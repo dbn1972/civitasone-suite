@@ -9,7 +9,10 @@ import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient"
 
 export type DqEntity = "contacts" | "leads" | "accounts";
 export type DqFilter = "missing" | "invalid" | "stale";
+/** What to ask the report for: one filter's rows, or `all` for every filter in one response. */
+export type DqFilterRequest = DqFilter | "all";
 export type DqSource = "api" | "error";
+const DQ_FILTERS: readonly DqFilter[] = ["missing", "invalid", "stale"];
 
 /** Candidate fields sent to the duplicate-check endpoint (DQ-001). */
 export interface DuplicateCheckInput {
@@ -51,7 +54,12 @@ export interface DqBucket {
 
 export interface DqRecord {
   id: string;
+  /** Completeness as a 0..1 fraction. */
   score: number;
+  /**
+   * Machine-readable reasons (`missing:<field>`, `invalid:<field>`, `stale`);
+   * render them with {@link parseDqIssue} so the wording is localised.
+   */
   issues: string[];
   /**
    * Human display name (contact/account name) so a data steward can recognise
@@ -64,7 +72,14 @@ export interface DqRecord {
 export interface DataQualityReport {
   distribution: DqBucket[];
   counts: { missing: number; invalid: number; stale: number };
+  /** Rows for the single filter the report was requested with (empty for `all`). */
   records: DqRecord[];
+  /**
+   * Rows per filter. A report requested with `filter=all` fills all three, so the
+   * screen switches tabs client-side without re-fetching the counts
+   * (GAP-CRM-DATA-QUALITY-03).
+   */
+  recordsByFilter: Record<DqFilter, DqRecord[]>;
 }
 
 export interface LoaderResult<T> {
@@ -105,13 +120,100 @@ export function parseFieldError(input: string | { code?: string; message?: strin
     code = input.code?.trim();
     message = input.message?.trim();
   }
-  if (!code || !(code in FIELD_ERROR_CODES)) return null;
+  if (!code || !Object.prototype.hasOwnProperty.call(FIELD_ERROR_CODES, code)) return null;
   const typedCode = code as FieldErrorCode;
   return {
     field: FIELD_ERROR_CODES[typedCode],
     code: typedCode,
     message: message && message.length > 0 ? message : defaultFieldMessage(typedCode),
   };
+}
+
+export type FieldErrorMap = Partial<Record<ValidatedField, string>>;
+
+/**
+ * Parsed JSON of a failed response WITHOUT consuming it, so the caller can still
+ * hand the same Response to errorMessageFromResponse afterwards. Null when the
+ * body is not JSON.
+ */
+export async function readJsonBody(res: Response): Promise<unknown> {
+  try {
+    return await (typeof res.clone === "function" ? res.clone() : res).json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Per-field format errors out of a failed create/update response body.
+ *
+ * crm-service answers a bad format with 400 `{ code: "VALIDATION_FAILED",
+ * fieldErrors: [{ field: "phone", message: "INVALID_MOBILE" }] }` (the format
+ * code is the zod issue MESSAGE, not the top-level code), so reading only
+ * `body.code` never lands the error under its field. This reads both that shape
+ * and the legacy top-level `{ code, message }`, and returns one message per field.
+ */
+export function parseFieldErrors(body: unknown): FieldErrorMap {
+  const out: FieldErrorMap = {};
+  if (!body || typeof body !== "object") return out;
+  const b = body as { code?: unknown; message?: unknown; fieldErrors?: unknown };
+  const top = parseFieldError({
+    code: typeof b.code === "string" ? b.code : undefined,
+    message: typeof b.message === "string" ? b.message : undefined,
+  });
+  if (top) out[top.field] = top.message;
+  if (Array.isArray(b.fieldErrors)) {
+    for (const item of b.fieldErrors) {
+      if (!item || typeof item !== "object") continue;
+      const i = item as { code?: unknown; message?: unknown };
+      const fe = parseFieldError(typeof i.code === "string" ? { code: i.code } : typeof i.message === "string" ? i.message : "");
+      if (fe && out[fe.field] === undefined) out[fe.field] = fe.message;
+    }
+  }
+  return out;
+}
+
+/** The fields a tenant may mark mandatory (kept in lockstep with crm-service LEAD_FIELD_NAMES). */
+export const LEAD_FIELD_NAMES = ["name", "email", "phone", "company", "designation", "city", "leadSource"] as const;
+export type LeadFieldName = (typeof LEAD_FIELD_NAMES)[number];
+
+/**
+ * Names of the mandatory fields a create was rejected for. crm-service answers
+ * 422 `MANDATORY_FIELDS_MISSING` with the names only inside the message
+ * ("missing mandatory field(s): city, phone"). Only names from the known field
+ * list are returned, so the raw server text is never surfaced (RouteError policy)
+ * and an unexpected message yields no fields.
+ */
+export function parseMissingMandatoryFields(body: unknown): LeadFieldName[] {
+  if (!body || typeof body !== "object") return [];
+  const { code, message } = body as { code?: unknown; message?: unknown };
+  if (code !== "MANDATORY_FIELDS_MISSING" || typeof message !== "string") return [];
+  const idx = message.indexOf(":");
+  if (idx < 0) return [];
+  const known: readonly string[] = LEAD_FIELD_NAMES;
+  const out: LeadFieldName[] = [];
+  for (const part of message.slice(idx + 1).split(",")) {
+    const name = part.trim();
+    if (known.includes(name) && !out.includes(name as LeadFieldName)) out.push(name as LeadFieldName);
+  }
+  return out;
+}
+
+export type DqIssue =
+  | { kind: "missing" | "invalid"; field: string }
+  | { kind: "stale" }
+  | { kind: "other"; raw: string };
+
+/** Split a report issue code (`missing:email`, `invalid:phone`, `stale`) for localised rendering. */
+export function parseDqIssue(raw: string): DqIssue {
+  if (raw === "stale") return { kind: "stale" };
+  const idx = raw.indexOf(":");
+  if (idx > 0) {
+    const kind = raw.slice(0, idx);
+    const field = raw.slice(idx + 1);
+    if ((kind === "missing" || kind === "invalid") && field.length > 0) return { kind, field };
+  }
+  return { kind: "other", raw };
 }
 
 function defaultFieldMessage(code: FieldErrorCode): string {
@@ -264,38 +366,86 @@ export async function mergeEntities(
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+function emptyRecordsByFilter(): Record<DqFilter, DqRecord[]> {
+  return { missing: [], invalid: [], stale: [] };
+}
+
+function isDqFilter(v: unknown): v is DqFilter {
+  return typeof v === "string" && (DQ_FILTERS as readonly string[]).includes(v);
+}
+
+function normaliseRecords(list: unknown): DqRecord[] {
+  const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((rec): rec is Record<string, unknown> => !!rec && typeof rec === "object")
+    .map((rec) => ({
+      id: String(rec.id ?? ""),
+      score: num(rec.score),
+      issues: Array.isArray(rec.issues) ? rec.issues.map(String) : [],
+      ...(typeof rec.name === "string" && rec.name.trim().length > 0 ? { name: rec.name } : {}),
+    }));
+}
+
+/**
+ * crm-service wraps every success body in `{ data }`; the first-generation
+ * mocks and tests passed the bare report. Accept both.
+ */
+function unwrapData(raw: unknown): unknown {
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    const inner = (raw as { data?: unknown }).data;
+    if (inner && typeof inner === "object" && !Array.isArray(inner)) return inner;
+  }
+  return raw;
+}
+
 export function normaliseReport(raw: unknown): DataQualityReport {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const root = unwrapData(raw);
+  const r = (root && typeof root === "object" ? root : {}) as Record<string, unknown>;
   const counts = (r.counts && typeof r.counts === "object" ? r.counts : {}) as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === "number" ? v : Number(v) || 0);
+
+  // The service sends the distribution as { "0-20": n, ... }; older mocks as [{label,count}].
+  let distribution: DqBucket[] = [];
+  if (Array.isArray(r.distribution)) {
+    distribution = r.distribution
+      .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
+      .map((b) => ({ label: String(b.label ?? ""), count: num(b.count) }));
+  } else if (r.distribution && typeof r.distribution === "object") {
+    distribution = Object.entries(r.distribution as Record<string, unknown>).map(([k, v]) => ({
+      label: `${k}%`,
+      count: num(v),
+    }));
+  }
+
+  const records = normaliseRecords(r.records);
+  const recordsByFilter = emptyRecordsByFilter();
+  if (r.recordsByFilter && typeof r.recordsByFilter === "object") {
+    for (const f of DQ_FILTERS) {
+      recordsByFilter[f] = normaliseRecords((r.recordsByFilter as Record<string, unknown>)[f]);
+    }
+  } else if (isDqFilter(r.filter)) {
+    // A single-filter response: its rows belong to that filter's tab.
+    recordsByFilter[r.filter] = records;
+  }
+
   return {
-    distribution: Array.isArray(r.distribution)
-      ? r.distribution
-          .filter((b): b is Record<string, unknown> => !!b && typeof b === "object")
-          .map((b) => ({ label: String(b.label ?? ""), count: num(b.count) }))
-      : [],
+    distribution,
     counts: { missing: num(counts.missing), invalid: num(counts.invalid), stale: num(counts.stale) },
-    records: Array.isArray(r.records)
-      ? r.records
-          .filter((rec): rec is Record<string, unknown> => !!rec && typeof rec === "object")
-          .map((rec) => ({
-            id: String(rec.id ?? ""),
-            score: num(rec.score),
-            issues: Array.isArray(rec.issues) ? rec.issues.map(String) : [],
-            ...(typeof rec.name === "string" && rec.name.trim().length > 0 ? { name: rec.name } : {}),
-          }))
-      : [],
+    records,
+    recordsByFilter,
   };
 }
 
 export async function getDataQuality(
   entity: DqEntity,
-  filter: DqFilter,
+  filter: DqFilterRequest = "all",
 ): Promise<LoaderResult<DataQualityReport>> {
   const empty: DataQualityReport = {
     distribution: [],
     counts: { missing: 0, invalid: 0, stale: 0 },
     records: [],
+    recordsByFilter: emptyRecordsByFilter(),
   };
   try {
     const res = await browserFetch(`v1/crm/data-quality?entity=${entity}&filter=${filter}`);

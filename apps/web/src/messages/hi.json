@@ -13083,7 +13083,29 @@
     "kindContact": "संपर्क रिकॉर्ड",
     "kindAccount": "खाता रिकॉर्ड",
     "unnamedRecord": "अनाम अभिलेख",
-    "distributionBarAria": "{label}: रिकॉर्ड का {pct}"
+    "distributionBarAria": "{label}: रिकॉर्ड का {pct}",
+    "entityContacts": "संपर्क और लीड",
+    "entityAccounts": "खाते",
+    "issueMissing": "{field} उपलब्ध नहीं",
+    "issueInvalid": "{field} अमान्य",
+    "issueStale": "हाल में अद्यतन नहीं किया गया",
+    "fieldLabel": {
+      "name": "नाम",
+      "email": "ईमेल",
+      "phone": "फ़ोन",
+      "company": "संगठन",
+      "designation": "पदनाम",
+      "city": "शहर",
+      "leadSource": "लीड स्रोत",
+      "pincode": "पिन कोड",
+      "gstin": "GSTIN",
+      "pan": "PAN",
+      "industry": "उद्योग",
+      "website": "वेबसाइट"
+    },
+    "truncatedNote": "{total} चिह्नित रिकॉर्ड में से पहले {shown} दिखाए जा रहे हैं।",
+    "nothingFlaggedMessage": "इस डेटा-गुणवत्ता फ़िल्टर से {entity} में से कोई मेल नहीं खाता।",
+    "loadingDistribution": "वितरण लोड हो रहा है…"
   },
   "crmDealDetail": {
     "logActivity": "गतिविधि दर्ज करें",
@@ -13152,7 +13174,9 @@
     "linkAccountAria": "किसी मौजूदा खाते से जोड़ें",
     "searchAccounts": "खाते खोजें…",
     "linkedTo": "<strong>{name}</strong> से जुड़ा है। नया संगठन टाइप करने के लिए चयनकर्ता को साफ़ करें।",
-    "typeNewOrg": "या नया संगठन टाइप करें"
+    "typeNewOrg": "या नया संगठन टाइप करें",
+    "gstinNote": "चालान और कर (केवाईसी) के लिए एकत्र किया गया। पहुँच भूमिका-आधारित है और दर्ज की जाती है।",
+    "panNote": "केवाईसी/कर के लिए एकत्र किया गया व्यक्तिगत डेटा। पहुँच भूमिका-आधारित है और दर्ज की जाती है।"
   },
   "crmFollowUpModal": {
     "defaultSubject": "खाता स्वास्थ्य अनुवर्ती कार्रवाई — {account}",
@@ -14092,7 +14116,18 @@
     "gstinNote": "चालान और कर (केवाईसी) के लिए एकत्र किया गया। पहुँच भूमिका-आधारित है और दर्ज की जाती है।",
     "panNote": "केवाईसी/कर के लिए एकत्र किया गया व्यक्तिगत डेटा। पहुँच भूमिका-आधारित है और दर्ज की जाती है।",
     "marketingConsent": "मैं विपणन संचार के लिए सहमति देता/देती हूँ (डीपीडीपी अधिनियम, 2023)",
-    "created": "बनाया गया"
+    "created": "बनाया गया",
+    "missingMandatory": "कृपया आवश्यक फ़ील्ड भरें: {fields}।",
+    "fieldRequired": "{field} आवश्यक है।",
+    "fieldLabel": {
+      "name": "पूरा नाम",
+      "email": "ईमेल",
+      "phone": "फ़ोन (मोबाइल)",
+      "company": "संगठन",
+      "designation": "पदनाम",
+      "city": "शहर",
+      "leadSource": "लीड स्रोत"
+    }
   },
   "crmControlTowerPage": {
     "title": "कार्यकारी नियंत्रण टावर",

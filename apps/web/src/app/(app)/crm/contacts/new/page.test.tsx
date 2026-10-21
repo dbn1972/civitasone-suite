@@ -123,9 +123,20 @@ describe("NewContactPage duplicate-check (DQ-001 findings 1,2,5)", () => {
 });
 
 describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04)", () => {
-  it("GAP-CRM-CONTACTS-NEW-01: a 422 shows a safe message that points at the fields (not the fixed string, not raw server text)", async () => {
+  /** Answer the lead-field-rules read with no rules and the contact POST with `post`. */
+  function answerPost(post: unknown) {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.endsWith("lead-field-rules")
+          ? { ok: true, status: 200, json: async () => ({ data: [] }) }
+          : post,
+      ),
+    );
+  }
+
+  it("GAP-CRM-CONTACTS-NEW-01: a 422 names the missing field (by this screen's own label) without echoing raw server text", async () => {
     vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
-    fetchMock.mockResolvedValue({
+    answerPost({
       ok: false,
       status: 422,
       json: async () => ({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city" }),
@@ -133,13 +144,91 @@ describe("NewContactPage error + duplicate-submit (GAP-CRM-CONTACTS-NEW-01 / -04
     renderWithIntl(<NewContactPage />);
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
     fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+
+    const banner = await screen.findByText(/Please fill in the required field\(s\)/);
+    // The banner mentions City, from OUR copy, not the server's sentence.
+    expect(banner.textContent).toContain("City");
+    expect(banner.textContent).not.toMatch(/missing mandatory field/i);
+    expect(banner.textContent).not.toMatch(/Could not create the contact/);
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-01: the named field is flagged on its input (aria-invalid + linked message) until it is filled", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    answerPost({
+      ok: false,
+      status: 422,
+      json: async () => ({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city, designation" }),
+    });
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+
+    const city = await screen.findByLabelText("City");
+    await waitFor(() => expect(city).toHaveAttribute("aria-invalid", "true"));
+    const note = document.getElementById(city.getAttribute("aria-describedby")!)!;
+    expect(note).toHaveTextContent("City is required.");
+    expect(screen.getByLabelText("Designation")).toHaveAttribute("aria-invalid", "true");
+    // A field the server did not name stays clean.
+    expect(screen.getByLabelText("Email")).not.toHaveAttribute("aria-invalid");
+
+    // Typing a value clears that field's flag; the other stays flagged.
+    fireEvent.change(city, { target: { value: "Cuttack" } });
+    expect(city).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText("City is required.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Designation")).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-01: a 422 that names no known field falls back to the safe generic copy, never the server text", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    answerPost({
+      ok: false,
+      status: 422,
+      json: async () => ({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): <b>secret_internal</b>" }),
+    });
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
     const alert = await screen.findByRole("alert");
-    // Safe copy for a 400/422: a plain "some values/details weren't accepted,
-    // check what you entered" — never the fixed "Could not create the contact."
-    // and never the raw server text.
     expect(alert.textContent).toMatch(/weren.t accepted/i);
-    expect(alert.textContent).not.toMatch(/Could not create the contact/);
-    expect(alert.textContent).not.toMatch(/missing mandatory field/i);
+    expect(alert.textContent).not.toMatch(/secret_internal|mandatory/i);
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-01: a network failure still shows the generic offline message", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    fetchMock.mockImplementation((url: string) =>
+      url.endsWith("lead-field-rules")
+        ? Promise.resolve({ ok: true, status: 200, json: async () => ({ data: [] }) })
+        : Promise.reject(new TypeError("Failed to fetch")),
+    );
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/connection|offline|internet|network/i);
+    expect(alert.textContent).not.toMatch(/Failed to fetch/);
+  });
+
+  it("DQ-003: the real crm-service 400 (VALIDATION_FAILED + fieldErrors) lands INVALID_MOBILE under Phone", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    answerPost({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        code: "VALIDATION_FAILED",
+        message: "invalid request",
+        retryable: false,
+        fieldErrors: [{ field: "phone", message: "INVALID_MOBILE" }],
+      }),
+    });
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Asha" } });
+    fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: "123" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+
+    const phone = screen.getByLabelText(/phone/i);
+    await waitFor(() => expect(phone).toHaveAttribute("aria-invalid", "true"));
+    const described = phone.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)?.textContent);
+    expect(described.join(" ")).toMatch(/valid 10-digit Indian mobile/i);
   });
 
   it("GAP-CRM-CONTACTS-NEW-04: a 201 with no id navigates to the list and disables a second submit", async () => {
@@ -165,6 +254,16 @@ describe("NewContactPage DPDP + account link (GAP-CRM-CONTACTS-NEW-03 / -02)", (
     expect(screen.getByText(/DPDP Act, 2023/)).toBeInTheDocument();
     expect(screen.queryByText(/GDPR/)).not.toBeInTheDocument();
     expect(screen.getByText(/Personal data collected for KYC\/tax/i)).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CONTACTS-NEW-03: the PAN and GSTIN notices are tied to their inputs via aria-describedby", () => {
+    renderWithIntl(<NewContactPage />);
+    const pan = screen.getByLabelText("PAN");
+    const gstin = screen.getByLabelText("GSTIN");
+    const noteFor = (el: HTMLElement) =>
+      el.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)?.textContent ?? "").join(" ");
+    expect(noteFor(pan)).toMatch(/KYC\/tax.*role-scoped and logged/i);
+    expect(noteFor(gstin)).toMatch(/invoicing and tax.*role-scoped and logged/i);
   });
 
   it("GAP-CRM-CONTACTS-NEW-02: offers an account picker plus a free-text organisation fallback", () => {
