@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16",
+  "generatedAt": "2026-10-21",
   "webHrRoles": [
     "admin",
     "dept_head",
@@ -20,7 +20,7 @@
   ],
   "counts": {
     "DRIFT": 12,
-    "MATCH": 862,
+    "MATCH": 865,
     "NO_ROLE_CHECK": 19,
     "OUT_OF_SCOPE": 21,
     "DYNAMIC": 9
@@ -447,7 +447,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/apar",
-      "line": 293,
+      "line": 330,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -478,7 +478,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar",
-      "line": 344,
+      "line": 396,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -505,7 +505,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/self-appraisal",
-      "line": 394,
+      "line": 446,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -536,7 +536,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/reporting",
-      "line": 406,
+      "line": 458,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -567,7 +567,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/reviewing",
-      "line": 429,
+      "line": 481,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -598,7 +598,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/accept",
-      "line": 449,
+      "line": 501,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -629,7 +629,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/representation",
-      "line": 467,
+      "line": 519,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -660,7 +660,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/apar/:id/finalise",
-      "line": 479,
+      "line": 531,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -687,7 +687,7 @@
       "file": "services/hrms-service/src/modules/apar/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/apar/:id",
-      "line": 492,
+      "line": 544,
       "roleExprs": [
         "ACTOR_ROLES"
       ],
@@ -2204,7 +2204,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/attendance",
-      "line": 212,
+      "line": 197,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2244,7 +2244,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/attendance/locks",
-      "line": 220,
+      "line": 205,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -2285,7 +2285,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/attendance/locks",
-      "line": 226,
+      "line": 211,
       "roleExprs": [
         "LOCK_ROLES"
       ],
@@ -2310,7 +2310,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/attendance/locks/unlock",
-      "line": 233,
+      "line": 218,
       "roleExprs": [
         "LOCK_ROLES"
       ],
@@ -2335,7 +2335,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/attendance/summary",
-      "line": 240,
+      "line": 225,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -2376,7 +2376,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/attendance",
-      "line": 249,
+      "line": 234,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -2417,7 +2417,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/attendance/checkin-log",
-      "line": 275,
+      "line": 260,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -2457,6 +2457,48 @@
       "service": "hrms-service",
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
+      "routePath": "/v1/hrms/attendance/regularisations",
+      "line": 286,
+      "roleExprs": [
+        "[...ALL_ROLES, \"employee\"]"
+      ],
+      "permKeys": [],
+      "roles": [
+        "employee",
+        "hr_admin",
+        "hr_officer",
+        "manager",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "dept_head",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hiring_manager",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/attendance/routes.ts",
+      "method": "POST",
       "routePath": "/v1/hrms/attendance/regularisations",
       "line": 301,
       "roleExprs": [
@@ -2499,50 +2541,8 @@
       "service": "hrms-service",
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
-      "routePath": "/v1/hrms/attendance/regularisations",
-      "line": 316,
-      "roleExprs": [
-        "[...ALL_ROLES, \"employee\"]"
-      ],
-      "permKeys": [],
-      "roles": [
-        "employee",
-        "hr_admin",
-        "hr_officer",
-        "manager",
-        "super_admin"
-      ],
-      "errors": null,
-      "dynamic": false,
-      "comparator": "layout:HR_ROLES",
-      "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
-        "finance_officer",
-        "hiring_manager",
-        "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
-        "payroll_admin",
-        "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
-      ],
-      "extraInBackend": [],
-      "extraInWeb": [],
-      "status": "MATCH"
-    },
-    {
-      "service": "hrms-service",
-      "file": "services/hrms-service/src/modules/attendance/routes.ts",
-      "method": "POST",
       "routePath": "/v1/hrms/attendance/regularisations/:id/approve",
-      "line": 345,
+      "line": 330,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2582,7 +2582,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/attendance/regularisations/:id/reject",
-      "line": 371,
+      "line": 356,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2622,7 +2622,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/shifts",
-      "line": 396,
+      "line": 381,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -2663,7 +2663,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/shifts",
-      "line": 407,
+      "line": 392,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2703,7 +2703,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/shifts/:id",
-      "line": 419,
+      "line": 404,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2743,7 +2743,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/shift-requests",
-      "line": 438,
+      "line": 423,
       "roleExprs": [
         "[...HR_ROLES, \"manager\", \"employee\"]"
       ],
@@ -2785,7 +2785,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/wfh-requests",
-      "line": 479,
+      "line": 464,
       "roleExprs": [
         "[...HR_ROLES, \"manager\", \"employee\"]"
       ],
@@ -2827,7 +2827,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/overtime-requests",
-      "line": 523,
+      "line": 508,
       "roleExprs": [
         "[...HR_ROLES, \"employee\"]"
       ],
@@ -2868,7 +2868,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/overtime-requests",
-      "line": 568,
+      "line": 553,
       "roleExprs": [
         "[...HR_ROLES, \"employee\", \"manager\"]"
       ],
@@ -2910,7 +2910,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/overtime-requests/:id/approve",
-      "line": 626,
+      "line": 630,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2950,7 +2950,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/overtime-requests/:id/reject",
-      "line": 661,
+      "line": 665,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -2990,7 +2990,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/wfh-eligibility",
-      "line": 705,
+      "line": 709,
       "roleExprs": [
         "[...HR_ROLES, \"employee\"]"
       ],
@@ -3031,7 +3031,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/wfh-requests",
-      "line": 731,
+      "line": 745,
       "roleExprs": [
         "[...HR_ROLES, \"employee\"]"
       ],
@@ -3072,7 +3072,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/wfh-requests/:id/approve",
-      "line": 778,
+      "line": 806,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -3113,7 +3113,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/wfh-requests/:id/reject",
-      "line": 810,
+      "line": 838,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -3154,7 +3154,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/shift-requests",
-      "line": 850,
+      "line": 878,
       "roleExprs": [
         "[...HR_ROLES, \"employee\"]"
       ],
@@ -3195,7 +3195,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/shift-requests/:id/approve",
-      "line": 868,
+      "line": 896,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -3236,7 +3236,7 @@
       "file": "services/hrms-service/src/modules/attendance/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/shift-requests/:id/reject",
-      "line": 898,
+      "line": 926,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -3437,7 +3437,7 @@
       "file": "services/hrms-service/src/modules/bulk-import/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/bulk",
-      "line": 48,
+      "line": 52,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -3477,7 +3477,7 @@
       "file": "services/hrms-service/src/modules/bulk-import/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/bulk/status/:batchId",
-      "line": 150,
+      "line": 192,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5158,7 +5158,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/contracts",
-      "line": 83,
+      "line": 84,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5198,7 +5198,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/contracts/:id/activate",
-      "line": 91,
+      "line": 92,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5238,7 +5238,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts",
-      "line": 100,
+      "line": 101,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5279,7 +5279,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/:id",
-      "line": 116,
+      "line": 122,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5320,7 +5320,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/employee/:employeeId/history",
-      "line": 126,
+      "line": 132,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5361,7 +5361,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/contracts/:id/terminate",
-      "line": 135,
+      "line": 141,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5401,7 +5401,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/contracts/:id/renew",
-      "line": 146,
+      "line": 152,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5442,7 +5442,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/contracts/bulk-renew",
-      "line": 178,
+      "line": 184,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5482,7 +5482,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/renewals",
-      "line": 186,
+      "line": 192,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5523,7 +5523,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/renewals/:id",
-      "line": 200,
+      "line": 206,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -5564,7 +5564,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/dashboard/expiring",
-      "line": 213,
+      "line": 219,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5604,7 +5604,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/contracts/config",
-      "line": 226,
+      "line": 232,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -5644,7 +5644,7 @@
       "file": "services/hrms-service/src/modules/contracts/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/contracts/config",
-      "line": 233,
+      "line": 239,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -6698,7 +6698,7 @@
       "file": "services/hrms-service/src/modules/disciplinary/icc-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/icc/complaints",
-      "line": 45,
+      "line": 61,
       "roleExprs": [
         "ICC_ROLES"
       ],
@@ -6725,7 +6725,7 @@
       "file": "services/hrms-service/src/modules/disciplinary/icc-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/icc/complaints",
-      "line": 63,
+      "line": 82,
       "roleExprs": [
         "ICC_ROLES"
       ],
@@ -6752,7 +6752,7 @@
       "file": "services/hrms-service/src/modules/disciplinary/icc-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/icc/complaints/:id",
-      "line": 117,
+      "line": 154,
       "roleExprs": [
         "IDENTITY_ROLES"
       ],
@@ -6775,7 +6775,7 @@
       "file": "services/hrms-service/src/modules/disciplinary/icc-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/icc/complaints/:id/hearings",
-      "line": 149,
+      "line": 186,
       "roleExprs": [
         "ICC_ROLES"
       ],
@@ -6802,7 +6802,7 @@
       "file": "services/hrms-service/src/modules/disciplinary/icc-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/icc/complaints/:id/hearings",
-      "line": 162,
+      "line": 199,
       "roleExprs": [
         "ICC_ROLES"
       ],
@@ -7934,7 +7934,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/departments",
-      "line": 126,
+      "line": 116,
       "roleExprs": [
         "DEPARTMENT_READ_ROLES"
       ],
@@ -7980,7 +7980,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/departments",
-      "line": 134,
+      "line": 124,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8007,7 +8007,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/departments/:id",
-      "line": 186,
+      "line": 176,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8034,7 +8034,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "DELETE",
       "routePath": "/v1/hrms/departments/:id",
-      "line": 230,
+      "line": 220,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8061,7 +8061,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/designations",
-      "line": 272,
+      "line": 254,
       "roleExprs": [
         "HR_READ_ROLES"
       ],
@@ -8106,7 +8106,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/designations",
-      "line": 279,
+      "line": 271,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8133,7 +8133,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/designations/:id",
-      "line": 301,
+      "line": 293,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8160,7 +8160,7 @@
       "file": "services/hrms-service/src/modules/employee/masters-routes.ts",
       "method": "DELETE",
       "routePath": "/v1/hrms/designations/:id",
-      "line": 316,
+      "line": 308,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8347,7 +8347,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees",
-      "line": 94,
+      "line": 95,
       "roleExprs": [
         "DIRECTORY_ROLES"
       ],
@@ -8391,7 +8391,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees",
-      "line": 117,
+      "line": 118,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8418,7 +8418,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/confirm",
-      "line": 125,
+      "line": 126,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8445,7 +8445,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/probation-extension",
-      "line": 167,
+      "line": 168,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8472,7 +8472,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/transfer",
-      "line": 188,
+      "line": 189,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8499,7 +8499,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/:id/transfer/submit-approval",
-      "line": 199,
+      "line": 200,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8526,7 +8526,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/:id/promotion/submit-approval",
-      "line": 210,
+      "line": 211,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8553,7 +8553,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/separate",
-      "line": 218,
+      "line": 219,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -8580,7 +8580,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/:id",
-      "line": 245,
+      "line": 246,
       "roleExprs": [
         "[...READER_ROLES, \"employee\"]"
       ],
@@ -8622,7 +8622,7 @@
       "file": "services/hrms-service/src/modules/employee/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id",
-      "line": 290,
+      "line": 296,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9209,7 +9209,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/compensation/plans",
-      "line": 23,
+      "line": 26,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9249,7 +9249,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/compensation/plans",
-      "line": 44,
+      "line": 47,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -9291,7 +9291,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/compensation/plans/:id/model",
-      "line": 54,
+      "line": 57,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9331,7 +9331,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lms/courses",
-      "line": 67,
+      "line": 70,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9371,7 +9371,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/lms/courses",
-      "line": 88,
+      "line": 91,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -9413,7 +9413,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lms/courses/:id/enroll",
-      "line": 97,
+      "line": 100,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -9455,7 +9455,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lms/enrollments/:id/complete",
-      "line": 111,
+      "line": 114,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9495,7 +9495,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/lms/my-learning",
-      "line": 122,
+      "line": 125,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -9537,7 +9537,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/lms/compliance",
-      "line": 133,
+      "line": 136,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9577,7 +9577,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/skills/competencies",
-      "line": 144,
+      "line": 147,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9617,7 +9617,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/skills/role-matrix",
-      "line": 155,
+      "line": 158,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9657,7 +9657,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/skills/assessments",
-      "line": 166,
+      "line": 169,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9697,7 +9697,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/skills/gap-analysis",
-      "line": 181,
+      "line": 184,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -9739,7 +9739,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/skills/team-heatmap",
-      "line": 195,
+      "line": 198,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9779,7 +9779,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/succession/critical-roles",
-      "line": 207,
+      "line": 210,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9819,7 +9819,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/succession/nominees",
-      "line": 227,
+      "line": 230,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9859,7 +9859,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/succession/pipeline",
-      "line": 248,
+      "line": 251,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9899,7 +9899,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/succession/risk",
-      "line": 308,
+      "line": 311,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9939,7 +9939,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/engagement/surveys",
-      "line": 327,
+      "line": 330,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -9979,7 +9979,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/engagement/surveys/:id/respond",
-      "line": 338,
+      "line": 341,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10021,7 +10021,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/engagement/surveys/:id/results",
-      "line": 350,
+      "line": 353,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10061,7 +10061,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/engagement/eNPS",
-      "line": 360,
+      "line": 363,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10101,7 +10101,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/onboarding/templates",
-      "line": 374,
+      "line": 377,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10141,7 +10141,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/onboarding/active",
-      "line": 390,
+      "line": 393,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10181,7 +10181,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/onboarding/:id/steps/:stepIdx/complete",
-      "line": 431,
+      "line": 434,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10223,7 +10223,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/feedback/cycles",
-      "line": 464,
+      "line": 467,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10263,7 +10263,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/feedback/cycles/:id/nominate-raters",
-      "line": 484,
+      "line": 487,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10305,7 +10305,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/feedback/responses",
-      "line": 518,
+      "line": 521,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10347,7 +10347,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/feedback/cycles/:id/report",
-      "line": 548,
+      "line": 551,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10387,7 +10387,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/benefits/plans",
-      "line": 569,
+      "line": 572,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10427,7 +10427,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/benefits/plans",
-      "line": 585,
+      "line": 588,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10469,7 +10469,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/benefits/elections",
-      "line": 594,
+      "line": 597,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10511,7 +10511,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/benefits/my-elections",
-      "line": 647,
+      "line": 658,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -10553,7 +10553,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/disciplinary-cases",
-      "line": 667,
+      "line": 684,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10593,7 +10593,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/certifications",
-      "line": 755,
+      "line": 772,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -10635,7 +10635,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/skills",
-      "line": 808,
+      "line": 825,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -10677,7 +10677,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/staffing-plan",
-      "line": 845,
+      "line": 862,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10717,7 +10717,7 @@
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/vigilance",
-      "line": 911,
+      "line": 928,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -10742,9 +10742,49 @@
     {
       "service": "hrms-service",
       "file": "services/hrms-service/src/modules/gap-features/routes.ts",
+      "method": "POST",
+      "routePath": "/v1/hrms/vigilance/:id/charges/reveal",
+      "line": 1083,
+      "roleExprs": [
+        "HR_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
+        "hr_admin",
+        "hr_officer",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "dept_head",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hiring_manager",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/gap-features/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/work-summaries",
-      "line": 1015,
+      "line": 1114,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -11501,7 +11541,7 @@
       "file": "services/hrms-service/src/modules/holidays/routes.ts",
       "method": "DELETE",
       "routePath": "/v1/hrms/holidays/:id",
-      "line": 51,
+      "line": 53,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -13546,7 +13586,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/leave-types",
-      "line": 173,
+      "line": 247,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -13586,7 +13626,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leave-config",
-      "line": 182,
+      "line": 256,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -13628,7 +13668,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "PUT",
       "routePath": "/v1/hrms/leave-config",
-      "line": 188,
+      "line": 262,
       "roleExprs": [
         "LEAVE_CONFIG_ADMIN_ROLES"
       ],
@@ -13669,7 +13709,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leave-allocations",
-      "line": 195,
+      "line": 269,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -13711,7 +13751,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/leave-allocations",
-      "line": 206,
+      "line": 280,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -13738,7 +13778,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/leave-applications",
-      "line": 213,
+      "line": 287,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -13780,7 +13820,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/leave-requests",
-      "line": 224,
+      "line": 298,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -13822,7 +13862,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/leave-requests/preview",
-      "line": 245,
+      "line": 322,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -13864,7 +13904,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/leave-applications/:id/approve",
-      "line": 258,
+      "line": 342,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -13907,7 +13947,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/leave-applications/:id/reject",
-      "line": 275,
+      "line": 359,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -13950,7 +13990,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/leave-requests/:id/approve",
-      "line": 290,
+      "line": 374,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -13993,7 +14033,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/leave-requests/:id/reject",
-      "line": 306,
+      "line": 390,
       "roleExprs": [
         "[...HR_ROLES, \"manager\"]"
       ],
@@ -14036,7 +14076,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leave/applications",
-      "line": 320,
+      "line": 404,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -14078,7 +14118,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leave-applications",
-      "line": 360,
+      "line": 444,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -14120,7 +14160,7 @@
       "file": "services/hrms-service/src/modules/leave/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leave-requests",
-      "line": 378,
+      "line": 462,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -14799,7 +14839,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/transfers",
-      "line": 83,
+      "line": 85,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -14839,7 +14879,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/promotions",
-      "line": 116,
+      "line": 118,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -14879,7 +14919,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/service-book",
-      "line": 161,
+      "line": 178,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -14919,7 +14959,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/deputation",
-      "line": 216,
+      "line": 228,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -14959,7 +14999,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/confirmations",
-      "line": 260,
+      "line": 276,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -14999,7 +15039,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/m7-list-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/retirements",
-      "line": 320,
+      "line": 336,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15039,7 +15079,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/:id/onboarding-tasks",
-      "line": 218,
+      "line": 217,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15066,7 +15106,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/:id/onboarding-tasks",
-      "line": 231,
+      "line": 230,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15093,7 +15133,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/onboarding-tasks/:taskId/complete",
-      "line": 239,
+      "line": 238,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15120,7 +15160,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/:id/buddy",
-      "line": 246,
+      "line": 245,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15147,7 +15187,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/:id/buddy",
-      "line": 258,
+      "line": 257,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15174,7 +15214,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/:id/onboarding-documents",
-      "line": 271,
+      "line": 270,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15201,7 +15241,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/onboarding-documents/:docType/mark-received",
-      "line": 298,
+      "line": 297,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15228,7 +15268,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/employees/:id/onboarding-documents/:docType/verify",
-      "line": 318,
+      "line": 317,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15255,7 +15295,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/onboarding-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/onboarding",
-      "line": 335,
+      "line": 334,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15282,7 +15322,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/lifecycle/promotions",
-      "line": 39,
+      "line": 60,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15322,7 +15362,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lifecycle/promotions",
-      "line": 93,
+      "line": 114,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15362,7 +15402,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/lifecycle/transfers",
-      "line": 105,
+      "line": 126,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15402,7 +15442,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lifecycle/transfers",
-      "line": 133,
+      "line": 154,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15442,7 +15482,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lifecycle/transfers/:id/issue-order",
-      "line": 140,
+      "line": 161,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15482,7 +15522,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lifecycle/transfers/:id/relieve",
-      "line": 167,
+      "line": 188,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15522,7 +15562,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/lifecycle/transfers/:id/join",
-      "line": 193,
+      "line": 214,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15562,7 +15602,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/separations/:id/checklist",
-      "line": 216,
+      "line": 237,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15602,7 +15642,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "PUT",
       "routePath": "/v1/hrms/separations/:id/checklist",
-      "line": 237,
+      "line": 258,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -15642,7 +15682,7 @@
       "file": "services/hrms-service/src/modules/lifecycle/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/separations/:id/issue-ppo",
-      "line": 252,
+      "line": 273,
       "roleExprs": [
         "HR_ADMIN_ROLES"
       ],
@@ -16673,7 +16713,7 @@
       "file": "services/hrms-service/src/modules/pay-matrix/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/pay-matrix",
-      "line": 91,
+      "line": 110,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -16715,7 +16755,7 @@
       "file": "services/hrms-service/src/modules/pay-matrix/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/pay-matrix/lookup",
-      "line": 117,
+      "line": 136,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -16757,7 +16797,7 @@
       "file": "services/hrms-service/src/modules/pay-matrix/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/pay-matrix/annual-increment",
-      "line": 178,
+      "line": 197,
       "roleExprs": [
         "HR_WRITE_ROLES"
       ],
@@ -20465,7 +20505,7 @@
       "file": "services/hrms-service/src/modules/recruitment/jd-template-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/jd-templates/:id/use",
-      "line": 85,
+      "line": 90,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -25933,7 +25973,7 @@
       "file": "services/hrms-service/src/modules/service-book/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/employees/:id/service-book",
-      "line": 45,
+      "line": 46,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -25975,7 +26015,7 @@
       "file": "services/hrms-service/src/modules/service-book/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/service-book/me",
-      "line": 59,
+      "line": 60,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -26017,7 +26057,7 @@
       "file": "services/hrms-service/src/modules/service-book/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/employees/:id/service-book",
-      "line": 68,
+      "line": 72,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -26057,7 +26097,7 @@
       "file": "services/hrms-service/src/modules/service-book/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/service-book/entries/:entryId",
-      "line": 95,
+      "line": 99,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -26097,7 +26137,7 @@
       "file": "services/hrms-service/src/modules/service-book/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/service-book/entries/:entryId/attest",
-      "line": 115,
+      "line": 119,
       "roleExprs": [
         "HR_ROLES"
       ],
@@ -26472,7 +26512,7 @@
       "file": "services/hrms-service/src/modules/social/pulse-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/goals/:id/checkins",
-      "line": 323,
+      "line": 335,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -26514,7 +26554,7 @@
       "file": "services/hrms-service/src/modules/social/pulse-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leaderboard",
-      "line": 348,
+      "line": 360,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -26565,7 +26605,7 @@
       "file": "services/hrms-service/src/modules/social/pulse-routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/leaderboard/my-points",
-      "line": 414,
+      "line": 426,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -26616,7 +26656,7 @@
       "file": "services/hrms-service/src/modules/social/pulse-routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/assistant",
-      "line": 445,
+      "line": 457,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -26667,7 +26707,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/kudos",
-      "line": 163,
+      "line": 203,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -26709,7 +26749,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/kudos/feed",
-      "line": 246,
+      "line": 286,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -26751,7 +26791,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/social/feed",
-      "line": 301,
+      "line": 341,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -26793,7 +26833,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/announcements",
-      "line": 456,
+      "line": 500,
       "roleExprs": [
         "[\"hr_admin\", \"super_admin\"]"
       ],
@@ -26832,7 +26872,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/announcements",
-      "line": 496,
+      "line": 540,
       "roleExprs": [],
       "permKeys": [],
       "roles": null,
@@ -26845,8 +26885,92 @@
       "service": "hrms-service",
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
+      "routePath": "/v1/hrms/me/birthday-sharing",
+      "line": 563,
+      "roleExprs": [
+        "ALL_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
+        "employee",
+        "hr_admin",
+        "hr_officer",
+        "manager",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "dept_head",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hiring_manager",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/social/routes.ts",
+      "method": "PUT",
+      "routePath": "/v1/hrms/me/birthday-sharing",
+      "line": 572,
+      "roleExprs": [
+        "ALL_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
+        "employee",
+        "hr_admin",
+        "hr_officer",
+        "manager",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "dept_head",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hiring_manager",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/social/routes.ts",
+      "method": "GET",
       "routePath": "/v1/hrms/birthdays/today",
-      "line": 511,
+      "line": 585,
       "roleExprs": [
         "ALL_ROLES"
       ],
@@ -26888,7 +27012,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/birthdays/:id/wish",
-      "line": 558,
+      "line": 634,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -26939,7 +27063,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/travel-requests",
-      "line": 608,
+      "line": 684,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -26990,7 +27114,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/travel-requests",
-      "line": 662,
+      "line": 738,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -27041,7 +27165,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/travel-requests/:id/approve",
-      "line": 731,
+      "line": 812,
       "roleExprs": [
         "[\"manager\", \"hr_admin\", \"hr_officer\", \"super_admin\"]"
       ],
@@ -27082,7 +27206,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/travel-requests/:id/reject",
-      "line": 799,
+      "line": 880,
       "roleExprs": [
         "[\"manager\", \"hr_admin\", \"hr_officer\", \"super_admin\"]"
       ],
@@ -27123,7 +27247,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/expenses",
-      "line": 846,
+      "line": 927,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -27174,7 +27298,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/expenses",
-      "line": 880,
+      "line": 961,
       "roleExprs": [
         "EXPENSE_DECIDE_ROLES"
       ],
@@ -27215,7 +27339,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/expenses/:id/approve",
-      "line": 957,
+      "line": 1038,
       "roleExprs": [
         "EXPENSE_DECIDE_ROLES"
       ],
@@ -27256,7 +27380,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "PATCH",
       "routePath": "/v1/hrms/expenses/:id/reject",
-      "line": 1020,
+      "line": 1101,
       "roleExprs": [
         "EXPENSE_DECIDE_ROLES"
       ],
@@ -27297,10 +27421,10 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/expenses/:id/receipt",
-      "line": 1080,
+      "line": 1161,
       "roleExprs": [],
       "permKeys": [],
-      "guardedVia": "ctx.roles.includes @ line 1092",
+      "guardedVia": "ctx.roles.includes @ line 1173",
       "roles": null,
       "errors": null,
       "dynamic": false,
@@ -27312,7 +27436,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "POST",
       "routePath": "/v1/hrms/devices/register",
-      "line": 1146,
+      "line": 1227,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -27363,7 +27487,7 @@
       "file": "services/hrms-service/src/modules/social/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/orgchart",
-      "line": 1168,
+      "line": 1249,
       "roleExprs": [
         "STAFF_ROLES"
       ],
@@ -28014,7 +28138,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/headcount",
-      "line": 101,
+      "line": 112,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -28056,7 +28180,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/vacancy-forecast",
-      "line": 141,
+      "line": 152,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -28098,7 +28222,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/retirement-forecast",
-      "line": 166,
+      "line": 180,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -28140,7 +28264,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/analytics-kpis",
-      "line": 214,
+      "line": 231,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -28182,7 +28306,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/budget",
-      "line": 270,
+      "line": 287,
       "roleExprs": [
         "READER_ROLES"
       ],
@@ -28224,7 +28348,7 @@
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/diversity",
-      "line": 286,
+      "line": 303,
       "roleExprs": [
         "READER_ROLES"
       ],
