@@ -185,7 +185,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/crm/grievances/:id — detail (exposes forwarded_to, appeal_reason)
+  // GET /v1/crm/grievances/:id — detail (exposes forwarded_to, appeal_reason, assigned_at)
   app.get("/v1/crm/grievances/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
@@ -199,6 +199,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
              g.resolution, g.due_at AS "dueAt",
              g.resolved_at AS "resolvedAt", g.closed_at AS "closedAt",
              g.escalated_at AS "escalatedAt",
+             g.assigned_at AS "assignedAt",
              g.forwarded_to AS "forwardedTo", g.forwarded_at AS "forwardedAt",
              g.appeal_reason AS "appealReason",
              g.created_at AS "createdAt", g.updated_at AS "updatedAt",
@@ -224,10 +225,11 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
+          assigned_at = now(),
           status = CASE WHEN status = 'REGISTERED' THEN 'FORWARDED' ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionF}
-      RETURNING id, status, assigned_to AS "assignedTo", version
+      RETURNING id, status, assigned_to AS "assignedTo", assigned_at AS "assignedAt", version
     `)) as unknown as Array<Record<string, unknown>>;
       if (updated.length > 0) {
         await emitWithAudit(tx, ctx, {

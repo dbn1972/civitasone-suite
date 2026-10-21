@@ -3,7 +3,8 @@
  *   GET    /v1/crm/document-types        — the tenant's types
  *   POST   /v1/crm/document-types         — create a type (admin, audited)
  *   PUT    /v1/crm/document-types/:id      — amend a type (admin, audited)
- *   DELETE /v1/crm/document-types/:id      — remove a type (admin, audited)
+ *   DELETE /v1/crm/document-types/:id      — remove an UNUSED type (admin, audited);
+ *                                            409 TYPE_IN_USE while documents still use it
  *
  * Low-volume admin config, so writes are synchronous + transactionally audited
  * (the task-escalation-rules / reason-codes pattern), not domain events.
@@ -14,7 +15,7 @@ import { sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDocumentTypeBody, updateDocumentTypeBody, idParam } from "./validators.js";
+import { createDocumentTypeBody, updateDocumentTypeBody, deleteDocumentTypeBody, idParam } from "./validators.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
@@ -24,6 +25,16 @@ const SELECT_COLS = sql`
   id, code, name, applies_to AS "appliesTo", mandatory, expiry_required AS "expiryRequired",
   verification_required AS "verificationRequired", enabled,
   created_at AS "createdAt", updated_at AS "updatedAt", version`;
+
+/**
+ * GAP-CRM-DOCUMENT-TYPES-03: how many document rows (every version, including
+ * superseded and soft-deleted ones -- they all hold the foreign key) are filed
+ * under a type. Only the LIST reports it; `t` is the document_types alias.
+ */
+const USAGE_COUNT = sql`(
+  SELECT count(*)::int FROM crm.documents d
+  WHERE d.tenant_id = t.tenant_id AND d.doc_type = t.code
+) AS "documentCount"`;
 
 /**
  * Format a JS string array as a Postgres array literal for binding into a raw `sql`
@@ -44,8 +55,8 @@ export async function documentTypeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT ${SELECT_COLS} FROM crm.document_types
-      WHERE tenant_id = ${ctx.tenantId} ORDER BY applies_to, code
+      SELECT ${SELECT_COLS}, ${USAGE_COUNT} FROM crm.document_types t
+      WHERE t.tenant_id = ${ctx.tenantId} ORDER BY t.applies_to, t.code
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows, meta: { total: rows.length } });
   });
@@ -110,18 +121,45 @@ export async function documentTypeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    const deleted = await db.transaction(async (tx) => {
-      const rows = (await tx.execute(sql`
-        DELETE FROM crm.document_types WHERE id = ${id} AND tenant_id = ${ctx.tenantId} RETURNING id
-      `)) as unknown as Array<{ id: string }>;
-      if (rows.length === 0) return false;
+    const body = deleteDocumentTypeBody.parse(req.body);
+    // GAP-CRM-DOCUMENT-TYPES-03: crm.documents(tenant_id, doc_type) references the
+    // type with ON DELETE SET NULL, which on a composite key also nulls the
+    // NOT NULL tenant_id -- so the database cannot let a referenced type go, and
+    // "documents keep their type" was never true. Lock the type row (a concurrent
+    // upload's FK check waits on it), refuse while any document row still uses it,
+    // and tell the admin what to do instead, rather than surfacing an opaque 500.
+    const outcome = await db.transaction(async (tx) => {
+      const found = (await tx.execute(sql`
+        SELECT code FROM crm.document_types
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} FOR UPDATE
+      `)) as unknown as Array<{ code: string }>;
+      const code = found[0]?.code;
+      if (code === undefined) return { kind: "not_found" } as const;
+      const usage = (await tx.execute(sql`
+        SELECT count(*)::int AS n FROM crm.documents
+        WHERE tenant_id = ${ctx.tenantId} AND doc_type = ${code}
+      `)) as unknown as Array<{ n: number }>;
+      const inUse = usage[0]?.n ?? 0;
+      if (inUse > 0) return { kind: "in_use", count: inUse } as const;
+      await tx.execute(sql`DELETE FROM crm.document_types WHERE id = ${id} AND tenant_id = ${ctx.tenantId}`);
       await enqueue(tx, {
         topic: AUDIT, eventType: AUDIT, tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-        payload: { service: "crm", action: "document_type_delete", resourceType: "document_type", resourceId: id, outcome: "success" },
+        payload: {
+          service: "crm", action: "document_type_delete", resourceType: "document_type", resourceId: id, outcome: "success",
+          // The admin's justification, captured for the audit trail (null when none was sent).
+          metadata: { code, reason: body?.reason ?? null },
+        },
       });
-      return true;
+      return { kind: "deleted" } as const;
     });
-    if (!deleted) throw new HttpError(404, "NOT_FOUND", "document type not found");
+    if (outcome.kind === "not_found") throw new HttpError(404, "NOT_FOUND", "document type not found");
+    if (outcome.kind === "in_use") {
+      throw new HttpError(
+        409,
+        "TYPE_IN_USE",
+        `${outcome.count} ${outcome.count === 1 ? "document still uses" : "documents still use"} this document type, so it cannot be deleted. Turn off Enabled to stop new uploads of this type instead.`,
+      );
+    }
     return reply.code(204).send();
   });
 

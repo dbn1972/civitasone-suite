@@ -14,6 +14,7 @@
  *   GET/POST/PUT/DELETE /v1/crm/partners[/:id]
  *   GET/POST/PUT/DELETE /v1/crm/branches[/:id]
  *   GET/POST/PUT/DELETE /v1/crm/escalation-rules[/:id]
+ *   GET                /v1/crm/escalation-rules/recipients  (role + user pickers for the editor)
  */
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "drizzle-orm";
@@ -26,6 +27,8 @@ import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { assertEscalationRecipientExists } from "./recipients.js";
+import { listTenantRoleNames, listActiveTenantUsers } from "../../shared/directory-client.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -309,9 +312,38 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const rows = await repo.listEscalationRuleViews(ctx.tenantId);
     return reply.send({ data: rows, meta: { page: 1, pageSize: rows.length, total: rows.length } });
   });
+  // GAP-CRM-ESCALATION-RULES-01: the editor's recipient pickers. Served here (not read
+  // straight from policy-/identity-service) because those list endpoints are
+  // tenant_admin-only, so a crm_admin got empty pickers and typed free text. Admin
+  // roles only; roles are tenant roles, users are ACTIVE users (id + display name).
+  app.get(
+    "/v1/crm/escalation-rules/recipients",
+    { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+      const [roles, users] = await Promise.all([
+        listTenantRoleNames(ctx.tenantId),
+        listActiveTenantUsers(ctx.tenantId),
+      ]);
+      return reply.send({
+        data: {
+          roles: (roles ?? []).map((name) => ({ key: name, label: name })),
+          users: users?.users ?? [],
+        },
+        // `*Available:false` = that directory could not be read (NOT "there are none"), so the
+        // editor can say so and refuse to save an unverifiable recipient.
+        meta: {
+          rolesAvailable: roles !== undefined,
+          usersAvailable: users !== undefined,
+          usersTruncated: users?.truncated ?? false,
+        },
+      });
+    },
+  );
   app.post("/v1/crm/escalation-rules", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const body = v.upsertEscalationRuleBody.parse(req.body);
+    await assertEscalationRecipientExists(ctx.tenantId, body);
     await assertNoDuplicateEscalationRule(ctx.tenantId, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertEscalationRule(ctx, body));
   });
@@ -319,6 +351,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
     const body = v.upsertEscalationRuleBody.parse(req.body);
+    await assertEscalationRecipientExists(ctx.tenantId, body);
     await assertNoDuplicateEscalationRule(ctx.tenantId, body, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEscalationRule(ctx, id, body));
   });

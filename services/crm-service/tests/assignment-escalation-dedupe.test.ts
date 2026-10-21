@@ -6,7 +6,7 @@
  *
  * DB-backed, HTTP round-trip (CQRS reads back after the queue drains).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -14,6 +14,14 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
+
+// GAP-CRM-ESCALATION-RULES-01: the escalation-rule routes now verify a recipient role against
+// the tenant's role directory (policy-service). There is no policy-service in this suite, so
+// the lookup is stubbed with the one role these flows use; the rules are real DB round-trips.
+vi.mock("../src/shared/directory-client.js", () => ({
+  listTenantRoleNames: vi.fn(async () => ["sales_manager"]),
+  listActiveTenantUsers: vi.fn(async () => ({ users: [], truncated: false })),
+}));
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
