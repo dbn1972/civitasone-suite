@@ -77,8 +77,14 @@ export type CreateContactBody = z.infer<typeof createContactBody>;
  * "clear this field" (explicit null, since JSON drops undefined) was rejected
  * with 400 for the whole PATCH - a DPDP correction/erasure of email, phone or
  * the business identifiers could not be recorded. null = clear; absent = leave.
+ *
+ * `accountId` is clearable too: the edit form sends `accountId: null` when the
+ * Organisation link is cleared (unlink the contact from its account). The update
+ * consumer already guards the cross-tenant FK check with `p.accountId &&` and
+ * then writes `patch.accountId = p.accountId`, so null unlinks the row.
  */
 const clearableContactFields = {
+  accountId: z.string().uuid().nullable().optional(),
   email: z.string().email().max(320).nullable().optional(),
   phone: z.string().min(3).max(32).nullable().optional(),
   company: z.string().min(1).max(200).nullable().optional(),

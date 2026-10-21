@@ -14,10 +14,13 @@
  * `name` is required by the API schema and is never nullable: a trimmed-empty
  * name is simply never emitted (the form's `required` attribute blocks it).
  *
- * NOTE (HUMAN REVIEW): this assumes the contact PATCH route's zod schema
- * accepts `null` to clear email/phone/company/designation/city. That could not
- * be verified in this worktree (crm-service is absent). If the backend rejects
- * null, the field schemas must be made `.nullable()` — see report.
+ * Backend contract (verified): crm-service's `updateContactBody`
+ * (services/crm-service/src/modules/contacts/validators.ts,
+ * `clearableContactFields`) accepts `null` to clear email, phone, company,
+ * designation, city, the identifiers (gstin/pan/pincode), leadSource and
+ * `accountId` (unlink from the account). This builder only emits the five
+ * fields above; the edit form adds `accountId: null` itself when the account
+ * link is cleared. `name` stays non-nullable on the API.
  */
 
 /** The editable, clearable string fields of a contact (excludes the required name). */

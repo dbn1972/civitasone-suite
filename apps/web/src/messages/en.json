@@ -13500,6 +13500,7 @@
     "campaignId": "Campaign ID",
     "noPerformanceTitle": "No performance recorded",
     "noPerformanceMessage": "This campaign has no cost, revenue or response figures posted against it yet. Use the form below to post its first reporting period.",
+    "noPerformanceMessageReadOnly": "This campaign has no cost, revenue or response figures posted against it yet. A CRM administrator can post its first reporting period.",
     "noPeriodsTitle": "No periods recorded",
     "noPeriodsMessage": "No reporting periods have been recorded for this campaign."
   },
@@ -13666,7 +13667,8 @@
     "noChanges": "No changes to save.",
     "linkAccountAria": "Link to an existing account",
     "searchAccounts": "Search accounts…",
-    "linkedTo": "Linked to <strong>{name}</strong>. Clear the picker to type a new organisation instead.",
+    "linkedTo": "Linked to <strong>{name}</strong>. Unlink it to type a new organisation instead.",
+    "unlinkAccount": "Unlink account",
     "typeNewOrg": "Or type a new organisation"
   },
   "crmFollowUpModal": {

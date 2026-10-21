@@ -477,7 +477,20 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
             />
             {accountId ? (
               <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
-                {t.rich("linkedTo", { name: accountLabel || accountId, strong: (chunks) => <strong>{chunks}</strong> })}
+                {t.rich("linkedTo", { name: accountLabel || accountId, strong: (chunks) => <strong>{chunks}</strong> })}{" "}
+                {/* The single-select EntityPicker has no clear control of its own, so
+                    this is how a contact is unlinked: Save then sends accountId: null. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAccountId(null);
+                    setAccountLabel("");
+                  }}
+                >
+                  {t("unlinkAccount")}
+                </Button>
               </p>
             ) : (
               <input id="edit-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder={t("typeNewOrg")} style={{ ...inputStyle, marginTop: 6 }} />

@@ -122,8 +122,8 @@ describe("EditContactForm", () => {
   });
 
   // GAP-CRM-CONTACTS-NEW-02: the Organisation field is an account picker; a
-  // contact already linked to an account seeds it (resolve) and unlinking sends
-  // accountId: null on save.
+  // contact already linked to an account seeds it (resolve), and saving without
+  // touching the link re-sends nothing.
   it("seeds the linked account into the picker and does not re-send the link when it is unchanged", async () => {
     browserFetchMock.mockImplementation((path: string) => {
       if (path === "v1/crm/accounts") {
@@ -141,5 +141,59 @@ describe("EditContactForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
     expect(browserFetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-01 + GAP-CRM-CONTACTS-NEW-02: clearing the
+  // Organisation on an account-linked contact unlinks it - the PATCH carries an
+  // explicit accountId: null (the backend accepts null to unlink). The picker has
+  // no clear control of its own, so the form offers "Unlink account".
+  it("unlinks the account and sends accountId: null when the link is cleared", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
+    await waitFor(() => expect(picker.value).toBe("Acme"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlink account" }));
+    // Unlinked: the "Linked to" line is gone and the free-text organisation input is offered.
+    expect(screen.queryByText(/Linked to/)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Or type a new organisation")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    expect(patchCall).toBeDefined();
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body.accountId).toBeNull();
+    expect(body).toHaveProperty("accountId");
+    expect(body).not.toHaveProperty("leadStatus");
+  });
+
+  it("unlinking and typing a new organisation sends accountId: null together with the new company", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    await waitFor(() =>
+      expect((screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement).value).toBe("Acme"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlink account" }));
+    fireEvent.change(screen.getByPlaceholderText("Or type a new organisation"), { target: { value: "Globex" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ accountId: null, company: "Globex" });
   });
 });

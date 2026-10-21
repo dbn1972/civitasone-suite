@@ -51,6 +51,19 @@ describe("PostPeriodForm request payload (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
+  it("percent-encodes the campaign id in the request path (it can be a raw URL segment)", async () => {
+    renderWithIntl(<PostPeriodForm campaignId="a/b?c#d" currency="INR" />);
+
+    fireEvent.change(screen.getByLabelText(/^Period start/), { target: { value: "2026-08-01" } });
+    fireEvent.change(screen.getByLabelText("Spend (INR)"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Revenue (INR)"), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post period" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/crm/campaigns/a%2Fb%3Fc%23d/performance");
+  });
+
   it("blocks a sub-paise amount before any request is made", async () => {
     renderWithIntl(<PostPeriodForm campaignId="c-123" currency="INR" />);
 

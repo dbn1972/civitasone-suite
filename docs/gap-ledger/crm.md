@@ -949,7 +949,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
 - **First-pass claim:** The subtitle prints campaign.currency (e.g. "INR") but every amount goes through formatMoney, which always prints ₹, so a non-INR campaign would show rupee symbols on foreign amounts (app/(app)/crm/campaigns/[id]/page.tsx:50, lib/formatters.ts:55).
 - **Verified evidence:** formatMoney(minorUnits) in lib/formatters.ts:~66-131 takes no currency and hard-codes '₹' (:131). The page prints campaign.currency in the subtitle (:50) but formats Spend/Revenue/Net and the amount cells (cellType 'amount') and cost-per-response through formatMoney, so a non-INR campaign would show rupee symbols. Whether non-INR campaigns exist cannot be verified (crm-service absent); CLAUDE.md rule 11 says money carries an ISO 4217 code.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`
@@ -966,6 +966,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 ### GAP-CRM-CAMPAIGNS-DETAIL-04  ·  LOW  ·  confirmed  ·  theme DEADEND (was DEADROUTE)
 
 - [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **Rework note (W2 crm rescan review):** the post-period form is rendered only to the roles the PUT admits (crm_admin, super_admin, tenant_admin; CRM_CAMPAIGN_PERFORMANCE_POST_ROLES), the no-figures (404) branch also requires a UUID-shaped id (the raw URL segment), and the campaign id is percent-encoded in the request path.
 - **First-pass claim:** Detail is read-only: there is no way to post a period's cost or revenue from here although the empty period state tells the user to "Post a reporting period's cost and revenue" (app/(app)/crm/campaigns/[id]/page.tsx:97).
 - **Verified evidence:** Detail page is read-only (no forms/actions); the DataTable emptyMessage (:97) says 'Post a reporting period's cost and revenue to see the breakdown.' and no page, component or lib helper in apps/web posts campaign periods (grep of web for campaign period/roi writes found only the two loaders). Whether a POST endpoint exists in crm-service cannot be verified. Note the empty state is also unreachable in practice: a campaign with zero periods returns 404 and shows the page-level EmptyState instead.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/lib/crm/campaignPeriods.ts`, `apps/web/src/app/(app)/crm/campaigns/[id]/PostPeriodForm.tsx`
@@ -1003,8 +1004,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
-- **Owner note (W2 crm rescan):** the mask-by-default + audited-reveal build is complete. Policy still to be confirmed by the privacy owner: reveal is offered to the existing CRM_PII_READ_ROLES (crm_admin/super_admin reach the page; the reveal endpoint also admits admin, platform_admin, tenant_admin) and a plain crm_user has no reveal path.
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
+- **Owner note (W2 crm rescan):** the mask-by-default + audited-reveal build is complete. Policy still to be confirmed by the privacy owner: the reveal control is offered to the existing web CRM_PII_READ_ROLES (crm_admin, admin, super_admin, platform_admin, tenant_admin) and a plain crm_user has no reveal path. The CRM layout admits crm_user, crm_admin, super_admin and tenant_admin (crm/layout.tsx:12), but crm-service unmasks only CONTACT_PII_ROLES = crm_admin, super_admin (shared/data-governance.ts:24) and its contacts routes admit only crm_user, crm_admin, super_admin (modules/contacts/routes.ts:23), so a tenant_admin who reaches the page is not served contacts by crm-service today. OWNER QUESTION: should tenant_admin be a CRM contacts / PII-reveal role (then add it to crm-service CRM_ROLES and CONTACT_PII_ROLES), or be removed from the web CRM_PII_READ_ROLES?
 - **First-pass claim:** Phone and Email are printed in full in an 11-column list for every role while the banner promises "Access is role-scoped and logged"; there is no masking or reveal step for personal data under DPDP (app/(app)/crm/contacts/ContactsTable.tsx:50, app/(app)/crm/contacts/page.tsx:63).
 - **Verified evidence:** ContactsTable.tsx:50 phone and :52-ish email columns print c.phone/c.email in full for all users (l.116-118 mapping); page.tsx:63 banner says 'Access is role-scoped and logged'. No <Masked> component exists in apps/web (grep). Role-scoping/logging by backend cannot be verified. The 11 columns claim is true.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -1136,7 +1137,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
 - **Owner note (W2 crm rescan):** reveal-on-click (audited) and the consent purpose/source record are built. The per-role masking policy (CRM_PII_READ_ROLES) is still a default pending privacy-owner confirmation; consent 'source' is the capture channel (web_form/email/phone/in_person/import).
 - **First-pass claim:** Phone, Email and Marketing Consent are printed in full to every role; consent is shown as bare Yes/No with no purpose, date or source, which DPDP consent records need, and there is no masked-until-revealed step (app/(app)/crm/contacts/[id]/page.tsx:58).
 - **Verified evidence:** Detail page prints phone and email (page.tsx:58-59) and Marketing Consent as Yes/No (:64-66) to every role that passes the CRM layout (crm_user, crm_admin, platform_admin, super_admin) with no masking; no mask helper exists in apps/web (grep). Overstated: the Customer360Panel on the same page shows consent with the updatedAt date (:165-178), but still no purpose/source, and the page's own Yes/No duplicates it.
@@ -1212,7 +1213,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
 - **First-pass claim:** Stage text is the enum with underscores replaced ("prospecting", "closed won") and Lead Status prints raw values, unlike the form labels (app/(app)/crm/contacts/[id]/page.tsx:103).
 - **Verified evidence:** page.tsx:103 uses deal.stage.replace(/_/g,' ') giving lower-case 'closed won' into a status pill (cellType 'status'); :61 prints contact.leadStatus raw ('new', 'disqualified'); classification pills (:75) print raw temperature/priority. formatters.ts has humanizeStatus (:~41) that title-cases underscored values, and the edit form capitalises status labels (EditContactForm.tsx:222).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1234,7 +1235,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
+- **Rework note (W2 crm rescan review):** clearing the Organisation account link on a linked contact sends `accountId: null`. The backend now accepts it (`clearableContactFields.accountId`, validators.ts) and unlinks the row (DB test `accountId: null unlinks a linked contact`); the single-select EntityPicker has no clear control, so the edit form gained an explicit "Unlink account" button (EditContactForm.test.tsx `unlinks the account and sends accountId: null`).
 - **First-pass claim:** Core fields are sent as `value || undefined`, which JSON.stringify drops, so clearing Email, Phone, Organisation, Designation or City in the form silently leaves the stored value unchanged; the classification patch correctly sends null, so the two halves of one form disagree, and a data-correction/erasure request under DPDP cannot be done here (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:125, app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:98).
 - **Verified evidence:** EditContactForm.tsx:161-165 sends email/phone/company/designation/city as `form.x || undefined`; JSON.stringify omits undefined keys, so emptying a field leaves the stored value unchanged. Classification patch uses `|| null` (:134-139) and documents null=clear (:117-121). Whether the contact PATCH accepts null to clear cannot be verified (crm-service absent). Also leadStatus and marketingConsent are always sent.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/lib/crm/contactPatch.ts`, `apps/web/src/lib/crm/__tests__/contactPatch.test.ts`
@@ -1252,7 +1254,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-02  ·  HIGH  ·  confirmed  ·  theme GOVERNANCE (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: formerly PROVISIONAL, now re-confirmed against this branch; completed by #PRNUM)
 - **First-pass claim:** The Lead status select here can set any status, including disqualified, with no Reason code, note or ConfirmDialog; the contact page's "Change lead status" control requires a reason and audit note, so editing bypasses that governance (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:183 vs app/_components/crm/LeadTransitionControl.tsx:174).
 - **Verified evidence:** EditContactForm.tsx:219-224 offers all six LEAD_STATUSES (leadQualification.ts:18-25) and sends leadStatus on every PATCH (:166), with no reason, note or ConfirmDialog. LeadTransitionControl (used on the detail page, page.tsx:113) restricts targets via TRANSITIONS (:23-30), requires a reason code or note (:75-86) and confirms (:191-200), and states changes are audited. Whether the backend PATCH enforces the same transition rules cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/page.tsx`

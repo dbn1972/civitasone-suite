@@ -104,7 +104,7 @@ export function buildPerformanceBody(input: PostPeriodInput): {
 /** Post (upsert) a reporting period's cost, revenue and responses for a campaign. */
 export async function postCampaignPeriod(campaignId: string, input: PostPeriodInput): Promise<void> {
   const body = buildPerformanceBody(input);
-  const res = await browserFetch(`v1/crm/campaigns/${campaignId}/performance`, {
+  const res = await browserFetch(`v1/crm/campaigns/${encodeURIComponent(campaignId)}/performance`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
