@@ -2828,9 +2828,7 @@
     "exDateOfJoining": "2024-01-15",
     "exBasicPay": "44900 (रुपयों में)",
     "exGender": "male / female / other",
-    "exManagerEmployeeNo": "EMP-045 (पहले से मौजूद होना चाहिए)",
-    "loadingTitle": "कर्मचारी आयात करें",
-    "loadingSubtitle": "थोक कर्मचारी आयात।"
+    "exManagerEmployeeNo": "EMP-045 (पहले से मौजूद होना चाहिए)"
   },
   "employeeImportForm": {
     "fileLabel": "CSV फ़ाइल",
@@ -4514,10 +4512,6 @@
     "charsCount": "{count} / 20+ अक्षर",
     "balanceWarning": "आप {days} दिन की छुट्टी मांग रहे हैं लेकिन आपके पास केवल {balance} दिन शेष हैं। यह गणना अनुमानित है (कैलेंडर दिवस); वास्तविक कटौती भिन्न हो सकती है। जारी रखें?",
     "calendarDaysDisclaimer": "अनुमानित — कैलेंडर दिवसों में दर्शाया गया है। सटीक कटौती अनुरोध की प्रक्रिया के समय अवकाश नियमों (सप्ताहांत व छुट्टियाँ) के अनुसार तय होती है, इसलिए भिन्न हो सकती है।",
-    "employeePickerPlaceholder": "नाम या कर्मचारी संख्या से खोजें…",
-    "employeePickerSearching": "खोजा जा रहा है…",
-    "employeePickerNoResults": "कोई मिलता-जुलता कर्मचारी नहीं",
-    "applyForMyselfLink": "अपने लिए आवेदन करें",
     "selectEmployeePlaceholder": "कर्मचारी खोजें और चुनें…",
     "selectEmployeeError": "वह कर्मचारी चुनें जिसके लिए यह अवकाश है।",
     "applyForMyself": "स्वयं के लिए आवेदन करें",
@@ -16091,6 +16085,12 @@
       "reasonLowConfidence": "सहायक उत्तर नहीं दे सका",
       "reasonGuardrail": "गार्डरेल ने वार्तालाप फ़्लैग किया"
     }
+  },
+  "onboardingDetail": {
+    "title": "ऑनबोर्डिंग विवरण",
+    "emptyTasksTitle": "अभी तक कोई ऑनबोर्डिंग कार्य सेट नहीं किया गया",
+    "emptyTasksMessage": "HR ने इस नए कर्मचारी के लिए अभी तक कोई ऑनबोर्डिंग कार्य नहीं जोड़ा है। कार्य जोड़े जाने पर उनकी चेकलिस्ट और देय-तिथि कैलेंडर यहाँ दिखाई देगा।",
+    "dpdpNoticeText": "ये दस्तावेज़ (पहचान और बैंक प्रमाण सहित) केवल HR को दिखाई देते हैं और आपके संगठन की अभिलेख-प्रतिधारण नीति के अनुसार रखे जाते हैं।"
   },
   "certifications": {
     "title": "प्रमाणन",

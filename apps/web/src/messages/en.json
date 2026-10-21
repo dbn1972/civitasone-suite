@@ -2813,9 +2813,7 @@
     "exDateOfJoining": "2024-01-15",
     "exBasicPay": "44900 (in rupees)",
     "exGender": "male / female / other",
-    "exManagerEmployeeNo": "EMP-045 (must already exist)",
-    "loadingTitle": "Import Employees",
-    "loadingSubtitle": "Bulk employee import."
+    "exManagerEmployeeNo": "EMP-045 (must already exist)"
   },
   "employeeImportForm": {
     "fileLabel": "CSV File",
@@ -4498,10 +4496,6 @@
     "charsCount": "{count} / 20+ chars",
     "balanceWarning": "You are applying for {days} days but only have {balance} days balance. The count shown is approximate (calendar days); the actual deduction may differ. Continue?",
     "calendarDaysDisclaimer": "Approximate — shown as calendar days. The exact deduction is worked out under the leave rules (weekends and holidays) when the request is processed, so it may differ.",
-    "employeePickerPlaceholder": "Search by name or employee number…",
-    "employeePickerSearching": "Searching…",
-    "employeePickerNoResults": "No matching employee",
-    "applyForMyselfLink": "Apply for myself",
     "selectEmployeePlaceholder": "Search and select an employee…",
     "selectEmployeeError": "Select the employee this leave is for.",
     "applyForMyself": "Apply for myself",
