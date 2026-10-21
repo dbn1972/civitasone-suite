@@ -51,13 +51,21 @@ function scoped<T>(tenant: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   }) as Promise<T>;
 }
 
-/** An open task whose DATE due_date is `daysAgo` days before today (IST). */
+/**
+ * An open task whose DATE due_date is `daysAgo` days before today's UTC date.
+ *
+ * UTC, not IST, on purpose: these tests measure a task's age with the scheduler's arithmetic (the due
+ * DATE is end-of-day UTC), so the seed must use the same calendar the arithmetic does. Seeding with the
+ * IST date made every "N days ago" task one day younger than asserted between 18:30 and 24:00 UTC,
+ * when the IST date is already tomorrow's. A task seeded this way is also always past the IST overdue
+ * boundary the list applies (due < today IST), because the IST date is never before the UTC date.
+ */
 async function seedTask(owner: string, daysAgo: number, subject = "Call back"): Promise<string> {
   const id = randomUUID();
   await scoped(TENANT, (tx) => tx`
     INSERT INTO crm.activities (id, tenant_id, actor_name, text, type, subject, status, due_date, owner_id, created_by)
     VALUES (${id}, ${TENANT}, 'Tester', 'follow up', 'task', ${subject}, 'open',
-            (now() AT TIME ZONE 'Asia/Kolkata')::date - ${daysAgo}::int, ${owner}, ${ACTOR})
+            (now() AT TIME ZONE 'UTC')::date - ${daysAgo}::int, ${owner}, ${ACTOR})
   `);
   return id;
 }
