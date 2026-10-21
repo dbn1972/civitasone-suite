@@ -3689,10 +3689,10 @@
     "errorArea": "GPF statements",
     "title": "<term>GPF</term> Statements",
     "subtitle": "General Provident Fund contributions by employee and period.",
-    "statStatements": "Statements",
-    "statEmployees": "Employees",
-    "statTotalContributions": "Total Contributions",
-    "statPeriods": "Periods",
+    "statStatements": "Statements (listed below)",
+    "statEmployees": "Employees (listed below)",
+    "statTotalContributions": "Total Contributions (listed below)",
+    "statPeriods": "Periods Covered (listed below)",
     "lastPeriodLabel": "Last Period Contribution",
     "periodValue": "Period: {period}",
     "trendCardTitle": "Contribution Trend (last 6 periods)",
@@ -3715,7 +3715,8 @@
     "emptyMessageFiltered": "No General Provident Fund records match your filter.",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} no contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "GPF Statements"
+    "loadingHeading": "GPF Statements",
+    "ledgerLimitNote": "Only the first {limit} statements are loaded, so the counts and totals above cover those statements only, not the full history."
   },
   "gratuity": {
     "ceilingNote": "Payment of Gratuity Act ceiling: {amount}. Government (CCS Pension Rules) DCRG follows separate rules and ceilings, so this cap does not apply to every row.",

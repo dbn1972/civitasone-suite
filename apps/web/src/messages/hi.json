@@ -3665,10 +3665,10 @@
     "errorArea": "GPF विवरण",
     "title": "<term>GPF</term> विवरण",
     "subtitle": "कर्मचारी और अवधि के अनुसार सामान्य भविष्य निधि अंशदान।",
-    "statStatements": "विवरण",
-    "statEmployees": "कर्मचारी",
-    "statTotalContributions": "कुल अंशदान",
-    "statPeriods": "अवधियां",
+    "statStatements": "विवरण (नीचे सूचीबद्ध)",
+    "statEmployees": "कर्मचारी (नीचे सूचीबद्ध)",
+    "statTotalContributions": "कुल अंशदान (नीचे सूचीबद्ध)",
+    "statPeriods": "कवर की गई अवधियां (नीचे सूचीबद्ध)",
     "lastPeriodLabel": "अंतिम अवधि का अंशदान",
     "periodValue": "अवधि: {period}",
     "trendCardTitle": "अंशदान रुझान (पिछली 6 अवधियाँ)",
@@ -3691,7 +3691,8 @@
     "emptyMessageFiltered": "आपके फ़िल्टर से कोई सामान्य भविष्य निधि रिकॉर्ड मेल नहीं खाता।",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि नहीं है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "GPF विवरण"
+    "loadingHeading": "GPF विवरण",
+    "ledgerLimitNote": "केवल पहले {limit} विवरण लोड किए गए हैं, इसलिए ऊपर की गिनती और कुल योग केवल उन्हीं विवरणों को दर्शाते हैं, पूरे इतिहास को नहीं।"
   },
   "gratuity": {
     "ceilingNote": "भुगतान ग्रेच्युटी अधिनियम की सीमा: {amount}। सरकारी (सीसीएस पेंशन नियम) डीसीआरजी के नियम और सीमाएँ अलग हैं, इसलिए यह सीमा हर पंक्ति पर लागू नहीं होती।",
