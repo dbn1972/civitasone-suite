@@ -46,10 +46,24 @@ export const dashboardScopeSchema = z.object({
 });
 export type DashboardScope = z.infer<typeof dashboardScopeSchema>;
 
+// ── retirement_age (GAP-HR-WORKFORCE-07) ────────────────────────────────────
+// Superannuation age used by the workforce-planning vacancy and retirement
+// forecasts. Default 60 == the value those endpoints always used, so a tenant
+// with no stored row sees no change. Which age applies to which edition
+// (Govt / PSU / teachers ...) is an HR-policy decision the deployment makes
+// by setting this key; the 40-75 bounds are deliberately wider than any
+// civilian superannuation age and only guard against a typo (e.g. 6 or 600)
+// corrupting every projection -- they are not a statement of policy.
+export const retirementAgeSchema = z.object({
+  superannuationAge: z.number().int().min(40).max(75).default(60),
+});
+export type RetirementAge = z.infer<typeof retirementAgeSchema>;
+
 export const POLICY_SCHEMAS = {
   wfh_eligibility: wfhEligibilitySchema,
   apar_deadlines: aparDeadlinesSchema,
   dashboard_scope: dashboardScopeSchema,
+  retirement_age: retirementAgeSchema,
 } as const;
 
 export type PolicyKey = keyof typeof POLICY_SCHEMAS;
