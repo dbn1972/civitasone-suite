@@ -323,7 +323,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-APAR-05  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [x] **Status** — PR #1694 (merged): independently reviewed clean.
+- [x] **Status** — PR #1694 (merged): independently reviewed clean. Rescan: apar.subtitle (en+hi) now reads Reporting Officer -> Reviewing Officer -> Accepting Authority; the 'Under Review' stat is renamed 'In Officer Review' (with a hint) to match the grouped statuses 2-4; a test greps every locale file for 'Counter-signing'. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Three different names for stage 3: stat "Under Review", card "Counter-signing Officer" (aparFlowCard.stageCso), detail page "Reviewing Officer concurrence" (aparDetail.stageReviewingOfficer), backend reviewing_officer. DoPT terminology is Reporting → Reviewing → Accepting Authority.
 - **Verified evidence:** Stage 3 naming diverges: stat card 'Under Review' (apar.statUnderReview, which also covers stages 2-4), card 'Counter-signing Officer' (aparFlowCard.stageCso) and the apar.subtitle 'Counter-signing Officer', detail page '3. Reviewing Officer concurrence' (aparDetail.stageReviewingOfficer), backend status reviewing_officer. Stage 4 similarly 'Acceptance / Dispute' vs 'Accepting Authority finalisation'.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/lib/apar/stages.ts`
@@ -339,7 +339,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-APAR-06  ·  LOW  ·  confirmed  ·  theme CAP (was OTHER)
 
-- [x] **Status** — PR #1694 (merged): independently reviewed clean.
+- [x] **Status** — PR #1694 (merged): independently reviewed clean. Rescan: GET /v1/hrms/apar gains ?q= (appraisee name or employee number, ILIKE with escaped wildcards, tenant+read-scope bounded); the list page has a search box, 20-per-page paging (?page=, Previous/Next with 'Showing x-y of total', filters preserved) and shows the server total; real-DB test with 150 rows covers total 150, page of 20, last partial page, status/q filters, employee-scope and cross-tenant isolation. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** No filter/search on the list although a department can have hundreds of APARs per cycle; repo.ts:40 caps at 100 rows silently (limit = 100).
 - **Verified evidence:** AparListPage renders APARFlowList of all rows with no filter, search or paging (page.tsx:84-94). repo.listAppraisals has limit = 100 default (apar/repo.ts, signature ~line 37) and the route calls it without a limit (routes.ts:181); the response has no total/hasMore, so the Total stat card shows at most 100 without warning.
 - **Files to change:** `services/hrms-service/src/modules/apar/routes.ts`, `services/hrms-service/src/modules/apar/repo.ts`, `apps/web/src/app/(app)/hr/apar/page.tsx`
@@ -412,7 +412,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-APAR-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OMISSION (was DEADROUTE)
 
-- [x] **Status** — PR #1845 (merged)
+- [x] **Status** — PR #1845 (merged). Rescan: the stage-history rows no longer leak what the appraisal row hides: for the appraisee before disclosure, officer-originated history rows lose `remarks` and `payload` (pen picture, score remarks, concur/vary, variations); redaction is by identity (an hr_admin who is the appraisee is redacted too); the list endpoint redacts the viewer's own pre-disclosure rows as well; the Reviewing Officer's concur/vary decision and varied scores are rendered from the history payload. Real-DB tests cover all of it. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** reviewingRemarks and acceptingRemarks are returned (appraisals/schema.ts:22–23) but never rendered — only selfAppraisal, reportingPenPicture and representation are (page.tsx:170–188). The Reviewing Officer’s variation and the AA’s remarks are invisible.
 - **Verified evidence:** AparDetail type declares reviewingRemarks/acceptingRemarks (page.tsx:36-37) and the API row includes them (appraisals/schema.ts:21-22; written by apar/f3-consumer.ts:215 and :238), but the details card renders only selfAppraisal (171), reportingPenPicture (177) and representation (183). Not a dead route; it is an omitted render. Also note the RvO 'vary' decision/variations are only in history payload, not shown. Confidentiality point: the GET returns the full row (including pen picture and remarks) to the appraisee at any stage, since assertReadable only checks employee scope; rendering these fields must be gated by stage (post-disclosure for the appraisee) and ideally the API should redact.
 - **Files to change:** `apps/web/src/app/(app)/hr/apar/[id]/page.tsx`, `services/hrms-service/src/modules/apar/routes.ts`, `apps/web/src/messages/en.json`
@@ -446,7 +446,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-APAR-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme COPY (was OTHER)
 
-- [x] **Status** — PR #1694 (merged): weighted-score formula verified byte-for-byte against backend's computeOverallGrade.
+- [x] **Status** — PR #1694 (merged): weighted-score formula verified byte-for-byte against backend's computeOverallGrade. Rescan: post-Accept the stat is labelled 'Simple Average (unweighted)' with a visible note that it can differ from the weighted Grade; the provisional score is 'Provisional Weighted Score'; the grade scale text is built from the API's `gradeBands` (engine.ts GRADE_BANDS, now the single table behind bandForGrade) with i18n band names, no hard-coded English copy on the page. OPEN FOR HR: sign-off that the cut-offs (>=9 / >=7 / >=5 / >=4) are the approved scale; they are unchanged from the engine. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Grade band is server-computed (engine.ts:24–30: Outstanding ≥9, Very Good ≥7, Good ≥5, Average ≥4, Below Average) but neither the scale nor "Avg Score" being an unweighted mean (page.tsx:112–114) vs the weighted overallGrade is explained; the two numbers can differ.
 - **Verified evidence:** Server: bandForGrade (apar/engine.ts:24-30) matches the stated bands; computeOverallGrade is a weighted mean. Page: avgScore (page.tsx:127-129) is an unweighted mean of scored rows, labelled 'Avg Score' (statAvgScore) and shown alongside the weighted overallGrade (line 163). Neither the 1-10 scale nor band cut-offs are explained. The two numbers can differ; before Accept overallGrade is null, so only the unweighted number exists. Observation's line refs 112-114 are really 127-129.
 - **Files to change:** `apps/web/src/app/(app)/hr/apar/[id]/page.tsx`, `apps/web/src/messages/en.json`
@@ -2284,7 +2284,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DESIGNATIONS-01  ·  HIGH  ·  partly  ·  theme FABRICATED
 
-- [x] **Status** — PR #1661 (merged): Grade Pay/6th-CPC mislabeling replaced with real 7th-CPC Group A/B/C classification (sourced from DoPT S.O. 3964(F), 9 Aug 2018), unified across DesignationsTable and the add-employee wizard.
+- [~] **Status** — PR #1661 (merged): Grade Pay/6th-CPC mislabeling replaced with real 7th-CPC Group A/B/C classification (sourced from DoPT S.O. 3964(F), 9 Aug 2018), unified across DesignationsTable and the add-employee wizard. W2 hr rescan: PARTIAL. Done: the derived Service Group is now labelled 'indicative' (column header, tooltip and a footnote printing the bands), levels 1-18 all classify, no Grade Pay column or CPC7_GRADE_PAY remains. NOT done (needs an owner decision, not built): acceptance 'table renders only stored fields' - Service Group is still derived in the browser from payLevels.ts SERVICE_GROUP_BANDS, and HR has not signed off the band mapping. OWNER QUESTION: should Service Group be (a) a stored optional per-designation field set by HR (needs a migration adding service_group to employee.hrms_designations plus createDesignationBody/consumer/form changes) or (b) stay derived and indicative; and does HR confirm Group C = levels 1-5, B = 6-9, A = 10-18 (DoPT S.O. 3964(F))?
 - **First-pass claim:** Grade Pay and Service Group are computed from a hard-coded browser table, not stored: CPC7_GRADE_PAY maps levels 1–14 to the old 6th-CPC grade pays (level 9 and 10 both 5,400) and stops at 14, so 7th-CPC levels 15–18 show '—' and every level is mislabelled '(7th CPC)' (DesignationsTable.tsx:14-20). Group boundaries (≤3 D, ≤5 C, ≤9 B) are also an assumption (DesignationsTable.tsx:22-28).
 - **Verified evidence:** Real: Grade Pay and Service Group are computed in the browser from a hard-coded table, not stored (DesignationsTable.tsx:19-31,187-188). The map covers levels 1-14 only, so 15-18 render '—'. Overstated points: level 9 and 10 both 5,400 matches the historical 6th-CPC to Level mapping, so that is not itself an error; the '(7th CPC)' label is on the Pay Level column header (en.json colPayLevel), which is accurate for levels. The real problem is that Grade Pay is a 6th-CPC concept shown beside 7th-CPC levels, and Group boundaries (<=3 D, <=5 C, <=9 B) are an unstated assumption (Group D was merged into C after the 7th CPC).
 - **Files to change:** `apps/web/src/app/(app)/hr/designations/DesignationsTable.tsx`, `apps/web/src/messages/en.json`, `services/hrms-service/src/modules/employee/schema.ts`, `services/hrms-service/src/modules/employee/masters-routes.ts`
@@ -4492,7 +4492,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-JD-TEMPLATES-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** — PR #1722 (merged): "Use template" gated on canManage; Archive action added (backend DELETE existed with no UI).
+- [x] **Status** — PR #1722 (merged): "Use template" gated on canManage; Archive action added (backend DELETE existed with no UI). Rescan: Archive now follows the 202 convention: DELETE answers 202 'accepted', the card shows 'request received', polls GET /:id until isArchived, then refreshes the list (timeout shows 'Still processing' + Refresh now); server error text is never shown. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** 'Use template' is shown to all viewers (page.tsx:137–142) though the target /hr/recruitment/new needs recruitment admin roles; the delete endpoint (routes.ts:68) has no UI, so obsolete templates cannot be retired.
 - **Verified evidence:** 'Use template' (page.tsx:139-142) is unconditional, but the list API is HR_ROLES-only (jd-template-routes.ts:17) and /hr/recruitment/new requires the identical set [hr_admin,hr_officer,super_admin] (recruitment/new/page.tsx:14), so no viewer who can see templates lacks access; the role-mismatch claim is not real today. True: DELETE /v1/hrms/jd-templates/:id (routes.ts:68, archives) has no UI, and the list page has no archive action.
 - **Files to change:** `apps/web/src/app/(app)/hr/jd-templates/page.tsx`, `apps/web/src/app/(app)/hr/jd-templates/JdTemplateActions.tsx`
@@ -4522,7 +4522,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-JD-TEMPLATES-06  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** — PR #1722 (merged): fixed literal "+" in button copy; added a "showing first N" notice at the page-size cap.
+- [x] **Status** — PR #1722 (merged): fixed literal "+" in button copy; added a "showing first N" notice at the page-size cap. Rescan: hi.json jdTemplates and jdTemplateNew are now complete (23/23 and 49/49 keys, parity test); type badges use i18n keys instead of hard-coded English. kn/ta/te intentionally NOT added: those locales are a ~10% restored subset with no HR namespaces at all (restored-locales policy) and need translator-reviewed strings. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** '+ New template' carries a literal '+' in the translation string (en.json jdTemplates.newTemplate) and useCount pluralisation is ICU-only in English; list is capped at 100 rows by the API default with no pagination.
 - **Verified evidence:** en.json jdTemplates.newTemplate is '+ New template' (line 5605), a literal '+' in the string. usedCount uses ICU plural (en.json:5611) which next-intl supports across locales; the 'English-only' claim is not verified, though hi.json has no jdTemplates namespace at all (grep found none), so other locales fall back. List is capped: backend default limit 100, max 200 (jd-template-routes.ts:20), page passes no limit and no pagination.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/hr/jd-templates/page.tsx`, `apps/web/src/messages/hi.json`
@@ -4593,7 +4593,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-JD-TEMPLATES-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme LOADING (was ROLEGATE)
 
-- [x] **Status** — PR #1722 (merged): distinguishes a real 404 from a 5xx/network failure while loading a template for edit.
+- [x] **Status** — PR #1722 (merged): distinguishes a real 404 from a 5xx/network failure while loading a template for edit. Rescan: edit load shows a form-shaped skeleton region instead of a bare line, and a 5xx/network failure now offers 'Try again' (404 stays 'not found', no retry). (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Edit loads the template with a client fetch after hydration (NewTemplateForm.tsx:52–75): the page renders a bare 'Loading template…' paragraph and a permission-checked shell but no skeleton; a 403/404 is reported only as 'may have been removed'.
 - **Verified evidence:** NewTemplateForm.tsx:52-75 fetches client-side; loading shows bare `<p>Loading template…</p>` (:127). Any !res.ok (403/404/5xx) sets loadError with 'It may have been removed' (:134). Overstated: page.tsx (hr/jd-templates/[id]) does do a server role check and PermissionDenied before rendering (so 403 from role is caught server-side); the remaining problem is that 404 vs 5xx are conflated and no skeleton is shown.
 - **Files to change:** `apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx`, `apps/web/src/app/(app)/hr/jd-templates/[id]/page.tsx`
@@ -4644,7 +4644,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-JD-TEMPLATES-NEW-01  ·  HIGH  ·  partly  ·  theme ASYNC (was OTHER)
 
-- [x] **Status** — PR #1722 (merged): same fix as DETAIL-01 (shared NewTemplateForm.tsx) — honest async copy, no false "successfully".
+- [x] **Status** — PR #1722 (merged): same fix as DETAIL-01 (shared NewTemplateForm.tsx) — honest async copy, no false "successfully". Rescan: after the 202 the form polls the new template's GET (404 until the consumer runs) and moves to the library with ?created=<id> only once it exists; Continue is available while pending; the list highlights the new card ('Just added') or shows a pending row (also in place of the empty state) until the consumer lands it. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Both POST and PATCH publish a queue command and return 202 (jd-template-routes.ts:38–50,52–66), yet NewTemplateForm.tsx:109–111 shows 'Template created successfully.' and redirects after 1 s — the list may not yet contain the change, and a consumer-side failure is never reported.
 - **Verified evidence:** Same as DETAIL-01: POST returns 202 (jd-template-routes.ts:48), form shows 'Template created successfully.' and pushes after 1 s (NewTemplateForm.tsx:110-111); the consumer inserts the row asynchronously (recruitment/consumer.ts:346-367) so list may lag and failures are invisible. (PATCH returns 200, not 202, so 'both 202' is inexact.)
 - **Files to change:** `apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx`, `apps/web/src/app/(app)/hr/jd-templates/page.tsx`
@@ -7527,7 +7527,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-SUCCESSION-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** — PR #1703 (merged): risk query joins hrms_departments for a real name; no department_id fallback remains anywhere.
+- [x] **Status** — PR #1703 (merged): risk query joins hrms_departments for a real name; no department_id fallback remains anywhere. Rescan: the card now shows each nominee's recorded development plan (the API's `developmentPlan` text, was read as a non-existent `devPlanUrl` so every successor said "No plan"); department shows a name or a dash, never the id (at-risk rows are mapped to name only); web tests assert 'Finance' in the risk table and card with no UUID pattern anywhere. Current holder / retirement date / skill gaps stay unreturned: no schema source exists, and the item marks them optional. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Pipeline never returns names, department names, current holder, retirement date or skill gaps, so the card's core content (who, when they vacate, gaps, Dev Plan link) is empty; 'Department' prints the raw department_id UUID on cards and in the risk table (page.tsx:70,124).
 - **Verified evidence:** services/hrms-service/src/modules/gap-features/routes.ts:265-269 pipeline returns no names, department name, holder, retirement date or skill gaps; services/hrms-service/src/modules/gap-features/routes.ts:277-281 risk returns role_ref, department_id only. apps/web/src/app/(app)/hr/succession/page.tsx:70 `department: row.department ?? row.department_id` puts the UUID on the card, and apps/web/src/app/(app)/hr/succession/page.tsx:124 RISK_COLS prints raw department_id in the at-risk table. currentHolder/retirementDate blocks (SC:106-121) are conditional so they silently disappear; skillGaps/devPlanUrl never arrive so every successor shows 'No plan' (SC:236-260). No <EntityPicker> exists in apps/web/src (grep empty).
 - **Files to change:** `apps/web/src/app/(app)/hr/succession/page.tsx`, `services/hrms-service/src/modules/gap-features/routes.ts`, `apps/web/src/app/(app)/hr/succession/_components/SuccessionPlanCard.tsx`
