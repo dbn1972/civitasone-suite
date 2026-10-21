@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
-import { Button, Field, Input } from "../../../../_components/ds";
+import { Button, DataTable, Field, Input } from "../../../../_components/ds";
 import { downloadCsvFile } from "@/lib/export/csvExport";
 import { parseCsv } from "./csv";
 
@@ -60,6 +60,9 @@ type PreviewRow = {
   basicPay: string;
   ok: boolean;
 };
+
+/** A PreviewRow as the review DataTable shows it: an `id` for the row key, and "—" for a blank cell. */
+type PreviewTableRow = PreviewRow & { id: string };
 
 /**
  * GAP-HR-EMPLOYEES-IMPORT-03: what the review step hands to the confirm step.
@@ -119,6 +122,12 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 /** How often, and for how long, an accepted import is polled for its real outcome. */
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_POLL_MAX_MS = 60_000;
+/**
+ * The batch record is written by a queue consumer AFTER the 202 (the route only publishes), so the status route can
+ * answer 404 for a batch it simply has not recorded yet. For this long after the last chunk was accepted a 404 means
+ * "not yet", and polling continues; after it, a 404 means this batch cannot be confirmed.
+ */
+const DEFAULT_NOT_RECORDED_GRACE_MS = 10_000;
 
 /**
  * Bulk CSV import form -- two deliberate steps:
@@ -171,7 +180,11 @@ const DEFAULT_POLL_MAX_MS = 60_000;
  * allowed to bulk-import; it is reported once, as a single permission message,
  * and no further chunk is sent.
  */
-export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxMs = DEFAULT_POLL_MAX_MS }: { pollIntervalMs?: number; pollMaxMs?: number } = {}) {
+export function ImportForm({
+  pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
+  pollMaxMs = DEFAULT_POLL_MAX_MS,
+  notRecordedGraceMs = DEFAULT_NOT_RECORDED_GRACE_MS,
+}: { pollIntervalMs?: number; pollMaxMs?: number; notRecordedGraceMs?: number } = {}) {
   const t = useTranslations("employeeImportForm");
   const fileRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Phase>("idle");
@@ -506,7 +519,8 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
       setOutcome({ submitted: success, created: 0, asyncFailed: 0, polled: true, confirmed: false });
       const latest = new Map<string, BatchStatus>();
       const unconfirmable = new Set<string>();
-      const deadline = Date.now() + pollMaxMs;
+      const acceptedAt = Date.now();
+      const deadline = acceptedAt + pollMaxMs;
       for (;;) {
         await Promise.all(
           accepted
@@ -514,7 +528,11 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
             .map(async (b) => {
               try {
                 const res = await fetch(`/api/proxy/v1/hrms/employees/bulk/status/${encodeURIComponent(b.batchId)}`);
-                if (res.status === 404) { unconfirmable.add(b.batchId); return; }
+                if (res.status === 404) {
+                  // Not recorded YET (see DEFAULT_NOT_RECORDED_GRACE_MS) -> keep polling; past the grace -> unconfirmable.
+                  if (Date.now() - acceptedAt >= notRecordedGraceMs) unconfirmable.add(b.batchId);
+                  return;
+                }
                 if (!res.ok) return; // transient: try again next round
                 const parsed = parseBatchStatus(JSON.parse(await res.text()));
                 if (parsed) latest.set(b.batchId, parsed);
@@ -559,6 +577,28 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
   const skippedCount = review ? review.fileRows - validCount : 0;
   const busy = status === "uploading" || status === "processing";
   const pendingCount = Math.max(0, outcome.submitted - outcome.created - outcome.asyncFailed);
+  // The review table is the shared DataTable (a11y, mobile layout, empty state), not a bare table. Its headers
+  // other than Row / Check are the CSV's own column names, kept literal on purpose so they match the file.
+  const previewCaptionId = useId();
+  const previewColumns: { key: keyof PreviewTableRow & string; label: string; render?: (row: PreviewTableRow) => React.ReactNode }[] = [
+    { key: "lineNo", label: t("previewColRow") },
+    { key: "employeeNo", label: "employeeNo" },
+    { key: "fullName", label: "fullName" },
+    { key: "departmentCode", label: "departmentCode" },
+    { key: "designationCode", label: "designationCode" },
+    { key: "dateOfJoining", label: "dateOfJoining" },
+    { key: "basicPay", label: "basicPay" },
+    {
+      key: "ok",
+      label: t("previewColCheck"),
+      render: (r) => <span style={{ color: r.ok ? "var(--good)" : "var(--bad)" }}>{r.ok ? t("previewRowReady") : t("previewRowSkipped")}</span>,
+    },
+  ];
+  const previewRows: PreviewTableRow[] = (review?.sample ?? []).map((r) => ({
+    id: String(r.lineNo), lineNo: r.lineNo,
+    employeeNo: r.employeeNo || "—", fullName: r.fullName || "—", departmentCode: r.departmentCode || "—",
+    designationCode: r.designationCode || "—", dateOfJoining: r.dateOfJoining || "—", basicPay: r.basicPay || "—", ok: r.ok,
+  }));
   // Colour of the live-region result: green only when nothing failed; muted while we are still
   // waiting on (or could not get) the server's word; red when any row failed.
   const resultColor =
@@ -627,38 +667,11 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
         <div style={{ marginTop: 16 }}>
           {/* Only true before the confirm click; once rows are on the wire it would be wrong. */}
           {reviewing && <p style={{ fontSize: 12.5, color: "var(--mut)", margin: "0 0 8px" }}>{t("previewNote")}</p>}
-          <div style={{ overflowX: "auto", marginBottom: 8 }}>
-            <table className="tbl" style={{ fontSize: 13 }}>
-              <caption style={{ textAlign: "start", fontSize: 12, color: "var(--mut)", paddingBottom: 4 }}>
-                {t("previewCaption", { shown: review.sample.length, total: review.fileRows })}
-              </caption>
-              <thead>
-                <tr>
-                  <th>{t("previewColRow")}</th>
-                  <th>employeeNo</th>
-                  <th>fullName</th>
-                  <th>departmentCode</th>
-                  <th>designationCode</th>
-                  <th>dateOfJoining</th>
-                  <th>basicPay</th>
-                  <th>{t("previewColCheck")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {review.sample.map((r) => (
-                  <tr key={r.lineNo}>
-                    <td>{r.lineNo}</td>
-                    <td>{r.employeeNo || "—"}</td>
-                    <td>{r.fullName || "—"}</td>
-                    <td>{r.departmentCode || "—"}</td>
-                    <td>{r.designationCode || "—"}</td>
-                    <td>{r.dateOfJoining || "—"}</td>
-                    <td>{r.basicPay || "—"}</td>
-                    <td style={{ color: r.ok ? "var(--good)" : "var(--bad)" }}>{r.ok ? t("previewRowReady") : t("previewRowSkipped")}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div role="group" aria-labelledby={previewCaptionId} style={{ marginBottom: 8 }}>
+            <p id={previewCaptionId} style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 4px" }}>
+              {t("previewCaption", { shown: review.sample.length, total: review.fileRows })}
+            </p>
+            <DataTable<PreviewTableRow> columns={previewColumns} rows={previewRows} />
           </div>
           {validCount === 0 && (
             <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: "0 0 8px" }}>{t("previewNothingToImport")}</p>

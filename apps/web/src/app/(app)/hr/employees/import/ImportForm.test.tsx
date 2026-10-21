@@ -704,10 +704,29 @@ describe("ImportForm — confirms the real outcome through the status route", ()
 
   it("does not claim success when the status route cannot find the batch (404)", async () => {
     vi.stubGlobal("fetch", backend({ statuses: () => ({ ok: false, status: 404 }) }));
-    renderForm({ pollIntervalMs: 5, pollMaxMs: 500 });
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 500, notRecordedGraceMs: 0 });
     await chooseAndSubmit(TWO_ROW_CSV);
     expect(await screen.findByText(/2 submitted\. 0 confirmed created so far, 2 still being processed/)).toBeInTheDocument();
     expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
+  });
+
+  it("a 404 right after the 202 means 'not recorded yet' (the batch is written by a queue consumer): keeps polling and then reports the real result", async () => {
+    const fetchMock = backend({ statuses: [{ ok: false, status: 404 }, { ok: false, status: 404 }, completedOk] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 5000 });
+    await chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText("2 created")).toBeInTheDocument();
+    expect(fetchMock.statusCalls).toHaveLength(3);
+  });
+
+  it("a batch that is still 404 once the grace has passed is given up on (unconfirmed, never a green 'created') without polling to the deadline", async () => {
+    const fetchMock = backend({ statuses: () => ({ ok: false, status: 404 }) });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 5000, notRecordedGraceMs: 30 });
+    await chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText(/2 submitted\. 0 confirmed created so far, 2 still being processed/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
+    expect(fetchMock.statusCalls.length).toBeLessThan(200);
   });
 
   it("keeps polling through a transient status failure and then reports the real result", async () => {
