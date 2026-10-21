@@ -5913,6 +5913,8 @@
   "promotion": {
     "title": "Promotions",
     "subtitle": "Grade progression — DPC seniority list, individual promotions, and approval chain.",
+    "backLabel": "Back to HR",
+    "hasMoreNotice": "Showing the 500 most recent promotions. Older promotions are not listed here.",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "statTotal": "Total Promotions",
     "statApprovedSigned": "Approved / Signed",
@@ -5943,6 +5945,9 @@
     "stepIndicator": "Step {step} of 2",
     "errSelectEmployee": "Select an employee.",
     "errSelectDesignation": "Select the new designation.",
+    "retry": "Retry",
+    "lookupFailed": "Could not load designations. Check your connection and try again.",
+    "errNoDesignation": "This employee has no designation on record. Update their profile before raising a promotion.",
     "errEffectiveDateRequired": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
     "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
@@ -7766,11 +7771,14 @@
     "statDueSoon": "Due in 30 Days",
     "statTimely": "Timely",
     "statDateNotSet": "Date Not Set",
-    "cardTitle": "Probation Register — Confirmation Due"
+    "cardTitle": "Probation Register — Confirmation Due",
+    "recNotRecorded": "No manager recommendation on record",
+    "recAria": "Manager recommendation: {label}"
   },
   "deputation": {
     "title": "Deputation",
     "subtitle": "Officers on deputation to other government organisations.",
+    "backLabel": "Back to HR",
     "statTotal": "Total Deputations",
     "statActive": "Active",
     "statRepatriated": "Repatriated",
@@ -7808,6 +7816,8 @@
       "repatriateConfirmDescription": "{name} will be restored to their parent posting and reporting line. This is recorded in the service book.",
       "cancelConfirmTitle": "Cancel this deputation?",
       "cancelConfirmDescription": "{name}'s deputation will be cancelled and their parent posting restored. This is recorded in the service book.",
+      "confirmBtn": "Confirm",
+      "dismissBtn": "Go back",
       "actionFailed": "Couldn't complete this action. Please try again.",
       "notActive": "This deputation is no longer active."
     }
@@ -8153,6 +8163,7 @@
     "statPending": "Pending",
     "statApproved": "Order Issued",
     "statRelieved": "Relieved",
+    "statCancelled": "Cancelled",
     "cardTitle": "Transfer Orders — Table View",
     "colEmployee": "Employee",
     "colFrom": "From",
@@ -8161,9 +8172,11 @@
     "colOrderNo": "Order No.",
     "colRelievedDate": "Relieved Date",
     "colStatus": "Status",
-    "filterPlaceholder": "Filter by employee, office or order no…",
     "emptyTitle": "No transfer orders",
-    "emptyMessage": "Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office."
+    "emptyMessage": "Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office.",
+    "backLabel": "Back to HR",
+    "viewOnlyNote": "You have view-only access to transfer orders. Ask an HR admin to raise a new transfer.",
+    "loadErrorBadge": "Couldn't load transfer orders — showing nothing"
   },
   "advances": {
     "title": "Salary Advances",
@@ -9711,7 +9724,8 @@
     "noResults": "No matching employees",
     "clear": "Clear",
     "clearAriaLabel": "Clear selected employee",
-    "searchFailed": "Could not load employees. Check your connection and try again."
+    "searchFailed": "Could not load employees. Check your connection and try again.",
+    "retry": "Retry"
   },
   "directoryPicker": {
     "placeholder": {
@@ -9823,6 +9837,11 @@
     "showing": "Showing {shown} of {total} transfers",
     "noMatchTitle": "No transfers match your filters",
     "noMatchHint": "Try clearing the search or adjusting the date range.",
+    "viewCards": "Cards",
+    "viewTable": "Table",
+    "viewToggleAria": "Transfer view",
+    "filtersApplied": "{count, plural, one {# filter applied} other {# filters applied}}",
+    "clearFilters": "Clear filters",
     "csvEmployee": "Employee",
     "csvFromOffice": "From Office",
     "csvToOffice": "To Office",
@@ -9840,7 +9859,10 @@
       "pending_approval": "Pending Approval",
       "pending_effective": "Approved — Effective Soon",
       "completed": "Completed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
     },
     "orderNo": "Order No.",
     "orderDate": "Order Date",
@@ -9876,6 +9898,8 @@
     "confirm": "Confirm",
     "errSelectEmployee": "Select an employee.",
     "errSelectDest": "Select the destination department.",
+    "errSameDept": "The destination department must be different from the current department.",
+    "errFromDeptUnavailable": "The employee's current department could not be determined, so a transfer cannot be raised. Ask HR to check their record.",
     "errEffectiveDate": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
     "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
@@ -9896,8 +9920,10 @@
     "selectEmployee": "Select employee…",
     "fromDept": "From (current department)",
     "fromDeptAria": "Current department (auto-filled)",
+    "notAvailable": "Not available",
     "toDept": "Transfer to (department)",
     "deptLoadFailed": "Couldn't load departments.",
+    "deptForbidden": "You don't have permission to view departments.",
     "retry": "Retry",
     "loadingDepts": "Loading departments…",
     "selectDest": "Select destination department…",
