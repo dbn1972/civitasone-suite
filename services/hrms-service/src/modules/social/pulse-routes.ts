@@ -273,7 +273,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
     // Verify ownership
     const goal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id, status FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
+      `SELECT id, status, created_at, due_date FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
       [id, ctx.tenantId, ctx.actorId],
     ));
     if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
@@ -302,7 +302,19 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       ));
     }
 
-    return reply.send({ status: "checked_in", progress: body.progress });
+    // GAP-HR-GOALS-04: hand the caller the post-write truth. The card used to
+    // guess "active" (= On Track) after a check-in even when the goal was
+    // actually behind schedule, because the response carried nothing but the
+    // progress it had just been given. `goalStatus` is the stored status;
+    // `health` is the same derived value GET /v1/hrms/goals reports for the
+    // goal now, so the in-session badge and the refreshed list can never
+    // disagree.
+    const goalRow = goal.rows[0] as { created_at: string | Date; due_date: string | Date | null };
+    const health = goalHealth(
+      { status: newStatus, progress: body.progress, createdAt: goalRow.created_at, dueDate: goalRow.due_date },
+      new Date().toISOString().slice(0, 10),
+    );
+    return reply.send({ status: "checked_in", progress: body.progress, goalStatus: newStatus, health });
   });
 
   /**
