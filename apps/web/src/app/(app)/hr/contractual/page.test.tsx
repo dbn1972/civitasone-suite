@@ -210,7 +210,7 @@ describe("ContractualPage per-row expiry badge (GAP-HR-CONTRACTUAL-04)", () => {
     expect(within(rowFor("Ends Today")).getByText("Expires today")).toBeInTheDocument();
     expect(within(rowFor("Ends Far Off")).getByText("Expires in 365 days")).toBeInTheDocument();
     // A terminated contract is not "expiring" or "expired": no expiry badge at all.
-    expect(within(rowFor("Was Terminated")).queryByText(/Expires|^Expired$/)).not.toBeInTheDocument();
+    expect(within(rowFor("Was Terminated")).queryByText(/(?:Expires|^Expired$)/)).not.toBeInTheDocument();
   });
 
   it("uses the IST date: at 00:30 IST an end date of 'IST yesterday' is already Expired", async () => {
