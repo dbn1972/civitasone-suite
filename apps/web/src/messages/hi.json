@@ -2595,7 +2595,7 @@
     "quickActionsTitle": "त्वरित कार्रवाइयाँ",
     "lifecycleActionsTitle": "जीवनचक्र (केवल मानव संसाधन)",
     "actionsUnavailableExited": "जीवनचक्र कार्रवाइयाँ उपलब्ध नहीं हैं — यह कर्मचारी संगठन छोड़ चुका है।",
-    "actionsUnavailableOther": "कर्मचारी के {status} होने के दौरान कार्रवाइयाँ उपलब्ध नहीं हैं।",
+    "actionsUnavailableOther": "कर्मचारी की स्थिति \"{status}\" होने के दौरान कार्रवाइयाँ उपलब्ध नहीं हैं।",
     "actionApplyLeave": "🌴 अवकाश हेतु आवेदन करें",
     "actionSalarySlips": "🧾 वेतन पर्चियाँ",
     "actionInitiateTransfer": "🔄 स्थानांतरण आरंभ करें",
@@ -2633,7 +2633,11 @@
     "marital_single": "अविवाहित",
     "marital_married": "विवाहित",
     "marital_divorced": "तलाकशुदा",
-    "marital_widowed": "विधवा/विधुर"
+    "marital_widowed": "विधवा/विधुर",
+    "actionsLimitedOnLeave": "यह कर्मचारी अवकाश पर है। उनके लौटने तक स्थानांतरण, पदोन्नति और पृथक्करण रोके गए हैं; अवकाश, उपस्थिति, सेवा पुस्तिका और वेतन पर्चियाँ उपलब्ध रहेंगी।",
+    "lifecycleUnavailable": "स्थानांतरण, पदोन्नति या प्रतिनियुक्ति अभी लोड नहीं हो सके, इसलिए यह इतिहास अधूरा हो सकता है। कृपया थोड़ी देर में पुनः प्रयास करें।",
+    "updatedBanner": "आपके परिवर्तन सबमिट हो गए हैं और लागू किए जा रहे हैं। यदि कोई मान अब भी पुराना दिखे, तो कुछ देर में रिफ़्रेश करें।",
+    "updatedBannerDismiss": "बंद करें"
   },
   "employeeEdit": {
     "pageTitle": "कर्मचारी संपादित करें",
@@ -2644,7 +2648,7 @@
     "formIntro": "केवल नीचे दिए गए फ़ील्ड ही अद्यतन किए जा सकते हैं। संरचनात्मक परिवर्तनों (नाम, विभाग, पदनाम) के लिए HR प्रशासन से संपर्क करें।",
     "fixHighlightedFields": "कृपया हाइलाइट किए गए फ़ील्ड ठीक करें।",
     "noChangesDetected": "कोई परिवर्तन नहीं मिला। सहेजने से पहले कोई फ़ील्ड अद्यतन करें।",
-    "updateSubmitted": "अद्यतन सबमिट किया गया। पुनर्निर्देशित किया जा रहा है…",
+    "updateSubmitted": "अद्यतन सबमिट किया गया।",
     "roLabelEmployeeId": "कर्मचारी आईडी",
     "roLabelDepartment": "विभाग",
     "roLabelDesignation": "पदनाम",
@@ -2686,7 +2690,16 @@
     "savingBtn": "सहेजा जा रहा है…",
     "saveChangesBtn": "परिवर्तन सहेजें",
     "cancelBtn": "रद्द करें",
-    "loadingLabel": "संपादन फ़ॉर्म लोड हो रहा है…"
+    "loadingLabel": "संपादन फ़ॉर्म लोड हो रहा है…",
+    "currentValue": "वर्तमान: {value}",
+    "changeBtn": "बदलें",
+    "keepCurrentBtn": "वर्तमान रखें",
+    "confirmBankAccountLabel": "बैंक खाता संख्या की पुष्टि करें",
+    "confirmBankAccountPlaceholder": "खाता संख्या दोबारा दर्ज करें",
+    "confirmAccountMismatch": "दोनों खाता संख्याएँ मेल नहीं खातीं। उन्हें दोबारा दर्ज करें।",
+    "bankAccountFormatError": "खाता संख्या केवल अंकों में दर्ज करें (9 से 18 अंक)।",
+    "ifscFormatError": "मान्य IFSC दर्ज करें: चार अक्षर, एक शून्य, फिर छह अक्षर या अंक (उदा. SBIN0001234)।",
+    "pickerSearchError": "कर्मचारी लोड नहीं हो सके। कृपया पुनः प्रयास करें।"
   },
   "employeeFyLookup": {
     "formTitle": "फॉर्म 12BA खोजें",
@@ -2758,7 +2771,17 @@
     "uploadBtn": "अपलोड करें और आयात करें",
     "resultImported": "{success} सबमिट किया गया",
     "resultFailedSuffix": ", {failed} विफल",
-    "downloadErrorReport": "त्रुटि रिपोर्ट डाउनलोड करें (CSV)"
+    "downloadErrorReport": "त्रुटि रिपोर्ट डाउनलोड करें (CSV)",
+    "errForbidden": "आपको कर्मचारियों को आयात करने की अनुमति नहीं है।",
+    "processingProgress": "कर्मचारी बनाए जा रहे हैं… ({done}/{submitted})",
+    "submittedProcessing": "{submitted} बनाने के लिए सबमिट किए गए — पुष्टि की प्रतीक्षा है।",
+    "resultCreated": "{created} बनाए गए",
+    "resultUnconfirmed": "{submitted} सबमिट किए गए। अब तक {created} बनने की पुष्टि हुई, {pending} अभी प्रक्रिया में हैं — कुछ देर में कर्मचारी सूची देखें।",
+    "rowFailExists": "यह कर्मचारी संख्या पहले से मौजूद है",
+    "rowFailReference": "इसमें संदर्भित एक रिकॉर्ड अब मौजूद नहीं है",
+    "rowFailInvalid": "सर्वर ने एक मान अस्वीकार कर दिया",
+    "rowFailNotQueued": "इसे कतार में नहीं डाला जा सका — कृपया इसे दोबारा आयात करें",
+    "rowFailGeneric": "कर्मचारी नहीं बनाया जा सका"
   },
   "employeeTypes": {
     "title": "कर्मचारी प्रकार",
@@ -3048,7 +3071,8 @@
     "showingRange": "{total} में से {from}–{to} कर्मचारी दिखाए जा रहे हैं",
     "othersLegend": "अन्य: वे कर्मचारी जो न सेवारत (परिवीक्षा, पुष्टि, प्रतिनियुक्ति) हैं और न अवकाश पर — जैसे निलंबित, सेवानिवृत्त, बर्खास्त, अनुपस्थित।",
     "statusFilterLabel": "स्थिति के अनुसार छाँटें",
-    "statusAll": "सभी स्थितियाँ"
+    "statusAll": "सभी स्थितियाँ",
+    "dashboardUnavailableNotice": "सारांश आँकड़े लोड नहीं हो सके — कार्ड में डैश दिख रहा है। नीचे दी गई कर्मचारी सूची प्रभावित नहीं है।"
   },
   "employeesTable": {
     "colEmpCode": "कर्मचारी कोड",
@@ -3063,7 +3087,8 @@
     "emptyMessage": "अवकाश प्रबंधन, उपस्थिति ट्रैकिंग और वेतन प्रसंस्करण को सक्षम करने के लिए अपना पहला कर्मचारी जोड़ें।",
     "addFirstEmployee": "पहला कर्मचारी जोड़ें",
     "emptyErrorTitle": "आपकी टीम लोड नहीं हो सकी",
-    "emptyErrorMessage": "यह आमतौर पर अस्थायी है। कुछ देर में पुनः प्रयास करें — आपके मौजूदा कर्मचारी रिकॉर्ड सुरक्षित हैं।"
+    "emptyErrorMessage": "यह आमतौर पर अस्थायी है। कुछ देर में पुनः प्रयास करें — आपके मौजूदा कर्मचारी रिकॉर्ड सुरक्षित हैं।",
+    "exportNotice": "{count, plural, one {CSV में केवल इस पृष्ठ का 1 कर्मचारी शामिल है।} other {CSV में केवल इस पृष्ठ के # कर्मचारी शामिल हैं।}}"
   },
   "error": {
     "load": {

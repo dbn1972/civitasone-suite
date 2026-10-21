@@ -3277,9 +3277,17 @@ export async function getOrgChart(): Promise<LoaderResult<OrgChartNode[]>> {
   });
 }
 
-export async function getEmployeeById(id: string): Promise<LoaderResult<EmployeeDetail | null>> {
+/**
+ * `opts.fresh` skips Next's 60 s data cache for this read (apiClient maps a
+ * missing `revalidateSeconds` to `cache: "no-store"`). It is meant for the
+ * navigation right AFTER an edit (profile `?updated=1`) and for the edit form
+ * itself: `router.refresh()` does not clear the fetch Data Cache, so without
+ * it the redirected-to profile -- and a second edit's seed values -- can show
+ * the pre-edit record for up to a minute. Every other caller keeps the cache.
+ */
+export async function getEmployeeById(id: string, opts?: { fresh?: boolean }): Promise<LoaderResult<EmployeeDetail | null>> {
   return fetchJson<unknown, EmployeeDetail | null>(`/api/v1/hrms/employees/${id}`, null, {
-    revalidateSeconds: 60,
+    ...(opts?.fresh ? {} : { revalidateSeconds: 60 }),
     telemetryKey: "hr.employee.detail",
     responseSchema: EmployeeDetailSchema,
     mapResponse: (p) => (isRecord(p) ? (p as EmployeeDetail) : null),

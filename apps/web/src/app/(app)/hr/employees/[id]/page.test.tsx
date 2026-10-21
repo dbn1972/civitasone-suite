@@ -168,6 +168,42 @@ describe("EmployeeDetailPage", () => {
     expect(screen.getByText("On Leave")).toBeInTheDocument();
   });
 
+  /**
+   * GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the edit form lands here with ?updated=1
+   * after an accepted save. That one arrival reads the record fresh (the 60 s
+   * data cache would otherwise show the pre-edit values) and warns that the
+   * write may still be settling.
+   */
+  describe("arriving from an accepted edit (?updated=1)", () => {
+    it("reads the employee fresh and shows a dismissible 'being applied' banner", async () => {
+      getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+      const ui = await EmployeeDetailPage({ params: { id: "e1" }, searchParams: { updated: "1" } });
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+      expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1", { fresh: true });
+      const banner = screen.getByText(/Your changes were submitted and are being applied/);
+      expect(banner.closest("[role=status]")).not.toBeNull();
+      expect(screen.getByRole("link", { name: "Dismiss" })).toHaveAttribute("href", "/hr/employees/e1");
+    });
+
+    it("uses the normal cached read, and shows no banner, on an ordinary visit", async () => {
+      getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+      const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+      expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1");
+      expect(screen.queryByText(/being applied/)).not.toBeInTheDocument();
+    });
+
+    it("ignores any other ?updated= value", async () => {
+      getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+      const ui = await EmployeeDetailPage({ params: { id: "e1" }, searchParams: { updated: "yes" } });
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+      expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1");
+      expect(screen.queryByText(/being applied/)).not.toBeInTheDocument();
+    });
+  });
+
   /** GAP-HR-EMPLOYEES-DETAIL-05 */
   it("shows a masked Statutory & Bank card for hr_admin when the API returns masked values, and links Reports To", async () => {
     mockRoles = ["hr_admin"];

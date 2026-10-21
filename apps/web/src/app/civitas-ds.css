@@ -237,6 +237,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* GAP-HR-EMPLOYEES-08: link-style filter chip; the active one is driven by aria-current so server-rendered tab rows need no inline styles. */
 .chip-link{text-decoration:none;border:1px solid var(--line);border-radius:20px;background:var(--bg2)}
 .chip-link[aria-current="page"]{background:var(--primary);color:var(--panel,#fff);border-color:var(--primary)}
+/* GAP-HR-EMPLOYEES-08: wrapper for a row of filter chips (replaces the inline flex style on the row/nav). */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 
 /* ---------------- MOBILE ---------------- */
 .mobile{display:grid;place-items:center;min-height:100vh;background:#0b1220;padding:26px}

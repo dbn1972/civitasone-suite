@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
@@ -88,22 +88,73 @@ type ResolvedRow = {
  * retrying the rest of that chunk — a network-chunk boundary never fails an
  * otherwise-good row.
  *
- * One thing this cannot promise that the old per-row calls could: the
- * single-row endpoint writes synchronously (commands.createEmployee inserts
- * directly), so a 2xx meant "the row is in the database". The bulk endpoint
- * only validates synchronously and then queues actual creation
- * (hrms.employee.create, consumed by employee/consumer.ts) — a 2xx here
- * means "accepted and queued", not yet "confirmed written". The bulk
- * endpoint's own status-polling route (GET .../bulk/status/:batchId) is not
- * wired to real per-row state (see that route's own comment in
- * bulk-import/routes.ts), so there is currently no way to poll for stronger
- * confirmation than this — flagged as a follow-up, not solved here.
+ * GAP-HR-EMPLOYEES-IMPORT-02: the single-row endpoint writes synchronously,
+ * so a 2xx meant "the row is in the database". The bulk endpoint only
+ * validates synchronously and then queues creation (hrms.employee.create,
+ * consumed by employee/consumer.ts) — a 2xx means "accepted and queued", not
+ * "created". Each accepted chunk now returns a batch id whose real per-row
+ * state is persisted by the consumer, so after the last chunk this form polls
+ * GET .../bulk/status/:batchId (every `pollIntervalMs`, for at most
+ * `pollMaxMs`), shows "N submitted" immediately, and only reports "N created"
+ * — plus a named, downloadable list of the rows that failed — once every batch
+ * reports "completed". If the budget runs out (or the server sent no batch id)
+ * the result stays "submitted" and says so; a green "created" is never shown
+ * on the strength of a 202 alone.
+ *
+ * GAP-HR-EMPLOYEES-IMPORT-01: a 403 on any chunk means the caller is not
+ * allowed to bulk-import; it is reported once, as a single permission message,
+ * and no further chunk is sent.
  */
-export function ImportForm() {
+/** One accepted POST /bulk chunk, kept so its status can be polled and its rows named in the report. */
+type AcceptedBatch = { batchId: string; rows: ResolvedRow[] };
+
+type BatchStatus = {
+  status: "processing" | "completed";
+  total: number;
+  created: number;
+  failed: number;
+  pending: number;
+  failedRows: { rowNo: number; employeeNo: string; code: string }[];
+};
+
+// Stable failure codes from the status route -> translated reason (never the server's own text).
+const ROW_FAILURE_KEYS: Record<string, string> = {
+  EMPLOYEE_NO_EXISTS: "rowFailExists",
+  INVALID_REFERENCE: "rowFailReference",
+  INVALID_VALUE: "rowFailInvalid",
+  NOT_QUEUED: "rowFailNotQueued",
+};
+
+function parseBatchStatus(raw: unknown): BatchStatus | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : NaN);
+  const total = num(r.total), created = num(r.created), failed = num(r.failed), pending = num(r.pending);
+  if ([total, created, failed, pending].some(Number.isNaN)) return null;
+  if (r.status !== "processing" && r.status !== "completed") return null;
+  const failedRows = Array.isArray(r.failedRows)
+    ? (r.failedRows as Record<string, unknown>[])
+        .filter((f) => typeof f.rowNo === "number")
+        .map((f) => ({ rowNo: f.rowNo as number, employeeNo: String(f.employeeNo ?? ""), code: String(f.code ?? "") }))
+    : [];
+  return { status: r.status, total, created, failed, pending, failedRows };
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** How often, and for how long, an accepted import is polled for its real outcome. */
+const DEFAULT_POLL_INTERVAL_MS = 2000;
+const DEFAULT_POLL_MAX_MS = 60_000;
+
+export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxMs = DEFAULT_POLL_MAX_MS }: { pollIntervalMs?: number; pollMaxMs?: number } = {}) {
   const t = useTranslations("employeeImportForm");
   const fileRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "done" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "processing" | "done" | "error">("idle");
   const [progress, setProgress] = useState({ total: 0, success: 0, failed: 0 });
+  // GAP-HR-EMPLOYEES-IMPORT-02: what the status route has actually reported. `confirmed`
+  // is true only when EVERY accepted chunk reached "completed"; until then the result is
+  // worded as "submitted", never as a green "created".
+  const [outcome, setOutcome] = useState({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
   const [errors, setErrors] = useState<string[]>([]);
   // GAP-HR-EMPLOYEES-IMPORT-06: structured alongside the plain display
   // strings above (which stay exactly as before, so the existing on-screen
@@ -112,6 +163,9 @@ export function ImportForm() {
   // suitable for re-splitting into columns.
   const [errorRows, setErrorRows] = useState<{ lineNo: number; fullName: string; message: string }[]>([]);
   const formError = useFormError("employee row");
+  // Polling must stop if the page is left mid-import.
+  const unmounted = useRef(false);
+  useEffect(() => () => { unmounted.current = true; }, []);
 
   function downloadErrorReport() {
     const csvLines = [
@@ -129,14 +183,29 @@ export function ImportForm() {
     return new Map(rows.map((r) => [r.code, r.id]));
   }
 
+  /** Batch id out of a 202 body ({ id } flat, or { data: { id } }); null when the server did not send one. */
+  async function readBatchId(res: Response): Promise<string | null> {
+    try {
+      const parsed = JSON.parse(await res.text()) as { id?: unknown; data?: { id?: unknown } };
+      const id = parsed.id ?? parsed.data?.id;
+      return typeof id === "string" && id.length > 0 ? id : null;
+    } catch {
+      return null;
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // One import at a time: the button is disabled while busy, but a second submit
+    // (Enter key, programmatic) must not start a second run either.
+    if (status === "uploading" || status === "processing") return;
     const file = fileRef.current?.files?.[0];
     if (!file) { setStatus("error"); setErrors([t("errSelectFile")]); return; }
 
     setStatus("parsing");
     setErrors([]);
     setErrorRows([]);
+    setOutcome({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
     const text = await file.text();
     // GAP-HR-EMPLOYEES-IMPORT-03: a header-only BOM/CRLF is trimmed by the
     // same per-line .trim() already used below; splitting on "\n" alone
@@ -184,6 +253,10 @@ export function ImportForm() {
     setStatus("uploading");
     setProgress({ total: rows.length, success: 0, failed: errs.length });
     let success = 0;
+    // GAP-HR-EMPLOYEES-IMPORT-01: a 403 means the caller may not bulk-import at all. It is
+    // reported ONCE (not once per row) and stops the run -- retrying the next chunk cannot help.
+    let forbidden = false;
+    const accepted: AcceptedBatch[] = [];
 
     // Resolve codes to ids and validate client-side (see header comment) --
     // rows an unknown code or an invalid field makes un-submittable are
@@ -237,7 +310,7 @@ export function ImportForm() {
     // with no field-level detail to act on), the whole chunk is reported
     // failed rather than guessed at.
     async function submitChunk(chunk: ResolvedRow[]): Promise<void> {
-      if (chunk.length === 0) return;
+      if (chunk.length === 0 || forbidden) return;
       let res: Response;
       try {
         res = await fetch("/api/proxy/v1/hrms/employees/bulk", {
@@ -256,12 +329,17 @@ export function ImportForm() {
       }
 
       if (res.ok || res.status === 202) {
-        // Accepted and queued for async creation — see header comment on why
-        // this isn't the same guarantee the old per-row synchronous calls
-        // gave. Counted the same way ("success") as before: this form has
-        // never had a way to represent "queued but unconfirmed" separately.
+        // Accepted and queued for async creation: "submitted", NOT yet "created".
+        // The batch id lets the status route confirm the real outcome below.
         success += chunk.length;
+        const batchId = await readBatchId(res);
+        if (batchId) accepted.push({ batchId, rows: chunk });
         setProgress({ total: rows.length, success, failed: errs.length });
+        return;
+      }
+
+      if (res.status === 403) {
+        forbidden = true;
         return;
       }
 
@@ -297,13 +375,81 @@ export function ImportForm() {
     }
 
     for (let i = 0; i < resolved.length; i += BULK_MAX_PER_REQUEST) {
+      if (forbidden) break;
       await submitChunk(resolved.slice(i, i + BULK_MAX_PER_REQUEST));
     }
 
+    if (forbidden) {
+      // One message for the whole refusal. Row-level validation noise gathered before it is dropped:
+      // the import was refused outright, so there is nothing for the user to fix row by row.
+      setErrors(success > 0 ? [...errs, t("errForbidden")] : [t("errForbidden")]);
+      setErrorRows(success > 0 ? errRows : []);
+      setOutcome({ submitted: success, created: 0, asyncFailed: 0, polled: false, confirmed: false });
+      setStatus(success > 0 ? "done" : "error");
+      return;
+    }
+
+    // ---- GAP-HR-EMPLOYEES-IMPORT-02: confirm what actually happened -------------------------------
+    // 202 only means queued. Poll each accepted batch's status route until every batch reports
+    // "completed" (or the time budget runs out) and report created / failed from THAT, never from
+    // the 202s. A server that sent no batch id (older backend) simply skips this and stays "submitted".
+    let created = 0;
+    let asyncFailed = 0;
+    let confirmed = accepted.length > 0;
+    if (accepted.length > 0) {
+      setStatus("processing");
+      setOutcome({ submitted: success, created: 0, asyncFailed: 0, polled: true, confirmed: false });
+      const latest = new Map<string, BatchStatus>();
+      const unconfirmable = new Set<string>();
+      const deadline = Date.now() + pollMaxMs;
+      for (;;) {
+        await Promise.all(
+          accepted
+            .filter((b) => latest.get(b.batchId)?.status !== "completed" && !unconfirmable.has(b.batchId))
+            .map(async (b) => {
+              try {
+                const res = await fetch(`/api/proxy/v1/hrms/employees/bulk/status/${encodeURIComponent(b.batchId)}`);
+                if (res.status === 404) { unconfirmable.add(b.batchId); return; }
+                if (!res.ok) return; // transient: try again next round
+                const parsed = parseBatchStatus(JSON.parse(await res.text()));
+                if (parsed) latest.set(b.batchId, parsed);
+              } catch {
+                /* transient: try again next round */
+              }
+            }),
+        );
+        created = 0;
+        asyncFailed = 0;
+        for (const s of latest.values()) { created += s.created; asyncFailed += s.failed; }
+        if (unmounted.current) return;
+        setOutcome({ submitted: success, created, asyncFailed, polled: true, confirmed: false });
+        const allDone = accepted.every((b) => latest.get(b.batchId)?.status === "completed" || unconfirmable.has(b.batchId));
+        if (allDone || Date.now() >= deadline) break;
+        await sleep(pollIntervalMs);
+        if (unmounted.current) return;
+      }
+      confirmed = accepted.every((b) => latest.get(b.batchId)?.status === "completed");
+      // Name each row the server could not create (rowNo is 1-based within the chunk that was posted).
+      for (const b of accepted) {
+        for (const f of latest.get(b.batchId)?.failedRows ?? []) {
+          const row = b.rows[f.rowNo - 1];
+          if (!row) continue;
+          const reason = t(ROW_FAILURE_KEYS[f.code] ?? "rowFailGeneric");
+          errs.push(t("errRowSave", { lineNo: row.lineNo, fullName: row.fullName, message: reason }));
+          errRows.push({ lineNo: row.lineNo, fullName: row.fullName, message: reason });
+        }
+      }
+    }
+
+    setProgress({ total: rows.length, success, failed: errs.length });
+    setOutcome({ submitted: success, created, asyncFailed, polled: accepted.length > 0, confirmed });
     setErrors(errs);
     setErrorRows(errRows);
     setStatus("done");
   }
+
+  const busy = status === "uploading" || status === "processing";
+  const pendingCount = Math.max(0, outcome.submitted - outcome.created - outcome.asyncFailed);
 
   return (
     <form noValidate onSubmit={handleSubmit}>
@@ -321,20 +467,42 @@ export function ImportForm() {
           {t("optionalColumnsHint", { columns: OPTIONAL_COLUMNS.join(", ") })}
         </p>
       </Field>
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <Button type="submit" variant="primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
-          {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
+          {status === "uploading"
+            ? t("importingProgress", { success: progress.success, total: progress.total })
+            : status === "processing"
+              ? t("processingProgress", { done: outcome.created + outcome.asyncFailed, submitted: outcome.submitted })
+              : t("uploadBtn")}
         </Button>
-        {status === "done" && (
+        {/* Shown at once when the server accepts the rows, and kept while the status route is polled. */}
+        {status === "processing" && (
+          <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>
+            {t("submittedProcessing", { submitted: outcome.submitted })}
+          </span>
+        )}
+        {status === "done" && !outcome.polled && (
           <span style={{ fontSize: 13, color: progress.failed === 0 ? "var(--good)" : "var(--bad)" }}>
             {t("resultImported", { success: progress.success })}
             {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
           </span>
         )}
+        {status === "done" && outcome.polled && outcome.confirmed && (
+          <span style={{ fontSize: 13, color: errors.length === 0 ? "var(--good)" : "var(--bad)" }}>
+            {t("resultCreated", { created: outcome.created })}
+            {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
+          </span>
+        )}
+        {/* Not confirmed (timed out, or the status could not be read): never a green check. */}
+        {status === "done" && outcome.polled && !outcome.confirmed && (
+          <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>
+            {t("resultUnconfirmed", { submitted: outcome.submitted, created: outcome.created, pending: pendingCount })}
+          </span>
+        )}
       </div>
       {errors.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", border: "1px solid var(--badbd)", fontSize: 12.5, color: "var(--bad)", maxHeight: 200, overflow: "auto" }}>
+          <div role="alert" style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", border: "1px solid var(--badbd)", fontSize: 12.5, color: "var(--bad)", maxHeight: 200, overflow: "auto" }}>
             {errors.map((e, i) => <div key={i}>{e}</div>)}
           </div>
           {/* GAP-HR-EMPLOYEES-IMPORT-06: errors only ever lived in local

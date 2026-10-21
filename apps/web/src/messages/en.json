@@ -2619,7 +2619,7 @@
     "quickActionsTitle": "Quick Actions",
     "lifecycleActionsTitle": "Lifecycle (HR only)",
     "actionsUnavailableExited": "Lifecycle actions are unavailable — this employee has left the organisation.",
-    "actionsUnavailableOther": "Actions are unavailable while the employee is {status}.",
+    "actionsUnavailableOther": "Actions are unavailable while the employee's status is {status}.",
     "actionApplyLeave": "🌴 Apply Leave",
     "actionSalarySlips": "🧾 Salary Slips",
     "actionInitiateTransfer": "🔄 Initiate Transfer",
@@ -2657,7 +2657,11 @@
     "marital_single": "Single",
     "marital_married": "Married",
     "marital_divorced": "Divorced",
-    "marital_widowed": "Widowed"
+    "marital_widowed": "Widowed",
+    "actionsLimitedOnLeave": "This employee is on leave. Transfer, promotion and separation are withheld until they return; leave, attendance, service book and salary slips stay available.",
+    "lifecycleUnavailable": "Transfers, promotions or deputations couldn't be loaded right now, so this history may be incomplete. Please try again in a moment.",
+    "updatedBanner": "Your changes were submitted and are being applied. If a value still looks old, refresh in a moment.",
+    "updatedBannerDismiss": "Dismiss"
   },
   "employeeEdit": {
     "pageTitle": "Edit Employee",
@@ -2668,7 +2672,7 @@
     "formIntro": "Only the fields below can be updated. For structural changes (name, department, designation) contact HR administration.",
     "fixHighlightedFields": "Please fix the highlighted fields.",
     "noChangesDetected": "No changes detected. Update a field before saving.",
-    "updateSubmitted": "Update submitted. Redirecting…",
+    "updateSubmitted": "Update submitted.",
     "roLabelEmployeeId": "Employee ID",
     "roLabelDepartment": "Department",
     "roLabelDesignation": "Designation",
@@ -2710,7 +2714,16 @@
     "savingBtn": "Saving…",
     "saveChangesBtn": "Save Changes",
     "cancelBtn": "Cancel",
-    "loadingLabel": "Loading edit form…"
+    "loadingLabel": "Loading edit form…",
+    "currentValue": "Current: {value}",
+    "changeBtn": "Change",
+    "keepCurrentBtn": "Keep current",
+    "confirmBankAccountLabel": "Confirm bank account no.",
+    "confirmBankAccountPlaceholder": "Re-enter the account number",
+    "confirmAccountMismatch": "The two account numbers don't match. Re-enter them.",
+    "bankAccountFormatError": "Enter the account number as digits only (9 to 18 digits).",
+    "ifscFormatError": "Enter a valid IFSC: four letters, a zero, then six letters or digits (e.g. SBIN0001234).",
+    "pickerSearchError": "Couldn't load employees. Please try again."
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
@@ -2782,7 +2795,17 @@
     "uploadBtn": "Upload & Import",
     "resultImported": "{success} submitted",
     "resultFailedSuffix": ", {failed} failed",
-    "downloadErrorReport": "Download error report (CSV)"
+    "downloadErrorReport": "Download error report (CSV)",
+    "errForbidden": "You don't have permission to import employees.",
+    "processingProgress": "Creating employees… ({done}/{submitted})",
+    "submittedProcessing": "{submitted} submitted for creation — waiting for confirmation.",
+    "resultCreated": "{created} created",
+    "resultUnconfirmed": "{submitted} submitted. {created} confirmed created so far, {pending} still being processed — check the employee list in a moment.",
+    "rowFailExists": "this employee number already exists",
+    "rowFailReference": "a record it refers to no longer exists",
+    "rowFailInvalid": "a value was rejected by the server",
+    "rowFailNotQueued": "it could not be queued — please import it again",
+    "rowFailGeneric": "the employee could not be created"
   },
   "employeeTypes": {
     "title": "Employee Types",
@@ -3072,7 +3095,8 @@
     "showingRange": "Showing {from}–{to} of {total} employees",
     "othersLegend": "Others: employees who are neither serving (probation, confirmed, deputation) nor on leave — e.g. suspended, retired, terminated, no-show.",
     "statusFilterLabel": "Filter by status",
-    "statusAll": "All statuses"
+    "statusAll": "All statuses",
+    "dashboardUnavailableNotice": "Summary figures couldn't be loaded — the cards show a dash. The employee list below is unaffected."
   },
   "employeesTable": {
     "colEmpCode": "Emp Code",
@@ -3087,7 +3111,8 @@
     "emptyMessage": "Add your first employee to unlock leave management, attendance tracking, and payroll processing.",
     "addFirstEmployee": "Add first employee",
     "emptyErrorTitle": "Couldn't load your team",
-    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe."
+    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe.",
+    "exportNotice": "{count, plural, one {CSV includes only the 1 employee on this page.} other {CSV includes only the # employees on this page.}}"
   },
   "error": {
     "load": {

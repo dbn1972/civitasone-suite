@@ -4,10 +4,10 @@ import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { ImportForm } from "./ImportForm";
 
-function renderForm() {
+function renderForm(props: React.ComponentProps<typeof ImportForm> = {}) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <ImportForm />
+      <ImportForm {...props} />
     </NextIntlClientProvider>,
   );
 }
@@ -319,5 +319,188 @@ describe("ImportForm — error report download", () => {
     fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
 
     expect(await screen.findByRole("button", { name: /download error report/i })).toBeInTheDocument();
+  });
+});
+
+const TWO_ROW_CSV =
+  "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
+  "EMP-001,Ravi Kumar,ravi@office.gov.in,9876543210,FIN,JC,permanent,2024-01-15,44900,male\n" +
+  "EMP-003,Asha Rao,asha@office.gov.in,9988776655,FIN,JC,permanent,2024-03-01,42000,female\n";
+
+function fileOf(csv: string) {
+  const file = new File([csv], "employees.csv", { type: "text/csv" });
+  Object.defineProperty(file, "text", { value: async () => csv });
+  return file;
+}
+
+function chooseAndSubmit(csv: string) {
+  const input = document.getElementById("import-csv-file") as HTMLInputElement;
+  fireEvent.change(input, { target: { files: [fileOf(csv)] } });
+  fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+}
+
+const MASTERS = (url: string): Response | null => {
+  if (url === "/api/proxy/v1/hrms/departments") return { ok: true, json: async () => ({ data: [{ id: "dept-fin-uuid", code: "FIN" }] }) } as Response;
+  if (url === "/api/proxy/v1/hrms/designations") return { ok: true, json: async () => ({ data: [{ id: "desig-jc-uuid", code: "JC" }] }) } as Response;
+  return null;
+};
+
+/**
+ * GAP-HR-EMPLOYEES-IMPORT-01: a 403 is ONE permission message, not one
+ * "couldn't save" line per row, and it stops the run.
+ */
+describe("ImportForm — 403 is a single permission message", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows exactly one permission message for a refused chunk of several rows -- no per-row lines", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const m = MASTERS(url);
+      if (m) return m;
+      if (url === "/api/proxy/v1/hrms/employees/bulk" && init?.method === "POST") {
+        return { ok: false, status: 403, text: async () => JSON.stringify({ code: "FORBIDDEN", message: "role not allowed" }) } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "" } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+    chooseAndSubmit(TWO_ROW_CSV);
+
+    expect(await screen.findByText("You don't have permission to import employees.")).toBeInTheDocument();
+    expect(screen.getAllByText(/permission to import employees/i)).toHaveLength(1);
+    expect(screen.queryByText(/couldn't save/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ravi Kumar/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Asha Rao/)).not.toBeInTheDocument();
+    // nothing "submitted", no per-row CSV report to download
+    expect(screen.queryByText(/submitted/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download error report/i })).not.toBeInTheDocument();
+  });
+
+  it("stops after the first refused chunk instead of sending the rest (501 rows = 2 chunks, 1 request)", async () => {
+    let bulkCalls = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const m = MASTERS(url);
+      if (m) return m;
+      if (url === "/api/proxy/v1/hrms/employees/bulk" && init?.method === "POST") {
+        bulkCalls++;
+        return { ok: false, status: 403, text: async () => "{}" } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "" } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const header = "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n";
+    const rows = Array.from({ length: 501 }, (_, i) => `EMP-${i},Person ${i},,,FIN,JC,permanent,2024-01-15,44900,male`).join("\n");
+    renderForm();
+    chooseAndSubmit(header + rows + "\n");
+
+    expect(await screen.findByText("You don't have permission to import employees.")).toBeInTheDocument();
+    expect(bulkCalls).toBe(1);
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-IMPORT-02: "submitted" immediately; "created N" only after
+ * the status route says so; failed rows named; never a green check on a 202.
+ */
+describe("ImportForm — confirms the real outcome through the status route", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  type StatusReply = { ok: boolean; status: number; body?: unknown };
+  function backend(opts: { batchBody?: string; statuses: StatusReply[] | (() => StatusReply) }) {
+    const statusCalls: string[] = [];
+    let n = 0;
+    const fn = vi.fn(async (url: string, init?: RequestInit) => {
+      const m = MASTERS(url);
+      if (m) return m;
+      if (url === "/api/proxy/v1/hrms/employees/bulk" && init?.method === "POST") {
+        return { ok: true, status: 202, text: async () => opts.batchBody ?? JSON.stringify({ id: "batch-1", status: "accepted" }) } as Response;
+      }
+      if (url.startsWith("/api/proxy/v1/hrms/employees/bulk/status/")) {
+        statusCalls.push(url);
+        const r = typeof opts.statuses === "function" ? opts.statuses() : (opts.statuses[Math.min(n++, opts.statuses.length - 1)] as StatusReply);
+        return { ok: r.ok, status: r.status, text: async () => JSON.stringify(r.body ?? {}) } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "" } as Response;
+    });
+    return Object.assign(fn, { statusCalls });
+  }
+  const processing = { ok: true, status: 200, body: { batchId: "batch-1", status: "processing", total: 2, created: 1, failed: 0, pending: 1, failedRows: [] } };
+  const completedOk = { ok: true, status: 200, body: { batchId: "batch-1", status: "completed", total: 2, created: 2, failed: 0, pending: 0, failedRows: [] } };
+
+  it("says 'submitted' while processing, shows no 'created' yet, and reports 'created' only after completion", async () => {
+    const fetchMock = backend({ statuses: [processing, processing, completedOk] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm({ pollIntervalMs: 20, pollMaxMs: 5000 });
+    chooseAndSubmit(TWO_ROW_CSV);
+
+    const submitted = await screen.findByText(/2 submitted for creation/i);
+    expect(submitted).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ created/)).not.toBeInTheDocument();
+    // the button is disabled for the whole poll
+    expect(screen.getByRole("button", { name: /creating employees/i })).toBeDisabled();
+
+    expect(await screen.findByText("2 created")).toBeInTheDocument();
+    expect(fetchMock.statusCalls.length).toBeGreaterThanOrEqual(3);
+    expect(fetchMock.statusCalls[0]).toBe("/api/proxy/v1/hrms/employees/bulk/status/batch-1");
+    expect(screen.queryByText(/still being processed/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload & import/i })).toBeEnabled();
+  });
+
+  it("names a row the server could not create, from the stable failure code, in the list and the CSV report", async () => {
+    const failed = {
+      ok: true, status: 200,
+      body: { batchId: "batch-1", status: "completed", total: 2, created: 1, failed: 1, pending: 0, failedRows: [{ rowNo: 2, employeeNo: "EMP-003", code: "EMPLOYEE_NO_EXISTS" }] },
+    };
+    vi.stubGlobal("fetch", backend({ statuses: [failed] }));
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 5000 });
+    chooseAndSubmit(TWO_ROW_CSV);
+
+    expect(await screen.findByText("Row 3 (Asha Rao): this employee number already exists")).toBeInTheDocument();
+    expect(screen.getByText(/1 created, 1 failed/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download error report/i })).toBeInTheDocument();
+  });
+
+  it("falls back to a generic reason for an unknown failure code (never the server's own text)", async () => {
+    const failed = {
+      ok: true, status: 200,
+      body: { batchId: "batch-1", status: "completed", total: 2, created: 1, failed: 1, pending: 0, failedRows: [{ rowNo: 1, employeeNo: "EMP-001", code: "SOMETHING_NEW" }] },
+    };
+    vi.stubGlobal("fetch", backend({ statuses: [failed] }));
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 5000 });
+    chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText("Row 2 (Ravi Kumar): the employee could not be created")).toBeInTheDocument();
+  });
+
+  it("never shows a green 'created' when polling times out: it says how many are confirmed and how many are still pending", async () => {
+    vi.stubGlobal("fetch", backend({ statuses: () => processing }));
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 60 });
+    chooseAndSubmit(TWO_ROW_CSV);
+
+    expect(await screen.findByText(/2 submitted\. 1 confirmed created so far, 1 still being processed/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
+  });
+
+  it("does not claim success when the status route cannot find the batch (404)", async () => {
+    vi.stubGlobal("fetch", backend({ statuses: () => ({ ok: false, status: 404 }) }));
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 500 });
+    chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText(/2 submitted\. 0 confirmed created so far, 2 still being processed/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
+  });
+
+  it("keeps polling through a transient status failure and then reports the real result", async () => {
+    vi.stubGlobal("fetch", backend({ statuses: [{ ok: false, status: 503 }, completedOk] }));
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 5000 });
+    chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText("2 created")).toBeInTheDocument();
+  });
+
+  it("with no batch id in the 202 there is nothing to poll: the result stays 'submitted'", async () => {
+    const fetchMock = backend({ batchBody: "{}", statuses: [completedOk] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 500 });
+    chooseAndSubmit(TWO_ROW_CSV);
+    expect(await screen.findByText(/^2 submitted$/)).toBeInTheDocument();
+    expect(fetchMock.statusCalls).toHaveLength(0);
+    expect(screen.queryByText(/created/)).not.toBeInTheDocument();
   });
 });
