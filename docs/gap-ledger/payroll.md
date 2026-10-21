@@ -90,7 +90,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-HOME-06  ·  MEDIUM  ·  partly  ·  theme CACHE (was VALIDATION)
 
-- [x] **Status** — PR #1752 (merged): cache-staleness after Create Run fixed.
+- [x] **Status** — PR #1752 (merged): cache-staleness after Create Run fixed. PayrollRunsTable re-seeds from refreshed server data, so the router.refresh() branches (pay-group created-many, no-id fallback) show the new run; PayrollRunsTable.fresh.test.tsx. Residual (not code-fixable here): Next 14 client Router Cache on back-navigation. (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Runs list is cached: revalidateSeconds 120 (loaders.ts:2311). After Create Run, router.refresh() (CreatePayrollRunForm.tsx:104) can still show the old list for up to two minutes.
 - **Verified evidence:** loaders.ts:2310-2315 uses revalidateSeconds:120 (apiClient.ts:137 next:{revalidate}) so router.refresh() alone does not bypass the data cache. But CreatePayrollRunForm.tsx:99-101 on success with body.id does router.push to the new run (fresh page for the id); router.refresh() (104) runs only in the fallback with no id. The stale list on return to /hr/payroll for up to 120s is still real. No revalidateTag/path is called anywhere in the form flow.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/hr/payroll/CreatePayrollRunForm.tsx`
@@ -1567,7 +1567,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-INCOME-TAX-02  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** — PR #1753 (merged): page-level role gate added (PAYROLL_TAX_READER_ROLES), matching backend READER_ROLES exactly; verified no actual leak existed pre-fix since employee rows were already self-scoped and manager already got a backend 403.
+- [~] **Status** — PR #1753 (merged): page-level role gate added (PAYROLL_TAX_READER_ROLES), matching backend READER_ROLES exactly; verified no actual leak existed pre-fix since employee rows were already self-scoped and manager already got a backend 403. W2 payroll rescan: OPEN, OWNER DECISION. Employee is admitted by design (backend pins an employee caller to their own row via requireOwnEmployeeId; manager gets a backend 403 and PermissionDenied; tax-declaration links employees here after filing), so the acceptance 'Employee role sees PermissionDenied' is NOT implemented. Tests added: payroll-ownership-idspace (employeeId per row, manager 403). OWNER QUESTION: should the employee role see PermissionDenied on /hr/payroll/income-tax (removing the own-row self-view and the link from the tax-declaration page), or is own-row self-view the intended behaviour?
 - **First-pass claim:** Tenant-wide list of every employee's gross income, deductions and tax with no page-level role gate (hr/layout.tsx admits manager and employee, layout.tsx:32-42); page.tsx never calls getSessionRoles. Whether the backend restricts it cannot be verified here — DPDP-sensitive salary data.
 - **Verified evidence:** income-tax/page.tsx has no getSessionRoles/PermissionDenied; it renders all employees' gross, deductions, tax (columns 36-44). hr/layout.tsx admits manager/employee. Backend restriction cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/income-tax/page.tsx`
@@ -1582,7 +1582,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-INCOME-TAX-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** — PR #1753 (merged): added the missing Department column and unified back-links to /hr/payroll.
+- [x] **Status** — PR #1753 (merged): added the missing Department column and unified back-links to /hr/payroll. Rows now open /hr/employees/{employeeId}: payroll-service tax/routes.ts adds an additive employeeId to each row (id stays declaration-id-or-employee-id), IncomeTaxTable passes rowHref + identifyingColumnKey. (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** "Departments" StatCard counts distinct department (page.tsx:56) but department is not a table column (page.tsx:36-44), and the rows are not linked to an employee or declaration (no rowLinkPrefix) — the reviewer cannot drill in. Row.id is fetched but unused.
 - **Verified evidence:** page.tsx:56 counts new Set(items.map(i=>i.department)).size but columns (36-44) have no department; DataTable at 64 has no rowLinkKey/rowLinkPrefix; Row.id and employee (name?) present but unused for links. Unknown whether backend returns employeeId, so linking may need backend field.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/income-tax/page.tsx`
@@ -1596,7 +1596,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-INCOME-TAX-04  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [x] **Status** — PR #1753 (merged): Finalized/Pending bucketing fixed to match the real backend status vocabulary (always submitted, never finalized/completed) — traced to tax/consumer.ts.
+- [x] **Status** — PR #1753 (merged): Finalized/Pending bucketing fixed to match the real backend status vocabulary (always submitted, never finalized/completed) — traced to tax/consumer.ts. bucketIncomeTaxStatuses() (statusLabels.ts): Finalized + Pending + Other always sum to Total (Other tile shows when > 0); verified/approved (DB-valid) get en/hi labels. (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Status buckets are incomplete: Finalized = finalized|completed, Pending = pending|draft (page.tsx:54-55); any other backend status (e.g. rejected, submitted) counts in Total only, so cards do not sum. Status pill prints the raw enum (cellType status) with no i18n, unlike SalarySlipsTable.
 - **Verified evidence:** page.tsx:54-55 Finalized = finalized|completed, Pending = pending|draft; other statuses count only in Total. Column status uses cellType 'status' (StatusPill with raw humanized text, no payrollRunStatusLabel-like i18n as in SalarySlipsTable). Status enum of backend unknown.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/income-tax/page.tsx`, `apps/web/src/lib/payroll/statusLabels.ts`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`
@@ -1733,7 +1733,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-LOANS-06  ·  LOW  ·  partly  ·  theme DEADCARD (was OTHER)
 
-- [x] **Status** — PR #1798 (merged)
+- [~] **Status** — PR #1798 (merged) W2 payroll rescan: Recovery Schedule card is conditional and real-data-backed (met). OPEN, OWNER DECISION: no scheme-level loan ceiling per pay level (HBA/vehicle/festival) exists in the repo or tenant config (loans/policy.ts has only an explicitly-unconfirmed 50% combined-EMI placeholder), so no 'Max eligible' hint was built. OWNER QUESTION: are per-pay-level ceilings required for HBA / vehicle / festival advance? If yes, supply the ceiling table (pay level x loan type, with the governing order/rule) or approve a tenant-configurable ceiling table; the API and the CreateLoanForm hint are built after that.
 - **First-pass claim:** Recovery Schedule is a permanent EmptyState (page.tsx:75–81), so the page ships a card that can never hold data; a scheme-level loan ceiling per pay level (HBA/vehicle/festival) is not surfaced.
 - **Verified evidence:** page.tsx:75-81 renders a Recovery Schedule Card containing only an EmptyState; en.json payrollLoans.recoveryEmptyMessage honestly says no per-installment schedule endpoint exists yet, so it is a disclosed placeholder, not fabricated data. The scheme-level ceiling part is a feature gap: nothing in the page or LoanRow carries a ceiling, and no ceiling endpoint is visible (payroll-service absent).
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/loans/page.tsx`, `apps/web/src/messages/en.json`
@@ -2227,7 +2227,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-PERIOD-01  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** — PR #1752 (merged), as part of the same run-lifecycle cluster fix.
+- [x] **Status** — PR #1752 (merged), as part of the same run-lifecycle cluster fix. Page title/card title/empty copy and the HR dashboard tile (hr.payrollPeriod/hr.payrollPeriodDesc) retitled to a run history ('Payroll Runs by Period', 'Monthly payroll run history and status'); rows link to /hr/payroll/{id} (tested). Open product question (non-blocking): redirect/merge this route into /hr/payroll/runs, or keep it separate? (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Not a period view: it lists the same runs as /hr/payroll and /hr/payroll/runs (page.tsx header comment). No period open/close or lock, so "Payroll Periods" promises more than it shows, and nothing here links to the run detail.
 - **Verified evidence:** period/page.tsx:9-20 comment and :62 show it calls getPayrollRunDetails() (same as /hr/payroll and /runs). No period open/close/lock control exists; DataTable (102) has no rowLinkKey/rowLinkPrefix, so rows do not link to /hr/payroll/{id} (runs/page.tsx:64 does). Title from payrollPeriod.title implies period management.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/period/page.tsx`, `apps/web/src/messages/en.json`
@@ -2243,7 +2243,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-PERIOD-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1752 (merged): stat tiles fixed to total-minus-paid logic, same fix as the Home page.
+- [x] **Status** — PR #1752 (merged): stat tiles fixed to total-minus-paid logic, same fix as the Home page. Period tiles: Total / Paid / In progress / Failed (bucketPayrollRuns, shared with Payroll home; always sum to Total) and Employees = the latest run's count (latestPayrollRun). (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Employees total sums headcount across every run (page.tsx:94), counting each person once per month; "Completed" counts paid runs too and omits approved/failed, as does "Processing" (approved runs vanish from both).
 - **Verified evidence:** period/page.tsx:94 sums employeesProcessed over all runs (a person paid monthly is counted once per run). Line 92 Completed = completed|paid; line 93 Processing = processing|draft; approved, failed (and others) fall in neither. Payroll home (page.tsx:31-38) uses the same paid/completed vs draft/processing split, so it is consistent but incomplete.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/period/page.tsx`, `apps/web/src/messages/en.json`
@@ -2291,7 +2291,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-PERIOD-05  ·  LOW  ·  confirmed  ·  theme I18N (was VALIDATION)
 
-- [x] **Status** — PR #1752 (merged), as part of the same run-lifecycle cluster fix.
+- [x] **Status** — PR #1752 (merged), as part of the same run-lifecycle cluster fix. Period passes payrollRunStatusVariant (statusVariants) next to the translated labels, so a run reads and is coloured identically on Home, Runs and Period in en and hi (period/statusParity.test.tsx); bucket logic lives in statusLabels.ts. (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Duplicate of runs pages increases maintenance: three routes read the same endpoint with three different status treatments (cellType status here, translated pill on home, plain pill on runs).
 - **Verified evidence:** Three views of one endpoint: period/page.tsx:83 uses cellType:'status' (DataTable.tsx:131 raw enum, untranslated); PayrollRunsTable.tsx:33 uses StatusPill with payrollRunStatusLabel (translated); runs/page.tsx:70 uses StatusPill status only (no label). Home stat logic (page.tsx:31-38) differs again.
 - **Files to change:** `apps/web/src/app/(app)/hr/payroll/period/page.tsx`, `apps/web/src/app/(app)/hr/payroll/runs/page.tsx`, `apps/web/src/app/(app)/hr/payroll/PayrollRunsTable.tsx`
@@ -4171,7 +4171,7 @@ Counts: ACTION 236, BACKEND-VERIFY 20, CANNOT-VERIFY 3
 
 ### GAP-PAYROLL-RETURNS-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1761 (merged)
+- [x] **Status** — PR #1761 (merged) Every *Minor amount on GET form24q, POST form24q/force-file and GET form26q (incl. the embedded reconciliation.perPeriod) is an integer paise JSON number (26Q was bigint strings); the whole-rupee twins (tdsDeducted, tdsDeposited, totalTdsDeducted, totalTdsDeposited, challanSummary[].tdsDeposited) are gone from the 24Q wire and survive only inside the TRACES flat file (wholeRupees(), output unchanged); tests/returns-money-units.test.ts. Note: Q4 annexureII still carries Form 16 Part B figures in whole rupees by design. (W2 payroll rescan: completed by #PRNUM)
 - **First-pass claim:** Money crosses three ways for one figure: 24Q amounts are numbers of paise, 26Q are strings (page.tsx:38-49,183-187), the annual tile converts through minorToRupeesOrNull + Intl (TaxReturnsSummary.tsx:45,70), and the force-file result treats totalTdsDeducted as rupees ×100 (ForceFileButton.tsx:99) — one payroll-service response family with mixed units (payroll-service not in snapshot).
 - **Service:** `payroll-service`  ·  **Endpoint(s):** `['GET statutory/form24q', 'GET statutory/form26q', 'POST statutory/form24q/force-file']`
 - **Question:** Do all return endpoints use one money unit (paise integers) with consistent types?
