@@ -1,11 +1,9 @@
 import Link from "next/link";
 
-// GAP-HR-DASHBOARD-09: every entry now var()-wrapped -- #2563eb/#16a34a
-// already match the established --info/--good tokens used fleet-wide (same
-// fallback value, reused directly); #818cf8/#64748b/#a3a3a3 have no existing
-// semantic match (plain rotating chart-series colours), so page-local
-// --dash-dept-* names cover them instead. No token is defined anywhere for
-// the new names, so every fallback renders identically to before this change.
+// GAP-HR-DASHBOARD-09: rotating bar colours. Entries with a semantic match use
+// the design-system tokens (--info/--warn/--good/--bad/--muted); series 4 and 7
+// have none, so they are page-local --dash-dept-series-N tokens defined (light
+// and dark) in dashboard.css.
 const BAR_COLORS = ["var(--info)", "var(--warn)", "var(--good)", "var(--dash-dept-series-4)", "var(--bad)", "var(--muted)", "var(--dash-dept-series-7)"];
 
 interface Props {
@@ -50,20 +48,6 @@ export function DeptHeadcountChart({ breakdown, scopeNote }: Props) {
           ))
         )}
       </div>
-      <style>{`
-        .dept-panel { background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09);overflow:hidden; }
-        .dept-head { padding:13px 16px 11px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between; }
-        .dept-title { font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px; }
-        .dept-scope-note { font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--bg);border-radius:4px;padding:2px 6px; }
-        .dept-link { font-size:11px;color:var(--info);font-weight:600;text-decoration:none; }
-        .dept-body { padding:4px 0 8px; }
-        .dept-row { padding:8px 16px; }
-        .dept-meta { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px; }
-        .dept-name { font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%; }
-        .dept-count { font-size:12px;font-weight:700;font-variant-numeric:tabular-nums; }
-        .bar-track { height:5px;background:var(--slate-200);border-radius:3px;overflow:hidden; }
-        .bar-fill { height:100%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1); }
-      `}</style>
     </div>
   );
 }
