@@ -15,7 +15,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
-import { assertEligibleManager } from "./manager-eligibility.js";
+import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -327,7 +327,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     // serving colleague who does not (transitively) report to this employee --
     // never self, never exited staff. An unchanged value is not re-validated, so
     // an unrelated edit is not blocked because the existing manager has since left.
-    if (body.managerId !== undefined && body.managerId !== emp.managerId) {
+    if (body.managerId !== undefined && !isSameEmployeeId(body.managerId, emp.managerId)) {
       await assertEligibleManager(
         async (eid) => {
           const row = await repo.findById(eid, ctx.tenantId);

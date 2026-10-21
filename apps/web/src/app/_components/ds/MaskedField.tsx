@@ -50,12 +50,20 @@ export function MaskedField({
   const hasMasked = !!maskedValue && maskedValue.trim() !== "";
   const [editing, setEditing] = useState(!hasMasked);
   const inputRef = useRef<HTMLInputElement>(null);
+  const changeRef = useRef<HTMLButtonElement>(null);
   const focusOnEdit = useRef(false);
+  const focusOnKeep = useRef(false);
 
   useEffect(() => {
     if (editing && focusOnEdit.current) {
       focusOnEdit.current = false;
       inputRef.current?.focus();
+    }
+    // "Keep current" unmounts the input (and the button that was just pressed), which would
+    // drop keyboard focus to <body>. Hand it back to the Change button that replaces them.
+    if (!editing && focusOnKeep.current) {
+      focusOnKeep.current = false;
+      changeRef.current?.focus();
     }
   }, [editing]);
 
@@ -66,6 +74,7 @@ export function MaskedField({
   }
 
   function keepCurrent() {
+    focusOnKeep.current = true;
     onChange("");
     setEditing(false);
     onEditingChange?.(false);
@@ -77,7 +86,7 @@ export function MaskedField({
         <span style={formLabelStyle}>{label}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 14, color: "var(--ink)" }}>{currentLabel}</span>
-          <Button variant="ghost" size="sm" onClick={startChange} aria-label={`${changeLabel}: ${label}`}>
+          <Button ref={changeRef} variant="ghost" size="sm" onClick={startChange} aria-label={`${changeLabel}: ${label}`}>
             {changeLabel}
           </Button>
         </div>
@@ -94,7 +103,7 @@ export function MaskedField({
       {hasMasked && (
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <span style={{ fontSize: 12, color: "var(--mut)" }}>{currentLabel}</span>
-          <Button variant="ghost" size="sm" onClick={keepCurrent}>{keepLabel}</Button>
+          <Button variant="ghost" size="sm" onClick={keepCurrent} aria-label={`${keepLabel}: ${label}`}>{keepLabel}</Button>
         </div>
       )}
       {children}

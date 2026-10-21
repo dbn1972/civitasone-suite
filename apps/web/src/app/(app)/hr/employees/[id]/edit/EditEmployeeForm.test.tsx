@@ -255,12 +255,23 @@ describe("EditEmployeeForm — masked bank account entry", () => {
     renderWithBank();
     reveal();
     type("Bank Account No.", "00099988877");
-    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep current: Bank Account No." }));
     expect(screen.queryByLabelText("Bank Account No.")).not.toBeInTheDocument();
+    // focus moves back to the Change button rather than being lost with the unmounted input
+    expect(screen.getByRole("button", { name: "Change: Bank Account No." })).toHaveFocus();
     type("Email", "keep@example.gov.in");
     save();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({ email: "keep@example.gov.in" });
+  });
+
+  it("with Mobile and Bank account both being changed, each 'Keep current' button is named after its own field", () => {
+    renderWithBank();
+    fireEvent.click(screen.getByRole("button", { name: "Change: Mobile" }));
+    reveal();
+    expect(screen.getByRole("button", { name: "Keep current: Mobile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep current: Bank Account No." })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Keep current" })).not.toBeInTheDocument();
   });
 
   it("sends the confirmed account number once both entries match and a reason is given -- never a value containing '*'", async () => {

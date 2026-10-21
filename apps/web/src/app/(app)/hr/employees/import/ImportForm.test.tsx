@@ -1,15 +1,18 @@
+import { StrictMode } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { ImportForm } from "./ImportForm";
 
-function renderForm(props: React.ComponentProps<typeof ImportForm> = {}) {
-  return render(
+function renderForm(props: React.ComponentProps<typeof ImportForm> = {}, opts: { strict?: boolean } = {}) {
+  const form = (
     <NextIntlClientProvider locale="en" messages={enMessages}>
       <ImportForm {...props} />
-    </NextIntlClientProvider>,
+    </NextIntlClientProvider>
   );
+  // next.config sets reactStrictMode: true, so `next dev` mounts every effect twice (mount, cleanup, mount).
+  return render(opts.strict ? <StrictMode>{form}</StrictMode> : form);
 }
 
 const CSV =
@@ -443,6 +446,37 @@ describe("ImportForm — confirms the real outcome through the status route", ()
     expect(fetchMock.statusCalls[0]).toBe("/api/proxy/v1/hrms/employees/bulk/status/batch-1");
     expect(screen.queryByText(/still being processed/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /upload & import/i })).toBeEnabled();
+  });
+
+  // next.config sets reactStrictMode: true, so in `next dev` React mounts, cleans up and mounts again.
+  // A guard that only ever flips to "unmounted" in its cleanup stays true after that second mount, the
+  // poll loop bails after its first round, and the form sits in "processing" forever.
+  it("under React StrictMode the poll still runs to completion: 'created' is reported and the button is re-enabled", async () => {
+    const fetchMock = backend({ statuses: [processing, processing, completedOk] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm({ pollIntervalMs: 20, pollMaxMs: 5000 }, { strict: true });
+    chooseAndSubmit(TWO_ROW_CSV);
+
+    expect(await screen.findByText(/2 submitted for creation/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\d+ created/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /creating employees/i })).toBeDisabled();
+
+    expect(await screen.findByText("2 created")).toBeInTheDocument();
+    expect(fetchMock.statusCalls.length).toBeGreaterThanOrEqual(3);
+    expect(screen.queryByText(/still being processed/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /upload & import/i })).toBeEnabled();
+  });
+
+  it("stops polling once the form is really unmounted (guard still works after the StrictMode fix)", async () => {
+    const fetchMock = backend({ statuses: () => processing });
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderForm({ pollIntervalMs: 20, pollMaxMs: 5000 }, { strict: true });
+    chooseAndSubmit(TWO_ROW_CSV);
+    await screen.findByText(/2 submitted for creation/i);
+    view.unmount();
+    const callsAtUnmount = fetchMock.statusCalls.length;
+    await new Promise((r) => setTimeout(r, 150));
+    expect(fetchMock.statusCalls.length).toBeLessThanOrEqual(callsAtUnmount + 1);
   });
 
   it("names a row the server could not create, from the stable failure code, in the list and the CSV report", async () => {

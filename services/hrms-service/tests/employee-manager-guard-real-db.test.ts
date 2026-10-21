@@ -52,11 +52,11 @@ const auth = (roles = ["hr_admin"]) => ({
 
 let app: FastifyInstance;
 
-async function seedEmployee(status: string, managerId: string | null = null): Promise<string> {
+async function seedEmployee(status: string, managerId: string | null = null, label = "Mgr Guard"): Promise<string> {
   const id = randomUUID();
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.insert(hrmsEmployees).values({
-      id, tenantId: TENANT, employeeNo: `E-${id.slice(0, 8)}`, fullName: `Mgr Guard ${status} ${id.slice(0, 4)}`,
+      id, tenantId: TENANT, employeeNo: `E-${id.slice(0, 8)}`, fullName: `${label} ${status} ${id.slice(0, 4)}`,
       departmentId: deptId, designationId: desigId, dateOfJoining: "2015-01-01",
       status, employeeType: "permanent", managerId, createdBy: ACTOR, updatedBy: ACTOR,
     });
@@ -69,6 +69,9 @@ async function managerOf(id: string): Promise<string | null> {
     .from(hrmsEmployees).where(and(eq(hrmsEmployees.id, id), eq(hrmsEmployees.tenantId, TENANT))).limit(1)));
   return rows[0]?.managerId ?? null;
 }
+
+/** Employees seeded by the id-case tests; named apart from "Mgr Guard" so they never enter the picker-search assertions. */
+const seedCaseGuard = (status: string, managerId: string | null = null): Promise<string> => seedEmployee(status, managerId, "Case Guard");
 
 const patch = (id: string, payload: Record<string, unknown>) =>
   app.inject({ method: "PATCH", url: `/v1/hrms/employees/${id}`, headers: auth(), payload });
@@ -101,6 +104,45 @@ describe("PATCH /v1/hrms/employees/:id managerId -- eligibility (route)", () => 
     expect(publish).not.toHaveBeenCalled();
     publish.mockRestore();
     expect(await managerOf(emp)).toBeNull();
+  });
+
+  // zod .uuid() accepts upper-case hex and Postgres matches uuids case-insensitively,
+  // so the same employee can be spelled two ways -- the guard must not be fooled.
+  it("refuses self when the URL id is upper-case and the body managerId is lower-case (422 CYCLE_DETECTED)", async () => {
+    const emp = await seedCaseGuard("confirmed");
+    const publish = vi.spyOn(queue, "publish");
+    const r = await patch(emp.toUpperCase(), { managerId: emp });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("CYCLE_DETECTED");
+    expect(publish).not.toHaveBeenCalled();
+    publish.mockRestore();
+    expect(await managerOf(emp)).toBeNull();
+  });
+
+  it("refuses self when the URL id is lower-case and the body managerId is upper-case (422 CYCLE_DETECTED)", async () => {
+    const emp = await seedCaseGuard("confirmed");
+    const r = await patch(emp, { managerId: emp.toUpperCase() });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("CYCLE_DETECTED");
+    expect(await managerOf(emp)).toBeNull();
+  });
+
+  it("refuses a loop when the employee is addressed with an upper-case id", async () => {
+    const boss = await seedCaseGuard("confirmed");
+    const mid = await seedCaseGuard("confirmed", boss);
+    const leaf = await seedCaseGuard("confirmed", mid);
+    const r = await patch(boss.toUpperCase(), { managerId: leaf });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("CYCLE_DETECTED");
+    await drain();
+    expect(await managerOf(boss)).toBeNull();
+  });
+
+  it("treats an upper-case spelling of the CURRENT manager as unchanged (not re-validated)", async () => {
+    const gone = await seedCaseGuard("separated");
+    const emp = await seedCaseGuard("confirmed", gone);
+    const r = await patch(emp, { managerId: gone.toUpperCase(), email: "unchanged.case@example.gov.in" });
+    expect(r.statusCode).toBe(202);
   });
 
   it("refuses a manager id that does not exist in the tenant (422 INVALID_MANAGER)", async () => {
@@ -163,6 +205,12 @@ describe("employee update consumer -- managerId re-check inside the write transa
   it("does not persist self as manager even when the command bypassed the route", async () => {
     const emp = await seedEmployee("confirmed");
     await publishUpdate({ id: emp, managerId: emp });
+    expect(await managerOf(emp)).toBeNull();
+  });
+
+  it("does not persist self as manager when the command spells the ids in different cases", async () => {
+    const emp = await seedCaseGuard("confirmed");
+    await publishUpdate({ id: emp.toUpperCase(), managerId: emp });
     expect(await managerOf(emp)).toBeNull();
   });
 
