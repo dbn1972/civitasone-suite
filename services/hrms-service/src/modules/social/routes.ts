@@ -688,20 +688,25 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         if (reportUserRefs.length === 0) return reply.send({ data: [] });
       }
 
+      // GAP-HR-TRAVEL-01: the approver's OWN requests are never part of the
+      // approvals queue. approve/reject answer 403 SELF_APPROVAL on them, so
+      // listing them (HR got the whole tenant, own rows included) only offered
+      // controls that could never succeed. They stay visible to their owner in
+      // the default self-scoped list.
       const rows = await withTenantGuc(ctx.tenantId, (pool) => (reportUserRefs
         ? pool.query(
             `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
              FROM claims.hrms_travel_requests
-             WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])
+             WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[]) AND employee_id <> $3
              ORDER BY created_at DESC`,
-            [ctx.tenantId, reportUserRefs],
+            [ctx.tenantId, reportUserRefs, ctx.actorId],
           )
         : pool.query(
             `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
              FROM claims.hrms_travel_requests
-             WHERE tenant_id = $1
+             WHERE tenant_id = $1 AND employee_id <> $2
              ORDER BY created_at DESC`,
-            [ctx.tenantId],
+            [ctx.tenantId, ctx.actorId],
           )));
       const requesterIds = [...new Set(rows.rows.map((r: { employee_id: string }) => r.employee_id))];
       const nameByActorId = new Map<string, string>();
