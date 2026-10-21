@@ -7843,7 +7843,12 @@
     "myNoProfileTitle": "No employee profile linked",
     "myNoProfileMessage": "Your sign-in is not linked to an employee record, so there is no personal competency profile to show. Contact HR to link it.",
     "myRadarEmptyTitle": "Not enough recorded competencies",
-    "myRadarEmptyMessage": "A radar needs at least three recorded competencies. HR records your levels from assessments and training; they will appear here."
+    "myRadarEmptyMessage": "A radar needs at least three recorded competencies. HR records your levels from assessments and training; they will appear here.",
+    "compEmptyMessageReadOnly": "No competencies defined yet. Contact HR.",
+    "statOther": "Other",
+    "categoryGeneral": "General",
+    "frameworkSubmitted": "Submitted — the framework will appear in the list shortly.",
+    "frameworkStillProcessing": "Still processing — the framework was received but is not in the list yet. Refresh to check again."
   },
   "confirmation": {
     "title": "Probation Confirmations",
@@ -8007,7 +8012,7 @@
     "subtitle": "Employee competency mapping, proficiency levels, and skill gap identification.",
     "statTotal": "Skill Records",
     "statEmployees": "Employees Mapped",
-    "statExpert": "Expert / Advanced",
+    "statExpert": "Expert",
     "statBeginner": "Beginner / Basic",
     "cardTitle": "Competency Grid",
     "emptyTitle": "No skill assessments recorded",
@@ -8021,10 +8026,10 @@
     "levelAdvanced": "Advanced",
     "levelExpert": "Expert",
     "gapNotAssessed": "Not assessed",
-    "gapMeets": "Meets requirement",
-    "gapOneBelow": "1 level below requirement",
-    "gapBehind": "2+ levels below requirement",
-    "legendMeets": "At / above requirement",
+    "gapMeets": "Meets baseline",
+    "gapOneBelow": "1 level below baseline",
+    "gapBehind": "2+ levels below baseline",
+    "legendMeets": "At / above baseline",
     "legendOneBelow": "1 level below",
     "legendGap": "Gap ≥ 2 levels",
     "legendNotAssessed": "Not assessed",
@@ -8034,7 +8039,8 @@
     "filterAllCategories": "All categories",
     "noMatch": "No skill records match the filter.",
     "rowSummary": "{employee}: {level}, {gap}",
-    "truncationNotice": "Showing {shown} of {total} skill records."
+    "truncationNotice": "Showing {shown} of {total} skill records.",
+    "legendBaseline": "Baseline for all skills: {level}"
   },
   "retirement": {
     "title": "Retirement & Separation",
@@ -8990,7 +8996,8 @@
       "ongoing": "Ongoing",
       "completed": "Completed",
       "cancelled": "Cancelled"
-    }
+    },
+    "pendingProgramMessage": "Your new programme was received and is still being processed. It will appear here shortly."
   },
   "trainingNew": {
     "title": "New Training Program",
@@ -9022,7 +9029,14 @@
     "pastDateWarning": "This start date is in the past. Only continue if you're recording a training that already took place.",
     "statusFixFields": "Please fix the highlighted fields.",
     "errToDateBeforeFromDate": "To date must be on or after from date.",
-    "errDeadlineAfterStart": "Enrolment deadline must be on or before the from date."
+    "errDeadlineAfterStart": "Enrolment deadline must be on or before the from date.",
+    "loadingAriaLabel": "Loading new training program form",
+    "stillProcessingMessage": "Still processing — your programme was received but is not in the list yet. Check the list again in a moment.",
+    "viewListLink": "View training programmes",
+    "errRequired": "This field is required.",
+    "errTooLong": "Must be {max} characters or fewer.",
+    "errInvalidDate": "Enter a valid date.",
+    "errWholeNumber": "Enter a whole number, 1 or more."
   },
   "trainingDetail": {
     "title": "Training Programme",
