@@ -315,68 +315,24 @@ export const SCORE_FN_PARAM_HINTS: Record<ScoreFnType, string> = {
 };
 
 /**
- * Attributes the built-in default rules score on (score-rules-domain.ts
- * DEFAULT_SCORE_RULE_CONFIGS). Offered as suggestions so an admin picks a known
- * lead field instead of a typo that silently never scores
- * (GAP-CRM-LEAD-SCORING-03). The backend `attribute` column is a free
- * varchar(64), so a custom attribute is still allowed — the editor only *warns*
- * on an unrecognised one rather than blocking it.
+ * GAP-CRM-LEAD-SCORING-03: the lead fields a scoring rule can really score on, in
+ * exact lock-step with crm-service (leads/score-rules-domain.ts
+ * SCOREABLE_LEAD_ATTRIBUTES -- the scorer's whole input, built by
+ * leadAttributesFromRow). The backend rejects a rule on anything else (400 on
+ * `rules.<i>.attribute`) and advertises this list in `meta.scoreableAttributes` on
+ * GET; the loader prefers the advertised list and falls back to this one.
+ * Custom fields are NOT scoreable today (they are not part of the scoring input).
  */
-export const DEFAULT_SCORE_ATTRIBUTES = ["leadSource", "company", "lastActivityAt", "email"] as const;
-
-function isObject(v: unknown): v is Record<string, unknown> {
-  return !!v && typeof v === "object" && !Array.isArray(v);
-}
-function isNum(v: unknown): boolean {
-  return typeof v === "number" && Number.isFinite(v);
-}
-
-/**
- * Validate a score-function's params against the shape buildScoreFn
- * (score-rules-domain.ts) actually reads, so a mistyped params blob is caught in
- * the editor rather than silently mis-scoring every lead. Returns an error
- * string or null when valid. Params must already be a parsed object.
- * GAP-CRM-LEAD-SCORING-02.
- */
-export function validateScoreFnParams(type: ScoreFnType, params: Record<string, unknown>): string | null {
-  switch (type) {
-    case "presence":
-      if (params.present !== undefined && !isNum(params.present)) return "“present” must be a number.";
-      if (params.absent !== undefined && !isNum(params.absent)) return "“absent” must be a number.";
-      return null;
-    case "map": {
-      if (params.values !== undefined) {
-        if (!isObject(params.values)) return "“values” must be an object of value → score.";
-        for (const v of Object.values(params.values)) if (!isNum(v)) return "Every entry in “values” must be a number.";
-      }
-      if (params.default !== undefined && !isNum(params.default)) return "“default” must be a number.";
-      return null;
-    }
-    case "recency": {
-      if (params.tiers !== undefined) {
-        if (!Array.isArray(params.tiers)) return "“tiers” must be an array of {maxDays, score}.";
-        for (const t of params.tiers) {
-          if (!isObject(t) || !isNum(t.maxDays) || !isNum(t.score)) return "Each tier needs numeric “maxDays” and “score”.";
-        }
-      }
-      if (params.beyondScore !== undefined && !isNum(params.beyondScore)) return "“beyondScore” must be a number.";
-      if (params.absentScore !== undefined && !isNum(params.absentScore)) return "“absentScore” must be a number.";
-      return null;
-    }
-    case "numeric_threshold": {
-      if (params.tiers !== undefined) {
-        if (!Array.isArray(params.tiers)) return "“tiers” must be an array of {min, score}.";
-        for (const t of params.tiers) {
-          if (!isObject(t) || !isNum(t.min) || !isNum(t.score)) return "Each tier needs numeric “min” and “score”.";
-        }
-      }
-      if (params.default !== undefined && !isNum(params.default)) return "“default” must be a number.";
-      return null;
-    }
-    default:
-      return null;
-  }
-}
+export const SCOREABLE_LEAD_ATTRIBUTES = [
+  "leadSource",
+  "company",
+  "lastActivityAt",
+  "email",
+  "phone",
+  "leadStatus",
+  "city",
+  "designation",
+] as const;
 
 export interface LeadScoreRule {
   attribute: string;
@@ -429,6 +385,8 @@ export interface ConcurrencyMeta {
   version?: string;
   updatedBy?: string;
   updatedAt?: string;
+  /** Lead fields a rule may score on, as advertised by the backend (score rules only). */
+  scoreableAttributes?: string[];
 }
 
 /** Extract the list version + last-changed metadata from a config GET response. */
@@ -442,6 +400,10 @@ async function readConcurrencyMeta(res: Response, body: unknown): Promise<Concur
   if (version) out.version = version;
   if (typeof meta.updatedBy === "string" && meta.updatedBy.length > 0) out.updatedBy = meta.updatedBy;
   if (typeof meta.updatedAt === "string" && meta.updatedAt.length > 0) out.updatedAt = meta.updatedAt;
+  if (Array.isArray(meta.scoreableAttributes)) {
+    const attrs = meta.scoreableAttributes.filter((a): a is string => typeof a === "string" && a.length > 0);
+    if (attrs.length > 0) out.scoreableAttributes = attrs;
+  }
   return out;
 }
 
@@ -486,6 +448,67 @@ export async function saveScoreRules(rules: LeadScoreRule[], version?: string): 
   } catch {
     return undefined;
   }
+}
+
+/**
+ * GAP-CRM-LEAD-SCORING-04: dry-run of the rules as currently edited against the
+ * tenant's leads (POST /v1/crm/lead-score-rules/preview). Read-only -- nothing is
+ * saved or re-scored. Mirrors crm-service ScorePreview.
+ */
+export interface ScorePreviewBand {
+  label: string;
+  current: number;
+  proposed: number;
+}
+export interface ScorePreview {
+  totalLeads: number;
+  sampled: number;
+  truncated: boolean;
+  unscored: number;
+  currentAverage: number | null;
+  proposedAverage: number | null;
+  changed: number;
+  raised: number;
+  lowered: number;
+  totalWeight: number;
+  maxPossibleScore: number;
+  bands: ScorePreviewBand[];
+}
+
+export function normaliseScorePreview(raw: unknown): ScorePreview | null {
+  const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  const d = body && body.data && typeof body.data === "object" ? (body.data as Record<string, unknown>) : null;
+  if (!d || !Array.isArray(d.bands)) return null;
+  const avg = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return {
+    totalLeads: num(d.totalLeads),
+    sampled: num(d.sampled),
+    truncated: d.truncated === true,
+    unscored: num(d.unscored),
+    currentAverage: avg(d.currentAverage),
+    proposedAverage: avg(d.proposedAverage),
+    changed: num(d.changed),
+    raised: num(d.raised),
+    lowered: num(d.lowered),
+    totalWeight: num(d.totalWeight),
+    maxPossibleScore: num(d.maxPossibleScore),
+    bands: (d.bands as unknown[]).map((b) => {
+      const r = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
+      return { label: str(r.label), current: num(r.current), proposed: num(r.proposed) };
+    }),
+  };
+}
+
+/** Throws on any failure; the caller shows a catalogued message, never the raw error. */
+export async function previewScoreRules(rules: LeadScoreRule[]): Promise<ScorePreview> {
+  const res = await browserFetch("v1/crm/lead-score-rules/preview", {
+    method: "POST",
+    body: JSON.stringify({ rules }),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  const preview = normaliseScorePreview(await res.json());
+  if (!preview) throw new Error("Unexpected preview response.");
+  return preview;
 }
 
 export function normaliseScoreHistory(raw: unknown): ScoreHistoryEntry[] {

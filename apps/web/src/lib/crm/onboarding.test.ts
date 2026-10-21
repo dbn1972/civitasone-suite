@@ -273,3 +273,87 @@ describe("onboarding HTTP client", () => {
     expect(unresolved.accountName).toBeNull();
   });
 });
+
+// GAP-CRM-ONBOARDING-01 / -DETAIL-01 (W2 crm cluster 07): the deal/account lookup must
+// respect the server's page cap. GET /v1/crm/accounts caps `limit` at 200 and answers a
+// larger one with a 400, so the old `?limit=500` lookup never resolved a single account
+// name in practice. The lookup now pages with the real page size until it has found the
+// deals/accounts of the cases being labelled.
+describe("getOnboardingLookups pages within the server cap (GAP-CRM-ONBOARDING-01)", () => {
+  const filler = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}` }));
+  const wanted = [{ dealId: "d-wanted", accountId: "a-wanted" }];
+
+  /** Serve `deals`/`accounts` by their `offset`, like the real list routes. */
+  function serve(deals: Array<{ id: string; name: string }>, accounts: Array<{ id: string; name: string }>) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const limit = Number(url.searchParams.get("limit"));
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      if (limit > 200) return res({ code: "VALIDATION_FAILED" }, { status: 400 }); // the real accounts cap
+      const all = url.pathname.endsWith("/accounts") ? accounts : deals;
+      return res({ data: all.slice(offset, offset + limit), meta: { total: all.length } });
+    });
+  }
+  const urlsFor = (suffix: string) =>
+    fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => new URL(u, "http://localhost").pathname.endsWith(suffix));
+
+  it("never asks for more than 200 rows a page, so the accounts endpoint no longer 400s", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], [{ id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk).toEqual({ dealNames: { "d-wanted": "Acme renewal" }, accountNames: { "a-wanted": "Acme Corp" } });
+    for (const u of fetchMock.mock.calls.map((c) => String(c[0]))) expect(u).not.toMatch(/limit=(?:[3-9]\d\d|\d{4,})/);
+  });
+
+  it("keeps paging until the wanted account is found (it is not on the first page)", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], [...filler("other", 200), { id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.accountNames["a-wanted"]).toBe("Acme Corp");
+    expect(urlsFor("/accounts").map((u) => new URL(u, "http://localhost").searchParams.get("offset"))).toEqual(["0", "200"]);
+  });
+
+  it("stops as soon as every wanted id has been seen (no needless extra pages)", async () => {
+    serve(filler("d", 450).concat([{ id: "d-wanted", name: "Acme renewal" }]), [{ id: "a-wanted", name: "Acme Corp" }]);
+    // d-wanted is the very last deal, so all three pages are needed for deals ...
+    await onb.getOnboardingLookups(wanted);
+    expect(urlsFor("/deals")).toHaveLength(3);
+    // ... but the accounts list (one page) is read once.
+    expect(urlsFor("/accounts")).toHaveLength(1);
+    fetchMock.mockReset();
+    serve([{ id: "d-wanted", name: "Acme renewal" }, ...filler("d", 450)], [{ id: "a-wanted", name: "Acme Corp" }]);
+    await onb.getOnboardingLookups(wanted);
+    expect(urlsFor("/deals")).toHaveLength(1); // found on page one, pages two and three never requested
+  });
+
+  it("does not fetch a list at all when no case references it", async () => {
+    serve([], []);
+    const lk = await onb.getOnboardingLookups([{ dealId: "", accountId: null }]);
+    expect(lk).toEqual({ dealNames: {}, accountNames: {} });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the name unresolved (null, never a UUID) when the account cannot be found", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], filler("other", 3));
+    const lk = await onb.getOnboardingLookups(wanted);
+    const [c] = onb.resolveCaseNames(
+      [{ id: "c1", dealId: "d-wanted", accountId: "a-wanted", stage: "initiated", kycStatus: "pending", kycReference: null, kycVerifiedAt: null, completedAt: null, cancellationReason: null, createdAt: "", updatedAt: "", version: 1, accountName: null, dealName: null }],
+      lk,
+    );
+    expect(c!.dealName).toBe("Acme renewal");
+    expect(c!.accountName).toBeNull();
+  });
+});
+
+describe("onboarding display helpers (GAP-CRM-ONBOARDING-DETAIL-01 / -05)", () => {
+  it("shortRef shows only the first 8 characters, and a dash for a missing id", () => {
+    expect(onb.shortRef("3fa85f64-5717-4562-b3fc-2c963f66afa6")).toBe("3fa85f64");
+    expect(onb.shortRef(null)).toBe("—");
+    expect(onb.shortRef("")).toBe("—");
+  });
+
+  it("isMaskedKycReference recognises only the server-masked shape", () => {
+    expect(onb.isMaskedKycReference("••••7890")).toBe(true);
+    expect(onb.isMaskedKycReference("••••")).toBe(true);
+    expect(onb.isMaskedKycReference("KYCPROV-ABCD1234")).toBe(false);
+    expect(onb.isMaskedKycReference(null)).toBe(false);
+  });
+});

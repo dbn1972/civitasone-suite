@@ -298,3 +298,93 @@ describe("OnboardingDetail (P1-9)", () => {
     expect(vi.mocked(onb.getOnboardingCase).mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+// W2 crm cluster 07 -- GAP-CRM-ONBOARDING-DETAIL-01 / -05.
+describe("OnboardingDetail naming + reveal (W2 crm cluster 07)", () => {
+  const FULL_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const header = { title: "Onboarding case", backHref: "/crm/onboarding", backLabel: "Back to onboarding" };
+
+  it("prints only a short Ref - the full record UUID appears nowhere on the page", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "submitted"), id: FULL_ID }, source: "api" });
+    const { container } = render(<OnboardingDetail id={FULL_ID} />);
+    await waitFor(() => expect(screen.getByText("3fa85f64")).toBeInTheDocument());
+    expect(container.textContent).not.toContain(FULL_ID);
+    expect(container.textContent).not.toContain("5717-4562");
+  });
+
+  it("asks the lookup to name THIS case's deal and account", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(onb.getOnboardingLookups).toHaveBeenCalled());
+    expect(vi.mocked(onb.getOnboardingLookups).mock.calls[0]![0]).toEqual([expect.objectContaining({ dealId: "d1", accountId: "a1" })]);
+  });
+
+  it("the page h1 names the customer once the case has loaded, with the generic title as subtitle", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    vi.mocked(onb.getOnboardingLookups).mockResolvedValue({ dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } });
+    render(<OnboardingDetail id="c1" header={header} />);
+    // Until the name resolves the generic title stands in.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Onboarding case");
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Acme renewal"));
+    expect(screen.getByText("Onboarding case", { selector: ".sub" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to onboarding" })).toHaveAttribute("href", "/crm/onboarding");
+    expect(document.title).toContain("Acme renewal");
+  });
+
+  it("falls back to the account name, and keeps the generic title when the case cannot be loaded", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    vi.mocked(onb.getOnboardingLookups).mockResolvedValue({ dealNames: {}, accountNames: { a1: "Acme Corp" } });
+    const first = render(<OnboardingDetail id="c1" header={header} />);
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Acme Corp"));
+    first.unmount();
+
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: null, source: "error" });
+    render(<OnboardingDetail id="c1" header={header} />);
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Onboarding case");
+  });
+
+  it("renders no page header of its own when none is supplied (the existing callers)", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(screen.getByText(/Onboarding —/)).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  });
+
+  // The audited reveal control is wired for a server-masked reference an approver may reveal.
+  it("offers the audited reveal for a masked reference to a KYC approver, and calls the audited endpoint with a reason", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "••••7890" }, source: "api" });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "KYC-REF-1234567890" } }), { status: 200 }));
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    expect(await screen.findByText("••••7890")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "re-checking before approval" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    expect(await screen.findByText("KYC-REF-1234567890")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/crm/pii/reveal");
+    expect(JSON.parse(init.body as string)).toEqual({
+      resourceType: "onboarding",
+      resourceId: "c1",
+      field: "kycReference",
+      reason: "re-checking before approval",
+    });
+    fetchMock.mockRestore();
+  });
+
+  it("offers no reveal to a non-approver (who could not use it) or when the value is already clear", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "••••7890" }, source: "api" });
+    const nonApprover = render(<OnboardingDetail id="c1" canApproveKyc={false} />);
+    expect(await screen.findByText("••••7890")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    nonApprover.unmount();
+
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "KYC-REF-1234567890" }, source: "api" });
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    expect(await screen.findByText("KYC-REF-1234567890")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+});
