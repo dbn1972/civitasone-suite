@@ -122,6 +122,34 @@ describe("GAP2-CRM-GRIEVANCES-AUDIT-01: lifecycle mutations emit audit", () => {
     expect(rows.map((r) => r.action)).toEqual(["register", "assign", "close"]);
   });
 
+  // GAP-CRM-GRIEVANCES-DETAIL-02 backend half: the web hides Close from a non-admin, but the route is the
+  // authority - a direct PATCH /close by a plain crm_user is refused, changes nothing and audits nothing.
+  it("a non-admin cannot close a grievance (403): it stays open and no close audit row is written", async () => {
+    const id = await createGrievance();
+    const res = await app.inject({ method: "PATCH", url: `/v1/crm/grievances/${id}/close`, headers: CLERK() });
+    expect(res.statusCode).toBe(403);
+    expect((await auditRows(id)).map((r) => r.action)).toEqual(["register"]);
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ status: string }>>`SELECT status FROM crm.grievances WHERE id = ${id} AND tenant_id = ${TENANT}`;
+    });
+    expect(rows[0]?.status).not.toBe("DISPOSED");
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-02 backend half: the web hides Close from a non-admin, but the route is the
+  // authority - a direct PATCH /close by a plain crm_user is refused, changes nothing and audits nothing.
+  it("a non-admin cannot close a grievance (403): it stays open and no close audit row is written", async () => {
+    const id = await createGrievance();
+    const res = await app.inject({ method: "PATCH", url: `/v1/crm/grievances/${id}/close`, headers: CLERK() });
+    expect(res.statusCode).toBe(403);
+    expect((await auditRows(id)).map((r) => r.action)).toEqual(["register"]);
+    const rows = await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      return tx<Array<{ status: string }>>`SELECT status FROM crm.grievances WHERE id = ${id} AND tenant_id = ${TENANT}`;
+    });
+    expect(rows[0]?.status).not.toBe("DISPOSED");
+  });
+
   it("no audit row is written when the mutation affects no row (404 path)", async () => {
     const ghost = randomUUID();
     expect((await app.inject({

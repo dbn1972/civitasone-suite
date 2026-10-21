@@ -92,6 +92,20 @@ describe("ForecastPage — GoI redesign", () => {
     expect(screen.queryByTestId("stage-table")).not.toBeInTheDocument();
   });
 
+  // GAP-CRM-FORECAST-01 acceptance: "healthy empty forecast still renders zeros" - a forecast that LOADED
+  // with nothing in it is a real zero, not an outage: the zero tiles stay and no error state replaces them.
+  it("still renders the zero tiles (no error state) for a healthy, empty forecast", async () => {
+    mockedForecast.mockResolvedValue({
+      data: { totalForecastMinor: "0", dealCount: 0, stages: [] },
+      source: "api" as const,
+    } as never);
+    render(await ForecastPage({}));
+    expect(screen.getByText("Weighted Forecast")).toBeInTheDocument();
+    expect(screen.getAllByText("₹0.00").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("stage-table")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-FORECAST-03: a chosen FY quarter is resolved to a close-date window
   // passed to the loader, and named in the subtitle.
   it("passes the period's close-date window to the loader and names it in the subtitle", async () => {

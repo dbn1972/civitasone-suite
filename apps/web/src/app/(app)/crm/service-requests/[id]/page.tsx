@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card, Masked } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_SERVICE_REQUEST_ASSIGN_ROLES } from "@/lib/auth/roleGuard";
 import { ServiceRequestActions } from "./ServiceRequestActions";
 import { PriorityBadge } from "../PriorityBadge";
 import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
@@ -18,13 +18,6 @@ import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_componen
  * (POST /v1/crm/pii/reveal). Everyone else sees the masked value and no Reveal
  * button. The page never holds a clear value for anyone.
  */
-
-/**
- * GAP-CRM-SERVICE-REQUESTS-DETAIL-05: who may assign / reassign. Mirrors crm-service's
- * ADMIN_ROLES for PATCH .../assign (the same tier that may close or cancel); the server is the
- * authority and refuses anyone else, this only decides whether to offer the button.
- */
-const ASSIGN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /**
  * GAP-CRM-SERVICE-REQUESTS-DETAIL-04: what became of the notice to the citizen, as recorded on
@@ -132,7 +125,9 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
     ? t(`priority_${priorityKey}`)
     : undefined;
   const canRevealPii = hasAnyRole(roles, CRM_PII_READ_ROLES);
-  const canAssign = ASSIGN_ROLES.some((role) => roles.includes(role));
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-05: who may assign / reassign is the shared, server-pinned
+  // CRM_SERVICE_REQUEST_ASSIGN_ROLES (roleGuard.ts), not a local copy of the route's list.
+  const canAssign = hasAnyRole(roles, CRM_SERVICE_REQUEST_ASSIGN_ROLES);
   const nameUnavailable = t("nameUnavailable");
   const note = r.citizenNotification ?? null;
   const noteChannel = note?.channel ? t(`channel_${note.channel}`) : "";

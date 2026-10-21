@@ -48,7 +48,9 @@ async function assertRecipientsExist(
   b: { recipientRole?: string | null | undefined; recipientId?: string | null | undefined },
 ): Promise<void> {
   if (b.recipientRole) {
-    const roles = await listDirectoryRoles(tenantId);
+    // `fresh`: a role created or retired a moment ago must be judged as it is now, not as the
+    // 60s cache last saw it (same as the lead-escalation twin in assignment/recipients.ts).
+    const roles = await listDirectoryRoles(tenantId, { fresh: true });
     if (roles === undefined) throw new HttpError(503, "DIRECTORY_UNAVAILABLE", "could not verify the role; try again");
     if (!roles.some((r) => r.key === b.recipientRole)) {
       throw new HttpError(422, "INVALID_RECIPIENT_ROLE", "recipientRole is not a role in this tenant");

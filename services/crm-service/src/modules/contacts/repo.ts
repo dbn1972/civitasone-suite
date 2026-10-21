@@ -569,17 +569,24 @@ export async function countAccounts(tenantId: string, filters: AccountListFilter
   return Number(rows[0]?.total ?? 0);
 }
 
-/** Tenant-scoped existence check for an account (cross-tenant FK guard). */
+/**
+ * Tenant-scoped existence check for a LIVE account (cross-tenant FK guard). Only an account with
+ * status = 'active' counts: the account lists, the pickers and the by-id lookup serve active accounts
+ * only, so a merged / soft-deleted account is not offered anywhere and must not be linkable by a direct
+ * API caller either (account-merge never re-points rows linked after the merge). Same rule as
+ * deals/repo.ts accountExistsTx and service-requests.
+ */
 export async function accountExists(tenantId: string, accountId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId), eq(accounts.status, "active")))
     .limit(1));
   return rows.length > 0;
 }
 
+/** In-transaction twin of {@link accountExists}; used by the contact and activity consumers. */
 export async function accountExistsTx(tx: Writer, tenantId: string, accountId: string): Promise<boolean> {
   const rows = await tx.select({ one: sql`1` }).from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId), eq(accounts.status, "active")))
     .limit(1);
   return rows.length > 0;
 }

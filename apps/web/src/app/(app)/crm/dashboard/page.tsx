@@ -17,6 +17,9 @@ export default async function Page() {
   const tl = await getTranslations("crm.dashboard");
   // One name for this screen everywhere: the hub tile title (GAP-CRM-ACTIVITIES-08).
   const tHubActivities = await getTranslations("crm.hub.tiles.activities");
+  // GAP-CRM-PIPELINE-04: the board has ONE name across the hub, this dashboard and the
+  // forecast. Read it from the hub tile key (as the forecast link does) so it cannot drift.
+  const tHubBoard = await getTranslations("crm.hub.tiles.pipelineBoard");
 
   // GAP-CRM-DASHBOARD-01: a failed load must not read as "no contacts, no
   // engagements". Show "—" (the same convention Contacts/Accounts/Activities
@@ -57,7 +60,7 @@ export default async function Page() {
           <Link href="/crm/contacts" className="btn ghost">Contacts</Link>
           <Link href="/crm/accounts" className="btn ghost">Accounts</Link>
           <Link href="/crm/deals" className="btn ghost">Engagements</Link>
-          <Link href="/crm/pipeline" className="btn ghost">Pipeline Board</Link>
+          <Link href="/crm/pipeline" className="btn ghost">{tHubBoard("title")}</Link>
           <Link href="/crm/activities" className="btn ghost">{tHubActivities("title")}</Link>
         </div>
       </Card>

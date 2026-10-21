@@ -196,4 +196,31 @@ describe("EditContactForm", () => {
     const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
     expect(body).toEqual({ accountId: null, company: "Globex" });
   });
+
+  // GAP-CRM-CONTACTS-NEW-02: re-pointing a contact at ANOTHER account sends that account's id AND its
+  // name as the company. (The picker hands back only an id and resolve() runs only for unseen ids, so
+  // the label used to stay the OLD account's name: the contact kept the old company beside a new link.)
+  it("re-pointing the link to another account sends the new accountId with the NEW account's name as company", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }, { id: "acc-2", name: "Beta Department" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
+    await waitFor(() => expect(picker.value).toBe("Acme"));
+
+    fireEvent.change(picker, { target: { value: "Beta" } });
+    fireEvent.mouseDown(await screen.findByText("Beta Department"));
+    // The "Linked to" line names the account just picked, not the one it replaced.
+    await waitFor(() => expect(screen.getByText("Beta Department", { selector: "strong" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(browserFetchMock.mock.calls.some((c) => c[0] === "v1/crm/contacts/c1")).toBe(true));
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ accountId: "acc-2", company: "Beta Department" });
+  });
 });

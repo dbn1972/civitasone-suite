@@ -67,6 +67,20 @@ describe("Contact detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
     render(await Page({ params: { id: "c-1" } }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
   });
+
+  // The verify route admits crm_admin / super_admin / tenant_admin only; "admin" and "platform_admin"
+  // clear the broader CRM admin gate but are 403'd, so they must not be offered Verify / Reject.
+  it.each(["admin", "platform_admin"])("passes canVerify=false for %s (the verify route answers 403)", async (role) => {
+    mockRoles.mockReturnValue(["crm_user", role]);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByTestId("docs").dataset.canVerify).toBe("false");
+  });
+
+  it.each(["super_admin", "tenant_admin"])("passes canVerify=true for %s (the verify route admits it)", async (role) => {
+    mockRoles.mockReturnValue([role]);
+    render(await Page({ params: { id: "c-1" } }));
+    expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
+  });
 });
 
 describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {

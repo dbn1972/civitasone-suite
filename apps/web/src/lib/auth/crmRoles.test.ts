@@ -66,3 +66,81 @@ describe("CRM_MERGE_ROLES (Duplicate Candidates Merge gate)", () => {
     expect(CRM_MERGE_ROLES).not.toContain("tenant_admin");
   });
 });
+
+/**
+ * Web-to-backend drift protection for the rest of the CRM role lists that claim to mirror a crm-service route.
+ * Each web list only decides whether a control is OFFERED; the route is the authority, and a role the web names that
+ * the route does not admit yields a button that always 403s (a role the route admits that the web omits hides a
+ * working control). So each is compared, element for element, with the `const NAME = [...]` it mirrors, read from the
+ * server source rather than a literal typed here.
+ */
+const SERVICE_SRC = resolve(__dirname, "../../../../../services/crm-service/src");
+
+function serverList(file: string, constName: string): string[] {
+  const src = readFileSync(resolve(SERVICE_SRC, file), "utf8");
+  const body = new RegExp(`const ${constName} = \\[([^\\]]*)\\]`).exec(src)?.[1] ?? "";
+  return [...body.matchAll(/"([a-z_]+)"/g)].map((m) => m[1]!);
+}
+const sorted = (xs: readonly string[]) => [...xs].sort();
+
+describe("CRM role lists are pinned to the crm-service route that enforces them", () => {
+  it("could read every server list it is compared against (a renamed constant fails here, not silently)", () => {
+    for (const [file, name] of [
+      ["modules/products/routes.ts", "ADMIN_ROLES"],
+      ["modules/service-requests/routes.ts", "ADMIN_ROLES"],
+      ["modules/teams/routes.ts", "ADMIN_ROLES"],
+      ["modules/dashboard/campaign-roi-routes.ts", "ADMIN_ROLES"],
+      ["modules/documents/routes.ts", "VERIFY_ROLES"],
+      ["modules/deals/quotation-approval-routes.ts", "ADMIN_ROLES"],
+      ["modules/onboarding/routes.ts", "KYC_APPROVER_ROLES"],
+      ["modules/grievances/routes.ts", "ADMIN_ROLES"],
+      ["modules/contacts/routes.ts", "CRM_ROLES"],
+    ] as const) {
+      expect(serverList(file, name).length, `${file} ${name}`).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(["modules/products/routes.ts", "modules/service-requests/routes.ts", "modules/teams/routes.ts"])(
+    "CRM_STRICT_ADMIN_ROLES matches ADMIN_ROLES of %s (Product Catalogue, Service Types, Agent Workload)",
+    (file) => {
+      expect(sorted(roleGuard.CRM_STRICT_ADMIN_ROLES)).toEqual(sorted(serverList(file, "ADMIN_ROLES")));
+    },
+  );
+
+  it("CRM_CAMPAIGN_PERFORMANCE_POST_ROLES matches ADMIN_ROLES of dashboard/campaign-roi-routes.ts", () => {
+    expect(sorted(roleGuard.CRM_CAMPAIGN_PERFORMANCE_POST_ROLES)).toEqual(sorted(serverList("modules/dashboard/campaign-roi-routes.ts", "ADMIN_ROLES")));
+  });
+
+  it("CRM_SERVICE_REQUEST_ASSIGN_ROLES matches ADMIN_ROLES of service-requests/routes.ts (PATCH .../assign)", () => {
+    expect(sorted(roleGuard.CRM_SERVICE_REQUEST_ASSIGN_ROLES)).toEqual(sorted(serverList("modules/service-requests/routes.ts", "ADMIN_ROLES")));
+  });
+
+  it("the service-request detail page uses the exported assign list, not a local copy of it", () => {
+    const page = readFileSync(resolve(__dirname, "../../app/(app)/crm/service-requests/[id]/page.tsx"), "utf8");
+    expect(page).toContain("CRM_SERVICE_REQUEST_ASSIGN_ROLES");
+    expect(page).not.toMatch(/const ASSIGN_ROLES\b/);
+  });
+
+  it("CRM_VERIFY_ROLES is exactly VERIFY_ROLES of documents/routes.ts - no admin / platform_admin (the server 403s both)", () => {
+    expect(sorted(roleGuard.CRM_VERIFY_ROLES)).toEqual(sorted(serverList("modules/documents/routes.ts", "VERIFY_ROLES")));
+    expect(roleGuard.CRM_VERIFY_ROLES).not.toContain("admin");
+    expect(roleGuard.CRM_VERIFY_ROLES).not.toContain("platform_admin");
+    expect(roleGuard.CRM_VERIFY_ROLES).not.toContain("crm_user");
+  });
+
+  it("CRM_QUOTATION_APPROVE_ROLES matches ADMIN_ROLES of deals/quotation-approval-routes.ts", () => {
+    expect(sorted(roleGuard.CRM_QUOTATION_APPROVE_ROLES)).toEqual(sorted(serverList("modules/deals/quotation-approval-routes.ts", "ADMIN_ROLES")));
+  });
+
+  it("CRM_KYC_APPROVER_ROLES matches KYC_APPROVER_ROLES of onboarding/routes.ts", () => {
+    expect(sorted(roleGuard.CRM_KYC_APPROVER_ROLES)).toEqual(sorted(serverList("modules/onboarding/routes.ts", "KYC_APPROVER_ROLES")));
+  });
+
+  it("CRM_GRIEVANCE_CLOSE_ROLES matches ADMIN_ROLES of grievances/routes.ts", () => {
+    expect(sorted(roleGuard.CRM_GRIEVANCE_CLOSE_ROLES)).toEqual(sorted(serverList("modules/grievances/routes.ts", "ADMIN_ROLES")));
+  });
+
+  it("CRM_CONTACT_READ_ROLES matches CRM_ROLES of contacts/routes.ts (GET /v1/crm/contacts/:id)", () => {
+    expect(sorted(roleGuard.CRM_CONTACT_READ_ROLES)).toEqual(sorted(serverList("modules/contacts/routes.ts", "CRM_ROLES")));
+  });
+});

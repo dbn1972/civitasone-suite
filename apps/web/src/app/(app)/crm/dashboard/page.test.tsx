@@ -94,4 +94,16 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(screen.getAllByText("Engagements").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Deals" })).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-PIPELINE-04 (W2 rescan): the board has ONE name across the CRM hub, this
+  // dashboard and the forecast. The hub tile reads "Engagement Pipeline Board"
+  // (GAP-CRM-HOME-02) and the forecast link reads that same hub key; the dashboard quick link
+  // must too, so it carries exactly that name and never the old hard-coded "Pipeline Board".
+  it("GAP-CRM-PIPELINE-04: the pipeline quick link carries the hub's own name for the board", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByRole("link", { name: "Pipeline Board" })).not.toBeInTheDocument();
+  });
 });

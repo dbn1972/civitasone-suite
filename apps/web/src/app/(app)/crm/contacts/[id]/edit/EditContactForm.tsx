@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { rupeesToMinorString } from "@/lib/money";
 import { saveClassification, type ClassificationPatch, type Temperature, type Priority, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/crm/leadQualification";
@@ -130,6 +130,15 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
   // accountId; the label is resolved by the picker's resolve() on first render.
   const [accountId, setAccountId] = useState<string | null>(initial.accountId ?? null);
   const [accountLabel, setAccountLabel] = useState<string>(initial.organization ?? "");
+  // The picker's onChange hands back only an id, and resolve() runs only for ids the picker has not
+  // already seen, so re-pointing the contact at another account left the OLD account's name as its
+  // label. Remember the label of every account the search offered, so a pick names the new account.
+  const seenAccountLabels = useRef(new Map<string, string>());
+  const searchAccountsSeen = useCallback(async (query: string, signal: AbortSignal) => {
+    const opts = await searchAccounts(query, signal);
+    for (const o of opts) seenAccountLabels.current.set(o.id, o.label);
+    return opts;
+  }, []);
   const [classification, setClassification] = useState<ClassificationFormValue>({
     temperature: initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "",
     priority: initial.priority && isPriority(initial.priority) ? initial.priority : "",
@@ -468,8 +477,12 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
                 const id = typeof v === "string" ? v : null;
                 setAccountId(id);
                 if (!id) setAccountLabel("");
+                else {
+                  const picked = seenAccountLabels.current.get(id);
+                  if (picked) setAccountLabel(picked);
+                }
               }}
-              search={searchAccounts}
+              search={searchAccountsSeen}
               resolve={async (ids) => {
                 const opts = await resolveAccounts(ids);
                 if (opts[0]) setAccountLabel(opts[0].label);

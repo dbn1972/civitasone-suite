@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
 import { ConsentField, type ConsentValue } from "../../../../_components/crm/ConsentField";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -87,6 +87,15 @@ export default function NewContactPage() {
   // when empty the free-text Organisation input below is the fallback.
   const [accountId, setAccountId] = useState<string | null>(null);
   const [accountLabel, setAccountLabel] = useState<string>("");
+  // The picker's onChange hands back only an id, and resolve() runs only for ids the picker has not
+  // already seen, so a pick from the search results never named the account: the "Linked to" line was
+  // blank and `company` went out empty. Remember the label of every account the search offered.
+  const seenAccountLabels = useRef(new Map<string, string>());
+  const searchAccountsSeen = useCallback(async (query: string, signal: AbortSignal) => {
+    const opts = await searchAccounts(query, signal);
+    for (const o of opts) seenAccountLabels.current.set(o.id, o.label);
+    return opts;
+  }, []);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -364,8 +373,12 @@ export default function NewContactPage() {
                   const id = typeof v === "string" ? v : null;
                   setAccountId(id);
                   if (!id) setAccountLabel("");
+                  else {
+                    const picked = seenAccountLabels.current.get(id);
+                    if (picked) setAccountLabel(picked);
+                  }
                 }}
-                search={searchAccounts}
+                search={searchAccountsSeen}
                 resolve={async (ids) => {
                   const opts = await resolveAccounts(ids);
                   if (opts[0]) setAccountLabel(opts[0].label);

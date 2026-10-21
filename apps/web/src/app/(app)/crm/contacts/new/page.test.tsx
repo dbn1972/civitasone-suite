@@ -273,6 +273,33 @@ describe("NewContactPage DPDP + account link (GAP-CRM-CONTACTS-NEW-03 / -02)", (
     expect(screen.getByPlaceholderText("Or type a new organisation")).toBeInTheDocument();
   });
 
+  // GAP-CRM-CONTACTS-NEW-02 acceptance: "selecting an account and saving makes account detail Linked
+  // Contacts increment" -- the create body must carry the picked account's id (crm-service counts and
+  // lists a contact by contacts.account_id), with the account's name as the contact's company.
+  it("GAP-CRM-CONTACTS-NEW-02: a picked account is sent as accountId (with its name as company), replacing the free-text organisation", async () => {
+    vi.mocked(dq.duplicateCheck).mockResolvedValue([]);
+    fetchMock.mockImplementation((url: string) =>
+      String(url).includes("/v1/crm/accounts")
+        ? Promise.resolve({ ok: true, status: 200, json: async () => ({ data: [{ id: "acc-77", name: "Odisha Housing Board" }] }) })
+        : Promise.resolve({ ok: true, status: 202, json: async () => ({ id: "c-9" }) }),
+    );
+    renderWithIntl(<NewContactPage />);
+    fireEvent.change(screen.getByLabelText(/^full name/i), { target: { value: "Asha Rao" } });
+    const picker = screen.getByLabelText("Link to an existing account");
+    fireEvent.change(picker, { target: { value: "Odisha" } });
+    fireEvent.mouseDown(await screen.findByText("Odisha Housing Board"));
+    // Linked: the free-text organisation fallback is gone and the "Linked to" line names the account.
+    await waitFor(() => expect(screen.queryByPlaceholderText("Or type a new organisation")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Odisha Housing Board", { selector: "strong" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /create contact/i }));
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => c[0] === "/api/proxy/v1/crm/contacts")).toBe(true));
+    const post = fetchMock.mock.calls.find((c) => c[0] === "/api/proxy/v1/crm/contacts")!;
+    expect(JSON.parse((post[1] as RequestInit).body as string)).toMatchObject({
+      name: "Asha Rao", accountId: "acc-77", company: "Odisha Housing Board",
+    });
+  });
+
   // GAP-CRM-CONTACTS-DETAIL-EDIT-07: the create form uses the same consent
   // record control as the edit form, so a grant can't reach crm-service (which
   // now requires purpose + channel) without them.

@@ -110,3 +110,17 @@ describe("ActivitiesTable segment-specific empty copy (GAP-CRM-ACTIVITIES-07)", 
     expect(screen.queryByText("No records found")).not.toBeInTheDocument();
   });
 });
+
+// GAP-CRM-ACTIVITIES-04 acceptance: "a cancelled row is returned and appears in the All segment".
+// (The mapper keeps it - activityTypes.test.ts; the default All view must then list it.)
+describe("ActivitiesTable keeps a cancelled activity in the All segment (GAP-CRM-ACTIVITIES-04)", () => {
+  it("lists a cancelled row in the default All view, but not under Overdue", () => {
+    const rows = [act("1", "2026-03-11", "open"), act("2", "2026-03-10", "cancelled")];
+    const { unmount } = render(<ActivitiesTable activities={rows} source="api" today="2026-03-11" />);
+    expect(screen.getByText("Task 1")).toBeInTheDocument();
+    expect(screen.getByText("Task 2")).toBeInTheDocument();
+    unmount();
+    render(<ActivitiesTable activities={rows} source="api" initialSegment="Overdue" today="2026-03-11" />);
+    expect(screen.queryByText("Task 2")).not.toBeInTheDocument();
+  });
+});

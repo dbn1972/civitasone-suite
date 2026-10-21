@@ -201,6 +201,28 @@ describe("GAP-CRM-TASK-ESCALATION-01: rule recipients are verified", () => {
   it("is still admin-only", async () => {
     expect((await post({ ...rule, recipientRole: "sales_manager" }, ["crm_user"])).statusCode).toBe(403);
   });
+
+  // The role directory is cached for 60s. A recipient check must judge a role as it is NOW
+  // (the lead-escalation twin and the recipients picker both read `fresh`), so a role created
+  // or retired inside that window is neither wrongly refused nor wrongly accepted.
+  it("judges a role created seconds ago by the live directory, not the 60s cache (no cache clear between)", async () => {
+    // Warm the 60s cache with the original role set.
+    expect((await post({ ...rule, recipientRole: "sales_manager" })).statusCode).toBe(201);
+    // A role is created in policy-service; the cache has NOT expired and is NOT cleared.
+    policyRoles = [...(policyRoles ?? []), { name: "new_zonal_head", status: "active" }];
+    const res = await post({ ...rule, recipientRole: "new_zonal_head" });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.recipientRole).toBe("new_zonal_head");
+  });
+
+  it("refuses a role retired seconds ago by the live directory, not the 60s cache (no cache clear between)", async () => {
+    expect((await post({ ...rule, recipientRole: "regional_head" })).statusCode).toBe(201);
+    // regional_head is retired in policy-service; the cache still lists it as active.
+    policyRoles = (policyRoles ?? []).map((r) => (r.name === "regional_head" ? { ...r, status: "inactive" } : r));
+    const res = await post({ ...rule, recipientRole: "regional_head" });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INVALID_RECIPIENT_ROLE");
+  });
 });
 
 describe("GAP-CRM-TASK-ESCALATION-01: the staff directory behind the pickers", () => {

@@ -70,6 +70,23 @@ describe("CRM Documents cross-record register (GAP-CRM-DOCUMENTS-02)", () => {
     expect(screen.getByLabelText(/register view/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/record type/i)).toBeInTheDocument();
   });
+
+  // GAP-CRM-DOCUMENTS-02 acceptance: "Failed load shows error state, not empty table". An outage
+  // must not read as "No documents match" (a register with nothing in it).
+  it("shows a retry error state, not the empty-register copy, when the register fails to load", async () => {
+    vi.mocked(rg.getSessionRoles).mockReturnValue(["crm_admin"]);
+    vi.mocked(docs.getDocumentRegister).mockResolvedValue({ rows: [], total: 0, source: "error" });
+    renderWithIntl(<Page />);
+    expect(await screen.findByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText("No documents match")).not.toBeInTheDocument();
+  });
+
+  it("shows the empty-register copy for a register that loaded fine and has nothing in it", async () => {
+    vi.mocked(rg.getSessionRoles).mockReturnValue(["crm_admin"]);
+    renderWithIntl(<Page />);
+    expect(await screen.findByText("No documents match")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
 });
 
 describe("CRM Documents client-side navigation (GAP-CRM-DOCUMENTS-03)", () => {

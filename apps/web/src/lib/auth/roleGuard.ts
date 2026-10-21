@@ -378,10 +378,25 @@ export const CRM_CAMPAIGN_PERFORMANCE_POST_ROLES = ["crm_admin", "super_admin", 
  * (GAP-CRM-ACCOUNTS-DETAIL-02). Document verification is an approval control,
  * so it is restricted to CRM admins rather than every crm_user — the detail
  * pages previously passed canVerify unconditionally, showing Verify/Reject to
- * every crm_user. The server remains the authority (the verify endpoint must
- * 403 others); this only decides whether the UI offers the control.
+ * every crm_user. EXACTLY the set crm-service's verify route admits
+ * (modules/documents/routes.ts VERIFY_ROLES: crm_admin, super_admin, tenant_admin),
+ * matched by exact role string: "admin" and "platform_admin" (both in
+ * CRM_ADMIN_ROLES) are accepted by no document route, so offering them Verify/Reject
+ * gave a button that always 403'd. crmRoles.test.ts reads the server constant and
+ * fails if the two drift. The server remains the authority; this only decides
+ * whether the UI offers the control.
  */
-export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+export const CRM_VERIFY_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Who may assign / reassign a service request (GAP-CRM-SERVICE-REQUESTS-DETAIL-05).
+ * Mirrors crm-service's ADMIN_ROLES for PATCH /v1/crm/service-requests/:id/assign
+ * (modules/service-requests/routes.ts, the same tier that may close or cancel); the
+ * server is the authority and refuses anyone else, this only decides whether the
+ * detail page offers the button. One exported copy (it used to be a local constant in
+ * the page); crmRoles.test.ts reads the server constant and fails if the two drift.
+ */
+export const CRM_SERVICE_REQUEST_ASSIGN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /**
  * Roles permitted to close (won/lost/cancelled/on_hold) an opportunity
