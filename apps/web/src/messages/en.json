@@ -3945,7 +3945,15 @@
     "deleteConfirmDescription": "\"{name}\" will be removed from the calendar. This affects leave and attendance calculations that read this calendar.",
     "filterPlaceholder": "Filter by holiday name or type…",
     "emptyTitle": "No holidays configured",
-    "emptyMessage": "National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll."
+    "emptyMessage": "National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll.",
+    "backLabel": "Back to HR",
+    "applicableToAll": "All",
+    "fieldApplicableToPlaceholder": "e.g. all",
+    "deleteForbidden": "You don't have permission to delete holidays.",
+    "deleteNotFound": "This holiday has already been removed. The list has been refreshed.",
+    "deleteSubmitted": "\"{name}\" deletion submitted — it will disappear from the list shortly.",
+    "deleteConfirmAction": "Delete",
+    "deleteCancelAction": "Keep holiday"
   },
   "home": {
     "title": "Dashboard",
@@ -7609,7 +7617,8 @@
     "emptyTitle": "No WFH requests",
     "emptyMessage": "Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer.",
     "cardNewRequest": "New WFH Request",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a WFH request from here. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a WFH request from here. Contact HR to get your account linked to your employee record.",
+    "noFilerRoleMessage": "Work-from-home requests are filed by the employee or by HR. As a manager you can approve or reject your team's requests in the list below."
   },
   "workforce": {
     "title": "Workforce Overview",
@@ -8953,7 +8962,7 @@
     "statCompleted": "Completed",
     "allProgramsTitle": "All Training Programs",
     "viewNominations": "View Nominations",
-    "feedbackReports": "Feedback Reports",
+    "completionResults": "Completion Results",
     "upcomingHeading": "Upcoming Programs",
     "upcomingSubtitle": "{count, plural, one {Next # scheduled training} other {Next # scheduled trainings}}",
     "startDate": "Start date",
@@ -9041,7 +9050,19 @@
     "noEmployeeLink": "No linked employee record was found for your account — contact HR to enrol.",
     "enrollCta": "Enroll me",
     "enrolling": "Enrolling…",
-    "enrolled": "You're nominated for this programme."
+    "enrolled": "Nomination submitted — it will appear on the Nominations page shortly.",
+    "nominateTitle": "Nominate an employee",
+    "nominateHint": "Nominate a colleague for this programme. The nomination is sent for approval and appears on the Nominations page.",
+    "nominateEmployeeLabel": "Employee",
+    "nominateEmployeePlaceholder": "Search by name or employee number…",
+    "nominateNoResults": "No matching employees",
+    "nominateSearching": "Searching…",
+    "nominateSearchError": "Couldn't load employees. Please try again.",
+    "nominateEmployeeRequired": "Choose an employee to nominate.",
+    "nominateCta": "Nominate",
+    "nominating": "Submitting…",
+    "nominationSubmitted": "Nomination submitted — it will appear on the Nominations page shortly.",
+    "viewNominations": "View nominations"
   },
   "trainingFeedback": {
     "title": "Training Completion Results",
