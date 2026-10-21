@@ -57,6 +57,19 @@ export interface EntityPickerProps {
    * not exist. Adapters signal failure by throwing; see lib/entityAdapters.
    */
   searchErrorText?: string;
+  /**
+   * GAP-HR-PROMOTION-05: when set, a failed search also shows a button with this
+   * text that re-runs the last query, so a transient failure (a 500, a dropped
+   * connection) is recoverable without retyping. Omit to keep the alert-only
+   * behaviour every existing caller has.
+   */
+  retryText?: string;
+  /**
+   * GAP-HR-PROMOTION-05: called with true when a search fails and with false
+   * once a later search starts or succeeds, so a form can hold back its
+   * "Next"/"Submit" while a required lookup is in a failed state.
+   */
+  onFailedChange?: (failed: boolean) => void;
   removeOptionAriaLabel?: (label: string) => string;
   /** Accessible name for standalone use (no ancestor Field, no visible label). Ignored when a Field label already provides one. */
   "aria-label"?: string;
@@ -127,6 +140,8 @@ export function EntityPicker({
   noResultsText = "No matches",
   searchingText = "Searching…",
   searchErrorText = "Couldn\u2019t load results. Please try again.",
+  retryText,
+  onFailedChange,
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
@@ -162,6 +177,14 @@ export function EntityPicker({
   const [activeIndex, setActiveIndex] = useState(-1);
 
   const selectedIds = useMemo(() => idsOf(value), [value]);
+
+  // Report the failed state to the form (GAP-HR-PROMOTION-05). A ref keeps a
+  // fresh-identity callback from re-firing the effect on every parent render.
+  const onFailedChangeRef = useRef(onFailedChange);
+  onFailedChangeRef.current = onFailedChange;
+  useEffect(() => {
+    onFailedChangeRef.current?.(failed);
+  }, [failed]);
 
   // Merge caller-supplied labels immediately (synchronous, no network) --
   // avoids a resolve() round-trip entirely when the caller already has
@@ -410,6 +433,16 @@ export function EntityPicker({
       >
         {showStatus ? (loading ? searchingText : failed ? searchErrorText : noResultsText) : ""}
       </span>
+
+      {open && failed && !loading && retryText && (
+        <button
+          type="button"
+          onClick={() => runSearch(query)}
+          style={{ justifySelf: "start", fontSize: 12, padding: "2px 10px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}
+        >
+          {retryText}
+        </button>
+      )}
 
       {open && results.length > 0 && (
         <ul
