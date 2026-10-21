@@ -24,12 +24,12 @@ const ADVANCE_ROLES = HR_ADVANCE_ROLES;
 // backend's own HR_ROLES for the approve/reject routes exactly (loans-routes.ts).
 const ADVANCE_DECIDE_ROLES = HR_FINANCE_DECIDER_ROLES;
 
-async function getData(): Promise<LoaderResult<Row[]>> {
+async function getData(formatMonths: (months: number) => string): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
     telemetryKey: "hr.advances",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiAdvance[] })?.data;
-      return Array.isArray(arr) ? mapAdvances(arr as ApiAdvance[]) : null;
+      return Array.isArray(arr) ? mapAdvances(arr as ApiAdvance[], formatMonths) : null;
     },
   });
   return r;
@@ -64,7 +64,8 @@ export default async function AdvancesPage() {
   const canRequestAdvance = selfServiceOnly || canPickEmployees;
 
   const t = await getTranslations("advances");
-  const { data: items, source } = await getData();
+  // GAP-HR-ADVANCES-07: the Recovery column ("1 month" / "6 months") is localised via an ICU plural.
+  const { data: items, source } = await getData((count) => t("recoveryMonthsValue", { count }));
   const errored = source === "error";
 
   // GAP-HR-ADVANCES-02: the API/DB status stays "active" on approve (see
@@ -77,12 +78,12 @@ export default async function AdvancesPage() {
 
   return (
     <div className="page-main wrap">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backToHr")} />
       {/* GAP-HR-ADVANCES-08: the banner used to claim "showing nothing" even
           though RequestAdvanceForm below stays fully usable on a list-load
           failure (it doesn't depend on this GET) -- reworded to describe
           what actually failed. */}
-      <DataSourceBadge source={source} message="Couldn't load the advances list — you can still submit a new request below" />
+      <DataSourceBadge source={source} message={t("listLoadError")} />
       <StatGrid>
 <StatCard icon="💰" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />

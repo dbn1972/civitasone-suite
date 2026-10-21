@@ -101,4 +101,17 @@ describe("ShiftRequestsTable", () => {
     await waitFor(() => expect(dialog).toHaveTextContent(/You don't have permission to do this\. Ask your administrator if you need access\./));
     expect(dialog.textContent).not.toMatch(/\b403\b/);
   });
+
+  // GAP-HR-SHIFT-REQUESTS-04: the 44px touch target used to be forced inline on
+  // every row's buttons, making desktop rows tall. It now comes from the ds
+  // stylesheet's coarse-pointer rule (see civitas-ds.touchTarget.test.ts), so the
+  // buttons are compact .btn.sm with NO inline minHeight.
+  it("GAP-HR-SHIFT-REQUESTS-04: Approve/Reject are compact .btn.sm buttons with no inline minHeight", () => {
+    renderTable([PENDING], true);
+    for (const name of [/^approve$/i, /^reject$/i]) {
+      const btn = screen.getByRole("button", { name });
+      expect(btn).toHaveClass("btn", "sm");
+      expect(btn.style.minHeight).toBe("");
+    }
+  });
 });
