@@ -15,7 +15,9 @@
  * What it does not: JSX text is not tokenised. A `//` directly after a colon is therefore kept as
  * text (so `<a>https://example.test</a>` survives), and an apostrophe in JSX text starts a "string"
  * that runs to the end of its line, which only means a comment on that same line is kept. An
- * unterminated block comment drops the rest of the file.
+ * unterminated block comment is KEPT, with everything after it: a guard test reads the result to
+ * look for violations, so when the scanner cannot tell where a comment ends it must leave the code
+ * in view (a false alarm is visible) rather than drop it (a missed violation is not).
  */
 
 /** Words after which a `/` begins a regular expression rather than dividing. */
@@ -124,7 +126,12 @@ export function stripComments(src: string): string {
 
       if (c === "/" && next === "*") {
         const end = src.indexOf("*/", j + 2);
-        j = end === -1 ? n : end + 2;
+        if (end === -1) {
+          out += src.slice(j); // unterminated: keep it and the rest, never silently drop code
+          j = n;
+        } else {
+          j = end + 2;
+        }
         continue;
       }
       if (c === "/" && next === "/" && src[j - 1] !== ":") {

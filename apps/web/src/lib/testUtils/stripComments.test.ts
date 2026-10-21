@@ -14,9 +14,12 @@ describe("stripComments: comments", () => {
     expect(stripComments("// head\ncode /* tail */")).toBe("\ncode ");
   });
 
-  it("drops the rest of the source after an unterminated block comment, and never throws", () => {
-    expect(stripComments("keep /* never closed\nmore")).toBe("keep ");
-    expect(stripComments("keep /*")).toBe("keep ");
+  // A guard test scans the result for violations, so an unterminated comment must leave the code IN VIEW (a false
+  // alarm is noticed) and not drop it (a missed violation is not).
+  it("keeps an unterminated block comment and everything after it, and never throws", () => {
+    expect(stripComments("keep /* never closed\nmore")).toBe("keep /* never closed\nmore");
+    expect(stripComments("keep /*")).toBe("keep /*");
+    expect(stripComments("a /* closed */ b /* open\nconst bad = '#fff';")).toBe("a  b /* open\nconst bad = '#fff';");
   });
 
   it("does not splice the text around a removed comment into a NEW delimiter", () => {
