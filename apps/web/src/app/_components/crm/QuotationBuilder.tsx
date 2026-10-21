@@ -686,7 +686,15 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
             <div style={{ padding: "0 12px 12px" }}>
               <h4 style={{ fontSize: 13, margin: "8px 0" }}>Version history</h4>
               {versionSource === "error" ? (
-                <p style={{ fontSize: 13, color: "var(--muted)" }}>— Version history could not be loaded. Showing saved information.</p>
+                /* GAP-CRM-OPPORTUNITY-AGEING-04 (rescan): nothing is cached for version history,
+                   so the old line claiming saved data was being shown was false. One honest
+                   message with a Retry. */
+                <div role="alert" style={{ fontSize: 13, color: "var(--muted)", display: "flex", gap: 8, alignItems: "center" }}>
+                  <span>{t("versionHistoryError")}</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => selected.quoteRef && void loadVersions(selected.quoteRef)}>
+                    {t("versionHistoryRetry")}
+                  </Button>
+                </div>
               ) : versions.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--muted)" }}>No prior versions.</p>
               ) : (

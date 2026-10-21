@@ -2111,7 +2111,7 @@
         },
         "pipelineBoard": {
           "title": "Pipeline Board",
-          "description": "Visual kanban of deal stages"
+          "description": "Visual kanban of engagement stages"
         },
         "pipelines": {
           "title": "Engagement Pipelines",
@@ -13726,15 +13726,15 @@
   },
   "crmKanbanBoard": {
     "loadErrorTitle": "Pipeline couldn't be loaded",
-    "loadErrorMessage": "This is usually temporary. Refresh to try again — we won't show an empty board as if there were no deals.",
+    "loadErrorMessage": "This is usually temporary. Refresh to try again — we won't show an empty board as if there were no engagements.",
     "retry": "Retry",
     "moveTitle": "Move “{name}” to {stage}?",
     "moveDescription": "This changes the engagement's stage to <strong>{stage}</strong>.",
-    "replaceProbability": "Replace this deal's likelihood ({current}%) with the stage default ({stageDefault}%)",
+    "replaceProbability": "Replace this engagement's likelihood ({current}%) with the stage default ({stageDefault}%)",
     "moveConfirm": "Move",
     "moveCancelled": "Move cancelled.",
     "announcePickedUp": "Picked up engagement {name}. Use arrow keys or drop on a stage column.",
-    "versionConflict": "Version conflict — someone else updated this deal. Please refresh.",
+    "versionConflict": "Version conflict — someone else updated this engagement. Please refresh.",
     "announceVersionConflict": "Move failed for engagement {name}: version conflict. Please refresh.",
     "missingFields": "This stage needs more information first: {fields}. Open the engagement to fill them in, then move it again.",
     "announceMoveFailed": "Move failed for engagement {name}: {message}",
@@ -13961,7 +13961,7 @@
     "moveStageDownTitle": "Move this stage later in the flow",
     "scopeLegend": "Scope (optional) — limits this stage to opportunities matching these values",
     "scope": "Scope",
-    "scopeHelp": "Optional filters. Leave blank to apply the stage to every opportunity, or enter a product, region or business unit to apply it only to matching opportunities. Pick an existing value from the list where possible so it matches.",
+    "scopeHelp": "Optional filters. Leave blank to apply the stage to every opportunity, or enter a product, region or business unit to apply it only to matching opportunities. Pick a value from the list where possible so it matches — product suggestions come from the product catalogue.",
     "productScope": "Product scope",
     "productScopeAria": "Product scope for stage {n}",
     "regionScope": "Region scope",
@@ -13991,7 +13991,39 @@
     "resolveCurrency": "Resolve currency",
     "resolveGeography": "Resolve geography",
     "resolveChannel": "Resolve channel",
-    "resolveFailed": "Couldn’t resolve the price book just now. Try Resolve again."
+    "resolveFailed": "Couldn’t resolve the price book just now. Try Resolve again.",
+    "unknownUser": "Unknown user",
+    "history": "History",
+    "historyAria": "Change history for price book {name}",
+    "historyTitle": "Change history — {name}",
+    "historyClose": "Close history",
+    "historyLoading": "Loading change history…",
+    "historyLoadFailed": "The change history couldn’t be loaded just now.",
+    "historyRetry": "Retry",
+    "historyEmpty": "No changes recorded yet. Edits made before change history was introduced are not listed.",
+    "historyHeading": "v{version} · {action} by {by} · {when}",
+    "historyCreated": "Created",
+    "historyEdited": "Edited",
+    "historyPriceEdited": "Price edited",
+    "historyReason": "Reason: {reason}",
+    "historyFieldChange": "{field}: {from} → {to}",
+    "historyFieldName": "Name",
+    "historyFieldSegment": "Segment",
+    "historyFieldCurrency": "Currency",
+    "historyFieldGeography": "Geography",
+    "historyFieldChannel": "Channel",
+    "historyFieldPriority": "Priority",
+    "historyFieldEnabled": "Status",
+    "historyAny": "any",
+    "historyOn": "Enabled",
+    "historyOff": "Disabled",
+    "historyPriceChange": "{product}: {from} → {to}",
+    "historyPriceAdded": "{product}: added at {to}",
+    "historyPriceRemoved": "{product}: removed (was {from})",
+    "historyUnknownProduct": "Unknown product",
+    "historyMorePrices": "+{count, plural, one {# more price change} other {# more price changes}} not listed",
+    "unknownValue": "No other price book uses “{value}”. A book only matches quotations that carry exactly this text — check the spelling.",
+    "didYouMean": "“{value}” differs only in letter case from “{existing}”, which other price books use. Matching is exact, so this book would not match those quotations."
   },
   "crmProductCatalogueEditor": {
     "currency": "Currency",
@@ -14002,9 +14034,6 @@
     "colLastChanged": "Last changed",
     "lastChangedAria": "Last changed for product {n}",
     "unknownUser": "Unknown",
-    "deleteWarning": "This product may be referenced by existing quotations and price books. Deleting it can leave those documents pointing at a product that no longer exists, and it cannot be undone.",
-    "deletePrefer": "Prefer turning the product <em>Off</em> (unticking Enabled) instead — that stops it being quoted while keeping it on existing documents.",
-    "deleteAnyway": "Delete anyway",
     "newLabel": "(new)",
     "activeToBeforeFrom": "Product “{name}”: Active to cannot be before Active from.",
     "needsFields": "Product “{name}” needs a name, code, a valid price (max 2 decimals) and a tax rate (choose a GST slab or a custom rate up to {max}%).",
@@ -14033,7 +14062,20 @@
     "colActiveFrom": "Active from",
     "colActiveTo": "Active to",
     "colEnabled": "Enabled",
-    "colActions": "Actions"
+    "colActions": "Actions",
+    "disable": "Disable",
+    "disableAria": "Disable product {n}",
+    "remove": "Remove",
+    "removeAria": "Remove unsaved product {n}",
+    "disableTitle": "Disable product “{name}”?",
+    "disableConfirm": "Disable product",
+    "disableExplain": "Disabling retires the product — it is not erased. Existing quotations keep the price and tax they captured, but the product can no longer be added to new quotations or priced in price books. You can switch it back on later by ticking Enabled and saving.",
+    "usageLoading": "Checking where this product is used…",
+    "usageUnknown": "We couldn’t check where this product is used. Review quotations and price books before disabling it.",
+    "usageNone": "This product is not used in any quotation or price book.",
+    "usageCounts": "Used in {quotations, plural, one {# quotation} other {# quotations}} and {priceBooks, plural, one {# price book} other {# price books}}.",
+    "disabledMessage": "Product “{name}” disabled.",
+    "disableFailed": "Could not disable the product. Try again."
   },
   "crmQualificationFrameworksEditor": {
     "added": "New framework added — enter its name below.",
@@ -14120,7 +14162,9 @@
     "recordAcceptanceTitle": "Record the customer's acceptance?",
     "recordAcceptanceDescription": "This marks the quotation accepted on the customer's behalf. Confirm only against a real acceptance.",
     "recordAcceptance": "Record acceptance",
-    "quotationAccepted": "Quotation accepted."
+    "quotationAccepted": "Quotation accepted.",
+    "versionHistoryError": "Version history couldn’t be loaded.",
+    "versionHistoryRetry": "Retry"
   },
   "crmReasonCodesEditor": {
     "title": "Lead Stage Reasons",
@@ -14719,7 +14763,8 @@
     "errTitle": "Procurement Pipeline Forecast",
     "errSubtitle": "Weighted engagement value — each active procurement tracked at its stage likelihood • पाइपलाइन पूर्वानुमान",
     "subtitle": "Weighted engagement value — each active procurement tracked at its stage likelihood{periodSuffix} • पाइपलाइन पूर्वानुमान",
-    "loadArea": "forecast"
+    "loadArea": "forecast",
+    "pipelineBoardLink": "Pipeline Board"
   },
   "crmGrievanceCategoriesError": {
     "backLabel": "Back to CRM",
@@ -14976,6 +15021,12 @@
     "ariaLabel": "{name} stage — {count} engagements, {value} value",
     "summary": "{count, plural, one {# engagement} other {# engagements}} · {probability}% prob",
     "dropHere": "Drop engagements here"
+  },
+  "crmDealCard": {
+    "roleDescription": "draggable engagement card",
+    "cardLabel": "Engagement: {name}, value {value}, likelihood {likelihood}%, {hasAssignee, select, yes {assignee {assignee}} other {unassigned}}. Tab to the engagement name and press Enter to open its record.",
+    "moveHandle": "Move engagement {name}. Use the left and right arrow keys to move it between stages.",
+    "updating": "Updating…"
   },
   "crmPipelinePage": {
     "title": "Engagement Pipeline",

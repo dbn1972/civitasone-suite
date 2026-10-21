@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PipelineEditor } from "./PipelineEditor";
 import * as op from "@/lib/crm/opportunity";
+import * as qp from "@/lib/crm/quotation";
 
 import type { ReactElement } from "react";
 
@@ -21,6 +22,11 @@ vi.mock("@/lib/crm/opportunity", async (orig) => {
   return { ...actual, getPipelines: vi.fn(), createPipeline: vi.fn(), updatePipeline: vi.fn(), deletePipeline: vi.fn() };
 });
 
+vi.mock("@/lib/crm/quotation", async (orig) => {
+  const actual = await orig<typeof import("@/lib/crm/quotation")>();
+  return { ...actual, getProducts: vi.fn() };
+});
+
 const pipeline: op.Pipeline = {
   id: "p1",
   name: "Enterprise",
@@ -29,6 +35,7 @@ const pipeline: op.Pipeline = {
 };
 
 beforeEach(() => {
+  vi.mocked(qp.getProducts).mockReset().mockResolvedValue({ data: [], source: "api" });
   vi.mocked(op.getPipelines).mockReset();
   vi.mocked(op.createPipeline).mockReset();
   vi.mocked(op.updatePipeline).mockReset();
@@ -248,5 +255,62 @@ describe("PipelineEditor (OP-002)", () => {
     await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
     await waitFor(() => expect(screen.getByLabelText(/pipeline name/i)).toHaveFocus());
+  });
+  // GAP-CRM-PIPELINES-04 (W2 rescan): the Product scope offers the product catalogue, not only
+  // values other stages already use. It stays free text (scope matching is exact-string on the
+  // server and is not tied to a catalogue id/code), so these are suggestions.
+  describe("Product scope suggestions (GAP-CRM-PIPELINES-04)", () => {
+    const base = { category: "", unit: "each", taxRateBps: 0, priceMinor: "0", currency: "INR", activeFrom: "", activeTo: "" };
+    const catalogue: qp.Product[] = [
+      { ...base, id: "pr1", code: "LMS-01", name: "Learning Platform", enabled: true },
+      { ...base, id: "pr2", code: "OLD-09", name: "Retired Gadget", enabled: false },
+    ];
+    const usedElsewhere: op.Pipeline = {
+      id: "p9", name: "Other", enabled: true,
+      stages: [{ key: "k", name: "Intake", mandatoryFields: [], gate: false, product: "Legacy Suite" }],
+    };
+
+    async function openEditor() {
+      vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline, usedElsewhere], source: "api" });
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: catalogue, source: "api" });
+      const { container } = render(<PipelineEditor />);
+      await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+      fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]);
+      const input = await screen.findByLabelText(/product scope for stage 1/i);
+      return { container, input: input as HTMLInputElement };
+    }
+
+    it("lists enabled catalogue products (name, code) plus already-used values; skips retired ones", async () => {
+      const { container, input } = await openEditor();
+      const listId = input.getAttribute("list")!;
+      await waitFor(() => {
+        const now = Array.from(container.querySelectorAll(`datalist[id="${listId}"] option`)).map((o) => o.getAttribute("value"));
+        expect(now).toContain("Learning Platform");
+      });
+      const values = Array.from(container.querySelectorAll(`datalist[id="${listId}"] option`)).map((o) => [o.getAttribute("value"), o.textContent]);
+      expect(values).toEqual(expect.arrayContaining([["Learning Platform", "LMS-01"], ["Legacy Suite", ""]]));
+      expect(values.map((v) => v[0])).not.toContain("Retired Gadget");
+    });
+
+    it("still accepts free text (suggestions only) and saves the typed scope", async () => {
+      vi.mocked(op.updatePipeline).mockResolvedValue(undefined);
+      const { input } = await openEditor();
+      fireEvent.change(input, { target: { value: "Learning Platform" } });
+      fireEvent.click(screen.getByRole("button", { name: /save pipeline/i }));
+      await waitFor(() => expect(op.updatePipeline).toHaveBeenCalled());
+      expect(vi.mocked(op.updatePipeline).mock.calls[0][1].stages[0].product).toBe("Learning Platform");
+    });
+
+    it("a failed catalogue load degrades to the already-used values without breaking the editor", async () => {
+      vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline, usedElsewhere], source: "api" });
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "error" });
+      const { container } = render(<PipelineEditor />);
+      await waitFor(() => expect(screen.getByText("Enterprise")).toBeInTheDocument());
+      fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]);
+      const input = await screen.findByLabelText(/product scope for stage 1/i);
+      const listId = input.getAttribute("list")!;
+      const values = Array.from(container.querySelectorAll(`datalist[id="${listId}"] option`)).map((o) => o.getAttribute("value"));
+      expect(values).toEqual(["Legacy Suite"]);
+    });
   });
 });

@@ -10,16 +10,26 @@
  * <date> (IST)" (from the API's version/updatedBy/updatedAt), and editing a
  * LIVE (enabled) book requires an explicit reason first — a price change feeds
  * every quotation built afterwards, while already-captured quotations keep
- * their saved price. A per-book audit-event history drawer is deferred: the
- * crm-service price-books module exposes no audit-event read endpoint yet
- * (decision recorded in the fixer report).
+ * their saved price.
+ *
+ * W2 rescan (GAP-CRM-PRICE-BOOKS-01): "Last changed by" shows the editor's NAME
+ * (the API resolves it; an unresolved editor reads "Unknown user", never the user
+ * id), the reason typed for a live-book edit is sent with the save and stored
+ * against the new version, and each book has a History panel (who / when / why and
+ * which fields and product prices moved) read from crm-service's append-only
+ * price-book history. Effective-from/to dates are NOT built: they change which
+ * book a quotation resolves, which is a pricing-policy decision for the owner.
+ *
+ * GAP-CRM-PRICE-BOOKS-02: Segment / Geography / Channel stay free text (there is no
+ * master list to bind them to), so the form warns — without blocking — when a value
+ * is not one any other book uses, since matching is exact-string.
  */
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatMoneyIn, formatIndianDate } from "@/lib/formatters";
+import { formatMoneyIn, formatIndianDate, formatDateTimeIST } from "@/lib/formatters";
 import {
   getPriceBooks,
   createPriceBook,
@@ -27,10 +37,12 @@ import {
   deletePriceBook,
   resolvePriceBook,
   getProducts,
+  getPriceBookHistory,
   isProductSelectable,
   ALLOWED_CURRENCIES,
   type PriceBook,
   type PriceBookEntry,
+  type PriceBookHistoryEntry,
   type Product,
   type QpSource,
 } from "@/lib/crm/quotation";
@@ -48,6 +60,35 @@ const SUPPORTED_CURRENCIES = ALLOWED_CURRENCIES;
 /** Unique, sorted, non-empty values of a book field across the loaded books. */
 function usedValues(books: PriceBook[], pick: (b: PriceBook) => string): string[] {
   return Array.from(new Set(books.map(pick).map((v) => v.trim()).filter(Boolean))).sort();
+}
+
+/**
+ * GAP-CRM-PRICE-BOOKS-02: how a typed scope value relates to the values other books use.
+ * Matching on the server is EXACT, so "Government" never matches a quotation that says
+ * "government". "ok" = used by another book (or blank = wildcard); "case" = differs only in
+ * letter case from a used value; "new" = no other book uses it (possibly a typo).
+ */
+function scopeCheck(value: string, used: string[]): { kind: "ok" } | { kind: "case"; existing: string } | { kind: "new" } {
+  const v = value.trim();
+  if (v === "" || used.includes(v)) return { kind: "ok" };
+  const lower = v.toLowerCase();
+  const near = used.find((u) => u.toLowerCase() === lower);
+  return near ? { kind: "case", existing: near } : { kind: "new" };
+}
+
+/** Book fields the change history can report, mapped to their message keys. */
+const HISTORY_FIELD_KEYS = {
+  name: "historyFieldName",
+  segment: "historyFieldSegment",
+  currency: "historyFieldCurrency",
+  geography: "historyFieldGeography",
+  channel: "historyFieldChannel",
+  priority: "historyFieldPriority",
+  enabled: "historyFieldEnabled",
+} as const;
+type HistoryFieldKey = keyof typeof HISTORY_FIELD_KEYS;
+function isHistoryField(f: string): f is HistoryFieldKey {
+  return Object.prototype.hasOwnProperty.call(HISTORY_FIELD_KEYS, f);
 }
 
 interface EntryRow {
@@ -79,6 +120,15 @@ export function PriceBookEditor() {
   // every quotation built afterwards will use, so opening one for edit goes
   // through an explicit acknowledgement first.
   const [confirmEditBook, setConfirmEditBook] = useState<PriceBook | null>(null);
+  // GAP-CRM-PRICE-BOOKS-01 (rescan): the reason typed in that dialog is kept for the draft and
+  // sent with the save (it used to be collected and then thrown away).
+  const [editReason, setEditReason] = useState<string | null>(null);
+  // GAP-CRM-PRICE-BOOKS-01 (rescan): per-book change history panel.
+  const [historyBook, setHistoryBook] = useState<PriceBook | null>(null);
+  const [history, setHistory] = useState<{ status: "loading" | "ready" | "error"; rows: PriceBookHistoryEntry[] }>({
+    status: "loading",
+    rows: [],
+  });
 
   // Resolve panel state.
   const [rSegment, setRSegment] = useState("");
@@ -109,11 +159,13 @@ export function PriceBookEditor() {
 
   function startNew() {
     setDraft(blankBook());
+    setEditReason(null);
     setEntries([]);
     setMessage("");
     setError("");
   }
-  function edit(b: PriceBook) {
+  function edit(b: PriceBook, reason?: string) {
+    setEditReason(reason?.trim() ? reason.trim() : null);
     setDraft({ ...b });
     setEntries(
       b.entries.map((e) =>
@@ -196,10 +248,13 @@ export function PriceBookEditor() {
     const payload: PriceBook = { ...draft, name: draft.name.trim(), entries: outEntries };
     setBusy(true);
     try {
-      if (payload.id) await updatePriceBook(payload.id, payload);
+      if (payload.id) await updatePriceBook(payload.id, payload, editReason ? { reason: editReason } : {});
       else await createPriceBook(payload);
       setMessage(`Price book “${payload.name}” saved.`);
       setDraft(null);
+      setEditReason(null);
+      // The panel (if open) must not keep showing the history of the pre-save version.
+      if (historyBook) void openHistory(historyBook, true);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save the price book.");
@@ -219,12 +274,26 @@ export function PriceBookEditor() {
       setMessage(`Price book “${b.name}” deleted.`);
       setConfirmBook(null);
       if (draft?.id === b.id) setDraft(null);
+      if (historyBook?.id === b.id) setHistoryBook(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the price book.");
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Open (or, if already open for this book, close) the change-history panel. */
+  async function openHistory(b: PriceBook, reload = false) {
+    if (!b.id) return;
+    if (!reload && historyBook?.id === b.id) {
+      setHistoryBook(null);
+      return;
+    }
+    setHistoryBook(b);
+    setHistory({ status: "loading", rows: [] });
+    const { data, source: s } = await getPriceBookHistory(b.id);
+    setHistory(s === "error" ? { status: "error", rows: [] } : { status: "ready", rows: data });
   }
 
   async function runResolve() {
@@ -237,6 +306,35 @@ export function PriceBookEditor() {
     });
     setResolved(data);
     setResolveSource(s);
+  }
+
+  /** The books a draft is compared against: every OTHER saved book (its own saved scope is not evidence). */
+  function otherBooks(d: PriceBook): PriceBook[] {
+    return books.filter((b) => !d.id || b.id !== d.id);
+  }
+
+  /**
+   * GAP-CRM-PRICE-BOOKS-02: a non-blocking hint under a scope field. Matching is exact, so a
+   * value no other book uses (or one that differs only in letter case) may be a typo that
+   * leaves this book unable to resolve. Free text stays allowed — there is no master list yet.
+   */
+  function scopeWarning(value: string, used: string[]) {
+    const check = scopeCheck(value, used);
+    if (check.kind === "ok") return null;
+    return (
+      <span role="status" style={{ fontSize: 12, color: "var(--warn, #b45309)" }}>
+        {check.kind === "case"
+          ? t("didYouMean", { value: value.trim(), existing: check.existing })
+          : t("unknownValue", { value: value.trim() })}
+      </span>
+    );
+  }
+
+  /** A change-history value for display: null scope = "any", booleans = Enabled/Disabled. */
+  function historyValue(v: string | number | boolean | null): string {
+    if (v === null) return t("historyAny");
+    if (typeof v === "boolean") return v ? t("historyOn") : t("historyOff");
+    return String(v);
   }
 
   if (source === "loading") {
@@ -291,15 +389,29 @@ export function PriceBookEditor() {
                   </span>
                   {b.updatedBy || b.updatedAt ? (
                     <span style={{ display: "block", fontSize: 12, color: "var(--muted)" }} aria-label={t("lastChangedAria", { name: b.name })}>
-                      {b.updatedBy && b.updatedAt
-                        ? t("lastChangedByOn", { by: b.updatedBy, date: formatIndianDate(b.updatedAt) })
-                        : b.updatedBy
-                          ? t("lastChangedBy", { by: b.updatedBy })
+                      {/* The editor's NAME — the API resolves it. An editor it could not resolve reads
+                          "Unknown user"; the raw user id is never shown. */}
+                      {b.updatedAt && (b.updatedByName || b.updatedBy)
+                        ? t("lastChangedByOn", { by: b.updatedByName ?? t("unknownUser"), date: formatIndianDate(b.updatedAt) })
+                        : b.updatedByName || b.updatedBy
+                          ? t("lastChangedBy", { by: b.updatedByName ?? t("unknownUser") })
                           : t("lastChangedOn", { date: formatIndianDate(b.updatedAt ?? "") })}
                     </span>
                   ) : null}
                 </span>
                 <span style={{ display: "flex", gap: 6 }}>
+                  {b.id ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void openHistory(b)}
+                      aria-expanded={historyBook?.id === b.id}
+                      aria-label={t("historyAria", { name: b.name })}
+                    >
+                      {t("history")}
+                    </Button>
+                  ) : null}
                   <Button type="button" variant="ghost" size="sm" onClick={() => requestEdit(b)}>
                     Edit
                   </Button>
@@ -311,6 +423,77 @@ export function PriceBookEditor() {
             ))}
           </ul>
         )}
+
+        {historyBook ? (
+          <section
+            aria-label={t("historyTitle", { name: historyBook.name })}
+            style={{ margin: "8px 12px 0", border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <h4 style={{ margin: 0, fontSize: 14 }}>{t("historyTitle", { name: historyBook.name })}</h4>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setHistoryBook(null)}>
+                {t("historyClose")}
+              </Button>
+            </div>
+            {history.status === "loading" ? (
+              <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>{t("historyLoading")}</p>
+            ) : history.status === "error" ? (
+              <div role="alert" style={{ fontSize: 13, color: "#b42318", display: "flex", gap: 8, alignItems: "center" }}>
+                <span>{t("historyLoadFailed")}</span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => void openHistory(historyBook, true)}>
+                  {t("historyRetry")}
+                </Button>
+              </div>
+            ) : history.rows.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--muted)" }}>{t("historyEmpty")}</p>
+            ) : (
+              <ol style={{ listStyle: "none", margin: "8px 0 0", padding: 0, display: "grid", gap: 10 }}>
+                {history.rows.map((h) => (
+                  <li key={h.id} style={{ fontSize: 13, borderTop: "1px solid var(--line)", paddingTop: 8 }}>
+                    <strong>
+                      {t("historyHeading", {
+                        version: h.version,
+                        action: h.action === "create" ? t("historyCreated") : h.action === "item" ? t("historyPriceEdited") : t("historyEdited"),
+                        by: h.changedByName ?? t("unknownUser"),
+                        when: formatDateTimeIST(h.changedAt),
+                      })}
+                    </strong>
+                    {h.reason ? <div style={{ color: "var(--ink2)" }}>{t("historyReason", { reason: h.reason })}</div> : null}
+                    {h.fields.filter((f) => isHistoryField(f.field)).map((f) => (
+                      <div key={f.field} style={{ color: "var(--muted)" }}>
+                        {t("historyFieldChange", {
+                          field: t(HISTORY_FIELD_KEYS[f.field as HistoryFieldKey]),
+                          from: historyValue(f.from),
+                          to: historyValue(f.to),
+                        })}
+                      </div>
+                    ))}
+                    {h.prices.map((p) => {
+                      const product = products.find((pr) => pr.id === p.productId)?.name ?? t("historyUnknownProduct");
+                      const cur = historyBook.currency;
+                      return (
+                        <div key={p.productId} style={{ color: "var(--muted)" }}>
+                          {p.fromMinor === null && p.toMinor !== null
+                            ? t("historyPriceAdded", { product, to: formatMoneyIn(p.toMinor, cur) })
+                            : p.toMinor === null && p.fromMinor !== null
+                              ? t("historyPriceRemoved", { product, from: formatMoneyIn(p.fromMinor, cur) })
+                              : t("historyPriceChange", {
+                                  product,
+                                  from: formatMoneyIn(p.fromMinor ?? "0", cur),
+                                  to: formatMoneyIn(p.toMinor ?? "0", cur),
+                                })}
+                        </div>
+                      );
+                    })}
+                    {h.priceChangeCount > h.prices.length ? (
+                      <div style={{ color: "var(--muted)" }}>{t("historyMorePrices", { count: h.priceChangeCount - h.prices.length })}</div>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        ) : null}
 
         <div style={{ padding: 12 }}>
           {!draft ? (
@@ -328,6 +511,7 @@ export function PriceBookEditor() {
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Segment
                   <input aria-label={t("segment")} list={`${headingId}-segments`} value={draft.segment} onChange={(e) => setDraft({ ...draft, segment: e.target.value })} style={inputStyle} placeholder={t("segmentPlaceholder")} />
+                  {scopeWarning(draft.segment, usedValues(otherBooks(draft), (b) => b.segment))}
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Currency
@@ -338,10 +522,12 @@ export function PriceBookEditor() {
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Geography
                   <input aria-label={t("geography")} list={`${headingId}-geographies`} value={draft.geography} onChange={(e) => setDraft({ ...draft, geography: e.target.value })} style={inputStyle} placeholder={t("geographyPlaceholder")} />
+                  {scopeWarning(draft.geography, usedValues(otherBooks(draft), (b) => b.geography))}
                 </label>
                 <label style={{ fontSize: 13, display: "grid", gap: 4 }}>
                   Channel
                   <input aria-label={t("channel")} list={`${headingId}-channels`} value={draft.channel} onChange={(e) => setDraft({ ...draft, channel: e.target.value })} style={inputStyle} placeholder={t("channelPlaceholder")} />
+                  {scopeWarning(draft.channel, usedValues(otherBooks(draft), (b) => b.channel))}
                 </label>
                 <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, marginTop: 24 }}>
                   <input type="checkbox" checked={draft.enabled} onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
@@ -396,7 +582,7 @@ export function PriceBookEditor() {
                   + Add price
                 </Button>
                 <span style={{ flex: 1 }} />
-                <Button type="button" variant="ghost" onClick={() => setDraft(null)} disabled={busy}>
+                <Button type="button" variant="ghost" onClick={() => { setDraft(null); setEditReason(null); }} disabled={busy}>
                   Cancel
                 </Button>
                 <Button
@@ -484,15 +670,17 @@ export function PriceBookEditor() {
         open={confirmEditBook !== null}
         requireReason
         reasonLabel={t("editReasonLabel")}
+        maxReasonLength={500}
         title={confirmEditBook ? t("editTitle", { name: confirmEditBook.name }) : ""}
         description={t("editDescription")}
         confirmLabel={t("editConfirm")}
         busy={busy}
         onCancel={() => setConfirmEditBook(null)}
-        onConfirm={() => {
+        onConfirm={(reason) => {
           const b = confirmEditBook;
           setConfirmEditBook(null);
-          if (b) edit(b);
+          // The reason is stored against the version this edit produces (change history).
+          if (b) edit(b, reason);
         }}
       />
     </div>

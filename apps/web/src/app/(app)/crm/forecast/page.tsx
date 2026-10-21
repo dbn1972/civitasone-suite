@@ -60,7 +60,7 @@ export default async function ForecastPage({ searchParams }: PageProps) {
         title="Procurement Pipeline Forecast"
         subtitle={t("subtitle", { periodSuffix })}
         back="/crm"
-        actions={<Link className="btn" href="/crm/pipeline">Engagement Board</Link>}
+        actions={<Link className="btn" href="/crm/pipeline">{t("pipelineBoardLink")}</Link>}
       />
       {pipelineSource === "error" && <DataSourceBadge source="error" />}
       <StatGrid>

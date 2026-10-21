@@ -24,6 +24,7 @@ import {
   type OppFieldKey,
   type OpSource,
 } from "@/lib/crm/opportunity";
+import { getProducts, type Product } from "@/lib/crm/quotation";
 
 const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
@@ -65,6 +66,10 @@ export function PipelineEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Pipeline | null>(null);
+  // GAP-CRM-PIPELINES-04 (W2 rescan): the product catalogue, offered as suggestions for the
+  // per-stage Product scope. Best-effort: a failed catalogue load just leaves the
+  // already-used values as the only suggestions (scope stays free text).
+  const [catalogue, setCatalogue] = useState<Product[]>([]);
   // GAP-CRM-PIPELINES-02: an aria-live message announcing stage reorders.
   const [stageAnnouncement, setStageAnnouncement] = useState("");
   // GAP-CRM-PIPELINES-05: the pristine JSON of the draft when it was opened, used
@@ -83,6 +88,9 @@ export function PipelineEditor() {
     if (!isLive()) return;
     setPipelines(data);
     setSource(s);
+    const prod = await getProducts();
+    if (!isLive()) return;
+    setCatalogue(prod.data);
   }
 
   useEffect(() => {
@@ -276,6 +284,20 @@ export function PipelineEditor() {
       regions: [...regions].sort(),
       businessUnits: [...businessUnits].sort(),
     };
+  })();
+
+  // GAP-CRM-PIPELINES-04 (W2 rescan): Product scope offers the catalogue's products (by name,
+  // labelled with the code) alongside values already used by other stages. Pipeline scope is
+  // matched by EXACT string equality on the server, and nothing in the repo ties it to a
+  // catalogue id/code — so the field stays free text and these are suggestions only (see the
+  // owner question in the ledger).
+  const productOptions = (() => {
+    const byValue = new Map<string, string>();
+    for (const p of catalogue) {
+      if (p.enabled && p.name.trim()) byValue.set(p.name.trim(), p.code.trim());
+    }
+    for (const v of scopeOptions.products) if (!byValue.has(v)) byValue.set(v, "");
+    return [...byValue.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   })();
 
   if (source === "loading") {
@@ -514,7 +536,9 @@ export function PipelineEditor() {
                 across saved pipelines + the current draft, so entries are reused
                 consistently rather than retyped (and mis-typed). */}
             <datalist id={`${headingId}-products`}>
-              {scopeOptions.products.map((v) => <option key={v} value={v} />)}
+              {productOptions.map(([value, code]) => (
+                <option key={value} value={value}>{code}</option>
+              ))}
             </datalist>
             <datalist id={`${headingId}-regions`}>
               {scopeOptions.regions.map((v) => <option key={v} value={v} />)}

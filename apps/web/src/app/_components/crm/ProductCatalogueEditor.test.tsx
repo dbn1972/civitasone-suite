@@ -19,7 +19,7 @@ function render(ui: ReactElement) {
 
 vi.mock("@/lib/crm/quotation", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/quotation")>();
-  return { ...actual, getProducts: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn(), deleteProduct: vi.fn() };
+  return { ...actual, getProducts: vi.fn(), createProduct: vi.fn(), updateProduct: vi.fn(), deleteProduct: vi.fn(), getProductUsage: vi.fn() };
 });
 
 const product: qp.Product = {
@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.mocked(qp.createProduct).mockReset();
   vi.mocked(qp.updateProduct).mockReset();
   vi.mocked(qp.deleteProduct).mockReset();
+  vi.mocked(qp.getProductUsage).mockReset().mockResolvedValue({ data: { quotations: 0, priceBooks: 0 }, source: "api" });
 });
 
 describe("ProductCatalogueEditor (QP-001)", () => {
@@ -93,26 +94,103 @@ describe("ProductCatalogueEditor (QP-001)", () => {
   // GAP-CRM-PRODUCTS-01: audit visibility — who last changed the product/when.
   it("shows the last-changed author and date when the API returns them", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({
-      data: [{ ...product, updatedBy: "priya.admin", updatedAt: "2026-03-01T09:00:00.000Z" }],
+      data: [{ ...product, updatedBy: "0c1d2e3f-0000-4000-8000-0000000000aa", updatedByName: "Priya Admin", updatedAt: "2026-03-01T09:00:00.000Z" }],
       source: "api",
     });
     renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
     const cell = screen.getByLabelText(/last changed for product 1/i);
-    expect(cell).toHaveTextContent("priya.admin");
+    expect(cell).toHaveTextContent("Priya Admin");
+    expect(cell.textContent).not.toContain("0c1d2e3f");
   });
 
-  // GAP-CRM-PRODUCTS-01: deleting a product that feeds quotations/price books
-  // must warn and steer the admin to soft-disable instead.
-  it("warns about references and recommends disabling in the delete dialog", async () => {
-    vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
+  // GAP-CRM-PRODUCTS-01 (W2 rescan): crm.products.updated_by is a uuid and the API now returns it
+  // with updatedAt. An editor the API could not name reads "Unknown" — never the id.
+  it("never prints the raw editor id: an unresolved editor reads 'Unknown'", async () => {
+    const uuid = "0c1d2e3f-0000-4000-8000-0000000000bb";
+    vi.mocked(qp.getProducts).mockResolvedValue({
+      data: [{ ...product, updatedBy: uuid, updatedAt: "2026-03-01T09:00:00.000Z" }],
+      source: "api",
+    });
     renderWithIntl(<ProductCatalogueEditor />);
     await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: /delete product 1/i }));
-    const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/referenced by existing quotations and price books/i);
-    expect(dialog).toHaveTextContent(/turning the product/i);
-    expect(screen.getByRole("button", { name: /delete anyway/i })).toBeInTheDocument();
+    const cell = screen.getByLabelText(/last changed for product 1/i);
+    expect(cell.textContent).toMatch(/^Unknown ·/);
+    expect(cell.textContent).not.toContain("0c1d2e3f");
+  });
+
+  // GAP-CRM-PRODUCTS-01 (W2 rescan): the server's DELETE is a soft-disable (enabled=false), so the
+  // action is named "Disable" — not "Delete" — and the dialog says how many quotations and price
+  // books reference the product BEFORE the admin confirms.
+  describe("disabling a product (server DELETE is a soft-disable)", () => {
+    async function open() {
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: [product], source: "api" });
+      renderWithIntl(<ProductCatalogueEditor />);
+      await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
+    }
+
+    it("is labelled Disable (no Delete button) and names the real effect", async () => {
+      await open();
+      expect(screen.queryByRole("button", { name: /^delete/i })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /disable product 1/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(dialog).toHaveTextContent(/disable product “rack server”/i);
+      expect(dialog).toHaveTextContent(/retires the product — it is not erased/i);
+      expect(dialog.textContent).not.toMatch(/cannot be undone|no longer exists/i);
+    });
+
+    it("shows how many quotations and price books reference the product", async () => {
+      vi.mocked(qp.getProductUsage).mockResolvedValue({ data: { quotations: 2, priceBooks: 1 }, source: "api" });
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: /disable product 1/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      await waitFor(() => expect(dialog).toHaveTextContent("Used in 2 quotations and 1 price book."));
+      expect(qp.getProductUsage).toHaveBeenCalledWith("pr1");
+    });
+
+    it("says the product is unused only when the count is a real zero", async () => {
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: /disable product 1/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      await waitFor(() => expect(dialog).toHaveTextContent(/not used in any quotation or price book/i));
+    });
+
+    it("says it could not check — never 'unused' — when the usage cannot be read", async () => {
+      vi.mocked(qp.getProductUsage).mockResolvedValue({ data: null, source: "error" });
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: /disable product 1/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      await waitFor(() => expect(dialog).toHaveTextContent(/couldn.t check where this product is used/i));
+      expect(dialog.textContent).not.toMatch(/not used in any/i);
+    });
+
+    it("calls the API only after confirmation, then reports the product as disabled", async () => {
+      vi.mocked(qp.deleteProduct).mockResolvedValue(undefined);
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: /disable product 1/i }));
+      expect(qp.deleteProduct).not.toHaveBeenCalled();
+      fireEvent.click(await screen.findByRole("button", { name: /^disable product$/i }));
+      await waitFor(() => expect(qp.deleteProduct).toHaveBeenCalledWith("pr1"));
+      expect(await screen.findByText(/product “rack server” disabled/i)).toBeInTheDocument();
+    });
+
+    it("offers nothing to disable on a product that is already disabled", async () => {
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ ...product, enabled: false }], source: "api" });
+      renderWithIntl(<ProductCatalogueEditor />);
+      await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
+      expect(screen.getByRole("button", { name: /disable product 1/i })).toBeDisabled();
+    });
+
+    it("just removes an unsaved row — no dialog, no API call", async () => {
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
+      renderWithIntl(<ProductCatalogueEditor />);
+      await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /add product/i }));
+      fireEvent.click(screen.getByRole("button", { name: /remove unsaved product 1/i }));
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+      expect(qp.deleteProduct).not.toHaveBeenCalled();
+      expect(await screen.findByText(/no products yet/i)).toBeInTheDocument();
+    });
   });
 
   // GAP-CRM-PRODUCTS-02: the tax field is a GST-slab select, so a fat-fingered

@@ -160,6 +160,28 @@ describe("StageAgeingDashboard (OP-005)", () => {
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
   });
 
+  // GAP-CRM-OPPORTUNITY-AGEING-03 (W2 rescan): the live endpoint now resolves the owner's
+  // name server-side. A row with an owner id but no resolvable name must not print the id
+  // or a bare dash; a row with no owner says Unassigned.
+  it("never shows a bare dash or raw id in Owner: unresolved owner => Unknown user, no owner => Unassigned", async () => {
+    vi.mocked(op.getStageAgeing).mockResolvedValue({
+      data: [
+        { id: "d1", name: "Named owner", stage: "qual", stageName: "Qualify", daysInStage: 30, limitDays: 14, exceededBy: 16, ownerId: "0c1d2e3f-0000-4000-8000-000000000001", ownerName: "Asha Rao" },
+        { id: "d2", name: "Unresolved owner", stage: "qual", stageName: "Qualify", daysInStage: 31, limitDays: 14, exceededBy: 17, ownerId: "0c1d2e3f-0000-4000-8000-000000000002" },
+        { id: "d3", name: "No owner", stage: "qual", stageName: "Qualify", daysInStage: 32, limitDays: 14, exceededBy: 18 },
+      ],
+      source: "api",
+    });
+    render(<StageAgeingDashboard canConfig={false} />);
+    await waitFor(() => expect(screen.getByText("No owner")).toBeInTheDocument());
+    const rowOf = (name: string) => screen.getByText(name).closest("tr")!;
+    expect(rowOf("Named owner")).toHaveTextContent("Asha Rao");
+    expect(rowOf("Unresolved owner")).toHaveTextContent("Unknown user");
+    expect(rowOf("Unresolved owner")).not.toHaveTextContent("0c1d2e3f");
+    expect(rowOf("No owner")).toHaveTextContent("Unassigned");
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-OPPORTUNITY-AGEING-04: the error state has a Retry that re-fetches and
   // never claims "saved information".
   it("shows a Retry on a failed ageing load that re-fetches", async () => {
@@ -169,6 +191,10 @@ describe("StageAgeingDashboard (OP-005)", () => {
     render(<StageAgeingDashboard />);
     const retry = await screen.findByRole("button", { name: /retry/i });
     expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    // ONE message: the "Couldn't load — showing nothing" badge is not stacked on top of the
+    // error state (GAP-CRM-OPPORTUNITY-AGEING-04 rescan).
+    expect(screen.getByText(/couldn.t load the ageing list/i)).toBeInTheDocument();
+    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByText("Recovered deal")).toBeInTheDocument());
   });

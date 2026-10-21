@@ -107,4 +107,13 @@ describe("ForecastPage — GoI redesign", () => {
     render(await ForecastPage({}));
     expect(screen.getByTestId("period-filter")).toBeInTheDocument();
   });
+  // GAP-CRM-PIPELINE-04 (W2 rescan): the board has ONE name across the CRM hub, dashboard and
+  // forecast. The forecast header used to call it "Engagement Board" while the hub and the
+  // dashboard say "Pipeline Board".
+  it("links to the pipeline board under the same name the CRM hub and dashboard use", async () => {
+    render(await ForecastPage({}));
+    const link = screen.getByRole("link", { name: "Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByText("Engagement Board")).not.toBeInTheDocument();
+  });
 });

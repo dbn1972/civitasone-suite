@@ -282,4 +282,29 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     await waitFor(() => expect(screen.getByText("₹999.99")).toBeInTheDocument());
     expect(screen.queryByText("₹354.00")).not.toBeInTheDocument();
   });
+  // GAP-CRM-OPPORTUNITY-AGEING-04 (W2 rescan): a failed version-history load used to claim that
+  // saved data was being shown although nothing is cached. It is one honest message with a
+  // Retry that re-fetches by quote ref.
+  it("version history: a failed load is one message with a working Retry, never 'saved information'", async () => {
+    const v1: qp.Quotation = { ...quote, id: "q1", quoteRef: "QTN/2026/V", version: 1, status: "draft" };
+    vi.mocked(qp.getQuotations).mockResolvedValue({ data: [v1], source: "api" });
+    vi.mocked(qp.getQuotationVersions)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValue({
+        data: [{ id: "q1", version: 1, status: "draft", totalMinor: "35400", createdAt: "2026-03-01T10:00:00.000Z" }],
+        source: "api",
+      });
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/^standard$/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
+    expect(await screen.findByText(/version history couldn.t be loaded/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved information/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+    await waitFor(() => expect(qp.getQuotationVersions).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(qp.getQuotationVersions).mock.calls[1][0]).toBe("QTN/2026/V");
+    await waitFor(() => expect(screen.queryByText(/version history couldn.t be loaded/i)).not.toBeInTheDocument());
+    const section = screen.getByRole("heading", { name: /version history/i }).parentElement!;
+    await waitFor(() => expect(section).toHaveTextContent("v1"));
+    expect(section).toHaveTextContent("₹354.00");
+  });
 });
