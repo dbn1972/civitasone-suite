@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EmptyState } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { minorToDecimalString } from "@/lib/money";
+import { isValidFy } from "@/lib/validators/fy";
 
 const NATURES = [
   "accommodation", "car", "loan", "medical", "club_membership", "gas_electricity_water",
@@ -55,15 +56,21 @@ const NATURE_LABEL_KEYS: Record<(typeof NATURES)[number], string> = {
  * unchanged -- this was a false positive in the original snapshot audit,
  * not a real unit mismatch.
  */
-export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing }: {
+export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, defaultEmployeeName, editing }: {
   defaultEmployeeId: string;
   defaultFy: string;
+  /** GAP-PAYROLL-STATUTORY-PERQUISITE-05: the looked-up employee's name, shown instead of the UUID. */
+  defaultEmployeeName?: string;
   /** GAP-PAYROLL-STATUTORY-PERQUISITE-06: an existing line being corrected (nature is its key, so it is fixed). */
   editing?: { nature: string; description: string; valueByEmployerMinor: string; amountRecoveredMinor: string };
 }) {
   const t = useTranslations("perquisiteComponentForm");
   const router = useRouter();
-  const canSave = !!defaultEmployeeId && !!defaultFy;
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-05: a component is only ever posted to a real
+  // financial year (YYYY-YY, suffix = start + 1), never to a mistyped one.
+  const canSave = !!defaultEmployeeId && isValidFy(defaultFy);
+  // The id is the key the API needs; the person sees the name (never the UUID).
+  const employeeLabel = defaultEmployeeName?.trim() || t("employeeUnnamed");
   const editingNature = editing && (NATURES as readonly string[]).includes(editing.nature) ? (editing.nature as typeof NATURES[number]) : undefined;
   const [nature, setNature] = useState<typeof NATURES[number]>(editingNature ?? "accommodation");
   const [description, setDescription] = useState(editing?.description ?? "");
@@ -89,6 +96,11 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
     e.preventDefault();
     setMessage(null);
     setValueInvalid(false);
+    if (!isValidFy(defaultFy)) {
+      setTone("bad");
+      setMessage(t("fyInvalidError"));
+      return;
+    }
     const value = parseFloat(valueByEmployer);
     if (Number.isNaN(value) || value < 0) {
       setTone("bad");
@@ -118,7 +130,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(t("savedMessage", { nature: t(NATURE_LABEL_KEYS[nature]), employeeId: defaultEmployeeId }));
+      setMessage(t("savedMessage", { nature: t(NATURE_LABEL_KEYS[nature]), employee: employeeLabel }));
       setDescription(""); setValueByEmployer(""); setAmountRecovered("");
       router.refresh();
     } catch (err) {
@@ -143,7 +155,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
           <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 13 }}>
             <div>
               <div style={{ color: "var(--ink2)" }}>{t("employeeIdLabel")}</div>
-              <div style={{ fontWeight: 600 }}>{defaultEmployeeId}</div>
+              <div style={{ fontWeight: 600 }}>{employeeLabel}</div>
             </div>
             <div>
               <div style={{ color: "var(--ink2)" }}>{t("financialYearLabel")}</div>
@@ -238,7 +250,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
           ? t.rich("confirmDescriptionWithRecovered", {
               strong: (chunks) => <strong>{chunks}</strong>,
               nature: t(NATURE_LABEL_KEYS[nature]),
-              employeeId: defaultEmployeeId,
+              employee: employeeLabel,
               fy: defaultFy,
               value: valueByEmployer || 0,
               recovered: amountRecovered,
@@ -246,7 +258,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
           : t.rich("confirmDescriptionBase", {
               strong: (chunks) => <strong>{chunks}</strong>,
               nature: t(NATURE_LABEL_KEYS[nature]),
-              employeeId: defaultEmployeeId,
+              employee: employeeLabel,
               fy: defaultFy,
               value: valueByEmployer || 0,
             })}

@@ -2694,7 +2694,8 @@
     "employeePickerPlaceholder": "नाम या कर्मचारी कोड टाइप करें…",
     "financialYearLabel": "वित्तीय वर्ष",
     "submitBtn": "फॉर्म 12BA देखें",
-    "requiredError": "देखने हेतु एक कर्मचारी चुनें।"
+    "requiredError": "देखने हेतु एक कर्मचारी चुनें।",
+    "fyInvalidError": "मान्य वित्तीय वर्ष चुनें, उदाहरण के लिए 2026-27।"
   },
   "employeeImport": {
     "title": "थोक कर्मचारी आयात",
@@ -6339,7 +6340,7 @@
     "statFinancialYear": "वित्तीय वर्ष",
     "form12baCardTitle": "फॉर्म 12BA",
     "selectEmployeeFyTitle": "एक कर्मचारी और वित्तीय वर्ष चुनें",
-    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी आईडी और वित्तीय वर्ष दर्ज करें।",
+    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी और वित्तीय वर्ष चुनें।",
     "noForm12baTitle": "कोई फॉर्म 12BA डेटा नहीं",
     "noForm12baMessage": "दिए गए कर्मचारी और वित्त वर्ष {fy} के लिए कोई अनुलाभ डेटा नहीं मिला।",
     "employerLabel": "नियोक्ता",
@@ -6364,7 +6365,10 @@
     "deleteDescription": "{nature} घटक इस कर्मचारी के फ़ॉर्म 12BA से हटा दिया जाएगा। हटाए गए मान के साथ यह कार्रवाई ऑडिट में दर्ज होगी।",
     "deleteConfirm": "घटक हटाएँ",
     "deleteReasonLabel": "हटाने का कारण",
-    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।"
+    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।",
+    "subtitleFor": "{name} के अनुलाभ और फॉर्म 12BA, वित्त वर्ष {fy}।",
+    "invalidFyMessage": "पते में दिया गया वित्तीय वर्ष मान्य नहीं है। नीचे से वित्तीय वर्ष चुनें।",
+    "panMaskedAriaLabel": "PAN (मास्क किया हुआ)"
   },
   "perquisiteComponentForm": {
     "formTitle": "अनुलाभ घटक जोड़ें",
@@ -6389,14 +6393,16 @@
     "submitBtn": "घटक सहेजें",
     "valueInvalidError": "नियोक्ता द्वारा मूल्य एक मान्य रुपया राशि होनी चाहिए।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "savedMessage": "अनुलाभ घटक \"{nature}\" {employeeId} के लिए सहेजा गया।",
+    "savedMessage": "अनुलाभ घटक \"{nature}\" {employee} के लिए सहेजा गया।",
     "confirmTitle": "क्या यह अनुलाभ घटक सहेजें?",
     "confirmLabel": "पुष्टि करें और सहेजें",
-    "confirmDescriptionBase": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
-    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
+    "confirmDescriptionBase": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
+    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
     "updateBtn": "घटक अपडेट करें",
     "cancelEdit": "रद्द करें",
-    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।"
+    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।",
+    "employeeUnnamed": "चुना गया कर्मचारी",
+    "fyInvalidError": "वित्तीय वर्ष मान्य नहीं है। मान्य वित्तीय वर्ष के साथ कर्मचारी को फिर से खोजें।"
   },
   "pf": {
     "selectPeriodLabel": "अवधि",

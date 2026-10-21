@@ -2718,7 +2718,8 @@
     "employeePickerPlaceholder": "Type a name or employee code…",
     "financialYearLabel": "Financial Year",
     "submitBtn": "View Form 12BA",
-    "requiredError": "Select an employee to look up."
+    "requiredError": "Select an employee to look up.",
+    "fyInvalidError": "Choose a valid financial year, for example 2026-27."
   },
   "employeeImport": {
     "title": "Bulk Employee Import",
@@ -5321,7 +5322,7 @@
     "statFinancialYear": "Financial Year",
     "form12baCardTitle": "Form 12BA",
     "selectEmployeeFyTitle": "Select an employee and financial year",
-    "selectEmployeeFyMessage": "Enter an employee ID and financial year above to view their Form 12BA statement of perquisites.",
+    "selectEmployeeFyMessage": "Select an employee and financial year above to view their Form 12BA statement of perquisites.",
     "noForm12baTitle": "No Form 12BA data",
     "noForm12baMessage": "No perquisite data found for the given employee and FY {fy}.",
     "employerLabel": "Employer",
@@ -5346,7 +5347,10 @@
     "deleteDescription": "The {nature} component is removed from this employee's Form 12BA. The deletion is audited with the values removed.",
     "deleteConfirm": "Delete component",
     "deleteReasonLabel": "Reason for deleting",
-    "deleteFailed": "Could not delete the component. Please try again."
+    "deleteFailed": "Could not delete the component. Please try again.",
+    "subtitleFor": "Perquisites and Form 12BA for {name}, FY {fy}.",
+    "invalidFyMessage": "The financial year in the address is not valid. Choose a financial year below.",
+    "panMaskedAriaLabel": "PAN (masked)"
   },
   "perquisiteComponentForm": {
     "formTitle": "Add Perquisite Component",
@@ -5371,14 +5375,16 @@
     "submitBtn": "Save Component",
     "valueInvalidError": "Value by employer must be a valid rupee amount.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "Perquisite component \"{nature}\" saved for {employeeId}.",
+    "savedMessage": "Perquisite component \"{nature}\" saved for {employee}.",
     "confirmTitle": "Save this perquisite component?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}.",
-    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
+    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}.",
+    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
     "updateBtn": "Update component",
     "cancelEdit": "Cancel",
-    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts."
+    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts.",
+    "employeeUnnamed": "Selected employee",
+    "fyInvalidError": "The financial year is not valid. Look the employee up again with a valid financial year."
   },
   "pf": {
     "selectPeriodLabel": "Period",
