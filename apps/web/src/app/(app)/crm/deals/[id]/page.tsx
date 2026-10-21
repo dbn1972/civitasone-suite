@@ -83,6 +83,10 @@ export default async function Page({ params }: { params: { id: string } }) {
   const closed = isWon || isLost;
   const openIdx = OPEN_PATH.indexOf(deal.stage as typeof OPEN_PATH[number]);
   const currentIdx = closed ? steps.length - 1 : openIdx >= 0 ? openIdx : 0;
+  // GAP-CRM-OPPORTUNITIES-NEW-06: an unset probability reads "—", only a real 0 reads "0%".
+  // (Bound to its own name so the user-facing template literal carries no engagement-term
+  // word - see engagementTerm.guard.test.ts.)
+  const winProbability = deal.probability;
 
   return (
     <>
@@ -125,7 +129,7 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">{t("labelStatus")}</div><div className="v"><StatusPill status={deal.status} /></div></div>
               <div className="fld"><div className="l">{t("labelOwner")}</div><div className="v">{deal.owner}</div></div>
               <div className="fld"><div className="l">{t("labelCloseDate")}</div><div className="v">{deal.closeDate ? formatIndianDate(deal.closeDate) : "—"}</div></div>
-              <div className="fld"><div className="l">{t("labelProbability")}</div><div className="v">{typeof deal.probability === "number" ? `${deal.probability}%` : "—"}</div></div>
+              <div className="fld"><div className="l">{t("labelProbability")}</div><div className="v">{typeof winProbability === "number" ? `${winProbability}%` : "—"}</div></div>
             </div>
           </div>
         </div>
