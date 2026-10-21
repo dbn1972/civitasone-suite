@@ -20,6 +20,15 @@ import { z } from "zod";
  * "Group D" no longer exists — it was merged into Group C after the 6th CPC
  * and stays merged under the 7th CPC. Do not reintroduce it.
  *
+ * STATUS -- INDICATIVE, NOT SIGNED OFF (GAP-HR-DESIGNATIONS-01): HR has not
+ * confirmed this level->group mapping for this deployment, and the group is
+ * derived at display time rather than stored on the designation. The
+ * designations table therefore labels it "Service Group (indicative)" and
+ * prints these bands in a footnote. Whether to store the group per
+ * designation instead (a schema change) or keep it derived is an open
+ * product decision recorded in docs/gap-ledger/hr.md; do not present this as
+ * an official classification until that is settled.
+ *
  * If HR/legal later confirms a different or more precise mapping, update
  * SERVICE_GROUP_BANDS here — both screens read it, so they can't silently
  * drift apart again the way they did before this fix (see payLevels.test.ts

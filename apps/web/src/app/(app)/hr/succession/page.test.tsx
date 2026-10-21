@@ -99,3 +99,54 @@ describe("SuccessionPage stats (GAP-HR-SUCCESSION-04)", () => {
     expect(screen.getByText("All critical roles have ready successors")).toBeInTheDocument();
   });
 });
+
+// GAP-HR-SUCCESSION-02: the card header and the at-risk table used to print
+// the raw department_id UUID; the API now sends the department NAME and the
+// page must show only that.
+describe("SuccessionPage department names (GAP-HR-SUCCESSION-02)", () => {
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const DEPT_ID = "5c1d3b6e-8f0a-4c2e-9d11-0a1b2c3d4e5f";
+
+  it("shows 'Finance' in the at-risk table for a row carrying a department_id UUID, and no UUID anywhere", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    mockThreeCalls({
+      risk: { data: [{ role_ref: "Chief Accountant", department_id: DEPT_ID, department: "Finance" }] },
+    });
+    const { container } = await renderPage();
+    const cell = screen.getByRole("cell", { name: "Finance" });
+    expect(cell).toBeInTheDocument();
+    expect(container.textContent).toContain("Finance");
+    expect(container.textContent).not.toMatch(UUID_RE);
+  });
+
+  it("shows a dash, not the UUID, for an at-risk row whose department could not be resolved", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    mockThreeCalls({
+      risk: { data: [{ role_ref: "Chief Accountant", department_id: DEPT_ID }] },
+    });
+    const { container } = await renderPage();
+    expect(screen.getByRole("cell", { name: "—" })).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(UUID_RE);
+  });
+
+  it("shows the department name in the pipeline card header and never the id", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    mockThreeCalls({
+      pipeline: {
+        data: [{
+          planId: "0b7d9f22-1111-4222-8333-444455556666", role_ref: "Chief Accountant", department_id: DEPT_ID, department: "Finance",
+          nominee_count: 1, ready_now: 1, riskLevel: "medium",
+          successors: [{ employeeId: "9f8e7d6c-1111-4222-8333-444455556666", name: "Priya Nair", readiness: "ready_now", developmentPlan: "Rotate through Treasury" }],
+        }],
+      },
+    });
+    const { container } = await renderPage();
+    const card = screen.getByRole("heading", { name: "Chief Accountant" }).closest("article");
+    expect(card).not.toBeNull();
+    expect(card).toHaveTextContent("Finance");
+    // the recorded plan reaches the card, so the successor is not shown as "No plan"
+    expect(card).toHaveTextContent("Rotate through Treasury");
+    expect(card).not.toHaveTextContent("No plan");
+    expect(container.textContent).not.toMatch(UUID_RE);
+  });
+});

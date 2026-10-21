@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { serviceGroup, payLevelSchema, type ServiceGroup } from "@/lib/payLevels";
+import { serviceGroup, payLevelSchema, SERVICE_GROUP_BANDS, type ServiceGroup } from "@/lib/payLevels";
 
 // `& Record<string, unknown>` satisfies DataTable's `T extends
 // Record<string, unknown>` generic constraint -- same pattern already used
@@ -260,7 +260,11 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       sortable: false,
       render: (item: Designation) => {
         const grp = editingId === item.id ? serviceGroup(editingLevelValue) : serviceGroup(item.level);
-        return <span style={groupBadgeStyle(grp)}>{grp ?? "—"}</span>;
+        // GAP-HR-DESIGNATIONS-01 (fix step 4): the group is derived from the
+        // pay level, not stored on the designation, so it is labelled
+        // "Indicative" in the column header, in a footnote under the table
+        // and in this badge's tooltip.
+        return <span style={groupBadgeStyle(grp)} title={grp ? t("serviceGroupIndicativeTitle") : undefined}>{grp ?? "—"}</span>;
       },
     },
     {
@@ -324,6 +328,11 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       : []),
   ];
 
+  // "Group-C 1–5 · Group-B 6–9 · Group-A 10–18", straight from the shared bands.
+  const serviceGroupBandsText = SERVICE_GROUP_BANDS
+    .map((b) => `${b.group} ${b.minLevel}\u2013${b.maxLevel}`)
+    .join(" \u00b7 ");
+
   return (
     <>
       <DataTable<Designation>
@@ -344,6 +353,14 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
         emptyTitle={t("noMatchTitle")}
         emptyMessage={t("noMatchMessage")}
       />
+
+      {/* GAP-HR-DESIGNATIONS-01: Service Group is not a stored field -- it is
+          derived from the pay level (apps/web/src/lib/payLevels.ts) -- so say
+          so, and print the bands it uses, instead of presenting it as
+          recorded data. */}
+      <p style={{ margin: "10px 2px 0", fontSize: 12, color: "var(--mut)" }}>
+        {t("serviceGroupNote", { bands: serviceGroupBandsText })}
+      </p>
 
       <ConfirmDialog
         open={deleteTarget !== null}
