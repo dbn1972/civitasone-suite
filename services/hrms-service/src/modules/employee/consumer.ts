@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
-import { assertEligibleManager } from "./manager-eligibility.js";
+import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
@@ -441,7 +441,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       // synchronous managerId pre-check (the manager may have exited, or been
       // re-pointed under this employee, between the 202 and now). A refusal is
       // deterministic, so it is non-retryable rather than burning retries.
-      if (p.managerId !== undefined && p.managerId !== emp.managerId) {
+      if (p.managerId !== undefined && !isSameEmployeeId(p.managerId, emp.managerId)) {
         try {
           await assertEligibleManager(
             async (eid) => {

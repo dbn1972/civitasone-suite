@@ -163,9 +163,15 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
   // suitable for re-splitting into columns.
   const [errorRows, setErrorRows] = useState<{ lineNo: number; fullName: string; message: string }[]>([]);
   const formError = useFormError("employee row");
-  // Polling must stop if the page is left mid-import.
+  // Polling must stop if the page is left mid-import. The flag is reset on every mount, not just
+  // set in the cleanup: React StrictMode (reactStrictMode: true, so `next dev`) runs mount ->
+  // cleanup -> mount, and a flag that is only ever set to true would stay true after the second
+  // mount and end the poll loop after its first round, leaving the form stuck in "processing".
   const unmounted = useRef(false);
-  useEffect(() => () => { unmounted.current = true; }, []);
+  useEffect(() => {
+    unmounted.current = false;
+    return () => { unmounted.current = true; };
+  }, []);
 
   function downloadErrorReport() {
     const csvLines = [

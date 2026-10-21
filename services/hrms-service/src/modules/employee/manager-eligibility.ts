@@ -23,29 +23,47 @@ export type ManagerLookup = (employeeId: string) => Promise<{ status: string; ma
 /** Upper bound on how far up the reporting chain the cycle walk goes (mirrors manager-domain.ts). */
 const MAX_CHAIN_DEPTH = 50;
 
+/**
+ * Employee ids are uuids. `z.string().uuid()` accepts upper-case hex and
+ * Postgres matches the uuid type case-insensitively, so the same employee can
+ * arrive spelled two ways. Every id comparison in this rule goes through these
+ * helpers so a differently-cased id can never slip past the self / cycle checks.
+ */
+export function normalizeEmployeeId(id: string): string {
+  return id.toLowerCase();
+}
+
+/** Case-insensitive id equality; a null / undefined side is never equal. */
+export function isSameEmployeeId(a: string | null | undefined, b: string | null | undefined): boolean {
+  return a != null && b != null && normalizeEmployeeId(a) === normalizeEmployeeId(b);
+}
+
 export async function assertEligibleManager(lookup: ManagerLookup, employeeId: string, managerId: string): Promise<void> {
-  if (managerId === employeeId) {
+  const employee = normalizeEmployeeId(employeeId);
+  const proposed = normalizeEmployeeId(managerId);
+  if (proposed === employee) {
     throw new HttpError(422, "CYCLE_DETECTED", "an employee cannot be their own manager");
   }
-  const manager = await lookup(managerId);
+  const manager = await lookup(proposed);
   if (!manager) {
     throw new HttpError(422, "INVALID_MANAGER", "the proposed manager does not exist in this organisation");
   }
   if (isExitedStatus(manager.status)) {
     throw new HttpError(422, "INVALID_MANAGER", `the proposed manager has status '${manager.status}' and has left the organisation`);
   }
-  // Walk UP from the proposed manager; reaching `employeeId` means the proposed
+  // Walk UP from the proposed manager; reaching `employee` means the proposed
   // manager already reports (transitively) to this employee, so assigning
-  // them would close a loop.
-  let current: string | null = manager.managerId;
-  const seen = new Set<string>([managerId]);
+  // them would close a loop. Every managerId read back from `lookup` is
+  // normalised too, so a row that returns a differently-cased id is still caught.
+  let current: string | null = manager.managerId === null ? null : normalizeEmployeeId(manager.managerId);
+  const seen = new Set<string>([proposed]);
   for (let depth = 0; current !== null && depth < MAX_CHAIN_DEPTH; depth++) {
-    if (current === employeeId) {
+    if (current === employee) {
       throw new HttpError(422, "CYCLE_DETECTED", "assigning this manager would create a circular reporting chain");
     }
     if (seen.has(current)) break; // pre-existing loop elsewhere in the data: not this assignment's doing
     seen.add(current);
     const next: { status: string; managerId: string | null } | null = await lookup(current);
-    current = next ? next.managerId : null;
+    current = next && next.managerId !== null ? normalizeEmployeeId(next.managerId) : null;
   }
 }

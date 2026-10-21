@@ -57,17 +57,44 @@ describe("MaskedField", () => {
     render(<Harness maskedValue="******7890" onEditingChange={onEditingChange} />);
     fireEvent.click(screen.getByRole("button", { name: "Change: Account" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Account" }), { target: { value: "999" } });
-    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Keep current: Account" }));
     expect(screen.getByTestId("state")).toHaveTextContent("");
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(onEditingChange.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("names 'Keep current' after its field, so two open fields are not announced as identical buttons", () => {
+    render(
+      <>
+        <MaskedField label="Mobile" maskedValue="******3210" value="" onChange={() => {}} currentLabel="Current: ******3210" changeLabel="Change" keepLabel="Keep current" />
+        <MaskedField label="Bank account" maskedValue="*******2345" value="" onChange={() => {}} currentLabel="Current: *******2345" changeLabel="Change" keepLabel="Keep current" />
+      </>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Change: Mobile" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change: Bank account" }));
+    expect(screen.getByRole("button", { name: "Keep current: Mobile" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Keep current: Bank account" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Keep current" })).not.toBeInTheDocument();
+  });
+
+  it("returns keyboard focus to the Change button after 'Keep current' (the input and the pressed button unmount)", () => {
+    render(<Harness maskedValue="******7890" />);
+    fireEvent.click(screen.getByRole("button", { name: "Change: Account" }));
+    expect(screen.getByRole("textbox", { name: "Account" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Keep current: Account" }));
+    expect(screen.getByRole("button", { name: "Change: Account" })).toHaveFocus();
+  });
+
+  it("does not steal focus to the Change button on first render", () => {
+    render(<Harness maskedValue="******7890" />);
+    expect(screen.getByRole("button", { name: "Change: Account" })).not.toHaveFocus();
   });
 
   it.each([undefined, null, "", "  "])("with nothing on file (%j) the plain input shows straight away, with no Change / Keep buttons", (maskedValue) => {
     render(<Harness maskedValue={maskedValue} />);
     expect(screen.getByRole("textbox", { name: "Account" })).toHaveValue("");
     expect(screen.queryByRole("button", { name: /change/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Keep current" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /keep current/i })).not.toBeInTheDocument();
     expect(screen.getByTestId("extra")).toBeInTheDocument();
   });
 
