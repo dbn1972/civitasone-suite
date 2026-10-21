@@ -47,7 +47,7 @@ describe("NewTemplateForm create -- GAP-HR-JD-TEMPLATES-NEW-01 (202 is not 'done
 
   it("says 'submitted', polls the new template's own GET, and moves to the library with ?created=<id> once it exists", async () => {
     let gets = 0;
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === "POST") return json({ id: NEW_ID, status: "accepted" }, 202);
       gets += 1;
       // the queue consumer has not inserted the row for the first two looks

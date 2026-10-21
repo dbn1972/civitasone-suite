@@ -68,7 +68,7 @@ async function getOvertimeRequests(offset: number): Promise<LoaderResult<Overtim
   );
 }
 
-export default async function OvertimePage({ searchParams }: { searchParams?: { offset?: string } } = {}) {
+export default async function OvertimePage({ searchParams }: { searchParams?: { offset?: string } }) {
   const t = await getTranslations("overtime");
   const roles = getSessionRoles();
   const canDecide = roles.some((r) => OVERTIME_DECIDE_ROLES.includes(r));

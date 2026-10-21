@@ -1,6 +1,6 @@
 import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, boolean } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,7 +9,6 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { departmentUsageTx, designationUsageForOneTx } from "./master-usage.js";
 import { hrmsEmployees } from "./schema.js";
-import { checkMandatoryConditions } from "./activation-domain.js";
 import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
@@ -114,7 +113,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .set({ fitnessStatus: body.fitnessStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, rows[0].version)));
                   return updated;
-            break;
           }
           case "employee_agent1_gap_routes__1": {
             // F3 reconstruction: the code-gen that stubbed
@@ -177,7 +175,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .set({ status: body.revertToStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
                   return { id: targetId, status: body.revertToStatus };
-            break;
           }
           case "employee_agent1_gap_routes__3": {
             // Fetch current employee
@@ -230,7 +227,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
 
                   return { id: targetId, ...body };
-            break;
           }
           case "employee_employee_types_routes__0": {
             // F3 reconstruction: `employeeTypeMaster` was never imported (the

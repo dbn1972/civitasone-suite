@@ -41,7 +41,7 @@ async function renderRegister(contracts: ReturnType<typeof contractEnding>[]) {
     // Only the register's own load carries a mapper; ignore any other fetchJson caller.
     o ? { source: "api", data: o.mapResponse({ data: contracts }) } : { source: "api", data: [] },
   );
-  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{await ContractualPage()}</NextIntlClientProvider>);
+  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{await ContractualPage({})}</NextIntlClientProvider>);
 }
 
 const tile = (label: string) => {

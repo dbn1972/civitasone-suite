@@ -69,7 +69,7 @@ describe("ArchiveTemplateButton (GAP-HR-JD-TEMPLATES-04)", () => {
   });
 
   it("does NOT refresh the list straight after the 202: it says the request was received, then polls until the template reports isArchived", async () => {
-    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) => {
       if (init?.method === "DELETE") return json({ id: ID, status: "accepted" }, 202);
       // GET /:id -- not archived on the first look, archived on the second
       const gets = fetchMock.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method !== "DELETE").length;

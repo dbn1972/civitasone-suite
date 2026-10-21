@@ -1,5 +1,5 @@
 import { cache } from "../../shared/infra.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import {
   hrmsContracts,
   hrmsContractRenewals,

@@ -60,7 +60,7 @@ const listQuery = z.object({
 export async function iccRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/icc/complaints", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ICC_ROLES);
-    const body = z.object({
+    z.object({
       complainantId: z.string().uuid(),
       respondentId: z.string().uuid().optional(),
       summary: z.string().min(10).max(5000),
@@ -186,7 +186,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/icc/complaints/:id/hearings", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ICC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       hearingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       notes: z.string().max(5000).optional(),
       finding: z.string().max(24).optional(),

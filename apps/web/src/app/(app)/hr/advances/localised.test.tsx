@@ -40,7 +40,7 @@ describe("advances under the Hindi locale (GAP-HR-ADVANCES-07)", () => {
     inHindi(<RequestAdvanceForm selfServiceOnly />);
     expect(screen.getByRole("heading", { name: hi.formHeading })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: hi.formNewRequest }));
-    expect(await screen.findByLabelText(new RegExp(hi.formLabelAmount.replace(/[()₹]/g, "\\$&")))).toBeInTheDocument();
+    expect(await screen.findByLabelText(hi.formLabelAmount, { exact: false })).toBeInTheDocument();
     expect(screen.getByText(hi.formLabelPurpose, { exact: false })).toBeInTheDocument();
     // submit empty -> Hindi validation text, no English
     fireEvent.click(screen.getByRole("button", { name: hi.formSubmit }));
@@ -52,7 +52,7 @@ describe("advances under the Hindi locale (GAP-HR-ADVANCES-07)", () => {
   it("the success toast is Hindi", async () => {
     inHindi(<RequestAdvanceForm selfServiceOnly />);
     fireEvent.click(screen.getByRole("button", { name: hi.formNewRequest }));
-    const amount = await screen.findByLabelText(new RegExp(hi.formLabelAmount.replace(/[()₹]/g, "\\$&")));
+    const amount = await screen.findByLabelText(hi.formLabelAmount, { exact: false });
     fireEvent.change(amount, { target: { value: "5000" } });
     fireEvent.change(screen.getByPlaceholderText(hi.formPlaceholderPurpose), { target: { value: "चिकित्सा व्यय" } });
     fireEvent.click(screen.getByRole("button", { name: hi.formSubmit }));

@@ -4,7 +4,7 @@ import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema, LeaveRequestPageSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";

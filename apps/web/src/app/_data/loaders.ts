@@ -218,16 +218,12 @@ import {
   attendanceSummaryResponseSchema,
   payrollRunsResponseSchema,
   TrainingProgramSummaryListSchema,
-  vendorListResponseSchema,
-  posListResponseSchema,
   approvalsListResponseSchema,
   tenantModulesResponseSchema,
-  userListResponseSchema,
   roleListResponseSchema,
   crmAccountHierarchyListSchema,
   crmAccountsListSchema,
   crmContactsListSchema,
-  crmDealsListSchema,
   crmActivitiesListSchema,
   crmForecastSchema,
   crmVocSummarySchema,
@@ -262,7 +258,6 @@ import {
   AllocationDistributionSummaryListSchema,
   FinanceBudgetAllocationSummaryListSchema,
   BudgetMonitoringSummarySchema,
-  BudgetMonitoringLineListSchema,
   BudgetMonitoringLinesResponseSchema,
   VendorTdsEntryListSchema,
   PfmsBatchSummaryListSchema,
@@ -285,21 +280,13 @@ import {
   FinanceVendorDetailSchema,
   FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
-  IndentSummaryListSchema,
-  IndentDetailSchema,
-  VendorDetailListSchema,
-  VendorDetailSchema,
   RFQSummaryListSchema,
   RFQDetailSchema,
   GRNSummaryListSchema,
   TenderSummaryListSchema,
   TenderDetailSchema,
-  PurchaseOrderListItemListSchema,
-  PODetailSchema,
   CRMDashboardSchema,
-  DealSummaryListSchema,
   ContactDetailSchema,
-  TicketDetailSchema,
   TicketAnalyticsSchema,
   CitizenRequestSummaryListSchema,
   RTISummaryListSchema,
@@ -319,7 +306,6 @@ import {
   GrantReleaseListSchema,
   GrantUtilizationListSchema,
   EstabDashboardSchema,
-  EstabFileSummaryListSchema,
   EstabFileDetailSchema,
   MeetingSummaryListSchema,
   MeetingDetailSchema,
@@ -330,13 +316,7 @@ import {
   LibraryBookSummarySchema,
   LibraryIssueSummaryListSchema,
   AssetDashboardSchema,
-  AssetSummaryListSchema,
-  AssetDetailSchema,
-  MaintenanceSummaryListSchema,
   StockDashboardSchema,
-  StockItemSummaryListSchema,
-  StockItemDetailSchema,
-  StockLedgerEntryListSchema,
   AuditDashboardSchema,
   AuditObservationSummaryListSchema,
   AuditObservationDetailSchema,
@@ -348,7 +328,6 @@ import {
   VigilanceCaseSummaryListSchema,
   InvestigationSummaryListSchema,
   LegalDashboardSchema,
-  LegalCaseSummaryListSchema,
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
   CourtOrderPageSchema,
@@ -362,7 +341,6 @@ import {
   RoleDetailSchema,
   SubscriptionSummarySchema,
   TenantModuleListSchema,
-  AdminUserSummaryListSchema,
   AdminRoleSummaryListSchema,
   TenantAuditEventListSchema,
   ReportDashboardSchema,
@@ -1749,23 +1727,6 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
   return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
-function mapCrmDeals(payload: unknown): CRMDealSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-  const mapped: CRMDealSummary[] = [];
-  const stages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const id = toText(row.id);
-    const name = toText(row.name);
-    const stage = toText(row.stage);
-    const valueDisplay = toText(row.valueDisplay) ?? "—";
-    if (!id || !name || !stage || !stages.has(stage)) continue;
-    mapped.push({ id, name, stage: stage as CRMDealSummary["stage"], valueDisplay });
-  }
-  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
-  return rows.length > 0 && mapped.length === 0 ? null : mapped;
-}
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -3850,39 +3811,6 @@ export async function getCRMDashboard(): Promise<LoaderResult<CRMDashboard>> {
   });
 }
 
-function mapDeals(payload: unknown): DealSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-  const mapped: DealSummary[] = [];
-  const validStages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
-  const validStatuses = new Set(["active", "won", "lost"]);
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const id = toText(row.id);
-    const dealName = toText(row.dealName) ?? toText(row.name);
-    const stage = toText(row.stage);
-    const status = toText(row.status) ?? "active";
-    if (!id || !dealName || !stage || !validStages.has(stage)) continue;
-    if (!validStatuses.has(status)) continue;
-    mapped.push({
-      id,
-      dealName,
-      contactId: toText(row.contactId) ?? undefined,
-      contactName: toText(row.contactName) ?? undefined,
-      stage: stage as DealSummary["stage"],
-      // GAP-CRM-DEALS-04: DealSummary.amount is now a minor-unit string. (This
-      // mapDeals is currently unused — getDeals uses mapDealSummaries — but keep
-      // it type-correct: emit an exact digit string, "0" when absent/invalid.)
-      amount: typeof row.amount === "number" && Number.isSafeInteger(row.amount) && row.amount >= 0 ? String(row.amount) : "0",
-      owner: toText(row.owner) ?? "—",
-      closeDate: toText(row.closeDate) ?? undefined,
-      probability: typeof row.probability === "number" ? row.probability : 0,
-      status: status as DealSummary["status"],
-    });
-  }
-  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
-  return rows.length > 0 && mapped.length === 0 ? null : mapped;
-}
 
 export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
   return fetchJson<unknown, DealSummary[]>("/api/v1/crm/deals", [], {

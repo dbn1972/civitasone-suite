@@ -1,6 +1,5 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
@@ -91,9 +90,10 @@ function stageOverride(a: AppraisalRow, actingEmployeeId: string | null): boolea
 }
 
 /**
- * Mirrors the module-private `trueActorRole()` in routes.ts. That helper records
- * the functional stage role when the actor genuinely owns the stage, and the
- * actor's real elevated role on an override. Since `assertStageOwner` only ever
+ * Mirrors the route-private `trueActorRole()` helper this consumer replaced (it
+ * was dead code in routes.ts once the write moved here, and has been removed).
+ * That helper recorded the functional stage role when the actor genuinely owns
+ * the stage, and the actor's real elevated role on an override. Since `assertStageOwner` only ever
  * returns `override: true` on the `ctx.roles.includes("super_admin")` branch,
  * an override is necessarily a super_admin — so history is never falsified.
  */

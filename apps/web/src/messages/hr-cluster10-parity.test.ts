@@ -17,9 +17,13 @@ import hi from "./hi.json";
 type Dict = Record<string, unknown>;
 const ns = (root: Dict, name: string): Record<string, string> => root[name] as Record<string, string>;
 // ICU argument names only: the bodies of plural/select branches ("one {time}") are translated text, not arguments.
+// One left-to-right pass: a plural/select branch ("one {...}") is matched by the first alternative and skipped
+// (group 1 stays undefined); an argument opener ("{name") is captured by the second.
 const args = (s: string): string[] =>
   [...new Set(
-    [...s.replace(/(?:zero|one|two|few|many|other|=\d+)\s*\{[^{}]*\}/g, "").matchAll(/\{(\w+)/g)].map((m) => m[1]!),
+    [...s.matchAll(/(?:zero|one|two|few|many|other|=\d+)\s*\{[^{}]*\}|\{(\w+)/g)]
+      .map((m) => m[1])
+      .filter((name): name is string => name !== undefined),
   )].sort();
 
 const FULL_NAMESPACES = ["jdTemplates", "jdTemplateNew"] as const;

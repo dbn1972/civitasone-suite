@@ -73,7 +73,7 @@ describe("DocumentsPanel", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       let polls = 0;
-      global.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      global.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "PATCH") return { ok: true } as Response;
         polls += 1;
         // First poll: consumer has not applied the write yet. Second: it has.

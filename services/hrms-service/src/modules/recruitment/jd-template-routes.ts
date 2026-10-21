@@ -6,7 +6,6 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { createJdTemplateBody, updateJdTemplateBody, idParam } from "./validators.js";
 import * as templateRepo from "./jd-template-repo.js";
-import * as repo from "./repo.js";
 import * as editionPolicyRepo from "./edition-policy-repo.js";
 import { REQUISITION_REQUIRED_MESSAGE } from "./edition-policy.js";
 

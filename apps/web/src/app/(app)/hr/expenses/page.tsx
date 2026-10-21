@@ -37,7 +37,7 @@ async function getApprovalsData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
-export default async function ExpensesPage({ searchParams }: { searchParams?: { travelRequestId?: string | string[] } } = {}) {
+export default async function ExpensesPage({ searchParams }: { searchParams?: { travelRequestId?: string | string[] } }) {
   // GAP-HR-TRAVEL-02: an approved travel request links here to pre-link the claim.
   const travelRequestId = parseTravelRequestId(searchParams?.travelRequestId);
   const t = await getTranslations("expenses");

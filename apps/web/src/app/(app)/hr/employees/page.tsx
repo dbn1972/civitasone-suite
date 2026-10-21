@@ -75,7 +75,6 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   const roles = getSessionRoles();
   const canCreate = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
-  const SERVING = new Set(["probation", "confirmed", "deputation"]);
   // hrDashboard.headcount is a separately-scoped aggregate (see
   // getHRDashboard/mapHRDashboard) that can disagree with the concrete rows
   // this page actually fetched -- e.g. a first-time manager whose dashboard

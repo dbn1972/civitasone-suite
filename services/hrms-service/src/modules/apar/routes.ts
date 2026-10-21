@@ -20,7 +20,6 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { writeAuditLog } from "../../shared/audit.js";
 import * as repo from "./repo.js";
 import { computeOverallGrade, GRADE_BANDS, type ScoreInput } from "./engine.js";
@@ -157,19 +156,6 @@ async function computeAparActions(
 }
 
 /**
- * The TRUE role of the acting actor for stage-history (C2). We record the
- * functional stage role only when the actor genuinely owns the stage; on a
- * privileged override we record the actor's real elevated role so history is
- * never falsified.
- */
-function trueActorRole(ctx: RequestContext, functionalRole: string, override: boolean): string {
-  if (!override) return functionalRole;
-  if (ctx.roles.includes("super_admin")) return "super_admin";
-  if (ctx.roles.includes("hr_admin")) return "hr_admin";
-  return ctx.roles[0] ?? functionalRole;
-}
-
-/**
  * Read-scope for GET /v1/hrms/apar (list) and GET /v1/hrms/apar/:id (detail)
  * ONLY. The stage-transition (POST) routes below do NOT use this — they rely
  * entirely on assertStageOwner's per-stage ownership chain, which is already
@@ -199,7 +185,7 @@ function trueActorRole(ctx: RequestContext, functionalRole: string, override: bo
  */
 async function resolveAparReadScope(
   ctx: RequestContext,
-  req: FastifyRequest,
+  _req: FastifyRequest,
   // GAP-HR-APAR-DETAIL-03: the list route now resolves the acting employee
   // itself (to redact the viewer's own pre-disclosure row), so it hands the
   // result in instead of paying for a second identical lookup.
@@ -438,7 +424,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
         `an APAR for this employee and period '${body.appraisalPeriod}' already exists`);
     }
     const id = randomUUID();
-    await publishF3Write(ctx, "apar_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apar_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send({ id, status: "self_pending" }) as any;
   });
 
@@ -447,10 +433,10 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
+    z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = await assertStageOwner(ctx, req, a, "self_pending");
-    await publishF3Write(ctx, "apar_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await assertStageOwner(ctx, req, a, "self_pending");
+    await publishF3Write(ctx, "apar_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "reporting_officer" }) as any;
   });
 
@@ -459,7 +445,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       penPicture: z.string().min(1).max(8000),
       scores: z.array(z.object({
         attribute: z.string().min(1).max(64),
@@ -472,8 +458,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       ),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = await assertStageOwner(ctx, req, a, "reporting_officer");
-    await publishF3Write(ctx, "apar_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await assertStageOwner(ctx, req, a, "reporting_officer");
+    await publishF3Write(ctx, "apar_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "reviewing_officer" }) as any;
   });
 
@@ -492,8 +478,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       })).optional(),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = await assertStageOwner(ctx, req, a, "reviewing_officer");
-    await publishF3Write(ctx, "apar_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await assertStageOwner(ctx, req, a, "reviewing_officer");
+    await publishF3Write(ctx, "apar_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "accepting_authority", decision: body.decision }) as any;
   });
 
@@ -502,16 +488,16 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ remarks: z.string().min(1).max(8000) }).parse(req.body);
+    z.object({ remarks: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = await assertStageOwner(ctx, req, a, "accepting_authority");
+    await assertStageOwner(ctx, req, a, "accepting_authority");
     const scoreRows = await repo.listScores(ctx.tenantId, id);
     if (scoreRows.length === 0) throw new HttpError(409, "NO_SCORES", "no attribute scores to grade");
     const scores: ScoreInput[] = scoreRows.map((s) => ({
       attribute: s.attribute, weight: Number(s.weight), score: s.score,
     }));
     const grade = computeOverallGrade(scores);
-    await publishF3Write(ctx, "apar_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apar_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "disclosed", overallGrade: grade.overallGrade, band: grade.band }) as any;
   });
 
@@ -520,10 +506,10 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
+    z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = await assertStageOwner(ctx, req, a, "disclosed");
-    await publishF3Write(ctx, "apar_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await assertStageOwner(ctx, req, a, "disclosed");
+    await publishF3Write(ctx, "apar_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "representation" }) as any;
   });
 
@@ -536,7 +522,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     if (a.status !== "disclosed" && a.status !== "representation") {
       throw new HttpError(409, "WRONG_STAGE", `cannot finalise from '${a.status}'`);
     }
-    await publishF3Write(ctx, "apar_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "apar_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "finalised", overallGrade: a.overallGrade, band: a.overallBand }) as any;
   });
 

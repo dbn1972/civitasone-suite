@@ -217,7 +217,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/employees/:id/onboarding-tasks", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       title: z.string().min(1).max(200),
       dueByDay: z.coerce.number().int().min(1).max(365),
       assignedTo: z.string().uuid().optional(),

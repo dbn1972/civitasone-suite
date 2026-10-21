@@ -6,9 +6,8 @@ import { eq, and, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "./schema.js";
-import { queue } from "../../shared/infra.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 // GAP-HR-HOLIDAYS-01: hr/layout.tsx admits "manager" into /hr, but this route
@@ -42,7 +41,7 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/holidays", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = createHolidayBody.parse(req.body);
+    createHolidayBody.parse(req.body);
     const id = randomUUID();
     // The row is inserted with THIS id (f3-consumer reads p.id), so the id
     // the caller gets back in the 202 is the id the holiday will really have.

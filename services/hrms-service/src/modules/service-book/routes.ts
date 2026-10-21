@@ -72,8 +72,8 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/employees/:id/service-book", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const { id: employeeId } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const body = z.object({
+    z.object({ id: z.string().uuid() }).parse(req.params);
+    z.object({
       // SEC-CRIT-002 (trivial companion fix): bound free-text fields to their
       // DB column widths so an oversized value 400s cleanly here instead of
       // failing as a raw DB error later in the async F3 consumer (entry_type
@@ -100,7 +100,7 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { entryId } = z.object({ entryId: z.string().uuid() }).parse(req.params);
-    const body = z.object({
+    z.object({
       description: z.string().min(1).max(2000),
       documentRef: z.string().max(100).optional(),
     }).parse(req.body);
@@ -120,7 +120,7 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { entryId } = z.object({ entryId: z.string().uuid() }).parse(req.params);
-    const body = z.object({ remarks: z.string().max(1000).optional() }).parse(req.body ?? {});
+    z.object({ remarks: z.string().max(1000).optional() }).parse(req.body ?? {});
     const entry = await repo.getEntry(ctx.tenantId, entryId);
     if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");
     if (entry.attested) throw new HttpError(409, "ALREADY_ATTESTED", "entry is already attested");

@@ -197,7 +197,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/skills/team-heatmap", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const q = z.object({ departmentId: z.string().uuid().optional() }).parse(req.query);
+    z.object({ departmentId: z.string().uuid().optional() }).parse(req.query);
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(

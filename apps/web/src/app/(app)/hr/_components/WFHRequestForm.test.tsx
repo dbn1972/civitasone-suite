@@ -404,7 +404,7 @@ describe("WFHRequestForm — server policy refusals (GAP-HR-WFH-01)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   function stubServer(code: string) {
-    const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => {
       if (init?.method === "POST") {
         return new Response(JSON.stringify({ code, message: "raw server text 422" }), { status: 422, headers: { "content-type": "application/json" } });
       }
