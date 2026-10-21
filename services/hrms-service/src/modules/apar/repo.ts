@@ -15,6 +15,13 @@ export interface ListAppraisalsOptions {
   status?: string;
   /** Exact appraisalPeriod match (e.g. "2025-26"). */
   period?: string;
+  /**
+   * GAP-HR-APAR-06: free-text search over the appraisee's name or employee
+   * number (case-insensitive substring). Resolved through a tenant-scoped
+   * hrms_employees subquery, so it can only ever narrow the already
+   * tenant+read-scope-filtered set -- never widen it.
+   */
+  q?: string;
   limit?: number;
   offset?: number;
 }
@@ -23,6 +30,11 @@ export interface ListAppraisalsResult {
   rows: AppraisalRow[];
   /** Total rows matching tenant+scope+filters, ignoring limit/offset -- lets the caller tell "100 shown" from "100 of 100". */
   total: number;
+}
+
+/** Escapes LIKE/ILIKE metacharacters so a search term is matched literally. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 /**
@@ -50,10 +62,11 @@ export interface ListAppraisalsResult {
  *                                  employee ids).
  *
  * GAP-HR-APAR-06: `opts.status`/`opts.period` add optional exact-match
- * filters, and the result now also reports `total` (same tenant+scope+filter
- * conditions, ignoring limit/offset) so a caller showing "first N" rows can
- * say how many rows exist in total instead of silently capping at `limit`
- * with no indication more exist.
+ * filters, `opts.q` an appraisee name/employee-number search, and the result
+ * now also reports `total` (same tenant+scope+filter conditions, ignoring
+ * limit/offset) so a caller showing "first N" rows can say how many rows
+ * exist in total instead of silently capping at `limit` with no indication
+ * more exist.
  */
 export async function listAppraisals(
   tenantId: string,
@@ -67,6 +80,14 @@ export async function listAppraisals(
   }
   if (opts.status) conditions.push(eq(hrmsAppraisals.status, opts.status));
   if (opts.period) conditions.push(eq(hrmsAppraisals.appraisalPeriod, opts.period));
+  if (opts.q) {
+    const like = `%${escapeLike(opts.q)}%`;
+    conditions.push(sql`${hrmsAppraisals.employeeId} IN (
+      SELECT ${hrmsEmployees.id} FROM ${hrmsEmployees}
+      WHERE ${hrmsEmployees.tenantId} = ${tenantId}
+        AND (${hrmsEmployees.fullName} ILIKE ${like} OR ${hrmsEmployees.employeeNo} ILIKE ${like})
+    )`);
+  }
   const where = and(...conditions);
   const limit = opts.limit ?? 100;
   const offset = opts.offset ?? 0;
