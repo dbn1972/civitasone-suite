@@ -34,6 +34,12 @@ export async function createNomination(ctx: RequestContext, body: CreateNominati
   if (!training) throw new HttpError(404, "NOT_FOUND", "training not found");
   const employee = await employeeRepo.findById(body.employeeId, ctx.tenantId);
   if (!employee) throw new HttpError(404, "NOT_FOUND", "employee not found");
+  // GAP-HR-TRAINING-01: one nomination per (training, employee) -- see
+  // repo.findNominationByTrainingAndEmployee. HR can now nominate colleagues
+  // from the UI, which makes an accidental repeat realistic.
+  if (await repo.findNominationByTrainingAndEmployee(ctx.tenantId, body.trainingId, body.employeeId)) {
+    throw new HttpError(409, "DUPLICATE_NOMINATION", "this employee is already nominated for this training");
+  }
 
   const id = randomUUID();
   await queue.publish(COMMANDS.nominationCreate, {

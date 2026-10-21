@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { TrainingProgramSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
+import { StatusPill, type PillVariant } from "@/app/_components/ds/StatusPill";
 
 const MODE_STYLE: Record<string, string> = {
   online:    "bg-blue-50 text-blue-700 border-blue-200",
@@ -15,11 +16,17 @@ const CATEGORY_STYLE: Record<string, string> = {
   optional:   "bg-slate-50 text-slate-600 border-slate-200",
   mandatory:  "bg-red-50 text-red-700 border-red-200",
 };
-const STATUS_STYLE: Record<string, string> = {
-  upcoming:  "bg-blue-50 text-blue-700",
-  ongoing:   "bg-emerald-50 text-emerald-700",
-  completed: "bg-slate-100 text-slate-600",
-  cancelled: "bg-red-50 text-red-600",
+/**
+ * GAP-HR-TRAINING-06: the status badge is the shared StatusPill (design-token
+ * tones that follow the theme) with this programme lifecycle's own variant per
+ * status -- StatusPill's generic map has no "ongoing" entry -- and the
+ * translated label, instead of a hand-styled uppercase span.
+ */
+const STATUS_VARIANT: Record<string, PillVariant> = {
+  upcoming: "info",
+  ongoing: "good",
+  completed: "mut",
+  cancelled: "bad",
 };
 
 /**
@@ -67,8 +74,12 @@ export function ProgramCard({ program }: ProgramCardProps) {
       {/* Title + status */}
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold text-slate-800 text-sm leading-snug">{program.title}</p>
-        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${STATUS_STYLE[program.status] ?? "bg-slate-100 text-slate-600"}`}>
-          {t(`status.${program.status}` as never)}
+        <span className="shrink-0">
+          <StatusPill
+            status={program.status}
+            label={t(`status.${program.status}` as never)}
+            variant={STATUS_VARIANT[program.status] ?? "info"}
+          />
         </span>
       </div>
 
