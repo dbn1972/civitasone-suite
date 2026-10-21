@@ -15897,5 +15897,20 @@
     "filteredTotal": "Filtered total ({count, plural, one {# entry} other {# entries}})",
     "cardsNoteFiltered": "The cards above show the whole FY {fy} ledger. The totals at the foot of the table cover only the entries matching your tab or search.",
     "cardsNoteUnavailable": "Ledger-wide totals are not available for this view, so the cards show a dash. The totals at the foot of the table cover only the entries matching your tab or search."
+  },
+  "financeBudgetFormulation": {
+    "tabAll": "All",
+    "tabOther": "Other",
+    "status": {
+      "active": "Active",
+      "exhausted": "Exhausted",
+      "draft": "Draft",
+      "pending": "Pending",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "highlightAdded": "Estimate added: {head} (FY {fy}). It is listed under the {tab} tab.",
+    "highlightPending": "Your new estimate is still being processed and will appear in this list shortly. Refresh in a moment."
   }
 }

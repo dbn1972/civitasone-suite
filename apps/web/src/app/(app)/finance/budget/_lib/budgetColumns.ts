@@ -23,12 +23,20 @@ export const BUDGET_COLUMN_LABELS = {
 } as const;
 
 /**
- * Budget row status values (finance-service budget.finance_budgets.status,
- * varchar default "draft"; the web lists them under the Formulation tabs) and
- * the ONE label each is shown under -- the tab, the stat card and the pill all
- * read this map (GAP-FINANCE-BUDGET-FORMULATION-05).
+ * Budget row status values the Formulation list can show (GAP-FINANCE-BUDGET-FORMULATION-05).
+ *
+ * What finance-service really reports today: budget.finance_budgets has NO status column, so GET /v1/finance/budgets
+ * computes one per row (budget/queries.ts listBudgetSummaries): `exhausted` once utilised >= allocated, else `active`.
+ * A freshly proposed estimate therefore reads `active`. The approval vocabulary (draft / pending / submitted /
+ * approved / rejected) is kept for a row that carries one, but no live row does until the budget module gets a real
+ * lifecycle (an owner decision, see docs/gap-ledger/finance.md). The keys of this map ARE the enum: the tabs, the stat
+ * cards and the pill all read it, and each value has exactly one tab (budgetTabOf) and an explicit pill tone
+ * (ds/StatusPill). The words shown to the user come from the financeBudgetFormulation i18n namespace (status.*); these
+ * English labels are the code-side fallback and the source of the enum.
  */
 export const BUDGET_STATUS_LABEL = {
+  active: "Active",
+  exhausted: "Exhausted",
   draft: "Draft",
   pending: "Pending",
   submitted: "Submitted",
@@ -36,6 +44,41 @@ export const BUDGET_STATUS_LABEL = {
   rejected: "Rejected",
 } as const;
 export type BudgetStatus = keyof typeof BUDGET_STATUS_LABEL;
+export const BUDGET_STATUSES = Object.keys(BUDGET_STATUS_LABEL) as BudgetStatus[];
+
+export const BUDGET_TAB_ALL = "all";
+/** Home of any status value that is not in the enum (a future server value): it is still listed, never dropped. */
+export const BUDGET_TAB_OTHER = "other";
+export type BudgetTab = typeof BUDGET_TAB_ALL | typeof BUDGET_TAB_OTHER | BudgetStatus;
+
+export function isBudgetStatus(value: unknown): value is BudgetStatus {
+  return typeof value === "string" && Object.prototype.hasOwnProperty.call(BUDGET_STATUS_LABEL, value);
+}
+
+/** The ONE status tab (besides "all") a row with this status is listed under. */
+export function budgetTabOf(status: string): BudgetStatus | typeof BUDGET_TAB_OTHER {
+  return isBudgetStatus(status) ? status : BUDGET_TAB_OTHER;
+}
+
+/**
+ * Tabs to offer for these rows: All, then every status that has at least one row (enum order), then Other. A tab that
+ * could never match anything is not offered (the old Submitted / Approved / Pending tabs were always empty against the
+ * live API).
+ */
+export function budgetTabsFor(rows: ReadonlyArray<{ status: string }>): BudgetTab[] {
+  const present = new Set(rows.map((r) => budgetTabOf(r.status)));
+  return [
+    BUDGET_TAB_ALL,
+    ...BUDGET_STATUSES.filter((s) => present.has(s)),
+    ...(present.has(BUDGET_TAB_OTHER) ? [BUDGET_TAB_OTHER] : []),
+  ];
+}
+
+/** A `?tab=` value from the URL, or null when it is not a tab this page knows (a stale or hand-typed link). */
+export function parseBudgetTab(value: unknown): BudgetTab | null {
+  if (value === BUDGET_TAB_ALL || value === BUDGET_TAB_OTHER) return value;
+  return isBudgetStatus(value) ? value : null;
+}
 
 /** Strict paise parser: an integer string/number -> bigint, else null (never a fabricated 0). */
 export function parseMinor(value: unknown): bigint | null {
