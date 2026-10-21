@@ -518,6 +518,8 @@ export const EVENTS = {
   serviceRequestCreated: "crm.service_request.created",
   /** A service request status changed. Payload: { serviceRequestId, fromStatus, toStatus }. */
   serviceRequestStatusChanged: "crm.service_request.status_changed",
+  /** A service request was assigned / reassigned. Payload: { serviceRequestId, fromAssignee, toAssignee }. */
+  serviceRequestAssigned: "crm.service_request.assigned",
 
   // ── GAP2-CRM-RTI-AUDIT-03: RTI early-lifecycle acts now audited too (no PII) ──
   /** An RTI request was logged. Payload: { rtiId, status, section }. */

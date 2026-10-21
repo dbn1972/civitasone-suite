@@ -14,12 +14,14 @@ import { sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { isActiveTenantUser } from "../../shared/identity-client.js";
+import { listDirectoryRoles } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
 const AUDIT = "audit.event.record";
 
-const createBody = z.object({
+const createShape = z.object({
   name: z.string().min(1).max(200),
   appliesTo: z.enum(["next_action", "task", "both"]).default("both"),
   thresholdMinutes: z.number().int().positive(),
@@ -27,7 +29,37 @@ const createBody = z.object({
   recipientId: z.string().uuid().nullable().optional(),
   enabled: z.boolean().default(true),
 });
-const updateBody = createBody.partial().refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+// GAP-CRM-TASK-ESCALATION-01: a rule with no recipient escalates to nobody, which
+// silently drops the accountability it exists to create - refuse it at the source.
+const createBody = createShape.refine((b) => !!b.recipientRole || !!b.recipientId, {
+  message: "a recipient role or a recipient user is required",
+  path: ["recipientRole"],
+});
+const updateBody = createShape.partial().refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+
+/**
+ * GAP-CRM-TASK-ESCALATION-01: a recipient must be a real role / a real ACTIVE user of this
+ * tenant. Only values being SET are checked, so tuning the threshold of an older rule whose
+ * manager has since left still works. Both lookups fail CLOSED (503) - saving a rule against a
+ * recipient we could not verify is exactly the bug this guards against.
+ */
+async function assertRecipientsExist(
+  tenantId: string,
+  b: { recipientRole?: string | null | undefined; recipientId?: string | null | undefined },
+): Promise<void> {
+  if (b.recipientRole) {
+    const roles = await listDirectoryRoles(tenantId);
+    if (roles === undefined) throw new HttpError(503, "DIRECTORY_UNAVAILABLE", "could not verify the role; try again");
+    if (!roles.some((r) => r.key === b.recipientRole)) {
+      throw new HttpError(422, "INVALID_RECIPIENT_ROLE", "recipientRole is not a role in this tenant");
+    }
+  }
+  if (b.recipientId) {
+    const active = await isActiveTenantUser(tenantId, b.recipientId);
+    if (active === undefined) throw new HttpError(503, "IDENTITY_UNAVAILABLE", "could not verify the user; try again");
+    if (!active) throw new HttpError(422, "INVALID_RECIPIENT", "recipientId must be an active user in this tenant");
+  }
+}
 const idParam = z.object({ id: z.string().uuid() });
 
 const SELECT_COLS = sql`
@@ -50,6 +82,7 @@ export async function taskEscalationRuleRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const b = createBody.parse(req.body);
+    await assertRecipientsExist(ctx.tenantId, b);
     const row = await db.transaction(async (tx) => {
       const inserted = (await tx.execute(sql`
         INSERT INTO crm.task_escalation_rules
@@ -72,6 +105,21 @@ export async function taskEscalationRuleRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const b = updateBody.parse(req.body);
+    await assertRecipientsExist(ctx.tenantId, b);
+    // Clearing one recipient is fine while the other remains; clearing the last one is not.
+    if (b.recipientRole !== undefined || b.recipientId !== undefined) {
+      const [cur] = (await scopedRead((tx) => tx.execute(sql`
+        SELECT recipient_role AS "recipientRole", recipient_id AS "recipientId"
+        FROM crm.task_escalation_rules WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+      `))) as unknown as Array<{ recipientRole: string | null; recipientId: string | null }>;
+      if (cur) {
+        const role = b.recipientRole !== undefined ? b.recipientRole : cur.recipientRole;
+        const user = b.recipientId !== undefined ? b.recipientId : cur.recipientId;
+        if (!role && !user) {
+          throw new HttpError(422, "RECIPIENT_REQUIRED", "a rule needs a recipient role or a recipient user");
+        }
+      }
+    }
     const sets = [] as ReturnType<typeof sql>[];
     if (b.name !== undefined) sets.push(sql`name = ${b.name}`);
     if (b.appliesTo !== undefined) sets.push(sql`applies_to = ${b.appliesTo}`);

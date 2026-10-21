@@ -2,12 +2,21 @@
  * AC-005 task-escalation: rule admin CRUD (HTTP) + the scheduler applying escalation
  * to overdue open next-actions / task activities (DB round-trip).
  */
-import { describe, it, expect, afterAll, beforeAll } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { scannerSqlClient } from "../src/shared/scanner-db.js";
 import { runTenantTaskEscalation, runTaskEscalationCycle, startTaskEscalationScheduler } from "../src/modules/activities/task-escalation-scheduler.js";
+
+// GAP-CRM-TASK-ESCALATION-01: rule recipients are now verified against the tenant's real roles
+// (policy-service). This suite is about rule CRUD + the scheduler, not that lookup, so give it
+// the one role it uses ("manager") instead of calling out to a service that is not running.
+// The verification itself is covered by task-escalation-recipients.test.ts.
+vi.mock("../src/shared/user-directory.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/user-directory.js")>()),
+  listDirectoryRoles: vi.fn(async () => [{ key: "manager", label: "manager" }]),
+}));
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000ac005";
