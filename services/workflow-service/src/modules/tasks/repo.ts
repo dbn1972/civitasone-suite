@@ -55,9 +55,19 @@ export async function findById(id: string, tenantId: string): Promise<TaskView |
   return toView(row);
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TaskView[]> {
+/**
+ * GAP-HR-LEAVE-APPROVALS-02 — optional exact `ref_type` filter shared by every
+ * list/count below. Applied in SQL (never after the page window), so a module's
+ * inbox (e.g. leave_app) is not crowded out by other modules' tasks when the
+ * tenant has more pending tasks than one page holds.
+ */
+function refTypeFilter(refType?: string) {
+  return refType ? [eq(tasks.refType, refType)] : [];
+}
+
+export async function listByTenant(tenantId: string, limit: number, offset: number, refType?: string): Promise<TaskView[]> {
   const rows = await scopedRead((tx) => tx.select().from(tasks)
-    .where(eq(tasks.tenantId, tenantId))
+    .where(and(eq(tasks.tenantId, tenantId), ...refTypeFilter(refType)))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
     .offset(offset));
@@ -70,9 +80,9 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
  * instead of only the length of the first page. Tenant-scoped via scopedRead
  * (RLS), mirrors listByTenant's WHERE.
  */
-export async function countByTenant(tenantId: string): Promise<number> {
+export async function countByTenant(tenantId: string, refType?: string): Promise<number> {
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
-    .where(eq(tasks.tenantId, tenantId)));
+    .where(and(eq(tasks.tenantId, tenantId), ...refTypeFilter(refType))));
   return rows[0]?.n ?? 0;
 }
 
@@ -86,9 +96,10 @@ export async function listByInstance(
   instanceId: string,
   limit: number,
   offset: number,
+  refType?: string,
 ): Promise<TaskView[]> {
   const rows = await scopedRead((tx) => tx.select().from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId)))
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId), ...refTypeFilter(refType)))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
     .offset(offset));
@@ -96,9 +107,9 @@ export async function listByInstance(
 }
 
 /** GAP-APPROVALS-HOME-01 — exact total of one instance's tasks (mirrors listByInstance's WHERE). */
-export async function countByInstance(tenantId: string, instanceId: string): Promise<number> {
+export async function countByInstance(tenantId: string, instanceId: string, refType?: string): Promise<number> {
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId))));
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId), ...refTypeFilter(refType))));
   return rows[0]?.n ?? 0;
 }
 
@@ -144,6 +155,7 @@ export async function listPendingForRoles(
   roles: string[],
   limit: number,
   offset: number,
+  refType?: string,
 ): Promise<TaskView[]> {
   // L1 — filter by role in SQL (not in app code after a limit*3 fetch, which
   // silently dropped matching tasks beyond the window). A task with no roleRef
@@ -160,6 +172,7 @@ export async function listPendingForRoles(
       eq(tasks.tenantId, tenantId),
       eq(tasks.status, "pending"),
       eq(tasks.isCall, false),
+      ...refTypeFilter(refType),
       ...(rolePredicate ? [rolePredicate] : []),
     ))
     .orderBy(desc(tasks.updatedAt))
@@ -175,7 +188,7 @@ export async function listPendingForRoles(
  * unified approvals page's Pending stat reflects every item an approver has,
  * not just the first page. Tenant-scoped via scopedRead (RLS).
  */
-export async function countPendingForRoles(tenantId: string, roles: string[]): Promise<number> {
+export async function countPendingForRoles(tenantId: string, roles: string[], refType?: string): Promise<number> {
   const isSuperAdmin = roles.includes("super_admin");
   const rolePredicate = isSuperAdmin
     ? undefined
@@ -188,6 +201,7 @@ export async function countPendingForRoles(tenantId: string, roles: string[]): P
       eq(tasks.tenantId, tenantId),
       eq(tasks.status, "pending"),
       eq(tasks.isCall, false),
+      ...refTypeFilter(refType),
       ...(rolePredicate ? [rolePredicate] : []),
     )));
   return rows[0]?.n ?? 0;
