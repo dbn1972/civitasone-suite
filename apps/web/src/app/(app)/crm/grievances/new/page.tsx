@@ -39,6 +39,14 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Pause after the last keystroke before the typed phone / email is checked against existing contacts. */
 const CONTACT_CHECK_DEBOUNCE_MS = 500;
+/**
+ * A phone is looked up only once it is a whole number: PHONE_RE also accepts 7-15 digit international numbers, but
+ * a lookup at 7, 8 or 9 digits while the clerk is still typing would score up to 2,000 contacts for a number that
+ * cannot match anyone. (An Indian mobile is exactly 10 digits.)
+ */
+const PHONE_MIN_LOOKUP_DIGITS = 10;
+/** "Nothing to report": no lookup made yet, or the typed value changed and the last answer no longer applies. */
+const NO_MATCH: ExistingContactResult = { matches: [], failed: false };
 
 export default function NewGrievancePage() {
   const t = useTranslations("crmGrievanceNew");
@@ -85,30 +93,36 @@ export default function NewGrievancePage() {
   // check can run. Advisory only: it never blocks filing, and a failed check says so.
   const [typedPhone, setTypedPhone] = useState("");
   const [typedEmail, setTypedEmail] = useState("");
-  const [existing, setExisting] = useState<ExistingContactResult>({ matches: [], failed: false });
+  const [existing, setExisting] = useState<ExistingContactResult>(NO_MATCH);
+  // Set once the server refuses the lookup (403: this role may not read contacts). Then the form simply stops
+  // asking - no message, no repeated calls - because there is nothing the clerk can do about it.
+  const [lookupForbidden, setLookupForbidden] = useState(false);
   useEffect(() => {
+    // The typed value changed, so the last answer (a warning about the PREVIOUS number) no longer applies:
+    // clear it now, before the next lookup, instead of leaving it up while the new one is checked.
+    setExisting(NO_MATCH);
+    if (lookupForbidden) return;
     const phone = typedPhone.trim();
     const email = typedEmail.trim();
-    // Only a value that passes the form's own format check is looked up (a half-typed number is not a citizen).
-    const phoneOk = phone !== "" && PHONE_RE.test(phone);
+    // Only a value that passes the form's own format check is looked up (a half-typed number is not a citizen),
+    // and a phone only once it is a whole number.
+    const phoneOk = phone !== "" && PHONE_RE.test(phone) && phone.replace(/\D/g, "").length >= PHONE_MIN_LOOKUP_DIGITS;
     const emailOk = email !== "" && EMAIL_RE.test(email);
-    if (!phoneOk && !emailOk) {
-      // Nothing typed that can identify a citizen yet, so there is nothing to look up or to report: this
-      // resets the advisory state; it is not a fetch result being read as "empty".
-      setExisting((prev) => (prev.matches.length === 0 && !prev.failed ? prev : { matches: [], failed: false })); // ux-001-ok: input cleared / not yet valid, no lookup was made
-      return;
-    }
+    if (!phoneOk && !emailOk) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       void findExistingContacts({ ...(phoneOk ? { phone } : {}), ...(emailOk ? { email } : {}) }, ctrl.signal).then((r) => {
-        if (!ctrl.signal.aborted) setExisting(r);
+        // A response for a value that has since been replaced must not overwrite the current state.
+        if (ctrl.signal.aborted) return;
+        if (r.forbidden) setLookupForbidden(true);
+        setExisting(r);
       });
     }, CONTACT_CHECK_DEBOUNCE_MS);
     return () => {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [typedPhone, typedEmail]);
+  }, [typedPhone, typedEmail, lookupForbidden]);
   // A contact the clerk has already linked is not worth warning about a second time.
   const shownMatches = existing.matches.filter((m) => m.id !== contactId);
   const matchedFields = new Set(shownMatches.flatMap((m) => m.matchedOn));

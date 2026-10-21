@@ -16,7 +16,7 @@
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import type { EntityOption } from "@/app/_components/ds";
-import { duplicateCheck } from "@/lib/crm/dataQuality";
+import { duplicateCheck, DuplicateCheckError } from "@/lib/crm/dataQuality";
 
 export async function searchContacts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   const q = query.trim();
@@ -72,20 +72,21 @@ export async function getOpenGrievancesForContact(
  * cannot match them), which left a clerk who types a repeat citizen's number with no warning unless
  * they happened to pick the contact by hand. This asks the contact duplicate-check instead - the same
  * endpoint, role gate (CRM roles), tenant scoping and tenant dedup rules the new-contact form uses.
- * It compares the typed value with the decrypted contacts server-side and answers with ids, the
- * matched field NAMES and a score only - never a phone or email - so nothing is learnt here that the
- * clerk's role cannot already see. Only the typed phone / email are sent (never the name), and only
- * once they pass the form's own format check.
+ * It compares the typed value with the decrypted contacts server-side and answers with ids, the contact's
+ * display NAME, the matched field NAMES and a score only - never a phone or email - so nothing is learnt
+ * here that the clerk's role cannot already see (a contact's name is in the contact list). Only the typed
+ * phone / email are sent (never a name), and only once they pass the form's own format check.
  *
  * Everything here is ADVISORY and fails soft: a failed check reports `failed` (the form says it could
- * not check), a failed name or open-grievance read just leaves that detail out. Filing is never blocked.
+ * not check), a refused one (403) reports `forbidden` (the form stops asking, silently), and a failed
+ * open-grievance read just leaves that detail out. Filing is never blocked.
  * ---------------------------------------------------------------------------------------------- */
 
 export type ContactMatchField = "phone" | "email";
 
 export interface ExistingContactMatch {
   id: string;
-  /** Display name, or null when the contact could not be read (the link still works). */
+  /** Display name from the duplicate-check answer, or null when the contact has none (the link still works). */
   name: string | null;
   /** Which of the TYPED values matched this contact. */
   matchedOn: ContactMatchField[];
@@ -97,21 +98,16 @@ export interface ExistingContactResult {
   matches: ExistingContactMatch[];
   /** True = the duplicate check itself could not be completed (NOT "no match"). */
   failed: boolean;
+  /**
+   * True = the server REFUSED the check (403): this user's role is not allowed to run a contact lookup (for
+   * example a tenant_admin who can file grievances but not read contacts). That is not an error to announce and
+   * not worth retrying, so the caller stops asking for the rest of the session.
+   */
+  forbidden?: boolean;
 }
 
 /** At most this many matching contacts are shown; more than that is a data-quality problem for the dedup queue. */
 const MAX_MATCHES = 3;
-
-async function contactName(id: string, signal: AbortSignal): Promise<string | null> {
-  try {
-    const res = await browserFetch(`v1/crm/contacts/${encodeURIComponent(id)}`, { signal });
-    if (!res.ok) return null;
-    const body = (await res.json()) as { name?: unknown } | null;
-    return typeof body?.name === "string" && body.name.trim() ? body.name.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function findExistingContacts(
   input: { phone?: string; email?: string },
@@ -123,20 +119,29 @@ export async function findExistingContacts(
   let candidates;
   try {
     candidates = await duplicateCheck({ ...(phone ? { phone } : {}), ...(email ? { email } : {}) });
-  } catch {
-    return { matches: [], failed: !signal.aborted };
+  } catch (err) {
+    if (signal.aborted) return { matches: [], failed: false };
+    if (err instanceof DuplicateCheckError && err.status === 403) return { matches: [], failed: false, forbidden: true };
+    return { matches: [], failed: true };
   }
   if (signal.aborted) return { matches: [], failed: false };
   // Only a match on a value that was actually typed counts (the tenant rules may also weigh other fields).
   const hits = candidates
-    .map((c) => ({ id: c.id, matchedOn: c.matchedFields.filter((f): f is ContactMatchField => f === "phone" || f === "email") }))
+    .map((c) => ({
+      id: c.id,
+      // The name comes with the duplicate-check answer itself: no second read of the contact record is needed.
+      name: c.name ?? null,
+      matchedOn: c.matchedFields.filter((f): f is ContactMatchField => f === "phone" || f === "email"),
+    }))
     .filter((c) => c.matchedOn.length > 0)
     .slice(0, MAX_MATCHES);
   const matches = await Promise.all(
-    hits.map(async (h): Promise<ExistingContactMatch> => {
-      const [name, openGrievances] = await Promise.all([contactName(h.id, signal), getOpenGrievancesForContact(h.id, signal)]);
-      return { id: h.id, name, matchedOn: h.matchedOn, openGrievances };
-    }),
+    hits.map(async (h): Promise<ExistingContactMatch> => ({
+      id: h.id,
+      name: h.name,
+      matchedOn: h.matchedOn,
+      openGrievances: await getOpenGrievancesForContact(h.id, signal),
+    })),
   );
   return { matches, failed: false };
 }
