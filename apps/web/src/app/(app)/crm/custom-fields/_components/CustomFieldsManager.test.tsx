@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -380,5 +380,124 @@ describe("CustomFieldsManager entity-switch dirty guard (GAP-CRM-CUSTOM-FIELDS-0
     fireEvent.click(screen.getByRole("tab", { name: /^Engagements$/i }));
     expect(screen.queryByText("Discard unsaved changes?")).not.toBeInTheDocument();
     await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("deals"));
+  });
+});
+
+// GAP-CRM-CUSTOM-FIELDS-03 — saves are queued (202), so the reload right after a
+// save can be stale. The status line must say "submitted" until a reload really
+// carries the change, and an edit must not be reported as saved on id/type alone.
+describe("CustomFieldsManager save reflection (GAP-CRM-CUSTOM-FIELDS-03)", () => {
+  /** Advance fake time inside act() so state updates after awaited promises are flushed before asserting. */
+  async function tick(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  async function renderWithRegionField(list: cf.CustomField[][]) {
+    const mock = vi.mocked(cf.listCustomFields);
+    for (const data of list.slice(0, -1)) mock.mockResolvedValueOnce({ data, source: "api" });
+    mock.mockResolvedValue({ data: list[list.length - 1]!, source: "api" });
+    vi.mocked(cf.updateCustomField).mockResolvedValue();
+    vi.mocked(cf.createCustomField).mockResolvedValue();
+    render(<CustomFieldsManager />);
+    await tick(0);
+  }
+
+  it("a rename stays 'submitted' through two stale reloads and becomes 'saved' on the fresh one, keeping the edit meanwhile", async () => {
+    vi.useFakeTimers();
+    try {
+      const stale = field({ id: "f1", fieldName: "Region" });
+      const fresh = field({ id: "f1", fieldName: "Zone" });
+      // initial load, then reload attempts 0 and 1 are stale, attempt 2 is fresh.
+      await renderWithRegionField([[stale], [stale], [stale], [fresh]]);
+
+      fireEvent.change(screen.getByDisplayValue("Region"), { target: { value: "Zone" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      await tick(0);
+
+      // First reload is stale: the line says submitted, never saved, and the edit is not lost.
+      expect(screen.getByText(/“Zone” submitted; it may take a moment/i)).toBeInTheDocument();
+      expect(screen.queryByText(/saved\./i)).not.toBeInTheDocument();
+      expect((screen.getByLabelText(/custom field name/i) as HTMLInputElement).value).toBe("Zone");
+
+      // Second reload (after 500ms) is still stale.
+      await tick(500);
+      expect(screen.queryByText(/saved\./i)).not.toBeInTheDocument();
+      expect(screen.getByText(/submitted; it may take a moment/i)).toBeInTheDocument();
+      expect((screen.getByLabelText(/custom field name/i) as HTMLInputElement).value).toBe("Zone");
+
+      // Third reload (after a further 1s) carries the rename.
+      await tick(1000);
+      expect(screen.getByText(/“Zone” saved\./i)).toBeInTheDocument();
+      expect(screen.queryByText(/submitted; it may take a moment/i)).not.toBeInTheDocument();
+      // initial load + 3 reload attempts
+      expect(vi.mocked(cf.listCustomFields)).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("an edit to the options is not reported saved while the list still shows the old options", async () => {
+    vi.useFakeTimers();
+    try {
+      const stale = field({ id: "f1", validationSchema: { required: true, options: ["North", "South"] } });
+      await renderWithRegionField([[stale]]);
+
+      fireEvent.change(screen.getByDisplayValue("South"), { target: { value: "South-East" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      // Run out the whole poll (500 + 1000 + 2000): every reload is stale.
+      await tick(4000);
+
+      expect(screen.getByText(/submitted; it may take a moment/i)).toBeInTheDocument();
+      expect(screen.queryByText(/saved\./i)).not.toBeInTheDocument();
+      // The unsaved-looking edit is kept, not replaced by the stale server rows.
+      expect(screen.getByDisplayValue("South-East")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("toggling Required is only 'saved' once the reload shows it", async () => {
+    vi.useFakeTimers();
+    try {
+      const stale = field({ id: "f1", validationSchema: { required: false, options: ["North", "South"] } });
+      const fresh = field({ id: "f1", validationSchema: { required: true, options: ["North", "South"] } });
+      await renderWithRegionField([[stale], [stale], [fresh]]);
+
+      fireEvent.click(screen.getByLabelText(/^Required$/i));
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      await tick(0);
+      expect(screen.queryByText(/saved\./i)).not.toBeInTheDocument();
+
+      await tick(500);
+      expect(screen.getByText(/“Region” saved\./i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a new field stays 'submitted' through two stale reloads and becomes 'saved' when it appears, without losing the draft", async () => {
+    vi.useFakeTimers();
+    try {
+      const created = field({ id: "p1", fieldName: "Priority", fieldType: "text", validationSchema: null });
+      // initial (empty), reload attempts 0 and 1 stale (empty), attempt 2 fresh.
+      await renderWithRegionField([[], [], [], [created]]);
+
+      fireEvent.click(screen.getByRole("button", { name: /add custom field/i }));
+      fireEvent.change(screen.getByLabelText(/custom field name/i), { target: { value: "Priority" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      await tick(0);
+
+      expect(screen.getByText(/“Priority” submitted; it may take a moment/i)).toBeInTheDocument();
+      expect((screen.getByLabelText(/custom field name/i) as HTMLInputElement).value).toBe("Priority");
+
+      await tick(1500);
+      expect(screen.getByText(/“Priority” saved\./i)).toBeInTheDocument();
+      // The draft row was replaced by the persisted one, still visible.
+      expect(screen.getByDisplayValue("Priority")).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
