@@ -113,6 +113,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "seniority_list",
   "separation",
   "service_book",
+  "social_feed_birthdays", // GAP-HR-SOCIAL-FEED-01 (DPDP): audit-on-read when a feed response disclosed birthday entries
   "sponsor_bank_config",
   "statutory_ecr",
   "statutory_return",

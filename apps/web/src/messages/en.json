@@ -7226,7 +7226,12 @@
     "byAuthorLine": "by {author}",
     "loadingSubtitle": "Team announcements and kudos.",
     "backToHr": "Back to HR",
-    "reactionsCount": "{count, plural, one {# reaction} other {# reactions}}"
+    "reactionsCount": "{count, plural, one {# reaction} other {# reactions}}",
+    "birthdaySharingTitle": "Birthday sharing",
+    "birthdaySharingLabel": "Show my birthday on the social feed",
+    "birthdaySharingHelp": "Off by default. When on, your name, department and designation are shown to colleagues on your birthday. Your date of birth and age are never shown. You can turn this off at any time.",
+    "birthdaySharingSavedOn": "Saved. Your birthday will be shown on the feed.",
+    "birthdaySharingSavedOff": "Saved. Your birthday will not be shown."
   },
   "sponsorBankConfigForm": {
     "currentConfigNote": "Currently configured: sponsor account ending in <strong>{last4}</strong>, settlement offset {days} day(s).",
