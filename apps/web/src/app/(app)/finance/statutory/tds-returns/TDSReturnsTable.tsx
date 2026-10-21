@@ -39,6 +39,7 @@ export function TDSReturnsTable({ returns, source = "api", canReveal = false }: 
                   pick={(json) => (json as { pan?: string | null } | null)?.pan}
                   canReveal
                   label="PAN"
+                  context={row.vendor_name}
                   minReasonLength={TDS_REVEAL_REASON_MIN}
                   maxReasonLength={TDS_REVEAL_REASON_MAX}
                 />

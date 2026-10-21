@@ -40,6 +40,12 @@ export interface RevealableValueProps {
    */
   minReasonLength?: number;
   maxReasonLength?: number;
+  /**
+   * What record the value belongs to (e.g. the vendor name), for a control repeated once per table row.
+   * When set it is appended to the Reveal / Hide button's accessible name ("Reveal PAN for Vendor A"), so a
+   * screen-reader button list can tell the rows apart. The visible text stays "Reveal" / "Hide".
+   */
+  context?: string;
 }
 
 const MIN_REASON = 5;
@@ -47,7 +53,7 @@ const MAX_REASON = 300;
 
 export function RevealableValue({
   maskedText, revealPath, revealBody, pick, canReveal, label, fallback = "—", autoHideMs = 30_000, className,
-  minReasonLength = MIN_REASON, maxReasonLength = MAX_REASON,
+  minReasonLength = MIN_REASON, maxReasonLength = MAX_REASON, context,
 }: RevealableValueProps) {
   const t = useTranslations("revealableValue");
   const te = useTranslations("financeWorkflowErrors");
@@ -98,11 +104,15 @@ export function RevealableValue({
       </span>
       {canReveal ? (
         clear === null ? (
-          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={false} onClick={() => { setError(""); setOpen(true); }}>
+          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={false}
+            {...(context ? { "aria-label": t("revealAria", { label, context }) } : {})}
+            onClick={() => { setError(""); setOpen(true); }}>
             {t("reveal")}
           </button>
         ) : (
-          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={true} onClick={hide}>
+          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={true}
+            {...(context ? { "aria-label": t("hideAria", { label, context }) } : {})}
+            onClick={hide}>
             {t("hide")}
           </button>
         )

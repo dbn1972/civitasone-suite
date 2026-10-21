@@ -12152,6 +12152,8 @@
     "reveal": "Reveal",
     "hide": "Hide",
     "maskedAria": "{label} (masked)",
+    "revealAria": "Reveal {label} for {context}",
+    "hideAria": "Hide {label} for {context}",
     "title": "Reveal {label}?",
     "description": "Showing the {label} is recorded in the audit trail with your name and the reason below. It is hidden again after 30 seconds.",
     "confirm": "Reveal",

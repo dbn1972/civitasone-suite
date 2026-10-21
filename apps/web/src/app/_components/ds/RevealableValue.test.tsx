@@ -87,6 +87,26 @@ describe("RevealableValue (audited reveal)", () => {
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
+  // a11y: a control repeated once per table row names the record it acts on.
+  it("appends the record context to the Reveal and Hide accessible names only when given", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ values: { bankAccount: "123456789012" } }), { status: 200 }));
+    const { unmount } = render(<RevealableValue {...props} canReveal />);
+    // No context: the name is the visible text, exactly as before.
+    expect(screen.getByRole("button", { name: "Reveal" })).not.toHaveAttribute("aria-label");
+    unmount();
+
+    render(<RevealableValue {...props} canReveal context="Vendor A" />);
+    const reveal = screen.getByRole("button", { name: "Reveal account number for Vendor A" });
+    expect(reveal).toHaveTextContent("Reveal");
+    fireEvent.click(reveal);
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "reconciliation" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    await screen.findByText("123456789012");
+    const hide = screen.getByRole("button", { name: "Hide account number for Vendor A" });
+    expect(hide).toHaveTextContent("Hide");
+    expect(hide).toHaveAttribute("aria-pressed", "true");
+  });
+
   // GAP-FINANCE-STATUTORY-TDS-RETURNS-05: an endpoint with a longer reason rule (TDS PAN reveal: 10 to 500).
   it("honours caller-set reason bounds, so the dialog never lets through a reason the route would 400", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ values: { bankAccount: "123456789012" } }), { status: 200 }));

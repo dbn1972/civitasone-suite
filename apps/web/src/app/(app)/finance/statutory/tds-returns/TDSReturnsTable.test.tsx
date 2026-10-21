@@ -54,7 +54,7 @@ describe("TDSReturnsTable PAN reveal", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const { container } = renderWithIntl(<TDSReturnsTable returns={[]} source="api" canReveal={false} />);
     expect(container.textContent).toContain("ABCDE****F");
-    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Reveal/ })).not.toBeInTheDocument();
     expect(container.textContent).not.toContain(CLEAR_PAN);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -67,7 +67,7 @@ describe("TDSReturnsTable PAN reveal", () => {
     const { container } = renderWithIntl(<TDSReturnsTable returns={[]} source="api" canReveal />);
     // The clear PAN is nowhere in the DOM until the server returns it.
     expect(container.textContent).not.toContain(CLEAR_PAN);
-    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reveal PAN for Vendor A" }));
     expect(fetchMock).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole("alertdialog");
@@ -87,7 +87,7 @@ describe("TDSReturnsTable PAN reveal", () => {
     expect(init.method).toBe("POST");
     expect(JSON.parse(init.body as string)).toEqual({ reason: "Reconcile Form 26AS entry" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Hide" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide PAN for Vendor A" }));
     await waitFor(() => expect(container.textContent).not.toContain(CLEAR_PAN));
     expect(container.textContent).toContain("ABCDE****F");
   });
@@ -96,7 +96,7 @@ describe("TDSReturnsTable PAN reveal", () => {
     seed([ROW]);
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN" }), { status: 403 }));
     const { container } = renderWithIntl(<TDSReturnsTable returns={[]} source="api" canReveal />);
-    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reveal PAN for Vendor A" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/Reason for revealing/i), { target: { value: "Reconcile Form 26AS entry" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Reveal" }));
@@ -107,6 +107,15 @@ describe("TDSReturnsTable PAN reveal", () => {
   it("has nothing to reveal for a deduction with no PAN on record", () => {
     seed([{ ...ROW, pan: null }]);
     renderWithIntl(<TDSReturnsTable returns={[]} source="api" canReveal />);
-    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Reveal/ })).not.toBeInTheDocument();
+  });
+
+  // a11y: one Reveal button per row must be told apart in a screen reader's button list.
+  it("gives every row's Reveal button a distinct accessible name (the vendor), while the visible text stays Reveal", () => {
+    seed([ROW, { ...ROW, id: "2", vendor_name: "Vendor B", pan: "FGHIJ****K" }]);
+    renderWithIntl(<TDSReturnsTable returns={[]} source="api" canReveal />);
+    const buttons = screen.getAllByRole("button", { name: /^Reveal/ });
+    expect(buttons.map((b) => b.getAttribute("aria-label")).sort()).toEqual(["Reveal PAN for Vendor A", "Reveal PAN for Vendor B"]);
+    for (const b of buttons) expect(b).toHaveTextContent("Reveal");
   });
 });

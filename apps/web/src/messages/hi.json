@@ -11646,6 +11646,8 @@
     "reveal": "दिखाएँ",
     "hide": "छिपाएँ",
     "maskedAria": "{label} (छिपा हुआ)",
+    "revealAria": "{context} के लिए {label} दिखाएँ",
+    "hideAria": "{context} के लिए {label} छिपाएँ",
     "title": "{label} दिखाएँ?",
     "description": "{label} दिखाने का रिकॉर्ड आपके नाम और नीचे दिए कारण के साथ ऑडिट ट्रेल में दर्ज होगा। यह 30 सेकंड बाद फिर छिप जाएगा।",
     "confirm": "दिखाएँ",
