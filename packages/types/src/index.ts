@@ -1798,6 +1798,10 @@ export type EstabDashboard = {
   slaBreached: number;
   dakPending: number;
   avgPendencyDays: number;
+  /** Files open at any stage (not closed, archived or disposed) — GAP-ESTAB-DASHBOARD-05. */
+  openFiles: number;
+  /** Whole IST days since creation of the oldest open file; 0 when none is open. */
+  oldestPendencyDays: number;
 };
 
 export type EstabFileSummary = {
@@ -1809,7 +1813,14 @@ export type EstabFileSummary = {
   createdBy: string;
   createdDate: string;
   currentHolder?: string;
-  status: "active" | "pending" | "archived" | "disposed";
+  /**
+   * Register vocabulary. The service's own statuses are draft | active | closed | archived
+   * (FILE_STATUSES); a draft is still in work, so the mapper presents it as "active", while
+   * "closed" (what a file close writes) is kept distinct. "pending" and "disposed" are
+   * register-side values. closed, archived and disposed are terminal (isFileReadOnly in
+   * estab/files/[id]/FileDetailActions.tsx).
+   */
+  status: "active" | "pending" | "closed" | "archived" | "disposed";
   dueDate?: string;
   tags: string[];
 };
