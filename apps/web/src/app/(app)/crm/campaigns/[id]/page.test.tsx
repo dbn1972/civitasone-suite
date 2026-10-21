@@ -6,6 +6,12 @@ import type { CRMCampaignRoi } from "@civitasone/types";
 vi.mock("../../../../_data/loaders", () => ({ getCrmCampaignRoi: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
+const mockRoles = vi.fn<() => string[]>();
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => mockRoles() };
+});
+
 import Page, { generateMetadata } from "./page";
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
 
@@ -27,7 +33,12 @@ function campaign(overrides: Partial<CRMCampaignRoi> = {}): CRMCampaignRoi {
   };
 }
 
-beforeEach(() => mocked.mockReset());
+beforeEach(() => {
+  mocked.mockReset();
+  // The write behind the post-period form is crm_admin / super_admin / tenant_admin only.
+  mockRoles.mockReset();
+  mockRoles.mockReturnValue(["crm_admin"]);
+});
 
 describe("Campaign detail page", () => {
   it("GAP-CRM-CAMPAIGNS-DETAIL-01: shows the campaign name as the h1 when present", async () => {
@@ -131,6 +142,57 @@ describe("Campaign detail page", () => {
     expect(screen.getByRole("form", { name: /post a reporting period/i })).toBeInTheDocument();
     // currency is unknown for a brand-new campaign, so it is editable and defaults to INR
     expect(screen.getByLabelText(/^Currency/)).toHaveValue("INR");
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: the 404 branch offers the form to each role the write admits", async () => {
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    for (const role of ["crm_admin", "super_admin", "tenant_admin"]) {
+      mockRoles.mockReturnValue([role]);
+      const { unmount } = renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+      expect(screen.getByRole("form", { name: /post a reporting period/i })).toBeInTheDocument();
+      expect(screen.getByText(/Use the form below/)).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: a role the write rejects (crm_user) sees no form and no 'use the form below'", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+
+    expect(screen.getByText("No performance recorded")).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post a reporting period/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Use the form below/)).not.toBeInTheDocument();
+    expect(screen.getByText(/A CRM administrator can post its first reporting period/)).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: roles in the wider CRM admin set that the write 403s (admin, platform_admin) see no form", async () => {
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    for (const role of ["admin", "platform_admin"]) {
+      mockRoles.mockReturnValue([role]);
+      const { unmount } = renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+      expect(screen.queryByRole("form", { name: /post a reporting period/i })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: the 404 branch never builds the form around a non-UUID URL segment", async () => {
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    renderWithIntl(await Page({ params: { id: "../../v1/admin/x" } }));
+
+    expect(screen.getByText("No performance recorded")).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post a reporting period/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Use the form below/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: a campaign with figures hides the post form from a non-admin viewer", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    mocked.mockResolvedValue({ data: campaign(), source: "api" });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+
+    expect(screen.getByText("Period Breakdown")).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: /post a reporting period/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /post period/i })).not.toBeInTheDocument();
   });
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-04: a 500 does not offer the post form", async () => {

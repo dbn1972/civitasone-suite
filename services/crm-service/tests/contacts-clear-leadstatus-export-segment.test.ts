@@ -4,6 +4,8 @@
  *  GAP-CRM-CONTACTS-DETAIL-EDIT-01  PATCH /v1/crm/contacts/:id accepts `null` to
  *      CLEAR email / phone / company / designation / city (and the identifiers),
  *      instead of 400-ing the whole request; absent keys leave a value alone.
+ *      `accountId: null` (the edit form clearing the Organisation link) unlinks
+ *      the contact from its account instead of 400-ing the whole PATCH.
  *  GAP-CRM-CONTACTS-DETAIL-EDIT-02  the generic PATCH refuses `leadStatus` (status
  *      moves only through POST /v1/crm/leads/:id/transition) and the update
  *      consumer no longer applies one that is already in flight.
@@ -28,6 +30,7 @@ const SECRET = process.env.JWT_SECRET ?? "";
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000c0201";
 const ACTOR = "cccccccc-3333-4000-8000-0000000c0201";
 const OTHER_OWNER = "dddddddd-4444-4000-8000-0000000c0201";
+const ACCOUNT = "eeeeeeee-5555-4000-8000-0000000c0201";
 
 function headers(roles: string[]): Record<string, string> {
   return {
@@ -71,6 +74,7 @@ async function rawRow(id: string): Promise<Record<string, unknown>> {
 async function cleanup(): Promise<void> {
   await scoped(async (tx) => {
     await tx`DELETE FROM crm.contacts WHERE tenant_id = ${TENANT}`.catch(() => {});
+    await tx`DELETE FROM crm.accounts WHERE tenant_id = ${TENANT}`.catch(() => {});
     await tx`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`.catch(() => {});
   }).catch(() => {});
 }
@@ -79,6 +83,11 @@ beforeAll(async () => {
   registerAllConsumers(queue);
   await queue.start();
   await cleanup();
+  await scoped(
+    (tx) => tx`
+      INSERT INTO crm.accounts (id, tenant_id, name, status, created_by, updated_by)
+      VALUES (${ACCOUNT}, ${TENANT}, 'Unlink Acct', 'active', ${ACTOR}, ${ACTOR})`,
+  );
 });
 
 afterAll(async () => {
@@ -128,6 +137,42 @@ describe("GAP-CRM-CONTACTS-DETAIL-EDIT-01: PATCH null clears a field", () => {
     const after = await rawRow(id);
     expect(after.city).toBeNull();
     expect(after.company).toBe("KeepCo");
+  });
+
+  it("accountId: null unlinks a linked contact (with company cleared in the same PATCH)", async () => {
+    // The edit form sends accountId: null (JSON drops undefined) when the
+    // Organisation account link is cleared. Before, updateContactBody rejected
+    // it ("accountId: Expected string, received null") and the whole PATCH 400ed.
+    const id = await createContact({ name: "Unlink Me", company: "Unlink Acct", accountId: ACCOUNT });
+    const before = await rawRow(id);
+    expect(before.account_id).toBe(ACCOUNT);
+
+    const res = await inject("PATCH", `/v1/crm/contacts/${id}`, ["crm_admin"], {
+      accountId: null,
+      company: null,
+    });
+    expect(res.statusCode).toBe(202);
+
+    const after = await rawRow(id);
+    expect(after.account_id).toBeNull();
+    expect(after.company).toBeNull();
+    expect(after.name).toBe("Unlink Me");
+    expect(Number(after.version)).toBe(Number(before.version) + 1);
+  });
+
+  it("an omitted accountId leaves the account link alone (absent = keep)", async () => {
+    const id = await createContact({ name: "Keep Link", accountId: ACCOUNT });
+    const res = await inject("PATCH", `/v1/crm/contacts/${id}`, ["crm_admin"], { city: "Goa" });
+    expect(res.statusCode).toBe(202);
+    const after = await rawRow(id);
+    expect(after.account_id).toBe(ACCOUNT);
+    expect(after.city).toBe("Goa");
+  });
+
+  it("a malformed accountId is still refused (null clears, a non-uuid string does not)", async () => {
+    const id = await createContact({ name: "Bad Link" });
+    const res = await inject("PATCH", `/v1/crm/contacts/${id}`, ["crm_admin"], { accountId: "not-a-uuid" });
+    expect(res.statusCode).toBe(400);
   });
 
   it("still rejects null for a required / non-clearable field (name)", async () => {

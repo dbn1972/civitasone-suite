@@ -3,6 +3,7 @@ import { Card, DataTable, EmptyState, LoadErrorState, PageHeader, StatCard, Stat
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { formatMoneyIn } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole, CRM_CAMPAIGN_PERFORMANCE_POST_ROLES } from "@/lib/auth/roleGuard";
 import { formatRoiPercent, orderPeriods, periodLabel } from "../campaigns";
 import { PostPeriodForm } from "./PostPeriodForm";
 import { CopyIdButton } from "./CopyIdButton";
@@ -29,6 +30,9 @@ type PeriodRow = {
   roi: string;
 };
 
+/** crm-service campaign ids are UUIDs; the 404 branch only has the (user-controlled) URL segment to go on. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** First segment of a UUID, so the subtitle shows a recognisable short id rather than a 36-char string. */
 function shortId(id: string): string {
   return id.includes("-") ? id.split("-")[0] : id.slice(0, 8);
@@ -37,6 +41,10 @@ function shortId(id: string): string {
 export default async function CampaignRoiPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("crmCampaignDetail");
   const { data: campaign, source, status, errorMessage } = await getCrmCampaignRoi(params.id);
+  // The write behind the "post a reporting period" form is admin-gated in
+  // crm-service; only offer the form to the roles it admits, so nobody fills
+  // it in just to hit a 403. The server remains the authority.
+  const canPostPeriod = hasAnyRole(getSessionRoles(), CRM_CAMPAIGN_PERFORMANCE_POST_ROLES);
 
   // GAP-CRM-CAMPAIGNS-DETAIL-02: a true "no figures" 404 and an outage both
   // produced the same EmptyState. Separate them: a 404 is the expected
@@ -56,19 +64,22 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
         </>
       );
     }
+    // The id on this branch is the raw URL segment (no server payload vouches for
+    // it), so the form is rendered only for a UUID-shaped id as well as an admin.
+    const showPostForm = canPostPeriod && UUID_RE.test(params.id);
     return (
       <>
         <PageHeader title={t("performanceTitle")} back="/crm/campaigns" backLabel={t("backLabel")} />
         <EmptyState
           icon="📣"
           title={t("noPerformanceTitle")}
-          message={t("noPerformanceMessage")}
+          message={showPostForm ? t("noPerformanceMessage") : t("noPerformanceMessageReadOnly")}
         />
         {/* GAP-CRM-CAMPAIGNS-DETAIL-04: a campaign with no periods answers 404, so
             the form must live on this branch too or its first period could never
             be posted. The currency is not known yet, so it defaults to the
             service default (INR) and is editable for this first period. */}
-        <PostPeriodForm campaignId={params.id} currency="INR" currencyEditable />
+        {showPostForm ? <PostPeriodForm campaignId={params.id} currency="INR" currencyEditable /> : null}
       </>
     );
   }
@@ -149,9 +160,15 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
       </Card>
 
       {/* GAP-CRM-CAMPAIGNS-DETAIL-04: the empty-state instruction to "post a
-          reporting period's cost and revenue" is now actionable from here.
-          The write is admin-gated server-side; a non-admin's submit 403s. */}
-      <PostPeriodForm campaignId={campaign.campaignId} currency={currency} {...(campaign.name ? { campaignName: campaign.name } : {})} />
+          reporting period's cost and revenue" is now actionable from here, for
+          the admin roles the write is gated to (crm-service enforces the same). */}
+      {canPostPeriod ? (
+        <PostPeriodForm
+          campaignId={campaign.campaignId}
+          currency={currency}
+          {...(campaign.name ? { campaignName: campaign.name } : {})}
+        />
+      ) : null}
     </>
   );
 }

@@ -330,6 +330,17 @@ export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "
 export const CRM_CONTACTS_BULK_EXPORT_ROLES = ["crm_admin", "super_admin"];
 
 /**
+ * Roles offered the "Post a reporting period" form on the campaign detail page
+ * (GAP-CRM-CAMPAIGNS-DETAIL-04). crm-service's PUT /v1/crm/campaigns/:id/performance
+ * (modules/dashboard/campaign-roi-routes.ts, its ADMIN_ROLES) admits exactly
+ * crm_admin / super_admin / tenant_admin, matched by EXACT role string, so
+ * "admin" and "platform_admin" (both in CRM_ADMIN_ROLES) would be shown a form
+ * that always 403s. The server stays the authority; this only decides whether
+ * the form is rendered.
+ */
+export const CRM_CAMPAIGN_PERFORMANCE_POST_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
  * Roles permitted to verify/reject uploaded account & contact documents
  * (GAP-CRM-ACCOUNTS-DETAIL-02). Document verification is an approval control,
  * so it is restricted to CRM admins rather than every crm_user — the detail
