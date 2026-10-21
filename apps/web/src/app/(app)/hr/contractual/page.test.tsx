@@ -248,6 +248,12 @@ describe("/hr/contractual expiring <=30d tile (GAP-HR-WORKFORCE-CONTRACTUAL-01)"
     expect(within(tile("Expiring ≤30d")).getByText("4")).toBeInTheDocument();
   });
 
+  it("an escalated contract ending within 30 days is counted (as the backend summary counts it) but keeps its own pill", async () => {
+    await renderRegister([contractEnding("c1", "Escalated Soon", "escalated", 12), contractEnding("c2", "Escalated Later", "escalated", 40)]);
+    expect(tile("Expiring ≤30d")).toHaveTextContent("1");
+    expect(within(rowByName("Escalated Soon")).queryByText("Expiring ≤30d")).not.toBeInTheDocument();
+  });
+
   it("an ended contract flagged expiring is counted under Expired, never under Expiring", async () => {
     await renderRegister([contractEnding("c4", "Ended Yesterday Still Flagged", "expiring", -1)]);
     expect(tile("Expiring ≤30d")).toHaveTextContent("0");

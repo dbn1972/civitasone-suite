@@ -104,9 +104,10 @@ function mapContracts(apiItems: ApiContract[]): Row[] {
 }
 
 /**
- * Register counts tallied from a complete (unpaged) list, same classes as the server summary except that "Expiring
- * <=30d" is an end-DATE test: hrms-service flips active -> expiring at <=90 days, so counting every `expiring` row
- * overstated this tile, and an ended contract still flagged expiring must not count at all.
+ * Register counts tallied from a complete (unpaged) list: the same classes as the server summary (hrms-service
+ * summarizeContracts). "Expiring <=30d" is an end-DATE test there and here: hrms-service flips active -> expiring at
+ * <=90 days, so counting every `expiring` row would overstate this tile, and an ended contract still flagged expiring
+ * must not count at all.
  */
 function tallyLoadedRows(rows: Row[]): ContractSummary {
   const hasEnded = (r: Row) => r.daysToExpiry !== null && r.daysToExpiry < 0;

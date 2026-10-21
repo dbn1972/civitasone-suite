@@ -6,7 +6,9 @@
  *   - summary=true adds meta.summary: FULL-SCOPE register counts classified by
  *     contract status AND end date against the IST calendar date -- an active
  *     contract past its end date is Expired (not Active), a contract ending
- *     within 30 days is Expiring, terminated/renewed/draft are in none;
+ *     within 30 days is Expiring (by END DATE only: a scheduler-flagged
+ *     'expiring' contract 45 days out is not, the tile is "Expiring <=30d"),
+ *     terminated/renewed/draft are in none;
  *   - the counts do not depend on the page that was returned, and a manager's
  *     counts are confined to their own scope;
  *   - without the flags the response is unchanged (no meta.summary).
@@ -51,7 +53,7 @@ const CONTRACTS: Array<[string, string, string, string, string]> = [
   [id(0xc01), E1, "C-01", "active", "2026-06-14"],     // ended yesterday but still 'active' -> Expired (not Active)
   [id(0xc02), E2, "C-02", "active", "2026-06-25"],     // 10 days left       -> Active + Expiring
   [id(0xc03), E3, "C-03", "active", "2027-01-01"],     // far off            -> Active
-  [id(0xc04), E2, "C-04", "expiring", "2026-07-30"],   // scheduler-flagged, 45 days left -> Expiring
+  [id(0xc04), E2, "C-04", "expiring", "2026-07-30"],   // scheduler-flagged (<=90d), 45 days left -> NOT Expiring (<=30d is an end-date test)
   [id(0xc05), E3, "C-05", "expired", "2026-05-01"],    // -> Expired
   [id(0xc06), E3, "C-06", "terminated", "2026-06-10"], // none
   [id(0xc07), E3, "C-07", "renewed", "2026-06-01"],    // none
@@ -137,15 +139,34 @@ describe("GET /v1/hrms/contracts?summary=true (full-scope register counts)", () 
   it("classifies by status AND end date against the IST today: an active contract past its end is Expired, not Active", async () => {
     const body = await list("?summary=true&limit=200");
     expect(body.meta.total).toBe(10);
-    // active: C-02, C-03, C-08 | expiring: C-02, C-04, C-08, C-10 | expired: C-01, C-05 | agencies: AGENCY-1, AGENCY-2
-    expect(body.meta.summary).toEqual({ active: 3, expiring: 4, expired: 2, agencies: 2 });
+    // active: C-02, C-03, C-08 | expiring: C-02, C-08, C-10 (C-04 is flagged but 45 days out) | expired: C-01, C-05 | agencies: AGENCY-1, AGENCY-2
+    expect(body.meta.summary).toEqual({ active: 3, expiring: 3, expired: 2, agencies: 2 });
+  });
+
+  it("'Expiring <=30d' is an END-DATE test: a scheduler-flagged 'expiring' contract 45 days out is not counted, while an escalated one ending in exactly 30 days is (31 days is not)", async () => {
+    // Extra contracts live only for this test (C-04 above is the 45-day flagged one), so the shared fixture's totals stay put.
+    const extra: Array<[string, string, string, string]> = [
+      [id(0xc11), "C-11", "escalated", "2026-07-15"], // 30 days left, window inclusive -> Expiring
+      [id(0xc12), "C-12", "escalated", "2026-07-16"], // 31 days left -> not Expiring
+    ];
+    for (const [cid, no, status, end] of extra) {
+      await asTenant((tx) => tx`
+        INSERT INTO contracts.hrms_contracts (id, tenant_id, employee_id, contract_no, start_date, end_date, status, created_by, updated_by)
+        VALUES (${cid}, ${TENANT}, ${E5}, ${no}, '2025-01-01', ${end}, ${status}, ${SEED}, ${SEED})`);
+    }
+    try {
+      const body = await list("?summary=true&limit=200");
+      expect(body.meta.summary).toEqual({ active: 3, expiring: 4, expired: 2, agencies: 2 });
+    } finally {
+      await asTenant((tx) => tx`DELETE FROM contracts.hrms_contracts WHERE tenant_id = ${TENANT} AND id IN (${extra[0]![0]}, ${extra[1]![0]})`);
+    }
   });
 
   it("is independent of the page returned: a one-row page still reports the whole scope", async () => {
     const body = await list("?summary=true&limit=1&offset=3&sort=endDate");
     expect(body.data).toHaveLength(1);
     expect(body.meta.total).toBe(10);
-    expect(body.meta.summary).toEqual({ active: 3, expiring: 4, expired: 2, agencies: 2 });
+    expect(body.meta.summary).toEqual({ active: 3, expiring: 3, expired: 2, agencies: 2 });
   });
 
   it("uses the IST date, not the UTC date, for 'past its end date'", async () => {

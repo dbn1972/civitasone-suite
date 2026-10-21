@@ -27,15 +27,16 @@ export type ContractExpiryState = "expired" | "expiring" | "active" | "none";
  * (contracts/repo.ts summarizeContracts), so a row's badge and the stat cards can never disagree:
  *   none      terminated / renewed / draft, or an unreadable end date on an open contract -- not in force
  *   expired   status 'expired', or still open (active/expiring/escalated) and past its end date
- *   expiring  in force and ending within EXPIRING_WINDOW_DAYS (or flagged 'expiring' by the scheduler)
- *   active    in force, further out
+ *   expiring  in force and ending within EXPIRING_WINDOW_DAYS -- by END DATE only; the scheduler's own 'expiring'
+ *             status is set at <=90 days, so it is not a 30-day signal by itself
+ *   active    in force, further out (a scheduler-flagged 'expiring' contract 45 days out is here)
  */
 export function contractExpiryState(status: string, daysToExpiry: number | null): ContractExpiryState {
   if (status === "terminated" || status === "renewed" || status === "draft") return "none";
   if (status === "expired") return "expired";
   if (daysToExpiry === null) return "none";
   if (daysToExpiry < 0) return "expired";
-  if (status === "expiring" || daysToExpiry <= EXPIRING_WINDOW_DAYS) return "expiring";
+  if (daysToExpiry <= EXPIRING_WINDOW_DAYS) return "expiring";
   return "active";
 }
 
@@ -71,13 +72,15 @@ export function validateNewEndDate(newEndDate: string, currentEndDate: string): 
 export const EXPIRING_SOON_DAYS = 30;
 
 /**
- * True only for a LIVE engagement (active, or already flagged "expiring" by
- * hrms-service's expiry consumer) whose end date is today or within the next
- * `windowDays`. The backend flips active -> expiring at <=90 days, so the
- * `expiring` status alone is NOT a 30-day signal; and a contract whose end
- * date has already passed (negative `daysToExpiry`) is ended, not expiring,
- * even if its stored status has not been swept yet. Terminated / renewed /
- * expired contracts never count. A missing end date (null) never counts.
+ * True only for a LIVE engagement (active, already flagged "expiring" by
+ * hrms-service's expiry consumer, or "escalated" by it) whose end date is today
+ * or within the next `windowDays`. The backend flips active -> expiring at <=90
+ * days, so the `expiring` status alone is NOT a 30-day signal; and a contract
+ * whose end date has already passed (negative `daysToExpiry`) is ended, not
+ * expiring, even if its stored status has not been swept yet. Terminated /
+ * renewed / expired contracts never count. A missing end date (null) never
+ * counts. This is the SAME rule as hrms-service's summarizeContracts (the
+ * register's "Expiring <=30d" tile), so the tile can never disagree with it.
  */
 export function isExpiringSoon(
   status: string,
@@ -85,7 +88,7 @@ export function isExpiringSoon(
   windowDays: number = EXPIRING_SOON_DAYS,
 ): boolean {
   if (daysToExpiry === null || Number.isNaN(daysToExpiry)) return false;
-  return (status === "active" || status === "expiring") && daysToExpiry >= 0 && daysToExpiry <= windowDays;
+  return (status === "active" || status === "expiring" || status === "escalated") && daysToExpiry >= 0 && daysToExpiry <= windowDays;
 }
 
 /** The pseudo-status shown on the register's status badge for a contract ending within 30 days. */
@@ -96,10 +99,12 @@ export const EXPIRING_SOON_STATUS = "expiring_30d";
  * except: a live contract ending within 30 days reads `expiring_30d`
  * (highlighted), and a live contract already past its end date reads
  * `expired` (the same rule the Expired tile counts by) instead of a stale
- * green "Active".
+ * green "Active". An `escalated` contract keeps its own pill (no renewal was
+ * started -- more important to see than the window), although the tile still
+ * counts it.
  */
 export function contractDisplayStatus(status: string, daysToExpiry: number | null): string {
-  if (isExpiringSoon(status, daysToExpiry)) return EXPIRING_SOON_STATUS;
+  if (status !== "escalated" && isExpiringSoon(status, daysToExpiry)) return EXPIRING_SOON_STATUS;
   if ((status === "active" || status === "expiring") && daysToExpiry !== null && daysToExpiry < 0) return "expired";
   return status;
 }
