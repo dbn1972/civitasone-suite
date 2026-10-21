@@ -7,6 +7,9 @@
  *                          move: the route answers 409 FILE_READ_ONLY and enqueues nothing; the
  *                          consumers refuse it too (and submit no longer flips a closed file back
  *                          to "active").
+ *  GAP-ESTAB-DASHBOARD-04 (follow-up)  the register list is cached for 60 s per page size; the
+ *                          consumers that add a file or close one drop it, so a new file is first on
+ *                          the very next read and a closed file reads as closed.
  *  GAP-ESTAB-FILES-DETAIL-05/06  GET /v1/estab/files/:id carries each note's signedAt, and the real
  *                          payload satisfies the web's EstabFileDetailSchema without losing
  *                          noteType / noteStatus / eSigned / signedAt / movementHistory / dakNo / dueBy.
@@ -21,8 +24,9 @@ import { signToken } from "@civitasone/auth";
 import { EstabFileDetailSchema } from "@civitasone/schemas/web";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
-import { queue as sharedQueue } from "../src/shared/infra.js";
+import { cache, queue as sharedQueue } from "../src/shared/infra.js";
 import { estabFiles, estabNotings, estabFileMovements } from "../src/modules/files/schema.js";
+import { estabFileRecord } from "../src/modules/records/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerFilesConsumers } from "../src/modules/files/consumer.js";
 import { isFileReadOnly } from "../src/modules/files/domain.js";
@@ -72,6 +76,7 @@ async function wipe(): Promise<void> {
         // a signed note is frozen by a trigger: downgrade before deleting, as the other suites do
         await tx.execute(sql`UPDATE files.estab_notings SET note_status='draft' WHERE tenant_id=${t}`);
         await tx.delete(estabNotings).where(eq(estabNotings.tenantId, t));
+        await tx.delete(estabFileRecord).where(eq(estabFileRecord.tenantId, t));
         await tx.delete(estabFiles).where(eq(estabFiles.tenantId, t));
       }),
     );
@@ -142,6 +147,76 @@ describe("GAP-ESTAB-DASHBOARD-04 — the register list is newest-first, then cap
     const res = await app.inject({ method: "GET", url: "/v1/estab/files?limit=50", headers: headers() });
     const nos = (res.json() as { data: Array<{ fileNo: string }> }).data.map((f) => f.fileNo);
     expect(nos).toEqual(["ORD/2", "ORD/3"]);
+  });
+});
+
+describe("GAP-ESTAB-DASHBOARD-04 follow-up — the cached register list is refreshed when a file is created or closed", () => {
+  // the in-process cache outlives a test: start each one cold (every cached "file" entry, both tenants)
+  beforeEach(async () => {
+    for (const t of [TENANT, OTHER_TENANT]) await cache.invalidateResource(t, "file");
+  });
+  const readList = async (limit: number, tenant = TENANT) => {
+    const res = await app.inject({ method: "GET", url: `/v1/estab/files?limit=${limit}`, headers: headers(tenant) });
+    expect(res.statusCode).toBe(200);
+    return (res.json() as { data: Array<{ fileNo: string; status: string }> }).data;
+  };
+  const createCmd = (id: string, fileNo: string) =>
+    env(COMMANDS.fileCreate, {
+      id, tenantId: TENANT, fileNo, section: "ESTAB-C", subject: `Subject ${fileNo}`, dept: "ESTAB",
+      priority: "normal", classification: "public", currentWith: ACTOR,
+    });
+
+  it("a file created by the fileCreate consumer is first on the very next read, for every cached page size", async () => {
+    await seedFile({ createdAgoHours: 5, fileNo: "CACHE/OLD" });
+    // warm the read-through cache for two page sizes
+    expect((await readList(50)).map((f) => f.fileNo)).toEqual(["CACHE/OLD"]);
+    expect((await readList(10)).map((f) => f.fileNo)).toEqual(["CACHE/OLD"]);
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerFilesConsumers(q);
+    await q.start();
+    const m = createCmd(randomUUID(), "CACHE/NEW");
+    await q.publish(COMMANDS.fileCreate, m); await waitProcessed(m.messageId);
+    await q.stop();
+
+    expect((await readList(50)).map((f) => f.fileNo)).toEqual(["CACHE/NEW", "CACHE/OLD"]);
+    expect((await readList(10)).map((f) => f.fileNo)).toEqual(["CACHE/NEW", "CACHE/OLD"]);
+  });
+
+  it("a file closed by the fileClose consumer reads as closed on the very next read", async () => {
+    const fileId = await seedFile({ status: "active", fileNo: "CACHE/CLOSE" });
+    // closure needs a record category (CSMOP/RRS), exactly as in production
+    await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.insert(estabFileRecord).values({ tenantId: TENANT, fileId, recordCategory: "B", createdBy: ACTOR })));
+    expect((await readList(50)).map((f) => f.status)).toEqual(["active"]);
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerFilesConsumers(q);
+    await q.start();
+    const m = env(COMMANDS.fileClose, { fileId, tenantId: TENANT });
+    await q.publish(COMMANDS.fileClose, m); await waitProcessed(m.messageId);
+    await q.stop();
+
+    expect((await fileRow(fileId))?.status).toBe("closed");
+    expect((await readList(50)).map((f) => f.status)).toEqual(["closed"]);
+  });
+
+  it("only the writing tenants list is dropped: another tenants cached list is left as it was", async () => {
+    await seedFile({ createdAgoHours: 1, fileNo: "CACHE/B-ONE", tenant: OTHER_TENANT });
+    expect((await readList(50, OTHER_TENANT)).map((f) => f.fileNo)).toEqual(["CACHE/B-ONE"]);
+    // a second file for the other tenant, written straight to the table (no consumer, so no invalidation)
+    await seedFile({ createdAgoHours: 0, fileNo: "CACHE/B-TWO", tenant: OTHER_TENANT });
+
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerFilesConsumers(q);
+    await q.start();
+    const m = createCmd(randomUUID(), "CACHE/A-ONE");
+    await q.publish(COMMANDS.fileCreate, m); await waitProcessed(m.messageId);
+    await q.stop();
+
+    expect((await readList(50)).map((f) => f.fileNo)).toEqual(["CACHE/A-ONE"]);
+    // still the cached page: tenant As write did not touch tenant Bs cache entry
+    expect((await readList(50, OTHER_TENANT)).map((f) => f.fileNo)).toEqual(["CACHE/B-ONE"]);
   });
 });
 

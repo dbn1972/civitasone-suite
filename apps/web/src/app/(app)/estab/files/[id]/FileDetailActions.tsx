@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
+import { isClosedStatus } from "@/lib/estab/sla";
 import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -39,12 +40,13 @@ type Props = {
  * the record room); the register vocabulary also carries `disposed`. An earlier version of this
  * guard tested `closed` alone and a later one tested only archived/disposed, because the mapper
  * folded `closed` into `active`: either way a closed file kept its write controls. The mapper now
- * keeps `closed` distinct, and this helper is the single source of truth for the read-only test
- * (estab-service mirrors it as isFileReadOnly in modules/files/domain.ts and answers 409
- * FILE_READ_ONLY to a write on such a file).
+ * keeps `closed` distinct. The status set itself lives in one place, isClosedStatus in
+ * lib/estab/sla.ts (closed, archived, disposed), which the list, inbox and SLA maths also use; this
+ * helper only names that rule for the write controls (estab-service mirrors it as isFileReadOnly in
+ * modules/files/domain.ts and answers 409 FILE_READ_ONLY to a write on such a file).
  */
 export function isFileReadOnly(status: string): boolean {
-  return status === "closed" || status === "archived" || status === "disposed";
+  return isClosedStatus(status);
 }
 
 export function FileDetailActions({ fileId, draftNotingId, status }: Props) {

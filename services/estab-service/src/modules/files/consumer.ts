@@ -8,6 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { computeFileDueBy, computeNotingHash, deriveChildFileNo, assertValidFileType, isFileReadOnly } from "./domain.js";
 import * as repo from "./repo.js";
+import { invalidateFileLists } from "./queries.js";
 import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -113,6 +114,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "create", "file", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+    // the register list is cached per limit: drop it so the new file is first on the next read
+    await invalidateFileLists(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.inwardOpenFile, async (msg) => {
@@ -159,6 +162,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "open_from_dak", "file", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+    // the register list is cached per limit: drop it so the new file is first on the next read
+    await invalidateFileLists(msg.tenantId);
   });
 
   queue.subscribe(COMMANDS.notingAdd, async (msg) => {
@@ -430,6 +435,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "close", "file", p.fileId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+    // the register list shows the status: drop its cached pages so a closed file reads as closed
+    await invalidateFileLists(msg.tenantId);
   });
 
   // CSMOP movement verb — RECALL: the sender pulls a wrongly-marked file back.
@@ -498,6 +505,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "open_volume", "file", p.id, { rootId, volumeNo: nextVol });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+    // the register list is cached per limit: drop it so the new file is first on the next read
+    await invalidateFileLists(msg.tenantId);
   });
 
   // ── R2 file-type taxonomy: open a PART file of a main file ─────────────────
@@ -528,6 +537,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "open_part", "file", p.id, { rootId, partNo: nextPart });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+    // the register list is cached per limit: drop it so the new file is first on the next read
+    await invalidateFileLists(msg.tenantId);
   });
 
   // ── R2 file-type taxonomy: symmetrically LINK two files ────────────────────

@@ -12494,7 +12494,6 @@
     "dispatchAckReason": "POD / Speed-post number / remarks",
     "dashActiveFiles": "Active Files",
     "dashActiveFilesHint": "Files with status Active. This is the same count as Active Files on the File Register.",
-    "dashActiveFilesSnapshot": "Active files",
     "dashSlaHint": "Open files across the office whose due date has passed (IST calendar day). My Desk counts only the files with you.",
     "dashAvgPendencyHint": "Average days that open files have been open (IST calendar days).",
     "dashSnapshotOpenFiles": "Open files (all stages)",

@@ -177,6 +177,16 @@ export async function getFileStatus(tenantId: string, id: string): Promise<strin
   return row?.status ?? null;
 }
 
+/**
+ * The register list is cached per page size under `{service}:{tenant}:file:list:{limit}` (see
+ * listFiles). A consumer that adds a file or changes its status calls this so the next read is
+ * fresh instead of up to 60 s stale. It drops the whole `file:list:` family for the tenant (every
+ * page size) and leaves the per-file detail entries alone.
+ */
+export async function invalidateFileLists(tenantId: string): Promise<void> {
+  await cache.invalidateResource(tenantId, "file:list");
+}
+
 export async function listFiles(tenantId: string, limit: number): Promise<Array<FileRow & { createdByName: string | null }>> {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "file", `list:${limit}`),

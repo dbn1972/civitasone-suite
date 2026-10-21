@@ -166,8 +166,11 @@ describe("EstabFileDetailPage — which draft Submit and Sign act on (GAP-ESTAB-
       source: "api",
       data: detail({
         noteSheets: [
-          note("n-old-draft", { timestamp: "2026-09-18T08:00:00.000Z" }),
-          note("n-new-draft", { timestamp: "2026-09-10T08:00:00.000Z" }),
+          // The OLDER draft is listed first and the newer one second, so a plain "first draft in
+          // array order" pick (a .find()) would sign n-draft-older: only a sort by timestamp
+          // passes this test.
+          note("n-draft-older", { timestamp: "2026-09-10T08:00:00.000Z" }),
+          note("n-draft-newer", { timestamp: "2026-09-18T08:00:00.000Z" }),
           note("n-later-submitted", { timestamp: "2026-09-15T08:00:00.000Z", noteStatus: "submitted" }),
           note("n-latest-green", { timestamp: "2026-09-20T08:00:00.000Z", noteType: "green", noteStatus: "approved", eSigned: true, signedAt: "2026-09-20T09:35:00.000Z" }),
         ],
@@ -184,9 +187,9 @@ describe("EstabFileDetailPage — which draft Submit and Sign act on (GAP-ESTAB-
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Sign note") as HTMLElement);
     await waitFor(() => expect(urls.some((u) => u.includes("/sign"))).toBe(true));
-    // The draft of 18 Sep is the newest draft (the 10 Sep one is older); neither the submitted
-    // note of 15 Sep nor the green one of 20 Sep is a draft.
-    expect(urls.filter((u) => u.includes("/sign"))).toEqual(["/api/proxy/v1/estab/files/f1/notings/n-old-draft/sign"]);
+    // The draft of 18 Sep is the newest draft (the 10 Sep one is older, though listed first);
+    // neither the submitted note of 15 Sep nor the green one of 20 Sep is a draft.
+    expect(urls.filter((u) => u.includes("/sign"))).toEqual(["/api/proxy/v1/estab/files/f1/notings/n-draft-newer/sign"]);
   });
 
   it("with no yellow draft, Submit and Sign are disabled and the officer is told to save a note first", async () => {
