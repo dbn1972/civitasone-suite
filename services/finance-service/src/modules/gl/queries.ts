@@ -125,15 +125,28 @@ export async function listFinancialStatements(tenantId: string) {
     () => repo.getTrialBalanceWithClassification(tenantId),
     30,
   ) ?? [];
-  return rows.map((row) => ({
-    id: row.headId,
-    head: row.headId,
-    openingBalance: 0,
-    receipts: Number(row.totalCredit) / 100,
-    payments: Number(row.totalDebit) / 100,
-    closingBalance: Number(row.totalCredit - row.totalDebit) / 100,
-    type: deriveStatementType(row.code, row.classification),
-  }));
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03: amounts leave as exact
+  // minor-unit (paise) decimal strings, straight from the bigint sums. They
+  // used to be Number(bigint) / 100 rupee floats, which lose precision above
+  // 2^53 paise and made the web guess the unit. Opening is 0 because this is a
+  // cumulative, all-periods trial balance.
+  //
+  // The rows come back through the cache (JSON), where a bigint is a string
+  // (shared/bigint-json.ts), so normalise with BigInt() before doing any
+  // arithmetic: subtracting two strings would silently go through double maths.
+  return rows.map((row) => {
+    const credit = BigInt(row.totalCredit);
+    const debit = BigInt(row.totalDebit);
+    return {
+      id: row.headId,
+      head: row.headId,
+      openingBalance: "0",
+      receipts: credit.toString(),
+      payments: debit.toString(),
+      closingBalance: (credit - debit).toString(),
+      type: deriveStatementType(row.code, row.classification),
+    };
+  });
 }
 
 /**

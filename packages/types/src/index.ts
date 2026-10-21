@@ -880,10 +880,15 @@ export type GLEntrySummary = {
 export type FinancialStatementSummary = {
   id: string;
   head: string;
-  openingBalance: number;
-  receipts: number;
-  payments: number;
-  closingBalance: number;
+  /**
+   * The four balances are MINOR units (paise) as base-10 integer strings
+   * (bigint-safe; see FinancialStatementSummarySchema), never rupee numbers.
+   * `closingBalance` = credits - debits and may be negative.
+   */
+  openingBalance: string;
+  receipts: string;
+  payments: string;
+  closingBalance: string;
   type: "asset" | "liability" | "income" | "expenditure";
 };
 

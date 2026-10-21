@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "./common.js";
-import { zMoneyMinorString } from "./money.js";
+import { zMoneyMinorString, zMoneyMinorStrict } from "./money.js";
 
 export const auditRowSchema = z.object({
   actor: z.string(),
@@ -797,10 +797,16 @@ export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 export const FinancialStatementSummarySchema = z.object({
   id: z.string(),
   head: z.string(),
-  openingBalance: z.number(),
-  receipts: z.number(),
-  payments: z.number(),
-  closingBalance: z.number(),
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03: every balance is MINOR
+  // units (paise) as a bigint-safe decimal string, e.g. "150050" for
+  // Rs 1,500.50 -- NOT rupees and NOT a JSON number (a double loses precision
+  // above 2^53 and a rupee float read as paise is 100x off). Strict on
+  // purpose: a number or a non-numeric string fails the schema.
+  openingBalance: zMoneyMinorStrict,
+  receipts: zMoneyMinorStrict,
+  payments: zMoneyMinorStrict,
+  // credits - debits; negative for a debit-normal head.
+  closingBalance: zMoneyMinorStrict,
   type: z.enum(["asset", "liability", "income", "expenditure"]),
 });
 export const FinancialStatementSummaryListSchema = z.array(FinancialStatementSummarySchema);
