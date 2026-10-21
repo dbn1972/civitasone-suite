@@ -36,8 +36,31 @@ const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_l
 
 // GAP-ESTAB-DFA-03: add "returned" filter so returned drafts are reachable.
 const FILTERS = ["all", "draft", "pending_approval", "returned", "approved", "signed", "dispatched"] as const;
+type Filter = (typeof FILTERS)[number];
 
 const EMPTY = { communicationType: "letter", subject: "", body: "", recipientName: "", recipientAddress: "", fileId: "" };
+
+// GAP-ESTAB-DFA-06: the write is eventually consistent (CQRS: the POST is accepted, a consumer
+// applies it), so after it the list is polled a bounded number of times, then the officer is told.
+const POLL_INTERVAL_MS = 1000;
+const POLL_MAX_TRIES = 5;
+
+function listQuery(view: Filter): string {
+  return view === "all" ? "?limit=100" : `?status=${view}&limit=100`;
+}
+
+/**
+ * Has the action on `id` taken effect, as seen in the list for `view`? In the "all" view (or the
+ * tab of the status the action produces) the row must be present with the new status. In any
+ * other status tab the row LEAVES the tab when its status changes (an approved draft is no
+ * longer under "Pending Approval"), so its absence is the effect. In "all" an absent row is
+ * not proof (it may sit past the list limit), so the poll keeps waiting.
+ */
+function confirmsTransition(fresh: Dfa[], id: string, expected: string, view: Filter): boolean {
+  const row = fresh.find((d) => d.id === id);
+  if (row) return row.status === expected;
+  return view !== "all" && view !== expected;
+}
 
 // GAP-ESTAB-DFA-04: the existing estab file search, as an EntityPicker adapter (file no + subject).
 async function searchFiles(query: string, signal: AbortSignal): Promise<EntityOption[]> {
@@ -47,8 +70,10 @@ async function searchFiles(query: string, signal: AbortSignal): Promise<EntityOp
   return (body.data ?? []).map((f) => ({ id: f.id, label: f.fileNo, sublabel: f.subject }));
 }
 
+type DfaAction = "submit" | "approve" | "return" | "sign" | "dispatch";
+
 // GAP-ESTAB-DFA-05: human-readable action → done message map.
-const ACTION_DONE: Record<string, string> = {
+const ACTION_DONE: Record<DfaAction, string> = {
   submit: "Draft submitted for approval.",
   approve: "Draft approved.",
   return: "Draft returned for revision.",
@@ -68,7 +93,7 @@ const FILTER_LABEL: Record<string, string> = {
 };
 
 // Req 2.6: title for the lifecycle step produced by an action.
-const ACTION_STEP_STATUS: Record<string, string> = {
+const ACTION_STEP_STATUS: Record<DfaAction, string> = {
   submit: "pending_approval",
   approve: "approved",
   return: "returned",
@@ -93,7 +118,7 @@ export function DfaPanel({
   canDraft?: boolean;
 }) {
   const [rows, setRows] = useState<Dfa[]>([]);
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(true);
   // GAP-ESTAB-DFA-01: separate load-error from action-error.
   const [loadFailed, setLoadFailed] = useState(false);
@@ -105,8 +130,15 @@ export function DfaPanel({
   const { fromResponse, fromException, clear } = useFormError("DFA");
   // Req 2.6: announce the new lifecycle step via an assertive live region.
   const [currentStepTitle, setCurrentStepTitle] = useState("");
-  // GAP-ESTAB-DFA-06: timers for cleanup.
-  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // GAP-ESTAB-DFA-06: one poll at a time. The timer, the in-flight fetch's AbortController and a
+  // generation counter belong to the latest poll; stopPolling() invalidates all three, so a
+  // superseded or unmounted poll can neither re-arm a timer nor touch state.
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollAbortRef = useRef<AbortController | null>(null);
+  const pollGenRef = useRef(0);
+  const mountedRef = useRef(true);
+  const filterRef = useRef<Filter>("all");
+  const [refreshing, setRefreshing] = useState(false);
 
   // GAP2-ESTAB-NOTIFICATIONS-DFALINK-01: the eOffice notifications feed deep-
   // links DFA items to /estab/dfa?focus=<id> (there is no /estab/dfa/[id]
@@ -119,8 +151,24 @@ export function DfaPanel({
   const focusId = searchParams?.get("focus") ?? "";
   const focusedRow = focusId ? rows.find((d) => d.id === focusId) : undefined;
 
-  // Cleanup pending polls on unmount.
-  useEffect(() => () => { if (pollRef.current) clearTimeout(pollRef.current); }, []);
+  const stopPolling = useCallback(() => {
+    pollGenRef.current += 1;
+    if (pollTimerRef.current !== null) { clearTimeout(pollTimerRef.current); pollTimerRef.current = null; }
+    if (pollAbortRef.current) { pollAbortRef.current.abort(); pollAbortRef.current = null; }
+  }, []);
+
+  // Unmount: cancel the pending timer and the in-flight poll fetch.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; stopPolling(); };
+  }, [stopPolling]);
+
+  // A poll belongs to the view that started it; switching tab ends it.
+  useEffect(() => {
+    filterRef.current = filter;
+    stopPolling();
+    setRefreshing(false);
+  }, [filter, stopPolling]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -128,8 +176,7 @@ export function DfaPanel({
     setRows([]);
     setLoadFailed(false);
     try {
-      const qs = filter === "all" ? "?limit=100" : `?status=${filter}&limit=100`;
-      const res = await fetch(`/api/proxy/v1/estab/dfa${qs}`, { signal });
+      const res = await fetch(`/api/proxy/v1/estab/dfa${listQuery(filter)}`, { signal });
       if (!res.ok) {
         setLoadFailed(true);
         setError((await fromResponse(res, "load")).message);
@@ -143,7 +190,8 @@ export function DfaPanel({
       setLoadFailed(true);
       setError(fromException("load", err).message);
     } finally {
-      setLoading(false);
+      // An aborted load was superseded by a newer one; it must not flip loading off under it.
+      if (!signal?.aborted) setLoading(false);
     }
   }, [filter, fromResponse, fromException]);
 
@@ -153,29 +201,54 @@ export function DfaPanel({
     return () => controller.abort();
   }, [load]);
 
-  // GAP-ESTAB-DFA-06: bounded poll instead of fixed 800ms timeout.
+  // GAP-ESTAB-DFA-06: bounded poll instead of a fixed timeout. Fetches the list for `view` every
+  // POLL_INTERVAL_MS, up to POLL_MAX_TRIES times, until `confirmed(fresh)`; then shows the fresh
+  // rows. A newer poll supersedes this one, and unmount or a tab change ends it (no state update,
+  // no new timer, the in-flight fetch is aborted).
   const pollUntil = useCallback(
-    (predicate: (rows: Dfa[]) => boolean, remaining = 5) => {
-      if (remaining <= 0) {
-        setMessage((m) => (m ? `${m} — still processing, refresh later.` : ""));
-        return;
-      }
-      pollRef.current = setTimeout(async () => {
-        try {
-          const qs = filter === "all" ? "?limit=100" : `?status=${filter}&limit=100`;
-          const res = await fetch(`/api/proxy/v1/estab/dfa${qs}`);
-          if (!res.ok) return;
-          const body = (await res.json()) as { data?: Dfa[] };
-          const fresh = body.data ?? [];
-          if (predicate(fresh)) {
-            setRows(fresh);
-          } else {
-            pollUntil(predicate, remaining - 1);
+    (confirmed: (fresh: Dfa[]) => boolean, view: Filter) => {
+      // The officer may have switched tab while the POST was in flight: the poll would then
+      // overwrite the new tab's rows with the old tab's list.
+      if (view !== filterRef.current) return;
+      stopPolling();
+      const gen = pollGenRef.current;
+      const controller = new AbortController();
+      pollAbortRef.current = controller;
+      const live = () => gen === pollGenRef.current && mountedRef.current;
+      setRefreshing(true);
+      const attempt = (remaining: number) => {
+        pollTimerRef.current = setTimeout(async () => {
+          pollTimerRef.current = null;
+          let done = false;
+          try {
+            const res = await fetch(`/api/proxy/v1/estab/dfa${listQuery(view)}`, { signal: controller.signal });
+            if (!live()) return;
+            if (res.ok) {
+              const body = (await res.json()) as { data?: Dfa[] };
+              if (!live()) return;
+              const fresh = body.data ?? [];
+              if (confirmed(fresh)) { setRows(fresh); done = true; }
+            }
+          } catch {
+            if (!live()) return; // aborted or unmounted: stop quietly
+            // otherwise a transient failure: fall through and try again
           }
-        } catch { /* ignore — will retry or give up */ }
-      }, 1000);
+          if (!live()) return;
+          if (done || remaining <= 1) {
+            pollAbortRef.current = null;
+            setRefreshing(false);
+            if (!done) {
+              const hint = tP2("dfaStillProcessing");
+              setMessage((m) => (m ? `${m} ${hint}` : hint));
+            }
+            return;
+          }
+          attempt(remaining - 1);
+        }, POLL_INTERVAL_MS);
+      };
+      attempt(POLL_MAX_TRIES);
     },
-    [filter],
+    [stopPolling, tP2],
   );
 
   const create = useCallback(async () => {
@@ -199,19 +272,27 @@ export function DfaPanel({
         setError((await fromResponse(res, "save")).message);
         return;
       }
+      // The 202 acknowledgement carries the new draft's id (sendAccepted).
+      const accepted = (await res.json().catch(() => null)) as { id?: unknown } | null;
+      const newId = typeof accepted?.id === "string" ? accepted.id : null;
+      if (!mountedRef.current) return;
       setMessage("Draft created. Submit it for approval when ready.");
       setCurrentStepTitle(stepTitleFor("draft"));
       setForm({ ...EMPTY }); setShowForm(false);
-      // GAP-ESTAB-DFA-06: poll for the new draft to appear.
-      pollUntil((fresh) => fresh.length > rows.length);
+      // GAP-ESTAB-DFA-06: a new draft belongs in the All and Draft views only; poll there until it
+      // is listed. In any other tab it would never appear, so waiting on it would be pointless.
+      if (filter === "all" || filter === "draft") {
+        const known = new Set(rows.map((d) => d.id));
+        pollUntil((fresh) => (newId ? fresh.some((d) => d.id === newId) : fresh.some((d) => !known.has(d.id))), filter);
+      }
     } catch (err) {
       setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
-  }, [form, rows.length, pollUntil, fromResponse, fromException, clear]);
+  }, [form, rows, filter, pollUntil, fromResponse, fromException, clear]);
 
-  const act = useCallback(async (id: string, action: string, reason?: string) => {
+  const act = useCallback(async (id: string, action: DfaAction, reason?: string) => {
     const res = await fetch(`/api/proxy/v1/estab/dfa/${id}/${action}`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: reason ? JSON.stringify({ reason }) : JSON.stringify({}),
@@ -220,22 +301,15 @@ export function DfaPanel({
       const resolved = await fromResponse(res, "save");
       throw UserFacingError.from(resolved);
     }
+    if (!mountedRef.current) return;
     // GAP-ESTAB-DFA-05: clerk-friendly success message.
-    setMessage(ACTION_DONE[action] ?? `DFA ${humanizeStatus(action)} done.`);
+    setMessage(ACTION_DONE[action]);
     // Req 2.6: announce the step
-    const nextStatus = ACTION_STEP_STATUS[action];
-    if (nextStatus) setCurrentStepTitle(stepTitleFor(nextStatus));
-    // GAP-ESTAB-DFA-06: poll for the status change.
     const expected = ACTION_STEP_STATUS[action];
-    if (expected) {
-      pollUntil((fresh) => {
-        const row = fresh.find((d) => d.id === id);
-        return row?.status === expected;
-      });
-    } else {
-      void load();
-    }
-  }, [load, pollUntil, fromResponse]);
+    setCurrentStepTitle(stepTitleFor(expected));
+    // GAP-ESTAB-DFA-06: poll until the status change is visible in the current view.
+    pollUntil((fresh) => confirmsTransition(fresh, id, expected, filter), filter);
+  }, [filter, pollUntil, fromResponse]);
 
   // GAP-ESTAB-DFA-02: Approve now has requireReason. Actions still server-enforced
   // (APPROVER_ROLES, maker≠checker in consumer). Sign description is Phase 2 honest.
@@ -267,9 +341,10 @@ export function DfaPanel({
               confirmTitle="Approve this draft?"
               confirmDescription={<DraftPreview d={d} />}
               confirmLabel="Approve"
-              requireReason reasonLabel="Approval remarks"
+              requireReason reasonLabel="Approval remarks" maxReasonLength={1000}
               onConfirm={(r) => act(d.id, "approve", r)} />
             <ActionButton label="Return" className="btn ghost" danger requireReason reasonLabel="Reason for return"
+              minReasonLength={3} maxReasonLength={1000}
               confirmTitle="Return this draft?" confirmDescription={<DraftPreview d={d} />}
               confirmLabel="Return" onConfirm={(r) => act(d.id, "return", r)} />
           </div>
@@ -313,6 +388,8 @@ export function DfaPanel({
 
       <div role="status" aria-live="polite">
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
+        {/* GAP-ESTAB-DFA-06: shown while the list is being re-read after a create or an action */}
+        {refreshing ? <p style={{ color: "var(--mut)", fontSize: "0.875rem" }}>{tP2("dfaRefreshing")}</p> : null}
         {/* GAP-ESTAB-DFA-01: load error shows ErrorState, not just text */}
         {error && !loadFailed ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>

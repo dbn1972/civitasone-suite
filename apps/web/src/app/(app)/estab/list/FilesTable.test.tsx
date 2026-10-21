@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -65,5 +65,33 @@ describe("FilesTable — keyboard row navigation", () => {
     expect(row).not.toBeNull();
     expect(row).not.toHaveAttribute("tabindex");
     expect(row).not.toHaveAttribute("role", "button");
+  });
+});
+
+
+describe("FilesTable — closed files (GAP-ESTAB-FILES-DETAIL-01)", () => {
+  const withClosed: FileRow[] = [
+    ...ROWS,
+    {
+      id: "file-3", fileNo: "F/2026/003", subject: "Closed matter", classification: "General", department: "Estab",
+      createdBy: "meera", status: "closed", statusRaw: "closed", dueDate: "2020-01-01",
+    },
+  ];
+
+  it("the Closed segment includes a closed file, and the Active segment does not", () => {
+    render(<FilesTable rows={withClosed} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Closed" }));
+    expect(screen.getByText("Closed matter")).toBeInTheDocument();
+    expect(screen.queryByText("Sanction of leave")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Active" }));
+    expect(screen.queryByText("Closed matter")).not.toBeInTheDocument();
+    expect(screen.getByText("Sanction of leave")).toBeInTheDocument();
+  });
+
+  it("a closed file past its due date is not flagged overdue", () => {
+    render(<FilesTable rows={withClosed} />);
+    const row = screen.getByText("Closed matter").closest("tr") as HTMLElement;
+    const due = within(row).getByText(/2020/);
+    expect(due.getAttribute("style") ?? "").not.toContain("var(--bad)");
   });
 });

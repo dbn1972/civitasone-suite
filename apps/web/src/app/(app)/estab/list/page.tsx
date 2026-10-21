@@ -3,7 +3,7 @@ import { getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatDays } from "@/lib/formatters";
-import { pendencyDays } from "@/lib/estab/sla";
+import { isClosedStatus, pendencyDays } from "@/lib/estab/sla";
 import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
 
@@ -31,7 +31,7 @@ export default async function EstabFilesListPage() {
   const pending = files.filter((f) => f.status === "pending").length;
   // GAP-ESTAB-LIST-02: "Closed (MTD)" → "Closed" — we don't have closedAt,
   // so the count is all-time closed, not month-to-date.
-  const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
+  const closed = files.filter((f) => isClosedStatus(f.status)).length;
 
   const pendingFiles = files.filter((f) => f.status === "pending");
   let avgPendencyDisplay = "—";

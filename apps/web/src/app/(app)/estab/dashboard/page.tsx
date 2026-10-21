@@ -112,15 +112,14 @@ export default async function EstabDashboardPage() {
               <h3>Pendency snapshot</h3>
             </div>
             <div className="fields pad">
-              <div className="fld"><div className="l">{t("dashActiveFilesSnapshot")}</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
-              <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{errored ? "—" : data.dakPending}</div></div>
-              <div className="fld"><div className="l">SLA breached</div><div className="v">{errored ? "—" : data.slaBreached}</div></div>
-              {/* GAP-ESTAB-DASHBOARD-05: this row previously repeated the
-                  "Avg pendency" stat tile verbatim. Replaced with the
-                  vehiclesInUse figure, which the dashboard already loads but
-                  was never displayed anywhere, so the snapshot no longer
-                  duplicates a tile and no loaded field is silently dropped. */}
-              <div className="fld"><div className="l">Vehicles in use</div><div className="v">{errored ? "—" : data.vehiclesInUse}</div></div>
+              {/* GAP-ESTAB-DASHBOARD-05: every row here is a figure the stat tiles above do NOT
+                  show. The panel used to echo Active files, Unlinked DAK, SLA breached and Avg
+                  pendency verbatim; those live in the tiles only. What it adds: how many files
+                  are open at any stage (the tile counts status Active alone), how long the
+                  oldest one has been open, and the vehicles in use (loaded but never shown). */}
+              <div className="fld"><div className="l">{t("dashSnapshotOpenFiles")}</div><div className="v">{errored ? "—" : data.openFiles.toLocaleString("en-IN")}</div></div>
+              <div className="fld"><div className="l">{t("dashSnapshotOldestOpen")}</div><div className="v">{errored ? "—" : formatDays(data.oldestPendencyDays)}</div></div>
+              <div className="fld"><div className="l">{t("dashSnapshotVehicles")}</div><div className="v">{errored ? "—" : data.vehiclesInUse.toLocaleString("en-IN")}</div></div>
             </div>
           </div>
         </div>

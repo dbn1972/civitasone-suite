@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { isClosedStatus } from "@/lib/estab/sla";
 
 export type FileRow = {
   id: string;
@@ -43,7 +44,7 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
       case "Pending":
         return r.statusRaw === "pending";
       case "Closed":
-        return r.statusRaw === "archived" || r.statusRaw === "disposed";
+        return isClosedStatus(r.statusRaw);
       default:
         return true;
     }
@@ -79,7 +80,7 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
             label: "Due",
             render: (row: FileRow) => {
               if (!row.dueDate) return <span style={{ color: "var(--ink2)" }}>—</span>;
-              const overdue = row.dueDate < today && row.statusRaw !== "archived" && row.statusRaw !== "disposed";
+              const overdue = row.dueDate < today && !isClosedStatus(row.statusRaw);
               return (
                 <span style={overdue ? { color: "var(--bad)", fontWeight: 600 } : undefined}>
                   {formatIndianDate(row.dueDate)}

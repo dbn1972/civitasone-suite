@@ -838,10 +838,11 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
                 : "unclassified";
     const rawStatus = (toText(row.status) ?? "active").toLowerCase();
     const status: EstabFileSummary["status"] =
-      rawStatus === "archived" ? "archived"
-        : rawStatus === "disposed" ? "disposed"
-          : rawStatus === "pending" ? "pending"
-            : "active";
+      rawStatus === "closed" ? "closed"
+        : rawStatus === "archived" ? "archived"
+          : rawStatus === "disposed" ? "disposed"
+            : rawStatus === "pending" ? "pending"
+              : "active";
     mapped.push({
       id,
       fileNo,
