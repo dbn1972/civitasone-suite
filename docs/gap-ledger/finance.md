@@ -2030,7 +2030,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: partly closed. DONE: payee is required (blocked client-side); an officer advance picks the employee through the payroll employee-lookup and stores payeeId; a vendor advance picks an active vendor of this tenant; migration 0150 adds payee_id; tested (component + real DB). OPEN, OWNER DECISION: finance_admin can create advances but is not in the payroll-service employee-lookup roles (apps/web/src/lib/auth/workRoles.ts EMPLOYEE_LOOKUP_ROLES; NewAdvanceForm.tsx picksPayee), so for finance_admin an officer advance is still a typed name with no id and the free-text DPDP gap persists for that role. QUESTION: may finance_admin be added to the employee-lookup roles (payroll-service employee-lookup LOOKUP_ROLES and EMPLOYEE_LOOKUP_ROLES)? The role list is deliberately not widened here.
 - **First-pass claim:** Payee is optional (page.tsx:84-86) yet the register column "Officer / Party" is the primary identifier; an advance can be created for nobody. No employee/vendor picker, and DPDP-sensitive individual advances are entered as free text.
 - **Verified evidence:** new/page.tsx:91-92 payee input has no required attribute and payload sends payee: form.payee || undefined (line 47); free text, no employee/vendor picker. Register column beneficiary (AdvancesTable.tsx:63) is primary. DPDP claim is judgement; no PII controls visible. Backend may reject empty payee (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/advances/new/page.tsx`

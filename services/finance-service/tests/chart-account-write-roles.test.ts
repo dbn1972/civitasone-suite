@@ -7,8 +7,11 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { queue } from "../src/shared/infra.js";
+import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { bearer } from "./_fp02.js";
 
 const T = randomUUID();
@@ -57,16 +60,43 @@ describe("POST /v1/finance/accounts role gate", () => {
   });
 });
 
+// The create route only queues a command; the budget consumer (on the shared queue singleton the route publishes to,
+// wrapped in runWithTenant like worker.ts) performs the insert. A fresh tenant has no heads, so the read-side test seeds
+// a major and a minor head through that real path, otherwise "each item carries level and parentId" could pass over an
+// empty list without asserting anything.
+type Drainable = { subscribe: (topic: string, handler: (msg: any) => Promise<void>) => void; drain(): Promise<void> };
+
 describe("GET /v1/finance/accounts (read side)", () => {
+  const READ_TENANT = randomUUID();
+  beforeAll(async () => {
+    const shared = queue as unknown as Drainable;
+    const rawSubscribe = shared.subscribe.bind(shared);
+    shared.subscribe = (topic, handler) => rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+    registerBudgetConsumers(queue);
+  });
+
   it("is readable by the read-only finance roles, and each item carries level and parentId", async () => {
-    const res = await app.inject({ method: "GET", url: "/v1/finance/accounts?limit=5", headers: bearer(T, ACTOR, ["audit_officer"]) });
+    const seed = (body: Record<string, unknown>) =>
+      app.inject({ method: "POST", url: "/v1/finance/accounts", headers: bearer(READ_TENANT, ACTOR, ["finance_officer"]), payload: body });
+    const major = await seed({ code: "9000", name: "Seeded major head", level: 0 });
+    expect(major.statusCode).toBe(202);
+    await (queue as unknown as Drainable).drain();
+    const minor = await seed({ code: "9000-01", name: "Seeded minor head", level: 1, parentId: major.json().id });
+    expect(minor.statusCode).toBe(202);
+    await (queue as unknown as Drainable).drain();
+
+    const res = await app.inject({ method: "GET", url: "/v1/finance/accounts?limit=5", headers: bearer(READ_TENANT, ACTOR, ["audit_officer"]) });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { data: Array<Record<string, unknown>> };
     expect(Array.isArray(body.data)).toBe(true);
+    // non-vacuous: both seeded heads are listed, so the loop below really checks items
+    expect(body.data.length).toBeGreaterThanOrEqual(2);
     for (const item of body.data) {
       expect(item).toHaveProperty("level");
       expect(item).toHaveProperty("parentId");
     }
+    expect(body.data.find((i) => i.id === major.json().id)).toMatchObject({ level: 0, parentId: null });
+    expect(body.data.find((i) => i.id === minor.json().id)).toMatchObject({ level: 1, parentId: major.json().id });
     expect((await app.inject({ method: "GET", url: "/v1/finance/accounts", headers: bearer(T, ACTOR, ["citizen"]) })).statusCode).toBe(403);
   });
 });

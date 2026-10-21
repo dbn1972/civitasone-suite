@@ -32,33 +32,43 @@ type AccountRow = {
 
 /**
  * Debounced server-side head search (GET /v1/finance/accounts?q=, bounded to 50). `results` is null while the query is
- * blank (callers fall back to the loaded list); a failed search yields [] rather than an error, and the caller's own
- * load-error banner reports connectivity problems.
+ * blank (callers fall back to the loaded list) AND when the search itself failed; `failed` is true only for a failed
+ * search (non-2xx or a network error), so callers can say "could not search" instead of the "no match" they say for a
+ * genuine empty result. A failed search never yields [] -- an empty list always means the server found nothing.
  */
-function useHeadSearch(query: string): { results: AccountRow[] | null; searching: boolean } {
+function useHeadSearch(query: string): { results: AccountRow[] | null; searching: boolean; failed: boolean } {
   const [results, setResults] = useState<AccountRow[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const q = query.trim();
+    setFailed(false);
     if (q === "") { setResults(null); setSearching(false); return; }
     const controller = new AbortController();
     setSearching(true);
     const timer = setTimeout(async () => {
       try {
         const res = await fetch(`/api/proxy/v1/finance/accounts?q=${encodeURIComponent(q)}&limit=50`, { headers: { accept: "application/json" }, signal: controller.signal });
-        if (!res.ok) { setResults([]); return; }
+        if (!res.ok) { if (!controller.signal.aborted) { setResults(null); setFailed(true); } return; }
         const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
+        if (controller.signal.aborted) return; // a newer query owns the state now
         setResults(Array.isArray(json) ? json : json.data ?? []);
       } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setResults([]);
+        if (controller.signal.aborted || (err instanceof Error && err.name === "AbortError")) return;
+        setResults(null);
+        setFailed(true);
       } finally {
         if (!controller.signal.aborted) setSearching(false);
       }
     }, 300);
     return () => { clearTimeout(timer); controller.abort(); };
   }, [query]);
-  return { results, searching };
+  return { results, searching, failed };
+}
+
+/** Shown under a head search box when the search request itself failed: announced, and distinct from "no match". */
+function SearchFailed({ text }: { text: string }) {
+  return <span role="alert" style={{ color: "var(--bad)" }}>{text}</span>;
 }
 
 const LEVEL_KEYS = ["levelMajor", "levelMinor", "levelSub"] as const;
@@ -105,7 +115,7 @@ export default function MapHeadOfAccountPage() {
   // "Find a head" box queries the server so a head beyond the cap is reachable.
   const [truncated, setTruncated] = useState(false);
   const [headSearch, setHeadSearch] = useState("");
-  const { results: searchResults, searching } = useHeadSearch(headSearch);
+  const { results: searchResults, searching, failed: searchFailed } = useHeadSearch(headSearch);
   const loadFormError = useFormError("accounts");
 
   const loadAccounts = useCallback(async (signal?: AbortSignal) => {
@@ -351,11 +361,13 @@ export default function MapHeadOfAccountPage() {
                 <span id="new-parent-search-help" className="sub" style={{ fontSize: 12 }}>
                   {parentSearchState.searching
                     ? t("searching")
-                    : parentSearch.trim() !== "" && parentPool.length === 0 // ux-001-ok: a search with no match is a genuine "no match"; a failed load is the loadError banner
-                      ? t("parentNoMatch")
-                      : truncated && parentSearch.trim() === ""
-                        ? t("parentTruncated", { limit: HEAD_LIST_LIMIT })
-                        : " "}
+                    : parentSearchState.failed
+                      ? <SearchFailed text={t("searchFailed")} />
+                      : parentSearch.trim() !== "" && parentPool.length === 0 // ux-001-ok: only a SUCCESSFUL search that matched nothing; a failed search is searchFailed above, a failed load is the loadError banner
+                        ? t("parentNoMatch")
+                        : truncated && parentSearch.trim() === ""
+                          ? t("parentTruncated", { limit: HEAD_LIST_LIMIT })
+                          : " "}
                 </span>
                 <label className="l" htmlFor="new-parent">Parent head</label>
                 <select id="new-parent" required value={parentId} onChange={(e) => setParentId(e.target.value)} style={inputStyle}>
@@ -424,11 +436,13 @@ export default function MapHeadOfAccountPage() {
                   ? "Heads could not be loaded. Use Retry above."
                   : searching
                     ? "Searching…"
-                    : truncated && headSearch.trim() === ""
-                      ? `Showing the first ${HEAD_LIST_LIMIT} heads. Search by code or name to find any other head.`
-                      : headSearch.trim() !== "" && searchResults?.length === 0 // ux-001-ok: a search that returns no match is a genuine "no match"; load failures are reported by the loadError banner
-                        ? "No head matches that search."
-                        : " "}
+                    : searchFailed
+                      ? <SearchFailed text={t("searchFailed")} />
+                      : truncated && headSearch.trim() === ""
+                        ? `Showing the first ${HEAD_LIST_LIMIT} heads. Search by code or name to find any other head.`
+                        : headSearch.trim() !== "" && searchResults?.length === 0 // ux-001-ok: only a SUCCESSFUL search that matched nothing; a failed search is searchFailed above, load failures are reported by the loadError banner
+                          ? "No head matches that search."
+                          : " "}
               </span>
               <label className="l" htmlFor="hoa-account">Head of account</label>
               <select id="hoa-account" required disabled={!!loadError} value={accountId} onChange={(e) => setAccountId(e.target.value)} style={inputStyle}>

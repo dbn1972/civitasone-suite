@@ -86,6 +86,11 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     // payee has no master record, so it cannot carry one. A vendor id must be an active vendor of THIS tenant, and the
     // register then shows the vendor's master name rather than whatever display text the client sent. An employee id is
     // an opaque reference into another service (nothing here can check it, and nothing is trusted from it but the id).
+    // It is accepted as any UUID: it is NOT checked against the employee master or against this tenant, because the
+    // employee master lives in payroll-service (no FK, no cross-service read here). It is stored in payee_id and never
+    // returned. Anything that later acts on it (for example a payroll recovery of an outstanding advance) MUST resolve
+    // the id against the employee master and check it belongs to the same tenant before using it; do not treat a stored
+    // payee_id as a verified employee reference.
     let payee = parsed.payee;
     if (parsed.payeeId) {
       if (parsed.type === "other") {

@@ -250,6 +250,11 @@ export async function pageJournalLines(f: JournalLinePageFilter) {
     // the page can show a ledger-wide balance check next to the filtered footer. Equal to `totals` when nothing
     // narrows the set. `null` (unknown, never a made-up zero) if a stored amount OUTSIDE the filtered set is
     // malformed: the filtered view still works, only the ledger-wide figure is withheld.
+    // Cost: when a tab or search is active this is two extra whole-fiscal-year jsonb scans (firstBadRow + totalsOf) per
+    // page request. Deliberately NOT cached: this is the ledger-wide balance verdict, and a TTL-only cache (the GL has no
+    // post-time invalidation of it, unlike the invalidateResource calls the budget/approvals reads rely on) would let a
+    // just-posted journal leave the Balanced / Unbalanced card stale. If a large ledger shows latency, cache per
+    // (tenant, fiscal year) AND invalidate it from the post / approve consumers, or serve it from a maintained summary.
     const ledgerTotals = !narrowed ? totals : (await firstBadRow(ledgerBase)) ? null : await totalsOf(ledgerBase);
     return { rows: rows as unknown as JournalLineRow[], totals, ledgerTotals };
   });

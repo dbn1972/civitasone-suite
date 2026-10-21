@@ -15936,6 +15936,7 @@
     "parentSearchPlaceholder": "e.g. 2110 or Creditors",
     "searching": "Searching…",
     "parentNoMatch": "No head at the right level matches that search.",
+    "searchFailed": "Could not search the heads. Check your connection and try again.",
     "parentTruncated": "Showing the heads from the first {limit} loaded. Search by code or name to find any other parent.",
     "createdMajor": "Head of account \"{code}\" created as a major head.",
     "createdPath": "Head of account \"{code}\" created. It sits at: {path}."

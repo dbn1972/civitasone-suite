@@ -266,11 +266,13 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
   const MAJOR = { id: "maj-1", code: "2000", name: "Liabilities", level: 0, parentId: null };
   const MINOR = { id: "min-1", code: "2100", name: "Creditors", level: 1, parentId: "maj-1" };
 
-  function mockChart(rows: unknown[], extra?: (url: string) => Response | null) {
+  function mockChart(rows: unknown[], extra?: (url: string) => Response | Error | null) {
     const posts: string[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
       if (init?.method === "POST") { posts.push(init.body as string); return new Response(JSON.stringify({ id: "new" }), { status: 202 }); }
-      return extra?.(String(url)) ?? new Response(JSON.stringify({ data: rows }), { status: 200 });
+      const special = extra?.(String(url)) ?? null;
+      if (special instanceof Error) throw special;
+      return special ?? new Response(JSON.stringify({ data: rows }), { status: 200 });
     });
     return posts;
   }
@@ -346,6 +348,43 @@ describe("MapHeadOfAccountPage parent head -- path and search", () => {
     fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "zzz" } });
     await screen.findByText("No head at the right level matches that search.");
     expect((screen.getByLabelText("Parent head") as HTMLSelectElement).value).toBe("maj-1");
+    // a search that succeeded and found nothing is "no match", never a failure
+    expect(screen.queryByText(/Could not search the heads/)).not.toBeInTheDocument();
+  });
+
+  // A FAILED search is not an empty result: it must not read as "no match" (empty vs error).
+  it.each([
+    ["a non-2xx answer", () => new Response("", { status: 503 })],
+    ["a network failure", () => new TypeError("Failed to fetch")],
+  ])("a parent search that fails by %s says it could not search, not that nothing matches", async (_label, failure) => {
+    mockChart([MAJOR], (url) => (url.includes("q=boom") ? failure() : url.includes("q=2000") ? new Response(JSON.stringify({ data: [MAJOR] }), { status: 200 }) : null));
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "boom" } });
+
+    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.queryByText("No head at the right level matches that search.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b503\b|TypeError|Failed to fetch/)).not.toBeInTheDocument();
+    // the heads already loaded stay choosable, and the failure clears on the next search that works
+    expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "2000" } });
+    await waitFor(() => expect(screen.queryByText(/Could not search the heads/)).not.toBeInTheDocument());
+  });
+
+  it("the HoA map card's head search also separates a failed search from no match", async () => {
+    mockChart([MAJOR], (url) => (url.includes("q=boom") ? new Response("", { status: 500 }) : url.includes("q=zzz") ? new Response(JSON.stringify({ data: [] }), { status: 200 }) : null));
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Find a head by code or name"), { target: { value: "boom" } });
+    const alert = await screen.findByText("Could not search the heads. Check your connection and try again.");
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.queryByText("No head matches that search.")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Find a head by code or name"), { target: { value: "zzz" } });
+    expect(await screen.findByText("No head matches that search.")).toBeInTheDocument();
+    expect(screen.queryByText(/Could not search the heads/)).not.toBeInTheDocument();
   });
 
   it("a minor head with no parent still cannot be submitted", async () => {
