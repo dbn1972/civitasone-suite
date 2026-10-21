@@ -16,6 +16,13 @@ export const HR_MASTERS_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 export const HR_STAFF_MANAGER_ROLES = [...HR_STAFF_ROLES, "manager"];
 /** HR staff + manager + employee: modules with a self-service half (apar, benefits, regularisation view). */
 export const HR_SELF_SERVICE_ROLES = [...HR_STAFF_MANAGER_ROLES, "employee"];
+/**
+ * Roles that may FILE an overtime request: backend POST /v1/hrms/overtime-requests
+ * is requireRole([...HR_ROLES, "employee"]) (attendance/routes.ts). A bare
+ * "manager" is rejected with 403, so the New Request entry points are hidden
+ * for them (GAP-HR-OVERTIME-03 / GAP-HR-OVERTIME-NEW-02). Server stays the authority.
+ */
+export const OVERTIME_REQUEST_ROLES = [...HR_STAFF_ROLES, "employee"];
 /** HR staff + finance_admin: loan/advance decide + export tier (loans-routes.ts HR_ROLES). */
 export const HR_FINANCE_DECIDER_ROLES = [...HR_STAFF_ROLES, "finance_admin"];
 /** Roles that can open /hr/loans (loans-routes.ts). */
