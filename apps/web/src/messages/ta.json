@@ -257,5 +257,11 @@
     "wordsIntro": "Government and accounting words you'll see around the system, in plain English.",
     "stuckSetup": "Getting Started",
     "stuckNote": "Still stuck? Open {setupLink} to walk through setup again, or raise a ticket from {helpdeskLink}."
+  },
+  "crm": {
+    "dashboard": {
+      "title": "CRM டாஷ்போர்டு",
+      "subtitle": "அரசு பங்குதாரர் மற்றும் விற்பனையாளர் தொடர்பு பதிவேடு"
+    }
   }
 }
