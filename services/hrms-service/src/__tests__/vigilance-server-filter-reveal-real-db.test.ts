@@ -44,7 +44,7 @@ const reveal = (id: string, body: unknown, roles = ["hr_officer"], tid = TENANT)
 
 let app: FastifyInstance;
 
-const SECRET_ALLEGATION = "Confidential allegation text ZEBRAWORD about a named officer, long enough to be truncated at eighty characters for the list view.";
+const CONFIDENTIAL_ALLEGATION = "Confidential allegation text ZEBRAWORD about a named officer, long enough to be truncated at eighty characters for the list view.";
 const N_OPENED = 245;
 const N_CLOSED = 4;
 const closedIds: string[] = [];
@@ -66,7 +66,7 @@ beforeAll(async () => {
   const oldest = new Date("2020-01-01T00:00:00.000Z");
   const row = (over: Record<string, unknown>): Record<string, unknown> => ({
     id: randomUUID(), tenantId: TENANT, employeeId: empA, proceedingType: "major", status: "opened",
-    allegation: SECRET_ALLEGATION, createdBy: HR_OFFICER, updatedBy: HR_OFFICER, ...over,
+    allegation: CONFIDENTIAL_ALLEGATION, createdBy: HR_OFFICER, updatedBy: HR_OFFICER, ...over,
   });
   const cases: Array<Record<string, unknown>> = [];
   for (let i = 0; i < N_OPENED; i++) cases.push(row({ caseNo: `VG-OPEN-${String(i).padStart(3, "0")}` }));

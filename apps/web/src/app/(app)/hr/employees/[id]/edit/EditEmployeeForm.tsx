@@ -106,7 +106,7 @@ export function EditEmployeeForm({ employee }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("error");
-  // field key -> its inline message (computed at submit time).
+  // Inline message per field key (computed at submit time).
   const [invalidFields, setInvalidFields] = useState<Record<string, string>>({});
   const formError = useFormError("employee record");
   const accepted = useAcceptedWrite();

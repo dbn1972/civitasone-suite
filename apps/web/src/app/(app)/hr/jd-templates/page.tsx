@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { ArchiveTemplateButton } from "./JdTemplateActions";
+import { typeBadge } from "./typeBadge";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
@@ -20,18 +21,6 @@ type JdTemplate = {
   tags?: string[];
   useCount: number;
   createdAt: string;
-};
-
-// GAP-HR-JD-TEMPLATES-06: the badge TEXT comes from i18n (the same
-// jdTemplates.filter* keys the filter chips use, so a type reads identically
-// in both places); only the colours live here.
-const TYPE_BADGES: Record<string, { labelKey: string; color: string; bg: string }> = {
-  regular:       { labelKey: "filterRegular",        color: "var(--info)", bg: "var(--infobg)" },
-  internship:    { labelKey: "filterInternship",     color: "var(--warn)", bg: "var(--warnbg)" },
-  apprenticeship:{ labelKey: "filterApprenticeship", color: "var(--good)", bg: "var(--goodbg)" },
-  volunteership: { labelKey: "filterVolunteer",      color: "var(--info)", bg: "var(--infobg)" },
-  contractual:   { labelKey: "filterContractual",    color: "var(--violet)", bg: "var(--primary-soft)" },
-  deputation:    { labelKey: "filterDeputation",     color: "var(--ink2)", bg: "var(--line)" },
 };
 
 // GAP-HR-JD-TEMPLATES-NEW-01: the id the create form appends (?created=<id>)
@@ -174,7 +163,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
               </article>
             )}
             {templates.map((tmpl) => {
-              const badge = TYPE_BADGES[tmpl.vacancyType];
+              const badge = typeBadge(tmpl.vacancyType);
               const ti = badge
                 ? { label: t(badge.labelKey), color: badge.color, bg: badge.bg }
                 : { label: tmpl.vacancyType, color: "var(--indigo)", bg: "var(--infobg)" };

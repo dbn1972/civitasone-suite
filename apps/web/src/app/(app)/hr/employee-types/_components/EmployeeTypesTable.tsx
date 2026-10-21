@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { DataTable } from "../../../../_components/ds";
 
 /**
@@ -8,6 +9,11 @@ import { DataTable } from "../../../../_components/ds";
  * Server Component cannot hand DataTable a `render` function -- see the Column
  * doc comment in ds/DataTable.tsx). Everything else is plain, already-translated
  * strings built by page.tsx.
+ *
+ * The edit link is built HERE (from `canManage` + the row id) rather than handed
+ * in as a ready-made href prop, so the path literal lives next to the
+ * `rowLinkKey` that consumes it. That keeps the row-link target statically
+ * checkable by the route-existence analyzer (tests/contract/route-existence).
  */
 export type EmployeeTypeRow = {
   id: string;
@@ -26,9 +32,10 @@ export type EmployeeTypeRow = {
   leave: string;
   payroll: string;
   appraisal: string;
-  /** Full path of the edit page, or "" when the viewer cannot manage types. */
-  editHref: string;
 };
+
+/** A register row plus its derived edit link ("" when the viewer cannot manage types). */
+type LinkedEmployeeTypeRow = EmployeeTypeRow & { editHref: string };
 
 export type EmployeeTypesTableLabels = {
   colCode: string;
@@ -50,9 +57,22 @@ export type EmployeeTypesTableLabels = {
   emptyFilteredMessage: string;
 };
 
-export function EmployeeTypesTable({ rows, labels }: { rows: EmployeeTypeRow[]; labels: EmployeeTypesTableLabels }) {
+export function EmployeeTypesTable({
+  rows,
+  labels,
+  canManage,
+}: {
+  rows: EmployeeTypeRow[];
+  labels: EmployeeTypesTableLabels;
+  /** Whether the viewer may open the edit page; when false rows carry no link. */
+  canManage: boolean;
+}) {
+  const linkedRows = useMemo<LinkedEmployeeTypeRow[]>(
+    () => rows.map((r) => ({ ...r, editHref: canManage ? `/hr/employee-types/${r.id}/edit` : "" })),
+    [rows, canManage],
+  );
   return (
-    <DataTable<EmployeeTypeRow>
+    <DataTable<LinkedEmployeeTypeRow>
       columns={[
         { key: "code", label: labels.colCode },
         {
@@ -84,7 +104,7 @@ export function EmployeeTypesTable({ rows, labels }: { rows: EmployeeTypeRow[]; 
         { key: "payroll", label: labels.colPayroll },
         { key: "appraisal", label: labels.colAppraisal },
       ]}
-      rows={rows}
+      rows={linkedRows}
       rowLinkKey="editHref" rowLinkPrefix=""
       identifyingColumnKey="name"
       sortable

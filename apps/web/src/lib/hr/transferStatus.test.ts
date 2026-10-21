@@ -52,7 +52,11 @@ function translator(messages: { transferUi: { status: Record<string, string> } }
 describe("transfer status module (GAP-HR-TRANSFER-07/08)", () => {
   const backend = backendTransferStatuses();
 
-  it.skipIf(backend === null)("knows every status the backend consumers emit", () => {
+  it("knows every status the backend consumers emit", () => {
+    // The hrms-service sources always exist in the monorepo. A null here means
+    // MODULE_DIR (or a consumer file name) moved -- fail loudly instead of
+    // letting the backend-status assertions silently vanish.
+    expect(backend, "hrms-service lifecycle consumers not found under MODULE_DIR").not.toBeNull();
     expect([...(backend as Set<string>)].sort()).toEqual(
       expect.arrayContaining(["requested", "ordered", "relieved", "joined", "pending_approval", "pending_effective", "completed", "cancelled"]),
     );
@@ -87,11 +91,10 @@ describe("transfer status module (GAP-HR-TRANSFER-07/08)", () => {
     expect(RELIEVE_FROM).toEqual(["ordered"]);
     expect(JOIN_FROM).toEqual(["relieved"]);
     const routes = read("lifecycle/routes.ts");
-    if (routes) {
-      expect(routes).toContain('transfer.status !== "requested" && transfer.status !== "pending"');
-      expect(routes).toContain('transfer.status !== "ordered"');
-      expect(routes).toContain('transfer.status !== "relieved"');
-    }
+    expect(routes, "lifecycle/routes.ts not found under MODULE_DIR").not.toBeNull();
+    expect(routes).toContain('transfer.status !== "requested" && transfer.status !== "pending"');
+    expect(routes).toContain('transfer.status !== "ordered"');
+    expect(routes).toContain('transfer.status !== "relieved"');
   });
 
   it("models the direct pipeline as Requested -> Order Issued -> Relieved -> Joined (no HOD/Admin stages)", () => {

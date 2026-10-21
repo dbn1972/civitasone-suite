@@ -106,9 +106,6 @@ export default async function EmployeeTypesPage() {
         code: et.code,
         name: et.name,
         description: et.description?.trim() ? et.description.trim() : null,
-        // Server-safe row link (DataTable is a client component, so a rowHref function prop
-        // cannot cross the RSC boundary): the full path, or "" when the viewer cannot manage.
-        editHref: canManage ? `/hr/employee-types/${et.id}/edit` : "",
         // GAP-HR-EMPLOYEE-TYPES-05: an unlisted pay mode (legacy / unexpected data)
         // used to fall through as the raw code ("weekly"); humanize it instead.
         payModeLabel: PAY_MODE_LABELS[et.payMode] ?? (et.payMode ? humanizeStatus(et.payMode) : "—"),
@@ -163,6 +160,7 @@ export default async function EmployeeTypesPage() {
         ) : (
           <EmployeeTypesTable
             rows={rows}
+            canManage={canManage}
             labels={{
               colCode: t("colCode"),
               colName: t("colName"),

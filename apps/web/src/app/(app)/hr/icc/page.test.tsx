@@ -37,13 +37,13 @@ const LEAK_IDS = {
   complainantId: "44444444-4444-4444-8444-444444444444",
   respondentId: "55555555-5555-4555-8555-555555555555",
 };
-const SECRET_SUMMARY = "Free-text summary that names the aggrieved woman";
+const CONFIDENTIAL_SUMMARY = "Free-text summary that names the aggrieved woman";
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
 // A row exactly as a misbehaving / older backend could send it: every internal
 // column present, the confidential flag false and the summary populated.
 const RAW_ROW = {
-  id: CASE_ID, caseNo: "ICC/2026/001", summary: SECRET_SUMMARY, filedAt: "2026-02-01T10:00:00.000Z",
+  id: CASE_ID, caseNo: "ICC/2026/001", summary: CONFIDENTIAL_SUMMARY, filedAt: "2026-02-01T10:00:00.000Z",
   status: "filed", confidential: false, iccMembersOnly: false, version: 3, ...LEAK_IDS,
 };
 const STATS = { filed: 70, underInquiry: 20, disposed: 30 };
@@ -75,7 +75,7 @@ describe("/hr/icc rows handed to the client table (GAP-HR-ICC-01)", () => {
   it("an hr_admin never sees the free-text summary -- even when the row says confidential=false and the API sent it", async () => {
     respond([RAW_ROW]);
     render(await IccPage({}));
-    expect(JSON.stringify(tableProps!.rows)).not.toContain(SECRET_SUMMARY);
+    expect(JSON.stringify(tableProps!.rows)).not.toContain(CONFIDENTIAL_SUMMARY);
     expect(tableProps!.rows[0]!.summary).toBe("Confidential complaint — case ref: ICC/2026/001");
   });
 
@@ -83,14 +83,14 @@ describe("/hr/icc rows handed to the client table (GAP-HR-ICC-01)", () => {
     mockRoles = ["super_admin"];
     respond([RAW_ROW]);
     render(await IccPage({}));
-    expect(JSON.stringify(tableProps!.rows)).not.toContain(SECRET_SUMMARY);
+    expect(JSON.stringify(tableProps!.rows)).not.toContain(CONFIDENTIAL_SUMMARY);
   });
 
   it("an icc_member sees the summary, still without any internal column", async () => {
     mockRoles = ["icc_member"];
     respond([RAW_ROW]);
     render(await IccPage({}));
-    expect(tableProps!.rows[0]!.summary).toBe(SECRET_SUMMARY);
+    expect(tableProps!.rows[0]!.summary).toBe(CONFIDENTIAL_SUMMARY);
     expect(Object.keys(tableProps!.rows[0]!).sort()).toEqual(["caseNo", "confidential", "filedAt", "id", "status", "summary"]);
     expect(JSON.stringify(tableProps!.rows)).not.toContain(LEAK_IDS.createdBy);
     // Only an icc_member can open the identity-bearing detail page, so only they get row links.

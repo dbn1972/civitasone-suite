@@ -94,7 +94,7 @@ type BatchStatus = {
   failedRows: { rowNo: number; employeeNo: string; code: string }[];
 };
 
-// Stable failure codes from the status route -> translated reason (never the server's own text).
+// Stable failure codes from the status route, each mapped to a translated reason (never the server text).
 const ROW_FAILURE_KEYS: Record<string, string> = {
   EMPLOYEE_NO_EXISTS: "rowFailExists",
   INVALID_REFERENCE: "rowFailReference",
@@ -117,7 +117,7 @@ function parseBatchStatus(raw: unknown): BatchStatus | null {
   return { status: r.status, total, created, failed, pending, failedRows };
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** How often, and for how long, an accepted import is polled for its real outcome. */
 const DEFAULT_POLL_INTERVAL_MS = 2000;
