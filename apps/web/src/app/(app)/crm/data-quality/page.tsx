@@ -7,7 +7,9 @@ import { getSessionRoles, CRM_ADMIN_ROLES, hasAnyRole } from "@/lib/auth/roleGua
 export default async function Page() {
   // GAP-CRM-DATA-QUALITY-07: title from next-intl (crm.dataQuality.title) instead
   // of the hard-coded 'Data Quality • डेटा गुणवत्ता' literal, so the active
-  // locale's string is shown (en/hi today; ta/te/kn fall back to English).
+  // locale's string is shown (en/hi today; ta/te/kn fall back to English per key
+  // via i18n/withEnglishFallback). An Odia (or) catalogue does not exist: adding a
+  // locale is an owner decision (GAP-CRM-DATA-QUALITY-07 in docs/gap-ledger/crm.md).
   const t = await getTranslations("crm.dataQuality");
   // GAP-CRM-DATA-QUALITY-05: the 'Matching rules' link targets an admin-only
   // route (dedup-rules/layout gates on the same admin set) that redirects a
