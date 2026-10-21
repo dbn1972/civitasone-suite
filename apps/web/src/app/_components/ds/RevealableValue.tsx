@@ -33,6 +33,13 @@ export interface RevealableValueProps {
   fallback?: React.ReactNode;
   autoHideMs?: number;
   className?: string;
+  /**
+   * Reason length bounds, for an endpoint that enforces its own (defaults 5 and 300, the vendor / cheque
+   * reveals). Set both to match the route, e.g. the TDS PAN reveal needs 10 to 500, so the dialog never
+   * lets through a reason the server would 400.
+   */
+  minReasonLength?: number;
+  maxReasonLength?: number;
 }
 
 const MIN_REASON = 5;
@@ -40,6 +47,7 @@ const MAX_REASON = 300;
 
 export function RevealableValue({
   maskedText, revealPath, revealBody, pick, canReveal, label, fallback = "—", autoHideMs = 30_000, className,
+  minReasonLength = MIN_REASON, maxReasonLength = MAX_REASON,
 }: RevealableValueProps) {
   const t = useTranslations("revealableValue");
   const te = useTranslations("financeWorkflowErrors");
@@ -57,7 +65,7 @@ export function RevealableValue({
 
   async function reveal(reason?: string) {
     const r = (reason ?? "").trim();
-    if (r.length < MIN_REASON) return;
+    if (r.length < minReasonLength) return;
     setBusy(true);
     setError("");
     try {
@@ -106,8 +114,8 @@ export function RevealableValue({
         confirmLabel={t("confirm")}
         requireReason
         reasonLabel={t("reasonLabel")}
-        minReasonLength={MIN_REASON}
-        maxReasonLength={MAX_REASON}
+        minReasonLength={minReasonLength}
+        maxReasonLength={maxReasonLength}
         busy={busy}
         errorMessage={error}
         onConfirm={(reason) => { void reveal(reason); }}

@@ -86,4 +86,19 @@ describe("RevealableValue (audited reveal)", () => {
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
+
+  // GAP-FINANCE-STATUTORY-TDS-RETURNS-05: an endpoint with a longer reason rule (TDS PAN reveal: 10 to 500).
+  it("honours caller-set reason bounds, so the dialog never lets through a reason the route would 400", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ values: { bankAccount: "123456789012" } }), { status: 200 }));
+    render(<RevealableValue {...props} canReveal minReasonLength={10} maxReasonLength={500} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    const reason = await screen.findByLabelText(/Reason for revealing/i);
+    fireEvent.change(reason, { target: { value: "TDS 26Q" } }); // 7 chars: fine by default (5), too short here
+    const confirm = screen.getAllByRole("button", { name: "Reveal" }).pop()!;
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(reason, { target: { value: "TDS challan 26Q reconciliation" } });
+    expect(confirm).not.toBeDisabled();
+  });
 });

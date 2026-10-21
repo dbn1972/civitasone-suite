@@ -1,10 +1,20 @@
 "use client";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, RevealableValue, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { VendorTdsEntry } from "@civitasone/types";
 type Row = VendorTdsEntry;
-export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; source?: "api" | "error" }) {
+/** finance-service's vendor-tds/:id/pan/reveal requires a reason of 10 to 500 characters. */
+const TDS_REVEAL_REASON_MIN = 10;
+const TDS_REVEAL_REASON_MAX = 500;
+/**
+ * GAP-FINANCE-STATUTORY-TDS-RETURNS-05: the PAN column shows the server-masked value (ABCDE****F). Rows reach
+ * this table already masked (page.tsx), so the full PAN is never in the DOM, the offline cache or the CSV export.
+ * A viewer who may see it (`canReveal`) gets a Reveal control that asks for a reason and calls the audited
+ * POST /v1/finance/vendor-tds/:id/pan/reveal; the audit event is published before the clear value comes back,
+ * and the value re-masks itself after 30 seconds. The clear value is held in component state only.
+ */
+export function TDSReturnsTable({ returns, source = "api", canReveal = false }: { returns: Row[]; source?: "api" | "error"; canReveal?: boolean }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("finance.tds-returns", returns, source, (d) => d.length === 0);
   return (
     <>
@@ -17,7 +27,25 @@ export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; s
       <DataTable<Row>
         columns={[
           { key: "vendor_name", label: "Vendor" },
-          { key: "pan", label: "PAN" },
+          {
+            key: "pan",
+            label: "PAN",
+            render: (row: Row) =>
+              // No control at all (not even a hidden one) for a viewer who may not reveal, or a row with no PAN.
+              canReveal && row.pan ? (
+                <RevealableValue
+                  maskedText={row.pan}
+                  revealPath={`v1/finance/vendor-tds/${encodeURIComponent(row.id)}/pan/reveal`}
+                  pick={(json) => (json as { pan?: string | null } | null)?.pan}
+                  canReveal
+                  label="PAN"
+                  minReasonLength={TDS_REVEAL_REASON_MIN}
+                  maxReasonLength={TDS_REVEAL_REASON_MAX}
+                />
+              ) : (
+                <span style={{ fontFamily: "monospace" }}>{row.pan ?? "—"}</span>
+              ),
+          },
           { key: "section", label: "Section" },
           { key: "quarter", label: "Quarter" },
           { key: "fy", label: "FY" },

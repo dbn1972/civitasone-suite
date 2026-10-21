@@ -41,8 +41,9 @@ export function fyQuarterCount(rows: ReadonlyArray<{ fy?: unknown; quarter?: unk
 /**
  * Replace the PAN with its masked form (ABCDE****F) before the rows reach the
  * client table, so the full PAN is never in the DOM, the offline cache or the
- * CSV export. A null/empty PAN stays null. Display-only: there is no reveal
- * (an audited reveal endpoint does not exist).
+ * CSV export. A null/empty PAN stays null. The clear value is available only
+ * through the audited reveal (POST /v1/finance/vendor-tds/:id/pan/reveal),
+ * which TDSReturnsTable offers to the roles that route admits.
  */
 export function maskTdsPan<T extends { pan?: string | null }>(rows: readonly T[]): T[] {
   return rows.map((r) => ({ ...r, pan: r.pan ? maskPan(r.pan) : null }));
