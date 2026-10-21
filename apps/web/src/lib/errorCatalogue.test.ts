@@ -242,3 +242,25 @@ describe("support reference", () => {
     expect(referenceFromHeaders(undefined)).toBeNull();
   });
 });
+
+describe("WFH eligibility domain codes (GAP-HR-WFH-01)", () => {
+  it.each([
+    ["GAZETTED_NOT_ELIGIBLE", /pay level/i],
+    ["WEEKLY_WFH_CAP_REACHED", /weekly work-from-home limit/i],
+  ] as const)("%s (hrms-service 422) reads as its own policy reason in en and hi, never the generic validation copy", (code, enWhat) => {
+    const generic = resolveHumanError({ status: 422, ctx: { locale: "en", hasFieldErrors: true } });
+    const en = resolveHumanError({ status: 422, code, ctx: { locale: "en" } });
+    expect(en.kind).toBe("domain");
+    expect(en.what).toMatch(enWhat);
+    expect(en.what).not.toBe(generic.what);
+    const hi = resolveHumanError({ status: 422, code, ctx: { locale: "hi" } });
+    expect(hi.kind).toBe("domain");
+    expect(hi.what.trim()).not.toBe("");
+    expect(hi.what).not.toBe(en.what);
+    // Neither the code nor the HTTP status ever reaches the screen.
+    expect(JSON.stringify([en, hi])).not.toMatch(new RegExp(`${code}|422`));
+    // Both locales carry the entry (parity).
+    expect(DOMAIN_CODE_MESSAGES[code]?.en).toBeDefined();
+    expect(DOMAIN_CODE_MESSAGES[code]?.hi).toBeDefined();
+  });
+});

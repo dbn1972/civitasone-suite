@@ -77,6 +77,8 @@ specific reason helps the user act:
 | STALE_ELECTION | This election was changed by someone else. Refresh to see the latest version, then choose again. |
 | DESIGNATION_IN_USE | This can't be done while it's still in use elsewhere. Update or reassign whatever depends on it first, then try again. |
 | DUPLICATE_CODE | This code is already in use. Choose a different code and try again. |
+| GAZETTED_NOT_ELIGIBLE | Work from home isn't available at this employee's pay level. It is limited to the pay levels your office has made eligible. Ask HR if you think this is wrong. |
+| WEEKLY_WFH_CAP_REACHED | These dates would go over the weekly work-from-home limit. Choose fewer days, or dates in a different week, and try again. |
 
 A call site that has its own translated sentence for a code (for example
 `postWithErrorCode`'s `codeMessages`) keeps using it; the central map is the fallback.
