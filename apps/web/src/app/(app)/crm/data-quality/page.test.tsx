@@ -44,6 +44,12 @@ describe("Data Quality page (GoI redesign)", () => {
     expect(screen.queryByRole("link", { name: "Matching rules" })).not.toBeInTheDocument();
   });
 
+  it("GAP-CRM-DEDUP-RULES-05: hides 'Matching rules' from tenant_admin, whom the server 403s on dedup-rules", async () => {
+    vi.mocked(rg.getSessionRoles).mockReturnValue(["tenant_admin"]);
+    render(await Page());
+    expect(screen.queryByRole("link", { name: "Matching rules" })).not.toBeInTheDocument();
+  });
+
   it("GAP-CRM-DATA-QUALITY-05: shows 'Matching rules' to a crm_admin", async () => {
     vi.mocked(rg.getSessionRoles).mockReturnValue(["crm_admin"]);
     render(await Page());

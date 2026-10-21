@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { DataQualityView } from "../../../_components/crm/DataQualityView";
-import { getSessionRoles, CRM_ADMIN_ROLES, hasAnyRole } from "@/lib/auth/roleGuard";
+import { getSessionRoles, CRM_DEDUP_RULES_ROLES, hasAnyRole } from "@/lib/auth/roleGuard";
 
 /** DQ-004 — Data Quality dashboard. */
 export default async function Page() {
@@ -10,11 +10,11 @@ export default async function Page() {
   // locale's string is shown (en/hi today; ta/te/kn fall back to English).
   const t = await getTranslations("crm.dataQuality");
   // GAP-CRM-DATA-QUALITY-05: the 'Matching rules' link targets an admin-only
-  // route (dedup-rules/layout gates on the same admin set) that redirects a
-  // plain crm_user straight back here with no explanation. Only offer the link
-  // to roles that can actually reach it. The layout guard remains the real
+  // route (dedup-rules/layout gates on the same CRM_DEDUP_RULES_ROLES set) that
+  // redirects anyone else straight back here with no explanation. Only offer the
+  // link to roles that can actually reach it. The layout guard remains the real
   // boundary; this just stops a dead-end redirect.
-  const canManageRules = hasAnyRole(getSessionRoles(), CRM_ADMIN_ROLES);
+  const canManageRules = hasAnyRole(getSessionRoles(), CRM_DEDUP_RULES_ROLES);
   return (
     <>
       <PageHeader

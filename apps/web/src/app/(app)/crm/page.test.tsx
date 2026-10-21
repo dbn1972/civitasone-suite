@@ -10,10 +10,14 @@ vi.mock("next-intl/server", async () => {
 });
 
 const mockRoles = vi.fn<() => string[]>();
-vi.mock("@/lib/auth/roleGuard", () => ({
-  getSessionRoles: () => mockRoles(),
-  CRM_ADMIN_ROLES: ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"],
-}));
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return {
+    ...actual,
+    getSessionRoles: () => mockRoles(),
+    CRM_ADMIN_ROLES: ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"],
+  };
+});
 
 // LinkTiles renders the tiles; keep it real-ish but light.
 vi.mock("../../_components/LinkTiles", () => ({
@@ -41,6 +45,27 @@ describe("CRM hub Configuration gating (GAP-CRM-AGENT-WORKLOAD-01)", () => {
     render(await Page());
     expect(screen.getByText("Agent Workload")).toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
+  });
+});
+
+describe("CRM hub Matching Rules tile gating (GAP-CRM-DEDUP-RULES-05)", () => {
+  beforeEach(() => mockRoles.mockReset());
+
+  it("offers the Matching Rules tile to crm_admin and super_admin (the roles the server admits)", async () => {
+    for (const role of ["crm_admin", "super_admin"]) {
+      mockRoles.mockReturnValue([role]);
+      const { unmount } = render(await Page());
+      expect(screen.getByText("Matching Rules")).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("hides the Matching Rules tile from tenant_admin (server 403s dedup-rules for it) but keeps the rest of Configuration", async () => {
+    mockRoles.mockReturnValue(["tenant_admin"]);
+    render(await Page());
+    expect(screen.queryByText("Matching Rules")).not.toBeInTheDocument();
+    expect(screen.getByText("Configuration")).toBeInTheDocument();
+    expect(screen.getByText("Agent Workload")).toBeInTheDocument();
   });
 });
 

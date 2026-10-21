@@ -11,6 +11,7 @@ import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button, ErrorState, ConfirmDialog, HelpTip } from "../ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
+import { useUnsavedNavigationGuard } from "@/lib/useUnsavedNavigationGuard";
 import { formatIndianDateTime } from "@/lib/formatters";
 import {
   getDedupRules,
@@ -25,11 +26,9 @@ import {
 const FIELD_OPTIONS: DedupField[] = ["email", "phone", "gstin", "pan", "name", "company"];
 const MATCH_OPTIONS: DedupMatchType[] = ["exact", "fuzzy"];
 
-/**
- * GAP-CRM-DEDUP-RULES-06: human labels for the field/match-type selects so a
- * clerk reads "GSTIN"/"Exact match" instead of the raw enum tokens
- * "gstin"/"exact". The <option value> stays the enum the backend expects.
- */
+// GAP-CRM-DEDUP-RULES-06: the field/match-type selects render human labels
+// (t("field.gstin") -> "GSTIN", t("match.exact") -> "Exact match") while each
+// <option value> stays the enum token the backend expects.
 
 /**
  * Coerce a numeric-input string to a finite integer 0-100 so a partial or
@@ -88,7 +87,7 @@ export function DedupRulesEditor() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const formError = useFormError("matching rules");
+  const formError = useFormError(t("area"));
   // Guards the destructive "save an empty rule set" path (GAP-CRM-DEDUP-RULES-01).
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   // GAP-CRM-DEDUP-RULES-02: optimistic-concurrency token from load, and the
@@ -104,6 +103,10 @@ export function DedupRulesEditor() {
   const headingId = useId();
 
   const dirty = source === "api" && snapshot(rules) !== loadedSnapshot;
+  // GAP-CRM-DEDUP-RULES-02: warn on a full unload (beforeunload) AND intercept
+  // in-app navigation while there are unsaved edits; the prompt is the
+  // ConfirmDialog rendered at the bottom of this component.
+  const leaveGuard = useUnsavedNavigationGuard(dirty);
 
   // Stable per-row React key, independent of array position -- see
   // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
@@ -140,20 +143,6 @@ export function DedupRulesEditor() {
     return () => { live = false; };
   }, []);
 
-  // GAP-CRM-DEDUP-RULES-02: warn before a full page unload (close/reload/
-  // external nav) while there are unsaved edits, so a tenant-wide config
-  // change is not lost silently. In-app navigation shows the inline "unsaved
-  // changes" banner below (Next's App Router has no stable navigation-block API).
-  useEffect(() => {
-    if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handler);
-    return () => window.removeEventListener("beforeunload", handler);
-  }, [dirty]);
-
   function update(idx: number, patch: Partial<DedupRule>) {
     setRules((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
   }
@@ -187,7 +176,7 @@ export function DedupRulesEditor() {
       const newVersion = await saveDedupRules(rules, version);
       // Keep the stored token current so a follow-up save isn't a false conflict.
       if (newVersion) setVersion(newVersion);
-      setMessage("Matching rules saved.");
+      setMessage(t("saved"));
       setLoadedSnapshot(snapshot(rules));
     } catch (e) {
       if (e instanceof DedupRulesConflictError) {
@@ -220,7 +209,7 @@ export function DedupRulesEditor() {
     // the backend's (tenant, field) upsert, so block it with an inline error.
     const dup = firstDuplicateField(rules);
     if (dup) {
-      setError(t("duplicateField", { field: dup }));
+      setError(t("duplicateField", { field: t(`field.${dup}`) }));
       return;
     }
     // Saving an empty list clears every matching rule — require an explicit
@@ -240,7 +229,7 @@ export function DedupRulesEditor() {
   if (source === "loading") {
     return (
       <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>
-        Loading matching rules…
+        {t("loading")}
       </p>
     );
   }
@@ -257,7 +246,7 @@ export function DedupRulesEditor() {
           <h3 id={headingId}>{t("heading")}</h3>
           <DataSourceBadge source="error" />
         </div>
-        <ErrorState error={toHumanError("load", { area: "matching rules" })} onRetry={() => void load()} />
+        <ErrorState error={toHumanError("load", { area: t("area") })} onRetry={() => void load()} />
       </div>
     );
   }
@@ -265,7 +254,7 @@ export function DedupRulesEditor() {
   return (
     <div className="card">
       <div className="card-h">
-        <h3 id={headingId}>Matching rules</h3>
+        <h3 id={headingId}>{t("heading")}</h3>
       </div>
       {lastChangedAt ? (
         <p style={{ fontSize: 12, color: "var(--muted)", padding: "0 12px" }}>
@@ -293,16 +282,15 @@ export function DedupRulesEditor() {
 
       {rules.length === 0 ? (
         <EmptyState
-          icon="🧭"
-          title="No matching rules yet"
-          message="Add a rule to tell the system which fields identify a duplicate and how strictly to compare them."
+          title={t("emptyTitle")}
+          message={t("emptyMessage")}
         />
       ) : (
         <table className="tbl" aria-labelledby={headingId}>
           <thead>
             <tr>
-              <th>Field</th>
-              <th>Match type</th>
+              <th>{t("colField")}</th>
+              <th>{t("colMatchType")}</th>
               <th style={{ textAlign: "end" }}>
                 {t("weight")}{" "}
                 <HelpTip term={t("weight")}>
@@ -315,15 +303,15 @@ export function DedupRulesEditor() {
                   {t("thresholdHelp")}
                 </HelpTip>
               </th>
-              <th>Enabled</th>
-              <th><span className="sr-only">Actions</span></th>
+              <th>{t("colEnabled")}</th>
+              <th><span className="sr-only">{t("colActions")}</span></th>
             </tr>
           </thead>
           <tbody>
             {rules.map((rule, idx) => (
               <tr key={ruleKeyFor(idx)}>
                 <td>
-                  <label className="sr-only" htmlFor={`${headingId}-field-${idx}`}>Field for rule {idx + 1}</label>
+                  <label className="sr-only" htmlFor={`${headingId}-field-${idx}`}>{t("fieldForRule", { n: idx + 1 })}</label>
                   <select
                     id={`${headingId}-field-${idx}`}
                     value={rule.field}
@@ -334,7 +322,7 @@ export function DedupRulesEditor() {
                   </select>
                 </td>
                 <td>
-                  <label className="sr-only" htmlFor={`${headingId}-match-${idx}`}>Match type for rule {idx + 1}</label>
+                  <label className="sr-only" htmlFor={`${headingId}-match-${idx}`}>{t("matchForRule", { n: idx + 1 })}</label>
                   <select
                     id={`${headingId}-match-${idx}`}
                     value={rule.matchType}
@@ -345,7 +333,7 @@ export function DedupRulesEditor() {
                   </select>
                 </td>
                 <td className="num">
-                  <label className="sr-only" htmlFor={`${headingId}-weight-${idx}`}>Weight for rule {idx + 1}</label>
+                  <label className="sr-only" htmlFor={`${headingId}-weight-${idx}`}>{t("weightForRule", { n: idx + 1 })}</label>
                   <input
                     id={`${headingId}-weight-${idx}`}
                     type="number" min={0} max={100} step={1}
@@ -356,7 +344,7 @@ export function DedupRulesEditor() {
                   />
                 </td>
                 <td className="num">
-                  <label className="sr-only" htmlFor={`${headingId}-threshold-${idx}`}>Threshold for rule {idx + 1}</label>
+                  <label className="sr-only" htmlFor={`${headingId}-threshold-${idx}`}>{t("thresholdForRule", { n: idx + 1 })}</label>
                   <input
                     id={`${headingId}-threshold-${idx}`}
                     type="number" min={0} max={100} step={1}
@@ -372,14 +360,14 @@ export function DedupRulesEditor() {
                       type="checkbox"
                       checked={rule.enabled}
                       onChange={(e) => update(idx, { enabled: e.target.checked })}
-                      aria-label={`Enable rule ${idx + 1}`}
+                      aria-label={t("enableRule", { n: idx + 1 })}
                     />
-                    {rule.enabled ? "On" : "Off"}
+                    {rule.enabled ? t("on") : t("off")}
                   </label>
                 </td>
                 <td>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRule(idx)} aria-label={`Remove rule ${idx + 1}`}>
-                    Remove
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeRule(idx)} aria-label={t("removeRule", { n: idx + 1 })}>
+                    {t("remove")}
                   </Button>
                 </td>
               </tr>
@@ -389,9 +377,9 @@ export function DedupRulesEditor() {
       )}
 
       <div style={{ display: "flex", gap: 8, padding: 12, alignItems: "center" }}>
-        <Button type="button" variant="ghost" onClick={addRule}>+ Add rule</Button>
+        <Button type="button" variant="ghost" onClick={addRule}>{t("addRule")}</Button>
         <Button type="button" onClick={() => void save()} disabled={busy}>
-          {busy ? "Saving…" : "Save rules"}
+          {busy ? t("saving") : t("save")}
         </Button>
         {rules.length > 0 ? (
           <span style={{ marginInlineStart: "auto", fontSize: 13, color: "var(--muted)" }}>
@@ -412,6 +400,18 @@ export function DedupRulesEditor() {
         busy={busy}
         onCancel={() => setConfirmEmpty(false)}
         onConfirm={() => void confirmEmptySave()}
+      />
+
+      {/* GAP-CRM-DEDUP-RULES-02: in-app navigation attempted with unsaved edits. */}
+      <ConfirmDialog
+        open={leaveGuard.pendingHref !== null}
+        danger
+        title={t("leaveTitle")}
+        description={t("leaveDescription")}
+        confirmLabel={t("leaveConfirm")}
+        cancelLabel={t("leaveStay")}
+        onCancel={leaveGuard.stay}
+        onConfirm={leaveGuard.leave}
       />
     </div>
   );
