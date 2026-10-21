@@ -240,4 +240,63 @@ describe("LwfConfigForm", () => {
       expect(erInput().value).toBe("");
     });
   });
+
+  // Review (cluster 04): for a state with no row yet, a blank frequency is NOT "unchanged" --
+  // payroll-service's stateRulesUpsert consumer stores the default (half_yearly) on first insert.
+  describe("GAP-PAYROLL-STATUTORY-LWF-05: frequency wording for a first-time vs an existing state", () => {
+    const freqSelect = () => screen.getByLabelText("Frequency") as HTMLSelectElement;
+    const blankOption = () => within(freqSelect()).getByRole("option", { name: /^(Default|Keep current)/ });
+
+    it("a state with no row yet and no frequency chosen: the dialog names the default frequency, not 'unchanged'; nothing extra is sent", async () => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ id: "MH", status: "accepted", correlationId: "c" }), { status: 202 }),
+      );
+      renderForm([KA_STORED]);
+      pickState("MH");
+      expect(blankOption()).toHaveTextContent("Default (Half-yearly)");
+      typeAmounts("25", "75");
+      submit();
+
+      await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+      expect(screen.getByText(/employee ₹25\.00, employer ₹75\.00, frequency Half-yearly\./)).toBeInTheDocument();
+      expect(screen.queryByText(/frequency unchanged/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText("Confirm & Save"));
+
+      await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+      // The default is the server's to apply -- the form does not invent a value on the wire.
+      const body = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+      expect(body).toEqual({ stateCode: "MH", lwfEmployee: 2500, lwfEmployer: 7500 });
+    });
+
+    it("with no configured states at all, the first state saved is described with the default frequency", async () => {
+      renderForm();
+      pickState("MH");
+      typeAmounts("0", "0");
+      submit();
+      await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+      expect(screen.getByText(/frequency Half-yearly\./)).toBeInTheDocument();
+    });
+
+    it("a state with no row yet and a frequency chosen shows the chosen frequency", async () => {
+      renderForm([KA_STORED]);
+      pickState("MH");
+      typeAmounts("25", "75");
+      fireEvent.change(freqSelect(), { target: { value: "monthly" } });
+      submit();
+      await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+      expect(screen.getByText(/frequency Monthly\./)).toBeInTheDocument();
+    });
+
+    it("an already-configured state keeps saying 'unchanged' when the frequency is left alone (the stored one is kept)", async () => {
+      renderForm([KA_STORED]);
+      pickState("KA");
+      expect(blankOption()).toHaveTextContent("Keep current frequency");
+      fireEvent.change(empInput(), { target: { value: "30" } });
+      // KA_STORED has half_yearly, which the form pre-selects; clearing it leaves the stored value alone.
+      fireEvent.change(freqSelect(), { target: { value: "" } });
+      submit();
+      await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+      expect(screen.getByText(/employee ₹30\.00, employer unchanged, frequency unchanged\./)).toBeInTheDocument();
+    });
+  });
 });

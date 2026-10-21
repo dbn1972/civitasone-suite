@@ -4790,6 +4790,7 @@
     "savedMessage": "LWF configuration saved for {state}.",
     "frequencyLabel": "Frequency",
     "frequencyKeepCurrent": "Keep current frequency",
+    "frequencyUseDefault": "Default ({frequency})",
     "frequencyMonthly": "Monthly",
     "frequencyQuarterly": "Quarterly",
     "frequencyHalfYearly": "Half-yearly",

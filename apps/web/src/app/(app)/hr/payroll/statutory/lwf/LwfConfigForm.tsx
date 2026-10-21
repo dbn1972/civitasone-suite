@@ -21,6 +21,13 @@ const FREQUENCY_LABEL_KEY = {
   yearly: "frequencyYearly",
 } as const;
 
+// What the server stores for a state that has no row yet and is saved without a
+// frequency: the COALESCE default in payroll-service's stateRulesUpsert consumer
+// (modules/payroll/consumer.ts) and the payroll_lwf.frequency column default.
+// Shown instead of "unchanged" so a first-time save does not claim there is a
+// stored frequency being kept.
+const DEFAULT_NEW_STATE_FREQUENCY: Frequency = "half_yearly";
+
 function isFrequency(v: unknown): v is Frequency {
   return typeof v === "string" && (FREQUENCIES as readonly string[]).includes(v);
 }
@@ -189,6 +196,10 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
   }
 
   const unchanged = t("unchangedValue");
+  // GAP-PAYROLL-STATUTORY-LWF-05 (review): a state with no row yet has no frequency
+  // to "keep" -- leaving the choice blank means the server default is stored.
+  const selectedIsNew = !!stateCode && !findExisting(stateCode);
+  const defaultFrequencyLabel = t(FREQUENCY_LABEL_KEY[DEFAULT_NEW_STATE_FREQUENCY]);
 
   return (
     <form noValidate onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
@@ -239,7 +250,9 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
                 onChange={(e) => setFrequency(e.target.value as Frequency | "")}
                 aria-describedby={hintId}
               >
-                <option value="">{t("frequencyKeepCurrent")}</option>
+                <option value="">
+                  {selectedIsNew ? t("frequencyUseDefault", { frequency: defaultFrequencyLabel }) : t("frequencyKeepCurrent")}
+                </option>
                 {FREQUENCIES.map((f) => (
                   <option key={f} value={f}>{t(FREQUENCY_LABEL_KEY[f])}</option>
                 ))}
@@ -281,7 +294,11 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
               state: pending?.stateCode ?? "",
               emp: pending?.lwfEmployee !== undefined ? formatMoney(pending.lwfEmployee) : unchanged,
               er: pending?.lwfEmployer !== undefined ? formatMoney(pending.lwfEmployer) : unchanged,
-              frequency: pending?.lwfFrequency ? t(FREQUENCY_LABEL_KEY[pending.lwfFrequency]) : unchanged,
+              frequency: pending?.lwfFrequency
+                ? t(FREQUENCY_LABEL_KEY[pending.lwfFrequency])
+                : isOverwrite
+                  ? unchanged
+                  : defaultFrequencyLabel,
             })}
             {isOverwrite && (
               <>

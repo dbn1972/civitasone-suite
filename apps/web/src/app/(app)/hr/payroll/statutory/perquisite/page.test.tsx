@@ -221,3 +221,78 @@ describe("PerquisitePage employee name and FY validation (GAP-PAYROLL-STATUTORY-
     expect(screen.getByText("Look up an employee first")).toBeInTheDocument();
   });
 });
+
+// Review (cluster 04): Form 12BA takes the name from the FY's last payroll month, so a blank name
+// is real for an employee who is not in that month. The page resolves it from the HRMS directory by id.
+describe("PerquisitePage employee name when the Form 12BA response has none (GAP-PAYROLL-STATUTORY-PERQUISITE-05)", () => {
+  type FetchOpts = { mapResponse: (p: unknown) => unknown };
+  const blankNameBody = () =>
+    form12ba({ employee: { employeeId: EMP_ID, pan: "ABCDE****F", name: "", panFlag: "" } });
+  const isDirectory = (path: unknown) => String(path).includes("/api/v1/hrms/employees");
+  const directoryCalls = () => fetchJsonMock.mock.calls.filter((c) => isDirectory(c[0]));
+
+  /** form12ba -> blank name; directory -> `directoryRows` run through the page's own mapResponse. */
+  function mockLookup(directoryRows: unknown, directoryStatus: "ok" | "error" = "ok") {
+    fetchJsonMock.mockImplementation(async (path: unknown, empty: unknown, opts: FetchOpts) => {
+      if (isDirectory(path)) {
+        return directoryStatus === "ok"
+          ? { data: opts.mapResponse(directoryRows), source: "api" }
+          : { data: empty, source: "error", status: 403 };
+      }
+      return { data: blankNameBody(), source: "api" };
+    });
+  }
+
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+  });
+
+  it("names the employee from the directory in the header, the Form 12BA card and the add-component form (never the UUID)", async () => {
+    mockLookup({ data: [{ id: EMP_ID, name: "Ravi Kumar", employeeNo: "EMP-7", department: "Finance" }] });
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+      </NextIntlClientProvider>,
+    );
+    expect(document.querySelector(".ph .sub")).toHaveTextContent("Perquisites and Form 12BA for Ravi Kumar (EMP-7), FY 2026-27.");
+    expect(screen.getAllByText("Ravi Kumar (EMP-7)")).toHaveLength(2); // 12BA card + add-component form
+    expect(screen.queryByText("Selected employee")).not.toBeInTheDocument();
+    expect(screen.queryByText("Unknown employee")).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain(EMP_ID);
+    // one directory read, by the id from the address, nothing else
+    expect(directoryCalls()).toHaveLength(1);
+    expect(directoryCalls()[0]![0]).toBe(`/api/v1/hrms/employees?ids=${EMP_ID}`);
+  });
+
+  it("ignores a directory row for any other id (the label can only be the looked-up employee's)", async () => {
+    mockLookup({ data: [{ id: "00000000-0000-4000-8000-000000000001", name: "Someone Else", employeeNo: "EMP-9" }] });
+    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    expect(screen.queryByText(/Someone Else/)).not.toBeInTheDocument();
+    expect(screen.getByText("Selected employee")).toBeInTheDocument();
+  });
+
+  it("without directory access (or an outage) the page still renders with the generic wording and no UUID", async () => {
+    mockLookup(null, "error");
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("Selected employee")).toBeInTheDocument();
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(document.querySelector(".ph .sub")).toHaveTextContent("Itemised perquisite components");
+    expect(container.textContent).not.toContain(EMP_ID);
+  });
+
+  it("does not read the directory when the Form 12BA response already carries the name, or when there is no lookup", async () => {
+    fetchJsonMock.mockResolvedValue({ data: form12ba(), source: "api" });
+    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
+
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockResolvedValue({ data: null, source: "api", status: 404 });
+    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    expect(directoryCalls()).toHaveLength(0);
+  });
+});

@@ -4732,6 +4732,7 @@
     "savedMessage": "{state} के लिए LWF विन्यास सहेज दिया गया।",
     "frequencyLabel": "आवृत्ति",
     "frequencyKeepCurrent": "वर्तमान आवृत्ति रखें",
+    "frequencyUseDefault": "डिफ़ॉल्ट ({frequency})",
     "frequencyMonthly": "मासिक",
     "frequencyQuarterly": "त्रैमासिक",
     "frequencyHalfYearly": "अर्धवार्षिक",
