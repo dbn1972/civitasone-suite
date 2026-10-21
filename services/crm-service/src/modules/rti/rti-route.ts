@@ -4,7 +4,7 @@
  * Endpoints:
  *   POST   /v1/crm/rti                    — log a new RTI request
  *   GET    /v1/crm/rti                    — list with filters + SLA ordering
- *   GET    /v1/crm/rti/:id               — detail
+ *   GET    /v1/crm/rti/:id               — detail (?maskPii=true masks PII even for PII-read roles)
  *   PATCH  /v1/crm/rti/:id/forward       — transfer to another department
  *   PATCH  /v1/crm/rti/:id/respond       — respond within 30-day statutory deadline
  *   PATCH  /v1/crm/rti/:id/first-appeal  — trigger first-appeal (s.19 RTI Act)
@@ -16,7 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import * as repo from "./rti-repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -169,10 +169,13 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    // GAP-CRM-RTI-DETAIL-03: the detail page asks for masked values even for a
+    // PII-read role, so the clear value only ever appears via the audited reveal.
+    const { maskPii } = maskPiiQuery.parse(req.query ?? {});
 
     const row = await repo.getRtiById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "RTI request not found");
-    return reply.send({ data: maskRecord("rti", row as Record<string, unknown>, ctx.roles) });
+    return reply.send({ data: maskRecord("rti", row as Record<string, unknown>, rolesForRead(ctx.roles, maskPii)) });
   });
 
   // GET /v1/crm/rti/:id/history — F6-01 status timeline
