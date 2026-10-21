@@ -430,7 +430,42 @@ export interface AccountListRow {
   lastContactAt: string | null;
 }
 
-export async function listAccounts(tenantId: string, limit = 500, offset = 0): Promise<AccountListRow[]> {
+/** Server-side narrowing for the accounts list / picker search (GAP-CRM-ACCOUNTS-DETAIL-01). */
+export interface AccountListFilters {
+  /** Case-insensitive substring of the account name. */
+  search?: string;
+  /** Hide this account AND every descendant (a re-parent picker must not offer a cycle). */
+  excludeSubtreeOf?: string;
+}
+
+/** Escape LIKE metacharacters so a typed `%` or `_` matches literally. */
+function escapeLike(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+function accountListConditions(tenantId: string, filters: AccountListFilters): SQL[] {
+  const conditions: SQL[] = [eq(accounts.tenantId, tenantId), eq(accounts.status, "active")];
+  const search = filters.search?.trim();
+  if (search) conditions.push(ilike(accounts.name, `%${escapeLike(search)}%`));
+  if (filters.excludeSubtreeOf) {
+    conditions.push(sql`${accounts.id} NOT IN (
+      WITH RECURSIVE sub(id) AS (
+        SELECT ${filters.excludeSubtreeOf}::uuid
+        UNION
+        SELECT a.id FROM crm.accounts a JOIN sub s ON a.parent_id = s.id WHERE a.tenant_id = ${tenantId}
+      )
+      SELECT id FROM sub
+    )`);
+  }
+  return conditions;
+}
+
+export async function listAccounts(
+  tenantId: string,
+  limit = 500,
+  offset = 0,
+  filters: AccountListFilters = {},
+): Promise<AccountListRow[]> {
   const rows = await scopedRead((tx) => tx.select({
     id: accounts.id,
     name: accounts.name,
@@ -447,18 +482,69 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
       eq(contacts.tenantId, accounts.tenantId),
       eq(contacts.status, "active"),
     ))
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
+    .where(and(...accountListConditions(tenantId, filters)))
     .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId, accounts.ownerId, accounts.lastContactAt)
     .orderBy(accounts.name)
     .limit(limit)
     .offset(offset));
-  // count() arrives as a bigint string from pg — normalise to a JSON number;
-  // lastContactAt arrives as a Date — normalise to an ISO string for the view.
-  return rows.map((r) => ({
+  return rows.map(normaliseAccountRow);
+}
+
+// count() arrives as a bigint string from pg — normalise to a JSON number;
+// lastContactAt arrives as a Date — normalise to an ISO string for the view.
+function normaliseAccountRow<T extends { contactCount: string; lastContactAt: unknown }>(
+  r: T,
+): Omit<T, "contactCount" | "lastContactAt"> & { contactCount: number; lastContactAt: string | null } {
+  return {
     ...r,
     contactCount: Number(r.contactCount ?? 0),
-    lastContactAt: r.lastContactAt ? new Date(r.lastContactAt as unknown as string).toISOString() : null,
-  }));
+    lastContactAt: r.lastContactAt ? new Date(r.lastContactAt as string).toISOString() : null,
+  };
+}
+
+/** An account by id plus the size of its active sub-tree (for the move-confirmation copy). */
+export interface AccountDetailRow extends AccountListRow {
+  /** Active accounts anywhere below this one in the hierarchy. */
+  descendantCount: number;
+}
+
+/**
+ * GAP-CRM-ACCOUNTS-DETAIL-01: resolve ONE active account by id, tenant-scoped, so the
+ * detail page no longer scans the (capped) list. Same shape as a list row, plus the
+ * active descendant count. Null when the id is unknown, in another tenant, or merged
+ * away / deactivated.
+ */
+export async function getAccount(tenantId: string, id: string): Promise<AccountDetailRow | null> {
+  const rows = await scopedRead((tx) => tx.select({
+    id: accounts.id,
+    name: accounts.name,
+    industry: accounts.industry,
+    website: accounts.website,
+    parentId: accounts.parentId,
+    ownerId: accounts.ownerId,
+    lastContactAt: accounts.lastContactAt,
+    contactCount: sql<string>`count(${contacts.id})`,
+  })
+    .from(accounts)
+    .leftJoin(contacts, and(
+      eq(contacts.accountId, accounts.id),
+      eq(contacts.tenantId, accounts.tenantId),
+      eq(contacts.status, "active"),
+    ))
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active"), eq(accounts.id, id)))
+    .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId, accounts.ownerId, accounts.lastContactAt)
+    .limit(1));
+  const row = rows[0];
+  if (!row) return null;
+  const sub = (await scopedRead((tx) => tx.execute(sql`
+    WITH RECURSIVE sub(id, status) AS (
+      SELECT id, status FROM crm.accounts WHERE parent_id = ${id} AND tenant_id = ${tenantId}
+      UNION
+      SELECT a.id, a.status FROM crm.accounts a JOIN sub s ON a.parent_id = s.id WHERE a.tenant_id = ${tenantId}
+    )
+    SELECT count(*)::int AS n FROM sub WHERE status = 'active'
+  `))) as unknown as Array<{ n: number }>;
+  return { ...normaliseAccountRow(row), descendantCount: Number(sub[0]?.n ?? 0) };
 }
 
 /**
@@ -467,10 +553,10 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
  * Counts the SAME population as listAccounts (status='active', tenant-scoped),
  * without the contact leftJoin so it is a single cheap aggregate.
  */
-export async function countAccounts(tenantId: string): Promise<number> {
+export async function countAccounts(tenantId: string, filters: AccountListFilters = {}): Promise<number> {
   const rows = await scopedRead((tx) => tx.select({ total: sql<string>`count(*)` })
     .from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active"))));
+    .where(and(...accountListConditions(tenantId, filters))));
   return Number(rows[0]?.total ?? 0);
 }
 

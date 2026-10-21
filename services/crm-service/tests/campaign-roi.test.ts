@@ -410,3 +410,60 @@ describe("GET /v1/crm/campaigns/roi-summary", () => {
     expect(res.statusCode).toBe(401);
   });
 });
+
+// ── GAP-CRM-CAMPAIGNS-01 / GAP-CRM-CAMPAIGNS-DETAIL-01: campaigns have a name ─────
+// campaign_performance used to identify a campaign only by its uuid, so the ROI list
+// and the detail page could only show a raw id. The performance feed may now carry a
+// display name, and both ROI reads return it as `name` (omitted when never named).
+describe("campaign display name (GAP-CRM-CAMPAIGNS-01)", () => {
+  const NAMED = "33333333-6700-4000-8000-000000000004";
+  const UNNAMED = "33333333-6700-4000-8000-000000000005";
+
+  async function read(path: string) {
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: path, headers: headers(["crm_user"]) });
+    await app.close();
+    return res;
+  }
+
+  it("stores the name sent on the feed and returns it from roi-summary and the detail roi", async () => {
+    const put = await upsert(NAMED, {
+      periodStart: "2026-01-01", costMinor: "100", revenueMinor: "300", responses: 3, campaignName: "  Diwali Outreach ",
+    });
+    expect(put.statusCode).toBe(202);
+
+    const summary = (await read("/v1/crm/campaigns/roi-summary?limit=100")).json().data as Array<{ campaignId: string; name?: string }>;
+    expect(summary.find((c) => c.campaignId === NAMED)?.name).toBe("Diwali Outreach");
+
+    const detail = (await read(`/v1/crm/campaigns/${NAMED}/roi`)).json().data;
+    expect(detail.name).toBe("Diwali Outreach");
+  });
+
+  it("omits `name` (not null) for a campaign whose feed never carried one", async () => {
+    await upsert(UNNAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "100", responses: 1 });
+    const summary = (await read("/v1/crm/campaigns/roi-summary?limit=100")).json().data as Array<Record<string, unknown>>;
+    const row = summary.find((c) => c.campaignId === UNNAMED)!;
+    expect(row).toBeDefined();
+    expect("name" in row).toBe(false);
+    expect("name" in (await read(`/v1/crm/campaigns/${UNNAMED}/roi`)).json().data).toBe(false);
+  });
+
+  it("keeps the stored name when a later period (or a replayed feed row) carries none, and lets a new name win", async () => {
+    await upsert(NAMED, { periodStart: "2026-02-01", costMinor: "10", revenueMinor: "20", responses: 1 });
+    // Replay of the first period without a name must not erase it either.
+    await upsert(NAMED, { periodStart: "2026-01-01", costMinor: "100", revenueMinor: "300", responses: 3 });
+    expect((await read(`/v1/crm/campaigns/${NAMED}/roi`)).json().data.name).toBe("Diwali Outreach");
+
+    await upsert(NAMED, { periodStart: "2026-03-01", costMinor: "1", revenueMinor: "1", responses: 0, campaignName: "Diwali 2026" });
+    expect((await read(`/v1/crm/campaigns/${NAMED}/roi`)).json().data.name).toBe("Diwali 2026");
+  });
+
+  it("rejects a blank or over-long name (400) without writing anything", async () => {
+    for (const campaignName of ["   ", "x".repeat(201)]) {
+      const res = await upsert(UNNAMED, { periodStart: "2026-04-01", costMinor: "1", revenueMinor: "1", responses: 0, campaignName });
+      expect(res.statusCode).toBe(400);
+    }
+    const detail = (await read(`/v1/crm/campaigns/${UNNAMED}/roi`)).json().data as { periods: unknown[] };
+    expect(detail.periods).toHaveLength(1); // only the 2026-01-01 period from above
+  });
+});

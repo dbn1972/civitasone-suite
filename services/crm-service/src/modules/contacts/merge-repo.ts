@@ -79,21 +79,128 @@ export async function reassignContactChildren(
 }
 
 /**
+ * True when `ancestorId` is `nodeId` itself or appears in its parent chain
+ * (cycle-safe: the recursive CTE uses UNION so a legacy loop terminates).
+ */
+export async function isSelfOrAncestor(
+  tx: ExecTx,
+  ancestorId: string,
+  nodeId: string,
+  tenantId: string,
+): Promise<boolean> {
+  const rows = (await tx.execute(sql`
+    WITH RECURSIVE chain(id, parent_id) AS (
+      SELECT id, parent_id FROM crm.accounts WHERE id = ${nodeId} AND tenant_id = ${tenantId}
+      UNION
+      SELECT a.id, a.parent_id FROM crm.accounts a
+        JOIN chain c ON a.id = c.parent_id
+       WHERE a.tenant_id = ${tenantId}
+    )
+    SELECT 1 AS hit FROM chain WHERE id = ${ancestorId} LIMIT 1
+  `)) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+/**
+ * Re-point the duplicate's CHILD ACCOUNTS (accounts.parent_id = duplicate) at the
+ * primary so the hierarchy does not keep pointing at the tombstoned duplicate.
+ *
+ * Cycle guard: if the primary itself sits inside the duplicate's subtree, the
+ * duplicate's direct child on the path down to the primary must NOT become a
+ * child of the primary (primary -> ... -> that child -> primary would loop). That
+ * one node is lifted to the duplicate's own parent instead (null = top level);
+ * every other child moves under the primary.
+ */
+export async function reassignChildAccounts(
+  tx: ExecTx,
+  fromId: string,
+  toId: string,
+  tenantId: string,
+  actorId: string,
+  fromParentId: string | null,
+): Promise<void> {
+  const path = (await tx.execute(sql`
+    WITH RECURSIVE chain(id, parent_id) AS (
+      SELECT id, parent_id FROM crm.accounts WHERE id = ${toId} AND tenant_id = ${tenantId}
+      UNION
+      SELECT a.id, a.parent_id FROM crm.accounts a
+        JOIN chain c ON a.id = c.parent_id
+       WHERE a.tenant_id = ${tenantId}
+    )
+    SELECT id FROM chain WHERE parent_id = ${fromId} LIMIT 1
+  `)) as unknown as Array<{ id: string }>;
+  const liftId = path[0]?.id ?? null;
+  if (liftId) {
+    await tx.execute(
+      sql`UPDATE crm.accounts SET parent_id = ${fromParentId}, updated_at = now(), updated_by = ${actorId}, version = version + 1 WHERE id = ${liftId} AND tenant_id = ${tenantId}`,
+    );
+  }
+  await tx.execute(
+    sql`UPDATE crm.accounts SET parent_id = ${toId}, updated_at = now(), updated_by = ${actorId}, version = version + 1 WHERE parent_id = ${fromId} AND tenant_id = ${tenantId} AND id <> ${toId}`,
+  );
+}
+
+/**
+ * Re-point crm.account_relationships edges (from/to the duplicate) at the primary.
+ * An edge that would become a self-loop (duplicate <-> primary) or collide with an
+ * edge the primary already has (same other end + type) is dropped rather than
+ * moved: the table forbids self-loops and has a unique (from, to, type) edge.
+ */
+export async function reassignAccountRelationships(
+  tx: ExecTx,
+  fromId: string,
+  toId: string,
+  tenantId: string,
+): Promise<void> {
+  await tx.execute(sql`
+    DELETE FROM crm.account_relationships
+     WHERE tenant_id = ${tenantId}
+       AND ((from_account_id = ${fromId} AND to_account_id = ${toId})
+         OR (from_account_id = ${toId} AND to_account_id = ${fromId}))
+  `);
+  await tx.execute(sql`
+    DELETE FROM crm.account_relationships r
+     WHERE r.tenant_id = ${tenantId} AND r.from_account_id = ${fromId}
+       AND EXISTS (SELECT 1 FROM crm.account_relationships p
+                    WHERE p.tenant_id = ${tenantId} AND p.from_account_id = ${toId}
+                      AND p.to_account_id = r.to_account_id AND p.rel_type = r.rel_type)
+  `);
+  await tx.execute(sql`UPDATE crm.account_relationships SET from_account_id = ${toId} WHERE from_account_id = ${fromId} AND tenant_id = ${tenantId}`);
+  await tx.execute(sql`
+    DELETE FROM crm.account_relationships r
+     WHERE r.tenant_id = ${tenantId} AND r.to_account_id = ${fromId}
+       AND EXISTS (SELECT 1 FROM crm.account_relationships p
+                    WHERE p.tenant_id = ${tenantId} AND p.to_account_id = ${toId}
+                      AND p.from_account_id = r.from_account_id AND p.rel_type = r.rel_type)
+  `);
+  await tx.execute(sql`UPDATE crm.account_relationships SET to_account_id = ${toId} WHERE to_account_id = ${fromId} AND tenant_id = ${tenantId}`);
+}
+
+/**
  * Re-point every child that references an account from `fromId` to `toId`:
- * the account's contacts, strategic plans, QBRs, tenders and onboarding cases.
- * Deals and activities follow transitively via the reassigned contacts.
+ * the account's contacts, account-subject activities, strategic plans, QBRs,
+ * tenders, onboarding cases, child accounts and typed account relationships.
+ * Deals follow transitively via the reassigned contacts.
+ *
+ * `fromParentId` is the duplicate's own parent (used to lift the one child that
+ * would otherwise create a hierarchy loop -- see reassignChildAccounts).
  */
 export async function reassignAccountChildren(
   tx: ExecTx,
   fromId: string,
   toId: string,
   tenantId: string,
+  actorId: string,
+  fromParentId: string | null = null,
 ): Promise<void> {
   await tx.execute(sql`UPDATE crm.contacts SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
+  await tx.execute(sql`UPDATE crm.activities SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
   await tx.execute(sql`UPDATE crm.account_plans SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
   await tx.execute(sql`UPDATE crm.qbr_schedules SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
   await tx.execute(sql`UPDATE crm.tenders SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
   await tx.execute(sql`UPDATE crm.onboarding_cases SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
+  await reassignChildAccounts(tx, fromId, toId, tenantId, actorId, fromParentId);
+  await reassignAccountRelationships(tx, fromId, toId, tenantId);
 }
 
 /** Soft-delete an account (status = inactive) inside the caller's tx. */

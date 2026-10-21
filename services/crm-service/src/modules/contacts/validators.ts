@@ -237,6 +237,23 @@ export const accountsListSchema = z.object({
   meta: z.object({ total: z.number().int().nonnegative() }).optional(),
 });
 
+// GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts query. `search` (name substring)
+// and `excludeSubtreeOf` (hide an account and all its descendants) let a picker ask
+// the server for matches instead of loading the capped list and filtering it.
+export const listAccountsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  search: z.string().trim().max(100).optional(),
+  excludeSubtreeOf: z.string().uuid().optional(),
+});
+
+// GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts/:id -- the list row shape plus the
+// number of ACTIVE sub-accounts below it (drives the "moves N sub-accounts" confirm).
+export const accountDetailSchema = accountViewSchema.extend({
+  descendantCount: z.number().int().nonnegative(),
+});
+export const accountDetailResponseSchema = z.object({ data: accountDetailSchema });
+
 export const contactViewSchema = z.object({
   id: z.string().uuid(),
   tenantId: z.string().uuid(),

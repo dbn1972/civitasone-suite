@@ -15,12 +15,13 @@
  *   GET/POST/PUT/DELETE /v1/crm/branches[/:id]
  *   GET/POST/PUT/DELETE /v1/crm/escalation-rules[/:id]
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
 import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
@@ -40,24 +41,76 @@ const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
  * instead of a 202 that quietly orphans rules. UUIDs are globally unique, so a
  * text search of the criteria JSON is a safe, key-agnostic reference test.
  */
-async function assertNotReferencedByRules(
+type TargetKind = "queue" | "territory" | "partner" | "branch";
+interface NamedRef { id: string; name: string }
+export interface TargetReferences {
+  assignmentRules: NamedRef[];
+  assignmentRuleCount: number;
+  branches: NamedRef[];
+  branchCount: number;
+}
+
+/** At most this many names are echoed back per category; the counts stay exact. */
+const REFERENCE_SAMPLE = 10;
+
+/**
+ * Everything that still points at a queue / territory / partner / branch: assignment
+ * rules (via their criteria) and, for a territory, the branches filed under it
+ * (branches.territory_id). Returns null when nothing references the target.
+ */
+async function findReferences(
   tenantId: string,
   targetId: string,
-): Promise<void> {
-  const rows = (await scopedRead((tx) => tx.execute(sql`
-    SELECT count(*)::int AS count
+  kind: TargetKind,
+): Promise<TargetReferences | null> {
+  const ruleRows = (await scopedRead((tx) => tx.execute(sql`
+    SELECT id, name, count(*) OVER ()::int AS total
     FROM crm.assignment_rules
     WHERE tenant_id = ${tenantId}
       AND criteria::text LIKE ${"%" + targetId + "%"}
-  `))) as unknown as Array<{ count: number }>;
-  const count = rows[0]?.count ?? 0;
-  if (count > 0) {
-    throw new HttpError(
-      409,
-      "IN_USE",
-      `cannot delete: still referenced by ${count} assignment rule${count === 1 ? "" : "s"}. Reassign or remove those rules first.`,
-    );
-  }
+    ORDER BY ordinal ASC
+    LIMIT ${REFERENCE_SAMPLE}
+  `))) as unknown as Array<{ id: string; name: string; total: number }>;
+  const branchRows = kind === "territory"
+    ? ((await scopedRead((tx) => tx.execute(sql`
+        SELECT id, name, count(*) OVER ()::int AS total
+        FROM crm.branches
+        WHERE tenant_id = ${tenantId} AND territory_id = ${targetId}
+        ORDER BY name ASC
+        LIMIT ${REFERENCE_SAMPLE}
+      `))) as unknown as Array<{ id: string; name: string; total: number }>)
+    : [];
+  if (ruleRows.length === 0 && branchRows.length === 0) return null;
+  return {
+    assignmentRules: ruleRows.map((r) => ({ id: r.id, name: r.name })),
+    assignmentRuleCount: ruleRows[0]?.total ?? 0,
+    branches: branchRows.map((r) => ({ id: r.id, name: r.name })),
+    branchCount: branchRows[0]?.total ?? 0,
+  };
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * GAP-CRM-ASSIGNMENT-DIRECTORY-04: the body of a 409 IN_USE refusal -- a structured
+ * `references` list (names + exact counts) so the UI can say WHAT still uses the
+ * target instead of a generic conflict. The route sends it with
+ * `return reply.code(409).send(...)` (returning the reply from an async helper would
+ * resolve to undefined and let the handler carry on and enqueue the delete).
+ */
+function inUseBody(req: FastifyRequest, refs: TargetReferences) {
+  const parts: string[] = [];
+  if (refs.assignmentRuleCount > 0) parts.push(plural(refs.assignmentRuleCount, "assignment rule", "assignment rules"));
+  if (refs.branchCount > 0) parts.push(plural(refs.branchCount, "branch", "branches"));
+  return {
+    code: "IN_USE",
+    message: `cannot delete: still referenced by ${parts.join(" and ")}. Reassign or remove those first.`,
+    correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
+    retryable: false,
+    references: refs,
+  };
 }
 
 /**
@@ -100,7 +153,15 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const rules = await repo.listRuleViews(ctx.tenantId);
-    return reply.send({ data: rules, meta: { page: 1, pageSize: rules.length, total: rules.length } });
+    // GAP-CRM-ASSIGNMENT-RULES-05: show WHO last changed the chain. The rule row keeps
+    // only the user id, so resolve a display name from identity-service (best effort:
+    // an unresolved id simply has no name; the raw id is never shown as a label).
+    const names = await fetchUserNames(ctx.tenantId);
+    const data = rules.map((r) => {
+      const updatedByName = r.updatedBy ? names.get(r.updatedBy) : undefined;
+      return updatedByName ? { ...r, updatedByName } : r;
+    });
+    return reply.send({ data, meta: { page: 1, pageSize: data.length, total: data.length } });
   });
 
   app.post("/v1/crm/assignment-rules", async (req, reply) => {
@@ -168,7 +229,8 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/assignment-queues/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
-    await assertNotReferencedByRules(ctx.tenantId, id);
+    const inUse = await findReferences(ctx.tenantId, id, "queue");
+    if (inUse) return reply.code(409).send(inUseBody(req, inUse));
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteAssignmentQueue, id));
   });
 
@@ -190,7 +252,8 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/territories/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
-    await assertNotReferencedByRules(ctx.tenantId, id);
+    const inUse = await findReferences(ctx.tenantId, id, "territory");
+    if (inUse) return reply.code(409).send(inUseBody(req, inUse));
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteTerritory, id));
   });
 
@@ -212,7 +275,8 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/partners/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
-    await assertNotReferencedByRules(ctx.tenantId, id);
+    const inUse = await findReferences(ctx.tenantId, id, "partner");
+    if (inUse) return reply.code(409).send(inUseBody(req, inUse));
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deletePartner, id));
   });
 
@@ -234,7 +298,8 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/crm/branches/:id", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
-    await assertNotReferencedByRules(ctx.tenantId, id);
+    const inUse = await findReferences(ctx.tenantId, id, "branch");
+    if (inUse) return reply.code(409).send(inUseBody(req, inUse));
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteTarget(ctx, COMMANDS.deleteBranch, id));
   });
 
