@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, type RenderOptions } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement, ReactNode } from "react";
+import enMessages from "@/messages/en.json";
+
+// The page reads its new copy through next-intl (financeChartOfAccountsNew / financeChartOfAccounts).
+const withIntl = ({ children }: { children: ReactNode }) => (
+  <NextIntlClientProvider locale="en" messages={enMessages}>{children}</NextIntlClientProvider>
+);
+const render = (ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) => rtlRender(ui, { wrapper: withIntl, ...options });
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -244,5 +253,109 @@ describe("MapHeadOfAccountPage", () => {
     expect(heading).toHaveTextContent("LMMHA");
     expect(heading.querySelector("button, [role='tooltip'], [aria-describedby], abbr, [tabindex]")).not.toBeNull();
     await waitFor(() => expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0));
+  });
+});
+
+// GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: the new head names its whole path, and any parent is reachable.
+describe("MapHeadOfAccountPage parent head -- path and search", () => {
+  beforeEach(() => {
+    refreshMock.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  const MAJOR = { id: "maj-1", code: "2000", name: "Liabilities", level: 0, parentId: null };
+  const MINOR = { id: "min-1", code: "2100", name: "Creditors", level: 1, parentId: "maj-1" };
+
+  function mockChart(rows: unknown[], extra?: (url: string) => Response | null) {
+    const posts: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      if (init?.method === "POST") { posts.push(init.body as string); return new Response(JSON.stringify({ id: "new" }), { status: 202 }); }
+      return extra?.(String(url)) ?? new Response(JSON.stringify({ data: rows }), { status: 200 });
+    });
+    return posts;
+  }
+  async function fill(codeValue: string, nameValue: string, levelValue: string, parentValue?: string) {
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: codeValue } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: nameValue } });
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: levelValue } });
+    if (parentValue) fireEvent.change(screen.getByLabelText("Parent head"), { target: { value: parentValue } });
+    fireEvent.click(screen.getByRole("button", { name: /create head/i }));
+  }
+
+  it("a sub-minor head's success message names the path Major > Minor > Sub-minor", async () => {
+    mockChart([MAJOR, MINOR]);
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "2" } });
+    await fill("2101", "Trade Creditors", "2", "min-1");
+    expect(await screen.findByText(
+      'Head of account "2101" created. It sits at: Major head 2000 (Liabilities) › Minor head 2100 (Creditors) › Sub-minor head 2101 (Trade Creditors).',
+    )).toBeInTheDocument();
+  });
+
+  it("a minor head's message names Major > Minor; a major head says it is a major head", async () => {
+    const posts = mockChart([MAJOR]);
+    const { unmount } = render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    await fill("2100", "Creditors", "1", "maj-1");
+    expect(await screen.findByText('Head of account "2100" created. It sits at: Major head 2000 (Liabilities) › Minor head 2100 (Creditors).')).toBeInTheDocument();
+    expect(JSON.parse(posts[0]!)).toMatchObject({ level: 1, parentId: "maj-1" });
+    unmount();
+
+    mockChart([]);
+    render(<MapHeadOfAccountPage />);
+    await fill("3000", "Assets", "0");
+    expect(await screen.findByText('Head of account "3000" created as a major head.')).toBeInTheDocument();
+  });
+
+  it("an ancestor that is not loaded is shown as an ellipsis, never invented", async () => {
+    // the minor head's own parent is not among the loaded heads
+    mockChart([{ ...MINOR, parentId: "gone" }]);
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2100 · Creditors").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "2" } });
+    await fill("2101", "Trade", "2", "min-1");
+    expect(await screen.findByText('Head of account "2101" created. It sits at: … › Minor head 2100 (Creditors) › Sub-minor head 2101 (Trade).')).toBeInTheDocument();
+  });
+
+  it("a parent beyond the loaded page is found by search and sent as parentId", async () => {
+    const urls: string[] = [];
+    const posts = mockChart([MAJOR], (url) => {
+      urls.push(url);
+      if (url.includes("q=9999")) return new Response(JSON.stringify({ data: [{ id: "maj-far", code: "9999", name: "Remote Major", level: 0, parentId: null }] }), { status: 200 });
+      return null;
+    });
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "9999" } });
+    await waitFor(() => expect(screen.getAllByText("9999 · Remote Major").length).toBeGreaterThan(0));
+    expect(urls.some((u) => u.includes("/finance/accounts?q=9999&limit=50"))).toBe(true);
+    await fill("9999-01", "Far Minor", "1", "maj-far");
+    await waitFor(() => expect(posts.length).toBe(1));
+    expect(JSON.parse(posts[0]!)).toMatchObject({ level: 1, parentId: "maj-far" });
+    expect(await screen.findByText(/Major head 9999 \(Remote Major\) › Minor head 9999-01 \(Far Minor\)/)).toBeInTheDocument();
+  });
+
+  it("the chosen parent stays selectable after a later search no longer returns it", async () => {
+    mockChart([MAJOR], (url) => (url.includes("q=zzz") ? new Response(JSON.stringify({ data: [] }), { status: 200 }) : null));
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Parent head"), { target: { value: "maj-1" } });
+    fireEvent.change(screen.getByLabelText("Find a parent head by code or name"), { target: { value: "zzz" } });
+    await screen.findByText("No head at the right level matches that search.");
+    expect((screen.getByLabelText("Parent head") as HTMLSelectElement).value).toBe("maj-1");
+  });
+
+  it("a minor head with no parent still cannot be submitted", async () => {
+    const posts = mockChart([MAJOR]);
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "2100" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Creditors" } });
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
+    expect(screen.getByRole("button", { name: /create head/i })).toBeDisabled();
+    expect(posts).toHaveLength(0);
   });
 });

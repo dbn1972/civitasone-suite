@@ -1,16 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import type { AccountSummary } from "@civitasone/types";
 import { Card, DataTable, Segmented, StatusPill, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { countAccountsByType, formatBalanceDisplay } from "./accountStats";
+import { placeHeadsAsTree } from "./headTree";
 
 interface AccountsTableProps {
   accounts: AccountSummary[];
   source?: "api" | "error";
+  /**
+   * The viewer may create heads (finance_officer / finance_admin / super_admin, mirroring finance-service's POST
+   * /v1/finance/accounts): gates the empty-state "+ Add Head" action (GAP-FINANCE-CHART-OF-ACCOUNTS-05). Off by default.
+   */
+  canWrite?: boolean;
 }
 
 type TypeFilter = "all" | "asset" | "liability" | "equity" | "income" | "expense";
@@ -18,7 +25,8 @@ type StatusFilter = "all" | "active" | "inactive";
 
 type AccountRow = AccountSummary & Record<string, unknown>;
 
-export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) {
+export function AccountsTable({ accounts, source = "api", canWrite = false }: AccountsTableProps) {
+  const t = useTranslations("financeChartOfAccounts");
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -41,15 +49,31 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
 
   const q = search.trim().toLowerCase();
 
-  const filtered = rows.filter((a) => {
-    const matchesSearch =
-      q === "" ||
-      a.name.toLowerCase().includes(q) ||
-      a.code.toLowerCase().includes(q);
-    const matchesType = typeFilter === "all" || a.type === typeFilter;
-    const matchesStatus = statusFilter === "all" || a.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
-  }) as AccountRow[];
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: the list is a tree. Each head sits directly under its parent (siblings by
+  // code), indented by depth, with its level and parent named in their own columns, so a minor or sub-minor head is
+  // found under the head it was created for. The tree is built from ALL rows and filtered afterwards, so a search or
+  // type filter never changes where a head sits or which parent it names.
+  const levelLabel = (depth: 0 | 1 | 2, level?: number) => {
+    const l = level === 0 || level === 1 || level === 2 ? level : depth;
+    return l === 0 ? t("levelMajor") : l === 1 ? t("levelMinor") : t("levelSub");
+  };
+  const filtered = placeHeadsAsTree(rows)
+    .filter(({ head: a }) => {
+      const matchesSearch =
+        q === "" ||
+        a.name.toLowerCase().includes(q) ||
+        a.code.toLowerCase().includes(q);
+      const matchesType = typeFilter === "all" || a.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || a.status === statusFilter;
+      return matchesSearch && matchesType && matchesStatus;
+    })
+    .map(({ head, depth, parent, parentMissing }) => ({
+      ...head,
+      depth,
+      levelLabel: levelLabel(depth, head.level),
+      parentLabel: parent ? parent.code : parentMissing ? t("parentNotListed") : "—",
+      parentName: parent?.name ?? "",
+    })) as AccountRow[];
 
   const SEG_OPTIONS = ["All", "Asset", "Liability", "Equity", "Income", "Expense"] as const;
   const segValue = typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1);
@@ -143,8 +167,10 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
         <EmptyState
           icon="🧱"
           title="No accounts set up yet"
-          message="Your chart of accounts lists every head you record money against, like a bank account or an expense category. Add your first head to get started."
-          action={<a href="/finance/chart-of-accounts/new" className="btn primary">+ Add Head</a>}
+          message={canWrite
+            ? "Your chart of accounts lists every head you record money against, like a bank account or an expense category. Add your first head to get started."
+            : t("emptyReadOnly")}
+          {...(canWrite ? { action: <a href="/finance/chart-of-accounts/new" className="btn primary">+ Add Head</a> } : {})}
         />
       ) : filtered.length === 0 ? (
         <EmptyState
@@ -156,7 +182,20 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
         <DataTable<AccountRow>
           columns={[
             { key: "code", label: "Code", render: (a) => <span className="mono">{a.code}</span> },
-            { key: "name", label: "Name" },
+            {
+              key: "name", label: "Name",
+              render: (a) => (
+                <span style={{ paddingInlineStart: `${(a.depth as number) * 20}px`, display: "inline-block" }}>
+                  {(a.depth as number) > 0 ? <span aria-hidden="true">└ </span> : null}
+                  {a.name}
+                </span>
+              ),
+            },
+            { key: "levelLabel", label: t("colLevel") },
+            {
+              key: "parentLabel", label: t("colParent"),
+              render: (a) => (a.parentName ? <span title={a.parentName as string}><span className="mono">{a.parentLabel as string}</span></span> : <>{a.parentLabel as string}</>),
+            },
             { key: "type", label: "Type", render: (a) => <span style={{ textTransform: "capitalize" }}>{a.type as string}</span> },
             { key: "currency", label: "Currency" },
             { key: "balanceDisplay", label: "Balance", align: "right", render: (a) => <>{formatBalanceDisplay(a.balanceDisplay as string)}</> },

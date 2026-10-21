@@ -15912,5 +15912,23 @@
     },
     "highlightAdded": "Estimate added: {head} (FY {fy}). It is listed under the {tab} tab.",
     "highlightPending": "Your new estimate is still being processed and will appear in this list shortly. Refresh in a moment."
+  },
+  "financeChartOfAccounts": {
+    "levelMajor": "Major head",
+    "levelMinor": "Minor head",
+    "levelSub": "Sub-minor head",
+    "colLevel": "Level",
+    "colParent": "Parent",
+    "parentNotListed": "Not in this list",
+    "emptyReadOnly": "Your chart of accounts lists every head you record money against, like a bank account or an expense category. No heads have been added yet; a finance officer can add them."
+  },
+  "financeChartOfAccountsNew": {
+    "parentSearchLabel": "Find a parent head by code or name",
+    "parentSearchPlaceholder": "e.g. 2110 or Creditors",
+    "searching": "Searching…",
+    "parentNoMatch": "No head at the right level matches that search.",
+    "parentTruncated": "Showing the heads from the first {limit} loaded. Search by code or name to find any other parent.",
+    "createdMajor": "Head of account \"{code}\" created as a major head.",
+    "createdPath": "Head of account \"{code}\" created. It sits at: {path}."
   }
 }

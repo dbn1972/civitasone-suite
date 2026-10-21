@@ -171,6 +171,16 @@ export const OPENING_BALANCE_WRITE_ROLES = ["finance_admin", "super_admin"] as c
 export const PAYMENT_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 
 /**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-05: roles finance-service lets create a head of account (POST /v1/finance/accounts)
+ * and map its PFMS HoA code (PATCH /v1/finance/accounts/:id/hoa): budget/routes.ts FINANCE_ROLES. The rest of
+ * FINANCE_ROLES (audit_officer, budget_officer, procurement_officer, accounts_officer, payroll_admin, tenant_admin,
+ * admin) can READ the chart but would get a 403 only after filling the form, so "+ Add Head" and the form are hidden
+ * for them. (A control account additionally needs finance_admin/super_admin; the server enforces that.) Mirrors that
+ * constant exactly -- keep in sync.
+ */
+export const ACCOUNT_HEAD_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
  * UX gate for every page under /hr, /hr/payroll and /hr/recruitment (all
  * three share hr/layout.tsx's single `requireAnyRole(HR_ROLES)` call, since
  * payroll and recruitment are sub-trees of the same URL prefix and layout).

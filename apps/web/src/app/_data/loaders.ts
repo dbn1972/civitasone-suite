@@ -785,10 +785,12 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
     if (status !== "active" && status !== "inactive") continue;
     const id = toText(row.id);
     const parentId = toText(row.parentId);
+    const level = row.level === 0 || row.level === 1 || row.level === 2 ? row.level : undefined;
     mapped.push({
       code, name, type, currency, balanceDisplay, status,
       ...(id ? { id } : {}),
       ...(parentId ? { parentId } : {}),
+      ...(level !== undefined ? { level } : {}),
       ...(row.isControl === true ? { isControl: true } : {}),
     });
   }

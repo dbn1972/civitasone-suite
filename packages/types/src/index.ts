@@ -640,6 +640,8 @@ export interface AccountSummary {
   id?: string;
   /** Parent head id, or null/absent for a top-level head. A head that is some other head's parent is a non-postable group head. */
   parentId?: string | null;
+  /** Position in the chart: 0 = major head, 1 = minor head, 2 = sub-minor head (absent on older feeds). */
+  level?: 0 | 1 | 2;
   /** Sub-ledger-controlled account: not postable from a manual journal (GAP-FINANCE-JOURNAL-ENTRY-04). */
   isControl?: boolean;
   code: string;
