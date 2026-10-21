@@ -9,14 +9,14 @@ import * as aa from "@/lib/crm/activityAccount";
 
 vi.mock("@/lib/crm/activityAccount", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
-  return { ...actual, getOverdueTasks: vi.fn(), snoozeTask: vi.fn(), reassignTask: vi.fn(), getEscalationUsers: vi.fn() };
+  return { ...actual, getOverdueTaskPage: vi.fn(), snoozeTask: vi.fn(), reassignTask: vi.fn(), getEscalationUsers: vi.fn() };
 });
 
 const TASK = { id: "t1", subject: "Send quote", dueAt: "2026-08-03T12:00:00Z", ageMinutes: 100, ownerId: "u-1" };
 const USERS = [{ id: "u-1", name: "Priya Nayak" }, { id: "u-2", name: "Ravi Das" }];
 
 beforeEach(() => {
-  vi.mocked(aa.getOverdueTasks).mockReset().mockResolvedValue({ data: [TASK], source: "api" });
+  vi.mocked(aa.getOverdueTaskPage).mockReset().mockResolvedValue({ data: { tasks: [TASK], total: 1 }, source: "api" });
   vi.mocked(aa.snoozeTask).mockReset();
   vi.mocked(aa.reassignTask).mockReset();
   vi.mocked(aa.getEscalationUsers).mockReset().mockResolvedValue({ data: USERS, source: "api" });

@@ -58,6 +58,27 @@ describe("F6-01 SR detail timeline wiring", () => {
     expect(screen.getByText("Opened")).toBeInTheDocument();
   });
 
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-03: the timeline names who acted, using what the history
+  // endpoint resolved (actorName) - the entry's actorId is never rendered.
+  it("shows who made each status change, by the name the history endpoint resolved", async () => {
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.endsWith("/history")) {
+        return Promise.resolve({
+          data: [
+            { ...history[0], actorId: "9f1c0b2a-1111-2222-3333-444455556666", actorName: "Meera Nair" },
+            { ...history[1], actorId: "9f1c0b2a-1111-2222-3333-444455556666", actorName: "Rahul Verma" },
+          ],
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: detail, source: "api" });
+    });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.getByText("by Meera Nair")).toBeInTheDocument();
+    expect(screen.getByText("by Rahul Verma")).toBeInTheDocument();
+    expect(screen.queryByText(/9f1c0b2a/)).not.toBeInTheDocument();
+  });
+
   it("calls fetchJson for both the detail and the history endpoints", async () => {
     await Page({ params: { id: "sr-1" } });
     const urls = fetchJsonMock.mock.calls.map((c) => c[0] as string);

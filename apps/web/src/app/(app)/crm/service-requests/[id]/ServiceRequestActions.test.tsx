@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -222,5 +222,170 @@ describe("ServiceRequestActions", () => {
     expect(confirm).toBeDisabled();
     fireEvent.change(reason, { target: { value: "Duplicate request" } });
     expect(confirm).not.toBeDisabled();
+  });
+});
+
+// GAP-CRM-SERVICE-REQUESTS-DETAIL-04 — the status response says what happens to the citizen notice.
+describe("ServiceRequestActions - citizen notice outcome (DETAIL-04)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  async function resolveWith(notification: unknown, status = "in_progress", action = "Resolve", label = "Resolution") {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: SR_ID, ...(notification ? { notification } : {}) } }), { status: 200 }),
+    );
+    render(<ServiceRequestActions id={SR_ID} status={status} version={3} />);
+    fireEvent.click(screen.getByRole("button", { name: action }));
+    await screen.findByLabelText(label);
+    fireEvent.change(screen.getByLabelText(label), { target: { value: "Certificate issued today" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  }
+
+  it("tells the officer the citizen was NOT notified when there is no phone or email on file", async () => {
+    await resolveWith({ state: "no_contact", channel: null });
+    expect(await screen.findByText(/citizen was not notified: there is no phone number or email on this request/i)).toBeInTheDocument();
+    expect(screen.queryByText(/is being sent/i)).not.toBeInTheDocument();
+  });
+
+  it("tells the officer a notice is on its way, and by which channel", async () => {
+    await resolveWith({ state: "queued", channel: "sms" });
+    expect(await screen.findByText(/A notice is being sent to the citizen by SMS/)).toBeInTheDocument();
+    expect(screen.queryByText(/was not notified/i)).not.toBeInTheDocument();
+  });
+
+  it("says a notice is on its way even if the channel is unknown", async () => {
+    await resolveWith({ state: "queued", channel: null });
+    expect(await screen.findByText(/A notice is being sent to the citizen; the result will show/)).toBeInTheDocument();
+  });
+
+  it("also reports it for a Close", async () => {
+    await resolveWith({ state: "no_contact", channel: null }, "in_progress", "Close", "Closing remarks");
+    expect(await screen.findByText(/citizen was not notified/i)).toBeInTheDocument();
+  });
+
+  it("says nothing about notification when the server reports none (a transition that notifies nobody)", async () => {
+    await resolveWith(undefined);
+    expect(screen.queryByText(/notified/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/is being sent/i)).not.toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-SERVICE-REQUESTS-DETAIL-05 — assign / reassign.
+describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
+  const USERS = [
+    { id: "u-1", name: "Kavita Rao" },
+    { id: "u-2", name: "Meera Nair" },
+  ];
+
+  /** Route the directory GET and the assign PATCH separately; return the spy. */
+  function mockApi(assign: Response | (() => Response) = new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 }), directory?: Response) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/v1/crm/directory/users")) {
+        return directory ?? new Response(JSON.stringify({ data: USERS }), { status: 200 });
+      }
+      return typeof assign === "function" ? assign() : assign.clone();
+    });
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("is not offered to a viewer who may not assign", () => {
+    render(<ServiceRequestActions id={SR_ID} status="open" version={1} />);
+    expect(screen.queryByRole("button", { name: /^(Re)?assign$/i })).not.toBeInTheDocument();
+  });
+
+  it("offers Assign when nobody owns the request, and Reassign when somebody does", () => {
+    const { unmount } = render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign />);
+    expect(screen.getByRole("button", { name: "Assign" })).toBeInTheDocument();
+    unmount();
+    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
+    expect(screen.getByRole("button", { name: "Reassign" })).toBeInTheDocument();
+  });
+
+  it("is not offered once the request is closed or cancelled", () => {
+    render(<ServiceRequestActions id={SR_ID} status="closed" version={1} canAssign />);
+    expect(screen.queryByRole("button", { name: /assign/i })).not.toBeInTheDocument();
+  });
+
+  it("assigns the chosen officer with the version the page read, then refreshes", async () => {
+    const spy = mockApi();
+    render(<ServiceRequestActions id={SR_ID} status="open" version={4} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    // The directory is loaded and listed BY NAME.
+    const select = (await within(dialog).findByLabelText("Officer")) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual(["Select an officer…", "Kavita Rao", "Meera Nair"]);
+    // Nothing can be submitted until an officer is chosen.
+    expect(within(dialog).getByRole("button", { name: "Assign" })).toBeDisabled();
+    fireEvent.change(select, { target: { value: "u-2" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const patch = spy.mock.calls.find(([u]) => String(u).endsWith("/assign"))!;
+    expect(String(patch[0])).toBe(`/api/proxy/v1/crm/service-requests/${SR_ID}/assign`);
+    expect((patch[1] as RequestInit).method).toBe("PATCH");
+    expect(JSON.parse((patch[1] as RequestInit).body as string)).toEqual({ assignedTo: "u-2", version: 4 });
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+
+  it("on reassign names the current officer and does not offer them again", async () => {
+    mockApi();
+    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign assignedTo="u-1" assignedToName="Kavita Rao" />);
+    fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Currently assigned to Kavita Rao/)).toBeInTheDocument();
+    const select = (await within(dialog).findByLabelText("Officer")) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.textContent)).not.toContain("Kavita Rao");
+    expect(Array.from(select.options).map((o) => o.textContent)).toContain("Meera Nair");
+  });
+
+  it("on a version conflict reloads the page and says someone else changed the request", async () => {
+    mockApi(new Response(JSON.stringify({ code: "VERSION_CONFLICT" }), { status: 409 }));
+    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+    expect(await within(dialog).findByText(/someone else changed this request/i)).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("explains an officer the server rejects as not an active user", async () => {
+    mockApi(new Response(JSON.stringify({ code: "INVALID_ASSIGNEE" }), { status: 422 }));
+    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+    expect(await within(dialog).findByText(/not an active user of this office/i)).toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a clerk-safe message, not the server text, for any other failure", async () => {
+    mockApi(new Response(JSON.stringify({ message: "stack trace here" }), { status: 500 }));
+    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(await within(dialog).findByLabelText("Officer"), { target: { value: "u-1" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+    expect(await within(dialog).findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/stack trace here/)).not.toBeInTheDocument();
+  });
+
+  it("says the officer list is unavailable (no empty picker) when the directory cannot be loaded", async () => {
+    mockApi(undefined, new Response("{}", { status: 503 }));
+    render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/officer list is unavailable right now/i)).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("Officer")).not.toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Assign" })).toBeDisabled();
   });
 });

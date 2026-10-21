@@ -2236,6 +2236,10 @@
         "dataQuality": {
           "title": "Data Quality",
           "description": "Data completeness scoring"
+        },
+        "overdueTasks": {
+          "title": "Overdue Tasks",
+          "description": "Open tasks past their due time, worst-aged first"
         }
       }
     },
@@ -13516,7 +13520,22 @@
     "regardingInvalid": "Enter a valid service request ID, or leave this blank.",
     "noticeLive": "Your feedback is collected and processed under the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> solely to improve public service delivery. Any comment you leave is visible only to authorised administrators.",
     "submitting": "Submitting…",
-    "submitFeedback": "Submit feedback"
+    "submitFeedback": "Submit feedback",
+    "title": "Citizen Feedback",
+    "backLabel": "Voice of Citizen",
+    "serviceRatingLabel": "Service Rating",
+    "ratingPoor": "Poor",
+    "ratingFair": "Fair",
+    "ratingGood": "Good",
+    "ratingVeryGood": "Very Good",
+    "ratingExcellent": "Excellent",
+    "commentsLabel": "Comments / Suggestions",
+    "commentsPlaceholder": "Tell us about your experience with this service...",
+    "submissionType": "Submission Type",
+    "anonymous": "Anonymous",
+    "registeredCitizen": "Registered Citizen",
+    "registeredNote": "This form does not collect the citizen’s name, phone number or ID, so a Registered Citizen response is recorded without them. To tie it to the citizen’s record, enter the service request it is about in “Regarding” above.",
+    "cancel": "Cancel"
   },
   "crmContactToolbar": {
     "exportFiltered": "Export filtered",
@@ -13932,7 +13951,13 @@
     "taskFallback": "Task",
     "colDue": "Due",
     "colOverdueBy": "Overdue by",
-    "colOwner": "Owner"
+    "colOwner": "Owner",
+    "showing": "Showing {from}–{to} of {total}",
+    "pagerAria": "Overdue tasks pages",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageOf": "Page {page} of {pages}",
+    "usersUnavailable": "The user list is unavailable right now, so tasks can’t be reassigned"
   },
   "crmOwnerPicker": {
     "onLeave": "On leave",
@@ -14347,7 +14372,22 @@
     "priority_urgent": "Urgent",
     "priority_high": "High",
     "priority_normal": "Normal",
-    "priority_low": "Low"
+    "priority_low": "Low",
+    "assignedNameUnavailable": "Assigned (name unavailable)",
+    "noDueDate": "No target date set",
+    "nameUnavailable": "Name unavailable",
+    "loggedBy": "Logged by",
+    "lastUpdatedBy": "Last updated by",
+    "linkedContact": "Linked contact",
+    "contactNameUnavailable": "Contact (name unavailable)",
+    "notificationCard": "Citizen notification",
+    "channel_email": "email",
+    "channel_sms": "SMS",
+    "notifyQueued": "A notice is being sent to the citizen by {channel}.",
+    "notifySent": "The citizen was notified by {channel} on {when}.",
+    "notifyFailed": "The notice could not be delivered by {channel}. Please contact the citizen directly.",
+    "notifyNoTemplate": "The citizen was not notified: this office has no “service_request_resolution” {channel} template set up. Ask an administrator to create one, and contact the citizen directly.",
+    "notifyNoContact": "The citizen was not notified: there is no phone number or email on this request."
   },
   "crmServiceRequestNew": {
     "phoneHint": "Enter a 10-digit mobile number.",
@@ -14393,7 +14433,14 @@
     "descriptionPlaceholder": "Detailed description of the service request…",
     "cancel": "Cancel",
     "saving": "Saving…",
-    "submit": "Submit Request"
+    "submit": "Submit Request",
+    "dupHeading": "Possible duplicate",
+    "dupIntro": "This citizen already has {count, plural, one {an open request} other {# open requests}}. Check before logging another.",
+    "dupLabel": "Possible duplicate:",
+    "dupCheckFailed": "Couldn’t check for existing requests from this phone or email. You can still log the request.",
+    "dupConfirmTitle": "File another request of the same type?",
+    "dupConfirmDescription": "{ref} is already open for this citizen and service type. File a new request only if this is a different matter.",
+    "dupConfirmLabel": "File anyway"
   },
   "crmServiceRequestsFilterBar": {
     "searchAria": "Search service requests",
@@ -14477,7 +14524,7 @@
     "noSpecificUser": "No specific user",
     "escalates": "Escalates to <strong>{name}</strong>",
     "escalatesMissing": "Escalates to <strong>{name}</strong> — fix this before it can escalate.",
-    "escalatesWithCount": "Escalates to <strong>{name}</strong> · {count, plural, one {{formatted} task currently overdue} other {{formatted} tasks currently overdue}}",
+    "escalatesWithCount": "Escalates to <strong>{name}</strong> · {count, plural, one {{formatted} task is} other {{formatted} tasks are}} already overdue by at least this long",
     "unitMinutes": "minutes",
     "unitHours": "hours",
     "unitDays": "days",
@@ -14489,7 +14536,41 @@
     "overdueBy": "Overdue by",
     "thresholdValueAria": "Threshold value for rule {n}",
     "thresholdUnitAria": "Threshold unit for rule {n}",
-    "rulesListedHelp": "Rules are listed by threshold, soonest first. Each rule fires independently when a task passes its threshold."
+    "rulesListedHelp": "Rules are listed by threshold, soonest first. Each rule fires independently when a task passes its threshold.",
+    "loading": "Loading task-escalation rules…",
+    "heading": "Task escalation",
+    "emptyTitle": "No task-escalation rules yet",
+    "emptyMessage": "Add a rule so overdue tasks reach a manager.",
+    "ruleLegend": "Rule {n}",
+    "ruleName": "Rule name",
+    "ruleNameAria": "Name for rule {n}",
+    "defaultRuleName": "Escalate overdue tasks",
+    "managerRole": "Manager role",
+    "managerUser": "Manager user",
+    "enabled": "Enabled",
+    "enableAria": "Enable rule {n}",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "deleteAria": "Delete rule {n}",
+    "addRule": "+ Add task-escalation rule",
+    "rowInvalid": "Each rule needs a name, a positive threshold in minutes and a manager role or user.",
+    "saved": "Task-escalation rule saved.",
+    "saveFailed": "Could not save the rule.",
+    "deleted": "Task-escalation rule deleted.",
+    "deleteFailed": "Could not delete the rule.",
+    "deleteTitle": "Delete this task-escalation rule?",
+    "deleteDescription": "Overdue tasks will no longer escalate under this rule.",
+    "deleteConfirm": "Delete rule",
+    "directoryUnavailable": "Roles and users could not be loaded, so a manager can’t be chosen right now. Reload the page to try again.",
+    "rejected": {
+      "INVALID_RECIPIENT_ROLE": "That role isn’t one of this office’s roles any more. Pick another role.",
+      "INVALID_RECIPIENT": "That person isn’t an active user of this office. Pick another user.",
+      "RECIPIENT_REQUIRED": "Choose a manager role or a manager user.",
+      "DIRECTORY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly.",
+      "IDENTITY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly."
+    }
   },
   "crmVoiceOfCitizen": {
     "windowRange": "Window: {from} to {to}",
@@ -14498,7 +14579,7 @@
     "windowAll": "Window: all time",
     "subtitle": "What citizens and stakeholders are saying — every logged interaction is scored for sentiment and grouped by theme • {window} • नागरिक प्रतिक्रिया",
     "feedbackForm": "Feedback form",
-    "invalidPeriod": "That reporting period isn’t valid (the start date must be on or before the end date). Showing all activity instead.",
+    "invalidPeriod": "That reporting period isn’t valid (the dates must be real calendar dates, and the start date must be on or before the end date). Choose a new period to see the figures.",
     "partialWindowBody": "More interactions have been scored than this summary can scan in one pass, so the figures below cover the most recent activity only. Use the period control above to narrow the window and read an exact figure.",
     "dataProtectionNotice": "Data protection notice",
     "averageScore": "Average Score ({min} to +{max})",
@@ -14507,7 +14588,8 @@
     "ratingsReceived": "Ratings received",
     "citizenRatingsNote": "Citizen-submitted service ratings, shown separately from the model-scored sentiment above.",
     "openFeedbackForm": "Open the feedback form",
-    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting."
+    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting.",
+    "windowInvalid": "Window: not valid"
   },
   "crmAccountHierarchy": {
     "heading": "Account Hierarchy",
@@ -15027,7 +15109,28 @@
     "cancelRequest": "Cancel request",
     "cancelTitle": "Cancel this request?",
     "cancelDescription": "Use this when the request is withdrawn or will not be actioned. This is final.",
-    "cancelReason": "Reason for cancellation"
+    "cancelReason": "Reason for cancellation",
+    "assign": "Assign",
+    "reassign": "Reassign",
+    "assignTitle": "Assign this request",
+    "reassignTitle": "Reassign this request",
+    "assignDescription": "Choose the officer responsible for this request.",
+    "reassignDescription": "Currently assigned to {name}. Choose another officer.",
+    "currentOfficerUnavailable": "an officer (name unavailable)",
+    "assignLoading": "Loading officers…",
+    "assignDirectoryUnavailable": "The officer list is unavailable right now. Try again shortly.",
+    "assignNoOfficers": "There are no other officers to choose from.",
+    "assignOfficer": "Officer",
+    "assignSelect": "Select an officer…",
+    "assigning": "Assigning…",
+    "assignCancel": "Cancel",
+    "assignInvalid": "That person is not an active user of this office. Choose someone else.",
+    "assignUnavailable": "The officer could not be verified right now. Try again shortly.",
+    "noticeNoContact": "Saved. The citizen was not notified: there is no phone number or email on this request.",
+    "noticeQueued": "Saved. A notice is being sent to the citizen by {channel}; the result will show on this page.",
+    "noticeQueuedNoChannel": "Saved. A notice is being sent to the citizen; the result will show on this page.",
+    "channel_email": "email",
+    "channel_sms": "SMS"
   },
   "crmServiceRequestsPage": {
     "openInProgress": "Open / In Progress",
@@ -15200,7 +15303,9 @@
   "crmTimeline": {
     "title": "Status timeline",
     "empty": "No status changes recorded yet.",
-    "opened": "Opened"
+    "opened": "Opened",
+    "by": "by {name}",
+    "byUnknown": "by a user (name unavailable)"
   },
   "crmCatalogue": {
     "hsnHeader": "HSN/SAC",

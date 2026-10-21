@@ -11,7 +11,7 @@
  * crm-service is being extended concurrently, so the UI stays forgiving and any
  * mismatch is reported rather than silently mis-rendered.
  */
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { minutesSince, formatAgeing } from "@/lib/crm/assignment";
 import { UserFacingError } from "@/lib/userFacingError";
 
@@ -190,11 +190,22 @@ export async function createActivity(input: ActivityInput): Promise<AcceptResult
 
 /* ============================================================ AC-005 ===== */
 
+export const ESCALATION_APPLIES_TO = ["next_action", "task", "both"] as const;
+export type EscalationAppliesTo = (typeof ESCALATION_APPLIES_TO)[number];
+
 export interface TaskEscalationRule {
   id?: string;
+  /** Short label for the rule. crm-service requires one (max 200 chars). */
+  name?: string;
+  /** What the rule watches; crm-service defaults to "both" when unset. */
+  appliesTo?: EscalationAppliesTo;
   /** Escalate a task overdue by more than this many minutes. */
   thresholdMinutes: number;
-  /** Escalate to a manager role OR a specific manager — one is used. */
+  /**
+   * Escalate to a manager role OR a specific manager — one is used. These are the
+   * editor's names; on the wire they are crm-service's `recipientRole` /
+   * `recipientId` (see taskEscalationRuleBody / normaliseTaskEscalationRule).
+   */
   managerRole: string;
   managerId: string;
   enabled: boolean;
@@ -204,13 +215,66 @@ export function normaliseTaskEscalationRule(raw: unknown): TaskEscalationRule | 
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const threshold = numOrNull(r.thresholdMinutes);
+  const appliesTo = ESCALATION_APPLIES_TO.find((a) => a === r.appliesTo);
   return {
     ...(typeof r.id === "string" ? { id: r.id } : {}),
+    ...(optStr(r.name) ? { name: str(r.name) } : {}),
+    ...(appliesTo ? { appliesTo } : {}),
     thresholdMinutes: threshold ?? 0,
-    managerRole: str(r.managerRole),
-    managerId: str(r.managerId),
+    // crm-service stores the manager as recipientRole / recipientId. Reading only
+    // managerRole/managerId (names no service uses) meant a saved manager was never
+    // shown again - every rule looked like it had none. Accept the legacy names too.
+    managerRole: str(r.recipientRole) || str(r.managerRole),
+    managerId: str(r.recipientId) || str(r.managerId),
     enabled: bool(r.enabled, true),
   };
+}
+
+/**
+ * The request body crm-service's task-escalation-rules routes accept. The editor's
+ * managerRole/managerId map to recipientRole/recipientId, and `name` (required by the
+ * service) is always sent - posting the editor's own shape 400'd because it had no name
+ * and the manager fields were unknown to the schema.
+ */
+export function taskEscalationRuleBody(rule: TaskEscalationRule): Record<string, unknown> {
+  return {
+    name: (rule.name ?? "").trim(),
+    appliesTo: rule.appliesTo ?? "both",
+    thresholdMinutes: rule.thresholdMinutes,
+    recipientRole: rule.managerRole.trim() || null,
+    recipientId: rule.managerId.trim() || null,
+    enabled: rule.enabled,
+  };
+}
+
+/**
+ * crm-service refused a rule for a reason the editor can word precisely (a recipient that does
+ * not exist, no recipient, the directory unreachable). `code` is the server's machine code; the
+ * editor maps it to translated copy - the code itself is never shown.
+ */
+export const RULE_REJECTION_CODES = [
+  "INVALID_RECIPIENT_ROLE",
+  "INVALID_RECIPIENT",
+  "RECIPIENT_REQUIRED",
+  "DIRECTORY_UNAVAILABLE",
+  "IDENTITY_UNAVAILABLE",
+] as const;
+export type RuleRejectionCode = (typeof RULE_REJECTION_CODES)[number];
+
+export class TaskEscalationRuleRejected extends UserFacingError {
+  readonly code: RuleRejectionCode;
+  constructor(code: RuleRejectionCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+async function throwRuleFailure(res: Response): Promise<never> {
+  const code = await errorCodeFromResponse(res);
+  const known = RULE_REJECTION_CODES.find((c) => c === code);
+  const message = await errorMessageFromResponse(res);
+  if (known) throw new TaskEscalationRuleRejected(known, message);
+  throw new UserFacingError(message);
 }
 
 export function normaliseTaskEscalationRules(raw: unknown): TaskEscalationRule[] {
@@ -274,7 +338,8 @@ export function normaliseEscalationUsers(raw: unknown): EscalationUser[] {
  */
 export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[]>> {
   try {
-    const res = await browserFetch("policy/roles");
+    // crm-service's directory (admin tier), not the platform-admin-only policy/roles.
+    const res = await browserFetch("v1/crm/directory/roles");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseEscalationRoles(await res.json()), source: "api" };
   } catch {
@@ -285,7 +350,10 @@ export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[
 /** The tenant's users, for the manager user picker (stores the user id). */
 export async function getEscalationUsers(): Promise<LoaderResult<EscalationUser[]>> {
   try {
-    const res = await browserFetch("identity/users?limit=500");
+    // crm-service's own directory (id + name only), open to CRM roles. The admin-only
+    // identity/users listing this used to call left every CRM user who was not also a
+    // tenant admin with an empty picker.
+    const res = await browserFetch("v1/crm/directory/users");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseEscalationUsers(await res.json()), source: "api" };
   } catch {
@@ -296,17 +364,17 @@ export async function getEscalationUsers(): Promise<LoaderResult<EscalationUser[
 export async function createTaskEscalationRule(rule: TaskEscalationRule): Promise<void> {
   const res = await browserFetch("v1/crm/task-escalation-rules", {
     method: "POST",
-    body: JSON.stringify(rule),
+    body: JSON.stringify(taskEscalationRuleBody(rule)),
   });
-  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  if (!res.ok) await throwRuleFailure(res);
 }
 
 export async function updateTaskEscalationRule(id: string, rule: TaskEscalationRule): Promise<void> {
-  const res = await browserFetch(`v1/crm/task-escalation-rules/${id}`, {
+  const res = await browserFetch(`v1/crm/task-escalation-rules/${encodeURIComponent(id)}`, {
     method: "PUT",
-    body: JSON.stringify(rule),
+    body: JSON.stringify(taskEscalationRuleBody(rule)),
   });
-  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  if (!res.ok) await throwRuleFailure(res);
 }
 
 export async function deleteTaskEscalationRule(id: string): Promise<void> {
@@ -349,7 +417,7 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
     // when the API sent no name. Keep the id separate: `owner` is a display
     // name ONLY (owner/actorName); `ownerId` carries the raw id for an optional
     // name lookup, and is never rendered verbatim.
-    const ownerName = optStr(r.owner) ?? optStr(r.actorName);
+    const ownerName = optStr(r.owner) ?? optStr(r.ownerName) ?? optStr(r.actorName);
     const ownerId = optStr(r.ownerId);
     out.push({
       id,
@@ -365,19 +433,60 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
   return out.sort((a, b) => b.ageMinutes - a.ageMinutes);
 }
 
-export async function getOverdueTasks(): Promise<LoaderResult<OverdueTask[]>> {
+/** Rows per page on the overdue-task monitor (the server allows up to 200). */
+export const OVERDUE_PAGE_SIZE = 50;
+
+export interface OverduePage {
+  tasks: OverdueTask[];
+  /** The REAL number of overdue tasks (meta.total), not the length of this page. */
+  total: number;
+}
+
+/**
+ * One page of overdue open tasks, oldest due date first, plus the true total.
+ *
+ * GAP-CRM-TASK-ESCALATION-02: the list used to fetch a single capped page (limit=50, no offset)
+ * and page it client-side, so tasks past the 50th were unreachable and the headline count
+ * understated a big backlog. It now asks the server for the page the reader is on and reports
+ * meta.total, so "Showing 51-100 of 214" is true.
+ * GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route. The old query
+ * (/v1/crm/activities?type=task&overdue=true) 400'd because that route requires
+ * subjectType+subjectId, so the alerts list never loaded.
+ */
+export async function getOverdueTaskPage(
+  opts: { limit?: number; offset?: number } = {},
+): Promise<LoaderResult<OverduePage>> {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? OVERDUE_PAGE_SIZE), 1), 200);
+  const offset = Math.max(Math.trunc(opts.offset ?? 0), 0);
   try {
-    // GAP-CRM-TASK-ESCALATION-02: cap the request so the alert table can't grow
-    // unbounded. The worst-aged sort is applied server-side (overdue=true) and
-    // re-applied here; 50 is the display cap the UI pages against.
-    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route. The old
-    // query (/v1/crm/activities?type=task&overdue=true) 400'd because that
-    // route requires subjectType+subjectId, so the alerts list never loaded.
-    const res = await browserFetch("v1/crm/activities/overdue-tasks?limit=50");
-    if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseOverdueTasks(await res.json()), source: "api" };
+    const res = await browserFetch(`v1/crm/activities/overdue-tasks?limit=${limit}&offset=${offset}`);
+    if (!res.ok) return { data: { tasks: [], total: 0 }, source: "error" };
+    const raw: unknown = await res.json();
+    const tasks = normaliseOverdueTasks(raw);
+    const metaTotal =
+      raw && typeof raw === "object" ? numOrNull((raw as { meta?: { total?: unknown } }).meta?.total) : null;
+    return { data: { tasks, total: metaTotal !== null && metaTotal >= 0 ? metaTotal : tasks.length }, source: "api" };
   } catch {
-    return { data: [], source: "error" };
+    return { data: { tasks: [], total: 0 }, source: "error" };
+  }
+}
+
+/**
+ * How many tasks are overdue by AT LEAST `minAgeMinutes` right now - what a rule with that
+ * threshold would match (GAP-CRM-TASK-ESCALATION-01). Asks the server to count (limit=1,
+ * meta.total) with the same arithmetic the escalation scheduler uses, rather than counting a
+ * capped page here.
+ */
+export async function getOverdueMatchCount(minAgeMinutes: number): Promise<LoaderResult<number>> {
+  const minutes = Math.max(Math.trunc(minAgeMinutes), 0);
+  try {
+    const res = await browserFetch(`v1/crm/activities/overdue-tasks?limit=1&offset=0&minAgeMinutes=${minutes}`);
+    if (!res.ok) return { data: 0, source: "error" };
+    const raw: unknown = await res.json();
+    const total = raw && typeof raw === "object" ? numOrNull((raw as { meta?: { total?: unknown } }).meta?.total) : null;
+    return total === null ? { data: 0, source: "error" } : { data: total, source: "api" };
+  } catch {
+    return { data: 0, source: "error" };
   }
 }
 

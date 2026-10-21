@@ -137,7 +137,7 @@ function StarRating({
   );
 }
 
-const RATING_LABELS = ["Poor", "Fair", "Good", "Very Good", "Excellent"];
+const RATING_KEYS = ["ratingPoor", "ratingFair", "ratingGood", "ratingVeryGood", "ratingExcellent"] as const;
 
 export default function CitizenFeedbackPage() {
   const t = useTranslations("crmCitizenFeedback");
@@ -186,10 +186,10 @@ export default function CitizenFeedbackPage() {
   return (
     <>
       <PageHeader
-        title="Citizen Feedback"
+        title={t("title")}
         subtitle={t("subtitleLive")}
         back="/crm/voice-of-customer"
-        backLabel="Voice of Citizen"
+        backLabel={t("backLabel")}
       />
       <div
         style={{
@@ -248,7 +248,7 @@ export default function CitizenFeedbackPage() {
           {/* Star rating */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
-              Service Rating{" "}
+              {t("serviceRatingLabel")}{" "}
               <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                 *
               </span>
@@ -272,21 +272,21 @@ export default function CitizenFeedbackPage() {
             <StarRating value={rating} onChange={setRating} />
             {rating > 0 && (
               <span style={{ fontSize: 12, color: "var(--mut)" }}>
-                {RATING_LABELS[rating - 1]}
+                {t(RATING_KEYS[rating - 1]!)}
               </span>
             )}
           </div>
 
           {/* Comment */}
           <label style={LABEL}>
-            <span style={{ fontWeight: 500 }}>Comments / Suggestions</span>
+            <span style={{ fontWeight: 500 }}>{t("commentsLabel")}</span>
             <textarea
               name="comment"
               rows={4}
               maxLength={2000}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
-              placeholder="Tell us about your experience with this service..."
+              placeholder={t("commentsPlaceholder")}
               style={{ ...FIELD, resize: "vertical" }}
             />
           </label>
@@ -313,15 +313,15 @@ export default function CitizenFeedbackPage() {
           {/* Contact type */}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <span style={{ fontSize: 14, fontWeight: 500, color: "var(--ink)" }}>
-              Submission Type{" "}
+              {t("submissionType")}{" "}
               <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                 *
               </span>
             </span>
             <div style={{ display: "flex", gap: 16 }}>
               {[
-                { value: "anonymous", label: "Anonymous" },
-                { value: "registered", label: "Registered Citizen" },
+                { value: "anonymous", label: t("anonymous") },
+                { value: "registered", label: t("registeredCitizen") },
               ].map(({ value, label }) => (
                 <label
                   key={value}
@@ -346,6 +346,16 @@ export default function CitizenFeedbackPage() {
                 </label>
               ))}
             </div>
+            {/* GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-03: this form collects no name, phone or ID, so
+                a "Registered Citizen" response is a label on the response, not an identified
+                one. Say so (and point at the one link to a record that does exist) rather than
+                imply the citizen is identified. Which identifier to collect, and how, is a
+                data-protection decision that is not made here. */}
+            {submissionType === "registered" ? (
+              <p id="registered-note" role="note" style={{ margin: 0, fontSize: 13, color: "var(--mut)", lineHeight: 1.5 }}>
+                {t("registeredNote")}
+              </p>
+            ) : null}
           </div>
 
           {/* DPDP notice.
@@ -379,7 +389,7 @@ export default function CitizenFeedbackPage() {
             }}
           >
             <a href="/crm/voice-of-customer" className="btn">
-              Cancel
+              {t("cancel")}
             </a>
             <Button type="submit" disabled={status === "saving" || rating < 1}>
               {status === "saving" ? t("submitting") : t("submitFeedback")}

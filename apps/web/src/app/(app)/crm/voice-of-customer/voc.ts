@@ -122,3 +122,27 @@ export function topConcern(summary: CRMVocSummary): RankedTheme | null {
       b.negativeCount - a.negativeCount || b.negativePct - a.negativePct,
   )[0] as RankedTheme;
 }
+
+/** True for a real calendar day written as yyyy-mm-dd ("2026-02-31" and "2026-13-01" are not). */
+export function isCalendarDate(value: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  return probe.getUTCFullYear() === y && probe.getUTCMonth() === mo - 1 && probe.getUTCDate() === d;
+}
+
+/**
+ * GAP-CRM-VOICE-OF-CUSTOMER-01: the period control works in calendar days (yyyy-mm-dd) but
+ * crm-service's sentiment summary/export filters are full ISO instants (zod `datetime()`,
+ * which also rejects a bare date with a 400). Convert a chosen window to those instants:
+ * the whole of the first day through the last millisecond of the last day, in IST (the
+ * calendar the office works in), expressed in UTC. The SAME conversion feeds the summary
+ * figures and the export, so a downloaded file always matches the window on screen.
+ */
+export function toApiWindow(range: { from?: string; to?: string }): { from?: string; to?: string } {
+  const out: { from?: string; to?: string } = {};
+  if (range.from && isCalendarDate(range.from)) out.from = new Date(`${range.from}T00:00:00.000+05:30`).toISOString();
+  if (range.to && isCalendarDate(range.to)) out.to = new Date(`${range.to}T23:59:59.999+05:30`).toISOString();
+  return out;
+}

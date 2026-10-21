@@ -28,6 +28,10 @@ const sections: SectionDef[] = [
 			{ tileKey: "accounts", href: "/crm/accounts" },
 			{ tileKey: "deals", href: "/crm/deals" },
 			{ tileKey: "activities", href: "/crm/activities" },
+			// GAP-CRM-TASK-ESCALATION-03: the overdue-task monitor is open to every CRM role (managers
+			// who RECEIVE escalations need not be admins), so it lives with the everyday tiles, not
+			// under the admin-only Configuration section next to the rule editor.
+			{ tileKey: "overdueTasks", href: "/crm/overdue-tasks" },
 		],
 	},
 	{

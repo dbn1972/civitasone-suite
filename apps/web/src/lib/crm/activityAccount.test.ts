@@ -21,7 +21,12 @@ import {
   createContactRole,
   getAccountRelationships,
   getTaskEscalationRules,
-  getOverdueTasks,
+  createTaskEscalationRule,
+  updateTaskEscalationRule,
+  taskEscalationRuleBody,
+  TaskEscalationRuleRejected,
+  getOverdueTaskPage,
+  getOverdueMatchCount,
   snoozeTask,
   reassignTask,
   getEscalationRoles,
@@ -114,6 +119,33 @@ describe("normalisers", () => {
     expect(out[0].enabled).toBe(true);
   });
 
+  // GAP-CRM-TASK-ESCALATION-01: crm-service stores the manager as recipientRole /
+  // recipientId. The editor only read managerRole / managerId, so a saved manager
+  // never came back and every rule looked like it had none.
+  it("normaliseTaskEscalationRules reads the manager from crm-service's recipientRole / recipientId, plus name and appliesTo", () => {
+    const out = normaliseTaskEscalationRules({
+      data: [
+        { id: "e1", name: "After a day", appliesTo: "task", thresholdMinutes: 1440, recipientRole: "sales_manager", recipientId: null, enabled: true },
+        { id: "e2", name: "Then the head", appliesTo: "both", thresholdMinutes: 2880, recipientRole: null, recipientId: "u-9", enabled: false },
+        { id: "e3", thresholdMinutes: 60, appliesTo: "nonsense", managerRole: "legacy_role", managerId: "legacy-id" },
+      ],
+    });
+    expect(out[0]).toMatchObject({ name: "After a day", appliesTo: "task", managerRole: "sales_manager", managerId: "" });
+    expect(out[1]).toMatchObject({ managerRole: "", managerId: "u-9", enabled: false });
+    // The legacy field names are still accepted; an unknown appliesTo is dropped, not trusted.
+    expect(out[2]).toMatchObject({ managerRole: "legacy_role", managerId: "legacy-id" });
+    expect(out[2].appliesTo).toBeUndefined();
+  });
+
+  it("taskEscalationRuleBody sends the shape crm-service accepts (name, recipientRole/recipientId), not the editor's own", () => {
+    expect(
+      taskEscalationRuleBody({ name: "  After a day ", thresholdMinutes: 1440, managerRole: " sales_manager ", managerId: "", enabled: true }),
+    ).toEqual({ name: "After a day", appliesTo: "both", thresholdMinutes: 1440, recipientRole: "sales_manager", recipientId: null, enabled: true });
+    expect(
+      taskEscalationRuleBody({ name: "x", appliesTo: "task", thresholdMinutes: 60, managerRole: "", managerId: "u-1", enabled: false }),
+    ).toEqual({ name: "x", appliesTo: "task", thresholdMinutes: 60, recipientRole: null, recipientId: "u-1", enabled: false });
+  });
+
   it("normaliseOverdueTasks: drops future/non-task, ages + sorts worst-first", () => {
     const now = Date.parse("2026-08-04T12:00:00Z");
     const out = normaliseOverdueTasks(
@@ -134,6 +166,17 @@ describe("normalisers", () => {
   // GAP-CRM-TASK-ESCALATION-02 (IDLEAK): `owner` is a display name ONLY. An
   // opaque owner id must land on `ownerId`, never on `owner` — the old code did
   // owner ?? actorName ?? ownerId, leaking a UUID into the rendered Owner cell.
+  // GAP-CRM-TASK-ESCALATION-02: crm-service now resolves the owner NAME server-side (ownerName).
+  it("normaliseOverdueTasks takes the display name from the server's ownerName", () => {
+    const now = Date.parse("2026-08-04T12:00:00Z");
+    const [t] = normaliseOverdueTasks(
+      { data: [{ id: "t1", type: "task", status: "open", subject: "named", dueDate: "2026-08-01", ownerName: "Kavita Rao", ownerId: "uuid-1" }] },
+      now,
+    );
+    expect(t.owner).toBe("Kavita Rao");
+    expect(t.ownerId).toBe("uuid-1");
+  });
+
   it("normaliseOverdueTasks keeps an opaque owner id out of the display `owner`", () => {
     const now = Date.parse("2026-08-04T12:00:00Z");
     const out = normaliseOverdueTasks(
@@ -318,7 +361,7 @@ describe("loaders + mutations", () => {
       () => getContactRoles("c1"),
       () => getAccountRelationships("a1"),
       () => getTaskEscalationRules(),
-      () => getOverdueTasks(),
+      () => getOverdueTaskPage(),
       () => getLinkedAccounts(),
     ]) {
       fetchMock.mockResolvedValueOnce(res([], 200));
@@ -328,29 +371,96 @@ describe("loaders + mutations", () => {
     }
   });
 
-  // GAP-CRM-TASK-ESCALATION-01 / -02 — directory loaders + bounded overdue request.
-  it("getEscalationRoles / getEscalationUsers hit the directory endpoints and gate errors", async () => {
+  // GAP-CRM-TASK-ESCALATION-01 — the pickers come from crm-service's own directory (CRM roles),
+  // not the platform-admin-only policy/roles and identity/users listings.
+  it("getEscalationRoles / getEscalationUsers hit crm-service's directory endpoints and gate errors", async () => {
     fetchMock.mockResolvedValueOnce(res({ data: [{ key: "sales_manager", label: "Sales Manager" }] }));
     const roles = await getEscalationRoles();
-    expect(fetchMock.mock.calls[0][0]).toBe("policy/roles");
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/directory/roles");
     expect(roles.data).toHaveLength(1);
 
     fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-1", name: "Priya Nair" }] }));
     const users = await getEscalationUsers();
-    expect(fetchMock.mock.calls[1][0]).toBe("identity/users?limit=500");
+    expect(fetchMock.mock.calls[1][0]).toBe("v1/crm/directory/users");
     expect(users.data[0].id).toBe("u-1");
 
     fetchMock.mockResolvedValueOnce(res({}, 500));
     expect((await getEscalationRoles()).source).toBe("error");
+    fetchMock.mockResolvedValueOnce(res({}, 503));
+    expect((await getEscalationUsers()).source).toBe("error");
   });
 
-  it("getOverdueTasks caps the request at 50 so the alert table can't grow unbounded", async () => {
+  // GAP-CRM-TASK-ESCALATION-02 — the monitor pages through the real backlog.
+  it("getOverdueTaskPage asks the server for the page the reader is on and reports the REAL total", async () => {
+    fetchMock.mockResolvedValueOnce(
+      res({
+        data: [{ id: "t1", type: "task", status: "open", subject: "a", dueDate: "2020-01-01", ownerId: "u1", ownerName: "Kavita Rao" }],
+        meta: { total: 214, limit: 50, offset: 100 },
+      }),
+    );
+    const page = await getOverdueTaskPage({ limit: 50, offset: 100 });
+    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route (the old subject-less
+    // /v1/crm/activities query 400s server-side).
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/overdue-tasks?limit=50&offset=100");
+    expect(page.source).toBe("api");
+    expect(page.data.total).toBe(214);
+    expect(page.data.tasks).toHaveLength(1);
+    expect(page.data.tasks[0].owner).toBe("Kavita Rao");
+  });
+
+  it("getOverdueTaskPage defaults to the first page of 50, clamps bad input, and falls back to the page length without meta", async () => {
     fetchMock.mockResolvedValueOnce(res({ data: [] }));
-    await getOverdueTasks();
-    expect(fetchMock.mock.calls[0][0]).toContain("limit=50");
-    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route (the old
-    // subject-less /v1/crm/activities query 400s server-side).
-    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/overdue-tasks?limit=50");
+    await getOverdueTaskPage();
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/overdue-tasks?limit=50&offset=0");
+    fetchMock.mockResolvedValueOnce(res({ data: [] }));
+    await getOverdueTaskPage({ limit: 9999, offset: -5 });
+    expect(fetchMock.mock.calls[1][0]).toBe("v1/crm/activities/overdue-tasks?limit=200&offset=0");
+    fetchMock.mockResolvedValueOnce(
+      res({ data: [{ id: "t1", type: "task", status: "open", dueDate: "2020-01-01" }, { id: "t2", type: "task", status: "open", dueDate: "2020-01-02" }] }),
+    );
+    expect((await getOverdueTaskPage()).data.total).toBe(2);
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — a rule preview counts what ITS threshold matches.
+  it("getOverdueMatchCount asks the server to count tasks overdue by at least the threshold", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [], meta: { total: 37, limit: 1, offset: 0 } }));
+    const r = await getOverdueMatchCount(2880);
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/activities/overdue-tasks?limit=1&offset=0&minAgeMinutes=2880");
+    expect(r).toEqual({ data: 37, source: "api" });
+    fetchMock.mockResolvedValueOnce(res({}, 500));
+    expect((await getOverdueMatchCount(60)).source).toBe("error");
+    // A reply with no total is "unknown", not a fabricated zero.
+    fetchMock.mockResolvedValueOnce(res({ data: [] }));
+    expect((await getOverdueMatchCount(60)).source).toBe("error");
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — create/update post crm-service's contract and surface its refusals.
+  it("createTaskEscalationRule / updateTaskEscalationRule post the crm-service body shape", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, 201));
+    await createTaskEscalationRule({ name: "After a day", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true });
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/task-escalation-rules");
+    expect(JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body))).toEqual({
+      name: "After a day", appliesTo: "both", thresholdMinutes: 1440, recipientRole: "sales_manager", recipientId: null, enabled: true,
+    });
+    fetchMock.mockResolvedValueOnce(res({}, 200));
+    await updateTaskEscalationRule("e 1", { name: "x", thresholdMinutes: 60, managerRole: "", managerId: "u-1", enabled: true });
+    expect(fetchMock.mock.calls[1][0]).toBe("v1/crm/task-escalation-rules/e%201");
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe("PUT");
+    expect(JSON.parse(String((fetchMock.mock.calls[1][1] as RequestInit).body))).toMatchObject({ recipientId: "u-1", recipientRole: null });
+  });
+
+  it("a recipient the server refuses surfaces as a typed rejection the editor can word; other failures stay generic", async () => {
+    const rule = { name: "x", thresholdMinutes: 60, managerRole: "ghost", managerId: "", enabled: true };
+    fetchMock.mockResolvedValueOnce(res({ code: "INVALID_RECIPIENT_ROLE", message: "no such role" }, 422));
+    const err = await createTaskEscalationRule(rule).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TaskEscalationRuleRejected);
+    expect((err as TaskEscalationRuleRejected).code).toBe("INVALID_RECIPIENT_ROLE");
+    // The server's own text is never what the reader sees.
+    expect((err as Error).message).not.toMatch(/no such role/);
+    fetchMock.mockResolvedValueOnce(res({ code: "SOMETHING_ELSE" }, 500));
+    const other = await createTaskEscalationRule(rule).catch((e: unknown) => e);
+    expect(other).not.toBeInstanceOf(TaskEscalationRuleRejected);
+    expect(other).toBeInstanceOf(Error);
   });
 
   it("snoozeTask and reassignTask PATCH the activity with a reason", async () => {
