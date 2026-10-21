@@ -5,11 +5,12 @@
  * overdue count is gated on source==="error" → "—" + saved-info badge, never a
  * fabricated zero. Ageing is shown in plain words (e.g. "2d 3h").
  */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { StatGrid, StatCard, EmptyState, DataTable, Modal, Button } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import {
   getOverdueTaskPage, snoozeTask, reassignTask, getEscalationUsers, formatAgeing, OVERDUE_PAGE_SIZE,
   type OverdueTask, type AaSource, type EscalationUser,
@@ -85,10 +86,11 @@ function ReasonField({ value, onChange, id }: { value: string; onChange: (v: str
  * event and stays the authority on role/tenant.
  */
 function ReassignControl({
-  task, users, usersUnavailable, onDone,
-}: { task: OverdueTask; users: EscalationUser[]; usersUnavailable: boolean; onDone: () => void }) {
+  task, users, usersTruncated, usersUnavailable, onDone,
+}: { task: OverdueTask; users: EscalationUser[]; usersTruncated: boolean; usersUnavailable: boolean; onDone: () => void }) {
   const t = useTranslations("crmOverdueTaskAlerts");
   const formError = useFormError("task");
+  const ownerFieldId = useId();
   const [open, setOpen] = useState(false);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
@@ -128,17 +130,20 @@ function ReassignControl({
           <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
             {t.rich("reassignIntro", { subject: task.subject || t("thisTask"), strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-            <span>{t("newOwner")}</span>
-            <select
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+            <label htmlFor={ownerFieldId}>{t("newOwner")}</label>
+            {/* A truncated directory adds a server-side name search, so nobody is unreachable. */}
+            <DirectoryUserSelect
+              id={ownerFieldId}
               value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
+              onChange={setOwnerId}
+              users={users}
+              truncated={usersTruncated}
+              excludeId={task.ownerId ?? null}
+              leading={<option value="">{t("selectUser")}</option>}
               style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
-            >
-              <option value="">{t("selectUser")}</option>
-              {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </label>
+            />
+          </div>
           <ReasonField id={`reassign-reason-${task.id}`} value={reason} onChange={setReason} />
           {error ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{error}</p> : null}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -238,11 +243,14 @@ export function OverdueTaskAlerts() {
   // the Reassign picker. A failed load just leaves names unresolved.
   const [users, setUsers] = useState<EscalationUser[]>([]);
   const [usersUnavailable, setUsersUnavailable] = useState(false);
+  // True = the loaded list is not the whole directory (large tenant): the Reassign picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
   useEffect(() => {
     let live = true;
-    void getEscalationUsers().then(({ data, source: s }) => {
+    void getEscalationUsers().then(({ data, source: s, truncated }) => {
       if (!live) return;
       setUsers(data);
+      setUsersTruncated(truncated === true);
       setUsersUnavailable(s === "error");
     });
     return () => { live = false; };
@@ -330,7 +338,7 @@ export function OverdueTaskAlerts() {
                 label: "",
                 render: (row) => (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <ReassignControl task={row} users={users} usersUnavailable={usersUnavailable} onDone={() => setReload((n) => n + 1)} />
+                    <ReassignControl task={row} users={users} usersTruncated={usersTruncated} usersUnavailable={usersUnavailable} onDone={() => setReload((n) => n + 1)} />
                     <SnoozeControl task={row} onSnoozed={() => setReload((n) => n + 1)} />
                   </div>
                 ),

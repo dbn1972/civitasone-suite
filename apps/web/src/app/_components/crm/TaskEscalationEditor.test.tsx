@@ -24,6 +24,7 @@ vi.mock("@/lib/crm/activityAccount", async (orig) => {
     deleteTaskEscalationRule: vi.fn(),
     getEscalationRoles: vi.fn(),
     getEscalationUsers: vi.fn(),
+    searchEscalationUsers: vi.fn(),
     getOverdueMatchCount: vi.fn(),
   };
 });
@@ -46,6 +47,7 @@ beforeEach(() => {
   vi.mocked(aa.deleteTaskEscalationRule).mockReset();
   vi.mocked(aa.getEscalationRoles).mockReset().mockResolvedValue({ data: ROLES, source: "api" });
   vi.mocked(aa.getEscalationUsers).mockReset().mockResolvedValue({ data: USERS, source: "api" });
+  vi.mocked(aa.searchEscalationUsers).mockReset();
   // GAP-CRM-TASK-ESCALATION-01: the preview is the server's count of tasks overdue by at least
   // THIS rule's threshold - one number per threshold, not the length of a capped list.
   vi.mocked(aa.getOverdueMatchCount).mockReset().mockImplementation(async (minutes: number) => ({
@@ -280,6 +282,58 @@ describe("TaskEscalationEditor (AC-005)", () => {
     // Error colour comes from the design token, not a hard-coded hex.
     expect(alert.getAttribute("style")).toContain("var(--bad)");
     expect(alert.getAttribute("style")).not.toMatch(/#[0-9a-f]{3,8}/i);
+  });
+
+  // The user directory is bounded: on a large tenant the loaded list is only the first page. The picker says so
+  // and searches the server, rather than quietly leaving people out of the choices.
+  describe("a truncated user directory (large tenant)", () => {
+    it("says the list is partial and offers a name search; a complete directory shows neither", async () => {
+      vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+      const { unmount } = render(<TaskEscalationEditor />);
+      await waitFor(() => expect(screen.getByLabelText(/manager user for rule 1/i)).toBeInTheDocument());
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+      unmount();
+
+      vi.mocked(aa.getEscalationUsers).mockResolvedValue({ data: USERS, source: "api", truncated: true });
+      render(<TaskEscalationEditor />);
+      expect(await screen.findByRole("searchbox", { name: "Search people by name" })).toBeInTheDocument();
+      expect(screen.getByText("Showing the first 2 people. Search by name to find anyone else.")).toBeInTheDocument();
+    });
+
+    it("reaches a person the loaded page leaves out, and saves that person's id", async () => {
+      vi.mocked(aa.getEscalationUsers).mockResolvedValue({ data: USERS, source: "api", truncated: true });
+      vi.mocked(aa.searchEscalationUsers).mockResolvedValue({ data: [{ id: "u-900", name: "Zoya Khan" }], source: "api", truncated: false });
+      vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
+      vi.mocked(aa.createTaskEscalationRule).mockResolvedValue(undefined);
+      render(<TaskEscalationEditor />);
+      await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
+      fireEvent.change(await screen.findByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoya" } });
+      await waitFor(() => expect(aa.searchEscalationUsers).toHaveBeenCalledWith("zoya"), { timeout: 3000 });
+      const picker = screen.getByLabelText(/manager user for rule 1/i);
+      await waitFor(() => expect(within(picker).getByRole("option", { name: "Zoya Khan" })).toBeInTheDocument());
+      fireEvent.change(picker, { target: { value: "u-900" } });
+      fireEvent.click(screen.getByRole("button", { name: /create/i }));
+      await waitFor(() => expect(aa.createTaskEscalationRule).toHaveBeenCalled());
+      expect(vi.mocked(aa.createTaskEscalationRule).mock.calls[0][0]).toMatchObject({ managerId: "u-900" });
+    });
+
+    it("does not call a saved manager 'unknown' just because they are not in the loaded page", async () => {
+      const saved: aa.TaskEscalationRule = { id: "e7", name: "Beyond the page", thresholdMinutes: 60, managerRole: "", managerId: "u-900", enabled: true };
+      vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [saved], source: "api" });
+      // complete directory: the id really is unknown -> flagged
+      const { unmount } = render(<TaskEscalationEditor />);
+      await waitFor(() => expect(screen.getByText(/fix this before it can escalate/i)).toBeInTheDocument());
+      expect(screen.getByText(/Escalates to/)).toHaveTextContent("Unknown user");
+      unmount();
+
+      // truncated directory: absence proves nothing -> not flagged, labelled honestly
+      vi.mocked(aa.getEscalationUsers).mockResolvedValue({ data: USERS, source: "api", truncated: true });
+      render(<TaskEscalationEditor />);
+      await waitFor(() => expect(screen.getByText(/Escalates to/)).toHaveTextContent("Saved user (not in the loaded list)"));
+      expect(screen.queryByText(/fix this before it can escalate/i)).not.toBeInTheDocument();
+      expect(within(screen.getByLabelText(/manager user for rule 1/i)).getByRole("option", { name: "Saved user (not in the loaded list)" })).toBeInTheDocument();
+    });
   });
 
   it("deletes a rule via ConfirmDialog", async () => {

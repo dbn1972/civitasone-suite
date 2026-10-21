@@ -19,7 +19,7 @@ function render(ui: ReactElement) {
 
 vi.mock("@/lib/crm/activityAccount", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
-  return { ...actual, getOverdueTaskPage: vi.fn(), snoozeTask: vi.fn(), reassignTask: vi.fn(), getEscalationUsers: vi.fn() };
+  return { ...actual, getOverdueTaskPage: vi.fn(), snoozeTask: vi.fn(), reassignTask: vi.fn(), getEscalationUsers: vi.fn(), searchEscalationUsers: vi.fn() };
 });
 
 /** A page of overdue tasks as the loader returns it: the rows plus the REAL total. */
@@ -32,6 +32,7 @@ beforeEach(() => {
   vi.mocked(aa.snoozeTask).mockReset();
   vi.mocked(aa.reassignTask).mockReset();
   vi.mocked(aa.getEscalationUsers).mockReset().mockResolvedValue({ data: [], source: "api" });
+  vi.mocked(aa.searchEscalationUsers).mockReset();
 });
 
 describe("OverdueTaskAlerts (AC-005)", () => {
@@ -252,5 +253,44 @@ describe("OverdueTaskAlerts (AC-005)", () => {
 
     await waitFor(() => expect(aa.reassignTask).toHaveBeenCalledWith("t1", "u-2", "Priya is on leave this week"));
     expect(await screen.findByText("Ravi Das")).toBeInTheDocument();
+  });
+  // The loaded directory is bounded; the Reassign picker says so and searches the server, so any colleague is reachable.
+  it("Reassign on a truncated directory says so and reassigns to a person found by the server-side search", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    vi.mocked(aa.getEscalationUsers).mockResolvedValue({
+      data: [{ id: "u-1", name: "Priya Nayak" }, { id: "u-2", name: "Ravi Das" }],
+      source: "api",
+      truncated: true,
+    });
+    vi.mocked(aa.searchEscalationUsers).mockResolvedValue({ data: [{ id: "u-900", name: "Zoya Khan" }], source: "api", truncated: false });
+    vi.mocked(aa.getOverdueTaskPage).mockResolvedValue(page([{ id: "t1", subject: "Send quote", dueAt: "2026-08-03T12:00:00Z", ageMinutes: 100, ownerId: "u-1" }]));
+    vi.mocked(aa.reassignTask).mockResolvedValue({ accepted: true });
+
+    renderWithIntl(<OverdueTaskAlerts />);
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Showing the first 2 people. Search by name to find anyone else.")).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoy" } });
+    await waitFor(() => expect(aa.searchEscalationUsers).toHaveBeenCalledWith("zoy"), { timeout: 3000 });
+    const select = within(dialog).getByLabelText(/new owner/i) as HTMLSelectElement;
+    await waitFor(() => expect(Array.from(select.options).map((o) => o.textContent)).toContain("Zoya Khan"));
+    fireEvent.change(select, { target: { value: "u-900" } });
+    fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "Priya is on leave this week" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Reassign$/ }));
+    await waitFor(() => expect(aa.reassignTask).toHaveBeenCalledWith("t1", "u-900", "Priya is on leave this week"));
+  });
+
+  it("Reassign offers no search when the directory is complete", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    vi.mocked(aa.getEscalationUsers).mockResolvedValue({
+      data: [{ id: "u-1", name: "Priya Nayak" }, { id: "u-2", name: "Ravi Das" }],
+      source: "api",
+    });
+    vi.mocked(aa.getOverdueTaskPage).mockResolvedValue(page([{ id: "t1", subject: "Send quote", dueAt: "2026-08-03T12:00:00Z", ageMinutes: 100, ownerId: "u-1" }]));
+    renderWithIntl(<OverdueTaskAlerts />);
+    fireEvent.click(await screen.findByRole("button", { name: "Reassign" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("searchbox")).not.toBeInTheDocument();
   });
 });

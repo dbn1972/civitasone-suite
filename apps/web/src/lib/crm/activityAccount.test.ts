@@ -31,6 +31,7 @@ import {
   reassignTask,
   getEscalationRoles,
   getEscalationUsers,
+  searchEscalationUsers,
   getLinkedAccounts,
   connectLinkedAccount,
   getContact360,
@@ -388,6 +389,33 @@ describe("loaders + mutations", () => {
     expect((await getEscalationRoles()).source).toBe("error");
     fetchMock.mockResolvedValueOnce(res({}, 503));
     expect((await getEscalationUsers()).source).toBe("error");
+  });
+
+  // The directory list is bounded server-side; the loader carries the server's own `truncated` flag so a picker can say so,
+  // and searchEscalationUsers asks the server to search by name (reaching people the bounded list leaves out).
+  it("getEscalationUsers reports the server's truncated flag; only an explicit true counts", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-1", name: "A" }], meta: { total: 1000, truncated: true } }));
+    expect((await getEscalationUsers()).truncated).toBe(true);
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-1", name: "A" }], meta: { total: 1, truncated: false } }));
+    expect((await getEscalationUsers()).truncated).toBe(false);
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-1", name: "A" }] }));
+    expect((await getEscalationUsers()).truncated).toBe(false);
+    fetchMock.mockResolvedValueOnce(res([{ id: "u-1", name: "A" }]));
+    expect((await getEscalationUsers()).truncated).toBe(false);
+  });
+
+  it("searchEscalationUsers sends the trimmed, encoded query to crm-service's directory and returns its matches", async () => {
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "u-9", name: "Meera Nair" }], meta: { total: 1, truncated: false, query: "mee & ra" } }));
+    const out = await searchEscalationUsers("  mee & ra ");
+    expect(fetchMock.mock.calls[0][0]).toBe("v1/crm/directory/users?q=mee%20%26%20ra");
+    expect(out).toEqual({ data: [{ id: "u-9", name: "Meera Nair" }], source: "api", truncated: false });
+  });
+
+  it("searchEscalationUsers says error (never an empty match list) when the directory is unavailable", async () => {
+    fetchMock.mockResolvedValueOnce(res({}, 503));
+    expect((await searchEscalationUsers("mee")).source).toBe("error");
+    fetchMock.mockRejectedValueOnce(new Error("offline"));
+    expect((await searchEscalationUsers("mee")).source).toBe("error");
   });
 
   // GAP-CRM-TASK-ESCALATION-02 — the monitor pages through the real backlog.

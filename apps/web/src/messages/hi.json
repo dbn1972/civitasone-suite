@@ -13653,6 +13653,15 @@
     "pageOf": "पृष्ठ {page} / {pages}",
     "usersUnavailable": "उपयोगकर्ता सूची अभी उपलब्ध नहीं है, इसलिए कार्य पुनः नहीं सौंपे जा सकते"
   },
+  "crmDirectoryUserSelect": {
+    "searchLabel": "नाम से लोगों को खोजें",
+    "searchPlaceholder": "नाम से खोजें (कम से कम {min} अक्षर)…",
+    "truncatedNote": "पहले {count} लोग दिखाए जा रहे हैं। किसी और को खोजने के लिए नाम से खोजें।",
+    "searching": "खोजा जा रहा है…",
+    "noMatches": "“{query}” से कोई मेल नहीं खाता।",
+    "moreMatches": "पहले {count} परिणाम दिखाए जा रहे हैं। सूची छोटी करने के लिए नाम का और हिस्सा लिखें।",
+    "searchFailed": "खोज अभी उपलब्ध नहीं है। फिर से प्रयास करें।"
+  },
   "crmOwnerPicker": {
     "onLeave": "अवकाश पर",
     "searchPlaceholder": "नाम से खोजें…"
@@ -14288,6 +14297,7 @@
   },
   "crmTaskEscalationEditor": {
     "unknownUser": "अज्ञात उपयोगकर्ता (अब मौजूद नहीं)",
+    "userNotListed": "सहेजा गया उपयोगकर्ता (लोड की गई सूची में नहीं)",
     "unknownRole": "अज्ञात भूमिका \"{role}\"",
     "noManager": "कोई प्रबंधक निर्धारित नहीं",
     "managerRoleAria": "नियम {n} के लिए प्रबंधक की भूमिका",

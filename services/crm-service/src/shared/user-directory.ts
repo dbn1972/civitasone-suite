@@ -32,6 +32,13 @@
  *     when the answer could not be obtained, so a route answers 503 rather than present an
  *     empty list as fact. Failures are never cached.
  *
+ *     `searchDirectoryUsers` is the way past that bound: a server-side NAME search through to
+ *     identity-service's shared directory (`/identity/users/directory?q=`: active users, matched
+ *     on name only so email / employee code can never be probed, id + display name back, at most
+ *     USER_SEARCH_LIMIT rows). A picker that is `truncated` says so and searches instead of silently
+ *     omitting people. Same fail-closed contract; never cached (a type-ahead must see the
+ *     directory as it is).
+ *
  *  3. PICKER ROLES - `listDirectoryRoles`. The tenant's ACTIVE roles from policy-service
  *     (`{ key, label }`; the key is the role name an escalation rule stores). Same
  *     fail-closed contract as the users.
@@ -52,6 +59,9 @@ const NAME_FAILURE_TTL_MS = 10_000;
 /** identity-service caps a page at 200 (tenantIdQuery); the pickers read a bounded number of pages. */
 const USER_PAGE_SIZE = 200;
 const USER_MAX_PAGES = 5;
+/** identity-service's directory type-ahead returns at most 20 rows and needs at least 2 characters. */
+export const USER_SEARCH_LIMIT = 20;
+export const USER_SEARCH_MIN_CHARS = 2;
 
 export interface DirectoryUser {
   id: string;
@@ -198,6 +208,36 @@ export async function listDirectoryUsers(tenantId: string, opts: ReadOptions = {
   const list: DirectoryUserList = { users, truncated };
   userCache.set(tenantId, { at: Date.now(), list });
   return list;
+}
+
+/**
+ * The tenant's ACTIVE users whose NAME contains `q` (case-insensitive), as `{ id, name }` sorted by
+ * name, or `undefined` when identity cannot be read (fail-closed, like {@link listDirectoryUsers}).
+ * Capped at USER_SEARCH_LIMIT: `truncated` is true when the cap was reached, i.e. more people may
+ * match and the caller should narrow the query. `q` must already be trimmed and at least
+ * USER_SEARCH_MIN_CHARS long (the route validates it).
+ */
+export async function searchDirectoryUsers(tenantId: string, q: string): Promise<DirectoryUserList | undefined> {
+  try {
+    const res = await fetch(
+      `${identityUrl()}/identity/users/directory?q=${encodeURIComponent(q)}&limit=${USER_SEARCH_LIMIT}`,
+      { headers: internalHeaders(tenantId), signal: AbortSignal.timeout(timeoutMs()) },
+    );
+    if (!res.ok) return undefined;
+    const rows = rowsOf(await res.json());
+    if (!rows) return undefined;
+    const users: DirectoryUser[] = [];
+    for (const r of rows) {
+      if (typeof r["id"] !== "string") continue;
+      // identity's directory calls the display name `displayName`; tolerate `name` too.
+      const raw = typeof r["displayName"] === "string" ? r["displayName"] : r["name"];
+      users.push({ id: r["id"], name: typeof raw === "string" && raw.trim() ? raw.trim() : r["id"] });
+    }
+    users.sort((a, b) => a.name.localeCompare(b.name, "en"));
+    return { users, truncated: rows.length >= USER_SEARCH_LIMIT };
+  } catch {
+    return undefined;
+  }
 }
 
 // ── 3. Picker roles (fail-closed, active only) ────────────────────────────────

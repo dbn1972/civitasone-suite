@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button, ErrorState } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import { toHumanError } from "@/lib/messages";
 import {
   getEscalationRules,
@@ -448,24 +449,18 @@ export function EscalationRulesEditor() {
                   </td>
                   <td>
                     <label className="sr-only" htmlFor={`${headingId}-uid-${row.key}`}>Recipient user for rule {n}</label>
-                    <select
+                    {/* A truncated user directory adds a server-side name search, so nobody is unreachable. */}
+                    <DirectoryUserSelect
                       id={`${headingId}-uid-${row.key}`}
                       value={row.recipientId}
-                      onChange={(e) => update(row.key, { recipientId: e.target.value })}
+                      onChange={(recipientId) => update(row.key, { recipientId })}
+                      users={directory.users}
+                      truncated={directory.usersTruncated}
+                      leading={<option value="">{t("noSpecificUser")}</option>}
+                      unlistedLabel={!directory.usersAvailable ? t("unverifiedRecipient") : t("unknownUser")}
+                      unlistedTruncatedLabel={!directory.usersAvailable ? t("unverifiedRecipient") : t("userNotListed")}
                       style={inputStyle}
-                    >
-                      <option value="">{t("noSpecificUser")}</option>
-                      {row.recipientId && !directory.users.some((u) => u.id === row.recipientId) && (
-                        <option value={row.recipientId}>
-                          {!directory.usersAvailable
-                            ? t("unverifiedRecipient")
-                            : directory.usersTruncated
-                              ? t("userNotListed")
-                              : t("unknownUser")}
-                        </option>
-                      )}
-                      {directory.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
+                    />
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>

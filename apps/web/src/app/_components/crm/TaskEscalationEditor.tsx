@@ -21,6 +21,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import {
   getTaskEscalationRules,
   createTaskEscalationRule,
@@ -97,6 +98,8 @@ export function TaskEscalationEditor() {
   // pickers would be silently empty, so say so instead.
   const [roles, setRoles] = useState<EscalationRole[]>([]);
   const [users, setUsers] = useState<EscalationUser[]>([]);
+  // True = `users` is not the whole directory (large tenant): each manager picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
   const [directoryFailed, setDirectoryFailed] = useState(false);
   // Overdue tasks matching each distinct threshold (minutes) -> count, or "error".
   const [matchCounts, setMatchCounts] = useState<Record<number, number | "error">>({});
@@ -120,6 +123,7 @@ export function TaskEscalationEditor() {
       if (!live) return;
       setRoles(r.data);
       setUsers(u.data);
+      setUsersTruncated(u.truncated === true);
       setDirectoryFailed(r.source === "error" || u.source === "error");
     });
     return () => {
@@ -170,7 +174,10 @@ export function TaskEscalationEditor() {
   function managerSummary(row: Row): { text: string; missing: boolean } {
     if (row.managerId.trim()) {
       const u = users.find((x) => x.id === row.managerId.trim());
-      return u ? { text: u.name, missing: false } : { text: t("unknownUser"), missing: true };
+      if (u) return { text: u.name, missing: false };
+      // A truncated directory proves nothing about absence: the saved manager may simply not be in the
+      // loaded page, so do not call them "unknown"; the server vets the id when the rule is saved.
+      return usersTruncated ? { text: t("userNotListed"), missing: false } : { text: t("unknownUser"), missing: true };
     }
     if (row.managerRole.trim()) {
       const r = roles.find((x) => x.key === row.managerRole.trim());
@@ -358,22 +365,19 @@ export function TaskEscalationEditor() {
                   {/* A searchable user picker (SELECT over the tenant directory)
                       storing the user id, not free text. */}
                   <label htmlFor={`${row.key}-mi`} style={labelStyle}>{t("managerUser")}</label>
-                  <select
+                  <DirectoryUserSelect
                     id={`${row.key}-mi`}
                     aria-label={t("managerUserAria", { n: i + 1 })}
                     value={row.managerId}
-                    onChange={(e) => update(row.key, { managerId: e.target.value })}
+                    onChange={(managerId) => update(row.key, { managerId })}
                     aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true}
+                    users={users}
+                    truncated={usersTruncated}
+                    leading={<option value="">{t("noSpecificUser")}</option>}
+                    unlistedLabel={t("unknownUser")}
+                    unlistedTruncatedLabel={t("userNotListed")}
                     style={inputStyle}
-                  >
-                    <option value="">{t("noSpecificUser")}</option>
-                    {row.managerId && !users.some((u) => u.id === row.managerId) && (
-                      <option value={row.managerId}>{t("unknownUser")}</option>
-                    )}
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
               {/* Resolved manager name + a preview of what the rule will do. The count is the

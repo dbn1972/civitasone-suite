@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { EscalationRulesEditor } from "./EscalationRulesEditor";
 import * as as from "@/lib/crm/assignment";
+import * as aa from "@/lib/crm/activityAccount";
 
 function render(ui: React.ReactElement) {
   return rtlRender(
@@ -23,6 +24,10 @@ vi.mock("@/lib/crm/assignment", async (orig) => {
     updateEscalationRule: vi.fn(),
     deleteEscalationRule: vi.fn(),
   };
+});
+vi.mock("@/lib/crm/activityAccount", async (orig) => {
+  const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
+  return { ...actual, searchEscalationUsers: vi.fn() };
 });
 const DIRECTORY: as.EscalationRecipientDirectory = {
   roles: [
@@ -304,6 +309,32 @@ describe("EscalationRulesEditor recipient directory (GAP-CRM-ESCALATION-RULES-01
     expect(await screen.findByRole("option", { name: /not in the loaded list/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
     await waitFor(() => expect(as.updateEscalationRule).toHaveBeenCalled());
+  });
+
+  it("a truncated user list says so and is searched on the server, so a recipient beyond the loaded page can be chosen", async () => {
+    vi.mocked(as.getEscalationRecipients).mockResolvedValue({ data: { ...DIRECTORY, usersTruncated: true }, source: "api" });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(as.createEscalationRule).mockResolvedValue(undefined);
+    vi.mocked(aa.searchEscalationUsers).mockReset().mockResolvedValue({ data: [{ id: "u-900", name: "Zoya Khan" }], source: "api", truncated: false });
+    render(<EscalationRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add escalation rule/i }));
+    expect(await screen.findByText("Showing the first 1 person. Search by name to find anyone else.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoya" } });
+    await waitFor(() => expect(aa.searchEscalationUsers).toHaveBeenCalledWith("zoya"), { timeout: 3000 });
+    const picker = screen.getByLabelText(/recipient user for rule 1/i);
+    await waitFor(() => expect(within(picker).getByRole("option", { name: "Zoya Khan" })).toBeInTheDocument());
+    fireEvent.change(picker, { target: { value: "u-900" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(as.createEscalationRule).toHaveBeenCalled());
+    expect(vi.mocked(as.createEscalationRule).mock.calls[0][0]).toMatchObject({ recipientId: "u-900" });
+  });
+
+  it("offers no search when the user list is complete", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<EscalationRulesEditor />);
+    await screen.findByLabelText(/recipient user for rule 1/i);
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
   it("derives the rule name the server requires from trigger, threshold and recipient", async () => {

@@ -37,6 +37,8 @@ const originalFetch = globalThis.fetch;
 let policyRoles: Array<{ name: string; status: string }> | null;
 /** identity-service /identity/users (the pickers list ACTIVE users only); null = unreachable. */
 let identityUsers: Array<{ id: string; name: string; status?: string }> | null;
+/** The identity requests the directory made to /identity/users/directory (the name search), newest last. */
+let searchRequests: Array<{ url: string; headers: Record<string, string> }> = [];
 
 globalThis.fetch = (async (url: unknown, init?: unknown) => {
   const u = String(url);
@@ -51,6 +53,22 @@ globalThis.fetch = (async (url: unknown, init?: unknown) => {
     const offset = Number(q.get("offset") ?? 0);
     const limit = Number(q.get("limit") ?? 200);
     return new Response(JSON.stringify(identityUsers.slice(offset, offset + limit)), { status: 200, headers: { "content-type": "application/json" } });
+  }
+  if (u.includes("/identity/users/directory?")) {
+    // identity-service's shared directory type-ahead: ACTIVE users, NAME match only, at most 20 rows,
+    // { id, displayName } back. Extra fields on the stored rows (email, phone, roles) are returned
+    // as-is by this stub so the tests can prove crm-service never passes them on.
+    searchRequests.push({ url: u, headers: ((init as { headers?: Record<string, string> } | undefined)?.headers ?? {}) });
+    if (identityUsers === null) throw new Error("connect ECONNREFUSED");
+    const q = new URL(u).searchParams;
+    const needle = (q.get("q") ?? "").toLowerCase();
+    const limit = Math.min(Number(q.get("limit") ?? 20), 20);
+    const rows = identityUsers
+      .filter((r) => r.status === "active" && r.name.toLowerCase().includes(needle))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map(({ name, ...rest }) => ({ ...rest, displayName: name }));
+    return new Response(JSON.stringify({ data: rows }), { status: 200, headers: { "content-type": "application/json" } });
   }
   return originalFetch(url as string, init as RequestInit);
 }) as typeof fetch;
@@ -68,6 +86,7 @@ beforeEach(async () => {
     { id: ACTOR, name: "Anil Kumar", status: "active" },
   ];
   clearDirectoryCache();
+  searchRequests = [];
   vi.mocked(isActiveTenantUser).mockReset();
   vi.mocked(isActiveTenantUser).mockResolvedValue(true);
   await sqlClient.begin(async (tx) => {
@@ -180,6 +199,57 @@ describe("GAP-CRM-TASK-ESCALATION-01: rule recipients are verified", () => {
     expect(res.json().data).toMatchObject({ thresholdMinutes: 90, enabled: false, recipientRole: "sales_manager" });
   });
 
+  it("can DISABLE a rule whose manager has left (an unchanged recipient is not re-verified)", async () => {
+    const id = (await post({ ...rule, recipientId: MANAGER })).json().data.id as string;
+    vi.mocked(isActiveTenantUser).mockReset();
+    vi.mocked(isActiveTenantUser).mockResolvedValue(false);
+    const res = await app.inject({
+      method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(),
+      payload: { ...rule, recipientId: MANAGER, enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ enabled: false, recipientId: MANAGER });
+    expect(vi.mocked(isActiveTenantUser)).not.toHaveBeenCalled();
+  });
+
+  it("can retime an ENABLED stale rule: the editor re-sends enabled: true, which is not 'enabling'", async () => {
+    const id = (await post({ ...rule, recipientRole: "sales_manager" })).json().data.id as string;
+    policyRoles = [{ name: "regional_head", status: "active" }];
+    clearDirectoryCache();
+    const res = await app.inject({
+      method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(),
+      payload: { ...rule, thresholdMinutes: 120, recipientRole: "sales_manager", enabled: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.thresholdMinutes).toBe(120);
+  });
+
+  // Same rule as the lead-escalation rules (shared/recipient-changes.ts): an unchanged recipient is not
+  // re-verified, EXCEPT when the rule is switched back ON, where every recipient it will have is.
+  it("verifies every recipient when a disabled rule is switched back ON: a retired role cannot be re-enabled", async () => {
+    const id = (await post({ ...rule, recipientRole: "sales_manager", enabled: false })).json().data.id as string;
+    policyRoles = [{ name: "regional_head", status: "active" }];
+    clearDirectoryCache();
+    const res = await app.inject({ method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(), payload: { enabled: true } });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INVALID_RECIPIENT_ROLE");
+    const list = await app.inject({ method: "GET", url: "/v1/crm/task-escalation-rules", headers: headers() });
+    expect(list.json().data[0]).toMatchObject({ id, enabled: false });
+  });
+
+  it("refuses to re-enable a rule whose manager has left, and allows it once the rule points at someone live", async () => {
+    const id = (await post({ ...rule, recipientId: MANAGER, enabled: false })).json().data.id as string;
+    vi.mocked(isActiveTenantUser).mockReset();
+    vi.mocked(isActiveTenantUser).mockImplementation(async (_t, uid) => uid === ACTOR);
+    const refused = await app.inject({ method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(), payload: { enabled: true } });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().code).toBe("INVALID_RECIPIENT");
+    // re-pointing the rule at a live manager in the same save re-enables it
+    const fixed = await app.inject({ method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(), payload: { enabled: true, recipientId: ACTOR } });
+    expect(fixed.statusCode).toBe(200);
+    expect(fixed.json().data).toMatchObject({ enabled: true, recipientId: ACTOR });
+  });
+
   it("404s an update to a rule that does not exist (or belongs to another tenant)", async () => {
     const res = await app.inject({
       method: "PUT", url: `/v1/crm/task-escalation-rules/${randomUUID()}`, headers: headers(),
@@ -290,5 +360,114 @@ describe("GAP-CRM-TASK-ESCALATION-01: the staff directory behind the pickers", (
     const res = await get("/v1/crm/directory/users");
     expect(res.json().data[0]).toEqual({ id: MANAGER, name: "Priya Sharma" });
     expect(res.body).not.toContain("priya@example.com");
+  });
+
+  // OWNER DECISION (docs/gap-ledger/crm.md): a plain crm_user may list / search every ACTIVE colleague by name.
+  // The response is pinned to id + display name for every role that may call it, whatever identity sends back.
+  describe("response shape: exactly { id, name } per person, for every role that may call it", () => {
+    const rich = () => [
+      {
+        id: MANAGER, name: "Priya Sharma", status: "active",
+        email: "priya@example.gov.in", phone: "+919876500001", roles: ["tenant_admin"], mfaEnabled: true, empCode: "E-1001",
+      },
+    ] as never;
+
+    it.each([["crm_user"], ["crm_admin"], ["tenant_admin"], ["super_admin"]])("browse as %s", async (role) => {
+      identityUsers = rich();
+      clearDirectoryCache();
+      const res = await get("/v1/crm/directory/users", [role]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual([{ id: MANAGER, name: "Priya Sharma" }]);
+      expect(Object.keys(res.json().data[0]).sort()).toEqual(["id", "name"]);
+      for (const leaked of ["priya@example.gov.in", "9876500001", "tenant_admin", "mfaEnabled", "E-1001", "status"]) {
+        expect(res.body).not.toContain(leaked);
+      }
+    });
+
+    it.each([["crm_user"], ["crm_admin"]])("search as %s", async (role) => {
+      identityUsers = rich();
+      const res = await get("/v1/crm/directory/users?q=priya", [role]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual([{ id: MANAGER, name: "Priya Sharma" }]);
+      expect(Object.keys(res.json().data[0]).sort()).toEqual(["id", "name"]);
+      for (const leaked of ["priya@example.gov.in", "9876500001", "tenant_admin", "mfaEnabled", "E-1001", "displayName"]) {
+        expect(res.body).not.toContain(leaked);
+      }
+    });
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 review: the plain list is bounded (1000 rows, flagged `truncated`), so on a
+  // large tenant some people are not in it. `?q=` searches by name on the server and reaches them.
+  describe("?q= server-side name search reaches users beyond the browse bound", () => {
+    function bigTenant(): string {
+      identityUsers = Array.from({ length: 1200 }, (_, i) => ({ id: randomUUID(), name: `Officer ${String(i).padStart(4, "0")}`, status: "active" }));
+      clearDirectoryCache();
+      return identityUsers[1150]!.id;
+    }
+
+    it("finds a user the truncated plain list leaves out", async () => {
+      const lateId = bigTenant();
+      const plain = await get("/v1/crm/directory/users", ["crm_admin"]);
+      expect(plain.json().meta.truncated).toBe(true);
+      expect((plain.json().data as Array<{ id: string }>).some((u) => u.id === lateId)).toBe(false);
+
+      const found = await get("/v1/crm/directory/users?q=Officer%201150", ["crm_admin"]);
+      expect(found.statusCode).toBe(200);
+      expect(found.json().data).toEqual([{ id: lateId, name: "Officer 1150" }]);
+      expect(found.json().meta).toEqual({ total: 1, truncated: false, query: "Officer 1150", searchLimit: 20 });
+    });
+
+    it("asks identity as the CALLER's tenant over the internal path, with the query encoded", async () => {
+      bigTenant();
+      await get("/v1/crm/directory/users?q=Officer%201150", ["crm_user"]);
+      expect(searchRequests).toHaveLength(1);
+      const { url, headers: sent } = searchRequests[0]!;
+      expect(new URL(url).pathname).toBe("/identity/users/directory");
+      expect(new URL(url).searchParams.get("q")).toBe("Officer 1150");
+      expect(sent["x-tenant-id"]).toBe(TENANT);
+      expect(sent["x-internal"]).toBe("1");
+    });
+
+    it("says `truncated` when the match list hit its cap, so the UI asks the user to narrow the search", async () => {
+      bigTenant();
+      const res = await get("/v1/crm/directory/users?q=Officer", ["crm_admin"]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toHaveLength(20);
+      expect(res.json().meta.truncated).toBe(true);
+    });
+
+    it("offers ACTIVE users only: a deactivated match is never returned", async () => {
+      identityUsers = [
+        { id: MANAGER, name: "Priya Sharma", status: "active" },
+        { id: randomUUID(), name: "Priya Retired", status: "suspended" },
+      ];
+      const res = await get("/v1/crm/directory/users?q=priya", ["crm_user"]);
+      expect(res.json().data).toEqual([{ id: MANAGER, name: "Priya Sharma" }]);
+      expect(res.body).not.toContain("Priya Retired");
+    });
+
+    it("returns an empty list (not an error) for a search nobody matches", async () => {
+      const res = await get("/v1/crm/directory/users?q=zzzz", ["crm_admin"]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual([]);
+      expect(res.json().meta.truncated).toBe(false);
+    });
+
+    it("refuses a query shorter than 2 characters (400) instead of listing the whole tenant", async () => {
+      expect((await get("/v1/crm/directory/users?q=a", ["crm_admin"])).statusCode).toBe(400);
+      expect((await get("/v1/crm/directory/users?q=%20%20", ["crm_admin"])).statusCode).toBe(400);
+      expect(searchRequests).toHaveLength(0);
+    });
+
+    it("fails closed: 503 when identity cannot be read, never an empty result presented as fact", async () => {
+      identityUsers = null;
+      expect((await get("/v1/crm/directory/users?q=priya", ["crm_admin"])).statusCode).toBe(503);
+    });
+
+    it("has the same access as the plain list: crm_user may search, a non-CRM role may not", async () => {
+      expect((await get("/v1/crm/directory/users?q=priya", ["crm_user"])).statusCode).toBe(200);
+      expect((await get("/v1/crm/directory/users?q=priya", ["citizen"])).statusCode).toBe(403);
+      expect(searchRequests).toHaveLength(1);
+    });
   });
 });

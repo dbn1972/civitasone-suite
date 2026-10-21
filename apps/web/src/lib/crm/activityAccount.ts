@@ -324,18 +324,43 @@ export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[
   }
 }
 
-/** The tenant's users, for the manager user picker (stores the user id). */
-export async function getEscalationUsers(): Promise<LoaderResult<EscalationUser[]>> {
+/**
+ * The users a picker offers, plus whether that list is the WHOLE directory. `truncated` is the
+ * server's own flag (meta.truncated): the plain list is bounded (and a search shows at most a
+ * fixed number of matches), so on a large tenant someone can be missing from it -- the picker says
+ * so and offers a name search (searchEscalationUsers) instead of silently omitting people.
+ */
+export interface EscalationUsersResult extends LoaderResult<EscalationUser[]> {
+  truncated?: boolean;
+}
+
+async function readEscalationUsers(path: string): Promise<EscalationUsersResult> {
   try {
     // crm-service's own directory (id + name only), open to CRM roles. The admin-only
     // identity/users listing this used to call left every CRM user who was not also a
     // tenant admin with an empty picker.
-    const res = await browserFetch("v1/crm/directory/users");
+    const res = await browserFetch(path);
     if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseEscalationUsers(await res.json()), source: "api" };
+    const body: unknown = await res.json();
+    const meta = body && typeof body === "object" ? (body as { meta?: { truncated?: unknown } }).meta : undefined;
+    return { data: normaliseEscalationUsers(body), source: "api", truncated: meta?.truncated === true };
   } catch {
     return { data: [], source: "error" };
   }
+}
+
+/** The tenant's users, for the manager user picker (stores the user id). */
+export async function getEscalationUsers(): Promise<EscalationUsersResult> {
+  return readEscalationUsers("v1/crm/directory/users");
+}
+
+/**
+ * Server-side NAME search of the tenant's users (2+ characters), for a picker whose plain list is
+ * `truncated`. Reaches people the bounded list leaves out; `truncated` is true when the match list
+ * itself hit its cap, i.e. the query should be narrowed.
+ */
+export async function searchEscalationUsers(query: string): Promise<EscalationUsersResult> {
+  return readEscalationUsers(`v1/crm/directory/users?q=${encodeURIComponent(query.trim())}`);
 }
 
 export async function createTaskEscalationRule(rule: TaskEscalationRule): Promise<void> {

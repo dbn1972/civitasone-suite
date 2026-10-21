@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ActionButton, Button, Modal } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { getEscalationUsers, type EscalationUser } from "@/lib/crm/activityAccount";
+import { DirectoryUserSelect } from "../../../../_components/crm/DirectoryUserSelect";
 
 /**
  * Plain-language failure message for a failed service-request status
@@ -224,6 +225,9 @@ function AssignOfficer({
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState<EscalationUser[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
+  // True = the loaded list is not the whole directory (large tenant): the picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
+  const officerFieldId = useId();
   const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -235,6 +239,7 @@ function AssignOfficer({
     if (users === null) {
       const res = await getEscalationUsers();
       setUsers(res.data);
+      setUsersTruncated(res.truncated === true);
       setLoadFailed(res.source === "error");
     }
   }
@@ -302,17 +307,20 @@ function AssignOfficer({
           ) : choices.length === 0 ? (
             <p role="status" style={{ margin: 0, fontSize: 13 }}>{t("assignNoOfficers")}</p>
           ) : (
-            <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-              <span>{t("assignOfficer")}</span>
-              <select
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+              <label htmlFor={officerFieldId}>{t("assignOfficer")}</label>
+              {/* A truncated directory adds a server-side name search, so nobody is unreachable. */}
+              <DirectoryUserSelect
+                id={officerFieldId}
                 value={choice}
-                onChange={(e) => setChoice(e.target.value)}
+                onChange={setChoice}
+                users={users ?? []}
+                truncated={usersTruncated}
+                excludeId={assignedTo}
+                leading={<option value="">{t("assignSelect")}</option>}
                 style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
-              >
-                <option value="">{t("assignSelect")}</option>
-                {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
-            </label>
+              />
+            </div>
           )}
           {error ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{error}</p> : null}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>

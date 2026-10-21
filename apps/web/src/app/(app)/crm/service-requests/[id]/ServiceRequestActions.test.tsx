@@ -346,6 +346,43 @@ describe("ServiceRequestActions - assign officer (DETAIL-05)", () => {
     expect(Array.from(select.options).map((o) => o.textContent)).toContain("Meera Nair");
   });
 
+  // The directory the page loads is bounded; a large tenant is searched on the server instead of silently omitting officers.
+  it("says the officer list is partial and assigns an officer found by the server-side search", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/v1/crm/directory/users")) {
+        return new Response(JSON.stringify({ data: USERS, meta: { total: 2, truncated: true } }), { status: 200 });
+      }
+      if (url.includes("/v1/crm/directory/users?q=")) {
+        return new Response(JSON.stringify({ data: [{ id: "u-900", name: "Zoya Khan" }], meta: { total: 1, truncated: false, query: "zoy" } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: { id: SR_ID } }), { status: 200 });
+    });
+    render(<ServiceRequestActions id={SR_ID} status="open" version={3} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText("Showing the first 2 people. Search by name to find anyone else.")).toBeInTheDocument();
+
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoy" } });
+    const select = (await within(dialog).findByRole("option", { name: "Zoya Khan" }, { timeout: 3000 })).closest("select") as HTMLSelectElement;
+    expect(spy.mock.calls.some(([u]) => String(u).endsWith("/v1/crm/directory/users?q=zoy"))).toBe(true);
+    fireEvent.change(select, { target: { value: "u-900" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Assign" }));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const patch = spy.mock.calls.find(([u]) => String(u).endsWith("/assign"))!;
+    expect(JSON.parse((patch[1] as RequestInit).body as string)).toEqual({ assignedTo: "u-900", version: 3 });
+  });
+
+  it("offers no search when the officer list is complete", async () => {
+    mockApi();
+    render(<ServiceRequestActions id={SR_ID} status="open" version={1} canAssign />);
+    fireEvent.click(screen.getByRole("button", { name: "Assign" }));
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByLabelText("Officer");
+    expect(within(dialog).queryByRole("searchbox")).not.toBeInTheDocument();
+  });
+
   it("on a version conflict reloads the page and says someone else changed the request", async () => {
     mockApi(new Response(JSON.stringify({ code: "VERSION_CONFLICT" }), { status: 409 }));
     render(<ServiceRequestActions id={SR_ID} status="open" version={2} canAssign />);

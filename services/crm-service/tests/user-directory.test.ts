@@ -8,7 +8,14 @@
  * never cached.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { listDirectoryRoles, listDirectoryUsers, resolveUserNames, clearDirectoryCache } from "../src/shared/user-directory.js";
+import {
+  listDirectoryRoles,
+  listDirectoryUsers,
+  searchDirectoryUsers,
+  resolveUserNames,
+  clearDirectoryCache,
+  USER_SEARCH_LIMIT,
+} from "../src/shared/user-directory.js";
 
 const TENANT = "11111111-2222-4333-8444-555555555555";
 const fetchMock = vi.fn();
@@ -190,5 +197,68 @@ describe("the two halves of the directory disagree about deactivated users ON PU
   it("sorts the picker by name", async () => {
     fetchMock.mockResolvedValue(json([{ id: "u-b", name: "Zoya", status: "active" }, { id: "u-a", name: "Anil", status: "active" }]));
     expect((await listDirectoryUsers(TENANT))?.users.map((u) => u.name)).toEqual(["Anil", "Zoya"]);
+  });
+});
+
+describe("searchDirectoryUsers (server-side name search past the browse bound)", () => {
+  const hit = (n: number) => ({ id: `u-${n}`, displayName: `User ${String(n).padStart(2, "0")}` });
+
+  it("asks identity's shared directory for the encoded query as the caller's tenant over the internal path", async () => {
+    fetchMock.mockResolvedValue(json({ data: [hit(1)] }));
+    await searchDirectoryUsers(TENANT, "Asha & Rao");
+    const [url, init] = fetchMock.mock.calls[0] as [string, { headers: Record<string, string> }];
+    const u = new URL(url);
+    expect(u.pathname).toBe("/identity/users/directory");
+    expect(u.searchParams.get("q")).toBe("Asha & Rao");
+    expect(u.searchParams.get("limit")).toBe(String(USER_SEARCH_LIMIT));
+    expect(init.headers["x-internal"]).toBe("1");
+    expect(init.headers["x-tenant-id"]).toBe(TENANT);
+    expect(init.headers["x-service-secret"]).toBe(process.env.INTERNAL_SERVICE_SECRET);
+  });
+
+  it("returns { id, name } only, sorted by name, from identity's { id, displayName } rows", async () => {
+    fetchMock.mockResolvedValue(json({ data: [
+      { id: "u-b", displayName: "Zoya", email: "z@example.gov.in", status: "active" },
+      { id: "u-a", displayName: "Anil", phone: "+919876500002" },
+    ] }));
+    const got = await searchDirectoryUsers(TENANT, "an");
+    expect(got).toEqual({ users: [{ id: "u-a", name: "Anil" }, { id: "u-b", name: "Zoya" }], truncated: false });
+    expect(JSON.stringify(got)).not.toContain("example.gov.in");
+    expect(JSON.stringify(got)).not.toContain("9876500002");
+  });
+
+  it("lists a match with no display name by id, and skips a row with no id", async () => {
+    fetchMock.mockResolvedValue(json({ data: [{ id: "u-9", displayName: "  " }, { displayName: "No id" }, null] }));
+    expect((await searchDirectoryUsers(TENANT, "us"))?.users).toEqual([{ id: "u-9", name: "u-9" }]);
+  });
+
+  it("is truncated exactly when the cap was reached (more people may match), not before", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: Array.from({ length: USER_SEARCH_LIMIT - 1 }, (_, i) => hit(i)) }));
+    expect((await searchDirectoryUsers(TENANT, "us"))?.truncated).toBe(false);
+    fetchMock.mockResolvedValueOnce(json({ data: Array.from({ length: USER_SEARCH_LIMIT }, (_, i) => hit(i)) }));
+    expect((await searchDirectoryUsers(TENANT, "us"))?.truncated).toBe(true);
+  });
+
+  it("is an empty, NOT truncated, list for a query that matches nobody", async () => {
+    fetchMock.mockResolvedValue(json({ data: [] }));
+    expect(await searchDirectoryUsers(TENANT, "zzzz")).toEqual({ users: [], truncated: false });
+  });
+
+  it.each([
+    ["a 400", () => fetchMock.mockResolvedValue(json({}, 400))],
+    ["a 500", () => fetchMock.mockResolvedValue(json({}, 500))],
+    ["an unexpected body", () => fetchMock.mockResolvedValue(json({ nope: true }))],
+    ["a network failure", () => fetchMock.mockRejectedValue(new Error("ECONNREFUSED"))],
+  ])("is undefined (unverifiable, fail-closed) on %s", async (_label, arrange) => {
+    arrange();
+    expect(await searchDirectoryUsers(TENANT, "us")).toBeUndefined();
+  });
+
+  it("is never cached: every search sees the directory as it is now", async () => {
+    fetchMock.mockResolvedValueOnce(json({ data: [hit(1)] }));
+    expect((await searchDirectoryUsers(TENANT, "us"))?.users).toHaveLength(1);
+    fetchMock.mockResolvedValueOnce(json({ data: [hit(1), hit(2)] }));
+    expect((await searchDirectoryUsers(TENANT, "us"))?.users).toHaveLength(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

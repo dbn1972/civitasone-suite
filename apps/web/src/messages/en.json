@@ -14159,6 +14159,15 @@
     "pageOf": "Page {page} of {pages}",
     "usersUnavailable": "The user list is unavailable right now, so tasks can’t be reassigned"
   },
+  "crmDirectoryUserSelect": {
+    "searchLabel": "Search people by name",
+    "searchPlaceholder": "Search by name ({min}+ letters)…",
+    "truncatedNote": "Showing the first {count, plural, one {# person} other {# people}}. Search by name to find anyone else.",
+    "searching": "Searching…",
+    "noMatches": "No one matches “{query}”.",
+    "moreMatches": "Showing the first {count, plural, one {# match} other {# matches}}. Type more of the name to narrow the list.",
+    "searchFailed": "The search is unavailable right now. Try again."
+  },
   "crmOwnerPicker": {
     "onLeave": "On leave",
     "searchPlaceholder": "Search by name…"
@@ -14794,6 +14803,7 @@
   },
   "crmTaskEscalationEditor": {
     "unknownUser": "Unknown user (no longer exists)",
+    "userNotListed": "Saved user (not in the loaded list)",
     "unknownRole": "Unknown role \"{role}\"",
     "noManager": "No manager set",
     "managerRoleAria": "Manager role for rule {n}",
