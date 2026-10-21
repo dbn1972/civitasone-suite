@@ -179,6 +179,7 @@ vi.mock("../src/modules/order/repo.js", () => ({
 
 vi.mock("../src/modules/cause-list/repo.js", () => ({
   listItems: async () => mockState.queryResult,
+  listItemsWithPurpose: async () => mockState.queryResult,
   getCauseList: async () => mockState.queryResult[0] ?? undefined,
 }));
 

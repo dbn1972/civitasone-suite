@@ -281,6 +281,7 @@ components:
         slot: { type: string }
         courtroom: { type: string }
         listDate: { type: [string, "null"] }
+        purpose: { type: [string, "null"] }
         version: { type: integer }
     Defect:
       type: object
