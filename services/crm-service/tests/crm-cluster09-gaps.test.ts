@@ -100,6 +100,17 @@ describe("GAP-CRM-RTI-DETAIL-03: ?maskPii=true on the RTI detail GET", () => {
     expect(user.json().data.applicantContact).toBe("******3210");
   });
 
+  it("accepts the grievance detail's older ?pii=masked spelling of the same switch (one convention)", async () => {
+    const id = await createRti();
+    const masked = await inject("GET", `/v1/crm/rti/${id}?pii=masked`, ["crm_admin"]);
+    expect(masked.statusCode).toBe(200);
+    expect(masked.json().data.applicantContact).toBe("******3210");
+    expect(masked.body).not.toContain(PHONE);
+    // an unknown mode is still refused, not read as "no masking"
+    const bad = await inject("GET", `/v1/crm/rti/${id}?pii=clear`, ["crm_admin"]);
+    expect(bad.statusCode).toBe(400);
+  });
+
   it("rejects an unrecognised maskPii value instead of silently ignoring it", async () => {
     const id = await createRti();
     const res = await inject("GET", `/v1/crm/rti/${id}?maskPii=maybe`, ["crm_admin"]);
@@ -201,6 +212,14 @@ describe("GAP-CRM-SERVICE-REQUESTS-DETAIL-02: ?maskPii=true on the service-reque
 
     const user = await inject("GET", `/v1/crm/service-requests/${id}?maskPii=false`, ["crm_user"]);
     expect(user.json().data.citizenPhone).toBe("******3210");
+  });
+
+  it("accepts the grievance detail's older ?pii=masked spelling of the same switch (one convention)", async () => {
+    const id = await createSr();
+    const masked = await inject("GET", `/v1/crm/service-requests/${id}?pii=masked`, ["crm_admin"]);
+    expect(masked.statusCode).toBe(200);
+    expect(masked.json().data.citizenPhone).toBe("******3210");
+    expect(masked.body).not.toContain(PHONE);
   });
 });
 

@@ -169,6 +169,50 @@ describe("GAP-CRM-GRIEVANCES-DETAIL-05 grievance detail ?pii=masked", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // The service-request and RTI detail reads spell the same switch `?maskPii=true`. Both spellings are
+  // accepted on every detail read that honours the switch (shared maskPiiQuery), so a caller never has to
+  // know which resource uses which, and the original grievance spelling above keeps working.
+  it.each(["maskPii=true", "maskPii=1", "pii=masked&maskPii=false"])(
+    "masks for a PII-read role on ?%s too (one convention across detail reads)",
+    async (query) => {
+      const tid = randomUUID();
+      const id = await createGrievance(tid);
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/crm/grievances/${id}?${query}`,
+        headers: authHeaders(["crm_admin"], tid),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.citizenPhone).toBe("******3210");
+      expect(res.json().data.citizenEmail).toBe("c***@example.in");
+      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(EMAIL);
+    },
+  );
+
+  it.each(["maskPii=false", "maskPii=0"])("?%s keeps the role-based behaviour (clear value for a PII-read role)", async (query) => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?${query}`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.citizenPhone).toBe(PHONE);
+  });
+
+  it("rejects an unknown maskPii value instead of silently returning clear data", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?maskPii=maybe`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("the clear value is then only reachable through the audited reveal, which a crm_user cannot call", async () => {
     const tid = randomUUID();
     const id = await createGrievance(tid);

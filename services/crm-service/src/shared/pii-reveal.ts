@@ -145,14 +145,19 @@ export function maskRecord<T extends Record<string, unknown>>(
  * step sends `?maskPii=true`: the record is then masked as for a caller with no
  * PII role. This can only ever REDUCE what a caller sees, never widen it, so it
  * needs no authorisation of its own. Absent / `false` keeps the role-based
- * behaviour, so existing API consumers are unchanged.
+ * behaviour, so existing API consumers are unchanged. `?pii=masked` is the older spelling
+ * of the same switch (the grievance detail used it first) and is accepted everywhere
+ * `maskPii` is; when both are sent, masking wins (it can only reduce what is returned).
  */
-export const maskPiiQuery = z.object({
-  maskPii: z
-    .enum(["true", "1", "false", "0"])
-    .optional()
-    .transform((v) => v === "true" || v === "1"),
-});
+export const maskPiiQuery = z
+  .object({
+    maskPii: z.enum(["true", "1", "false", "0"]).optional(),
+    // The grievance detail's original spelling (GAP-CRM-GRIEVANCES-DETAIL-05). It means exactly what
+    // `maskPii=true` means; kept working so no existing caller breaks, and now accepted by every detail
+    // read that honours the switch so there is ONE convention, not two.
+    pii: z.enum(["masked"]).optional(),
+  })
+  .transform((q) => ({ maskPii: q.maskPii === "true" || q.maskPii === "1" || q.pii === "masked" }));
 
 /** The roles to evaluate the masking policy with: none when the caller opted into masking. */
 export function rolesForRead(roles: string[], forceMask: boolean): string[] {

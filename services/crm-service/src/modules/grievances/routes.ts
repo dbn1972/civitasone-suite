@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { EVENTS } from "../../topics.js";
 import {
@@ -74,12 +74,6 @@ const listParams = listQuery.extend({
   contactId: z.string().uuid().optional(),
   open: z.enum(["true"]).optional(),
 });
-
-// GAP-CRM-GRIEVANCES-DETAIL-05: `pii=masked` asks the detail read to mask citizen
-// phone/email even for a PII-read role, so a page that offers the audited reveal
-// (POST /v1/crm/pii/reveal) never receives, nor ships to the browser, the clear
-// value up front. Absent => unchanged (privileged roles get the clear value).
-const detailQuery = z.object({ pii: z.enum(["masked"]).optional() });
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -204,7 +198,12 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
-    const { pii } = detailQuery.parse(req.query ?? {});
+    // GAP-CRM-GRIEVANCES-DETAIL-05: `?pii=masked` -- and, like the service-request and RTI detail reads,
+    // `?maskPii=true` (shared maskPiiQuery; both spellings mean the same) -- asks the detail read to mask
+    // citizen phone/email even for a PII-read role, so a page that offers the audited reveal
+    // (POST /v1/crm/pii/reveal) never receives, nor ships to the browser, the clear value up front.
+    // Absent => unchanged (privileged roles get the clear value).
+    const { maskPii } = maskPiiQuery.parse(req.query ?? {});
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT g.id, g.reference_no AS "referenceNo", g.citizen_name AS "citizenName",
@@ -224,9 +223,9 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "grievance not found");
-    // `pii=masked` masks as if the caller held no PII-read role; the clear value is then
+    // A mask request masks as if the caller held no PII-read role; the clear value is then
     // only reachable through the audited reveal endpoint.
-    return reply.send({ data: maskRecord("grievance", rows[0]!, pii === "masked" ? [] : ctx.roles) });
+    return reply.send({ data: maskRecord("grievance", rows[0]!, rolesForRead(ctx.roles, maskPii)) });
   });
 
   // PATCH /v1/crm/grievances/:id/assign
