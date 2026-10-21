@@ -18,3 +18,26 @@ describe("QuickActionsPanel (GAP-HR-DASHBOARD-06)", () => {
     expect(link).not.toHaveAttribute("href", "/hr/payroll");
   });
 });
+
+// GAP-HR-DASHBOARD-05: "Run Payroll" links to /hr/payroll, which renders
+// PermissionDenied for any role outside PAYROLL_READER_ROLES -- a manager (and
+// hr_officer) would click straight into that wall.
+describe("QuickActionsPanel — Run Payroll only where /hr/payroll opens (GAP-HR-DASHBOARD-05)", () => {
+  it("does not offer Run Payroll to the manager variant", () => {
+    render(<QuickActionsPanel variant="manager" />);
+    expect(screen.queryByRole("link", { name: /run payroll/i })).not.toBeInTheDocument();
+    // The actions that DO work for a manager are still there.
+    expect(screen.getByRole("link", { name: /approve leaves/i })).toBeInTheDocument();
+  });
+
+  it("offers Run Payroll to the admin variant by default", () => {
+    render(<QuickActionsPanel variant="admin" />);
+    expect(screen.getByRole("link", { name: /run payroll/i })).toHaveAttribute("href", "/hr/payroll");
+  });
+
+  it("drops Run Payroll from the admin variant when the viewer cannot open the payroll page", () => {
+    render(<QuickActionsPanel variant="admin" canViewPayroll={false} />);
+    expect(screen.queryByRole("link", { name: /run payroll/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /add employee/i })).toBeInTheDocument();
+  });
+});

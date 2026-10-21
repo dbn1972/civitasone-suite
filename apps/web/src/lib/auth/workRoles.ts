@@ -315,6 +315,15 @@ export const PAYROLL_CONFIG_ROLES = ["payroll_admin", "super_admin"];
 /** W1 SF-09b: payroll run/admin tier (mirrors roleGuard.PAYROLL_ADMIN_ROLES; kept here so pages whose tests mock roleGuard can share it). */
 export const PAYROLL_STAFF_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
+/**
+ * Roles that can OPEN the payroll runs page (hr/payroll/page.tsx renders
+ * PermissionDenied for anyone else, and GET /v1/payroll/runs 403s them).
+ * Mirrors roleGuard.PAYROLL_READER_ROLES; kept here so pages whose tests mock
+ * roleGuard (hr/dashboard) can share it. workRoles.payrollReader.test.ts keeps
+ * the two from drifting.
+ */
+export const PAYROLL_READER_ROLES = [...PAYROLL_STAFF_ROLES, "hr_admin", "finance_officer"];
+
 /** W1 SF-09b: payroll salary-slip / structure admin tier (payroll-service payroll/routes.ts). */
 export const PAYROLL_SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
 

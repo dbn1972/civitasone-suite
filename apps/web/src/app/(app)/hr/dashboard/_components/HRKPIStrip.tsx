@@ -122,52 +122,6 @@ export function HRKPIStrip({
           </>
         )}
       </div>
-
-      <style>{`
-        .kpi-strip {
-          display: grid;
-          grid-template-columns: repeat(6, 1fr);
-          gap: 10px;
-          padding: 0 24px 14px;
-        }
-        @media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
-        @media (max-width: 560px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
-        .kpi-card {
-          background: var(--panel);
-          border-radius: 8px;
-          padding: 14px 16px 12px;
-          box-shadow: 0 1px 3px rgba(15,34,64,.09);
-          border-top: 3px solid transparent;
-        }
-        .kpi-blue   { border-top-color: var(--info); }
-        .kpi-red    { border-top-color: var(--bad); }
-        .kpi-amber  { border-top-color: var(--warn); }
-        .kpi-slate  { border-top-color: var(--line); }
-        .kpi-label {
-          display: flex; align-items: center; gap: 4px;
-          font-size: 10px; font-weight: 700; letter-spacing: .08em;
-          text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
-        }
-        .kpi-val {
-          font-size: 26px; font-weight: 700; letter-spacing: -.03em;
-          font-variant-numeric: tabular-nums; line-height: 1;
-          color: var(--ink);
-        }
-        .kpi-val-sm  { font-size: 20px; }
-        .kpi-val-muted { font-size: 20px; color: var(--muted); }
-        .kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; }
-        .trend-up     { color: var(--good); }
-        .trend-down   { color: var(--bad); }
-        .trend-flat   { color: var(--muted); }
-        .trend-urgent { color: var(--bad); font-weight: 700; }
-        .kpi-badge {
-          position: absolute; top: 10px; inset-inline-end: 10px;
-          background: var(--bad); color: #fff;
-          font-size: 9px; font-weight: 800; border-radius: 9px;
-          min-width: 18px; height: 18px;
-          display: flex; align-items: center; justify-content: center; padding: 0 5px;
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { HR_STAFF_MANAGER_ROLES, HR_STAFF_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { HR_STAFF_MANAGER_ROLES, HR_STAFF_ROLES, PAYROLL_READER_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
 export const dynamic = "force-dynamic";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
@@ -19,6 +19,8 @@ import { MyLeaveStatusPanel } from "./_components/MyLeaveStatusPanel";
 import { DeptHeadcountChart } from "./_components/DeptHeadcountChart";
 import { QuickActionsPanel } from "./_components/QuickActionsPanel";
 import { PayrollBanner } from "./_components/PayrollBanner";
+// Page-local colour tokens + every dashboard component's styles (GAP-HR-DASHBOARD-09).
+import "./dashboard.css";
 
 /**
  * Mirrors hrms-service dashboard/routes.ts's READER_ROLES exactly: the same
@@ -72,12 +74,11 @@ type EmpRow = {
   payGrade?: string;
 } & Record<string, unknown>;
 
-// GAP-HR-DASHBOARD-09: pre-existing rotating avatar-tint palette, wrapped in
-// var(--token, #same-fallback) instead of bare hex -- identical rendering
-// (no token is defined anywhere, so every fallback renders exactly as
-// before), just no longer a bare-hex literal. Duplicated from
-// ActionInbox.tsx's own AVATAR_BG/FG (both flagged by the same gap) rather
-// than shared, matching this file's existing "each own copy" convention.
+// GAP-HR-DASHBOARD-09: rotating avatar-tint palette. The colours live in
+// dashboard.css (--dash-avatar-bg-N / --dash-avatar-fg-N, with light and dark
+// values), not here. Duplicated from ActionInbox.tsx's own AVATAR_BG/FG
+// rather than shared, matching this file's existing "each own copy"
+// convention.
 const AVATAR_BG = ["var(--dash-avatar-bg-1)", "var(--dash-avatar-bg-2)", "var(--dash-avatar-bg-3)", "var(--dash-avatar-bg-4)", "var(--dash-avatar-bg-5)", "var(--dash-avatar-bg-6)"];
 const AVATAR_FG = ["var(--dash-avatar-fg-1)", "var(--dash-avatar-fg-2)", "var(--dash-avatar-fg-3)", "var(--dash-avatar-fg-4)", "var(--dash-avatar-fg-5)", "var(--dash-avatar-fg-6)"];
 
@@ -198,12 +199,6 @@ export default async function HRDashboardPage() {
           </div>
         </div>
 
-        <style>{`
-          .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0; }
-          .dash-body-grid { display:grid;grid-template-columns:1fr 260px;gap:12px;padding:0 24px 32px; }
-          .dash-col-left,.dash-col-right { min-width:0; }
-          @media (max-width:900px) { .dash-body-grid { grid-template-columns:1fr;padding:0 16px 24px; } }
-        `}</style>
       </div>
     );
   }
@@ -267,6 +262,10 @@ export default async function HRDashboardPage() {
   // shows a "Start Run" link a manager would only reach a dead-end
   // PermissionDenied wall from.
   const canRunPayroll = roles.some((r) => PAYROLL_STAFF_ROLES.includes(r));
+  // GAP-HR-DASHBOARD-05: can the viewer open /hr/payroll at all (it renders
+  // PermissionDenied outside PAYROLL_READER_ROLES)? Gates the "Run Payroll"
+  // quick action, which would otherwise lead hr_officer/manager to that wall.
+  const canViewPayroll = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
   // GAP-HR-DASHBOARD-08: safe non-decision fallback -- whether a manager
   // should see tenant-wide KPIs/dept-chart/leave-inbox at all (vs scoped to
   // direct reports) is a real DPDP-relevant access decision this fix does
@@ -335,7 +334,7 @@ export default async function HRDashboardPage() {
       />
 
       {/* 3-column body */}
-      <div className="dash-body-grid">
+      <div className="dash-body-grid dash-body-grid-staff">
         {/* Left: routing-failure alert + action inbox + payroll banner */}
         <div className="dash-col-left">
           {/* GAP-HR-DASHBOARD-02: gated on inboxFailed (this alert's own
@@ -384,7 +383,7 @@ export default async function HRDashboardPage() {
 
         {/* Right: quick actions */}
         <div className="dash-col-right">
-          <QuickActionsPanel variant={canManageEmployees ? "admin" : "manager"} />
+          <QuickActionsPanel variant={canManageEmployees ? "admin" : "manager"} canViewPayroll={canViewPayroll} />
         </div>
       </div>
 
@@ -449,31 +448,6 @@ export default async function HRDashboardPage() {
         </div>
       </section>
 
-      <style>{`
-        .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0; }
-        .dash-body-grid { display:grid;grid-template-columns:1fr 260px 220px;gap:12px;padding:0 24px 12px; }
-        .dash-col-left,.dash-col-center,.dash-col-right { min-width:0; }
-        @media (max-width:900px) { .dash-body-grid { grid-template-columns:1fr;padding:0 16px 12px; } }
-        .routing-failed-alert { background:var(--badbg);border:1px solid var(--badbd);border-inline-start:4px solid var(--bad);border-radius:6px;padding:10px 14px;margin-bottom:12px; }
-        .rf-head { font-size:12px;font-weight:700;color:var(--bad); }
-        .rf-list { margin:6px 0 0;padding-inline-start:18px;font-size:11px;color:var(--ink); }
-        .rf-list li { margin-bottom:2px; }
-        .emp-section { margin:0 24px 32px; }
-        @media (max-width:900px) { .emp-section { margin:0 16px 24px; } }
-        .emp-section-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
-        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2); }
-        .emp-view-all { font-size:11px;color:var(--info);font-weight:600;text-decoration:none; }
-        .emp-table-wrap { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
-        .emp-table { width:100%;border-collapse:collapse;font-size:12px; }
-        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--line);background:var(--bg);white-space:nowrap; }
-        .emp-table td { padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle; }
-        .emp-table tr:last-child td { border-bottom:none; }
-        .emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
-        .emp-avatar { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
-        .emp-code { color:var(--muted);font-variant-numeric:tabular-nums; }
-        .emp-date { color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap; }
-        .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg);color:var(--ink2);border:1px solid var(--line);letter-spacing:.04em; }
-      `}</style>
     </div>
   );
 }
