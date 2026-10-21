@@ -30,6 +30,10 @@ const createBody = z.object({
   // GAP-CRM-SERVICE-REQUESTS-NEW-03: capture how the request was received so it
   // can be reported on by channel. Optional; constrained to a known set.
   intakeChannel: z.enum(INTAKE_CHANNEL).optional(),
+  // GAP-CRM-HEALTH-ACCOUNTID-03: a follow-up raised from the Account Health screen
+  // names the account it is about. Optional (ordinary citizen requests have none);
+  // the account must belong to the caller's tenant (checked on write).
+  relatedAccountId: z.string().uuid().optional(),
 });
 
 const listParams = listQuery.extend({
@@ -75,6 +79,16 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const refNo = srRef();
 
     const row = await scopedRead(async (tx) => {
+      // GAP-CRM-HEALTH-ACCOUNTID-03: the related account must exist in THIS tenant;
+      // never persist another tenant's (or a made-up) account id.
+      if (body.relatedAccountId !== undefined) {
+        const acct = (await tx.execute(sql`
+          SELECT 1 AS ok FROM crm.accounts
+          WHERE id = ${body.relatedAccountId}::uuid AND tenant_id = ${ctx.tenantId}
+        `)) as unknown as Array<{ ok: number }>;
+        if (acct.length === 0) throw new HttpError(422, "ACCOUNT_NOT_FOUND", "related account not found");
+      }
+
       // F6-03: when the caller gives no explicit dueAt, derive it from the
       // picked service type's SLA. due_at = created_at + sla_hours. Match on the
       // active service_types master by code OR label (the form sends the label),
@@ -102,17 +116,19 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         INSERT INTO crm.service_requests (
           tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
           service_type, subject, description, priority, status,
-          due_at, intake_channel, reference_no, created_by, updated_by
+          due_at, intake_channel, related_account_id, reference_no, created_by, updated_by
         ) VALUES (
           ${ctx.tenantId}, ${body.contactId ?? null}, ${body.citizenName},
           ${body.citizenPhone ?? null}, ${body.citizenEmail ?? null},
           ${body.serviceType}, ${body.subject}, ${body.description ?? null},
           ${body.priority}, 'open',
-          ${slaDueExpr}, ${body.intakeChannel ?? null}, ${refNo}, ${ctx.actorId}, ${ctx.actorId}
+          ${slaDueExpr}, ${body.intakeChannel ?? null}, ${body.relatedAccountId ?? null}::uuid,
+          ${refNo}, ${ctx.actorId}, ${ctx.actorId}
         )
         RETURNING id, reference_no AS "referenceNo",
                   citizen_name AS "citizenName", service_type AS "serviceType",
                   subject, priority, status, intake_channel AS "intakeChannel",
+                  related_account_id AS "relatedAccountId",
                   due_at AS "dueAt", created_at AS "createdAt"
       `)) as unknown as Array<Record<string, unknown>>;
 
@@ -136,7 +152,12 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         action: "create",
         resourceType: "service_request",
         resourceId: String(inserted[0]?.id),
-        payload: { serviceRequestId: String(inserted[0]?.id), status: "open", serviceType: body.serviceType },
+        payload: {
+          serviceRequestId: String(inserted[0]?.id),
+          status: "open",
+          serviceType: body.serviceType,
+          ...(body.relatedAccountId !== undefined ? { relatedAccountId: body.relatedAccountId } : {}),
+        },
       });
       return inserted[0];
     });
@@ -232,6 +253,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
              r.priority, r.status, r.assigned_to AS "assignedTo",
              r.contact_id AS "contactId", r.resolution, r.status_note AS "statusNote",
              r.intake_channel AS "intakeChannel",
+             r.related_account_id AS "relatedAccountId",
              r.due_at AS "dueAt", r.resolved_at AS "resolvedAt",
              r.closed_at AS "closedAt",
              r.created_at AS "createdAt", r.updated_at AS "updatedAt",
