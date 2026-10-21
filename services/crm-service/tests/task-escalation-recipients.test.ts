@@ -162,6 +162,28 @@ describe("GAP-CRM-TASK-ESCALATION-01: rule recipients are verified", () => {
     expect(good.json().data.recipientRole).toBe("regional_head");
   });
 
+  it("accepts the editor's full-body save of an unchanged recipient whose role has since gone", async () => {
+    const id = (await post({ ...rule, recipientRole: "sales_manager" })).json().data.id as string;
+    policyRoles = [{ name: "regional_head", status: "active" }];
+    clearDirectoryCache();
+    // The editor re-sends every field on each save; the stale-but-unchanged role must not block a
+    // disable/retime (the page flags the rule; the server only vets what is being CHANGED).
+    const res = await app.inject({
+      method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(),
+      payload: { ...rule, thresholdMinutes: 90, recipientRole: "sales_manager", recipientId: null, enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toMatchObject({ thresholdMinutes: 90, enabled: false, recipientRole: "sales_manager" });
+  });
+
+  it("404s an update to a rule that does not exist (or belongs to another tenant)", async () => {
+    const res = await app.inject({
+      method: "PUT", url: `/v1/crm/task-escalation-rules/${randomUUID()}`, headers: headers(),
+      payload: { thresholdMinutes: 90 },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
   it("will not let an update clear the last recipient (422)", async () => {
     const id = (await post({ ...rule, recipientRole: "sales_manager" })).json().data.id as string;
     const res = await app.inject({ method: "PUT", url: `/v1/crm/task-escalation-rules/${id}`, headers: headers(), payload: { recipientRole: null } });
