@@ -32,6 +32,9 @@ import {
   type DedupSource,
 } from "@/lib/crm/dedupCandidates";
 import { maskEmail, maskPhone } from "@/app/_components/ds";
+import { MaskedReveal } from "@/app/_components/ds/MaskedReveal";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { CRM_PII_READ_ROLES } from "@/lib/auth/crmRoles";
 
 // ─── Confidence badge ─────────────────────────────────────────────────────────
 
@@ -70,16 +73,37 @@ function ConfidenceBadge({ score }: { score: number }) {
 
 // ─── Field comparison ─────────────────────────────────────────────────────────
 
-const FIELDS: Array<{ key: keyof DedupContactSnapshot; label: string }> = [
-  { key: "name",         label: "Name" },
-  { key: "email",        label: "Email" },
-  { key: "phone",        label: "Phone" },
-  { key: "company",      label: "Company" },
-  { key: "lastActivity", label: "Last activity" },
+const FIELDS: Array<{ key: Exclude<keyof DedupContactSnapshot, "id">; labelKey: string }> = [
+  { key: "name",         labelKey: "fieldName" },
+  { key: "email",        labelKey: "fieldEmail" },
+  { key: "phone",        labelKey: "fieldPhone" },
+  { key: "company",      labelKey: "fieldCompany" },
+  { key: "lastActivity", labelKey: "fieldLastActivity" },
 ];
+
+/** i18n label keys for the match-reason fields the server reports (DedupField). */
+const MATCH_FIELD_LABEL_KEYS: Record<string, string> = {
+  name: "fieldName",
+  email: "fieldEmail",
+  phone: "fieldPhone",
+  company: "fieldCompany",
+  gstin: "fieldGstin",
+  pan: "fieldPan",
+};
 
 function differs(a: string | null | undefined, b: string | null | undefined): boolean {
   return (a ?? "").trim().toLowerCase() !== (b ?? "").trim().toLowerCase();
+}
+
+/**
+ * GAP-CRM-DEDUP-CANDIDATES-01: the server masks email/phone before they leave
+ * crm-service (a masked value always carries "*"), so show those as received. A
+ * value with no "*" came from a server that has not been upgraded; mask it here
+ * so the clear value is never rendered either way.
+ */
+function maskedFor(key: "email" | "phone", v: string): string {
+  if (v.includes("*")) return v;
+  return key === "email" ? maskEmail(v) : maskPhone(v);
 }
 
 function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): string {
@@ -93,13 +117,44 @@ function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): str
   }
   // DPDP data minimisation (GAP-CRM-DEDUP-CANDIDATES-01): a duplicate reviewer
   // only needs enough of the contact PII to recognise a match, not the full
-  // email/phone of both people side by side. Mask these by default; name and
-  // company stay clear so the pair is still recognisable. A role-gated,
-  // server-audited reveal is a backend-dependent follow-up (the dedup-candidates
-  // endpoint and an audit sink do not exist yet — see dedupCandidates.ts).
-  if (key === "email") return maskEmail(v);
-  if (key === "phone") return maskPhone(v);
+  // email/phone of both people side by side. These stay masked; name and company
+  // stay clear so the pair is still recognisable. The clear value is reachable
+  // only through PiiCell's audited reveal (POST /v1/crm/pii/reveal).
+  if (key === "email" || key === "phone") return maskedFor(key, v);
   return v;
+}
+
+// ─── Email / phone cell ──────────────────────────────────────────────────────
+
+/**
+ * A masked email/phone value. A viewer whose role the server's reveal endpoint
+ * accepts (CRM_PII_READ_ROLES) also gets a Reveal button that asks for a reason
+ * and calls the audited reveal; everyone else sees the masked text with no
+ * control. The button only decides what is OFFERED - the server re-checks the
+ * role and writes the pii_reveal audit event.
+ */
+function PiiCell({
+  contact,
+  field,
+  canReveal,
+}: {
+  contact: DedupContactSnapshot;
+  field: "email" | "phone";
+  canReveal: boolean;
+}) {
+  const t = useTranslations("crmDedupCandidates");
+  const value = contact[field];
+  const display = fmt(field, value);
+  if (!value || !canReveal) return <>{display}</>;
+  return (
+    <MaskedReveal
+      maskedText={display}
+      resourceType="contact"
+      resourceId={contact.id}
+      field={field}
+      label={t(field === "email" ? "revealEmailLabel" : "revealPhoneLabel", { name: contact.name ?? t("unnamed") })}
+    />
+  );
 }
 
 // ─── Pair card ────────────────────────────────────────────────────────────────
@@ -109,12 +164,14 @@ interface PairCardProps {
   /** True when the reviewer swapped sides, so `right` is the record kept (primary). */
   swapped: boolean;
   busyPairId: string | null;
+  /** Viewer holds a role the audited PII reveal accepts (display gate only). */
+  canReveal: boolean;
   onMerge: (pair: DedupPair) => void;
   onDismiss: (pair: DedupPair) => void;
   onSwap: (pair: DedupPair) => void;
 }
 
-function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: PairCardProps) {
+function PairCard({ pair, swapped, busyPairId, canReveal, onMerge, onDismiss, onSwap }: PairCardProps) {
   const t = useTranslations("crmDedupCandidates");
   const headingId = useId();
   const busy = busyPairId === pair.pairId;
@@ -123,6 +180,12 @@ function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: Pai
   // `keep` is the surviving (primary) record; `from` is merged into it.
   const keep = swapped ? pair.right : pair.left;
   const from = swapped ? pair.left : pair.right;
+
+  // The server computes which fields differ on the CLEAR values before masking
+  // (two different numbers can mask identically). Older servers send no list, so
+  // fall back to comparing what is shown.
+  const serverDiff = pair.diffFields ? new Set<string>(pair.diffFields) : null;
+  const matchedLabels = (pair.matchedFields ?? []).map((f) => (MATCH_FIELD_LABEL_KEYS[f] ? t(MATCH_FIELD_LABEL_KEYS[f]) : f));
 
   return (
     <article className="dedup-card" aria-labelledby={headingId}>
@@ -135,6 +198,10 @@ function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: Pai
         <ConfidenceBadge score={pair.confidence} />
       </div>
 
+      {matchedLabels.length > 0 ? (
+        <p className="dedup-matched">{t("matchedOn", { fields: matchedLabels.join(", ") })}</p>
+      ) : null}
+
       <div className="dedup-grid" role="table" aria-label="Field comparison">
         <div className="dedup-grid-row dedup-thead" role="row">
           <div role="columnheader" />
@@ -142,26 +209,31 @@ function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: Pai
           <div role="columnheader">{t("colMergeFrom")}</div>
         </div>
 
-        {FIELDS.map(({ key, label }) => {
-          const diff = differs(
-            keep[key] as string | null,
-            from[key] as string | null,
-          );
+        {FIELDS.map(({ key, labelKey }) => {
+          const diff = serverDiff
+            ? serverDiff.has(key)
+            : differs(keep[key] as string | null, from[key] as string | null);
+          const cell = (contact: DedupContactSnapshot) =>
+            key === "email" || key === "phone" ? (
+              <PiiCell contact={contact} field={key} canReveal={canReveal} />
+            ) : (
+              fmt(key, contact[key] as string | null)
+            );
           return (
             <div key={key} className="dedup-grid-row" role="row">
-              <div className="dedup-field-label" role="rowheader">{label}</div>
+              <div className="dedup-field-label" role="rowheader">{t(labelKey)}</div>
               <div
                 role="cell"
                 className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
                 title={diff ? "Values differ" : undefined}
               >
-                {fmt(key, keep[key] as string | null)}
+                {cell(keep)}
               </div>
               <div
                 role="cell"
                 className={diff ? "dedup-field-val dedup-diff" : "dedup-field-val"}
               >
-                {fmt(key, from[key] as string | null)}
+                {cell(from)}
               </div>
             </div>
           );
@@ -201,6 +273,9 @@ function PairCard({ pair, swapped, busyPairId, onMerge, onDismiss, onSwap }: Pai
 
 export default function DedupCandidatesPage() {
   const t = useTranslations("crmDedupCandidates");
+  // Display gate only: the server's reveal endpoint re-checks the role.
+  const identity = useSessionIdentity();
+  const canReveal = identity.roles.some((r) => CRM_PII_READ_ROLES.includes(r));
   const [pairs, setPairs]      = useState<DedupPair[]>([]);
   const [source, setSource]    = useState<DedupSource | "loading">("loading");
   const [actionErr, setActErr] = useState<string | null>(null);
@@ -402,6 +477,7 @@ export default function DedupCandidatesPage() {
                 pair={pair}
                 swapped={swapped[pair.pairId] ?? false}
                 busyPairId={null}
+                canReveal={canReveal}
                 onMerge={openMerge}
                 onDismiss={openDismiss}
                 onSwap={toggleSwap}
@@ -517,6 +593,7 @@ const STYLES = `
 .dedup-name { color:var(--text); }
 .dedup-vs   { color:var(--muted); font-weight:400; font-size:.875rem; }
 
+.dedup-matched   { font-size:.8rem; color:var(--muted); margin:0 0 12px; }
 .dedup-grid      { display:grid; grid-template-columns:110px 1fr 1fr; gap:0;
                    margin-bottom:16px; }
 .dedup-grid-row  { display:contents; }

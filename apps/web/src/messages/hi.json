@@ -14205,7 +14205,17 @@
     "dismissConfirm": "जोड़ी खारिज करें",
     "dismissReasonLabel": "कारण (वैकल्पिक)",
     "dismissFailed": "खारिज करना विफल रहा",
-    "page": "पृष्ठ {page} / {total}"
+    "page": "पृष्ठ {page} / {total}",
+    "fieldName": "नाम",
+    "fieldEmail": "ईमेल",
+    "fieldPhone": "फ़ोन",
+    "fieldCompany": "कंपनी",
+    "fieldLastActivity": "अंतिम गतिविधि",
+    "fieldGstin": "जीएसटीआईएन",
+    "fieldPan": "पैन",
+    "matchedOn": "इन आधारों पर मिलान: {fields}",
+    "revealEmailLabel": "{name} का ईमेल",
+    "revealPhoneLabel": "{name} का फ़ोन नंबर"
   },
   "crmDocumentRegister": {
     "missingMandatory": "अनिवार्य दस्तावेज़ अनुपलब्ध",
