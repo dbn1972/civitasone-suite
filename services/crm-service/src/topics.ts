@@ -70,10 +70,21 @@ export const COMMANDS = {
   createLeadCaptureForm: "crm.lead_capture_form.create",
   /**
    * Amend a public lead-capture form (LM-002).
-   * Payload: { id, tenantId, changed: {...}, actorId }. `formKey` is NOT amendable —
-   * rotating it is a create + delete so the old URL stops working deliberately.
+   * Payload: { id, tenantId, changed: {...}, actorId }. `formKey` is NOT amendable
+   * here -- a PATCH can never move a live form to a new address. Rotating the key is
+   * its own explicit command (rotateLeadCaptureFormKey below).
    */
   updateLeadCaptureForm: "crm.lead_capture_form.update",
+  /**
+   * Rotate a public lead-capture form's key IN PLACE (GAP-CRM-LEAD-FORMS-01).
+   * Payload: { id, tenantId, formKey, updatedBy } -- `formKey` is the new,
+   * server-generated key. The old key stops resolving the moment this applies
+   * ("the old URL stops working deliberately", as before); the form keeps its id, so
+   * the attribution already stamped on captured leads (contacts.capture_form_id)
+   * stays attached. Emits the existing leadCaptureFormUpdated event with
+   * changed.keyRotated=true and audit action `rotate_key`, never either key.
+   */
+  rotateLeadCaptureFormKey: "crm.lead_capture_form.rotate_key",
   /** Remove a public lead-capture form so its URL 404s (LM-002). Payload: { id, tenantId }. */
   deleteLeadCaptureForm: "crm.lead_capture_form.delete",
   /**

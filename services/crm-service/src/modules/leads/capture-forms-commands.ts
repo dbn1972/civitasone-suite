@@ -109,6 +109,32 @@ export async function updateCaptureForm(
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * GAP-CRM-LEAD-FORMS-01: rotate a form's public key in place. The new key is minted
+ * HERE (server-side, same generator as create) and returned once so the admin can
+ * re-embed the form; it rides the command envelope only, never an emitted event. A
+ * retry that reuses the client idempotency key collapses to one applied command,
+ * exactly like create.
+ */
+export async function rotateCaptureFormKey(
+  ctx: RequestContext,
+  id: string,
+): Promise<Accepted & { formKey: string }> {
+  const messageId = commandId(ctx, `${COMMANDS.rotateLeadCaptureFormKey}:${id}`);
+  const formKey = repo.generateFormKey();
+  await queue.publish(COMMANDS.rotateLeadCaptureFormKey, {
+    messageId,
+    type: COMMANDS.rotateLeadCaptureFormKey,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, formKey, updatedBy: ctx.actorId },
+  });
+  await cache.invalidateResource(ctx.tenantId, RESOURCE);
+  return { id, status: "accepted", correlationId: ctx.correlationId, formKey };
+}
+
 export async function deleteCaptureForm(ctx: RequestContext, id: string): Promise<Accepted> {
   const messageId = commandId(ctx, `${COMMANDS.deleteLeadCaptureForm}:${id}`);
   await queue.publish(COMMANDS.deleteLeadCaptureForm, {
