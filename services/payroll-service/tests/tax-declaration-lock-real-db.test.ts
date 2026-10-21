@@ -35,7 +35,8 @@ import { registerTaxConsumers } from "../src/modules/tax/consumer.js";
 import { submitDeclaration } from "../src/modules/tax/commands.js";
 import { isDeclarationLocked, LOCKED_DECLARATION_STATUSES } from "../src/modules/tax/declaration-lock.js";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+// Set by vitest.config.ts (env.JWT_SECRET); never a literal in the test.
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
 const ADMIN = randomUUID();
 const EMP_LOGIN = randomUUID();

@@ -42,7 +42,8 @@ import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { roundRupee } from "../src/modules/payroll/domain.js";
 import type { FastifyInstance } from "fastify";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+// Set by vitest.config.ts (env.JWT_SECRET); never a literal in the test.
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
 const STRUCTURE = randomUUID();
