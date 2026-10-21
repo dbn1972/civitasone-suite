@@ -86,6 +86,7 @@ vi.mock("drizzle-orm", async (importOriginal) => {
 
 import { registerF3_disciplinary_Consumers } from "./f3-consumer.js";
 import { COMMANDS } from "../../topics.js";
+import { enqueue } from "../../shared/outbox.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
@@ -264,6 +265,59 @@ describe("F3 disciplinary consumer — op routing", () => {
     expect(insertValuesMock).not.toHaveBeenCalled();
     expect(R.insertCase).not.toHaveBeenCalled();
     expect(q.dlq).toEqual([]);
+    await q.stop();
+  });
+});
+
+// GAP-HR-AUDIT-LOG-08: the HR audit log reads the CENTRAL audit trail
+// (audit.event.record), which the disciplinary consumer never wrote to -- a case
+// opened or moved through the proceedings left no row there at all.
+describe("disciplinary audit trail events (GAP-HR-AUDIT-LOG-08)", () => {
+  const auditCalls = () =>
+    (enqueue as unknown as { mock: { calls: Array<[unknown, { topic: string; eventType: string; tenantId: string; actorId: string; correlationId: string; payload: Record<string, unknown> }]> } })
+      .mock.calls.filter(([, e]) => e.topic === "audit.event.record");
+
+  it("opening a case enqueues one audit.event.record naming the case, with no allegation text", async () => {
+    const caseId = randomUUID();
+    const q = await run({ op: "disciplinary_routes__1", id: caseId, params: { id: EMP }, body: { caseNo: "DC-7", allegation: "a very sensitive allegation" } });
+    const calls = auditCalls();
+    expect(calls).toHaveLength(1);
+    const [, evt] = calls[0]!;
+    expect(evt).toMatchObject({ topic: "audit.event.record", eventType: "audit.event.record", tenantId: TENANT, actorId: ACTOR });
+    expect(evt.payload).toMatchObject({
+      service: "hrms", action: "open", resourceType: "disciplinary_case", resourceId: caseId,
+      outcome: "success", employeeId: EMP, caseNo: "DC-7", proceedingType: "major", toStatus: "opened",
+    });
+    expect(JSON.stringify(evt.payload)).not.toContain("sensitive allegation");
+    // Same transaction as the write: the tx handed to enqueue is the consumer's tx.
+    expect(vi.mocked(enqueue).mock.calls.find(([, e]) => (e as { topic: string }).topic === "audit.event.record")![0]).toBe(mockTx);
+    expect(q.dlq).toEqual([]);
+    await q.stop();
+  });
+
+  it("a guarded transition enqueues an audit event with the verb and the true from/to status", async () => {
+    const q = await run({
+      op: "disciplinary_routes__0", id: randomUUID(), params: { caseId: CASE }, body: {},
+      caseId: CASE, actorId: ACTOR, to: "inquiry_ordered", action: "order_inquiry", notes: "private note text", patch: {},
+    });
+    const calls = auditCalls();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![1].payload).toMatchObject({
+      service: "hrms", action: "order_inquiry", resourceType: "disciplinary_case", resourceId: CASE,
+      outcome: "success", fromStatus: "opened", toStatus: "inquiry_ordered",
+    });
+    // Free-text notes stay on the case's own history, not in the central trail.
+    expect(JSON.stringify(calls[0]![1].payload)).not.toContain("private note text");
+    await q.stop();
+  });
+
+  it("writes no audit event when the transition fails (case gone): nothing happened to record", async () => {
+    R.findCaseTx.mockResolvedValue(null);
+    const q = await run({
+      op: "disciplinary_routes__0", id: randomUUID(), params: { caseId: CASE }, body: {},
+      caseId: CASE, actorId: ACTOR, to: "closed", action: "close", notes: null, patch: {},
+    });
+    expect(auditCalls()).toHaveLength(0);
     await q.stop();
   });
 });

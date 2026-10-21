@@ -196,6 +196,19 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
                     tenantId: c.tenantId, caseId: c.id, fromStatus: c.status, toStatus: to,
                     action, notes, actorId,
                   });
+            // GAP-HR-AUDIT-LOG-08: the case's own event table (appendEvent above)
+            // is the case history; the central audit trail is what the HR audit
+            // log reads, and it never heard about disciplinary transitions. Same
+            // transaction as the write, so the audit row exists iff the change
+            // does. Status names only: `notes` (free text) stays on the case.
+            await enqueue(tx, {
+              topic: "audit.event.record", eventType: "audit.event.record",
+              tenantId: msg.tenantId, actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "hrms", action, resourceType: "disciplinary_case", resourceId: c.id,
+                outcome: "success", fromStatus: c.status, toStatus: to,
+              },
+            });
             break;
           }
           case "disciplinary_routes__1": {
@@ -214,6 +227,19 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
                     tenantId: p.tenantId, caseId, fromStatus: null, toStatus: "opened",
                     action: "open", notes: null, actorId: msg.actorId,
                   });
+            // GAP-HR-AUDIT-LOG-08: opening a disciplinary case is exactly the
+            // kind of HR action the audit log must show; without this the case
+            // existed only in the module's own tables. The allegation text is
+            // deliberately NOT copied into the audit payload (DPDP).
+            await enqueue(tx, {
+              topic: "audit.event.record", eventType: "audit.event.record",
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "hrms", action: "open", resourceType: "disciplinary_case", resourceId: caseId,
+                outcome: "success", employeeId, caseNo: body.caseNo, proceedingType: body.proceedingType ?? "major",
+                toStatus: "opened",
+              },
+            });
             break;
           }
           case "disciplinary_routes__2": {
