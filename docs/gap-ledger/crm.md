@@ -1297,7 +1297,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-05  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Phone and other fields have no format validation or duplicate check here, whereas New Contact shows field-level phone/GSTIN/PAN/PIN errors and a duplicate panel; an edit can introduce invalid or duplicate data (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:167).
 - **Verified evidence:** Edit form has only type=email on email (:200) and required on name; no phone format check and no duplicate check on edit, and errors show as one generic banner (:189). New Contact (contacts/new/page.tsx) runs duplicateCheck and maps backend validation codes to fields via parseFieldError (lib/crm/dataQuality.ts:91). Note new-contact validation is server-driven, not client formats, and the edit form has no GSTIN/PAN/PIN fields at all (see EDIT-07), so 'GSTIN/PAN/PIN errors' do not apply to edit today.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -1461,7 +1461,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme ERRORS (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The comment says the mandatory-field 422 "falls through to the page-level error banner", but the code sets a fixed "Could not create the contact." for every non-format failure, so the user is never told which mandatory field is missing (app/(app)/crm/contacts/new/page.tsx:167).
 - **Verified evidence:** new/page.tsx:359-361 comment says the LM-001 422 falls to the banner, but l.362-369 setError('Could not create the contact.') for any non-field error; body.message is read (l.362) but discarded. The form does pre-mark required fields via lead-field-rules (l.249-269), so the case is narrowed to a race with config changes or read failure.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -1492,7 +1492,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-03  ·  MEDIUM  ·  partly  ·  theme CONSENT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 note:** The edit form now carries the same PAN/GSTIN purpose and role-scoped-access notice as the new form, linked by aria-describedby. The final legal wording of the consent label and both notices still needs DPO sign-off (owner decision).
 - **First-pass claim:** PAN and GSTIN are collected in the open with no purpose or notice text; PAN of an individual is personal data, and the only consent line is a bare "Marketing consent (GDPR/DPDP)" checkbox (GDPR is not the governing law here) (app/(app)/crm/contacts/new/page.tsx:252, app/(app)/crm/contacts/new/page.tsx:316).
 - **Verified evidence:** new/page.tsx:238-264 GSTIN and PAN inputs have no helper text; l.315-318 checkbox reads 'Marketing consent (GDPR/DPDP)' (edit form EditContactForm.tsx says 'Marketing consent (DPDP)'). No purpose or notice text anywhere on the form (only the subtitle). GDPR mention is real; it is not the governing law. Masking is not the relevant fix here.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`
@@ -1536,7 +1537,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Placeholders come from another state: "Asha Rao", "Bengaluru", "560001", GSTIN 29ABCDE1234F1Z5 (a Karnataka code); an Odisha tenant sees wrong examples (app/(app)/crm/contacts/new/page.tsx:244).
 - **Verified evidence:** new/page.tsx placeholders: 'e.g. Asha Rao' (l.212), GSTIN '29ABCDE1234F1Z5' (l.244; 29 = Karnataka), city 'Bengaluru' (l.266), PIN '560001' (l.274), phone 9900000000. They are placeholders, not saved data.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -1674,7 +1675,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL - done: sensitive and visibleToRoles are written and round-tripped by the definition screen (name-pattern warning, pre-ticked flag, role picker), and crm-service now type-checks them on POST/PATCH (boolean sensitive, role-identifier list, visibleToRoles only on a sensitive field). NOT done, owner decision: custom-field VALUES have no storage or API anywhere (no contacts custom column or values table, nothing renders them), so the record-view mask with audited reveal, server-side stripping for roles outside visibleToRoles and CSV-export exclusion have nothing to act on. Owner question: approve a value-store design (migration), e.g. a crm custom_field_values table vs a contacts.custom_data jsonb column, and say whether the API must refuse sensitive:false on Aadhaar/PAN-named fields; earlier tick was: W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** An admin can define a Text field named anything (e.g. Aadhaar or PAN) on contacts, leads or deals; the form has no sensitivity, masking or role-visibility setting, so the value would render unmasked on every record for every CRM role (lib/crm/customFields.ts:178).
 - **Verified evidence:** CustomFieldsManager.tsx:229-256 offers only name, type (text/number/date/boolean/select/multi_select), required, order; buildValidationSchema (customFields.ts:178-189) persists only required+options, so no sensitivity/mask/role-visibility can be defined. Admin-only via custom-fields/layout.tsx. However no web screen in this snapshot reads or renders custom-field VALUES (only the definitions manager uses customFields.ts), and crm-service is absent, so the 'renders unmasked on every record' consequence cannot be seen; the missing control is real. No shared <Masked> exists in ds (only a local MaskedInput in hr Step4).
 - **Files to change:** `apps/web/src/lib/crm/customFields.ts`, `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -1709,7 +1710,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Save is a 202 (queue-backed) mutation followed immediately by a reload; the success line "Custom field “x” saved." can appear while the reloaded list does not yet contain the change (app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx:152).
 - **Verified evidence:** CustomFieldsManager.tsx:147-153 awaits create/update (which resolves on the 202 accepted per customFields.ts header comment), sets message at 152 then immediately load() at 153. If the consumer write has not landed, the list reloads without the change while the message says 'saved'. Real race but depends on backend consumer latency (crm-service not in snapshot, cannot measure); new rows would also vanish from the list since load() replaces rows with server data.
 - **Files to change:** `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1863,7 +1864,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL - done: no hard-coded Devanagari suffix; title and subtitle come from crm.dashboard.* in en and hi, and now ta/te/kn too (those three previously rendered the raw key path). NOT done, owner decision: Odia is not a supported locale (SUPPORTED_LOCALES is en, hi, ta, te, kn; there is no or.json), so switching to Odia cannot change the subtitle. Owner question: add Odia as a supported UI locale (config, or.json translations, translator sign-off)?; earlier tick was: W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- **W2 note:** The ta/te/kn dashboard strings were authored without native-speaker review; have a translator confirm them.
 - **First-pass claim:** Subtitle has a hard-coded Devanagari suffix, not a next-intl key, and not Odia for an Odisha tenant (app/(app)/crm/dashboard/page.tsx:14).
 - **Verified evidence:** dashboard/page.tsx:14 subtitle ends with '• सरकारी हितधारक पंजी' hard-coded literal; no getTranslations use in this file (hub crm/page.tsx does import next-intl). Odia not provided.
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -1883,7 +1885,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 note:** crm-service data-quality now returns records[] and recordsByFilter rows ({id,name,score 0..1,issues[]}) with the contact or account display name (additive, no migration); the web also unwraps the {data} envelope and the record-shaped distribution, so real rows carry names and no bare uuid is shown. Names are returned only to callers who may list contacts/accounts (crm_user, crm_admin, super_admin); a tenant_admin-only caller gets the same counts and ids with name null (shown as Unnamed record).
 - **First-pass claim:** The Record column prints the raw id (a UUID) as the link text, so a data steward sees a list of ids with a score and issue text but no name to recognise the contact or account to fix (app/_components/crm/DataQualityView.tsx:141).
 - **Verified evidence:** DataQualityView.tsx:142 renders <a>{r.id}</a>; DqRecord (lib/crm/dataQuality.ts:52-56) carries only id, score, issues - no name field, so the web cannot show a name without the backend adding one (mapper at dataQuality.ts ~225 maps only those). Whether the API returns a name cannot be verified (crm-service absent). Line ref 141 -> 142.
 - **Files to change:** `apps/web/src/lib/crm/dataQuality.ts`, `apps/web/src/app/_components/crm/DataQualityView.tsx`
@@ -1913,7 +1916,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was NAVUX)
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The report is refetched on every Entity or Tab change (useEffect on [entity, filter]) and stats flip to "…" each time, so clicking Invalid format re-loads the counts and distribution that did not change (app/_components/crm/DataQualityView.tsx:60).
 - **Verified evidence:** DataQualityView.tsx:49-60 one effect on [entity, filter] calls getDataQuality(entity, filter) and setSource('loading'), so stats show '…' (84-86) and distribution re-fetches on every Tab change. Counts/distribution are independent of filter per DataQualityReport shape (only records change).
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -1928,7 +1931,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-04  ·  LOW  ·  confirmed  ·  theme NAVUX (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 note:** Leads and Contacts load the same contact records with an identical completeness profile and there is no /crm/leads/:id screen, so the selector now has one combined scope (Contacts & leads); the API still accepts entity=leads. Owner to confirm, or define a distinct lead scope (e.g. by lead status).
 - **First-pass claim:** "Leads" and "Contacts" are separate entity options but both drill into /crm/contacts/:id, so the selector suggests two datasets that open the same screen (app/_components/crm/DataQualityView.tsx:35).
 - **Verified evidence:** DataQualityView.tsx:33-37 DETAIL_BASE maps both contacts and leads to /crm/contacts/, selector options at 19-25. Whether leads are the same table as contacts in crm-service cannot be verified.
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`
