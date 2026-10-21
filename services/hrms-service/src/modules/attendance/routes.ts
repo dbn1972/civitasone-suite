@@ -19,9 +19,10 @@ import { isGazettedForWfh, resolveEmployeePayLevel } from "./wfh-eligibility.js"
 import { WFH_WEEKLY_DAY_CAP, findWfhWeeklyOverflow, isValidIsoDate, isoWeekBounds, wfhDaysUsedInWeek } from "./wfh-week-cap.js";
 import { scopedRead } from "../../shared/db.js";
 import { batchEmployees } from "../../shared/batch-resolve.js";
+import { summariseOvertimeByStatus } from "./overtime-summary.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { eq, and, desc, inArray, count, gte, lte } from "drizzle-orm";
+import { eq, and, desc, inArray, count, sum, gte, lte } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 /**
@@ -581,14 +582,25 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
       employeeScopeCondition(hrmsOvertimeRequests.employeeId, effectiveEmpId),
     );
-    const [rows, totalResult] = await scopedRead(async (tx) => [
+    // GAP-HR-OVERTIME-04: one grouped aggregate over the SAME where-clause as
+    // the page query (so it honours the caller's tenant/self/direct-report
+    // scope and any empId filter) yields the real total plus the per-status
+    // counts and approved hours. The web stat cards used to count the rows
+    // of whatever page was loaded, so Pending / Approved / Approved Hours
+    // undercounted as soon as the list spanned more than one page.
+    const [rows, byStatus] = await scopedRead(async (tx) => [
       await tx.select().from(hrmsOvertimeRequests)
         .where(whereCond)
         .orderBy(desc(hrmsOvertimeRequests.requestDate))
         .limit(q.limit + 1)
         .offset(q.offset),
-      await tx.select({ value: count() }).from(hrmsOvertimeRequests).where(whereCond),
+      await tx.select({
+        status: hrmsOvertimeRequests.status,
+        n: count(),
+        hours: sum(hrmsOvertimeRequests.hoursRequested),
+      }).from(hrmsOvertimeRequests).where(whereCond).groupBy(hrmsOvertimeRequests.status),
     ]);
+    const summary = summariseOvertimeByStatus(byStatus);
     const hasMore = rows.length > q.limit;
     const page = hasMore ? rows.slice(0, q.limit) : rows;
     // GAP-HR-OVERTIME-02: resolve employeeName/employeeNo via the shared
@@ -603,7 +615,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
         employeeNo: empMap.get(r.employeeId)?.employeeNo,
       })),
       hasMore,
-      total: totalResult[0]?.value ?? 0,
+      total: summary.total,
+      summary,
     });
   });
 

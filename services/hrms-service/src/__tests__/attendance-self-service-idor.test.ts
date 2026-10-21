@@ -161,14 +161,20 @@ function paramValues(sql: unknown, out: unknown[] = []): unknown[] {
  * both resolve to `rows` without throwing — exactly what every OTHER
  * capturingTx call site in this file already relied on before this gap, now
  * just also tolerant of the two new call shapes.
+ *
+ * GAP-HR-OVERTIME-04 (rescan): that second query is now a per-status
+ * aggregate (`.where(cond).groupBy(status)`, feeding the response `summary`),
+ * so the hybrid is also chainable through `.groupBy`.
  */
 function capturingTx(rows: unknown[]) {
   let captured: unknown;
-  function hybrid(): Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown } {
-    const p = Promise.resolve(rows) as Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown };
+  type Hybrid = Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown; groupBy: () => unknown };
+  function hybrid(): Hybrid {
+    const p = Promise.resolve(rows) as Hybrid;
     p.orderBy = hybrid;
     p.limit = hybrid;
     p.offset = hybrid;
+    p.groupBy = hybrid;
     return p;
   }
   const tx = {
