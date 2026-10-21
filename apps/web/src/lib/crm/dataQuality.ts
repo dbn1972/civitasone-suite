@@ -200,7 +200,8 @@ export function parseMissingMandatoryFields(body: unknown): LeadFieldName[] {
 }
 
 export type DqIssue =
-  | { kind: "missing" | "invalid"; field: string }
+  | { kind: "missing"; field: string }
+  | { kind: "invalid"; field: string }
   | { kind: "stale" }
   | { kind: "other"; raw: string };
 
@@ -211,7 +212,10 @@ export function parseDqIssue(raw: string): DqIssue {
   if (idx > 0) {
     const kind = raw.slice(0, idx);
     const field = raw.slice(idx + 1);
-    if ((kind === "missing" || kind === "invalid") && field.length > 0) return { kind, field };
+    if (field.length > 0) {
+      if (kind === "missing") return { kind: "missing", field };
+      if (kind === "invalid") return { kind: "invalid", field };
+    }
   }
   return { kind: "other", raw };
 }
