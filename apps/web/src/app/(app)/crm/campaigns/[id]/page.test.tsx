@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { renderWithIntl } from "@/lib/testUtils/intl";
 import type { CRMCampaignRoi } from "@civitasone/types";
 
 vi.mock("../../../../_data/loaders", () => ({ getCrmCampaignRoi: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
-import Page from "./page";
+import Page, { generateMetadata } from "./page";
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
 
 const mocked = vi.mocked(getCrmCampaignRoi);
@@ -45,6 +45,41 @@ describe("Campaign detail page", () => {
 
     expect(screen.getByRole("heading", { name: "Campaign" })).toBeInTheDocument();
     expect(screen.getByText(/Campaign 7f3a1c2e · INR/)).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-01: the browser tab title is the campaign name, else 'Campaign'", async () => {
+    mocked.mockResolvedValue({ data: campaign({ name: "Diwali Push" }), source: "api" });
+    expect((await generateMetadata({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } })).title).toBe(
+      "Diwali Push — CivitasOne CRM",
+    );
+    mocked.mockResolvedValue({ data: campaign(), source: "api" });
+    expect((await generateMetadata({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } })).title).toBe(
+      "Campaign — CivitasOne CRM",
+    );
+    // An outage / unknown campaign still yields a neutral title, never the id.
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    expect((await generateMetadata({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } })).title).toBe(
+      "Campaign — CivitasOne CRM",
+    );
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-01: shows only a short id on screen, with a button that copies the full id", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    mocked.mockResolvedValue({ data: campaign(), source: "api" });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+
+    // The full UUID is not printed as text anywhere on the page.
+    expect(screen.queryByText("7f3a1c2e-0000-4000-8000-000000000000")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copy the full campaign ID" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("7f3a1c2e-0000-4000-8000-000000000000"));
+    expect(await screen.findByText("Copied")).toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-01: the post-period form is pre-filled with the campaign's name", async () => {
+    mocked.mockResolvedValue({ data: campaign({ name: "Diwali Push" }), source: "api" });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+    expect(screen.getByLabelText("Campaign name (optional)")).toHaveValue("Diwali Push");
   });
 
   it("GAP-CRM-CAMPAIGNS-DETAIL-02: a 404 shows the empty state, no retry", async () => {

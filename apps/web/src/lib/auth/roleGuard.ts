@@ -328,6 +328,18 @@ export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "
 export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
+ * Roles permitted to merge duplicate CRM accounts (GAP-CRM-ACCOUNTS-05). A merge is
+ * irreversible (the duplicate is tombstoned and its contacts, plans, tenders and
+ * child accounts move to the primary), and POST /v1/crm/accounts/merge answers 403
+ * to everyone but these two roles, so the control is only offered to them -- a
+ * plain crm_user used to be walked through a danger confirmation and then refused.
+ * Deliberately EXACTLY the server's set (not the wider CRM admin lists above): a
+ * role this does not name would be offered a button the service rejects. The
+ * server remains the authority; this only decides whether the UI offers it.
+ */
+export const CRM_MERGE_ROLES = ["crm_admin", "super_admin"];
+
+/**
  * Roles permitted to close (won/lost/cancelled/on_hold) an opportunity
  * (GAP-CRM-OPPORTUNITIES-03). Closing a deal is irreversible and feeds revenue
  * reporting, so the base crm_user must not be offered the Close control on every

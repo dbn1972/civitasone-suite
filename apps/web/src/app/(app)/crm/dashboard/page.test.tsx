@@ -24,7 +24,9 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     render(await Page());
     expect(screen.getByText("Contacts / Stakeholders")).toBeInTheDocument();
     expect(screen.getByText("Active Engagements")).toBeInTheDocument();
-    expect(screen.getByText("Interactions Today")).toBeInTheDocument();
+    // GAP-CRM-ACTIVITIES-08: the card links to the Activities screen, so it says Activities.
+    expect(screen.getByText("Activities Today")).toBeInTheDocument();
+    expect(screen.queryByText(/Interactions/)).not.toBeInTheDocument();
     expect(screen.getByText("Active Engagement Value")).toBeInTheDocument();
   });
 
@@ -76,7 +78,7 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(screen.queryByText(/सरकारी हितधारक पंजी/)).not.toBeInTheDocument();
   });
 
-  it("GAP-CRM-DASHBOARD-04: stat cards link into their lists, incl. Interactions Today -> activities Today segment", async () => {
+  it("GAP-CRM-DASHBOARD-04: stat cards link into their lists, incl. Activities Today -> activities Today segment", async () => {
     mocked.mockResolvedValue({ data: mockDash, source: "api" });
     const { container } = render(await Page());
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));

@@ -11,8 +11,6 @@ function render(ui: ReactElement) {
     </NextIntlClientProvider>,
   );
 }
-import type { CRMAccountSummary } from "@civitasone/types";
-
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
@@ -20,14 +18,8 @@ vi.mock("next/navigation", () => ({
 
 import { AccountParentForm } from "./AccountParentForm";
 
-const OPTIONS: CRMAccountSummary[] = [
-  { id: "p1", name: "Parent Org", industry: null, website: null, parentId: null, contactCount: 0 },
-];
-
 function renderForm() {
-  return render(
-    <AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} options={OPTIONS} />,
-  );
+  return render(<AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} />);
 }
 
 async function openAndSave() {
@@ -128,7 +120,7 @@ describe("AccountParentForm", () => {
   it("asks for confirmation before sending the PATCH", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     render(
-      <AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} options={OPTIONS} subtreeSize={3} />,
+      <AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} subtreeSize={3} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
     fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
@@ -136,6 +128,78 @@ describe("AccountParentForm", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Move account" })).toBeInTheDocument());
     expect(screen.getByText(/3 sub-accounts/)).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-ACCOUNTS-DETAIL-01: the parent is found by a SERVER-SIDE search (this
+  // account and its whole subtree excluded by the server), not picked from a
+  // pre-loaded capped list.
+  describe("server-side parent search", () => {
+    function mockApi(patchStatus = 204) {
+      return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (init?.method === "PATCH") return new Response(null, { status: patchStatus });
+        if (url.startsWith("/api/proxy/v1/crm/accounts?")) {
+          return new Response(
+            JSON.stringify({ data: [{ id: "p-far", name: "Far Away Ministry", industry: "Energy", parentId: null, contactCount: 0 }] }),
+            { status: 200 },
+          );
+        }
+        return new Response("{}", { status: 404 });
+      });
+    }
+
+    it("searches the server with the account's subtree excluded and moves under the picked account", async () => {
+      const fetchSpy = mockApi();
+      render(<AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} subtreeSize={2} />);
+      fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "far" } });
+
+      const option = await screen.findByRole("option", { name: /Far Away Ministry/ });
+      const searchUrl = fetchSpy.mock.calls.map((c) => String(c[0])).find((u) => u.includes("search=far"))!;
+      const params = new URL(searchUrl, "http://x").searchParams;
+      expect(params.get("search")).toBe("far");
+      expect(params.get("excludeSubtreeOf")).toBe("acc-1");
+      expect(params.get("limit")).toBe("10");
+
+      fireEvent.mouseDown(option);
+      fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
+      // The confirmation names the chosen parent (a label the picker saw), not "another account".
+      const dialog = await screen.findByRole("alertdialog");
+      expect(within(dialog).getByText("Far Away Ministry")).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole("button", { name: "Move account" }));
+
+      await waitFor(() => {
+        const patch = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PATCH")!;
+        expect(JSON.parse((patch[1] as RequestInit).body as string)).toEqual({ parentId: "p-far" });
+      });
+    });
+
+    it("'Make top level' clears the current parent and PATCHes parentId null", async () => {
+      const fetchSpy = mockApi();
+      render(
+        <AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId="p1" currentParentName="Parent Org" />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
+      // The picker opens labelled with the current parent's name (no id shown).
+      expect(screen.getByRole("combobox")).toHaveValue("Parent Org");
+      fireEvent.click(screen.getByRole("button", { name: "Make top level (no parent)" }));
+      fireEvent.click(screen.getByRole("button", { name: "Save hierarchy" }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Move account" }));
+      await waitFor(() => {
+        const patch = fetchSpy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PATCH")!;
+        expect(JSON.parse((patch[1] as RequestInit).body as string)).toEqual({ parentId: null });
+      });
+    });
+
+    it("shows a 'could not load' alert (not 'no matches') when the account search fails", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("boom", { status: 500 }));
+      render(<AccountParentForm accountId="acc-1" accountName="Test Account" currentParentId={null} />);
+      fireEvent.click(screen.getByRole("button", { name: "Change Parent" }));
+      fireEvent.change(screen.getByRole("combobox"), { target: { value: "far" } });
+      expect(await screen.findByText("Couldn’t load accounts. Please try again.")).toBeInTheDocument();
+      expect(screen.queryByText("No matching accounts")).not.toBeInTheDocument();
+    });
   });
 
   it("cancelling the confirm makes no request", async () => {

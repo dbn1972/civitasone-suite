@@ -223,6 +223,7 @@ import {
   tenantModulesResponseSchema,
   userListResponseSchema,
   roleListResponseSchema,
+  crmAccountDetailSchema,
   crmAccountHierarchyListSchema,
   crmAccountsListSchema,
   crmContactsListSchema,
@@ -387,6 +388,7 @@ import {
   mapAssetDetail,
   mapDepreciationEntries,
   mapAssetMaintenanceHistory,
+  mapCrmAccount,
   mapCrmAccountNodes,
   mapCrmAccounts,
   mapCrmDealSummaries,
@@ -1853,27 +1855,19 @@ export async function getCrmAccounts(): Promise<CrmAccountsResult> {
 }
 
 /**
- * Resolve a single account by id for the detail page (GAP-CRM-ACCOUNTS-DETAIL-01).
- *
- * crm-service has no GET /v1/crm/accounts/:id yet (the by-id endpoint is tracked
- * under GAP-CRM-ACCOUNTS-DETAIL-03), only a capped list. The detail page used to
- * resolve the account with accounts.find() over the DEFAULT list page (50 rows),
- * so a valid deep link to any account beyond the first page rendered
- * "Account not found". This loader queries the list at the server's maximum page
- * size (limit=200) so accounts beyond the default page resolve. The account's
- * EXISTENCE is confirmed authoritatively by the /ancestors endpoint (which loads
- * every tenant account and 404s on an unknown id), so the page can tell "beyond
- * the max page" apart from "truly does not exist". Returns the summary when it is
- * within the max page, else null (caller falls back to existence via ancestors).
+ * Resolve a single account by id for the detail page (GAP-CRM-ACCOUNTS-DETAIL-01)
+ * over GET /v1/crm/accounts/:id, so a valid deep link works no matter where the
+ * account would fall in the (capped) list. A 404 comes back as `data: null` with
+ * `status: 404` (the page renders "Account not found"); any other failure is
+ * `source: "error"` (the page renders a retryable error, never a false 404).
  */
 export async function getCrmAccount(id: string): Promise<LoaderResult<CRMAccountSummary | null>> {
-  const result = await fetchJson("/api/v1/crm/accounts?limit=200", [] as CRMAccountSummary[], {
+  return fetchJson(`/api/v1/crm/accounts/${encodeURIComponent(id)}`, null as CRMAccountSummary | null, {
     revalidateSeconds: 30,
     telemetryKey: "crm.account_lookup",
-    responseSchema: crmAccountsListSchema,
-    mapResponse: mapCrmAccounts,
+    responseSchema: crmAccountDetailSchema,
+    mapResponse: mapCrmAccount,
   });
-  return { ...result, data: result.data.find((a) => a.id === id) ?? null };
 }
 
 /** Parent chain for an account, ordered nearest parent → root. */

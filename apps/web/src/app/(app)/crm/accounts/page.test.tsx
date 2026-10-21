@@ -2,6 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 vi.mock("../../../_data/loaders", () => ({ getCrmAccounts: vi.fn() }));
+
+// The Merge control is role-gated on the session roles (GAP-CRM-ACCOUNTS-05).
+const mockRoles = vi.fn<() => string[]>();
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => mockRoles() };
+});
 vi.mock("./AccountsTable", () => ({ AccountsTable: () => <div data-testid="accounts-table" /> }));
 vi.mock("./AccountHierarchy", () => ({ AccountHierarchy: () => <div data-testid="hierarchy" /> }));
 vi.mock("./NewAccountForm", () => ({ NewAccountForm: () => <div data-testid="new-form" /> }));
@@ -21,7 +28,39 @@ const sampleAccounts = [
   { id: "2", name: "SDMA UP", industry: "Disaster Management", website: "sdma.up.gov.in", contactCount: 3, parentId: "1" },
 ];
 
-beforeEach(() => mocked.mockReset());
+beforeEach(() => {
+  mocked.mockReset();
+  mockRoles.mockReset();
+  mockRoles.mockReturnValue(["crm_admin"]);
+});
+
+// GAP-CRM-ACCOUNTS-05: POST /v1/crm/accounts/merge is crm_admin / super_admin only and
+// irreversible, so the control is offered only to them (a crm_user used to be walked
+// through the danger confirmation and then refused with a 403).
+describe("Accounts list page: Merge duplicate accounts is role-gated (GAP-CRM-ACCOUNTS-05)", () => {
+  it.each([["crm_admin"], ["super_admin"]])("offers the merge control to %s", async (role) => {
+    mockRoles.mockReturnValue([role]);
+    mocked.mockResolvedValue({ data: sampleAccounts as never, source: "api" });
+    render(await Page());
+    expect(screen.getByTestId("merge")).toBeInTheDocument();
+  });
+
+  it.each([["crm_user"], ["tenant_admin"], ["platform_admin"], []])(
+    "does not offer the merge control to a session with roles %j",
+    async (...roles) => {
+      mockRoles.mockReturnValue(roles.flat() as string[]);
+      mocked.mockResolvedValue({ data: sampleAccounts as never, source: "api" });
+      render(await Page());
+      expect(screen.queryByTestId("merge")).not.toBeInTheDocument();
+    },
+  );
+
+  it("still needs two accounts to merge, even for an admin", async () => {
+    mocked.mockResolvedValue({ data: [sampleAccounts[0]] as never, source: "api" });
+    render(await Page());
+    expect(screen.queryByTestId("merge")).not.toBeInTheDocument();
+  });
+});
 
 describe("Accounts list page", () => {
   it("renders heading 'Accounts'", async () => {

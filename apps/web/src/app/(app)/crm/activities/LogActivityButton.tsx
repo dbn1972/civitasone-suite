@@ -36,7 +36,9 @@ export function LogActivityButton({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const formError = useFormError("interaction");
+  // The screen, hub tile and header are all "Activities" (GAP-CRM-ACTIVITIES-08), so
+  // a failed save reads "We couldn't save your activity", not "interaction".
+  const formError = useFormError("activity");
   const [fieldErrors, setFieldErrors] = useState<ActivityFormErrors>({});
 
   // GAP-CRM-ACTIVITIES-06: do not swallow contact-picker failures. Track a

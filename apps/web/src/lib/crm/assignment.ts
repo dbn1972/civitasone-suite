@@ -101,9 +101,24 @@ export function normaliseRule(raw: unknown): AssignmentRule | null {
     ordinal: num(r.ordinal),
     enabled: bool(r.enabled, true),
     fallbackOwnerId: str(r.fallbackOwnerId),
-    ...(typeof r.updatedBy === "string" && r.updatedBy ? { updatedBy: r.updatedBy } : {}),
+    ...(updatedByLabel(r) ? { updatedBy: updatedByLabel(r) } : {}),
     ...(typeof r.updatedAt === "string" && r.updatedAt ? { updatedAt: r.updatedAt } : {}),
   };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Who last changed a rule, as a DISPLAY name (GAP-CRM-ASSIGNMENT-RULES-05). The
+ * service sends `updatedByName` (resolved from the identity directory) alongside
+ * the raw `updatedBy` user id; prefer the name, and never surface a bare id -- an
+ * unresolved actor is simply omitted rather than shown as a UUID.
+ */
+function updatedByLabel(r: Record<string, unknown>): string {
+  const name = str(r.updatedByName).trim();
+  if (name) return name;
+  const by = str(r.updatedBy).trim();
+  return by && !UUID_RE.test(by) ? by : "";
 }
 
 export function normaliseRules(raw: unknown): AssignmentRule[] {
@@ -318,9 +333,65 @@ export async function updateResource(
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+/**
+ * What still points at a queue / territory / partner / branch that a delete was
+ * refused for (GAP-CRM-ASSIGNMENT-DIRECTORY-04). Names are a bounded sample; the
+ * counts are exact.
+ */
+export interface ResourceReferences {
+  assignmentRules: string[];
+  assignmentRuleCount: number;
+  branches: string[];
+  branchCount: number;
+}
+
+/** DELETE refused with 409 IN_USE: other records still reference the target. */
+export class ResourceInUseError extends Error {
+  readonly references: ResourceReferences;
+  constructor(references: ResourceReferences) {
+    super("IN_USE");
+    this.name = "ResourceInUseError";
+    this.references = references;
+  }
+}
+
+function namesOf(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => (r && typeof r === "object" ? str((r as Record<string, unknown>).name) : ""))
+    .filter((n) => n.length > 0);
+}
+
+/** Parse the `references` of a 409 IN_USE body; null when the body is not an IN_USE refusal. */
+async function readInUseReferences(res: Response): Promise<ResourceReferences | null> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown; references?: Record<string, unknown> } | null;
+    if (!body || body.code !== "IN_USE") return null;
+    const refs = body.references ?? {};
+    const assignmentRules = namesOf(refs.assignmentRules);
+    const branches = namesOf(refs.branches);
+    return {
+      assignmentRules,
+      assignmentRuleCount: num(refs.assignmentRuleCount) || assignmentRules.length,
+      branches,
+      branchCount: num(refs.branchCount) || branches.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteResource(resource: OwnershipResource, id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/${resource}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (res.ok) return;
+  // A 409 IN_USE is a business refusal the admin can act on, not a generic
+  // "changed by someone else" conflict: carry the reason so the UI can say what
+  // still uses the entry.
+  if (res.status === 409) {
+    const references = await readInUseReferences(res);
+    if (references) throw new ResourceInUseError(references);
+  }
+  throw new Error(await errorMessageFromResponse(res));
 }
 
 /**

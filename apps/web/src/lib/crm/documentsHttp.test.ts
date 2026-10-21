@@ -170,6 +170,18 @@ describe("document-types + verify (DM-002)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
     await expect(dm.verifyDocument("d1", "verified")).rejects.not.toThrow(/E/);
   });
+
+  // GAP-CRM-ACCOUNTS-DETAIL-02: the service now answers 403 to a non-admin verifier;
+  // the client turns that into the standard permission message, never the raw
+  // "requires one of: ..." role list the service sends.
+  it("verifyDocument turns the service's 403 into the standard permission message", async () => {
+    fetchMock.mockResolvedValueOnce(
+      res({ code: "FORBIDDEN", message: "requires one of: crm_admin, super_admin, tenant_admin" }, { status: 403 }),
+    );
+    const err = await dm.verifyDocument("d1", "verified").catch((e: unknown) => e);
+    expect((err as Error).message).toContain("You don't have permission to do this.");
+    expect((err as Error).message).not.toMatch(/requires one of|crm_admin|FORBIDDEN/);
+  });
 });
 
 describe("pure helpers", () => {

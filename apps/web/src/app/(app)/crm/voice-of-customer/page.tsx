@@ -96,7 +96,7 @@ export default async function VoiceOfCitizenPage({
               {t("feedbackForm")}
             </a>
             <a className="btn" href="/crm/activities">
-              All Interactions
+              {t("allActivities")}
             </a>
           </div>
         }

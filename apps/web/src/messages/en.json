@@ -2045,7 +2045,9 @@
       "responses": "Responses",
       "post": "Post period",
       "posting": "Posting…",
-      "submitted": "Period submitted. Figures will appear once processing completes."
+      "submitted": "Period submitted. Figures will appear once processing completes.",
+      "campaignName": "Campaign name (optional)",
+      "campaignNamePlaceholder": "e.g. Diwali Outreach"
     },
     "editOpportunity": {
       "title": "Edit Opportunity",
@@ -13404,8 +13406,6 @@
   "crmAccountDetail": {
     "notFoundTitle": "Account not found",
     "notFoundMessage": "This account does not exist or is no longer active.",
-    "unavailableTitle": "Account detail unavailable",
-    "unavailableMessage": "This account exists but could not be loaded here yet. Open it from the Accounts list.",
     "reportingLineArea": "the reporting line"
   },
   "crmAccountHealth": {
@@ -13485,7 +13485,8 @@
     "toggleOnDescription": "New leads will start routing through this rule.",
     "toggleOffDescription": "New leads will no longer route through this rule.",
     "turnOn": "Turn on",
-    "turnOff": "Turn off"
+    "turnOff": "Turn off",
+    "justSaved": "Saved just now"
   },
   "crmCampaignDetail": {
     "performanceTitle": "Campaign Performance",
@@ -13493,7 +13494,11 @@
     "backLabel": "Campaigns",
     "loadArea": "campaign performance",
     "fallbackTitle": "Campaign",
-    "campaignId": "Campaign ID"
+    "campaignId": "Campaign ID",
+    "copyId": "Copy ID",
+    "copyIdAria": "Copy the full campaign ID",
+    "copied": "Copied",
+    "copyFailed": "Couldn’t copy. Please copy it manually."
   },
   "crmCampaignRoiTable": {
     "unnamedCampaign": "Unnamed campaign",
@@ -14507,7 +14512,8 @@
     "ratingsReceived": "Ratings received",
     "citizenRatingsNote": "Citizen-submitted service ratings, shown separately from the model-scored sentiment above.",
     "openFeedbackForm": "Open the feedback form",
-    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting."
+    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting.",
+    "allActivities": "All Activities"
   },
   "crmAccountHierarchy": {
     "heading": "Account Hierarchy",
@@ -14532,7 +14538,13 @@
     "subtreeClause": " and its {count, plural, one {# sub-account} other {# sub-accounts}}",
     "confirmTitle": "Move account in hierarchy?",
     "confirmDescription": "Move <strong>{name}</strong>{subtree} under <strong>{target}</strong>?",
-    "confirmLabel": "Move account"
+    "confirmLabel": "Move account",
+    "reportsTo": "Reports to",
+    "searchPlaceholder": "Type to search accounts",
+    "noMatches": "No matching accounts",
+    "searching": "Searching…",
+    "searchError": "Couldn’t load accounts. Please try again.",
+    "makeTopLevel": "Make top level (no parent)"
   },
   "crmNewAccountForm": {
     "nameRequired": "Enter an account name (at least 2 characters).",
@@ -14549,8 +14561,8 @@
     "parentSkipped": "Account created; the parent could not be set yet. Set it from the <link>accounts list</link> once it appears."
   },
   "crmActivitiesTable": {
-    "heading": "Interactions",
-    "loadArea": "interactions"
+    "heading": "Activities",
+    "loadArea": "activities"
   },
   "crmCampaignsPage": {
     "title": "Campaign Performance",
@@ -14611,7 +14623,8 @@
     "regionEmptyMessage": "Active deals with a contact region appear here."
   },
   "crmDashboardPage": {
-    "moduleNote": "This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts. Engagement and procurement pipeline tools live under Engagement Pipeline — it is not a commercial sales CRM."
+    "moduleNote": "This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts. Engagement and procurement pipeline tools live under Engagement Pipeline — it is not a commercial sales CRM.",
+    "statActivitiesToday": "Activities Today"
   },
   "crmDealsTable": {
     "stageProspecting": "Prospecting",
@@ -15065,7 +15078,8 @@
   "crmThemeTable": {
     "toneNeedsAttention": "Needs attention",
     "toneWatch": "Watch",
-    "toneHealthy": "Healthy"
+    "toneHealthy": "Healthy",
+    "logActivity": "Log an activity"
   },
   "crmAgentWorkloadEditor": {
     "needsWholeNumber": "{name} needs a whole-number lead capacity of 0 or more.",
@@ -15160,7 +15174,17 @@
   },
   "crmOwnershipDirectoryEditor": {
     "namePlaceholder": "{singular} name",
-    "addSingular": "+ Add {singular}"
+    "addSingular": "+ Add {singular}",
+    "deleteDescription": "This entry will no longer be available for assignment. This cannot be undone. If an assignment rule or branch still uses it, the delete is refused and nothing changes.",
+    "deleteFailed": "Could not delete the entry. Please try again.",
+    "unnamed": "this entry",
+    "inUseRules": "{count, plural, one {# assignment rule} other {# assignment rules}}",
+    "inUseBranches": "{count, plural, one {# branch} other {# branches}}",
+    "inUseJoin": "{first} and {second}",
+    "inUseMessage": "“{name}” can’t be deleted because it is still used by {usedBy}. Change or remove those first, then try again.",
+    "inUseGeneric": "“{name}” can’t be deleted because it is still in use. Change or remove what uses it first, then try again.",
+    "inUseNames": "Used by: {names}.",
+    "inUseMore": "…and {count} more."
   },
   "crmExport": {
     "button": "⬇ Export CSV",
@@ -15893,5 +15917,12 @@
       "reasonLowConfidence": "Assistant could not answer",
       "reasonGuardrail": "Guardrail flagged the exchange"
     }
+  },
+  "crmAccountRelationships": {
+    "searchPlaceholder": "Type to search accounts",
+    "noMatches": "No matching accounts",
+    "searching": "Searching…",
+    "searchError": "Couldn’t load accounts. Please try again.",
+    "unnamedAccount": "Unnamed account"
   }
 }

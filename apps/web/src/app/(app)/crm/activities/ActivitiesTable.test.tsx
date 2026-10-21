@@ -34,6 +34,14 @@ describe("ActivitiesTable outage (GAP-CRM-ACTIVITIES-02)", () => {
     expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
   });
 
+  // GAP-CRM-ACTIVITIES-08: the outage card names the screen "Activities" (the hub
+  // tile / nav / URL term), not "Interactions".
+  it("names the screen 'Activities' in the outage card (no 'Interactions' vocabulary)", () => {
+    render(<ActivitiesTable activities={[]} source="error" today="2026-03-11" />);
+    expect(screen.getByRole("heading", { name: "Activities" })).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/interaction/i);
+  });
+
   it("still shows the empty state for an empty but valid (api) list", () => {
     render(<ActivitiesTable activities={[]} source="api" today="2026-03-11" />);
     expect(screen.getByText("No activities yet")).toBeInTheDocument();

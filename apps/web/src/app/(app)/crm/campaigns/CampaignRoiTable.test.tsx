@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -46,6 +46,29 @@ describe("CampaignRoiTable naming (GAP-CRM-CAMPAIGNS-01)", () => {
   it("offers a name-oriented filter placeholder", () => {
     render(<CampaignRoiTable rows={[row({ name: "Diwali Outreach" })]} />);
     expect(screen.getByPlaceholderText("Filter by campaign name")).toBeInTheDocument();
+  });
+});
+
+describe("CampaignRoiTable filter by name (GAP-CRM-CAMPAIGNS-01)", () => {
+  const rows = [
+    row({ campaignId: "11111111-1111-1111-1111-111111111111", name: "Diwali Outreach" }),
+    row({ campaignId: "22222222-2222-2222-2222-222222222222", name: "Monsoon Awareness" }),
+  ];
+
+  it("keeps only the rows whose campaign name matches the filter text", () => {
+    render(<CampaignRoiTable rows={rows} />);
+    fireEvent.change(screen.getByPlaceholderText("Filter by campaign name"), { target: { value: "monsoon" } });
+    expect(screen.getByText("Monsoon Awareness")).toBeInTheDocument();
+    expect(screen.queryByText("Diwali Outreach")).not.toBeInTheDocument();
+  });
+
+  it("shows both campaigns again when the filter is cleared", () => {
+    render(<CampaignRoiTable rows={rows} />);
+    const box = screen.getByPlaceholderText("Filter by campaign name");
+    fireEvent.change(box, { target: { value: "monsoon" } });
+    fireEvent.change(box, { target: { value: "" } });
+    expect(screen.getByText("Diwali Outreach")).toBeInTheDocument();
+    expect(screen.getByText("Monsoon Awareness")).toBeInTheDocument();
   });
 });
 

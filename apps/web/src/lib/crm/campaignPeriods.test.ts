@@ -86,3 +86,20 @@ describe("buildPerformanceBody (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
     ).toThrow(CampaignPeriodValidationError);
   });
 });
+
+describe("buildPerformanceBody campaign name (GAP-CRM-CAMPAIGNS-01)", () => {
+  const base = { periodStart: "2026-01-01", costRupees: "1", revenueRupees: "1", responses: 1 };
+
+  it("forwards a trimmed campaign name so the service can show the campaign by name", () => {
+    expect(buildPerformanceBody({ ...base, campaignName: "  Diwali Outreach " }).campaignName).toBe("Diwali Outreach");
+  });
+
+  it("omits the field when blank, so a stored name is left unchanged", () => {
+    expect("campaignName" in buildPerformanceBody({ ...base, campaignName: "   " })).toBe(false);
+    expect("campaignName" in buildPerformanceBody(base)).toBe(false);
+  });
+
+  it("never sends more than the server's 200-character cap", () => {
+    expect(buildPerformanceBody({ ...base, campaignName: "x".repeat(250) }).campaignName).toHaveLength(200);
+  });
+});

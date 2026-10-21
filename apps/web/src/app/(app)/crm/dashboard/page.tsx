@@ -15,6 +15,8 @@ export default async function Page() {
   // "CRM Dashboard" string the loading skeleton shows, so the h1 no longer
   // flips on paint.
   const tl = await getTranslations("crm.dashboard");
+  // One name for this screen everywhere: the hub tile title (GAP-CRM-ACTIVITIES-08).
+  const tHubActivities = await getTranslations("crm.hub.tiles.activities");
 
   // GAP-CRM-DASHBOARD-01: a failed load must not read as "no contacts, no
   // engagements". Show "—" (the same convention Contacts/Accounts/Activities
@@ -39,11 +41,11 @@ export default async function Page() {
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        {/* GAP-CRM-DASHBOARD-04: stat cards drill into their lists. Interactions
+        {/* GAP-CRM-DASHBOARD-04: stat cards drill into their lists. Activities
             Today opens the activities "Today" segment the table already supports. */}
         <StatCard icon="▣" tone="info" label="Contacts / Stakeholders" value={stat(dash.totalContacts)} href="/crm/contacts" />
         <StatCard icon="◉" tone="good" label="Active Engagements" value={stat(dash.openDeals)} href="/crm/deals" />
-        <StatCard icon="◈" tone="warn" label="Interactions Today" value={stat(dash.activitiesToday)} href="/crm/activities?segment=Today" />
+        <StatCard icon="◈" tone="warn" label={t("statActivitiesToday")} value={stat(dash.activitiesToday)} href="/crm/activities?segment=Today" />
         <StatCard icon="△" tone="neutral" label="Active Engagement Value" value={money} href="/crm/deals" />
       </StatGrid>
       <Card title="Quick links">
@@ -56,7 +58,7 @@ export default async function Page() {
           <Link href="/crm/accounts" className="btn ghost">Accounts</Link>
           <Link href="/crm/deals" className="btn ghost">Engagements</Link>
           <Link href="/crm/pipeline" className="btn ghost">Pipeline Board</Link>
-          <Link href="/crm/activities" className="btn ghost">Activities</Link>
+          <Link href="/crm/activities" className="btn ghost">{tHubActivities("title")}</Link>
         </div>
       </Card>
       <div

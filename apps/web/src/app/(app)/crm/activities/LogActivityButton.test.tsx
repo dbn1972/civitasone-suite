@@ -76,6 +76,17 @@ describe("LogActivityButton save failures use the shared human error", () => {
     expect((alert.textContent ?? "").trim().length).toBeGreaterThan(0);
   });
 
+  // GAP-CRM-ACTIVITIES-08: the screen is "Activities", so the failure reads
+  // "your activity" (it used to say "your interaction").
+  it("names the record an 'activity', not an 'interaction', when a save fails", async () => {
+    await openAndSubmit();
+    browserFetch.mockResolvedValueOnce(new Response(JSON.stringify({ code: "INTERNAL", message: "boom" }), { status: 500 }));
+    fireEvent.click(screen.getByRole("button", { name: "Save activity" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent ?? "").toMatch(/activity/i);
+    expect(alert.textContent ?? "").not.toMatch(/interaction/i);
+  });
+
   it("shows the standard permission message for a 403 (no status code, no server text)", async () => {
     await openAndSubmit();
     browserFetch.mockResolvedValueOnce(new Response(JSON.stringify({ code: "FORBIDDEN", message: "requires one of: crm_user" }), { status: 403 }));
