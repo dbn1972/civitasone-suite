@@ -184,4 +184,46 @@ describe("EntityPicker", () => {
     expect(hidden).toHaveLength(2);
     expect(Array.from(hidden).map((el) => (el as HTMLInputElement).value).sort()).toEqual(["e1", "e2"]);
   });
+  // GAP-HR-PROMOTION-05
+  describe("retryText / onFailedChange", () => {
+    it("shows a Retry button beside the error that re-runs the last query, and recovers", async () => {
+      const search = vi
+        .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+        .mockRejectedValueOnce(new Error("HTTP 500"))
+        .mockResolvedValueOnce(OPTIONS);
+      render(<Harness search={search} retryText="Retry" />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+      expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(search.mock.calls[1]![0]).toBe("Asha");
+      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    });
+
+    it("has no Retry button unless retryText is given (every existing caller is unchanged)", async () => {
+      render(<Harness search={vi.fn(async () => { throw new Error("boom"); })} />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "x" } });
+      await screen.findByRole("alert");
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("reports the failed state to the form: true after a failed search, false once a later one succeeds", async () => {
+      const seen: boolean[] = [];
+      const search = vi
+        .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValueOnce(OPTIONS);
+      render(<Harness search={search} retryText="Retry" onFailedChange={(f) => seen.push(f)} />);
+      expect(seen).toEqual([false]);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "As" } });
+      await screen.findByRole("alert");
+      expect(seen[seen.length - 1]).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await screen.findByText("Asha Rao");
+      expect(seen[seen.length - 1]).toBe(false);
+    });
+  });
 });
