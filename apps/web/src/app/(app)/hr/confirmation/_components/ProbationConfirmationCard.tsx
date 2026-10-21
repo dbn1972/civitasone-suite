@@ -51,6 +51,17 @@ const REC_CONFIG: Record<string, { label: string; badge: string; color: string; 
   pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn)", bg: "var(--warnbg)" },
 };
 
+// GAP-HR-CONFIRMATION-01 (interim, pending an owner decision): hrms-service has
+// no manager-recommendation store or endpoint yet (who records it, and whether
+// Confirm is blocked without it, is an undecided policy -- see
+// docs/gap-ledger/hr.md), so GET /v1/hrms/confirmations never sends
+// `managerRecommendation`. The card used to default that absence to "pending",
+// i.e. it told every HR user a manager was "Awaiting" a recommendation nobody
+// has any way to give. An ABSENT value is now shown as what it is -- no
+// recommendation on record -- and only an explicit "pending" from the API reads
+// "Awaiting Manager". Confirm/Extend are unchanged (not gated on it).
+const REC_NOT_RECORDED = { badge: "—", color: "var(--mut)", bg: "var(--bg)" };
+
 // GAP-HR-CONFIRMATION-02: today's date in IST, for the confirmation-date
 // input's default and its upper bound (a confirmation cannot be postdated
 // into the future).
@@ -62,9 +73,11 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   const [action, setAction] = useState<LocalAction>("default");
   const router = useRouter();
   const tv = useTranslations("hrFormErrors");
+  const tc = useTranslations("confirmation");
   const days = daysUntilIST(row.dueDate);
   const due  = days !== null ? dueMeta(days) : { label: "Date not set", color: "var(--mut)" };
-  const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
+  const known = row.managerRecommendation ? REC_CONFIG[row.managerRecommendation] : undefined;
+  const rec  = known ?? { ...REC_NOT_RECORDED, label: tc("recNotRecorded") };
   const confirmFormError = useFormError("probation confirmation");
   const extendFormError = useFormError("probation extension");
 
@@ -256,7 +269,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       >
         <div
           role="status"
-          aria-label={`Manager recommendation: ${rec.label}`}
+          aria-label={tc("recAria", { label: rec.label })}
           style={{
             display: "flex", alignItems: "center", gap: 7,
             padding: "5px 12px", borderRadius: 20,
