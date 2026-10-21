@@ -2,7 +2,8 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmServiceRequests } from "../../../_data/loaders";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { ServiceRequestsFilterBar } from "./ServiceRequestsFilterBar";
 import { ServiceRequestsTable } from "./ServiceRequestsTable";
 
@@ -11,8 +12,16 @@ type SP = {
   priority?: string;
   serviceType?: string;
   search?: string;
+  /** GAP-CRM-SERVICE-REQUESTS-03: owner filter -- a user id (the "Assigned to me" toggle sets the viewer's own). */
+  assignedTo?: string;
+  /** GAP-CRM-SERVICE-REQUESTS-03: "true" keeps only past-due, still-workable requests. */
+  overdue?: string;
+  /** GAP-CRM-SERVICE-REQUESTS-03: "dueAt" orders soonest due date first. */
+  sort?: string;
   page?: string;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PAGE_SIZE = 15;
 
@@ -38,16 +47,31 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
   const pageParam = Number.parseInt(searchParams?.page ?? "1", 10);
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
 
+  // The server rejects a malformed owner id with a 400, so only a well-formed uuid is forwarded.
+  const assignedTo = searchParams?.assignedTo && UUID_RE.test(searchParams.assignedTo) ? searchParams.assignedTo : undefined;
+  const overdue = searchParams?.overdue === "true";
+  const sort = searchParams?.sort === "dueAt" ? ("dueAt" as const) : undefined;
+
   const { data, source } = await getCrmServiceRequests({
     ...(searchParams?.status ? { status: searchParams.status } : {}),
     ...(searchParams?.priority ? { priority: searchParams.priority } : {}),
     ...(searchParams?.serviceType ? { serviceType: searchParams.serviceType } : {}),
     ...(searchParams?.search ? { search: searchParams.search } : {}),
+    ...(assignedTo ? { assignedTo } : {}),
+    ...(overdue ? { overdue: true } : {}),
+    ...(sort ? { sort } : {}),
     limit: PAGE_SIZE,
     page,
   });
 
   const rows = data.rows;
+  // GAP-CRM-SERVICE-REQUESTS-03: the owner column shows a NAME, resolved server-side from the
+  // tenant's user directory in one batched call. An id the directory cannot resolve is simply
+  // absent (the table then shows "Assigned", never a raw uuid).
+  const assigneeNames = Object.fromEntries(
+    await resolveUsers(rows.map((r) => r.assignedTo).filter((id): id is string => !!id)),
+  );
+  const currentUserId = getSessionUserId();
   const total = data.total;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -71,6 +95,9 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
     ...(searchParams?.priority ? { priority: searchParams.priority } : {}),
     ...(searchParams?.serviceType ? { serviceType: searchParams.serviceType } : {}),
     ...(searchParams?.search ? { search: searchParams.search } : {}),
+    ...(assignedTo ? { assignedTo } : {}),
+    ...(overdue ? { overdue: "true" } : {}),
+    ...(sort ? { sort } : {}),
     page: String(page),
   }).toString();
 
@@ -100,6 +127,10 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
         priority={searchParams?.priority}
         serviceType={searchParams?.serviceType}
         search={searchParams?.search}
+        assignedTo={assignedTo}
+        overdue={overdue}
+        sort={sort}
+        currentUserId={currentUserId}
         serviceTypes={SERVICE_TYPES}
       />
 
@@ -112,6 +143,7 @@ export default async function ServiceRequestsPage({ searchParams }: { searchPara
         pageSize={PAGE_SIZE}
         canExport={canExport}
         queryKey={queryKey}
+        assigneeNames={assigneeNames}
       />
     </>
   );

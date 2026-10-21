@@ -1,21 +1,23 @@
 import { formatIndianDateTime } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
-import { PageHeader, StatusPill, Card } from "../../../../_components/ds";
+import { PageHeader, StatusPill, Card, Masked } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import { ServiceRequestActions } from "./ServiceRequestActions";
 import { PriorityBadge } from "../PriorityBadge";
 import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
 
 /**
  * GAP-CRM-SERVICE-REQUESTS-DETAIL-02 (DPDP) / F1-04 + F1-06: a citizen's phone
- * and email are personal data. The SERVER (crm-service
- * modules/service-requests/routes.ts + shared/pii-reveal.ts) masks them for
- * roles outside the CRM PII-read set and sends the clear value only to those
- * roles, so the page renders what the server returned — no client-side masking.
+ * and email are personal data. This page asks the server for them MASKED for every
+ * viewer (`?maskPii=true`, which can only reduce what crm-service returns -- it
+ * already masks for roles outside the CRM PII-read set), then offers a PII-read
+ * role the audited reveal: a stated reason is required and crm-service writes the
+ * `pii_reveal` audit event before it returns the clear value
+ * (POST /v1/crm/pii/reveal). Everyone else sees the masked value and no Reveal
+ * button. The page never holds a clear value for anyone.
  */
-const PII_REVEAL_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 interface ServiceRequestDetail {
   id: string;
@@ -66,7 +68,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default async function ServiceRequestDetailPage({ params }: { params: { id: string } }) {
   const { data: r, source } = await fetchJson<{ data?: ServiceRequestDetail } | ServiceRequestDetail, ServiceRequestDetail | null>(
-    `/api/v1/crm/service-requests/${params.id}`,
+    `/api/v1/crm/service-requests/${params.id}?maskPii=true`,
     null,
     {
       revalidateSeconds: 0,
@@ -100,7 +102,7 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
   const priorityLabel = ["urgent", "high", "normal", "low"].includes(priorityKey)
     ? t(`priority_${priorityKey}`)
     : undefined;
-  const canRevealPii = PII_REVEAL_ROLES.some((role) => roles.includes(role));
+  const canRevealPii = hasAnyRole(roles, CRM_PII_READ_ROLES);
 
   // F6-01: status timeline — a separate GET so the detail contract is unchanged.
   const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
@@ -208,18 +210,38 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
             <dl style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0 }}>
               <Field label={t("name")}>{r.citizenName ?? "—"}</Field>
               <Field label={t("phone")}>
-                <span style={{ fontFamily: "monospace" }}>
-                  {r.citizenPhone ?? "—"}
-                </span>
+                <Masked
+                  kind="phone"
+                  value={r.citizenPhone}
+                  fallback="—"
+                  ariaLabel={t("maskedAriaLabel", { label: t("revealPhoneLabel") })}
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "service_request",
+                    resourceId: r.id,
+                    field: "citizenPhone",
+                    label: t("revealPhoneLabel"),
+                  }}
+                />
               </Field>
               <Field label={t("email")}>
-                <span style={{ fontFamily: "monospace" }}>
-                  {r.citizenEmail ?? "—"}
-                </span>
+                <Masked
+                  kind="email"
+                  value={r.citizenEmail}
+                  fallback="—"
+                  ariaLabel={t("maskedAriaLabel", { label: t("revealEmailLabel") })}
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "service_request",
+                    resourceId: r.id,
+                    field: "citizenEmail",
+                    label: t("revealEmailLabel"),
+                  }}
+                />
               </Field>
-              {!canRevealPii && (r.citizenPhone || r.citizenEmail) ? (
+              {r.citizenPhone || r.citizenEmail ? (
                 <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
-                  {t("piiMasked")}
+                  {canRevealPii ? t("piiRevealNote") : t("piiMasked")}
                 </p>
               ) : null}
             </dl>

@@ -7,13 +7,19 @@
  * convert-to-order (ConfirmDialog-gated). The Send action is blocked while an
  * approval is outstanding: the backend's 422 APPROVAL_REQUIRED is surfaced
  * honestly (QP-004) — we never fake a successful send. Embeds the approval panel.
+ *
+ * GAP-CRM-QUOTATIONS-05: unit price stays editable (price books seed it), so each
+ * line shows the catalogue LIST price and how far the typed price sits below it,
+ * plus an overall effective discount banner -- measured against the same catalogue
+ * reference crm-service's send gate uses. The server stays the authority: a discount
+ * above the tenant threshold needs an approved discount approval before Send.
  */
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button, StatusPill } from "../ds";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatBps } from "@/lib/formatters";
 import { QuotationApprovalPanel } from "./QuotationApprovalPanel";
 import {
   getQuotations,
@@ -38,6 +44,8 @@ import {
   type Quotation,
   type QuotationLine,
   type QuotationVersion,
+  discountBps,
+  quotationDiscountBps,
   type Product,
   type PriceBook,
   type QpSource,
@@ -238,6 +246,15 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
   // total. BigInt throughout — no float touches a money value.
   const subtotalMinor = draftLines.reduce((sum, l) => sum + BigInt(lineNetMinor(l)), 0n).toString();
   const totalTaxMinor = draftLines.reduce((sum, l) => sum + BigInt(lineTaxMinor(l)), 0n).toString();
+  // GAP-CRM-QUOTATIONS-05: effective discount vs the catalogue list price (the server's
+  // reference), over lines that carry one. Only fully-valid rows count.
+  const effectiveDiscountBps = quotationDiscountBps(
+    draftLines.map((l) => ({
+      listUnitMinor: products.find((p) => p.id === l.productId)?.priceMinor ?? null,
+      unitPriceMinor: l.unitPriceMinor,
+      quantity: l.quantity,
+    })),
+  );
   // F4-02: GST split for the footer, from the entered place-of-supply / supplier-state.
   const gst = gstSplit(totalTaxMinor, placeOfSupply, supplierState);
   const intraState = placeOfSupply.trim() !== "" && supplierState.trim() !== "" && placeOfSupply.trim() === supplierState.trim();
@@ -540,6 +557,10 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
                   const total = net !== null && tax !== null ? (BigInt(net) + BigInt(tax)).toString() : null;
                   const priceOk = l.unitPriceRupees.trim() === "" || linePriceMinor(l) !== null;
                   const taxOk = lineTaxBps(l) !== null;
+                  // GAP-CRM-QUOTATIONS-05: list price + discount caption under the editable price.
+                  const rawList = products.find((p) => p.id === l.productId)?.priceMinor ?? null;
+                  const listMinor = rawList !== null && /^\d+$/.test(rawList) && BigInt(rawList) > 0n ? rawList : null;
+                  const lineDiscount = listMinor !== null && line ? discountBps(listMinor, line.unitPriceMinor) : null;
                   return (
                     <tr key={l.key}>
                       <td>
@@ -559,7 +580,13 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-price-${idx}`}>Unit price for line {n}</label>
-                        <input id={`${headingId}-price-${idx}`} inputMode="decimal" value={l.unitPriceRupees} aria-invalid={priceOk ? undefined : true} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, unitPriceRupees: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "end" }} />
+                        <input id={`${headingId}-price-${idx}`} inputMode="decimal" value={l.unitPriceRupees} aria-invalid={priceOk ? undefined : true} aria-describedby={listMinor !== null ? `${headingId}-list-${idx}` : undefined} onChange={(e) => setLines((prev) => prev.map((r, i) => (i === idx ? { ...r, unitPriceRupees: e.target.value } : r)))} style={{ ...inputStyle, textAlign: "end" }} />
+                        {listMinor !== null ? (
+                          <span id={`${headingId}-list-${idx}`} style={{ display: "block", fontSize: 11, textAlign: "end", color: lineDiscount !== null && lineDiscount > 0 ? "#b45309" : "var(--muted)" }}>
+                            {t("listPrice", { price: formatMoney(listMinor) })}
+                            {lineDiscount !== null && lineDiscount > 0 ? ` · ${t("belowList", { pct: formatBps(lineDiscount) })}` : ""}
+                          </span>
+                        ) : null}
                       </td>
                       <td>
                         <label className="sr-only" htmlFor={`${headingId}-tax-${idx}`}>Tax percent for line {n}</label>
@@ -631,6 +658,12 @@ export function QuotationBuilder({ canApprove = false, currentUserId = null }: Q
               ) : null}
             </table>
           </div>
+
+          {effectiveDiscountBps > 0 ? (
+            <p role="status" style={{ fontSize: 13, color: "#b45309", padding: "8px 12px 0", margin: 0 }}>
+              {t("discountBanner", { pct: formatBps(effectiveDiscountBps) })}
+            </p>
+          ) : null}
 
           <div style={{ display: "flex", gap: 8, padding: 12, flexWrap: "wrap" }}>
             <Button type="button" variant="ghost" size="sm" onClick={() => setLines((prev) => [...prev, newLine()])}>

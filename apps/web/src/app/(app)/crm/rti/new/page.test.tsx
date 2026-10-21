@@ -217,4 +217,50 @@ describe("NewRtiPage", () => {
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.departmentRef).toBe("Ministry of Finance");
   });
+  // GAP-CRM-RTI-NEW-04: "ministry of finance " folds to the CANONICAL casing of the listed
+  // authority (the existing test above only collapses whitespace on already-canonical casing).
+  it("folds a differently-cased authority to the canonical listed name before submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r6" } }), { status: 201 }),
+    );
+    render(<NewRtiPage />);
+    fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
+    fireEvent.change(screen.getByLabelText(/department \/ public authority/i), {
+      target: { value: "ministry of finance " },
+    });
+    fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Subject" } });
+    fireEvent.change(screen.getByLabelText(/description \/ particulars sought/i), { target: { value: "Details" } });
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Anil Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r6"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.departmentRef).toBe("Ministry of Finance");
+  });
+
+  it("keeps an authority that is not on the list as typed (normalised spacing only)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "r7" } }), { status: 201 }),
+    );
+    render(<NewRtiPage />);
+    fireEvent.change(screen.getByLabelText(/^section/i), { target: { value: "s.6" } });
+    fireEvent.change(screen.getByLabelText(/department \/ public authority/i), {
+      target: { value: "  Maharashtra   Revenue Department " },
+    });
+    fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: "Subject" } });
+    fireEvent.change(screen.getByLabelText(/description \/ particulars sought/i), { target: { value: "Details" } });
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Anil Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: "File RTI Request" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/rti/r7"));
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.departmentRef).toBe("Maharashtra Revenue Department");
+  });
+
+  // GAP-CRM-RTI-06: the section options read exactly like the register, filter and detail.
+  it("labels the section options with the canonical full wording", () => {
+    render(<NewRtiPage />);
+    const select = screen.getByLabelText(/^section/i) as HTMLSelectElement;
+    const labels = Array.from(select.querySelectorAll("option")).map((o) => o.textContent);
+    expect(labels).toContain("§6 — Information Request");
+    expect(labels).toContain("§11 — Third-party Information");
+  });
 });

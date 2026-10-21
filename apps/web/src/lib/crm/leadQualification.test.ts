@@ -13,6 +13,8 @@ import {
   transitionLead,
   getScoreRules,
   getFrameworks,
+  normaliseBusinessLine,
+  closestBusinessLine,
   createFramework,
   updateFramework,
   frameworkToWire,
@@ -336,5 +338,33 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     fetchMock.mockResolvedValue(fail);
     await expect(saveClassification("c1", { temperature: "hot" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     await expect(saveClassification("c1", { temperature: "hot" })).rejects.not.toThrow(/BAD/);
+  });
+});
+
+describe("business line canonicalisation (GAP-CRM-QUALIFICATION-FRAMEWORKS-04)", () => {
+  it("normaliseBusinessLine trims and lowercases, and treats null/undefined as blank", () => {
+    expect(normaliseBusinessLine("  Government ")).toBe("government");
+    expect(normaliseBusinessLine("PSU")).toBe("psu");
+    expect(normaliseBusinessLine(null)).toBe("");
+    expect(normaliseBusinessLine(undefined)).toBe("");
+  });
+
+  it("closestBusinessLine suggests the near-match of a typo", () => {
+    expect(closestBusinessLine("goverment", ["government", "psu"])).toBe("government");
+    expect(closestBusinessLine(" Governmnt ", ["Government"])).toBe("government");
+  });
+
+  it("closestBusinessLine returns null for an exact match, an unrelated value or a blank", () => {
+    expect(closestBusinessLine("Government", ["government"])).toBeNull();
+    expect(closestBusinessLine("enterprise", ["government", "psu"])).toBeNull();
+    expect(closestBusinessLine("   ", ["government"])).toBeNull();
+    expect(closestBusinessLine("goverment", [])).toBeNull();
+  });
+
+  it("closestBusinessLine does not conflate short, distinct codes two edits apart", () => {
+    expect(closestBusinessLine("smb", ["psu"])).toBeNull();
+    // ...but a one-letter slip on a short code is still caught.
+    expect(closestBusinessLine("pus", ["psu"])).toBeNull();
+    expect(closestBusinessLine("psv", ["psu"])).toBe("psu");
   });
 });

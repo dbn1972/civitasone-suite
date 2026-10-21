@@ -163,18 +163,28 @@ describe("RtiTable empty copy (GAP-CRM-RTI-05)", () => {
 describe("RtiTable section labels (GAP-CRM-RTI-06)", () => {
   beforeEach(() => mockedHook.mockReset());
 
-  it("shows the canonical short label '§6 Information' for an s.6 section row", () => {
+  // The register table, the filters, the detail page and the new-request form all show the
+  // SAME label for a section (acceptance of GAP-CRM-RTI-06): the full statutory wording.
+  it("shows the full label '§6 — Information Request' for an s.6 section row", () => {
     const r = { ...row("rti-s6", "pending", "2026-11-15"), section: "s.6" };
     seed([r]);
     render(<RtiTable rows={[r]} />);
-    expect(screen.getByText("§6 Information")).toBeInTheDocument();
+    expect(screen.getByText("§6 — Information Request")).toBeInTheDocument();
+    expect(screen.queryByText("§6 Information")).not.toBeInTheDocument();
   });
 
-  it("shows the canonical short label '§11 Third-party' for an s.11 section row", () => {
+  it("shows the full label '§11 — Third-party Information' for an s.11 section row", () => {
     const r = { ...row("rti-s11", "pending", "2026-11-15"), section: "s.11" };
     seed([r]);
     render(<RtiTable rows={[r]} />);
-    expect(screen.getByText("§11 Third-party")).toBeInTheDocument();
+    expect(screen.getByText("§11 — Third-party Information")).toBeInTheDocument();
+  });
+
+  it("shows an unknown section value as-is rather than blanking it", () => {
+    const r = { ...row("rti-s99", "pending", "2026-11-15"), section: "s.99" };
+    seed([r]);
+    render(<RtiTable rows={[r]} />);
+    expect(screen.getByText("s.99")).toBeInTheDocument();
   });
 });
 
