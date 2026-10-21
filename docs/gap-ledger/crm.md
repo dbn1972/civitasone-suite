@@ -3714,7 +3714,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Params is a raw JSON text box with no schema, example per score function or preview; admins must know the params contract of linear/step/boolean (opaque Record<string, unknown>) to configure a rule, and the only guard is 'is a JSON object' (editor:45-54, 213-216; lib/crm/leadQualification.ts:196-202).
 - **Verified evidence:** Params is a plain text input (LeadScoreRulesEditor.tsx:208-217, placeholder '{"max":100}'); parseParams (:45-54) only checks JSON object; type is Record<string, unknown> (leadQualification.ts:196-202). Param contract per linear/step/boolean is in crm-service, cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3730,7 +3730,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: partly closed by #PRNUM. DONE: the attribute is now a select of the 8 lead fields the scorer actually reads (backend-advertised in GET lead-score-rules `meta.scoreableAttributes`, incl. phone/leadStatus/city/designation the old list missed), and an unknown or duplicate attribute is rejected on save in the web AND by crm-service (400 on `rules.<i>.attribute`). REMAINING: 'custom field appears in list' - custom fields are not part of the scoring input (leads/consumer.ts leadAttributesFromRow), so a custom field cannot be scored today. OWNER QUESTION: should custom fields become scoreable? If yes, the scoring input must be extended with custom-field values and the allow-list opened to custom-field keys.)
 - **First-pass claim:** Attribute is a free-text string with a single placeholder ('e.g. industry'); nothing validates it against real lead fields or custom fields, so a typo saves a rule that never scores (editor:178-183).
 - **Verified evidence:** Attribute input (:177-184) is free text with placeholder 'e.g. industry'; rowValid only requires non-empty (:58). No source of valid attributes in the file. Theme FABRICATED is wrong (no fake data); it is validation.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3745,7 +3745,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Weights are independent 0-100 numbers with no total, normalisation hint, or preview of the resulting score distribution; the change applies to every lead after Save with no impact summary (editor:164, 236-239).
 - **Verified evidence:** Weight inputs (:197-207) are int 0-100 each; no sum, normalisation hint or preview; Save (:235-240) applies to all leads per note. Preview needs backend.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3892,7 +3892,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The list identifies a case only by the first 8 characters of a record id; Account is likewise an id fragment and the deal is not shown, so a clerk cannot tell which customer a row is without opening it (OnboardingList.tsx:30-32, 114, 122).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:30-32 shortId slices to 8 chars; used for case link text (114) and Account (122); no deal column; model has no names (lib/crm/onboarding.ts:195-208). Clerks cannot tell customers apart.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3989,7 +3989,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The card title is 'Case {full record id}' and Account and Deal are raw UUIDs with no names or links to /crm/accounts or the deal; the page title is a static 'Onboarding Case', so the customer being onboarded is never named (OnboardingDetail.tsx:246, 256-257; page.tsx:8).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:246 <h3>Case {item.id}</h3> prints the full id; 256-257 print item.accountId and item.dealId raw with no link or name. page.tsx:8 PageHeader title is static 'Onboarding Case'. OnboardingCase model (lib/crm/onboarding.ts:195-208) carries only ids, no customer name. Account/deal name lookup endpoints not visible in this snapshot (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/(app)/crm/onboarding/[id]/page.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -4056,7 +4056,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: partly closed by #PRNUM. DONE: the case page renders the audited-reveal control (ds MaskedReveal -> POST /v1/crm/pii/reveal with a reason) whenever the server hands a KYC approver a masked reference, with web tests; backend test now covers onboarding.kycReference reveal (approver clear + pii_reveal audit without the value, crm_user 403). REMAINING: (a) crm-service still returns the CLEAR reference to KYC approvers on every GET (shared/pii-reveal.ts ONBOARDING_MASKING_POLICY allows KYC_APPROVER_ROLES), so for them the reveal step never appears; (b) no stage/KYC history card - there is no onboarding history endpoint. OWNER QUESTIONS: is kycReference an opaque provider check id (approver-clear is fine) or a government document number such as Aadhaar/PAN (then mask for approvers too and require the audited reveal - flip the policy allowRoles to none)? Should the case expose a stage/KYC history (needs a history table or an audit-service read)?)
 - **First-pass claim:** The KYC reference and verification time are shown in full to every CRM role with no masking or role gate (DPDP-sensitive KYC data), and there is no stage/KYC history or audit view on the case (OnboardingDetail.tsx:258-259).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:258-259 show kycReference and kycVerifiedAt in clear to anyone passing the CRM layout gate. True. No stage/KYC history or audit section exists on the page (only current values). Whether kycReference is actually sensitive (e.g. PAN/Aadhaar number vs. an internal ticket id) cannot be verified; no <Masked> component exists in the repo (grep found none), so it would need creating.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -4222,7 +4222,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM) Account stays OPTIONAL (migration 0168 adds nullable crm.deals.account_id; create/PATCH accept and tenant-validate accountId; account 360 lists direct + contact-linked deals; account page links to /crm/opportunities/new?accountId=). OWNER QUESTION: should an account be mandatory on every opportunity (it would block quick capture of unlinked deals)?
 - **First-pass claim:** The create form has no Account or Contact field: accountId is added to the payload only when editing an existing record, so every opportunity made here is unlinked to an account and cannot feed account-level views (OpportunityForm.tsx:124).
 - **Verified evidence:** Payload adds accountId only from an existing record (apps/web/src/app/_components/crm/OpportunityForm.tsx:118); no account/contact input exists in the form; Opportunity type has accountId (apps/web/src/lib/crm/opportunity.ts:206). Whether backend requires/accepts contact: cannot-verify. No EntityPicker exists in repo.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx`
@@ -4279,7 +4279,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Probability and quantity default to 0 when left blank rather than unset, so an untouched form saves a 0% deal (OpportunityForm.tsx:121-122).
 - **Verified evidence:** Payload uses probability: probability.trim()===''?0:probNum and quantity same (apps/web/src/app/_components/crm/OpportunityForm.tsx:112,114; finding cited 121-122). An untouched form saves 0% / 0 quantity, indistinguishable from a real 0.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4301,7 +4301,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Stage limits are keyed by a hand-typed "stage key" with no pipeline selector or stage list; a typo (e.g. "proposel") saves as a valid limit that matches nothing, silently disabling the alert for that stage (apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:205,87).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:219-226 Stage is a free <input placeholder='stage key'>; rowValid (:75-77) only checks non-empty; saveLimit (:86-92) PUTs it as-is via createStageLimit (lib/crm/opportunity.ts:585, upsert keyed pipelineId+stage). New rows never get a pipelineId (:72). Whether the server rejects unknown stage keys cannot be verified (crm-service absent). Ageing rows carry stage and stageName (opportunity.ts:477-486), so the key must equal the server's stage key.
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -5848,7 +5848,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: partly closed by #PRNUM. DONE: linked accounts are caller-scoped - GET lists, DELETE disconnects and POST synced-items attaches only for the account's registering user (404 for anyone else's), admins keep tenant-wide visibility; real-DB tests. REMAINING: no OAuth/consent flow exists, so nothing can flip an account to `connected` (fail-closed: items are refused 409 + DB trigger), and the web still connects by typed email with an honest pending notice. OWNER QUESTIONS: which providers/OAuth apps and consent screens should prove mailbox ownership (this is an external-system build), and should crm_admin keep tenant-wide visibility of users' linked mailboxes?)
 - **First-pass claim:** 'Connecting' only POSTs a provider and a typed email address with status 'pending'; there is no OAuth / consent or proof of mailbox ownership, so any CRM user can register someone else's mailbox or calendar, and mailbox metadata later syncs into CRM under DPDP consent rules. The owner check would have to be server-side (crm-service absent, undeterminable) (LinkedAccountsPanel.tsx:72, 118-128; lib/crm/activityAccount.ts:919-925).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/linked-accounts', 'DELETE /v1/crm/linked-accounts/:id']`
 - **Question:** Does the server verify mailbox ownership via OAuth/consent before activating a linked account, tying it to the caller only?
