@@ -8196,7 +8196,19 @@
     "joinedAsLine": "{department} में {designation} के रूप में शामिल हुए",
     "byAuthorLine": "{author} द्वारा",
     "loadingSubtitle": "टीम की घोषणाएँ और बधाइयाँ।",
-    "reactionsCount": "{count, plural, one {# प्रतिक्रिया} other {# प्रतिक्रियाएँ}}"
+    "reactionsCount": "{count, plural, one {# प्रतिक्रिया} other {# प्रतिक्रियाएँ}}",
+    "cardTitle": "नवीनतम अपडेट",
+    "giveKudosBtn": "+ बधाई दें",
+    "kudosTypeLabel": "बधाई",
+    "birthdayTypeLabel": "जन्मदिन",
+    "newJoineeTypeLabel": "नया कर्मचारी",
+    "announcementTypeLabel": "घोषणा",
+    "backToHr": "HR पर वापस जाएँ",
+    "birthdaySharingTitle": "जन्मदिन साझा करना",
+    "birthdaySharingLabel": "सोशल फ़ीड पर मेरा जन्मदिन दिखाएँ",
+    "birthdaySharingHelp": "डिफ़ॉल्ट रूप से बंद। चालू करने पर आपके जन्मदिन पर सहकर्मियों को आपका नाम, विभाग और पदनाम दिखाया जाएगा। आपकी जन्म तिथि और आयु कभी नहीं दिखाई जाती। आप इसे कभी भी बंद कर सकते हैं।",
+    "birthdaySharingSavedOn": "सहेजा गया। आपका जन्मदिन फ़ीड पर दिखाया जाएगा।",
+    "birthdaySharingSavedOff": "सहेजा गया। आपका जन्मदिन नहीं दिखाया जाएगा।"
   },
   "sponsorBankConfigForm": {
     "currentConfigNote": "वर्तमान में कॉन्फ़िगर: <strong>{last4}</strong> पर समाप्त होने वाला प्रायोजक खाता, निपटान ऑफ़सेट {days} दिन।",

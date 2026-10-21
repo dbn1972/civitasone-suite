@@ -228,6 +228,31 @@ export async function updateEmployeeIfStatus(
 }
 
 /**
+ * GAP-HR-SOCIAL-FEED-01: guarded write of the employee's OWN birthday-sharing
+ * consent. The UPDATE only matches when the stored value actually differs, so
+ * it returns true exactly when the consent changed (a replay or a no-op toggle
+ * returns false and the caller writes no audit event). Tenant-scoped in the
+ * WHERE itself, in addition to RLS.
+ */
+export async function setShareBirthday(
+  tx: Writer,
+  tenantId: string,
+  employeeId: string,
+  share: boolean,
+  updatedBy: string,
+): Promise<boolean> {
+  const rows = await tx.update(hrmsEmployees)
+    .set({ shareBirthday: share, updatedBy, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsEmployees.id, employeeId),
+      eq(hrmsEmployees.tenantId, tenantId),
+      sql`${hrmsEmployees.shareBirthday} IS DISTINCT FROM ${share}`,
+    ))
+    .returning({ id: hrmsEmployees.id });
+  return rows.length > 0;
+}
+
+/**
  * Read {basicMinor, version} fresh, inside the caller's own transaction,
  * immediately before deciding what to write. Used by every consumer that
  * may write hrms_employees.basicMinor (annual increment, promotion — direct

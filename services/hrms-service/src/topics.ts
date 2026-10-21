@@ -90,6 +90,15 @@ export const COMMANDS = {
   // social: travel-request / expense-claim creates (route -> command -> consumer insert).
   travelRequestCreate:  "hrms.social.travel_request_create",
   expenseCreate:        "hrms.social.expense_create",
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): an employee's own opt-in / opt-out of having
+  // their birthday shown on the social feed (employee.hrms_employees.share_birthday).
+  // Route -> command -> consumer (markProcessed + guarded write + audit, one tx).
+  birthdaySharingSet:   "hrms.social.birthday_sharing_set",
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): audit-on-read when a social-feed response
+  // actually disclosed DOB-derived birthday entries. Published (fire-and-forget)
+  // from the route and recorded to the audit outbox by social/consumer.ts, same
+  // shape as medicalClaimsListRead (routes must not write to Postgres directly).
+  socialFeedBirthdaysRead: "hrms.social.feed_birthdays_read",
 
   // medical
   medicalClaimCreate:    "hrms.medical_claim.create",
