@@ -14166,7 +14166,8 @@
     "searching": "Searching…",
     "noMatches": "No one matches “{query}”.",
     "moreMatches": "Showing the first {count, plural, one {# match} other {# matches}}. Type more of the name to narrow the list.",
-    "searchFailed": "The search is unavailable right now. Try again."
+    "searchFailed": "The search is unavailable right now. Try again.",
+    "resultsFound": "{count, plural, one {# person found} other {# people found}}"
   },
   "crmOwnerPicker": {
     "onLeave": "On leave",
@@ -14858,7 +14859,8 @@
       "RECIPIENT_REQUIRED": "Choose a manager role or a manager user.",
       "DIRECTORY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly.",
       "IDENTITY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly."
-    }
+    },
+    "managerSearchAria": "Search people by name for rule {n}"
   },
   "crmVoiceOfCitizen": {
     "windowRange": "Window: {from} to {to}",
@@ -15282,7 +15284,13 @@
     "descriptionPlaceholder": "Detailed description of the grievance…",
     "cancel": "Cancel",
     "saving": "Saving…",
-    "submit": "Submit Grievance"
+    "submit": "Submit Grievance",
+    "contactMatchAria": "Existing contact check",
+    "contactMatchWarning": "{count, plural, one {An existing contact} other {# existing contacts}} already {count, plural, one {has} other {have}} this {fields, select, phone {phone number} email {email address} other {phone number or email address}}.",
+    "contactMatchUnnamed": "Existing contact",
+    "contactMatchOpenGrievances": "{count, plural, one {# open grievance:} other {# open grievances:}}",
+    "contactMatchHint": "To keep one record for this citizen, choose them under “{label}” below. This is only a warning; you can still file the grievance.",
+    "contactMatchUnavailable": "Could not check whether this phone or email already belongs to a contact. You can still file the grievance."
   },
   "crmWatchlistTable": {
     "band_critical": "Critical",
@@ -15568,7 +15576,10 @@
     "directoryRetry": "Retry loading directory",
     "unverifiedRecipient": "Saved recipient (not verified)",
     "userNotListed": "Saved user (not in the loaded list)",
-    "ruleName": "{trigger} · {threshold} → {recipient}"
+    "ruleName": "{trigger} · {threshold} → {recipient}",
+    "recipientRoleLabel": "Recipient role for rule {n}",
+    "recipientUserLabel": "Recipient user for rule {n}",
+    "recipientSearchLabel": "Search people by name for rule {n}"
   },
   "crmGrievanceCategoriesEditor": {
     "validationError": "Category “{name}” — {error}",

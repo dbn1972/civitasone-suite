@@ -287,6 +287,18 @@ describe("TaskEscalationEditor (AC-005)", () => {
   // The user directory is bounded: on a large tenant the loaded list is only the first page. The picker says so
   // and searches the server, rather than quietly leaving people out of the choices.
   describe("a truncated user directory (large tenant)", () => {
+    it("gives each rule's search box its own accessible name (the rule number), so the boxes can be told apart", async () => {
+      vi.mocked(aa.getEscalationUsers).mockResolvedValue({ data: USERS, source: "api", truncated: true });
+      vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
+        data: [rule, { ...rule, id: "e2", name: "After two days", thresholdMinutes: 2880 }],
+        source: "api",
+      });
+      render(<TaskEscalationEditor />);
+      expect(await screen.findByRole("searchbox", { name: "Search people by name for rule 1" })).toBeInTheDocument();
+      expect(screen.getByRole("searchbox", { name: "Search people by name for rule 2" })).toBeInTheDocument();
+      expect(screen.queryByRole("searchbox", { name: "Search people by name" })).not.toBeInTheDocument();
+    });
+
     it("says the list is partial and offers a name search; a complete directory shows neither", async () => {
       vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
       const { unmount } = render(<TaskEscalationEditor />);
@@ -296,7 +308,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
 
       vi.mocked(aa.getEscalationUsers).mockResolvedValue({ data: USERS, source: "api", truncated: true });
       render(<TaskEscalationEditor />);
-      expect(await screen.findByRole("searchbox", { name: "Search people by name" })).toBeInTheDocument();
+      expect(await screen.findByRole("searchbox", { name: "Search people by name for rule 1" })).toBeInTheDocument();
       expect(screen.getByText("Showing the first 2 people. Search by name to find anyone else.")).toBeInTheDocument();
     });
 
@@ -308,7 +320,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
       render(<TaskEscalationEditor />);
       await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
       fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
-      fireEvent.change(await screen.findByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoya" } });
+      fireEvent.change(await screen.findByRole("searchbox", { name: "Search people by name for rule 1" }), { target: { value: "zoya" } });
       await waitFor(() => expect(aa.searchEscalationUsers).toHaveBeenCalledWith("zoya"), { timeout: 3000 });
       const picker = screen.getByLabelText(/manager user for rule 1/i);
       await waitFor(() => expect(within(picker).getByRole("option", { name: "Zoya Khan" })).toBeInTheDocument());

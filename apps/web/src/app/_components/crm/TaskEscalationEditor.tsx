@@ -368,6 +368,7 @@ export function TaskEscalationEditor() {
                   <DirectoryUserSelect
                     id={`${row.key}-mi`}
                     aria-label={t("managerUserAria", { n: i + 1 })}
+                    searchLabel={t("managerSearchAria", { n: i + 1 })}
                     value={row.managerId}
                     onChange={(managerId) => update(row.key, { managerId })}
                     aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true}

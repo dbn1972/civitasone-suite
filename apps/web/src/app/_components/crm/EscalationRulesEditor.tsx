@@ -427,7 +427,7 @@ export function EscalationRulesEditor() {
                     })()}
                   </td>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-role-${row.key}`}>Recipient role for rule {n}</label>
+                    <label className="sr-only" htmlFor={`${headingId}-role-${row.key}`}>{t("recipientRoleLabel", { n })}</label>
                     {/* GAP-CRM-ESCALATION-RULES-01: always a SELECT fed by the tenant's
                         roles — a mistyped role can never be entered or saved. There is
                         no free-text fallback: if the directory could not be loaded the
@@ -448,10 +448,11 @@ export function EscalationRulesEditor() {
                     </select>
                   </td>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-uid-${row.key}`}>Recipient user for rule {n}</label>
+                    <label className="sr-only" htmlFor={`${headingId}-uid-${row.key}`}>{t("recipientUserLabel", { n })}</label>
                     {/* A truncated user directory adds a server-side name search, so nobody is unreachable. */}
                     <DirectoryUserSelect
                       id={`${headingId}-uid-${row.key}`}
+                      searchLabel={t("recipientSearchLabel", { n })}
                       value={row.recipientId}
                       onChange={(recipientId) => update(row.key, { recipientId })}
                       users={directory.users}

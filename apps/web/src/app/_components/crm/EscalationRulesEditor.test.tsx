@@ -320,7 +320,7 @@ describe("EscalationRulesEditor recipient directory (GAP-CRM-ESCALATION-RULES-01
     await waitFor(() => expect(screen.getByText(/no escalation rules yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add escalation rule/i }));
     expect(await screen.findByText("Showing the first 1 person. Search by name to find anyone else.")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search people by name" }), { target: { value: "zoya" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search people by name for rule 1" }), { target: { value: "zoya" } });
     await waitFor(() => expect(aa.searchEscalationUsers).toHaveBeenCalledWith("zoya"), { timeout: 3000 });
     const picker = screen.getByLabelText(/recipient user for rule 1/i);
     await waitFor(() => expect(within(picker).getByRole("option", { name: "Zoya Khan" })).toBeInTheDocument());
@@ -328,6 +328,32 @@ describe("EscalationRulesEditor recipient directory (GAP-CRM-ESCALATION-RULES-01
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
     await waitFor(() => expect(as.createEscalationRule).toHaveBeenCalled());
     expect(vi.mocked(as.createEscalationRule).mock.calls[0][0]).toMatchObject({ recipientId: "u-900" });
+  });
+
+  it("gives each rule's search box its own accessible name, and the role / user labels come from i18n", async () => {
+    vi.mocked(as.getEscalationRecipients).mockResolvedValue({ data: { ...DIRECTORY, usersTruncated: true }, source: "api" });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule, { ...rule, id: "e2", thresholdMinutes: 120 }], source: "api" });
+    render(<EscalationRulesEditor />);
+    expect(await screen.findByRole("searchbox", { name: "Search people by name for rule 1" })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search people by name for rule 2" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Recipient role for rule 2")).toBeInTheDocument();
+    expect(screen.getByLabelText("Recipient user for rule 2")).toBeInTheDocument();
+  });
+
+  it("the recipient labels are translated in Hindi too (no hard-coded English)", async () => {
+    const hiMessages = (await import("@/messages/hi.json")).default as unknown as { crmEscalationRulesEditor: Record<string, string> };
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    rtlRender(
+      <NextIntlClientProvider
+        locale="hi"
+        messages={{ ...enMessages, crmEscalationRulesEditor: { ...enMessages.crmEscalationRulesEditor, ...hiMessages.crmEscalationRulesEditor } }}
+      >
+        <EscalationRulesEditor />
+      </NextIntlClientProvider>,
+    );
+    expect(await screen.findByLabelText("नियम 1 के लिए प्राप्तकर्ता की भूमिका")).toBeInTheDocument();
+    expect(screen.getByLabelText("नियम 1 के लिए प्राप्तकर्ता उपयोगकर्ता")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Recipient (role|user) for rule/)).not.toBeInTheDocument();
   });
 
   it("offers no search when the user list is complete", async () => {

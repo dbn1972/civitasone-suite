@@ -14,7 +14,7 @@
  * the reader picked is remembered), and a stored id that is in neither list gets the caller's
  * "not listed" label instead of vanishing.
  */
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { searchEscalationUsers, type EscalationUser } from "@/lib/crm/activityAccount";
 
@@ -49,6 +49,11 @@ export interface DirectoryUserSelectProps {
   unlistedTruncatedLabel?: string;
   "aria-label"?: string;
   "aria-invalid"?: boolean | undefined;
+  /**
+   * Accessible name of the name-search box (default: "Search people by name"). A screen that renders one
+   * picker per row passes a name that tells the rows apart ("... for rule 2"), so each box is distinguishable.
+   */
+  searchLabel?: string;
   disabled?: boolean;
   style?: CSSProperties;
 }
@@ -65,10 +70,12 @@ export function DirectoryUserSelect({
   unlistedTruncatedLabel,
   "aria-label": ariaLabel,
   "aria-invalid": ariaInvalid,
+  searchLabel,
   disabled,
   style,
 }: DirectoryUserSelectProps) {
   const t = useTranslations("crmDirectoryUserSelect");
+  const statusId = useId();
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<SearchState>(IDLE);
   // Everyone seen in a search so far, so a person picked from results stays listed (and named) after the query changes.
@@ -127,13 +134,15 @@ export function DirectoryUserSelect({
   // A complete directory is just the select.
   if (!truncated) return select;
 
-  const note =
+  // ONE polite status region, mounted for as long as the picker is truncated: a live region that is created
+  // together with its text is not reliably announced, so the element stays and only its text changes.
+  const message =
     search.phase === "loading" ? t("searching")
-    : search.phase === "failed" ? null
+    : search.phase === "failed" ? t("searchFailed")
     : search.phase === "done" && search.users.length === 0 ? t("noMatches", { query: query.trim() })
     : search.phase === "done" && search.capped ? t("moreMatches", { count: search.users.length })
-    : search.phase === "idle" ? t("truncatedNote", { count: users.length })
-    : null;
+    : search.phase === "done" ? t("resultsFound", { count: search.users.length })
+    : t("truncatedNote", { count: users.length });
 
   return (
     <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
@@ -142,17 +151,21 @@ export function DirectoryUserSelect({
         type="search"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        aria-label={t("searchLabel")}
+        aria-label={searchLabel ?? t("searchLabel")}
+        aria-describedby={statusId}
         placeholder={t("searchPlaceholder", { min: DIRECTORY_SEARCH_MIN_CHARS })}
         autoComplete="off"
         {...(disabled !== undefined ? { disabled } : {})}
         style={{ padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%", fontSize: 13 }}
       />
-      {search.phase === "failed" ? (
-        <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("searchFailed")}</span>
-      ) : note ? (
-        <span role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--muted)" }}>{note}</span>
-      ) : null}
+      <span
+        id={statusId}
+        role="status"
+        aria-live="polite"
+        style={{ fontSize: 12, color: search.phase === "failed" ? "var(--bad)" : "var(--muted)" }}
+      >
+        {message}
+      </span>
     </span>
   );
 }

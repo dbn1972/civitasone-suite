@@ -139,8 +139,65 @@ describe("DirectoryUserSelect: a truncated directory says so and can be searched
     search.mockResolvedValue({ data: [], source: "error" });
     renderWithIntl(<Harness truncated />);
     await typeAndSettle("me");
-    expect(screen.getByRole("alert")).toHaveTextContent("The search is unavailable right now. Try again.");
+    // Announced through the ONE status region (no separate role=alert element is created and torn down).
+    expect(screen.getByRole("status")).toHaveTextContent("The search is unavailable right now. Try again.");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(optionTexts()).toEqual(["Choose…", "Asha Rao", "Ravi Das"]);
+  });
+
+  it("announces how many people a search found (singular and plural)", async () => {
+    renderWithIntl(<Harness truncated />);
+    search.mockResolvedValueOnce({ data: [{ id: "u-9", name: "Meera Nair" }], source: "api", truncated: false });
+    await typeAndSettle("mee");
+    expect(screen.getByRole("status")).toHaveTextContent("1 person found");
+    search.mockResolvedValueOnce({ data: [{ id: "u-9", name: "Meera Nair" }, { id: "u-8", name: "Meera Rao" }, { id: "u-7", name: "Meeta Das" }], source: "api", truncated: false });
+    await typeAndSettle("meer");
+    expect(screen.getByRole("status")).toHaveTextContent("3 people found");
+  });
+
+  it("keeps exactly ONE status region, the same element, mounted through every phase of a search", async () => {
+    let release: (v: Awaited<ReturnType<typeof aa.searchEscalationUsers>>) => void = () => {};
+    search.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    renderWithIntl(<Harness truncated />);
+    const region = screen.getByRole("status");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toHaveTextContent("Showing the first 2 people.");
+
+    fireEvent.change(searchBox(), { target: { value: "me" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(400);
+    });
+    expect(screen.getByRole("status")).toBe(region); // searching
+    expect(region).toHaveTextContent("Searching…");
+
+    await act(async () => {
+      release({ data: [{ id: "u-9", name: "Meera Nair" }], source: "api", truncated: false });
+    });
+    expect(screen.getByRole("status")).toBe(region); // found
+    expect(region).toHaveTextContent("1 person found");
+
+    await typeAndSettle(""); // back to idle
+    expect(screen.getByRole("status")).toBe(region);
+    expect(region).toHaveTextContent("Showing the first 2 people.");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
+  it("describes the search box by the status region", () => {
+    renderWithIntl(<Harness truncated />);
+    expect(searchBox()).toHaveAttribute("aria-describedby", screen.getByRole("status").id);
+  });
+
+  it("takes the search box's accessible name from the searchLabel prop when one is given", () => {
+    renderWithIntl(<Harness truncated searchLabel="Search people by name for rule 3" />);
+    expect(screen.getByRole("searchbox", { name: "Search people by name for rule 3" })).toBeInTheDocument();
+    expect(screen.queryByRole("searchbox", { name: "Search people by name" })).not.toBeInTheDocument();
+  });
+
+  it("renders no status region and no search box at all for a complete directory", () => {
+    renderWithIntl(<Harness />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
   });
 
   it("ignores a late answer to an earlier query", async () => {

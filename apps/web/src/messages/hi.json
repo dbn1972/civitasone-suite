@@ -13660,7 +13660,8 @@
     "searching": "खोजा जा रहा है…",
     "noMatches": "“{query}” से कोई मेल नहीं खाता।",
     "moreMatches": "पहले {count} परिणाम दिखाए जा रहे हैं। सूची छोटी करने के लिए नाम का और हिस्सा लिखें।",
-    "searchFailed": "खोज अभी उपलब्ध नहीं है। फिर से प्रयास करें।"
+    "searchFailed": "खोज अभी उपलब्ध नहीं है। फिर से प्रयास करें।",
+    "resultsFound": "{count} लोग मिले"
   },
   "crmOwnerPicker": {
     "onLeave": "अवकाश पर",
@@ -14352,7 +14353,8 @@
       "RECIPIENT_REQUIRED": "प्रबंधक की भूमिका या प्रबंधक उपयोगकर्ता चुनें।",
       "DIRECTORY_UNAVAILABLE": "भूमिका और उपयोगकर्ता निर्देशिका अभी उपलब्ध नहीं है, इसलिए इस नियम की जाँच नहीं हो सकती। थोड़ी देर में पुनः प्रयास करें।",
       "IDENTITY_UNAVAILABLE": "भूमिका और उपयोगकर्ता निर्देशिका अभी उपलब्ध नहीं है, इसलिए इस नियम की जाँच नहीं हो सकती। थोड़ी देर में पुनः प्रयास करें।"
-    }
+    },
+    "managerSearchAria": "नियम {n} के लिए नाम से लोगों को खोजें"
   },
   "crmVoiceOfCitizen": {
     "windowRange": "अवधि: {from} से {to} तक",
@@ -14782,7 +14784,13 @@
     "descriptionPlaceholder": "शिकायत का विस्तृत विवरण…",
     "cancel": "रद्द करें",
     "saving": "सहेजा जा रहा है…",
-    "submit": "शिकायत जमा करें"
+    "submit": "शिकायत जमा करें",
+    "contactMatchAria": "मौजूदा संपर्क की जाँच",
+    "contactMatchWarning": "{count, plural, one {एक मौजूदा संपर्क के पास} other {# मौजूदा संपर्कों के पास}} यह {fields, select, phone {फ़ोन नंबर} email {ईमेल पता} other {फ़ोन नंबर या ईमेल पता}} पहले से है।",
+    "contactMatchUnnamed": "मौजूदा संपर्क",
+    "contactMatchOpenGrievances": "{count, plural, one {# खुली शिकायत:} other {# खुली शिकायतें:}}",
+    "contactMatchHint": "इस नागरिक का एक ही रिकॉर्ड रखने के लिए नीचे “{label}” में उन्हें चुनें। यह केवल चेतावनी है; आप फिर भी शिकायत दर्ज कर सकते हैं।",
+    "contactMatchUnavailable": "जाँच नहीं हो सकी कि यह फ़ोन या ईमेल पहले से किसी संपर्क का है या नहीं। आप फिर भी शिकायत दर्ज कर सकते हैं।"
   },
   "crmWatchlistTable": {
     "band_critical": "गंभीर",
@@ -15068,7 +15076,10 @@
     "directoryRetry": "निर्देशिका दोबारा लोड करें",
     "unverifiedRecipient": "सहेजा गया प्राप्तकर्ता (सत्यापित नहीं)",
     "userNotListed": "सहेजा गया उपयोगकर्ता (लोड की गई सूची में नहीं)",
-    "ruleName": "{trigger} · {threshold} · प्राप्तकर्ता: {recipient}"
+    "ruleName": "{trigger} · {threshold} · प्राप्तकर्ता: {recipient}",
+    "recipientRoleLabel": "नियम {n} के लिए प्राप्तकर्ता की भूमिका",
+    "recipientUserLabel": "नियम {n} के लिए प्राप्तकर्ता उपयोगकर्ता",
+    "recipientSearchLabel": "नियम {n} के लिए नाम से लोगों को खोजें"
   },
   "crmGrievanceCategoriesEditor": {
     "validationError": "श्रेणी “{name}” — {error}",
