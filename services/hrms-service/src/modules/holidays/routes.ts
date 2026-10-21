@@ -44,7 +44,9 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createHolidayBody.parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "holidays_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // The row is inserted with THIS id (f3-consumer reads p.id), so the id
+    // the caller gets back in the 202 is the id the holiday will really have.
+    await publishF3Write(ctx, "holidays_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted" as const, correlationId: ctx.correlationId }) as any;
   });
 
@@ -52,7 +54,17 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    await publishF3Write(ctx, "holidays_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // GAP-HR-HOLIDAYS-06: tenant-scoped existence check, so deleting an
+    // unknown / other-tenant holiday is a 404 instead of a silent 204 that
+    // queues a no-op.
+    const existing = await scopedRead((tx) => tx.select({ id: hrmsHolidays.id }).from(hrmsHolidays)
+      .where(and(eq(hrmsHolidays.id, id), eq(hrmsHolidays.tenantId, ctx.tenantId))).limit(1));
+    if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "holiday not found");
+    // GAP-HR-HOLIDAYS-06: the real holiday id MUST be the queued op id. This
+    // used to pass a fresh randomUUID(), and the consumer (p.id before
+    // params.id) then deleted a random id -- every delete was a silent no-op
+    // that still answered 204.
+    await publishF3Write(ctx, "holidays_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(204).send() as any;
   });
 
