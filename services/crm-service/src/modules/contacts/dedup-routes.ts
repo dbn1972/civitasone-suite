@@ -6,9 +6,11 @@
  *   POST /v1/crm/contacts/duplicate-check — ranked potential duplicates for a
  *                                           candidate contact, BEFORE it is saved
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import * as dedupRepo from "./dedup-repo.js";
 import { rankDuplicates } from "./dedup-domain.js";
 import { toReviewPair } from "./dedup-candidates-domain.js";
@@ -64,6 +66,29 @@ const dismissBody = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 
+/**
+ * A "typed lookup": the caller asks about a phone and/or an email and NOTHING else (no name, company, GSTIN or
+ * PAN). That is what the new-grievance form sends while a clerk types a citizen's number, and it is the
+ * shape that works as a phone / email -> contact lookup, so it is the one that is audited and rate-limited
+ * more tightly. A whole-record check (a new-contact form, one import row) names the record it is about.
+ */
+function isTypedLookup(body: unknown): boolean {
+  if (!body || typeof body !== "object") return false;
+  const b = body as Record<string, unknown>;
+  const has = (k: string) => typeof b[k] === "string" && (b[k] as string).trim() !== "";
+  return (has("phone") || has("email")) && !has("name") && !has("company") && !has("gstin") && !has("pan");
+}
+
+/** Typed lookups per minute, per tenant + actor. A person types a handful of numbers; this is well above that. */
+export const DUPLICATE_LOOKUP_LIMIT_PER_MINUTE = 60;
+/** Every other duplicate-check keeps the service-wide default budget (an import checks one request per row). */
+export const DUPLICATE_CHECK_LIMIT_PER_MINUTE = 300;
+
+const actorKey = (req: FastifyRequest): string => {
+  const r = req as FastifyRequest & { ctx?: { tenantId?: string; actorId?: string } };
+  return `${r.ctx?.tenantId ?? ""}:${r.ctx?.actorId ?? req.ip}`;
+};
+
 export async function dedupRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/dedup-rules", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -107,29 +132,78 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
    * before save or import."). Runs the tenant's configured rules over active
    * contacts and returns ranked candidates.
    */
-  app.post("/v1/crm/contacts/duplicate-check", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
-    const body = duplicateCheckBody.parse(req.body);
-
-    const rules = await dedupRepo.getRules(ctx.tenantId, ctx.actorId);
-    const candidates = await dedupRepo.fetchCandidates(ctx.tenantId, 2000, body.id);
-    const matches = rankDuplicates(
-      {
-        name: body.name ?? null,
-        email: body.email ?? null,
-        phone: body.phone ?? null,
-        company: body.company ?? null,
-        gstin: body.gstin ?? null,
-        pan: body.pan ?? null,
+  app.post(
+    "/v1/crm/contacts/duplicate-check",
+    {
+      config: {
+        rateLimit: {
+          timeWindow: "1 minute",
+          // The body is only parsed from preHandler on, and the budget depends on it.
+          hook: "preHandler",
+          max: (req: FastifyRequest) => (isTypedLookup(req.body) ? DUPLICATE_LOOKUP_LIMIT_PER_MINUTE : DUPLICATE_CHECK_LIMIT_PER_MINUTE),
+          keyGenerator: (req: FastifyRequest) => `${isTypedLookup(req.body) ? "lookup" : "check"}:${actorKey(req)}`,
+        },
       },
-      candidates,
-      rules,
-      body.limit ?? 10,
-    );
+    },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, CRM_ROLES);
+      const body = duplicateCheckBody.parse(req.body);
 
-    return reply.send({ data: matches });
-  });
+      const rules = await dedupRepo.getRules(ctx.tenantId, ctx.actorId);
+      const candidates = await dedupRepo.fetchCandidates(ctx.tenantId, 2000, body.id);
+      const matches = rankDuplicates(
+        {
+          name: body.name ?? null,
+          email: body.email ?? null,
+          phone: body.phone ?? null,
+          company: body.company ?? null,
+          gstin: body.gstin ?? null,
+          pan: body.pan ?? null,
+        },
+        candidates,
+        rules,
+        body.limit ?? 10,
+      );
+
+      // A match is { id, name, matchedFields, score } - the contact NAME so a form can say who it is, and nothing
+      // else about them (never an email, phone, company or id number). Same role gate, same tenant; `name` is
+      // additive, so a caller that ignores it is unaffected. `score` is the 0-100 sum of the matched rules' weights.
+      const nameById = new Map(candidates.map((c) => [c.id, c.name] as const));
+      const data = matches.map((m) => {
+        const name = nameById.get(m.id)?.trim();
+        return { id: m.id, ...(name ? { name } : {}), matchedFields: m.matchedFields, score: m.score };
+      });
+
+      // Audit a typed lookup. It behaves as a "who has this phone / email?" question for every CRM role, so it
+      // leaves a record: WHO asked, WHICH field names, HOW MANY matched - never the typed value (nor a hash of
+      // it: a 10-digit number is trivially brute-forced from a hash). Audit only, no domain event.
+      if (isTypedLookup(body)) {
+        await db.transaction(async (tx) => {
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: "audit.event.record",
+            eventType: "audit.event.record",
+            tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
+            correlationId: ctx.correlationId,
+            payload: {
+              service: "crm",
+              action: "contact_lookup",
+              resourceType: "contact_registry",
+              resourceId: ctx.tenantId,
+              outcome: "success",
+              metadata: {
+                fields: (["phone", "email"] as const).filter((f) => typeof body[f] === "string" && body[f]!.trim() !== ""),
+                matchedCount: data.length,
+              },
+            },
+          });
+        });
+      }
+
+      return reply.send({ data });
+    },
+  );
 
   /**
    * GAP2-CRM-DEDUP-CANDIDATES-07 — the post-save duplicate-review LIST.
