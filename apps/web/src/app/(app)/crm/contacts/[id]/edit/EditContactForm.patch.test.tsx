@@ -75,13 +75,8 @@ describe("EditContactForm", () => {
   it("does not PATCH the contact when nothing core/consent changed", async () => {
     render(<EditContactForm params={{ id: "c1" }} initial={initial} />);
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
-    // Only the classification endpoint is hit; the contact PATCH is skipped.
-    const contactPatch = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
-    expect(contactPatch).toBeUndefined();
-    const classificationCall = browserFetchMock.mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].includes("/classification"),
-    );
-    expect(classificationCall).toBeDefined();
+    // Nothing changed: neither the contact PATCH nor the classification PATCH is sent.
+    expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
   });
 });
