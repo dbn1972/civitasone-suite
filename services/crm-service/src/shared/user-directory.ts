@@ -48,7 +48,21 @@ function internalHeaders(tenantId: string): Record<string, string> {
   };
 }
 
-/** All of the tenant's users as `{ id, name }`, or `undefined` when unreadable. */
+/**
+ * The tenant's users as `{ id, name }`, or `undefined` when unreadable.
+ *
+ * Known limits, both inherited from identity-service's
+ * `/identity/internal/user-summaries` (which deliberately returns only
+ * `{ id, name }`, no status):
+ *  - it lists EVERY user, deactivated ones included, so the assign / reassign /
+ *    escalation pickers can offer someone who is no longer active. That is safe:
+ *    the server re-checks the chosen person (`isActiveTenantUser`) and refuses an
+ *    inactive one with 422, which the UI words plainly.
+ *  - it returns at most 2000 users (the route's page size), so a tenant larger
+ *    than that has users missing from the pickers and from name resolution.
+ * Removing both needs an active-only filter / paging on the identity side; that
+ * is an identity-service change, not made here.
+ */
 export async function listDirectoryUsers(tenantId: string): Promise<DirectoryUser[] | undefined> {
   const hit = userCache.get(tenantId);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.users;

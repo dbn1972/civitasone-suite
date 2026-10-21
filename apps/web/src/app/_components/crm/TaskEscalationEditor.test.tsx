@@ -275,7 +275,11 @@ describe("TaskEscalationEditor (AC-005)", () => {
     vi.mocked(aa.getEscalationRoles).mockResolvedValue({ data: [], source: "error" });
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
     render(<TaskEscalationEditor />);
-    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded, so a manager can.t be chosen/i);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/could not be loaded, so a manager can.t be chosen/i);
+    // Error colour comes from the design token, not a hard-coded hex.
+    expect(alert.getAttribute("style")).toContain("var(--bad)");
+    expect(alert.getAttribute("style")).not.toMatch(/#[0-9a-f]{3,8}/i);
   });
 
   it("deletes a rule via ConfirmDialog", async () => {

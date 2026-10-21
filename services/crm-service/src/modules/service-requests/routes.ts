@@ -52,7 +52,10 @@ const updateStatusBody = z.object({
   // (GAP-CRM-SERVICE-REQUESTS-DETAIL-01).
   resolution: z.string().max(5000).optional(),
   statusNote: z.string().max(5000).optional(),
-  assignedTo: z.string().uuid().optional(),
+  // Deliberately NO `assignedTo` here: assignment is its own manager-only,
+  // active-user-checked, audited route (PATCH .../assign). Accepting it on this
+  // status PATCH let any CRM role bypass all three (GAP-CRM-SERVICE-REQUESTS-DETAIL-05).
+  // The schema is not strict, so a stray `assignedTo` is dropped, not honoured.
   // GAP-CRM-SERVICE-REQUESTS-DETAIL-03: optimistic concurrency. When the client
   // sends the `version` it read, a stale write (someone else already advanced
   // the request) is rejected with 409 instead of silently overwriting. Optional
@@ -381,7 +384,6 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         SET status = ${body.status},
             resolution = COALESCE(${body.resolution ?? null}, resolution),
             status_note = COALESCE(${body.statusNote ?? null}, status_note),
-            assigned_to = COALESCE(${body.assignedTo ?? null}::uuid, assigned_to),
             -- GAP-CRM-SERVICE-REQUESTS-DETAIL-04: resolving/closing starts a fresh
             -- citizen notification. Record the channel it will use now (email first,
             -- else SMS - the same rule the notify consumer applies), or that there is

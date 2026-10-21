@@ -269,6 +269,38 @@ describe("F6-02: resolve -> citizen notification", () => {
     expect((await detail(id)).citizenNotification).toMatchObject({ outcome: "no_template" });
   });
 
+  // A template that went through notification-service's approval workflow
+  // (draft -> in_review -> approved -> published) ends "published", not "active".
+  it("uses a PUBLISHED template (approval-workflow end state), not just an `active` one", async () => {
+    const PUBLISHED_EMAIL = randomUUID();
+    templates = [{ id: PUBLISHED_EMAIL, name: "service_request_resolution", channel: "email", status: "published" }];
+    const id = await createSr({ citizenEmail: "asha@example.com" });
+    await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });
+    fetchMock.mockClear();
+    await runNotify(id, "resolved");
+
+    expect(sendCalls()).toHaveLength(1);
+    const body = JSON.parse((sendCalls()[0]![1] as { body: string }).body);
+    expect(body.templateId).toBe(PUBLISHED_EMAIL);
+    expect(body.channel).toBe("email");
+    expect((await detail(id)).citizenNotification).toMatchObject({ channel: "email", outcome: "sent" });
+    expect(await auditOutcomes(id)).not.toContain("service_request_notify:no_template");
+  });
+
+  it("does not use a template still awaiting approval or superseded (in_review / approved / superseded -> no_template)", async () => {
+    templates = [
+      { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "in_review" },
+      { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "approved" },
+      { id: randomUUID(), name: "service_request_resolution", channel: "email", status: "superseded" },
+    ];
+    const id = await createSr({ citizenEmail: "asha@example.com" });
+    await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });
+    fetchMock.mockClear();
+    await runNotify(id, "resolved");
+    expect(sendCalls()).toHaveLength(0);
+    expect((await detail(id)).citizenNotification).toMatchObject({ outcome: "no_template" });
+  });
+
   it("skips (no send) when the request has no citizen phone/email", async () => {
     const id = await createSr({});
     await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "resolved", resolution: "Done" });

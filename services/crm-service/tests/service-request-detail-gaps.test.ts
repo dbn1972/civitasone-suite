@@ -214,6 +214,39 @@ describe("GAP-CRM-SERVICE-REQUESTS-DETAIL-05: assignee name + assign endpoint", 
     expect((await req("GET", `/v1/crm/service-requests/${id}`)).json().data.assignedTo).toBeNull();
   });
 
+  // The status PATCH used to accept `assignedTo`, so ANY CRM role could assign
+  // through it with no manager gate, no active-user check and no assign audit.
+  // It must now be ignored: assignment happens only through /assign.
+  it.each([["crm_user"], ["crm_admin"]])(
+    "a status PATCH carrying assignedTo from %s does NOT assign (unassigned stays unassigned)",
+    async (role) => {
+      const id = await create();
+      const res = await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "in_progress", assignedTo: OFFICER }, [role]);
+      expect(res.statusCode).toBe(200); // the status change itself is legitimate
+      expect(res.json().data.status).toBe("in_progress");
+      expect(res.json().data.assignedTo).toBeNull();
+      const d = (await req("GET", `/v1/crm/service-requests/${id}`)).json().data;
+      expect(d.status).toBe("in_progress");
+      expect(d.assignedTo).toBeNull();
+      expect(d.assignedToName).toBeNull();
+      expect(await auditActions(id)).not.toContain("crm.service_request.assigned");
+    },
+  );
+
+  it.each([["crm_user"], ["crm_admin"]])(
+    "a status PATCH carrying assignedTo from %s does NOT reassign an already-assigned request",
+    async (role) => {
+      const id = await create();
+      expect((await req("PATCH", `/v1/crm/service-requests/${id}/assign`, { assignedTo: OFFICER })).statusCode).toBe(200);
+      const res = await req("PATCH", `/v1/crm/service-requests/${id}/status`, { status: "in_progress", assignedTo: ACTOR }, [role]);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.assignedTo).toBe(OFFICER);
+      expect((await req("GET", `/v1/crm/service-requests/${id}`)).json().data.assignedTo).toBe(OFFICER);
+      // Only the one deliberate assignment was audited; the status PATCH added none.
+      expect((await auditActions(id)).filter((e) => e === "crm.service_request.assigned")).toHaveLength(1);
+    },
+  );
+
   it("refuses an assignee who is not an active user of this tenant (422)", async () => {
     vi.mocked(isActiveTenantUser).mockResolvedValue(false);
     const id = await create();

@@ -110,6 +110,18 @@ function isTransientStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
+/**
+ * A template notification-service will actually deliver. A template created
+ * directly is `active`; one that went through the approval workflow
+ * (draft -> in_review -> approved -> published) ends `published`
+ * (notification-service approval/domain.ts). Both are usable, so a tenant that
+ * authored and published the template is not wrongly told it has none. Anything
+ * still in draft/in_review/approved, or superseded, is not offered.
+ */
+function isDeliverableTemplateStatus(status: unknown): boolean {
+  return status === "active" || status === "published";
+}
+
 async function findResolutionTemplate(
   tenantId: string,
   channel: Channel,
@@ -132,7 +144,7 @@ async function findResolutionTemplate(
         typeof t === "object" &&
         (t as { name?: unknown }).name === SR_RESOLUTION_TEMPLATE_NAME &&
         (t as { channel?: unknown }).channel === channel &&
-        (t as { status?: unknown }).status === "active" &&
+        isDeliverableTemplateStatus((t as { status?: unknown }).status) &&
         typeof (t as { id?: unknown }).id === "string",
     );
     return hit ? { kind: "found", templateId: hit.id } : { kind: "missing" };

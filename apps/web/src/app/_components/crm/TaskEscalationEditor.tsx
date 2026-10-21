@@ -260,7 +260,7 @@ export function TaskEscalationEditor() {
       </div>
       <div className="pad" style={{ display: "grid", gap: 12 }}>
         {directoryFailed ? (
-          <p role="alert" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{t("directoryUnavailable")}</p>
+          <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{t("directoryUnavailable")}</p>
         ) : null}
         {rows.length === 0 ? (
           <EmptyState icon="⏰" title={t("emptyTitle")} message={t("emptyMessage")} />
