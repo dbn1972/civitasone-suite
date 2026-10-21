@@ -144,6 +144,71 @@ describe("NewDealPage contact picker (GAP-CRM-DEALS-NEW-04)", () => {
   });
 });
 
+describe("NewDealPage contact lookup failure (GAP-CRM-DEALS-NEW-04)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows the translated error and a Retry button when the contact lookup returns 500, and Retry re-runs the same query", async () => {
+    let calls = 0;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      calls += 1;
+      return calls === 1
+        ? new Response(JSON.stringify({ code: "INTERNAL", message: "boom" }), { status: 500 })
+        : new Response(JSON.stringify({ data: [{ id: "c1", name: "Asha Rao" }] }), { status: 200 });
+    });
+    renderWithIntl(<NewDealPage />);
+    fireEvent.change(screen.getByRole("combobox", { name: /contact \(optional\)/i }), { target: { value: "Asha" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(enMessages.crm.dealsNew.contactSearchError);
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+    // The failure never blocks creating the engagement without a contact.
+    expect(screen.getByRole("button", { name: /create engagement/i })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole("button", { name: enMessages.crm.dealsNew.contactRetry }));
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    const lookups = fetchSpy.mock.calls.filter(([url]) => String(url).includes("/v1/crm/contacts/lookup"));
+    expect(lookups).toHaveLength(2);
+    expect(String(lookups[1]![0])).toContain("q=Asha");
+  });
+
+  it("an exception (network down) on the lookup also offers Retry", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    renderWithIntl(<NewDealPage />);
+    fireEvent.change(screen.getByRole("combobox", { name: /contact \(optional\)/i }), { target: { value: "Asha" } });
+    expect(await screen.findByRole("button", { name: enMessages.crm.dealsNew.contactRetry })).toBeInTheDocument();
+  });
+});
+
+describe("NewDealPage uses the canonical noun, Engagement (GAP-CRM-DEALS-NEW-07)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("no visible copy on the page says 'deal'", () => {
+    renderWithIntl(<NewDealPage />);
+    expect(screen.getByRole("heading", { name: "New Engagement" })).toBeInTheDocument();
+    expect(screen.getByText(/create the engagement without one/i)).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\bdeals?\b/i);
+  });
+
+  it("the save-failure banner is the shared themed Alert (no hand-styled hex banner)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method === "POST") throw new TypeError("Failed to fetch");
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    renderWithIntl(<NewDealPage />);
+    fireEvent.change(screen.getByLabelText(/engagement name/i), { target: { value: "Banner test" } });
+    fireEvent.change(screen.getByLabelText(/value/i), { target: { value: "1000" } });
+    fireEvent.click(screen.getByRole("button", { name: /create engagement/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveAttribute("data-variant", "danger");
+    expect(alert.getAttribute("style") ?? "").toContain("var(--badbg)");
+    expect(alert.getAttribute("style") ?? "").not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
+});
+
 describe("NewDealPage navigation after create (GAP-CRM-DEALS-NEW-06)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();

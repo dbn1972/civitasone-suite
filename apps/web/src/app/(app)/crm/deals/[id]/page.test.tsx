@@ -158,6 +158,35 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
   });
 
+  // GAP-CRM-DEALS-DETAIL-06: the outage state titles the page with the canonical
+  // noun ("Engagement Detail", from the catalogue) - not the old "Deal Detail".
+  it("titles the outage state 'Engagement Detail', never 'Deal Detail'", async () => {
+    rawPayload.mockReturnValue(undefined);
+    nextStatus = 500;
+
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+
+    expect(screen.getByRole("heading", { name: "Engagement Detail" })).toBeInTheDocument();
+    expect(screen.queryByText(/Deal Detail/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-06: field labels, section headings and the subtitle all
+  // come from crmDealDetail (next-intl) and use the one noun.
+  it("renders the labels, headings and subtitle from the catalogue with no 'deal' wording", async () => {
+    rawPayload.mockReturnValue(RAW_DEAL);
+
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+
+    const ns = enMessages.crmDealDetail;
+    expect(screen.getByRole("heading", { name: ns.detailsHeading })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ns.workflowHeading })).toBeInTheDocument();
+    for (const label of [ns.contactOrganisation, ns.labelValue, ns.labelStage, ns.labelStatus, ns.labelOwner, ns.labelCloseDate, ns.labelProbability]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByText(ns.pageSubtitle)).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\bdeals?\b/i);
+  });
+
   // A thrown network failure (no status at all) is likewise an outage, not a
   // deletion.
   it("shows a retriable error on a network failure with no status", async () => {

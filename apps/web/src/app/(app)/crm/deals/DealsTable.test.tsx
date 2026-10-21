@@ -173,3 +173,71 @@ describe("DealsTable", () => {
     expect(within(table).getByText("0%")).toBeInTheDocument();
   });
 });
+
+describe("DealsTable sorting (GAP-CRM-DEALS-07)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  // Formatted dates read "31 Mar 2026" / "05 Nov 2026" / "15 Jan 2027": sorted as
+  // TEXT they run 05 Nov, 15 Jan, 31 Mar (by day number), which is not
+  // chronological. The column must sort on the underlying ISO date.
+  const DATED: Deal[] = [
+    { id: "1", dealName: "Mar Deal", contactId: null, contactName: "A", amount: "100", stage: "prospecting", status: "open", owner: "U", closeDate: "2026-03-31", probability: 90 },
+    { id: "2", dealName: "Nov Deal", contactId: null, contactName: "B", amount: "100", stage: "prospecting", status: "open", owner: "U", closeDate: "2026-11-05", probability: 5 },
+    { id: "3", dealName: "Jan Deal", contactId: null, contactName: "C", amount: "100", stage: "prospecting", status: "open", owner: "U", closeDate: "2027-01-15", probability: 40 },
+  ];
+
+  function bodyRowNames(): string[] {
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    return rows.map((r) => r.querySelector("a")?.getAttribute("aria-label")?.replace(/^Open /, "") ?? "");
+  }
+
+  it("sorts 'Expected close' chronologically, ascending then descending", () => {
+    seed(DATED, "live");
+    render(<DealsTable deals={DATED} source="api" />);
+    const header = screen.getByRole("columnheader", { name: /Expected close/i });
+    expect(header).toHaveAttribute("aria-sort", "none");
+
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-sort", "ascending");
+    expect(bodyRowNames()).toEqual(["Mar Deal", "Nov Deal", "Jan Deal"]);
+
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(bodyRowNames()).toEqual(["Jan Deal", "Nov Deal", "Mar Deal"]);
+  });
+
+  it("still shows the expected close date in the Indian dd Mon yyyy form", () => {
+    seed(DATED, "live");
+    render(<DealsTable deals={DATED} source="api" />);
+    const table = screen.getByRole("table");
+    expect(within(table).getByText("31 Mar 2026")).toBeInTheDocument();
+    expect(within(table).getByText("15 Jan 2027")).toBeInTheDocument();
+  });
+
+  it("sorts 'Probability' numerically (5 < 40 < 90, not '40' < '5' < '90')", () => {
+    seed(DATED, "live");
+    render(<DealsTable deals={DATED} source="api" />);
+    fireEvent.click(screen.getByRole("columnheader", { name: /^Probability/i }));
+    expect(bodyRowNames()).toEqual(["Nov Deal", "Jan Deal", "Mar Deal"]);
+  });
+});
+
+describe("DealsTable uses one noun, Engagement (GAP-CRM-DEALS-07)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("labels the card, the name column and the filter box 'engagement' — never 'deal'", () => {
+    seed(DEALS, "live");
+    render(<DealsTable deals={DEALS} source="api" />);
+    expect(screen.getByRole("heading", { name: "Engagements" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /^Engagement/ })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: /engagements/i })).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\bdeals?\b/i);
+  });
+
+  it("the empty state also says engagements", () => {
+    seed([], "live");
+    render(<DealsTable deals={[]} source="api" />);
+    expect(screen.getByText("No engagements found")).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\bdeals?\b/i);
+  });
+});

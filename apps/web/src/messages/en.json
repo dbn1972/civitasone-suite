@@ -2006,11 +2006,13 @@
       "stageLabel": "Stage",
       "contactLabel": "Contact (optional)",
       "contactPlaceholder": "Search contacts by name or organisation…",
-      "contactHint": "Link an existing contact, or leave blank to create the deal without one.",
+      "contactHint": "Link an existing contact, or leave blank to create the engagement without one.",
       "closeLabel": "Expected close date (optional)",
       "probabilityLabel": "Probability (%)",
       "creating": "Creating…",
-      "create": "Create engagement"
+      "create": "Create engagement",
+      "contactSearchError": "Couldn’t load contacts. Try again, or leave this blank and link a contact later.",
+      "contactRetry": "Retry"
     },
     "consent": {
       "incompleteNew": "Choose the purpose and how consent was captured before saving.",
@@ -13652,8 +13654,34 @@
       "won": "Won",
       "lost": "Lost"
     },
-    "detailTitle": "Deal Detail",
-    "loadArea": "this deal"
+    "detailTitle": "Engagement Detail",
+    "loadArea": "this engagement",
+    "pageTitle": "Engagement {name}",
+    "pageSubtitle": "Stakeholder engagement system: leads, engagements and pipeline.",
+    "detailsHeading": "Engagement Details",
+    "contactOrganisation": "Contact / Organisation",
+    "labelValue": "Value",
+    "labelStage": "Stage",
+    "labelStatus": "Status",
+    "labelOwner": "Owner",
+    "labelCloseDate": "Close Date",
+    "labelProbability": "Probability",
+    "workflowHeading": "Workflow",
+    "activityLogged": "Activity logged.",
+    "logActivityFor": "Log activity for {name}",
+    "fieldType": "Type",
+    "typeCall": "Call",
+    "typeMeeting": "Meeting",
+    "typeEmail": "Email",
+    "typeTask": "Task",
+    "typeNote": "Note",
+    "fieldSubject": "Subject",
+    "subjectPlaceholder": "Short summary",
+    "fieldNotes": "Notes",
+    "notesPlaceholder": "What happened?",
+    "saveActivity": "Save activity",
+    "saving": "Saving…",
+    "cancel": "Cancel"
   },
   "crmDedupRulesEditor": {
     "field": {
@@ -14633,7 +14661,9 @@
     "maskedEmailAria": "Masked email address"
   },
   "crmDealsPage": {
-    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
+    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions",
+    "title": "Vendor / Stakeholder Engagements",
+    "newEngagement": "+ New Engagement"
   },
   "crmContactsPage": {
     "subtitle": "Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master",
@@ -14696,21 +14726,33 @@
     "statActive": "Active Engagements",
     "statActiveValue": "Active Procurement Value",
     "statConcludedValue": "Concluded Value",
-    "statLapsed": "Lapsed Engagements"
+    "statLapsed": "Lapsed Engagements",
+    "heading": "Engagements",
+    "colEngagement": "Engagement",
+    "colValue": "Value",
+    "colStage": "Stage",
+    "colExpectedClose": "Expected close",
+    "colProbability": "Probability",
+    "colOwner": "Owner",
+    "emptyTitle": "No engagements found",
+    "emptyMessage": "Start adding engagements to track your procurement pipeline.",
+    "filterPlaceholder": "Filter engagements…"
   },
   "crmDealError": {
     "backLabel": "Back to engagements",
-    "area": "deal"
+    "area": "engagement",
+    "listBackLabel": "Back to CRM",
+    "listArea": "CRM engagements"
   },
   "crmDealNewPage": {
-    "nameRequired": "Enter a deal name.",
+    "nameRequired": "Enter an engagement name.",
     "invalidAmount": "Enter a valid amount (rupees, up to 2 decimal places).",
     "valuePlaceholder": "e.g. 1234567.89",
     "valuePreview": "Will be stored as {value}",
     "valueHint": "Enter a valid rupee amount (up to 2 decimal places).",
     "contactAria": "Contact (optional)",
     "searchContacts": "Search contacts by name or organisation…",
-    "contactHint": "Link an existing contact, or leave blank to create the deal without one."
+    "contactHint": "Link an existing contact, or leave blank to create the engagement without one."
   },
   "crmDedupCandidates": {
     "unnamed": "Unnamed",
