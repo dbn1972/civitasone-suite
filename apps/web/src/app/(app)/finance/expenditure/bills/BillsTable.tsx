@@ -1,10 +1,12 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { formatIndianDate, formatEntityRef } from "@/lib/formatters";
+import { formatIndianDate } from "@/lib/formatters";
+import { billPoHref, billPoLabel } from "@/lib/finance/billRefs";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Bill = {
@@ -12,12 +14,17 @@ type Bill = {
   billNo: string;
   vendor: string;
   poRef?: string | null;
+  /** The human PO number snapshotted from the GRN the bill was drafted from (GAP-FINANCE-EXPENDITURE-BILLS-06). */
+  poNumber?: string | null;
   amount: string;
   submittedDate: string;
   dueDate?: string | null;
   threeWayMatch: string;
   status: string;
 };
+
+/** A bill with its PO cell resolved once, so the column, the text filter, the sort and the CSV all see the same text. */
+type BillRow = Bill & { poLabel: string; poHref: string | null };
 
 export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: "api" | "error" }) {
   const t = useTranslations("expenditureBillsTable");
@@ -26,6 +33,10 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
     bills,
     source,
     (d) => d.length === 0,
+  );
+  const tableRows = useMemo<BillRow[]>(
+    () => rows.map((b) => ({ ...b, poLabel: billPoLabel(b), poHref: billPoHref(b) })),
+    [rows],
   );
 
   return (
@@ -36,18 +47,26 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<Bill>
+      <DataTable<BillRow>
         columns={[
           { key: "billNo", label: t("colBill"), render: (b) => <span className="mono">{b.billNo}</span> },
           { key: "vendor", label: t("colVendor") },
-          { key: "poRef", label: t("colPoRef"), render: (b) => formatEntityRef(b.poRef) },
+          {
+            key: "poLabel",
+            label: t("colPoRef"),
+            // The human PO number, linked to the purchase order when the ref names a page; plain text (never a dead
+            // link) otherwise, and "—" when the bill has no PO. stopPropagation: the row itself is a link to the bill.
+            render: (b) => (b.poHref
+              ? <Link href={b.poHref} onClick={(e) => e.stopPropagation()}>{b.poLabel}</Link>
+              : b.poLabel),
+          },
           { key: "amount", label: t("colAmount"), align: "right", cellType: "amount" },
           { key: "submittedDate", label: t("colSubmitted"), render: (b) => formatIndianDate(b.submittedDate) },
           { key: "dueDate", label: t("colDue"), render: (b) => (b.dueDate ? formatIndianDate(b.dueDate) : "—") },
           { key: "threeWayMatch", label: t("colThreeWayMatch"), render: (b) => <StatusPill status={b.threeWayMatch} /> },
           { key: "status", label: t("colStatus"), render: (b) => <StatusPill status={b.status} /> },
         ]}
-        rows={rows}
+        rows={tableRows}
         rowHref={(b) => `/finance/expenditure/bills/${b.id}`}
         sortable
         filterable
