@@ -42,7 +42,10 @@ describe("withEnglishFallback (GAP-CRM-DATA-QUALITY-07)", () => {
     ["te", te],
     ["kn", kn],
   ])("%s resolves crm.dataQuality.title (absent from its own file) to the English title", (_loc, own) => {
-    expect((own as Record<string, unknown>).crm).toBeUndefined();
+    // The locale may carry other crm.* keys (e.g. crm.dashboard.* from the dashboard
+    // translation fix); what matters is that crm.dataQuality is absent from its own file.
+    const ownCrm = (own as { crm?: Record<string, unknown> }).crm;
+    expect(ownCrm?.dataQuality).toBeUndefined();
     const merged = withEnglishFallback(en as Record<string, unknown>, own as Record<string, unknown>) as {
       crm: { dataQuality: { title: string } };
     };
