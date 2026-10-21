@@ -179,9 +179,27 @@ export interface DerivedStageFields {
  */
 export const TERMINAL_STAGE_NAMES = ["Won", "Lost"] as const;
 
-/** True when `stageName` is a terminal (deal-closing) stage. */
+/**
+ * The terminal vocabulary after {@link normalizeStageName}: the legacy Won/Lost plus the
+ * closed_won/closed_lost keys the web mapper (apps/web normalizeDealStage) folds every
+ * spelling into. A deal stored under any of these would be SHOWN as Concluded/Lapsed
+ * while the server still holds status "active" with no close reason or close audit,
+ * so they are all reserved for the governed close flow.
+ */
+const TERMINAL_STAGE_KEYS: ReadonlySet<string> = new Set(["won", "lost", "closed_won", "closed_lost"]);
+
+/** Same normalisation as the web `normalizeDealStage`: trim, lower-case, whitespace -> "_". */
+function normalizeStageName(stageName: string): string {
+  return stageName.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+/**
+ * True when `stageName` is a terminal (deal-closing) stage. Case-, padding- and
+ * space-insensitive ("won", "WON", " Lost ", "Closed Won", "closed_lost" all count), so
+ * a re-cased spelling cannot slip past the create / stage-change guards.
+ */
 export function isTerminalStage(stageName: string): boolean {
-  return (TERMINAL_STAGE_NAMES as readonly string[]).includes(stageName);
+  return TERMINAL_STAGE_KEYS.has(normalizeStageName(stageName));
 }
 
 /**
