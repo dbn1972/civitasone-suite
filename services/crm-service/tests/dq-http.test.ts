@@ -370,6 +370,26 @@ describe("DQ-004 data-quality dashboard", () => {
     expect(Object.keys(row!).sort()).toEqual(["id", "issues", "name", "score"]);
   });
 
+  // Names are record data: tenant_admin may open the dashboard but cannot list contacts,
+  // so it must not learn who the flagged records are through the drill-down.
+  it("withholds the display name from a caller who cannot list contacts (tenant_admin)", async () => {
+    const name = `Hidden Sparse ${randomUUID().slice(0, 8)}`;
+    await createContact({ name });
+
+    const asUser = await get("/v1/crm/data-quality?entity=contacts&filter=all", ["crm_user"]);
+    const userRows = asUser.json().data.recordsByFilter.missing as Array<{ name: string | null }>;
+    expect(userRows.some((r) => r.name === name)).toBe(true);
+
+    const asAdmin = await get("/v1/crm/data-quality?entity=contacts&filter=all", ["tenant_admin"]);
+    expect(asAdmin.statusCode).toBe(200);
+    const adminRep = asAdmin.json().data;
+    expect(adminRep.recordsByFilter.missing.length).toBeGreaterThan(0);
+    expect(adminRep.recordsByFilter.missing.every((r: { name: string | null }) => r.name === null)).toBe(true);
+    expect(JSON.stringify(adminRep)).not.toContain(name);
+    // The counts it always had are intact.
+    expect(adminRep.counts.missing).toBeGreaterThan(0);
+  });
+
   // GAP-CRM-DATA-QUALITY-03: one request carries every tab, so switching tabs never re-asks.
   it("filter=all returns the rows of every filter in a single response", async () => {
     const res = await get("/v1/crm/data-quality?entity=contacts&filter=all");

@@ -13,10 +13,18 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { getDataQuality } from "./data-quality-queries.js";
+import { withoutNames } from "./data-quality.js";
 
 const ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
+/**
+ * Roles that may list contacts and accounts (contacts/routes.ts CRM_ROLES). Only
+ * they get the display name on a drill-down row; tenant_admin may open this
+ * dashboard but not the lists, so its rows carry `name: null`.
+ */
+const NAME_READ_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
 const querySchema = z.object({
   entity: z.enum(["contacts", "leads", "accounts"]).default("contacts"),
@@ -33,6 +41,6 @@ export async function dataQualityRoutes(app: FastifyInstance): Promise<void> {
       staleDays: q.staleDays,
       filter: q.filter ?? null,
     });
-    return reply.send({ data: report });
+    return reply.send({ data: hasAnyRole(ctx, NAME_READ_ROLES) ? report : withoutNames(report) });
   });
 }
