@@ -2,13 +2,15 @@
  * LQ-002 — configurable lead scoring rules + score history.
  *   GET /v1/crm/lead-score-rules          — the tenant's rules (admin; seeds defaults)
  *   PUT /v1/crm/lead-score-rules          — upsert rules (admin, audited)
+ *   POST /v1/crm/lead-score-rules/preview — dry-run a proposed rule set against the tenant's leads (admin, read-only)
  *   GET /v1/crm/leads/:id/score-history   — score change history for a lead
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./score-rules-repo.js";
-import { putScoreRulesBody, scoreHistoryQuery, leadIdParam } from "./score-rules-validators.js";
+import { putScoreRulesBody, previewScoreRulesBody, scoreHistoryQuery, leadIdParam } from "./score-rules-validators.js";
+import { SCOREABLE_LEAD_ATTRIBUTES } from "./score-rules-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
@@ -28,8 +30,37 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { rules, meta } = await repo.getRuleViewsList(ctx.tenantId, ctx.actorId);
     void reply.header("ETag", meta.version);
-    return reply.send({ data: rules, version: meta.version, meta: { ...meta, total: rules.length } });
+    // GAP-CRM-LEAD-SCORING-03: advertise the lead fields a rule can score on, so the
+    // editor offers exactly these (the PUT validator rejects anything else).
+    return reply.send({
+      data: rules,
+      version: meta.version,
+      meta: { ...meta, total: rules.length, scoreableAttributes: SCOREABLE_LEAD_ATTRIBUTES },
+    });
   });
+
+  // GAP-CRM-LEAD-SCORING-04: score the tenant's leads with the PROPOSED rules and report
+  // the resulting distribution against the stored scores. Nothing is persisted.
+  app.post(
+    "/v1/crm/lead-score-rules/preview",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, ADMIN_ROLES);
+      const body = previewScoreRulesBody.parse(req.body);
+      const data = await repo.previewRules(
+        ctx.tenantId,
+        body.rules.map((r) => ({
+          attribute: r.attribute,
+          weight: r.weight,
+          scoreFnType: r.scoreFnType,
+          params: r.params,
+          enabled: r.enabled,
+        })),
+      );
+      return reply.send({ data });
+    },
+  );
 
   app.put("/v1/crm/lead-score-rules", async (req, reply) => {
     const ctx = resolveContext(req);
