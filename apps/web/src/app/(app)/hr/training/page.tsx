@@ -5,6 +5,7 @@ import { getTrainingPrograms } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { UpcomingPrograms } from "./_components/UpcomingPrograms";
 import { ProgramCard } from "./_components/ProgramCard";
+import { PendingProgramNotice } from "./_components/PendingProgramNotice";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
@@ -16,11 +17,30 @@ import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
  */
 const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
-export default async function TrainingPage() {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export default async function TrainingPage({
+  searchParams,
+}: {
+  searchParams?: { created?: string | string[] };
+}) {
   const t = await getTranslations("training");
   const { data: programs, source } = await getTrainingPrograms();
   const roles = getSessionRoles();
   const canCreate = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
+
+  // GAP-HR-TRAINING-NEW-01: the new-programme form links here with
+  // ?created=<id> when its bounded confirmation poll ran out before the
+  // consumer had inserted the row. While that id is still absent from the
+  // list, say so (a pending notice with a real Refresh) instead of showing a
+  // list that silently looks like the create was lost. Anything that is not
+  // a UUID is ignored.
+  const createdParam = Array.isArray(searchParams?.created) ? searchParams?.created[0] : searchParams?.created;
+  const awaitingCreated =
+    source !== "error" &&
+    typeof createdParam === "string" &&
+    UUID_RE.test(createdParam) &&
+    !programs.some((p) => p.id === createdParam);
 
   const total = programs.length;
   const upcoming = programs.filter((p) => p.status === "upcoming").length;
@@ -53,6 +73,7 @@ export default async function TrainingPage() {
         }
       />
       <DataSourceBadge source={source} />
+      {awaitingCreated && <PendingProgramNotice />}
 
       {source === "error" ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
