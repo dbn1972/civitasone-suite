@@ -81,7 +81,30 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const body = createAdvanceBody.parse(req.body);
+    const parsed = createAdvanceBody.parse(req.body);
+    // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: a payee picked from a master list arrives with its id. An "other"
+    // payee has no master record, so it cannot carry one. A vendor id must be an active vendor of THIS tenant, and the
+    // register then shows the vendor's master name rather than whatever display text the client sent. An employee id is
+    // an opaque reference into another service (nothing here can check it, and nothing is trusted from it but the id).
+    let payee = parsed.payee;
+    if (parsed.payeeId) {
+      if (parsed.type === "other") {
+        throw new HttpError(400, "ADVANCE_PAYEE_ID_NOT_ALLOWED", "an advance to another payee has no master record, so it cannot carry a payee id", [
+          { field: "payeeId", message: "A payee of type Other is typed, not picked from a list." },
+        ]);
+      }
+      if (parsed.type === "vendor") {
+        const vendor = await mastersRepo.getVendorById(ctx.tenantId, parsed.payeeId);
+        if (!vendor) {
+          throw new HttpError(404, "VENDOR_NOT_FOUND", "vendor not found", [{ field: "payeeId", message: "This vendor was not found. Pick a vendor from the list." }]);
+        }
+        if (!vendor.isActive) {
+          throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated", [{ field: "payeeId", message: "This vendor is deactivated. Pick an active vendor." }]);
+        }
+        payee = vendor.name;
+      }
+    }
+    const body = { ...parsed, payee };
     // Advance numbers are typed by hand and (tenant_id, advance_no) is UNIQUE:
     // without this pre-check a duplicate got a 202 and then failed silently in
     // the async consumer. The unique index stays the authority for a true race

@@ -54,7 +54,7 @@ describe("fp-finance-02 loaders", () => {
     // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04: the ledger-wide totals ride along; an older server omits them (null, never zero)
     expect(r.data.ledgerTotals?.entryLines).toBe(90);
     const older = last().options.mapResponse({ data: [entry], pagination: { limit: 25, offset: 0, total: 1, hasMore: false }, totals: { entryLines: 1, vouchers: 1, accountsActive: 1, debitMinor: "1", creditMinor: "1" } });
-    expect(older.ledgerTotals).toBeNull();
+    expect((older as { ledgerTotals: unknown }).ledgerTotals).toBeNull();
     // a payload that is not the expected shape is an error state, not an empty ledger
     expect(last().options.mapResponse({ data: "x" })).toBeNull();
     expect(last().options.mapResponse({ data: [{ nope: 1 }], pagination: {} })).toBeNull();

@@ -67,11 +67,9 @@ export function budgetTabOf(status: string): BudgetStatus | typeof BUDGET_TAB_OT
  */
 export function budgetTabsFor(rows: ReadonlyArray<{ status: string }>): BudgetTab[] {
   const present = new Set(rows.map((r) => budgetTabOf(r.status)));
-  return [
-    BUDGET_TAB_ALL,
-    ...BUDGET_STATUSES.filter((s) => present.has(s)),
-    ...(present.has(BUDGET_TAB_OTHER) ? [BUDGET_TAB_OTHER] : []),
-  ];
+  const tabs: BudgetTab[] = [BUDGET_TAB_ALL, ...BUDGET_STATUSES.filter((s) => present.has(s))];
+  if (present.has(BUDGET_TAB_OTHER)) tabs.push(BUDGET_TAB_OTHER);
+  return tabs;
 }
 
 /** A `?tab=` value from the URL, or null when it is not a tab this page knows (a stale or hand-typed link). */

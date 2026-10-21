@@ -9,11 +9,18 @@
  * convention) and rejects a raw JSON number, since a number can silently
  * lose precision above 2^53 before Zod ever sees it. The form is a real
  * action with validation + accessible error reporting (not a dead control).
+ *
+ * GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: the payee is PICKED, not typed. An officer advance picks the employee from
+ * the payroll employee lookup (open to finance_officer; id / code / name / department only, no PAN, bank or contact
+ * data) and a vendor advance picks an active vendor from the finance vendor master; the picked record's id is sent as
+ * `payeeId` and stored with the advance. Only an "other" party (neither an officer nor a registered vendor) is typed.
  */
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Alert, Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
+import { Alert, Button, ConfirmDialog, EntityPicker, Field, Input, PageHeader } from "../../../../../_components/ds";
+import { EmployeePicker } from "../../../../../_components/EmployeePicker";
+import { searchFinanceVendors, resolveFinanceVendors } from "@/lib/entityAdapters/financeVendor";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -23,7 +30,21 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 export default function NewAdvancePage() {
   const t = useTranslations("expenditureAdvancesNew");
   const router = useRouter();
+  // `payee` is the display name sent with the advance: the picked record's label for an officer / vendor advance (with
+  // `payeeId` set), or the typed name for an "other" party (no id).
   const [form, setForm] = useState({ advanceNo: "", purpose: "", payee: "", type: "employee", amount: "", dueDate: "", sanctionAuthority: "" });
+  const [payeeId, setPayeeId] = useState<string | null>(null);
+  const picksPayee = form.type !== "other";
+  // id -> name of every vendor the picker has shown, so choosing one can set the display name sent with the advance.
+  const vendorLabels = useRef(new Map<string, string>());
+  const searchVendors = useCallback(
+    (q: string, signal: AbortSignal) =>
+      searchFinanceVendors(q, signal, { strict: true }).then((opts) => {
+        for (const o of opts) vendorLabels.current.set(o.id, o.label);
+        return opts;
+      }),
+    [],
+  );
   const [payeeError, setPayeeError] = useState("");
   const [authorityError, setAuthorityError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,9 +65,10 @@ export default function NewAdvancePage() {
     setIsError(false);
     formError.clear();
     // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: an advance is issued TO someone;
-    // the register's primary identifier is the payee, so it is not optional.
-    if (!form.payee.trim()) {
-      setPayeeError(t("errorPayee"));
+    // the register's primary identifier is the payee, so it is not optional. An officer / vendor advance needs a
+    // picked record (its id is what is stored); only an "other" party is typed.
+    if (picksPayee ? !payeeId || !form.payee.trim() : !form.payee.trim()) {
+      setPayeeError(picksPayee ? t("errorPayeePick") : t("errorPayee"));
       return;
     }
     setPayeeError("");
@@ -80,6 +102,7 @@ export default function NewAdvancePage() {
           advanceNo: form.advanceNo.trim(),
           purpose: form.purpose,
           payee: form.payee.trim(),
+          ...(picksPayee && payeeId ? { payeeId } : {}),
           // The API's `type` enum (employee | vendor | other) was never sent,
           // so every advance was silently recorded as "employee"
           // (GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-06).
@@ -134,13 +157,52 @@ export default function NewAdvancePage() {
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="adv-payee">{t("labelPayee")}</label>
-              <input id="adv-payee" required aria-required="true" maxLength={200} aria-invalid={payeeError ? true : undefined} aria-describedby="adv-payee-help" value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} style={inputStyle} />
-              <span id="adv-payee-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpPayee")}</span>
-              {payeeError && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{payeeError}</span>}
-              {formError.fieldError("payee") && (
-                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("payee")}</span>
+              <label className="l" htmlFor="adv-type">{t("labelType")}</label>
+              <select id="adv-type" value={form.type} onChange={(e) => { setForm({ ...form, type: e.target.value, payee: "" }); setPayeeId(null); setPayeeError(""); }} style={inputStyle}>
+                <option value="employee">{t("typeEmployee")}</option>
+                <option value="vendor">{t("typeVendor")}</option>
+                <option value="other">{t("typeOther")}</option>
+              </select>
+              {formError.fieldError("type") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("type")}</span>
               )}
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <Field
+                label={t("labelPayee")}
+                required
+                error={payeeError || formError.fieldError("payee") || formError.fieldError("payeeId") || undefined}
+              >
+                {form.type === "employee" ? (
+                  <EmployeePicker
+                    directory="payroll"
+                    clearable
+                    value={payeeId}
+                    onChange={(id, option) => { setPayeeId(id); setForm({ ...form, payee: option?.label ?? "" }); setPayeeError(""); }}
+                    aria-describedby="adv-payee-help"
+                  />
+                ) : form.type === "vendor" ? (
+                  <EntityPicker
+                    value={payeeId}
+                    onChange={(v) => {
+                      const next = (Array.isArray(v) ? v[0] : v) ?? null;
+                      setPayeeId(next);
+                      setForm({ ...form, payee: next ? vendorLabels.current.get(next) ?? "" : "" });
+                      setPayeeError("");
+                    }}
+                    search={searchVendors}
+                    resolve={resolveFinanceVendors}
+                    placeholder={t("placeholderVendor")}
+                    searchingText={t("vendorSearching")}
+                    noResultsText={t("vendorNoResults")}
+                    searchErrorText={t("vendorSearchFailed")}
+                    aria-describedby="adv-payee-help"
+                  />
+                ) : (
+                  <Input maxLength={200} value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} aria-describedby="adv-payee-help" />
+                )}
+              </Field>
+              <span id="adv-payee-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{picksPayee ? t("helpPayeePick") : t("helpPayeeOther")}</span>
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-authority">{t("labelAuthority")}</label>
@@ -149,17 +211,6 @@ export default function NewAdvancePage() {
               {authorityError && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{authorityError}</span>}
               {formError.fieldError("sanctionAuthority") && (
                 <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("sanctionAuthority")}</span>
-              )}
-            </div>
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="adv-type">{t("labelType")}</label>
-              <select id="adv-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
-                <option value="employee">{t("typeEmployee")}</option>
-                <option value="vendor">{t("typeVendor")}</option>
-                <option value="other">{t("typeOther")}</option>
-              </select>
-              {formError.fieldError("type") && (
-                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("type")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>

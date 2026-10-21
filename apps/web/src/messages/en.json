@@ -3185,7 +3185,14 @@
     "labelAuthority": "Sanctioning authority",
     "helpAuthority": "The officer or order that sanctioned this advance, e.g. \"Under Secretary (Finance), order 12/2031\".",
     "errorAuthority": "Name the sanctioning authority.",
-    "reasonLabel": "Reason for this advance"
+    "reasonLabel": "Reason for this advance",
+    "errorPayeePick": "Pick the officer or vendor from the list.",
+    "helpPayeePick": "Search and pick the payee: the record's id is saved with the advance, so the payee is identified without retyping a name. The name and id are used only to issue and recover this advance; individual officers' names are masked for roles not authorised to see them.",
+    "helpPayeeOther": "Type the name of the party receiving the advance. A party that is not an officer or a registered vendor has no record to pick.",
+    "placeholderVendor": "Type a vendor name…",
+    "vendorSearching": "Searching…",
+    "vendorNoResults": "No matching active vendors",
+    "vendorSearchFailed": "Could not load vendors. Check your connection and try again."
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
