@@ -24,6 +24,17 @@ import { getTranslations } from "next-intl/server";
  *
  * GAP2-PAYROLL-TAX-CONFIG-02: amounts are formatted via formatRupees and the
  * card grid collapses to one column on phones (grid-cols-auto, see below).
+ *
+ * GAP-PAYROLL-TAX-CONFIG-03: the surcharge card shows BOTH regimes' bands side by
+ * side (it used to render only the new regime's, which dropped the old regime's
+ * top band), plus the engine's own behaviour as notes: the highest rate configured
+ * for the new regime (its cap) and marginal relief at every threshold
+ * (tax/engine.ts computeTax). Every rate shown is read from the fetched config.
+ * [HUMAN REVIEW: the wording of these two notes needs tax-owner sign-off.]
+ *
+ * GAP-PAYROLL-TAX-CONFIG-04: this screen is a READ-ONLY reference (no form, no
+ * mutation, no endpoint to change a slab), so it is named a reference and says so;
+ * nothing on it or on the HR hub tile reads as an editable configuration.
  */
 
 type Slab = { from: number; to: number | null; ratePct: number };
@@ -56,6 +67,21 @@ function slabLabel(s: Slab, t: (k: string, v?: Record<string, string>) => string
   if (s.to == null) return t("slabAbove", { from: formatRupees(s.from) });
   // Lower bound of a mid-slab is one rupee above the previous slab's top.
   return `${formatRupees(s.from + (s.from > 0 ? 1 : 0))} – ${formatRupees(s.to)}`;
+}
+
+/**
+ * GAP-PAYROLL-TAX-CONFIG-03: the surcharge rate (%) that applies to income above
+ * `threshold` under a regime's configured bands (the engine takes the highest band
+ * whose threshold the income exceeds; below the first band it is nil). null = the
+ * regime has no configuration for this FY, so there is nothing to show.
+ */
+function surchargeRateAbove(bands: SurchargeBand[] | undefined, threshold: number): number | null {
+  if (!bands) return null;
+  let rate = 0;
+  for (const b of [...bands].sort((x, y) => x.above - y.above)) {
+    if (b.above <= threshold) rate = b.ratePct;
+  }
+  return rate;
 }
 
 function RegimeTable({ cfg, title, note, t }: {
@@ -105,7 +131,14 @@ export default async function TaxConfigPage({ searchParams }: { searchParams?: {
   const errored = source === "error";
   const newRegime = data?.new ?? null;
   const oldRegime = data?.old ?? null;
-  const surcharge = (newRegime ?? oldRegime)?.surchargeBands ?? [];
+  // GAP-PAYROLL-TAX-CONFIG-03: one row per distinct threshold across both regimes.
+  const surchargeThresholds = Array.from(
+    new Set([...(newRegime?.surchargeBands ?? []), ...(oldRegime?.surchargeBands ?? [])].map((b) => b.above)),
+  ).sort((a, b) => a - b);
+  const newRegimeTopSurcharge = newRegime && newRegime.surchargeBands.length > 0
+    ? Math.max(...newRegime.surchargeBands.map((b) => b.ratePct))
+    : null;
+  const rateCell = (rate: number | null) => (rate === null ? "—" : `${rate}%`);
 
   return (
     <div className="page-main wrap">
@@ -148,29 +181,36 @@ export default async function TaxConfigPage({ searchParams }: { searchParams?: {
             <RegimeTable cfg={oldRegime} title={t("cardOldRegime", { fy })} note={t("oldRegimeIntro")} t={t} />
 
             <Card title={t("cardSurchargeCess")} padding>
-              {surcharge.length === 0 ? (
+              {surchargeThresholds.length === 0 ? (
                 <p style={{ fontSize: 13, color: "var(--mut)" }}>{t("regimeNotConfigured")}</p>
               ) : (
                 <div style={{ overflowX: "auto" }}>
                   <table className="tbl" style={{ fontSize: 13 }}>
-                    <thead><tr><th>{t("thIncome")}</th><th>{t("thSurcharge")}</th></tr></thead>
+                    <thead><tr><th>{t("thIncome")}</th><th>{t("thNewRegime")}</th><th>{t("thOldRegime")}</th></tr></thead>
                     <tbody>
-                      {surcharge.map((b, i) => (
-                        <tr key={`${b.above}-${i}`}>
-                          <td>{t("surchargeAbove", { amount: formatRupees(b.above) })}</td>
-                          <td>{b.ratePct}%</td>
+                      {surchargeThresholds.map((above) => (
+                        <tr key={above}>
+                          <td>{t("surchargeAbove", { amount: formatRupees(above) })}</td>
+                          <td>{rateCell(surchargeRateAbove(newRegime?.surchargeBands, above))}</td>
+                          <td>{rateCell(surchargeRateAbove(oldRegime?.surchargeBands, above))}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+              {newRegimeTopSurcharge !== null && (
+                <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("surchargeCapNote", { rate: String(newRegimeTopSurcharge) })}</p>
+              )}
+              {surchargeThresholds.length > 0 && (
+                <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("marginalReliefNote")}</p>
+              )}
               <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("cessNote")}</p>
             </Card>
           </div>
 
           <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
-            {t("footerNote")}{" "}
+            {t("footerNote")} {t("readOnlyNote")}{" "}
             <Link href="/hr/payroll/income-tax">{t("footerLink")}</Link>
           </p>
         </>

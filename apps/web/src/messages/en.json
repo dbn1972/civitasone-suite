@@ -3988,8 +3988,8 @@
     "incomeTaxDesc": "Monthly TDS computation and history",
     "tdsReturns": "TDS Returns",
     "tdsReturnsDesc": "Form 24Q / 26Q quarterly e-TDS",
-    "taxConfig": "Tax Config",
-    "taxConfigDesc": "TDS slabs and deduction limits",
+    "taxConfig": "Tax Reference",
+    "taxConfigDesc": "Read-only TDS slabs and deduction limits",
     "salaryRevisions": "Salary Revisions",
     "salaryRevisionsDesc": "Increment and revision records",
     "salaryCorrections": "Salary Corrections",
@@ -5233,8 +5233,8 @@
     "recoveryColClosing": "Closing"
   },
   "payrollTaxConfig": {
-    "title": "Income Tax Configuration",
-    "subtitle": "The income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine actually applies, for the selected financial year.",
+    "title": "Income Tax Reference",
+    "subtitle": "A read-only view of the income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine applies for the selected financial year.",
     "backLabel": "Payroll",
     "fyCardTitle": "Financial Year",
     "fyLabel": "Financial year",
@@ -5259,8 +5259,13 @@
     "footerNote": "These figures are read live from the payroll engine's per-tenant, per-FY configuration — they are what a run for this financial year applies.",
     "footerLink": "View the income-tax rollup",
     "loadErrorMessage": "Couldn't load the tax configuration — showing nothing",
-    "loadingTitle": "Tax Configuration",
-    "loadingSubtitle": "Tax rules and slab setup."
+    "loadingTitle": "Tax Reference",
+    "loadingSubtitle": "Tax slabs and limits the payroll engine applies.",
+    "thNewRegime": "New regime",
+    "thOldRegime": "Old regime",
+    "surchargeCapNote": "New regime: the highest surcharge rate configured is {rate}%, so surcharge under the new regime never exceeds that rate.",
+    "marginalReliefNote": "Marginal relief applies at every surcharge threshold: tax plus surcharge never exceeds the tax at the threshold plus the income above it.",
+    "readOnlyNote": "This page is a read-only reference and does not change any rate or limit."
   },
   "pensioners": {
     "ppoMaskedNote": "PPO numbers are shown masked. Open a record to see its details; payroll officers can reveal the full number there (the reveal is audited).",
