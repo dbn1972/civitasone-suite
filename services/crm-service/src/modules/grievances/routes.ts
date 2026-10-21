@@ -67,7 +67,19 @@ const listParams = listQuery.extend({
   category: z.string().max(64).optional(),
   assignedTo: z.string().uuid().optional(),
   search: z.string().max(200).optional(),
+  // GAP-CRM-GRIEVANCES-NEW-01: the create form warns when the contact a clerk is
+  // linking already has an open grievance. `contactId` narrows to that contact and
+  // `open=true` keeps only grievances not yet DISPOSED (the same definition the
+  // /stats openCount uses). Both are additive filters; absent => unchanged list.
+  contactId: z.string().uuid().optional(),
+  open: z.enum(["true"]).optional(),
 });
+
+// GAP-CRM-GRIEVANCES-DETAIL-05: `pii=masked` asks the detail read to mask citizen
+// phone/email even for a PII-read role, so a page that offers the audited reveal
+// (POST /v1/crm/pii/reveal) never receives, nor ships to the browser, the clear
+// value up front. Absent => unchanged (privileged roles get the clear value).
+const detailQuery = z.object({ pii: z.enum(["masked"]).optional() });
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -129,6 +141,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const priorityF = q.priority   ? sql`AND g.priority  = ${q.priority}`             : sql``;
     const categoryF = q.category   ? sql`AND g.category  = ${q.category}`             : sql``;
     const assignedF = q.assignedTo ? sql`AND g.assigned_to = ${q.assignedTo}::uuid`   : sql``;
+    const contactF  = q.contactId  ? sql`AND g.contact_id  = ${q.contactId}::uuid`    : sql``;
+    const openF     = q.open       ? sql`AND g.status <> 'DISPOSED'`                  : sql``;
     const searchF   = q.search
       ? sql`AND (g.citizen_name ILIKE ${"%" + q.search + "%"}
                  OR g.subject   ILIKE ${"%" + q.search + "%"}
@@ -145,7 +159,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
              g.created_at AS "createdAt", g.updated_at AS "updatedAt", g.version
       FROM crm.grievances g
       WHERE g.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${contactF} ${openF} ${searchF}
       ORDER BY
         CASE g.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
         g.created_at DESC
@@ -155,7 +169,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const [ct] = (await scopedRead((tx) => tx.execute(sql`
       SELECT COUNT(*)::int AS total FROM crm.grievances g
       WHERE g.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${contactF} ${openF} ${searchF}
     `))) as unknown as Array<{ total: number }>;
 
     return reply.send(listEnvelope(maskList("grievance", rows, ctx.roles), w, ct?.total ?? 0));
@@ -190,6 +204,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    const { pii } = detailQuery.parse(req.query ?? {});
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT g.id, g.reference_no AS "referenceNo", g.citizen_name AS "citizenName",
@@ -209,7 +224,9 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "grievance not found");
-    return reply.send({ data: maskRecord("grievance", rows[0]!, ctx.roles) });
+    // `pii=masked` masks as if the caller held no PII-read role; the clear value is then
+    // only reachable through the audited reveal endpoint.
+    return reply.send({ data: maskRecord("grievance", rows[0]!, pii === "masked" ? [] : ctx.roles) });
   });
 
   // PATCH /v1/crm/grievances/:id/assign
