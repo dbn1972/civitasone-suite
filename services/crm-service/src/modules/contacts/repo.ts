@@ -591,6 +591,27 @@ export async function accountExistsTx(tx: Writer, tenantId: string, accountId: s
   return rows.length > 0;
 }
 
+/**
+ * The audit outcome for a consumer that refused an account link because {@link accountExistsTx}
+ * said no. Two different facts hide behind that one "no", and whoever reads the trail needs the
+ * right one:
+ *  - `rejected_inactive_account`: the account belongs to THIS tenant but is no longer live (merged
+ *    away or soft-deleted), so the link was refused for a reason the caller could act on;
+ *  - `rejected_cross_tenant_account`: there is no such account in this tenant at all (an unknown id,
+ *    or another tenant's account, which row-level security hides, so the two look alike).
+ * The explicit tenant filter keeps the answer tenant-scoped even outside a tenant GUC.
+ */
+export async function rejectedAccountOutcomeTx(
+  tx: Writer,
+  tenantId: string,
+  accountId: string,
+): Promise<"rejected_inactive_account" | "rejected_cross_tenant_account"> {
+  const rows = await tx.select({ one: sql`1` }).from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .limit(1);
+  return rows.length > 0 ? "rejected_inactive_account" : "rejected_cross_tenant_account";
+}
+
 /** Tenant-scoped existence check for a contact (cross-tenant FK guard). */
 export async function contactExists(tenantId: string, contactId: string): Promise<boolean> {
   const rows = await scopedRead((tx) => tx.select({ one: sql`1` }).from(contacts)

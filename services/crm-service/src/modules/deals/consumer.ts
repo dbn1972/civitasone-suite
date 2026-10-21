@@ -25,7 +25,7 @@ export function registerDealConsumers(queue: Queue): void {
         return;
       }
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "create", p.id, await contactRepo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       await repo.insert(tx, {
@@ -89,7 +89,7 @@ export function registerDealConsumers(queue: Queue): void {
         return;
       }
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "update", p.id, await contactRepo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       const fields: repo.DealPatch = {};

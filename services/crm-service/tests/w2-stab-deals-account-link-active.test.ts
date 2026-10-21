@@ -90,6 +90,15 @@ async function createDealVia(payload: Record<string, unknown>): Promise<string> 
   await drainQueue();
   return res.json().id as string;
 }
+/** The audit outcomes recorded for one deal, oldest first (the consumer audits every refused command). */
+async function auditOutcomes(dealId: string): Promise<Array<{ action: string; outcome: string }>> {
+  const rows = await scoped((tx) => tx<Array<{ payload: { action: string; outcome: string } }>>`
+    SELECT payload FROM _outbox.messages
+    WHERE tenant_id = ${TENANT} AND event_type = 'audit.event.record'
+      AND payload->>'resourceType' = 'deal' AND payload->>'resourceId' = ${dealId}
+    ORDER BY created_at ASC`);
+  return rows.map((r) => ({ action: r.payload.action, outcome: r.payload.outcome }));
+}
 async function cleanup(): Promise<void> {
   await scoped((tx) => tx`DELETE FROM crm.deals WHERE tenant_id = ${TENANT}`);
   await scoped((tx) => tx`DELETE FROM crm.pipelines WHERE tenant_id = ${TENANT}`);
@@ -181,6 +190,8 @@ describe("a deal can be linked only to a live (active) account", () => {
       ),
     );
     expect(await dealRow(newId)).toBeUndefined();
+    // an account of THIS tenant that is no longer live is audited as exactly that, not as a cross-tenant link
+    expect(await auditOutcomes(newId)).toEqual([{ action: "create", outcome: "rejected_inactive_account" }]);
 
     await runWithTenant(TENANT, () =>
       handlerFor(COMMANDS.updateDeal)(
@@ -188,6 +199,24 @@ describe("a deal can be linked only to a live (active) account", () => {
       ),
     );
     expect((await dealRow(dealId))?.accountId).toBeNull();
+    expect((await auditOutcomes(dealId)).filter((a) => a.action === "update")).toEqual([
+      { action: "update", outcome: "rejected_inactive_account" },
+    ]);
+  });
+
+  it("the consumer audits an account that is not in this tenant at all as rejected_cross_tenant_account", async () => {
+    const { handlerFor } = captureHandlers();
+    const newId = randomUUID();
+    await runWithTenant(TENANT, () =>
+      handlerFor(COMMANDS.createDeal)(
+        envelope(COMMANDS.createDeal, {
+          id: newId, tenantId: TENANT, name: "Stab unknown account", stage: "Lead", valueMinor: "0", currency: "INR",
+          status: "active", probability: 0, accountId: randomUUID(),
+        }, { tenantId: TENANT, actorId: ACTOR }),
+      ),
+    );
+    expect(await dealRow(newId)).toBeUndefined();
+    expect(await auditOutcomes(newId)).toEqual([{ action: "create", outcome: "rejected_cross_tenant_account" }]);
   });
 });
 

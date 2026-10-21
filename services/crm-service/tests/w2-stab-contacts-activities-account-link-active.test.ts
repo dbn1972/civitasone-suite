@@ -93,6 +93,16 @@ async function activityCountByText(text: string): Promise<number> {
   return rows[0]?.n ?? 0;
 }
 
+/** The audit outcomes recorded for one row, oldest first (a refused command is audited, never silently dropped). */
+async function auditOutcomes(resourceType: "contact" | "activity", id: string): Promise<Array<{ action: string; outcome: string }>> {
+  const rows = await scoped((tx) => tx<Array<{ payload: { action: string; outcome: string } }>>`
+    SELECT payload FROM _outbox.messages
+    WHERE tenant_id = ${TENANT} AND event_type = 'audit.event.record'
+      AND payload->>'resourceType' = ${resourceType} AND payload->>'resourceId' = ${id}
+    ORDER BY created_at ASC`);
+  return rows.map((r) => ({ action: r.payload.action, outcome: r.payload.outcome }));
+}
+
 async function cleanup(): Promise<void> {
   await scoped((tx) => tx`DELETE FROM crm.activities WHERE tenant_id = ${TENANT}`.catch(() => {}));
   await scoped((tx) => tx`DELETE FROM crm.contacts WHERE tenant_id = ${TENANT}`.catch(() => {}));
@@ -134,6 +144,8 @@ describe("a contact can be linked only to a live (active) account", () => {
     await drainQueue();
     expect(await contactCountByName("Stab contact to merged")).toBe(0);
     expect(await contactRow(refused.json().id as string)).toBeUndefined();
+    // the merged-away account is a same-tenant account that is no longer live: audited as such, not as cross-tenant
+    expect(await auditOutcomes("contact", refused.json().id as string)).toEqual([{ action: "create", outcome: "rejected_inactive_account" }]);
 
     const ok = await createContactVia({ name: "Stab contact to survivor", accountId: primaryId });
     expect((await contactRow(ok))?.accountId).toBe(primaryId);
@@ -148,6 +160,9 @@ describe("a contact can be linked only to a live (active) account", () => {
     expect(patch.statusCode).toBe(202);
     await drainQueue();
     expect(await contactRow(contactId)).toMatchObject({ accountId: null, city: "Delhi" });
+    expect((await auditOutcomes("contact", contactId)).filter((a) => a.action === "update")).toEqual([
+      { action: "update", outcome: "rejected_inactive_account" },
+    ]);
 
     // reactivated: linkable again (the check follows the account's live status; nothing is cached)
     await setAccountStatus(accountId, "active");
@@ -170,6 +185,30 @@ describe("a contact can be linked only to a live (active) account", () => {
   });
 });
 
+describe("an account that is not in this tenant at all is still audited as rejected_cross_tenant_account", () => {
+  it("contact create / update and activity create against an unknown account id", async () => {
+    const unknown = randomUUID();
+
+    const created = await app.inject({ method: "POST", url: "/v1/crm/contacts", headers: auth(), payload: { name: "Stab contact unknown account", accountId: unknown } });
+    expect(created.statusCode).toBe(202);
+    const contactId = await createContactVia({ name: "Stab contact for unknown patch" });
+    const patched = await app.inject({ method: "PATCH", url: `/v1/crm/contacts/${contactId}`, headers: auth(), payload: { accountId: unknown } });
+    expect(patched.statusCode).toBe(202);
+    const note = await app.inject({
+      method: "POST", url: "/v1/crm/activities", headers: auth(),
+      payload: { text: "Stab note unknown account", type: "note", accountId: unknown },
+    });
+    expect(note.statusCode).toBe(202);
+    await drainQueue();
+
+    expect(await auditOutcomes("contact", created.json().id as string)).toEqual([{ action: "create", outcome: "rejected_cross_tenant_account" }]);
+    expect((await auditOutcomes("contact", contactId)).filter((a) => a.action === "update")).toEqual([
+      { action: "update", outcome: "rejected_cross_tenant_account" },
+    ]);
+    expect(await auditOutcomes("activity", note.json().id as string)).toEqual([{ action: "create", outcome: "rejected_cross_tenant_account" }]);
+  });
+});
+
 describe("an activity can be logged against a live (active) account only", () => {
   it("create: an account merged away is refused (no activity row), the surviving account takes it", async () => {
     const { primaryId, duplicateId } = await mergeAway();
@@ -182,6 +221,7 @@ describe("an activity can be logged against a live (active) account only", () =>
     await drainQueue();
     expect(await activityCountByText("Stab note on merged account")).toBe(0);
     expect(await activityAccount(refused.json().id as string)).toBeUndefined();
+    expect(await auditOutcomes("activity", refused.json().id as string)).toEqual([{ action: "create", outcome: "rejected_inactive_account" }]);
 
     const ok = await app.inject({
       method: "POST", url: "/v1/crm/activities", headers: auth(),
@@ -202,6 +242,7 @@ describe("an activity can be logged against a live (active) account only", () =>
     expect(refused.statusCode).toBe(202);
     await drainQueue();
     expect(await activityCountByText("Stab note on inactive account")).toBe(0);
+    expect(await auditOutcomes("activity", refused.json().id as string)).toEqual([{ action: "create", outcome: "rejected_inactive_account" }]);
 
     await setAccountStatus(accountId, "active");
     const ok = await app.inject({

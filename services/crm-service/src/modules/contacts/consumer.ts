@@ -27,7 +27,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       const p = msg.payload;
       // P0-1 cross-tenant FK guard: a referenced account must live in this tenant.
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "create", p.id, await repo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       // LM-006: allocate gapless lead reference number inside the same transaction.
@@ -61,7 +61,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P0-1 cross-tenant FK guard: a (re)assigned account must live in this tenant.
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "update", p.id, await repo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       const patch: Parameters<typeof repo.update>[3] = {};

@@ -27,7 +27,7 @@ export function registerActivityConsumers(queue: Queue): void {
         return;
       }
       if (p.accountId && !(await contactRepo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "create", p.id, await contactRepo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       await repo.insert(tx, {
