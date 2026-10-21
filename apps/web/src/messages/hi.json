@@ -3582,8 +3582,11 @@
     "completedLabel": " · पूर्ण {date}",
     "downloadLinkLabel": "डाउनलोड लिंक प्राप्त करें",
     "failureDetailsSummary": "विफलता विवरण ({count})",
-    "failureRow": "{employeeId}: {message}",
-    "failureDetailsUnavailable": "विफलता विवरण एक अपरिचित प्रारूप में हैं और यहां नहीं दिखाए जा सकते; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।"
+    "failureRow": "{employee}: {message}",
+    "failureDetailsUnavailable": "विफलता विवरण एक अपरिचित प्रारूप में हैं और यहां नहीं दिखाए जा सकते; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।",
+    "failureReasonUnknown": "कोई कारण दर्ज नहीं",
+    "failureRunLevel": "पूरा रन",
+    "failureEmployeeUnknown": "एक कर्मचारी"
   },
   "form16Wizard": {
     "stepAriaLabel": "फॉर्म 16 विज़ार्ड चरण",
@@ -5107,7 +5110,13 @@
     "statEmployeesPaid": "भुगतान किए गए कर्मचारी",
     "statTotalGross": "कुल सकल वेतन",
     "statPending": "लंबित",
-    "runsCardTitle": "वेतन रन"
+    "runsCardTitle": "वेतन रन",
+    "statPaid": "भुगतान किया गया",
+    "statInProgress": "प्रक्रियाधीन",
+    "statAwaitingDisbursement": "वितरण की प्रतीक्षा में",
+    "statFailed": "विफल",
+    "statEmployeesPaidPeriod": "भुगतान किए गए कर्मचारी ({period})",
+    "statTotalGrossPeriod": "कुल सकल वेतन ({period})"
   },
   "payrollLoans": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5264,7 +5273,8 @@
     "salarySlipsTitle": "वेतन पर्चियां ({count})",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "exceptionSalaryCalcFailed": "इस कर्मचारी की वेतन गणना विफल रही। कारण देखने के लिए उनका रिकॉर्ड खोलें।",
-    "viewRegisterLink": "विभागीय रजिस्टर देखें"
+    "viewRegisterLink": "विभागीय रजिस्टर देखें",
+    "backLabel": "वेतन रन"
   },
   "payrollRunActions": {
     "disburseChannelDefault": "वित्त EFT / PFMS ब्रिज",
@@ -5290,7 +5300,13 @@
     "revertConfirmTitle": "क्या यह रन ड्राफ्ट में वापस लाया जाए?",
     "revertReasonLabel": "वापस लाने का कारण",
     "revertConfirmLabel": "ड्राफ्ट में वापस लाएं",
-    "revertDescription": "<strong>{period}</strong> के लिए वेतन रन को ड्राफ्ट स्थिति में वापस लाया जाएगा ताकि इसे ठीक करके पुनः प्रोसेस किया जा सके। अभी तक कोई धनराशि वितरित नहीं की गई है।"
+    "revertDescription": "<strong>{period}</strong> के लिए वेतन रन को ड्राफ्ट स्थिति में वापस लाया जाएगा ताकि इसे ठीक करके पुनः प्रोसेस किया जा सके। अभी तक कोई धनराशि वितरित नहीं की गई है।",
+    "makerCheckerApproveHint": "आपने यह रन बनाया है, इसलिए इसे कोई अन्य स्वीकृतकर्ता ही स्वीकृत कर सकता है (मेकर-चेकर)।",
+    "makerCheckerDisburseHint": "आपने यह रन स्वीकृत किया है, इसलिए इसे कोई अन्य अधिकारी ही वितरित कर सकता है (मेकर-चेकर)।"
+  },
+  "payrollCommon": {
+    "backToPayroll": "पेरोल पर वापस जाएं",
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# वेतन अपवाद पर ध्यान देने की आवश्यकता है} other {# वेतन अपवादों पर ध्यान देने की आवश्यकता है}}",
@@ -9417,7 +9433,7 @@
   "fnfSettlementActions": {
     "submitBtn": "स्वीकृति हेतु सबमिट करें",
     "approveBtn": "वित्त स्वीकृति",
-    "disburseBtn": "वितरित चिह्नित करें",
+    "disburseBtn": "भुगतान दर्ज करें",
     "rejectBtn": "अस्वीकार करें",
     "cancelBtn": "रद्द करें",
     "submitAriaLabel": "{name} का निपटान वित्त स्वीकृति हेतु सबमिट करें",
@@ -9448,7 +9464,9 @@
     "selfApprovalError": "यह निपटान आपने परिकलित या सबमिट किया है, इसलिए आप इसे स्वीकृत या अस्वीकार नहीं कर सकते।",
     "selfDisbursalError": "यह निपटान आपने परिकलित, सबमिट या स्वीकृत किया है, इसलिए आप इसका भुगतान दर्ज या अस्वीकार नहीं कर सकते।",
     "forbiddenError": "आपकी भूमिका इस चरण की अनुमति नहीं देती।",
-    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।"
+    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
+    "paymentReasonLabel": "इस भुगतान को दर्ज करने का कारण",
+    "paymentReasonShort": "कम से कम {min} अक्षर दर्ज करें।"
   },
   "financeBillForm": {
     "pageTitle": "नया बिल",

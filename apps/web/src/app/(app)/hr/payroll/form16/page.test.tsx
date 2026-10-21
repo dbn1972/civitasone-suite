@@ -112,16 +112,75 @@ describe("Form16Page", () => {
           jobId: "job-2", fy: "2025-26", status: "completed",
           totalEmployees: 2, generated: 1, failed: 1,
           storagePrefix: "form16/2025-26",
-          errorDetails: [{ employeeId: "e9", message: "No PAN on file" }],
+          // The shape payroll-service form16-pdf/bulk-consumer.ts really writes.
+          errorDetails: [{ employeeId: "5b1c2d3e-0000-4000-8000-000000000e09", employeeNo: "EMP-0109", error: "No PAN on file" }],
           createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
         },
       },
     });
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
-    renderPage(ui);
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>,
+    );
     fireEventClickSummary();
-    expect(screen.getByText("e9: No PAN on file")).toBeInTheDocument();
+    // the HR-facing employee number, not the internal UUID
+    expect(screen.getByText("EMP-0109: No PAN on file")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("5b1c2d3e-0000-4000-8000-000000000e09");
     expect(screen.queryByText(/"employeeId"/)).not.toBeInTheDocument();
+  });
+
+  it("renders a run-level failure as 'Whole run' and a bounded one-line reason", async () => {
+    const long = `Chromium crashed\n${"x".repeat(400)}`;
+    statusAwareGetMock.mockResolvedValue({
+      kind: "ok", status: 200,
+      body: { data: {
+        jobId: "job-4", fy: "2025-26", status: "failed", totalEmployees: 0, generated: 0, failed: 1,
+        storagePrefix: null,
+        errorDetails: [{ employeeId: "system", employeeNo: "N/A", error: long }],
+        createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
+      } },
+    });
+    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    fireEventClickSummary();
+    const item = container.querySelector("details li");
+    expect(item?.textContent?.startsWith("Whole run: Chromium crashed xxx")).toBe(true);
+    expect(item?.textContent).not.toContain("\n");
+    expect((item?.textContent ?? "").length).toBeLessThan(170);
+    expect(item?.textContent?.endsWith("…")).toBe(true);
+  });
+
+  it("accepts the legacy { employeeId, message } shape without ever printing the id", async () => {
+    statusAwareGetMock.mockResolvedValue({
+      kind: "ok", status: 200,
+      body: { data: {
+        jobId: "job-5", fy: "2025-26", status: "completed", totalEmployees: 2, generated: 1, failed: 1,
+        storagePrefix: "form16/2025-26",
+        errorDetails: [{ employeeId: "e9", message: "No PAN on file" }],
+        createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
+      } },
+    });
+    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    fireEventClickSummary();
+    expect(screen.getByText("An employee: No PAN on file")).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\be9\b/);
+  });
+
+  it("falls back to 'No reason recorded' for an entry with no error text", async () => {
+    statusAwareGetMock.mockResolvedValue({
+      kind: "ok", status: 200,
+      body: { data: {
+        jobId: "job-6", fy: "2025-26", status: "completed", totalEmployees: 2, generated: 1, failed: 1,
+        storagePrefix: "form16/2025-26",
+        errorDetails: [{ employeeId: "u", employeeNo: "EMP-0007" }],
+        createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
+      } },
+    });
+    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    fireEventClickSummary();
+    expect(screen.getByText("EMP-0007: No reason recorded")).toBeInTheDocument();
   });
 
   // GAP-PAYROLL-FORM16-05: an unrecognized errorDetails shape must fall

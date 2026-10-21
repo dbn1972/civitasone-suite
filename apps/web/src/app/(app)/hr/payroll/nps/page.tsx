@@ -25,6 +25,7 @@ type NpsRow = {
 
 export default async function NpsStatementsPage() {
   const t = await getTranslations("npsStatements");
+  const tCommon = await getTranslations("payrollCommon");
   // GAP-PAYROLL-NPS-05: hr/layout.tsx admits employee/manager to every
   // /hr/payroll* route, and this ledger lists every subscriber's
   // contributions. Gate on payroll-service's own READER_ROLES for GET
@@ -85,7 +86,7 @@ export default async function NpsStatementsPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
 
       <StatGrid>

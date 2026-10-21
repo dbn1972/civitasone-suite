@@ -72,6 +72,7 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 
 export default async function PayStructuresPage() {
   const t = await getTranslations("payrollStructures");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   if (!roles.some((r) => STRUCTURES_VIEW_ROLES.includes(r))) {
     return <PermissionDenied module="pay structures" requiredRoles={STRUCTURES_VIEW_ROLES} />;
@@ -102,7 +103,7 @@ export default async function PayStructuresPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
       {/* GAP-PAYROLL-STRUCTURES-05: structures and components are
           independent fetches with no visible error source at all before --

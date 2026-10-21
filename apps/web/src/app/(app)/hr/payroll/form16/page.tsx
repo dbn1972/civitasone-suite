@@ -49,14 +49,35 @@ function currentFy(): string {
 // PAYROLL_ADMIN_ROLES is page-local.
 const FORM16_BULK_ADMIN_ROLES = ["payroll_admin", "super_admin"];
 
-// GAP-PAYROLL-FORM16-05: the bulk job's errorDetails shape is not documented
-// by the backend ("payroll tax service absent" from the original audit's
-// snapshot, and still not pinned down by a shared type in this checkout).
-// Parsed defensively so a shape that doesn't match this best-guess schema
-// falls back to the failure COUNT only, never a raw JSON dump of backend
-// internals (which may include employee ids/error text) to whatever role
-// can reach this page.
-const errorDetailsSchema = z.array(z.object({ employeeId: z.string(), message: z.string() })).optional();
+// GAP-PAYROLL-FORM16-05: the bulk job's errorDetails, as written by
+// payroll-service form16-pdf/bulk-consumer.ts: one entry per failed employee,
+// { employeeId, employeeNo, error }; a run-level failure is written as
+// { employeeId: "system", employeeNo: "N/A", error }. `message` is accepted as
+// an alias of `error`. Parsed defensively so any other shape falls back to the
+// failure COUNT only, never a raw JSON dump of backend internals. The internal
+// employeeId (a UUID) is parsed but NEVER rendered: the HR-facing employee
+// number is shown instead, and only to the roles that reach this block.
+const errorDetailsSchema = z.array(z.object({
+  employeeId: z.string().optional(),
+  employeeNo: z.string().optional(),
+  error: z.string().optional(),
+  message: z.string().optional(),
+})).optional();
+
+const RUN_LEVEL_EMPLOYEE_NO = "N/A";
+const REASON_MAX_CHARS = 140;
+
+/** One line of backend failure text, control characters removed, bounded in length. */
+function shortReason(raw: string | undefined): string {
+  // Control characters (incl. newlines/tabs) become spaces; runs of whitespace collapse.
+  let spaced = "";
+  for (const ch of raw ?? "") {
+    const code = ch.codePointAt(0) ?? 0;
+    spaced += code < 0x20 || code === 0x7f ? " " : ch;
+  }
+  const oneLine = spaced.split(/\s+/).filter(Boolean).join(" ");
+  return oneLine.length > REASON_MAX_CHARS ? `${oneLine.slice(0, REASON_MAX_CHARS - 1)}…` : oneLine;
+}
 
 async function getBulkStatus(fy: string): Promise<JobLookup> {
   const r = await statusAwareGet(`/v1/payroll/tax/form16/bulk-status?fy=${encodeURIComponent(fy)}`);
@@ -188,9 +209,12 @@ export default async function Form16Page({
                         <summary>{t("failureDetailsSummary", { count: lookup.job.failed })}</summary>
                         {parsed.success && parsed.data ? (
                           <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12 }}>
-                            {parsed.data.map((row, i) => (
-                              <li key={i}>{t("failureRow", { employeeId: row.employeeId, message: row.message })}</li>
-                            ))}
+                            {parsed.data.map((row, i) => {
+                              const reason = shortReason(row.error ?? row.message) || t("failureReasonUnknown");
+                              const runLevel = row.employeeNo === RUN_LEVEL_EMPLOYEE_NO;
+                              const who = runLevel ? t("failureRunLevel") : row.employeeNo?.trim() ? row.employeeNo.trim() : t("failureEmployeeUnknown");
+                              return <li key={i}>{t("failureRow", { employee: who, message: reason })}</li>;
+                            })}
                           </ul>
                         ) : (
                           <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 6 }}>{t("failureDetailsUnavailable")}</p>

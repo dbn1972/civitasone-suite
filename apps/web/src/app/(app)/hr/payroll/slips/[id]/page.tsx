@@ -12,6 +12,7 @@ import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 
 export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDashboard");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
   // employee got "Access restricted" on their OWN payslip -- there was no
@@ -28,7 +29,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   // no self-service "my payslips" list yet (GAP-PAYROLL-SALARY-SLIPS-04), so
   // /hr/payroll is the one back-target every role here can actually open.
   const backHref = isAdmin ? "/hr/payroll/salary-slips" : "/hr/payroll";
-  const backLabel = isAdmin ? "Back to Salary Slips" : "Back to Payroll";
+  const backLabel = isAdmin ? tCommon("backToSalarySlips") : tCommon("backToPayroll");
 
   if (!canAttempt) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;

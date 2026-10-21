@@ -1,14 +1,15 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { AcceptedNotice, Button, ConfirmDialog, Modal, Field, Input } from "../../../../_components/ds";
+import { AcceptedNotice, Button, ConfirmDialog, Modal, Field, Input, Textarea } from "../../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { formatMoney } from "@/lib/formatters";
 import { postWithErrorCode } from "../_lib/postWithErrorCode";
+import { UserFacingError } from "@/lib/userFacingError";
 import {
-  fnfAvailability, todayIst, PAYMENT_REFERENCE_PATTERN, REJECT_REASON_MIN, REASON_MAX,
+  fnfAvailability, todayIst, PAYMENT_REFERENCE_PATTERN, PAYMENT_REASON_MIN, REJECT_REASON_MIN, REASON_MAX,
   type FnfAction, type FnfViewer, type FnfWorkflowFields,
 } from "./fnfWorkflow";
 
@@ -40,6 +41,12 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
   const [message, setMessage] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
+  const [paymentReason, setPaymentReason] = useState("");
+  // One x-idempotency-key per dialog opening: a retry after a dropped
+  // connection reuses it (so the proxy can answer the original), a fresh
+  // opening gets a fresh one. The server also dedups on a deterministic
+  // messageId + the version check; this is the belt to those braces.
+  const idempotencyKey = useRef<string | null>(null);
   const formId = useId();
   const accepted = useAcceptedWrite();
 
@@ -60,6 +67,8 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
     setDialogError(undefined);
     setPaymentReference("");
     setPaymentDate(today);
+    setPaymentReason("");
+    idempotencyKey.current = null;
     setPending(action);
   }
 
@@ -69,14 +78,17 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
     try {
       const body: Record<string, unknown> = { version: row.version };
       for (const [k, v] of Object.entries(extra)) if (v) body[k] = v;
-      await postWithErrorCode(`v1/payroll/fnf/settlements/${row.id}/${action}`, body, errorCodes);
+      idempotencyKey.current ??= globalThis.crypto.randomUUID();
+      await postWithErrorCode(`v1/payroll/fnf/settlements/${row.id}/${action}`, body, errorCodes, { idempotencyKey: idempotencyKey.current });
       setMessage(t(`${KEY[action]}Queued`, { name: row.name }));
       setPending(null);
       router.refresh();
       // The write lands asynchronously (202): say so, with a manual refresh, instead of guessing a delay.
       void accepted.accept();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : t("networkError"));
+      // Only clerk-safe text is shown: a coded/catalogued failure carries its own sentence;
+      // anything else (a dropped connection's raw "Failed to fetch") reads as the network error.
+      setDialogError(err instanceof UserFacingError ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -85,7 +97,11 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
   const refTrimmed = paymentReference.trim();
   const refInvalid = refTrimmed.length > 0 && !PAYMENT_REFERENCE_PATTERN.test(refTrimmed);
   const dateInvalid = paymentDate !== "" && paymentDate > today;
-  const disburseReady = PAYMENT_REFERENCE_PATTERN.test(refTrimmed) && paymentDate !== "" && !dateInvalid;
+  const reasonTrimmed = paymentReason.trim();
+  const reasonShort = reasonTrimmed.length > 0 && reasonTrimmed.length < PAYMENT_REASON_MIN;
+  const disburseReady =
+    PAYMENT_REFERENCE_PATTERN.test(refTrimmed) && paymentDate !== "" && !dateInvalid
+    && reasonTrimmed.length >= PAYMENT_REASON_MIN && reasonTrimmed.length <= REASON_MAX;
 
   if (actions.length === 0 && !selfExcluded && !message) return null;
 
@@ -152,7 +168,7 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
           id={formId}
           onSubmit={(e) => {
             e.preventDefault();
-            if (disburseReady && !busy) void run("disburse", { paymentReference: refTrimmed, paymentDate });
+            if (disburseReady && !busy) void run("disburse", { paymentReference: refTrimmed, paymentDate, reason: reasonTrimmed });
           }}
         >
           <div className="cd-desc">{t("disburseDescription", { name: row.name, amount: formatMoney(row.netPayableMinor) })}</div>
@@ -166,6 +182,9 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
           </Field>
           <Field label={t("paymentDateLabel")} required error={dateInvalid ? t("paymentDateFuture") : undefined}>
             <Input type="date" value={paymentDate} max={today} onChange={(e) => setPaymentDate(e.target.value)} />
+          </Field>
+          <Field label={t("paymentReasonLabel")} required error={reasonShort ? t("paymentReasonShort", { min: PAYMENT_REASON_MIN }) : undefined}>
+            <Textarea rows={3} value={paymentReason} maxLength={REASON_MAX} onChange={(e) => setPaymentReason(e.target.value)} />
           </Field>
           <div className="cd-error" role="alert" aria-live="assertive">{dialogError ?? ""}</div>
           <div className="cd-actions">

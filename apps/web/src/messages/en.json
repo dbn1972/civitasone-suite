@@ -3606,8 +3606,11 @@
     "completedLabel": " · Completed {date}",
     "downloadLinkLabel": "Get download link",
     "failureDetailsSummary": "Failure details ({count})",
-    "failureRow": "{employeeId}: {message}",
-    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above."
+    "failureRow": "{employee}: {message}",
+    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above.",
+    "failureReasonUnknown": "No reason recorded",
+    "failureRunLevel": "Whole run",
+    "failureEmployeeUnknown": "An employee"
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
@@ -5172,7 +5175,13 @@
     "statEmployeesPaid": "Employees Paid",
     "statTotalGross": "Total Gross",
     "statPending": "Pending",
-    "runsCardTitle": "Payroll Runs"
+    "runsCardTitle": "Payroll Runs",
+    "statPaid": "Paid",
+    "statInProgress": "In Progress",
+    "statAwaitingDisbursement": "Awaiting Disbursement",
+    "statFailed": "Failed",
+    "statEmployeesPaidPeriod": "Employees Paid ({period})",
+    "statTotalGrossPeriod": "Total Gross ({period})"
   },
   "payrollRunsTable": {
     "colPeriod": "Period",
@@ -9151,7 +9160,8 @@
     "salarySlipsTitle": "Salary Slips ({count})",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "exceptionSalaryCalcFailed": "Salary calculation failed for this employee. Open their record to review the cause.",
-    "viewRegisterLink": "View department register"
+    "viewRegisterLink": "View department register",
+    "backLabel": "Payroll Runs"
   },
   "payrollRunActions": {
     "disburseChannelDefault": "the finance EFT / PFMS bridge",
@@ -9177,7 +9187,13 @@
     "revertConfirmTitle": "Revert this run to draft?",
     "revertReasonLabel": "Reason for revert",
     "revertConfirmLabel": "Revert to draft",
-    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed."
+    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed.",
+    "makerCheckerApproveHint": "You created this run, so a different approver must approve it (maker-checker).",
+    "makerCheckerDisburseHint": "You approved this run, so a different officer must disburse it (maker-checker)."
+  },
+  "payrollCommon": {
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# payroll exception requires attention} other {# payroll exceptions require attention}}",
@@ -9923,7 +9939,7 @@
   "fnfSettlementActions": {
     "submitBtn": "Submit for approval",
     "approveBtn": "Finance approve",
-    "disburseBtn": "Mark disbursed",
+    "disburseBtn": "Record payment",
     "rejectBtn": "Reject",
     "cancelBtn": "Cancel",
     "submitAriaLabel": "Submit the settlement for {name} for finance approval",
@@ -9954,7 +9970,9 @@
     "selfApprovalError": "You computed or submitted this settlement, so you cannot approve or reject it.",
     "selfDisbursalError": "You computed, submitted or approved this settlement, so you cannot record its payment or reject it.",
     "forbiddenError": "Your role does not allow this step.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "paymentReasonLabel": "Reason for recording this payment",
+    "paymentReasonShort": "Enter at least {min} characters."
   },
   "financeBillForm": {
     "pageTitle": "New Bill",

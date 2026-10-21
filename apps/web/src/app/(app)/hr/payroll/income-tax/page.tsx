@@ -70,9 +70,9 @@ export default async function IncomeTaxPage() {
   return (
     <div className="page-main wrap">
       {/* GAP-PAYROLL-INCOME-TAX-06: unified on /hr/payroll (where the page
-          header's own "Back to Payroll" link and RefreshErrorState below
+          header's own back-to-payroll link and RefreshErrorState below
           already went) instead of the header's previous "Back to HR" --
-          error.tsx's "Back to Payroll"/t("errorBackLabel") pairing is now
+          error.tsx's t("errorBackLabel") pairing is now
           what all three back targets on this page agree on. The "File tax
           declaration" action link (added in #1744) is kept as-is. */}
       <PageHeader
