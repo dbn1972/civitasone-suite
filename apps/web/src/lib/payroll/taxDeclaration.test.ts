@@ -102,7 +102,7 @@ describe("parseTaxDeclarationResponse", () => {
     ["amount negative", { ...DECLARATION, section80d: -1 }],
     ["amount fractional (not paise)", { ...DECLARATION, otherDeductions: 10.5 }],
     ["amount a non-numeric string", { ...DECLARATION, perquisitesMinor: "1,000" }],
-    ["amount not a safe integer", { ...DECLARATION, section80c: 9007199254740993 }],
+    ["amount not a safe integer", { ...DECLARATION, section80c: Number.MAX_SAFE_INTEGER + 1 }],
     ["status of the wrong type", { ...DECLARATION, status: 3 }],
   ])("reports %s as invalid (never as blank fields)", (_label, body) => {
     expect(parseTaxDeclarationResponse(body)).toEqual({ kind: "invalid" });
