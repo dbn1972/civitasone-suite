@@ -13,6 +13,7 @@ import * as repo from "./repo.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
+import { todayIST } from "../../shared/ist.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
@@ -108,7 +109,12 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // HR stays tenant-wide. Empty scope (unlinked actor) matches nothing.
     const scopeIds = await resolveManagerScopeIds(ctx);
     if (scopeIds) filters.employeeIds = scopeIds;
-    const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
+    const listOpts: { sort?: "endDate"; summaryToday?: string } = {};
+    if (query.sort) listOpts.sort = query.sort;
+    // Register counts are classified against the IST calendar date (what the officer sees),
+    // not the server's UTC date.
+    if (query.summary) listOpts.summaryToday = todayIST();
+    const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset }, listOpts);
     const data = await enrichWithEmployee(ctx.tenantId, result.data);
     return reply.send({ ...result, data });
   });

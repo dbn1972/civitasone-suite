@@ -245,6 +245,18 @@ export async function loadTypeCategoryResolver(tenantId: string): Promise<(typeC
   return buildTypeCategoryResolver(tenantTypes as unknown as PolicyRow[], canonical as unknown as PolicyRow[]);
 }
 
+/**
+ * Load the raw rows behind the resolvers above: the tenant's own type master and
+ * the global canonical catalogue (two SEQUENTIAL reads -- see loadTypeResolver).
+ * For callers that need a field the EngagementPolicy pack does not carry or a
+ * different precedence (GAP-HR-CONFIRMATION-05: probation-period.ts).
+ */
+export async function loadTypeRows(tenantId: string): Promise<{ tenantTypes: PolicyRow[]; canonical: PolicyRow[] }> {
+  const tenantTypes = await scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId)));
+  const canonical = await scopedRead((tx) => tx.select().from(engagementCatalogue));
+  return { tenantTypes: tenantTypes as unknown as PolicyRow[], canonical: canonical as unknown as PolicyRow[] };
+}
+
 /** Load a type→policy resolver for a tenant (tenant master + canonical catalogue). */
 export async function loadTypeResolver(tenantId: string): Promise<(typeCode: string) => EngagementPolicy> {
   // SEQUENTIAL reads (not Promise.all): two concurrent tenant transactions on the

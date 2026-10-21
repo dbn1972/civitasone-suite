@@ -57,6 +57,14 @@ export const listContractsQuery = z.object({
   status: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+  // GAP-HR-CONTRACTUAL-03/04: both opt-in, so every existing caller keeps the
+  // createdAt-desc order and the unchanged response shape.
+  //   sort=endDate   soonest-ending first (ties by id, for stable paging)
+  //   summary=true   adds meta.summary: FULL-SCOPE counts (active / expiring /
+  //                  expired / agencies) for the register's stat cards, so they
+  //                  are not computed from whichever page happened to load
+  sort: z.enum(["endDate"]).optional(),
+  summary: z.enum(["true"]).optional(),
 });
 
 export const listRenewalsQuery = z.object({

@@ -7,7 +7,9 @@ import {
   hrmsContractConfig,
   hrmsContractSeq,
 } from "./schema.js";
-import { eq, and, sql, desc, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, sql, desc, asc, gte, lte, inArray, type SQL } from "drizzle-orm";
+import { hrmsEmployees } from "../employee/schema.js";
+import { addDaysToDateOnly } from "../../shared/ist.js";
 
 const SERVICE = "hrms";
 
@@ -128,10 +130,73 @@ export async function getContractHistoryTx(tx: any, tenantId: string, employeeId
     .orderBy(hrmsContracts.startDate);
 }
 
+/** A contract still in force expiring within this many days counts as "expiring" on the register. */
+export const CONTRACT_EXPIRING_WINDOW_DAYS = 30;
+
+export interface ContractListSummary {
+  active: number;
+  expiring: number;
+  expired: number;
+  agencies: number;
+}
+
+/**
+ * Full-scope register counts, classified by contract status AND end date against
+ * `today` (the IST calendar date, "YYYY-MM-DD"). Disjoint where it matters:
+ *   active    status 'active' and not past its end date
+ *   expiring  still in force (end >= today) and either status 'expiring', or
+ *             active/escalated ending within CONTRACT_EXPIRING_WINDOW_DAYS
+ *   expired   status 'expired', or still-open (active/expiring/escalated) and
+ *             past its end date
+ * terminated / renewed / draft contracts are in none of the three. `agencies`
+ * is the number of distinct agency refs among the employees in scope.
+ */
+export async function summarizeContracts(
+  tenantId: string,
+  conds: SQL[],
+  today: string,
+): Promise<ContractListSummary> {
+  const soon = addDaysToDateOnly(today, CONTRACT_EXPIRING_WINDOW_DAYS) ?? today;
+  const where = and(...conds);
+  const counts = await scopedRead((tx) =>
+    tx
+      .select({
+        active: sql<number>`count(*) filter (where ${hrmsContracts.status} = 'active' and ${hrmsContracts.endDate} >= ${today}::date)::int`,
+        expiring: sql<number>`count(*) filter (where ${hrmsContracts.endDate} >= ${today}::date and (${hrmsContracts.status} = 'expiring' or (${hrmsContracts.status} in ('active', 'escalated') and ${hrmsContracts.endDate} <= ${soon}::date)))::int`,
+        expired: sql<number>`count(*) filter (where ${hrmsContracts.status} = 'expired' or (${hrmsContracts.status} in ('active', 'expiring', 'escalated') and ${hrmsContracts.endDate} < ${today}::date))::int`,
+      })
+      .from(hrmsContracts)
+      .where(where),
+  );
+  // Agencies live on the employee row (cross-module table, read-only, tenant-scoped) -- two
+  // plain queries rather than a SQL join across module schemas.
+  const empIdRows = await scopedRead((tx) =>
+    tx.selectDistinct({ employeeId: hrmsContracts.employeeId }).from(hrmsContracts).where(where),
+  );
+  const employeeIds = empIdRows.map((r) => r.employeeId);
+  let agencies = 0;
+  if (employeeIds.length > 0) {
+    const agencyRows = await scopedRead((tx) =>
+      tx
+        .select({ n: sql<number>`count(distinct ${hrmsEmployees.agencyRef})::int` })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, tenantId), inArray(hrmsEmployees.id, employeeIds))),
+    );
+    agencies = agencyRows[0]?.n ?? 0;
+  }
+  return {
+    active: counts[0]?.active ?? 0,
+    expiring: counts[0]?.expiring ?? 0,
+    expired: counts[0]?.expired ?? 0,
+    agencies,
+  };
+}
+
 export async function listContracts(
   tenantId: string,
   filters: { employeeId?: string; employeeIds?: string[]; status?: string },
   pagination: { limit: number; offset: number },
+  opts: { sort?: "endDate"; summaryToday?: string } = {},
 ) {
   const conds = [eq(hrmsContracts.tenantId, tenantId)];
   if (filters.employeeId)
@@ -146,7 +211,9 @@ export async function listContracts(
       .select()
       .from(hrmsContracts)
       .where(and(...conds))
-      .orderBy(desc(hrmsContracts.createdAt))
+      .orderBy(...(opts.sort === "endDate"
+        ? [asc(hrmsContracts.endDate), asc(hrmsContracts.id)]
+        : [desc(hrmsContracts.createdAt)]))
       .limit(pagination.limit)
       .offset(pagination.offset),
   );
@@ -165,6 +232,7 @@ export async function listContracts(
       page: Math.floor(pagination.offset / pagination.limit) + 1,
       pageSize: pagination.limit,
       total,
+      ...(opts.summaryToday ? { summary: await summarizeContracts(tenantId, conds, opts.summaryToday) } : {}),
     },
   };
 }
