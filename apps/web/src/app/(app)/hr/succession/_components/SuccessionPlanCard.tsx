@@ -15,6 +15,14 @@ export interface Successor {
   readiness: Readiness;
   skillGaps?: string[];
   devPlanUrl?: string;
+  /**
+   * GAP-HR-SUCCESSION-02: the nominee's free-text development plan, as the
+   * pipeline endpoint returns it (employee.succession_nominees
+   * .development_plan, entered in CreatePlanForm). The card previously read
+   * only `devPlanUrl`, which no endpoint sends, so every nominee showed
+   * "No plan" even when a plan had been recorded.
+   */
+  developmentPlan?: string;
 }
 
 export interface CriticalPost {
@@ -108,11 +116,12 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>
             {post.roleRef}
           </h3>
-          {post.department && (
-            <p style={{ margin: "2px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-              {post.department}
-            </p>
-          )}
+          {/* GAP-HR-SUCCESSION-02: a department NAME, or '—' for a plan with
+              none (department is optional on create) -- never the raw
+              department_id. */}
+          <p style={{ margin: "2px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
+            {post.department ? post.department : "—"}
+          </p>
         </div>
         <span
           style={{
@@ -228,6 +237,19 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                       </span>
                     </div>
 
+                    {/* Recorded development plan (free text) */}
+                    {s.developmentPlan && s.developmentPlan.trim().length > 0 && (
+                      <p
+                        title={s.developmentPlan}
+                        style={{
+                          margin: "5px 0 0", fontSize: "0.75rem", color: "var(--ink2)", lineHeight: 1.4,
+                          display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+                        }}
+                      >
+                        <span style={{ color: "var(--mut)" }}>{t("devPlanLabel")}</span> {s.developmentPlan}
+                      </p>
+                    )}
+
                     {/* Skill gap chips */}
                     {s.skillGaps && s.skillGaps.length > 0 && (
                       <div
@@ -269,6 +291,15 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                     >
                       {t("devPlanLinkText")}
                     </a>
+                  ) : s.developmentPlan && s.developmentPlan.trim().length > 0 ? (
+                    <span
+                      style={{
+                        fontSize: "0.75rem", color: "var(--good)", flexShrink: 0,
+                        padding: "3px 9px", borderRadius: 5, background: "var(--goodbg)", whiteSpace: "nowrap",
+                      }}
+                    >
+                      {t("planOnFile")}
+                    </span>
                   ) : (
                     <span
                       style={{ fontSize: "0.75rem", color: "var(--mut)", flexShrink: 0 }}

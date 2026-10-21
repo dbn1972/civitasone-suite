@@ -216,7 +216,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
     render(ui);
 
     // weighted: (10*60 + 2*40) / 100 = 6.8 ; plain average would be 6.0
-    expect(screen.getByText("Provisional Score")).toBeInTheDocument();
+    expect(screen.getByText("Provisional Weighted Score")).toBeInTheDocument();
     expect(screen.getByText("6.8")).toBeInTheDocument();
     expect(screen.queryByText("6.0")).not.toBeInTheDocument();
   });
@@ -235,8 +235,8 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
     const ui = await AparDetailPage({ params: { id: "a1" } });
     render(ui);
 
-    expect(screen.getByText("Avg Score")).toBeInTheDocument();
-    expect(screen.queryByText("Provisional Score")).not.toBeInTheDocument();
+    expect(screen.getByText("Simple Average (unweighted)")).toBeInTheDocument();
+    expect(screen.queryByText("Provisional Weighted Score")).not.toBeInTheDocument();
     expect(screen.getByText("7.50")).toBeInTheDocument();
   });
 
@@ -269,6 +269,170 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
     render(ui);
 
     expect(screen.getByText(/Confidential — APAR/)).toBeInTheDocument();
+  });
+});
+
+const GRADE_BANDS = [
+  { band: "Outstanding", min: 9 },
+  { band: "Very Good", min: 7 },
+  { band: "Good", min: 5 },
+  { band: "Average", min: 4 },
+  { band: "Below Average", min: null },
+];
+
+describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple Average", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionNameMock.mockReset();
+    getSessionNameMock.mockReturnValue("H R Officer");
+  });
+
+  it("prints the grade scale beside Grade, built from the band table the API returns", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "disclosed", overallGrade: "7.50", overallBand: "Very Good" },
+        scores: [{ id: "s1", attribute: "Quality", weight: "100", score: "8", remarks: null }],
+        history: [], actions: BASE_ACTIONS, gradeBands: GRADE_BANDS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText("(Outstanding \u22659 \u00b7 Very Good \u22657 \u00b7 Good \u22655 \u00b7 Average \u22654 \u00b7 else Below Average)")).toBeInTheDocument();
+  });
+
+  it("follows the API's table rather than a built-in one (a revised cut-off shows up without a web change)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "disclosed", overallGrade: "7.50", overallBand: "Very Good" },
+        scores: [], history: [], actions: BASE_ACTIONS,
+        gradeBands: [{ band: "Outstanding", min: 8.5 }, { band: "Below Average", min: null }],
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText("(Outstanding \u22658.5 \u00b7 else Below Average)")).toBeInTheDocument();
+  });
+
+  it("shows no scale at all, rather than a stale hard-coded one, when the API sent no band table", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const { container } = render(ui);
+
+    expect(container.textContent).not.toMatch(/Outstanding/);
+  });
+
+  it("after Accept, explains that the weighted Grade and the unweighted Simple Average can differ", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "disclosed", overallGrade: "6.80", overallBand: "Good" },
+        scores: [
+          { id: "s1", attribute: "Quality", weight: "60", score: "10", remarks: null },
+          { id: "s2", attribute: "Timeliness", weight: "40", score: "2", remarks: null },
+        ],
+        history: [], actions: BASE_ACTIONS, gradeBands: GRADE_BANDS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    // 6.8 weighted Grade, 6.0 unweighted -- labelled as such, with the reason on the page
+    expect(screen.getByText("6.80")).toBeInTheDocument();
+    expect(screen.getByText("6.0")).toBeInTheDocument();
+    expect(screen.getByText("Simple Average (unweighted)")).toBeInTheDocument();
+    expect(screen.getByText(/the Simple Average is unweighted, so the two can differ/)).toBeInTheDocument();
+  });
+
+  it("does not show the Grade-vs-average note before a Grade exists", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "reviewing_officer", overallGrade: null },
+        scores: [{ id: "s1", attribute: "Quality", weight: "100", score: "8", remarks: null }],
+        history: [], actions: BASE_ACTIONS, gradeBands: GRADE_BANDS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.queryByText(/the two can differ/)).not.toBeInTheDocument();
+  });
+});
+
+describe("AparDetailPage — GAP-HR-APAR-DETAIL-03 Reviewing Officer decision from stage history", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionNameMock.mockReset();
+    getSessionNameMock.mockReturnValue("H R Officer");
+  });
+
+  const rvHistory = (payload: unknown, remarks: string | null = null) => ({
+    id: "h-rv", fromStage: "reviewing_officer", toStage: "accepting_authority",
+    actorId: "actor-rv", actorRole: "reviewing_officer", override: false,
+    remarks, payload, createdAt: "2026-04-10T05:00:00Z",
+  });
+
+  it("shows 'Varied' with the varied scores for a vary decision", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "accepting_authority", reviewingRemarks: "Teamwork was understated." },
+        scores: [],
+        history: [rvHistory({ decision: "vary", variations: [{ attribute: "Teamwork", score: 8 }, { attribute: "Quality", score: 7 }] }, "Teamwork was understated.")],
+        actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText("Reviewing Officer — Decision")).toBeInTheDocument();
+    expect(screen.getByText("Varied the Reporting Officer's scores")).toBeInTheDocument();
+    expect(screen.getByText("Teamwork: varied to 8")).toBeInTheDocument();
+    expect(screen.getByText("Quality: varied to 7")).toBeInTheDocument();
+  });
+
+  it("shows 'Concurred' with no variation list for a concur decision", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "accepting_authority" },
+        scores: [], history: [rvHistory({ decision: "concur", variations: [] })], actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText("Concurred with the Reporting Officer's scores")).toBeInTheDocument();
+    expect(screen.queryByText(/varied to/)).not.toBeInTheDocument();
+  });
+
+  it("renders no decision block when the API stripped the payload (appraisee, before disclosure)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "accepting_authority" },
+        scores: [], history: [rvHistory({})], actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.queryByText("Reviewing Officer — Decision")).not.toBeInTheDocument();
   });
 });
 

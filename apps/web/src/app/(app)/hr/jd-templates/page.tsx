@@ -22,14 +22,21 @@ type JdTemplate = {
   createdAt: string;
 };
 
-const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  regular:       { label: "Regular",       color: "var(--info)", bg: "var(--infobg)" },
-  internship:    { label: "Internship",    color: "var(--warn)", bg: "var(--warnbg)" },
-  apprenticeship:{ label: "Apprenticeship",color: "var(--good)", bg: "var(--goodbg)" },
-  volunteership: { label: "Volunteer",     color: "var(--info)", bg: "var(--infobg)" },
-  contractual:   { label: "Contractual",   color: "var(--violet)", bg: "var(--primary-soft)" },
-  deputation:    { label: "Deputation",    color: "var(--ink2)", bg: "var(--line)" },
+// GAP-HR-JD-TEMPLATES-06: the badge TEXT comes from i18n (the same
+// jdTemplates.filter* keys the filter chips use, so a type reads identically
+// in both places); only the colours live here.
+const TYPE_BADGES: Record<string, { labelKey: string; color: string; bg: string }> = {
+  regular:       { labelKey: "filterRegular",        color: "var(--info)", bg: "var(--infobg)" },
+  internship:    { labelKey: "filterInternship",     color: "var(--warn)", bg: "var(--warnbg)" },
+  apprenticeship:{ labelKey: "filterApprenticeship", color: "var(--good)", bg: "var(--goodbg)" },
+  volunteership: { labelKey: "filterVolunteer",      color: "var(--info)", bg: "var(--infobg)" },
+  contractual:   { labelKey: "filterContractual",    color: "var(--violet)", bg: "var(--primary-soft)" },
+  deputation:    { labelKey: "filterDeputation",     color: "var(--ink2)", bg: "var(--line)" },
 };
+
+// GAP-HR-JD-TEMPLATES-NEW-01: the id the create form appends (?created=<id>)
+// when it redirects here after a 202; only a well-formed UUID is ever used.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GAP-HR-JD-TEMPLATES-02: the closed set of values this page (and the API's
 // own `vacancyType` filter) actually understands -- used both to build the
@@ -56,7 +63,7 @@ async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>
  */
 const JD_TEMPLATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
-export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
+export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string; created?: string } }) {
   const t = await getTranslations("jdTemplates");
 
   // GAP-HR-JD-TEMPLATES-01: every jd-templates route (including the list
@@ -81,6 +88,16 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
   const activeType = (KNOWN_TYPES as readonly string[]).includes(rawType) ? rawType : "";
   const result = await fetchTemplates(activeType || undefined);
   const { data: templates, source } = result;
+
+  // GAP-HR-JD-TEMPLATES-NEW-01: creating a template only queues a command, so
+  // the list a moment after the redirect may not contain it yet. With
+  // ?created=<id> the new card is highlighted once it appears, and until it
+  // does a pending row says it is on its way (instead of the list silently
+  // looking like the save was lost). A type filter that could legitimately
+  // exclude it suppresses the pending row.
+  const createdId = typeof searchParams.created === "string" && UUID_RE.test(searchParams.created) ? searchParams.created : "";
+  const createdLanded = createdId !== "" && templates.some((tmpl) => tmpl.id === createdId);
+  const showPendingRow = createdId !== "" && !createdLanded && !activeType && source !== "error";
 
   const typeOptions = [
     { value: "", label: t("filterAllTypes") },
@@ -130,7 +147,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
 
       {source === "error" ? (
         <LoadErrorState result={result} area="JD templates" backHref="/hr" requiredRoles={JD_TEMPLATE_ADMIN_ROLES} />
-      ) : templates.length === 0 ? (
+      ) : templates.length === 0 && !showPendingRow ? (
         <div style={{ textAlign: "center", padding: "48px 24px", background: "var(--panel)", borderRadius: 12, border: "1px solid var(--line)" }}>
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>{t("emptyTitle")}</h2>
@@ -142,16 +159,42 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
       ) : (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
+            {showPendingRow && (
+              <article
+                role="status"
+                aria-live="polite"
+                data-testid="jd-template-pending"
+                style={{ background: "var(--panel)", border: "1px dashed var(--primary)", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3 }}>{t("pendingTitle")}</h3>
+                <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>{t("pendingMessage")}</p>
+                <div>
+                  <Link href={`/hr/jd-templates?created=${createdId}`} className="btn-outline">{t("pendingRefresh")}</Link>
+                </div>
+              </article>
+            )}
             {templates.map((tmpl) => {
-              const ti = TYPE_LABELS[tmpl.vacancyType] ?? { label: tmpl.vacancyType, color: "var(--indigo)", bg: "var(--infobg)" };
+              const badge = TYPE_BADGES[tmpl.vacancyType];
+              const ti = badge
+                ? { label: t(badge.labelKey), color: badge.color, bg: badge.bg }
+                : { label: tmpl.vacancyType, color: "var(--indigo)", bg: "var(--infobg)" };
+              const isNew = tmpl.id === createdId;
               return (
-                <article key={tmpl.id} style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <article
+                  key={tmpl.id}
+                  id={`template-${tmpl.id}`}
+                  aria-current={isNew ? "true" : undefined}
+                  style={{ background: "var(--panel)", border: isNew ? "2px solid var(--primary)" : "1px solid var(--line)", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}
+                >
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
                     <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink)", lineHeight: 1.3 }}>{tmpl.name}</h3>
                     <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", padding: "2px 8px", borderRadius: 5, color: ti.color, background: ti.bg }}>
                       {ti.label}
                     </span>
                   </div>
+                  {isNew && (
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "var(--primary)" }}>{t("justAdded")}</p>
+                  )}
                   {tmpl.description && (
                     <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {tmpl.description}

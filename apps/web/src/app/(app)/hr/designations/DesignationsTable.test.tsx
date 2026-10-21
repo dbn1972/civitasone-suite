@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { DesignationsTable } from "./DesignationsTable";
@@ -214,5 +214,56 @@ describe("DesignationsTable — GAP-HR-DESIGNATIONS-03 DataTable migration (sort
     fireEvent.click(codeHeader); // descending
     expect(screen.getByText("Designation 15")).toBeInTheDocument();
     expect(screen.queryByText("Designation 00")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-01 (fix step 4): Service Group is derived from the pay
+ * level in the browser (apps/web/src/lib/payLevels.ts), not stored on the
+ * designation, and HR has not signed the mapping off -- so it must read as
+ * "indicative" and cover every level 1-18 consistently.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-01 Service Group is labelled indicative", () => {
+  const LEVEL_ITEMS = [
+    { id: "d16", code: "JS", name: "Joint Secretary", level: 16, payGrade: null },
+    { id: "d3", code: "MTS", name: "Multi Tasking Staff", level: 3, payGrade: null },
+    { id: "d0", code: "UNK", name: "Unclassified Post", level: 0, payGrade: null },
+  ];
+
+  function renderLevels() {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <DesignationsTable items={LEVEL_ITEMS} canEdit={false} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("labels the column header 'Service Group (indicative)' and has no Grade Pay column", () => {
+    renderLevels();
+    expect(screen.getByRole("columnheader", { name: /Service Group \(indicative\)/ })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /Grade Pay/i })).not.toBeInTheDocument();
+  });
+
+  it("explains under the table that the group is derived from the pay level, with the bands it uses", () => {
+    renderLevels();
+    expect(screen.getByText(/Service Group is indicative only/)).toHaveTextContent(
+      "derived from the pay level (Group-C 1\u20135 \u00b7 Group-B 6\u20139 \u00b7 Group-A 10\u201318) and is not stored on the designation",
+    );
+  });
+
+  it("classifies the top levels too (level 16 -> Group-A) and shows a dash, not a guess, for an unclassified level", () => {
+    renderLevels();
+    const row16 = screen.getByText("Joint Secretary").closest("tr");
+    expect(row16).not.toBeNull();
+    expect(within(row16 as HTMLElement).getByText("Group-A")).toBeInTheDocument();
+    const row3 = screen.getByText("Multi Tasking Staff").closest("tr");
+    expect(within(row3 as HTMLElement).getByText("Group-C")).toBeInTheDocument();
+    const row0 = screen.getByText("Unclassified Post").closest("tr");
+    expect(within(row0 as HTMLElement).queryByText(/Group-/)).not.toBeInTheDocument();
+  });
+
+  it("marks each classified badge as indicative in its tooltip", () => {
+    renderLevels();
+    expect(screen.getAllByTitle(/Indicative: derived from the pay level/).length).toBe(2);
   });
 });
