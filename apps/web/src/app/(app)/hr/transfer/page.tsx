@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getEmployeeById } from "@/app/_data/loaders";
@@ -8,6 +8,7 @@ import type { TransferRow } from "./_components/TransferOrderCard";
 import { TransferListFilters } from "./_components/TransferListFilters";
 import { getTranslations } from "next-intl/server";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { countTransferBuckets } from "@/lib/hr/transferStatus";
 
 /**
  * GAP-HR-TRANSFER-03: mirrors services/hrms-service's employee/routes.ts
@@ -40,6 +41,7 @@ async function getData(): Promise<LoaderResult<TransferRow[]>> {
 
 export default async function TransferPage({ searchParams }: { searchParams?: { empId?: string } }) {
   const t = await getTranslations("transfer");
+  const tr = await getTranslations("transferUi");
   const roles = getSessionRoles();
   const canRaise = roles.some((r) => TRANSFER_ROLES.includes(r));
 
@@ -54,29 +56,16 @@ export default async function TransferPage({ searchParams }: { searchParams?: { 
   const str = (v: unknown): string | undefined => (typeof v === "string" && v.length > 0 ? v : undefined);
   const items: TransferRow[] = raw.map((i) => ({
     ...i,
-    employee: str(i.employeeName) ?? i.employee ?? i.employeeId ?? "Unknown",
+    employee: str(i.employeeName) ?? i.employee ?? i.employeeId ?? tr("unknown"),
     fromOffice: str(i.fromDepartmentName) ?? i.fromOffice ?? i.fromDeptId ?? "—",
     toOffice: str(i.toDepartmentName) ?? i.toOffice ?? i.toDeptId ?? "—",
   }));
 
-  // Stat buckets use the shared real-status vocabulary (GAP-HR-TRANSFER-07):
-  // "requested"/"pending_approval" haven't been actioned yet; "ordered" (the
-  // direct path's issued order) and "pending_effective" (already approved
-  // by eOffice, awaiting its effective date) are both past that gate.
-  const completed = items.filter((i) => ["completed", "joined"].includes(i.status)).length;
-  const pending   = items.filter((i) => ["requested", "pending_approval"].includes(i.status)).length;
-  const approved  = items.filter((i) => ["ordered", "pending_effective"].includes(i.status)).length;
-  const relieved  = items.filter((i) => i.status === "relieved").length;
-
-  const tableColumns: { key: keyof TransferRow & string; label: string; cellType?: "status" }[] = [
-    { key: "employee",     label: t("colEmployee")      },
-    { key: "fromOffice",   label: t("colFrom")          },
-    { key: "toOffice",     label: t("colTo")            },
-    { key: "effectiveDate",label: t("colEffectiveDate")},
-    { key: "orderNo",      label: t("colOrderNo")     },
-    { key: "relievedDate", label: t("colRelievedDate") },
-    { key: "status",       label: t("colStatus"), cellType: "status" },
-  ];
+  // GAP-HR-TRANSFER-07/08: every status lands in exactly one stat bucket
+  // (lib/hr/transferStatus.ts), so the cards below always add up to Total --
+  // previously cancelled rows (an eOffice rejection) and any legacy "pending"
+  // row were counted nowhere.
+  const buckets = countTransferBuckets(items.map((i) => i.status));
 
   // GAP-HR-TRANSFER-09: resolve ?empId= (from employee detail's "Initiate
   // Transfer" quick action) to a real employee server-side, same pattern
@@ -92,50 +81,41 @@ export default async function TransferPage({ searchParams }: { searchParams?: { 
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
         actions={canRaise ? <TransferWithApproval prefillEmployee={prefillEmployee} /> : undefined}
       />
-      <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorBadge")} />
 
       <StatGrid>
-<StatCard icon="🔄" iconBg="var(--infobg)" label={t("statTotal")}    value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={errored ? null : completed} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")}            value={errored ? null : pending} />
-        <StatCard icon="👍" iconBg="var(--infobg)" label={t("statApproved")}       value={errored ? null : approved} />
-        {relieved > 0 && (
-          <StatCard icon="📍" iconBg="var(--warnbg)" label={t("statRelieved")} value={errored ? null : relieved} />
+        <StatCard icon="🔄" iconBg="var(--infobg)" label={t("statTotal")}    value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={errored ? null : buckets.completed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")}   value={errored ? null : buckets.pending} />
+        <StatCard icon="👍" iconBg="var(--infobg)" label={t("statApproved")}  value={errored ? null : buckets.approved} />
+        {buckets.relieved > 0 && (
+          <StatCard icon="📍" iconBg="var(--warnbg)" label={t("statRelieved")} value={errored ? null : buckets.relieved} />
+        )}
+        {buckets.cancelled > 0 && (
+          <StatCard icon="✕" iconBg="var(--badbg)" label={t("statCancelled")} value={errored ? null : buckets.cancelled} />
         )}
       </StatGrid>
 
       {!canRaise && (
         <p role="note" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 16px" }}>
-          You have view-only access to transfer orders. Ask an HR admin to raise a new transfer.
+          {t("viewOnlyNote")}
         </p>
       )}
 
-      {/* Card grid with filters + export — client island */}
-      <TransferListFilters transfers={items} />
-
-      {/* Table fallback for density view */}
-      <Card title={t("cardTitle")}>
-        {errored ? (
+      {/* One filter bar + one filtered list, shown as cards or as a table
+          (GAP-HR-TRANSFER-04) -- a client island. */}
+      {errored ? (
+        <Card title={t("cardTitle")}>
           <div className="pad">
             <LoadErrorState result={{ status, errorMessage }} area="transfer" backHref="/hr" />
           </div>
-        ) : (
-          <DataTable<TransferRow>
-          columns={tableColumns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="📍"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <TransferListFilters transfers={items} />
+      )}
     </div>
   );
 }
