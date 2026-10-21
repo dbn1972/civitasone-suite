@@ -4,6 +4,7 @@
  */
 import { sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
+import type { PriceBookChanges } from "./history.js";
 
 export interface PriceBookView {
   id: string;
@@ -40,6 +41,41 @@ export async function list(tenantId: string, limit: number, offset: number): Pro
     `) as unknown as PriceBookView[];
     const counted = await tx.execute(sql`
       SELECT count(*)::int AS total FROM crm.price_books WHERE tenant_id = ${tenantId}
+    `) as unknown as Array<{ total: number }>;
+    return { rows, total: counted[0]?.total ?? 0 };
+  });
+}
+
+export interface PriceBookHistoryView {
+  id: string;
+  priceBookId: string;
+  version: number;
+  action: "create" | "update" | "item";
+  changedBy: string;
+  changedAt: string;
+  reason: string | null;
+  changes: PriceBookChanges;
+}
+
+/** GAP-CRM-PRICE-BOOKS-01: the book's change history, newest first (see history.ts). */
+export async function listHistory(
+  tenantId: string,
+  priceBookId: string,
+  limit: number,
+  offset: number,
+): Promise<{ rows: PriceBookHistoryView[]; total: number }> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.execute(sql`
+      SELECT id, price_book_id AS "priceBookId", version, action, changed_by AS "changedBy",
+             changed_at AS "changedAt", reason, changes
+      FROM crm.price_book_history
+      WHERE tenant_id = ${tenantId} AND price_book_id = ${priceBookId}
+      ORDER BY changed_at DESC, version DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `) as unknown as PriceBookHistoryView[];
+    const counted = await tx.execute(sql`
+      SELECT count(*)::int AS total FROM crm.price_book_history
+      WHERE tenant_id = ${tenantId} AND price_book_id = ${priceBookId}
     `) as unknown as Array<{ total: number }>;
     return { rows, total: counted[0]?.total ?? 0 };
   });

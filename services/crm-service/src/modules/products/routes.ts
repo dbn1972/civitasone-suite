@@ -9,6 +9,7 @@ import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
+import { resolveUserNames } from "../../shared/identity-names.js";
 import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -56,6 +57,19 @@ const listQuery = z.object({
   category: z.string().min(1).max(120).optional(),
 });
 
+/**
+ * GAP-CRM-PRODUCTS-01: updated_by is an identity user uuid -- the catalogue's "Last changed"
+ * column must show WHO, not a uuid. Attach `updatedByName` (null when identity cannot resolve
+ * it; the lookup is fail-open display enrichment).
+ */
+async function withUpdaterNames<T extends { updatedBy: string }>(
+  tenantId: string,
+  products: T[],
+): Promise<Array<T & { updatedByName: string | null }>> {
+  const names = await resolveUserNames(tenantId, products.map((p) => p.updatedBy));
+  return products.map((p) => ({ ...p, updatedByName: names.get(p.updatedBy) ?? null }));
+}
+
 export async function productRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/products", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -79,7 +93,7 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const { rows, total } = await repo.list(ctx.tenantId, {
       limit: q.limit, offset: q.offset, activeOnly: q.activeOnly, ...(q.category ? { category: q.category } : {}),
     });
-    return reply.send({ data: rows, meta: { limit: q.limit, offset: q.offset, total } });
+    return reply.send({ data: await withUpdaterNames(ctx.tenantId, rows), meta: { limit: q.limit, offset: q.offset, total } });
   });
 
   app.get("/v1/crm/products/:id", async (req, reply) => {
@@ -88,7 +102,20 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const product = await repo.findById(ctx.tenantId, id);
     if (!product) throw new HttpError(404, "NOT_FOUND", "product not found");
-    return reply.send({ data: product });
+    const [named] = await withUpdaterNames(ctx.tenantId, [product]);
+    return reply.send({ data: named });
+  });
+
+  // GAP-CRM-PRODUCTS-01: how many quotations / price books still reference this product.
+  // Admin-only (it backs the catalogue editor's retire dialog). The DELETE below is a
+  // soft-disable, so this is a warning of impact -- not a referential block.
+  app.get("/v1/crm/products/:id/usage", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const usage = await repo.usageOf(ctx.tenantId, id);
+    if (!usage) throw new HttpError(404, "NOT_FOUND", "product not found");
+    return reply.send({ data: usage });
   });
 
   app.patch("/v1/crm/products/:id", async (req, reply) => {

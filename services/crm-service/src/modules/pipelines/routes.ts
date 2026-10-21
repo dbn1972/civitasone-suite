@@ -9,11 +9,14 @@ import * as repo from "./repo.js";
 import * as dealsRepo from "../deals/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
-// GAP-CRM-HOME-01 (step 4): pipelines and their stage gates are tenant-wide
-// configuration -- the web admin screen (/crm/pipelines) is gated to CRM admins, so
-// the server must refuse the same writes from a plain crm_user (hiding the tile and
-// the route is UX only). Reads stay on CRM_ROLES: the deals board and the
-// opportunity views list pipelines for every CRM user.
+// GAP-CRM-HOME-01 (step 4) / GAP-CRM-PIPELINES-03: pipelines and their stage gates, mandatory
+// fields and scope are tenant-wide CONFIGURATION -- an admin control. The web admin screen
+// (/crm/pipelines, crm/pipelines/layout.tsx) is gated to CRM admins, so the server must
+// refuse the same writes from a plain crm_user (hiding the tile and the route is UX only).
+// Reads stay on CRM_ROLES because the deals Kanban board, the opportunity views, the
+// stage-limit editor and the quotation builder all read pipelines as a plain crm_user.
+// Strictly narrower than the previous write set (CRM_ROLES minus crm_user): no role is
+// granted anything new here.
 const PIPELINE_WRITE_ROLES = ["crm_admin", "super_admin"];
 
 export async function pipelineRoutes(app: FastifyInstance): Promise<void> {

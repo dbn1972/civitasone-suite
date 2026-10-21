@@ -3,6 +3,7 @@ import { z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveUserNames } from "../../shared/identity-names.js";
 import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema, dealIdsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -128,7 +129,13 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const q = pipelineScopeQuery.parse(req.query ?? {});
     const rows = await repo.stageAgeingExceeding(ctx.tenantId, q.pipelineId);
-    return reply.send({ data: rows, meta: { total: rows.length } });
+    // GAP-CRM-OPPORTUNITY-AGEING-03: a manager needs WHO to chase, not a user uuid. The
+    // row carries only owner_id, so resolve it to a display name (identity-service,
+    // fail-open: an unresolved owner yields ownerName null and the UI says so rather than
+    // printing the uuid). ownerId stays on the row.
+    const names = await resolveUserNames(ctx.tenantId, rows.map((r) => r.ownerId));
+    const data = rows.map((r) => ({ ...r, ownerName: r.ownerId ? names.get(r.ownerId) ?? null : null }));
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // OP-004: kanban board — deals grouped by stage.
