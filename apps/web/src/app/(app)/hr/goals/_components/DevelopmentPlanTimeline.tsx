@@ -29,10 +29,12 @@ const TYPE_ICON: Record<string, string> = {
   other:       "📌",
 };
 
+// GAP-HR-GOALS-05: tokens only -- the connector dots and the in-progress pill
+// used bare hex colours, none of which followed the dark theme.
 const STATUS_STYLE: Record<string, { bg: string; color: string; dot: string }> = {
-  planned:     { bg: "var(--infobg)", color: "var(--info)", dot: "#60a5fa" },
-  in_progress: { bg: "#fff7e6", color: "var(--warn)", dot: "#fbbf24" },
-  completed:   { bg: "var(--goodbg)", color: "var(--good)", dot: "#4ade80" },
+  planned:     { bg: "var(--infobg)", color: "var(--info)", dot: "var(--info)" },
+  in_progress: { bg: "var(--warnbg)", color: "var(--warn)", dot: "var(--warn)" },
+  completed:   { bg: "var(--goodbg)", color: "var(--good)", dot: "var(--good)" },
   deferred:    { bg: "var(--bg)", color: "var(--mut)", dot: "var(--mut)" },
   cancelled:   { bg: "var(--badbg)", color: "var(--bad)", dot: "var(--bad)" },
 };
