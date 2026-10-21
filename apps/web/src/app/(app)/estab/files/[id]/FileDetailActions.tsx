@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
+import { NOTE_SIGN_RECORDS_COPY } from "../../_shared/signatureCopy";
 
 const ROLE_LABEL: Record<string, string> = {
   dealing_hand: "Dealing Hand",
@@ -322,7 +323,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       <ConfirmDialog
         open={signConfirm.open}
         title="Sign this note as a green note?"
-        description="This records your e-signature into the file's tamper-evident (hash-chained) noting trail as a green note in your name. A signed note cannot be edited or withdrawn."
+        description={NOTE_SIGN_RECORDS_COPY}
         confirmLabel="Sign note"
         danger
         busy={signConfirm.busy}
