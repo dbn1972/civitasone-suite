@@ -20,6 +20,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsOnboardingDocuments } from "./schema.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
+import { todayIST, addDaysToDateOnly } from "../../shared/ist.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
@@ -162,12 +163,10 @@ export function buildOnboardingSummaryRows(
     const completed = empTasks.filter((t) => t.status === "completed").length;
     const overdue = empTasks.filter((t) => {
       if (t.status === "completed" || !emp?.dateOfJoining) return false;
-      // Both sides are date-only strings or Date objects from a date column;
-      // compute due date in UTC to avoid local-tz midnight hazard.
-      const join = new Date(emp.dateOfJoining + "T00:00:00Z");
-      const due = new Date(join);
-      due.setUTCDate(due.getUTCDate() + t.dueByDay);
-      return due.toISOString().slice(0, 10) < todayStr;
+      // Due date = joining date + dueByDay, as calendar dates (no clock time),
+      // compared to the caller-supplied IST "today" string.
+      const due = addDaysToDateOnly(emp.dateOfJoining, t.dueByDay);
+      return due !== null && due < todayStr;
     }).length;
     const status = completed === total ? "completed" : overdue > 0 ? "overdue" : "in_progress";
     return {
@@ -363,7 +362,11 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       grouped.get(t.employeeId)!.push(t);
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
+    // GAP-HR-ONBOARDING-DETAIL-06: the IST calendar date, matching the detail
+    // page (web lib/formatters todayIST) -- the UTC date used here before is
+    // still "yesterday" between 00:00 and 05:30 IST, so the list overdue count
+    // and the detail page overdue chips disagreed for 5.5h of every day.
+    const todayStr = todayIST();
     const all = buildOnboardingSummaryRows(empIds, empMap, deptMap, grouped, todayStr);
     const counts = countOnboardingRows(all);
     const filtered = filterOnboardingRows(all, status);
