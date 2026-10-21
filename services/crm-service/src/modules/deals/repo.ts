@@ -62,6 +62,7 @@ export function toView(r: DealRow, contactName?: string | null): DealView {
     valueDisplay: formatValue(r.valueMinor, r.currency),
     contactId: r.contactId,
     contactName: contactName ?? null,
+    accountId: r.accountId ?? null,
     ownerId: r.ownerId,
     closeDate: r.closeDate ?? null,
     closedAt: r.closedAt?.toISOString() ?? null,
@@ -275,12 +276,14 @@ export async function updateStageWithVersion(
 }
 
 export async function findAccountId(tx: Writer, dealId: string, tenantId: string): Promise<string | null> {
-  const rows = await (tx as typeof db).select({ accountId: contacts.accountId })
+  // GAP-CRM-OPPORTUNITIES-NEW-02: the deal's own direct account link wins; the contact's
+  // account is the fallback for deals captured before the direct link existed.
+  const rows = await (tx as typeof db).select({ direct: deals.accountId, viaContact: contacts.accountId })
     .from(deals)
     .leftJoin(contacts, and(eq(deals.contactId, contacts.id), eq(contacts.tenantId, deals.tenantId)))
     .where(and(eq(deals.id, dealId), eq(deals.tenantId, tenantId)))
     .limit(1);
-  return rows[0]?.accountId ?? null;
+  return rows[0]?.direct ?? rows[0]?.viaContact ?? null;
 }
 
 /**
@@ -335,12 +338,29 @@ export async function contactExistsTx(tx: Writer, tenantId: string, contactId: s
   return rows.length > 0;
 }
 
+/**
+ * GAP-CRM-OPPORTUNITIES-NEW-02: does `accountId` exist in this tenant? Tx-scoped for the
+ * same reason as contactExistsTx (consumers already hold an open transaction).
+ */
+export async function accountExistsTx(tx: Writer, tenantId: string, accountId: string): Promise<boolean> {
+  const rows = (await (tx as typeof db).execute(sql`
+    SELECT 1 AS one FROM crm.accounts WHERE id = ${accountId}::uuid AND tenant_id = ${tenantId}::uuid LIMIT 1
+  `)) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+/** Route-level (no open transaction) twin of accountExistsTx, for the synchronous 422 check. */
+export async function accountExists(tenantId: string, accountId: string): Promise<boolean> {
+  return tenantTransaction(db, tenantId, (tx) => accountExistsTx(tx as unknown as Writer, tenantId, accountId));
+}
+
 /** OP-003 opportunity fields editable alongside the P1-1 base fields. */
 export interface DealPatch {
   valueMinor?: bigint;
   ownerId?: string | null;
   closeDate?: string | null;
   contactId?: string | null;
+  accountId?: string | null;
   product?: string | null;
   quantity?: number | null;
   competitors?: string[];
@@ -360,6 +380,7 @@ export async function updateDeal(
   if (fields.ownerId !== undefined) patch.ownerId = fields.ownerId;
   if (fields.closeDate !== undefined) patch.closeDate = fields.closeDate;
   if (fields.contactId !== undefined) patch.contactId = fields.contactId;
+  if (fields.accountId !== undefined) patch.accountId = fields.accountId;
   if (fields.product !== undefined) patch.product = fields.product;
   if (fields.quantity !== undefined) patch.quantity = fields.quantity;
   if (fields.competitors !== undefined) patch.competitors = fields.competitors;
