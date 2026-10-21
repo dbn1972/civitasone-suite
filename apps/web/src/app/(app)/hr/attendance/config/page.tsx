@@ -87,12 +87,12 @@ export default async function AttendanceConfigPage() {
           <KeyValueTable
             caption={t("cardWorkingHours")}
             rows={[
-              { label: t("whOfficeStart"), value: t("whOfficeStartVal", { value: formatClockTime12h(d.officeStartTime) }) },
-              { label: t("whOfficeEnd"), value: t("whOfficeEndVal", { value: formatClockTime12h(d.officeEndTime) }) },
-              { label: t("whGracePeriod"), value: t("whGracePeriodVal", { mins: d.graceMinutes }) },
-              { label: t("whHalfDayCutoff"), value: t("whHalfDayCutoffVal", { value: formatClockTime12h(d.halfDayCutoffTime) }) },
-              { label: t("whMinHours"), value: t("whMinHoursVal", { hours: d.minHoursForFullDay }) },
-              { label: t("whWeeklyOff"), value: t("whWeeklyOffVal", { value: d.weeklyOffDays }) },
+              { label: t("whOfficeStart"), value: t("whOfficeStartTpl", { value: formatClockTime12h(d.officeStartTime) }) },
+              { label: t("whOfficeEnd"), value: t("whOfficeEndTpl", { value: formatClockTime12h(d.officeEndTime) }) },
+              { label: t("whGracePeriod"), value: t("whGracePeriodTpl", { mins: d.graceMinutes }) },
+              { label: t("whHalfDayCutoff"), value: t("whHalfDayCutoffTpl", { value: formatClockTime12h(d.halfDayCutoffTime) }) },
+              { label: t("whMinHours"), value: t("whMinHoursTpl", { hours: d.minHoursForFullDay }) },
+              { label: t("whWeeklyOff"), value: t("whWeeklyOffTpl", { pattern: d.weeklyOffPattern }) },
             ]}
           />
         </Card>
@@ -101,11 +101,11 @@ export default async function AttendanceConfigPage() {
           <KeyValueTable
             caption={t("cardLateMarkRules")}
             rows={[
-              { label: t("lmGracePeriod"), value: t("lmGracePeriodVal", { mins: d.lateMarkGraceMinutes }) },
-              { label: t("lmTrigger"), value: t("lmTriggerVal", { value: formatClockTime12h(d.lateMarkTriggerTime) }) },
-              { label: t("lmHalfDayIf"), value: t("lmHalfDayIfVal", { value: formatClockTime12h(d.halfDayIfAfterTime) }) },
-              { label: t("lmAbsentIf"), value: t("lmAbsentIfVal", { value: formatClockTime12h(d.absentIfNoCheckInAfterTime) }) },
-              { label: t("lmDeduction"), value: t("lmDeductionVal", { marks: d.lateMarksPerClDeducted }) },
+              { label: t("lmGracePeriod"), value: t("lmGracePeriodTpl", { mins: d.lateMarkGraceMinutes }) },
+              { label: t("lmTrigger"), value: t("lmTriggerTpl", { value: formatClockTime12h(d.lateMarkTriggerTime) }) },
+              { label: t("lmHalfDayIf"), value: t("lmHalfDayIfTpl", { value: formatClockTime12h(d.halfDayIfAfterTime) }) },
+              { label: t("lmAbsentIf"), value: t("lmAbsentIfTpl", { value: formatClockTime12h(d.absentIfNoCheckInAfterTime) }) },
+              { label: t("lmDeduction"), value: t("lmDeductionTpl", { marks: d.lateMarksPerClDeducted }) },
             ]}
           />
         </Card>
@@ -114,11 +114,11 @@ export default async function AttendanceConfigPage() {
           <KeyValueTable
             caption={t("cardOvertimeRules")}
             rows={[
-              { label: t("otEligible"), value: t("otEligibleVal", { hours: d.otEligibleAfterHours }) },
-              { label: t("otRateWeekday"), value: t("otRateWeekdayVal", { multiplier: d.otRateWeekdayMultiplier }) },
-              { label: t("otRateWeeklyOff"), value: t("otRateWeeklyOffVal", { multiplier: d.otRateWeeklyOffMultiplier }) },
-              { label: t("otMaxPerDay"), value: t("otMaxPerDayVal", { hours: d.otMaxHoursPerDay }) },
-              { label: t("otRequiresApproval"), value: t("otRequiresApprovalVal", { value: d.otApprovalText }) },
+              { label: t("otEligible"), value: t("otEligibleTpl", { hours: d.otEligibleAfterHours }) },
+              { label: t("otRateWeekday"), value: t("otRateWeekdayTpl", { multiplier: d.otRateWeekdayMultiplier }) },
+              { label: t("otRateWeeklyOff"), value: t("otRateWeeklyOffTpl", { multiplier: d.otRateWeeklyOffMultiplier }) },
+              { label: t("otMaxPerDay"), value: t("otMaxPerDayTpl", { hours: d.otMaxHoursPerDay }) },
+              { label: t("otRequiresApproval"), value: t("otRequiresApprovalTpl", { approver: d.otApprovedBy }) },
             ]}
           />
         </Card>
@@ -127,10 +127,10 @@ export default async function AttendanceConfigPage() {
           <KeyValueTable
             caption={t("cardCompOff")}
             rows={[
-              { label: t("coEarnedWhen"), value: t("coEarnedWhenVal", { value: d.coEarnedWhen }) },
-              { label: t("coMustAvail"), value: t("coMustAvailVal", { days: d.coMustAvailWithinDays }) },
-              { label: t("coMaxAccumulation"), value: t("coMaxAccumulationVal", { count: d.coMaxAccumulation }) },
-              { label: t("coApprovalRequired"), value: t("coApprovalRequiredVal", { value: d.coApprovalText }) },
+              { label: t("coEarnedWhen"), value: t("coEarnedWhenTpl", { rule: d.coEarnedRule }) },
+              { label: t("coMustAvail"), value: t("coMustAvailTpl", { days: d.coMustAvailWithinDays }) },
+              { label: t("coMaxAccumulation"), value: t("coMaxAccumulationTpl", { count: d.coMaxAccumulation }) },
+              { label: t("coApprovalRequired"), value: t("coApprovalRequiredTpl", { approver: d.coApprovedBy }) },
             ]}
           />
         </Card>

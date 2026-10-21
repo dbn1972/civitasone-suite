@@ -10,6 +10,10 @@ import { ATTENDANCE_DEFAULTS } from "./attendanceDefaults";
  * messages/en.json previously displayed statically.
  */
 describe("ATTENDANCE_DEFAULTS", () => {
+  // The four text rows are closed codes now (rendered through an ICU `select`
+  // per locale) instead of English sentences, so the Hindi page no longer shows
+  // English for them; the displayed meaning is unchanged (see
+  // attendance/config/page.test.tsx for the rendered rows in en and hi).
   it("carries the same values the page previously displayed statically", () => {
     expect(ATTENDANCE_DEFAULTS).toEqual({
       officeStartTime: "09:30",
@@ -17,7 +21,7 @@ describe("ATTENDANCE_DEFAULTS", () => {
       graceMinutes: 15,
       halfDayCutoffTime: "12:30",
       minHoursForFullDay: 7.5,
-      weeklyOffDays: "Saturday & Sunday",
+      weeklyOffPattern: "sat_sun",
       lateMarkGraceMinutes: 15,
       lateMarkTriggerTime: "09:45",
       halfDayIfAfterTime: "12:30",
@@ -27,11 +31,11 @@ describe("ATTENDANCE_DEFAULTS", () => {
       otRateWeekdayMultiplier: 1.5,
       otRateWeeklyOffMultiplier: 2,
       otMaxHoursPerDay: 4,
-      otApprovalText: "Yes (supervisor)",
-      coEarnedWhen: "Worked on a holiday / weekly off",
+      otApprovedBy: "supervisor",
+      coEarnedRule: "holiday_or_weekly_off",
       coMustAvailWithinDays: 30,
       coMaxAccumulation: 3,
-      coApprovalText: "Yes (supervisor)",
+      coApprovedBy: "supervisor",
     });
   });
 
