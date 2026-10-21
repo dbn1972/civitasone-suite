@@ -38,3 +38,23 @@ describe("FinancialStatementSummarySchema wire contract (GAP-FINANCE-ACCOUNTING-
     expect(zMoneyMinorStrict.safeParse("4.2").success).toBe(false);
   });
 });
+
+import { FinanceDashboardSchema } from "../src/web.js";
+
+// GAP-FINANCE-DASHBOARD-01: the category split is optional and strict about its amounts.
+describe("FinanceDashboardSchema.categoryBreakdown", () => {
+  const BASE = { budgetUtilisationPct: 50, pendingSanctions: 1, paymentsThisMonth: 2, totalExpenditure: 300 };
+  it("is optional (an older API still parses) and accepts paise strings", () => {
+    expect(FinanceDashboardSchema.safeParse(BASE).success).toBe(true);
+    const ok = FinanceDashboardSchema.parse({ ...BASE, categoryBreakdown: [{ label: "Works", amountMinor: "123456" }] });
+    expect(ok.categoryBreakdown).toEqual([{ label: "Works", amountMinor: "123456" }]);
+  });
+  it.each([
+    [{ label: "Works", amountMinor: 1234 }],
+    [{ label: "Works", amountMinor: "12.5" }],
+    [{ label: "Works", amountMinor: "-1" }],
+    [{ label: "", amountMinor: "1" }],
+  ])("rejects a malformed entry %j", (entry) => {
+    expect(FinanceDashboardSchema.safeParse({ ...BASE, categoryBreakdown: [entry] }).success).toBe(false);
+  });
+});

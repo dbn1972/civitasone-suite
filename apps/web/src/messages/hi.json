@@ -3472,7 +3472,8 @@
     "printPage": "प्रिंट",
     "exportMis": "एमआईएस निर्यात (CSV)",
     "printMeta": "वित्त वर्ष {fy} · डेटा {time} तक का",
-    "paymentsThisMonth": "इस माह भुगतान"
+    "paymentsThisMonth": "इस माह भुगतान",
+    "categoryChart": "श्रेणी के अनुसार व्यय"
   },
   "financeChequesNew": {
     "title": "चेक / डीडी जारी करें",

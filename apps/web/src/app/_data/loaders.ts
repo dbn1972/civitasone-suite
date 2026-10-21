@@ -2380,8 +2380,25 @@ export const getWorkflowInstances = moduleLoader("/api/v1/workflow/instances", "
 
 // Finance loaders
 
+/**
+ * GAP-FINANCE-DASHBOARD-01: the category split is all-or-nothing. One malformed entry (no label, an amount that is not
+ * a base-10 paise string) drops the whole breakdown rather than drawing a partial split that looks complete.
+ */
+function mapCategoryBreakdown(raw: unknown): FinanceDashboard["categoryBreakdown"] {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: NonNullable<FinanceDashboard["categoryBreakdown"]> = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return undefined;
+    const label = toText(entry.label)?.trim();
+    if (!label || typeof entry.amountMinor !== "string" || !/^\d+$/.test(entry.amountMinor)) return undefined;
+    out.push({ label, amountMinor: entry.amountMinor });
+  }
+  return out;
+}
+
 function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
   if (!isRecord(payload)) return null;
+  const categoryBreakdown = mapCategoryBreakdown(payload.categoryBreakdown);
   return {
     // Preserve null (no sanctioned budget on record, UX-006) distinctly from
     // a malformed/missing field defaulting to 0 — collapsing both to 0 would
@@ -2394,6 +2411,7 @@ function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
     ...(typeof payload.sanctionedMinor === "string" && /^\d+$/.test(payload.sanctionedMinor)
       ? { sanctionedMinor: payload.sanctionedMinor }
       : {}),
+    ...(categoryBreakdown ? { categoryBreakdown } : {}),
   };
 }
 

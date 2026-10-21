@@ -3496,7 +3496,8 @@
     "printPage": "Print",
     "exportMis": "Export MIS (CSV)",
     "printMeta": "Financial year {fy} · Data as of {time}",
-    "paymentsThisMonth": "payments this month"
+    "paymentsThisMonth": "payments this month",
+    "categoryChart": "Expenditure by Category"
   },
   "financeChequesNew": {
     "title": "Issue Cheque / DD",

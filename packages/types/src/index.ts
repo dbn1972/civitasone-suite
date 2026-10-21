@@ -759,6 +759,11 @@ export type FinanceDashboard = {
   totalExpenditure: number;
   /** Total budget estimate (BE only), minor units (paise) as a decimal string; absent from an older API. */
   sanctionedMinor?: string;
+  /**
+   * Expenditure by category exactly as finance-service reports it (GAP-FINANCE-DASHBOARD-01); absent until the
+   * service sends one. `amountMinor` is paise as a base-10 string.
+   */
+  categoryBreakdown?: Array<{ label: string; amountMinor: string }>;
 };
 
 export type BudgetSummary = {

@@ -614,6 +614,14 @@ export const FinanceDashboardSchema = z.object({
   // Total budget estimate (BE only, no RE) in minor units, as a bigint-safe decimal
   // string (GAP-FINANCE-DASHBOARD-04). Optional so an older API still parses.
   sanctionedMinor: z.string().regex(/^\d+$/).optional(),
+  // GAP-FINANCE-DASHBOARD-01: expenditure split by category, AS REPORTED by finance-service (never derived or
+  // estimated on the client). Each amount is minor units (paise) as a base-10 string. Optional: finance-service does
+  // not send it yet (what a "category" is, and which spend counts as expenditure, is an owner decision), and the
+  // dashboard says "Category breakdown not available" until it does.
+  categoryBreakdown: z.array(z.object({
+    label: z.string().trim().min(1).max(120),
+    amountMinor: z.string().regex(/^\d+$/),
+  })).max(50).optional(),
 });
 
 // Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
