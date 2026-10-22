@@ -117,7 +117,7 @@ describe("document access-level clearance (LIST-05, REPOSITORY-06, DASHBOARD-05,
     expect(admin).toEqual(expect.arrayContaining([`${marker} restricted`, `${marker} confidential`]));
   });
 
-  it("detail by id: 404 for an uncleared user, 200 for an admin; an uncleared user cannot publish it either", async () => {
+  it("detail by id: 404 for an uncleared user, 200 for an admin; a knowledge_user cannot publish or unpublish it (403, role-gated)", async () => {
     const restricted = DOC["A:restricted"]!;
     expect((await app.inject({ method: "GET", url: `/v1/knowledge/articles/${restricted}`, headers: auth(userTok) })).statusCode).toBe(404);
     expect((await app.inject({ method: "GET", url: `/v1/knowledge/articles/${restricted}`, headers: auth(adminTok) })).statusCode).toBe(200);
@@ -126,7 +126,11 @@ describe("document access-level clearance (LIST-05, REPOSITORY-06, DASHBOARD-05,
       method: "PATCH", url: `/v1/knowledge/articles/${restricted}/publish`,
       headers: { ...auth(userTok), "content-type": "application/json" }, payload: { published: false },
     });
-    expect(patch.statusCode).toBe(404);
+    // Publishing is approver-only: a knowledge_user is refused outright (403) before any
+    // document lookup, so the restricted document can be neither changed nor probed.
+    expect(patch.statusCode).toBe(403);
+    const after = await app.inject({ method: "GET", url: `/v1/knowledge/articles/${restricted}`, headers: auth(adminTok) });
+    expect((after.json() as { status: string }).status).toBe("approved"); // seeded approved; the refused unpublish changed nothing
   });
 
   it("summary counts exclude uncleared documents for a knowledge_user", async () => {

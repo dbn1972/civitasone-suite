@@ -977,9 +977,9 @@ export const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"]
 
 /**
  * GAP-HELPDESK-CATALOGUE-BREACHES-03: roles permitted to view the tenant-wide
- * SLA breach report (includes requestedBy and stage data). This UI gate is
- * deliberately stricter than the server (GET /v1/helpdesk/catalogue/requests/breaches
- * allows USER_ROLES); the server remains the authority.
+ * SLA breach report (includes requestedBy and stage data). Mirrors the server
+ * (GET /v1/helpdesk/catalogue/requests/breaches is helpdesk_admin / super_admin
+ * only and 403s anyone else); the server remains the authority.
  */
 export const HELPDESK_MANAGER_ROLES = ["helpdesk_admin", "super_admin"];
 

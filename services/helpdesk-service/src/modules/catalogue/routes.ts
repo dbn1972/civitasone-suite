@@ -26,6 +26,12 @@ const ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
 const USER_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin"];
 const APPROVER_ROLES = ["helpdesk_admin", "super_admin"];
 const FULFILLER_ROLES = ["helpdesk_agent", "helpdesk_admin", "super_admin"];
+// Tenant-wide request views (list without `mine`, SLA breach report) expose other
+// requesters' formData/PII. Breach report: managers only. Tenant-wide list: the
+// roles that work the queue (fulfillers + managers), matching the by-id route's
+// agent-or-owner rule. A plain helpdesk_user is always scoped to their own requests.
+const MANAGER_ROLES = ["helpdesk_admin", "super_admin"];
+const TENANT_WIDE_REQUEST_ROLES = FULFILLER_ROLES;
 
 function offeringView(o: OfferingRow) {
   return {
@@ -172,7 +178,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/helpdesk/catalogue/requests/breaches", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, USER_ROLES);
+    requireRole(ctx, MANAGER_ROLES);
     const now = new Date();
     const rows = await repo.listBreachedRequests(ctx.tenantId);
     const views = rows.map((r) => requestView(r, now));
@@ -196,7 +202,10 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, USER_ROLES);
     const q = listQuerySchema.parse(req.query);
     const rq = req.query as Record<string, unknown>;
-    const mine = rq.mine === "true" || rq.mine === "1";
+    // A plain helpdesk_user never gets the tenant-wide view: it is forced to
+    // their own requests regardless of the `mine` flag.
+    const tenantWide = ctx.roles.some((r) => TENANT_WIDE_REQUEST_ROLES.includes(r));
+    const mine = !tenantWide || rq.mine === "true" || rq.mine === "1";
     const status = typeof rq.status === "string" ? String(rq.status) : undefined;
     const rows = await repo.listRequests(ctx.tenantId, {
       requestedBy: mine ? ctx.actorId : undefined,
@@ -222,7 +231,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     // PII in formData). Agents/admins may view any request. A non-owning
     // helpdesk_user is 404'd (ids are not enumerable), matching the list
     // endpoint's `?mine=true` self-scoping.
-    const isAgent = ["helpdesk_agent", "helpdesk_admin", "super_admin"].some((r) => ctx.roles.includes(r));
+    const isAgent = ctx.roles.some((r) => TENANT_WIDE_REQUEST_ROLES.includes(r));
     if (!isAgent && request.requestedBy !== ctx.actorId) {
       throw new HttpError(404, "NOT_FOUND", "service request not found");
     }

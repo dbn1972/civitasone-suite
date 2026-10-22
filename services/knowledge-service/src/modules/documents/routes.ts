@@ -15,6 +15,9 @@ import * as queries from "./queries.js";
 import { clearedAccessLevels, canSetAccessLevel } from "./clearance.js";
 
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
+// Publishing makes a document authoritative: approver roles only, the same set
+// the policies module uses for approve (a plain knowledge_user can author, not approve).
+const APPROVER_ROLES = ["knowledge_admin", "super_admin"];
 
 const searchBody = z.object({
   query: z.string().min(1).max(500),
@@ -131,10 +134,12 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(doc);
   });
 
-  // PATCH /v1/knowledge/articles/:id/publish — publish or unpublish an article
+  // PATCH /v1/knowledge/articles/:id/publish — publish or unpublish an article.
+  // Approver roles only; maker-checker (the author may not publish their own
+  // document); every change writes an audit event in the same transaction.
   app.patch("/v1/knowledge/articles/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
     const body = z.object({ published: z.boolean() }).parse(req.body);
     const status = body.published ? "approved" : "draft";
@@ -143,8 +148,11 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
     if (levels && !(await queries.getDocumentById(ctx.tenantId, id, levels))) {
       throw new HttpError(404, "NOT_FOUND", "article not found");
     }
-    const updated = await queries.setDocumentStatus(ctx.tenantId, id, status);
-    if (!updated) throw new HttpError(404, "NOT_FOUND", "article not found");
+    const outcome = await queries.publishDocument(ctx.tenantId, id, ctx, body.published);
+    if (outcome === "not_found") throw new HttpError(404, "NOT_FOUND", "article not found");
+    if (outcome === "self_publish") {
+      throw new HttpError(403, "MAKER_CHECKER", "the author of a document cannot publish it (maker-checker)");
+    }
     return reply.send({ id, status, correlationId: ctx.correlationId });
   });
 
