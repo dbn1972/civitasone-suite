@@ -36,5 +36,11 @@ export const stateRulesBody = z.object({
   lwfEmployee: z.number().int().nonnegative().optional(),
   lwfEmployer: z.number().int().nonnegative().optional(),
   lwfFrequency: z.enum(LWF_FREQUENCIES).optional(),
-});
+}).refine(
+  // GAP-PAYROLL-STATUTORY-LWF-05: a body that carries a state but none of the
+  // three LWF fields used to be accepted (202) while the consumer wrote nothing,
+  // so the UI reported "saved" for a no-op. Refuse it at the boundary instead.
+  (b) => b.lwfEmployee !== undefined || b.lwfEmployer !== undefined || b.lwfFrequency !== undefined,
+  { message: "at least one of lwfEmployee, lwfEmployer or lwfFrequency is required", path: ["lwfEmployee"] },
+);
 export type StateRulesBody = z.infer<typeof stateRulesBody>;

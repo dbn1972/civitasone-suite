@@ -18,6 +18,7 @@ import { createTaxDeclarationBody, taxDeclarationWindowBody, LANDLORD_PAN_RENT_T
 import { maskPan } from "../../shared/pii-mask.js";
 import { encryptPii } from "../../shared/pii-crypto.js";
 import { currentFyWindow } from "./declaration-window.js";
+import { isDeclarationLocked } from "./declaration-lock.js";
 import * as commands from "./commands.js";
 import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
 import { computeHraClaimedMinor } from "./consumer.js";
@@ -193,6 +194,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       const identity = identityById.get(employeeId);
       data.push({
         id: dec?.id ?? employeeId,
+        // GAP-PAYROLL-INCOME-TAX-03: `id` above is the declaration id when one
+        // exists but the employee id when none does (a mixed id space), so it
+        // cannot name a drill-in target. The employee id is always the
+        // hrms_employees.id the row was keyed on -- the same id every other
+        // payroll list links to /hr/employees/{id} with. Additive field.
+        employeeId,
         employee: identity?.fullName ?? employeeId,
         department: identity?.departmentId ?? "-",
         grossIncome: String(grossIncome),
@@ -389,6 +396,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     if (!isStaff && !win.open) {
       throw new HttpError(409, "DECLARATION_WINDOW_CLOSED",
         win.state === "not_open" ? `declarations for ${body.fy} open on ${win.opensOn}` : `declarations for ${body.fy} closed on ${win.closesOn}; contact payroll to change it`);
+    }
+    // GAP-PAYROLL-TAX-DECLARATION-05: a verified / approved declaration is read-only for
+    // everyone (staff included) -- no role can overwrite what payroll already relied on.
+    if (existingRow && isDeclarationLocked(existingRow.status)) {
+      throw new HttpError(409, "DECLARATION_LOCKED",
+        `the ${body.fy} declaration is ${existingRow.status} and can no longer be changed; contact payroll`);
     }
     if (regime === "old" && body.rentPaidMinor > LANDLORD_PAN_RENT_THRESHOLD_MINOR && !body.landlordPan && !existingRow?.landlordPan) {
       throw new HttpError(400, "LANDLORD_PAN_REQUIRED", "landlord PAN is required when annual rent exceeds Rs 1,00,000");

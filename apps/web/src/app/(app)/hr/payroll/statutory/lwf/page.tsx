@@ -91,9 +91,19 @@ export default async function LwfPage() {
         <StatCard icon="🗓️" iconBg="var(--warnbg)" label={t("statOtherFrequencyCount")} value={errored ? null : otherFrequencyCount} />
       </StatGrid>
 
-      {/* GAP-PAYROLL-STATUTORY-LWF-05: existing rows are passed in so the
-          form can warn before overwriting a state's stored configuration. */}
-      {canEdit && <LwfConfigForm existingConfigs={errored ? [] : rows.map((r) => ({ state_code: r.state_code }))} />}
+      {/* GAP-PAYROLL-STATUTORY-LWF-05: existing rows (state, stored amounts and
+          frequency) are passed in so the form can fill them in, send only what
+          changed, and warn before overwriting a state's stored configuration. */}
+      {canEdit && (
+        <LwfConfigForm
+          existingConfigs={errored ? [] : rows.map((r) => ({
+            state_code: r.state_code,
+            employee_contrib_minor: r.employee_contrib_minor,
+            employer_contrib_minor: r.employer_contrib_minor,
+            frequency: r.frequency,
+          }))}
+        />
+      )}
 
       <Card title={t("historyCardTitle")}>
         {errored ? (

@@ -20,6 +20,8 @@ type BulkJob = {
   failed: number;
   storagePrefix: string | null;
   errorDetails: unknown;
+  /** How many failures were recorded in all; errorDetails carries at most a capped prefix. */
+  errorDetailsTotal?: number;
   createdAt: string;
   completedAt: string | null;
 };
@@ -49,14 +51,38 @@ function currentFy(): string {
 // PAYROLL_ADMIN_ROLES is page-local.
 const FORM16_BULK_ADMIN_ROLES = ["payroll_admin", "super_admin"];
 
-// GAP-PAYROLL-FORM16-05: the bulk job's errorDetails shape is not documented
-// by the backend ("payroll tax service absent" from the original audit's
-// snapshot, and still not pinned down by a shared type in this checkout).
-// Parsed defensively so a shape that doesn't match this best-guess schema
-// falls back to the failure COUNT only, never a raw JSON dump of backend
-// internals (which may include employee ids/error text) to whatever role
-// can reach this page.
-const errorDetailsSchema = z.array(z.object({ employeeId: z.string(), message: z.string() })).optional();
+// GAP-PAYROLL-FORM16-05: the bulk job's errorDetails, as returned by
+// payroll-service GET bulk-status: one { employeeNo, reasonCode } row per failed
+// employee (a run-level failure has employeeNo "N/A"), capped server-side, with
+// errorDetailsTotal giving the full count. The service strips the raw exception
+// text, and this page ignores any other key (an older service that still sends
+// `error` / `message` / `employeeId` has them dropped by the parse), so backend
+// error text and internal ids can never be rendered. A reasonCode the page does
+// not know shows the generic "no reason recorded" copy. Anything that is not an
+// array of such rows falls back to the failure COUNT only.
+const errorDetailsSchema = z.array(z.object({
+  employeeNo: z.string().optional(),
+  reasonCode: z.string().optional(),
+})).optional();
+
+const RUN_LEVEL_EMPLOYEE_NO = "N/A";
+/** Defence in depth: the service already caps the list; never render an unbounded one. */
+const MAX_FAILURE_ROWS = 100;
+
+/** Stable reasonCode (form16-pdf/failure-reasons.ts) -> form16 i18n key. */
+const FAILURE_REASON_KEYS = {
+  DATA_UNAVAILABLE: "failureReasonDataUnavailable",
+  RENDERER_UNAVAILABLE: "failureReasonRendererUnavailable",
+  SIGNING_FAILED: "failureReasonSigningFailed",
+  STORAGE_ERROR: "failureReasonStorageError",
+  UNKNOWN: "failureReasonUnknown",
+} as const;
+
+function failureReasonKey(code: string | undefined): (typeof FAILURE_REASON_KEYS)[keyof typeof FAILURE_REASON_KEYS] {
+  return code !== undefined && Object.prototype.hasOwnProperty.call(FAILURE_REASON_KEYS, code)
+    ? FAILURE_REASON_KEYS[code as keyof typeof FAILURE_REASON_KEYS]
+    : "failureReasonUnknown";
+}
 
 async function getBulkStatus(fy: string): Promise<JobLookup> {
   const r = await statusAwareGet(`/v1/payroll/tax/form16/bulk-status?fy=${encodeURIComponent(fy)}`);
@@ -183,15 +209,30 @@ export default async function Form16Page({
                   )}
                   {lookup.job.failed > 0 && lookup.job.errorDetails != null && (() => {
                     const parsed = errorDetailsSchema.safeParse(lookup.job.errorDetails);
+                    const rows = parsed.success && parsed.data ? parsed.data.slice(0, MAX_FAILURE_ROWS) : null;
+                    const recorded = Math.max(
+                      parsed.success && parsed.data ? parsed.data.length : 0,
+                      typeof lookup.job.errorDetailsTotal === "number" ? lookup.job.errorDetailsTotal : 0,
+                    );
                     return (
                       <details style={{ marginTop: 10, fontSize: 13 }}>
                         <summary>{t("failureDetailsSummary", { count: lookup.job.failed })}</summary>
-                        {parsed.success && parsed.data ? (
-                          <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12 }}>
-                            {parsed.data.map((row, i) => (
-                              <li key={i}>{t("failureRow", { employeeId: row.employeeId, message: row.message })}</li>
-                            ))}
-                          </ul>
+                        {rows ? (
+                          <>
+                            <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 12 }}>
+                              {rows.map((row, i) => {
+                                const reason = t(failureReasonKey(row.reasonCode));
+                                const runLevel = row.employeeNo === RUN_LEVEL_EMPLOYEE_NO;
+                                const who = runLevel ? t("failureRunLevel") : row.employeeNo?.trim() ? row.employeeNo.trim() : t("failureEmployeeUnknown");
+                                return <li key={i}>{t("failureRow", { employee: who, message: reason })}</li>;
+                              })}
+                            </ul>
+                            {recorded > rows.length && (
+                              <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 6 }}>
+                                {t("failureRowsTruncated", { count: recorded - rows.length })}
+                              </p>
+                            )}
+                          </>
                         ) : (
                           <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 6 }}>{t("failureDetailsUnavailable")}</p>
                         )}

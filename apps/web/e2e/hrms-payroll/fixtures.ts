@@ -100,9 +100,9 @@ export const regularisations = {
 
 export const payrollRuns = {
   data: [
-    { id: 'run-001', payPeriod: '2024-07', runDate: '2024-07-28', status: 'paid', employeeCount: 150, grossAmount: 15000000, deductions: 3000000, netAmount: 12000000 },
-    { id: 'run-002', payPeriod: '2024-06', runDate: '2024-06-28', status: 'paid', employeeCount: 148, grossAmount: 14800000, deductions: 2960000, netAmount: 11840000 },
-    { id: 'run-003', payPeriod: '2024-08', runDate: '2024-08-01', status: 'draft', employeeCount: 152, grossAmount: 15200000, deductions: 3040000, netAmount: 12160000 },
+    { id: 'run-001', payPeriod: '2024-07', runDate: '2024-07-28', status: 'paid', employeeCount: 150, grossAmount: 15000000, deductions: 3000000, netAmount: 12000000, grossMinor: '1500000000', deductionsMinor: '300000000', netMinor: '1200000000' },
+    { id: 'run-002', payPeriod: '2024-06', runDate: '2024-06-28', status: 'paid', employeeCount: 148, grossAmount: 14800000, deductions: 2960000, netAmount: 11840000, grossMinor: '1480000000', deductionsMinor: '296000000', netMinor: '1184000000' },
+    { id: 'run-003', payPeriod: '2024-08', runDate: '2024-08-01', status: 'draft', employeeCount: 152, grossAmount: 15200000, deductions: 3040000, netAmount: 12160000, grossMinor: '1520000000', deductionsMinor: '304000000', netMinor: '1216000000' },
   ],
 };
 
@@ -115,10 +115,13 @@ export const payrollRunDetail = {
   grossAmount: 15000000,
   deductions: 3000000,
   netAmount: 12000000,
+  grossMinor: '1500000000',
+  deductionsMinor: '300000000',
+  netMinor: '1200000000',
   salarySlips: [
-    { id: 'slip-001', employeeId: 'emp-001', employeeName: 'Ravi Kumar', gross: 120000, deductions: 24000, net: 96000, status: 'paid' },
-    { id: 'slip-002', employeeId: 'emp-002', employeeName: 'Priya Singh', gross: 95000, deductions: 19000, net: 76000, status: 'paid' },
-    { id: 'slip-003', employeeId: 'emp-003', employeeName: 'Ankit Verma', gross: 55000, deductions: 11000, net: 44000, status: 'paid' },
+    { id: 'slip-001', employeeId: 'emp-001', employeeName: 'Ravi Kumar', gross: 120000, deductions: 24000, net: 96000, grossMinor: '12000000', deductionsMinor: '2400000', netMinor: '9600000', status: 'paid' },
+    { id: 'slip-002', employeeId: 'emp-002', employeeName: 'Priya Singh', gross: 95000, deductions: 19000, net: 76000, grossMinor: '9500000', deductionsMinor: '1900000', netMinor: '7600000', status: 'paid' },
+    { id: 'slip-003', employeeId: 'emp-003', employeeName: 'Ankit Verma', gross: 55000, deductions: 11000, net: 44000, grossMinor: '5500000', deductionsMinor: '1100000', netMinor: '4400000', status: 'paid' },
   ],
 };
 
@@ -131,9 +134,12 @@ export const payrollRunDraft = {
   grossAmount: 15200000,
   deductions: 3040000,
   netAmount: 12160000,
+  grossMinor: '1520000000',
+  deductionsMinor: '304000000',
+  netMinor: '1216000000',
   salarySlips: [
-    { id: 'slip-010', employeeId: 'emp-001', employeeName: 'Ravi Kumar', gross: 120000, deductions: 24000, net: 96000, status: 'draft' },
-    { id: 'slip-011', employeeId: 'emp-002', employeeName: 'Priya Singh', gross: 95000, deductions: 19000, net: 76000, status: 'draft' },
+    { id: 'slip-010', employeeId: 'emp-001', employeeName: 'Ravi Kumar', gross: 120000, deductions: 24000, net: 96000, grossMinor: '12000000', deductionsMinor: '2400000', netMinor: '9600000', status: 'draft' },
+    { id: 'slip-011', employeeId: 'emp-002', employeeName: 'Priya Singh', gross: 95000, deductions: 19000, net: 76000, grossMinor: '9500000', deductionsMinor: '1900000', netMinor: '7600000', status: 'draft' },
   ],
 };
 

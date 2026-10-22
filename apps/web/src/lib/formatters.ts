@@ -636,9 +636,15 @@ export function formatClockTime12h(hhmm: string): string {
 
 /**
  * Format money already expressed in RUPEES (not paise) as a ₹ string with en-IN
- * (lakh/crore) grouping and 2 decimals. Use this for the few API fields that return
- * rupees rather than minor units (e.g. payroll-runs grossAmount/netAmount). Do NOT
- * pass a rupee value to formatMoney() — that treats it as paise and shows 100x too small.
+ * (lakh/crore) grouping and 2 decimals. Use this ONLY for the few API fields that
+ * are natively rupees with no paise twin (income-tax, payroll period summary,
+ * tax-config slab bounds, typed-rupee form previews). Do NOT pass a rupee value to
+ * formatMoney() — that treats it as paise and shows 100x too small.
+ *
+ * Payroll RUN money (grossAmount/netAmount/deductions and the per-slip figures)
+ * is NOT a caller any more: those carry exact integer-paise *Minor twins and are
+ * rendered with formatMoney through lib/payroll/runMoney.ts (GAP-PAYROLL-RUNS-01).
+ * Do not add new run/slip callers here.
  *
  * UX-006: null/undefined/non-finite is MISSING data, not a real zero — it renders
  * "—" (same convention as formatBps/formatIndianDate), never a fabricated ₹0.00.
