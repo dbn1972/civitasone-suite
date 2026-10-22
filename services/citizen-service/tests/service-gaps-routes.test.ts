@@ -225,7 +225,48 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
     expect(Number(pay.amount)).toBe(500);
   });
 
+  it("FN-14: sandbox confirm is rejected (403 SANDBOX_DISABLED) unless explicitly enabled; citizen cannot assert gateway capture", async () => {
+    const prev = process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED;
+    delete process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED;
+    try {
+      const citizen = tok(TENANT_A, MAKER, ["citizen"]);
+      const intent = await app.inject({
+        method: "POST", url: "/v1/citizen/payments/intent", headers: hdr(citizen),
+        payload: { applicationId: APP_ID, scheduleId, subject: {} },
+      });
+      expect(intent.statusCode).toBe(202);
+      const intentId = intent.json().id as string;
+      await waitFor(async () => {
+        const g = await app.inject({ method: "GET", url: `/v1/citizen/payments/${intentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+        return g.statusCode === 200 && g.json().status === "pending" ? g.json() : null;
+      });
+
+      const sandbox = await app.inject({
+        method: "POST", url: `/v1/citizen/payments/${intentId}/confirm`, headers: hdr(citizen),
+        payload: { mode: "sandbox" },
+      });
+      expect(sandbox.statusCode).toBe(403);
+      expect(sandbox.json().code).toBe("SANDBOX_DISABLED");
+
+      // a plain citizen may not assert a gateway capture with a self-supplied ref
+      const gateway = await app.inject({
+        method: "POST", url: `/v1/citizen/payments/${intentId}/confirm`, headers: hdr(citizen),
+        payload: { mode: "gateway", gatewayRef: "pi_self_supplied" },
+      });
+      expect(gateway.statusCode).toBe(403);
+
+      const still = await app.inject({ method: "GET", url: `/v1/citizen/payments/${intentId}`, headers: hdr(tok(TENANT_A, MAKER)) });
+      expect(still.json().status).toBe("pending");
+    } finally {
+      if (prev === undefined) delete process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED;
+      else process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED = prev;
+    }
+  });
+
   it("FN-14: sandbox confirm of pending intent issues receipt and emits receipt.issued", async () => {
+    const prevSandbox = process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED;
+    process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED = "true"; // sandbox is opt-in
+    try {
     const intent = await app.inject({
       method: "POST", url: "/v1/citizen/payments/intent", headers: hdr(tok(TENANT_A, MAKER)),
       payload: { applicationId: APP_ID, scheduleId, subject: {} },
@@ -262,6 +303,10 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
     expect(pay.receiptNo).toMatch(/^RCT-\d{4}-\d{8}$/);
     const topics = await outboxTopics();
     expect(topics).toContain("citizen.receipt.issued");
+    } finally {
+      if (prevSandbox === undefined) delete process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED;
+      else process.env.CITIZEN_PAYMENTS_SANDBOX_ENABLED = prevSandbox;
+    }
   });
 
   it("offline payment records + issues a receipt and emits receipt.issued", async () => {

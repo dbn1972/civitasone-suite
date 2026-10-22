@@ -2,8 +2,9 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ActionButton } from "../../../_components/ds";
+import { useEffect, useState } from "react";
+import { AcceptedNotice, ActionButton } from "../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
 
@@ -28,7 +29,6 @@ const BOND_TYPES: Array<{ value: "performance" | "bank_guarantee" | "security_de
 ];
 
 // GAP-CONTRACTS-DETAIL-06: intervals for post-202 polling.
-const POLL_DELAYS = [5_000, 10_000];
 
 type Props = { contractId: string; bonds: ContractBond[]; canRegister: boolean };
 
@@ -95,9 +95,9 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
   // stay usable.
   const [busyBondId, setBusyBondId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const accepted = useAcceptedWrite();
   // GAP-CONTRACTS-DETAIL-06: pending bond transitions (id -> prevStatus).
   const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
-  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [bondType, setBondType] = useState<"performance" | "bank_guarantee" | "security_deposit">("performance");
   const [issuer, setIssuer] = useState("SBI");
@@ -119,10 +119,11 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       return changed ? next : prev;
     });
   }, [bonds]);
+
+  // The "received" notice is moot once every pending change has landed in props.
   useEffect(() => {
-    const timers = pollTimers.current;
-    return () => { for (const t of timers) clearTimeout(t); };
-  }, []);
+    if (pendingMap.size === 0 && accepted.phase === "accepted") accepted.reset();
+  }, [pendingMap, accepted]);
 
   // GAP-CONTRACTS-DETAIL-02: live paise preview of the typed rupees, computed
   // with the same exact string parser used on submit (null when invalid).
@@ -133,6 +134,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
     setBusy(true);
     setError(undefined);
     setMessage("");
+    accepted.reset();
     try {
       // GAP-CONTRACTS-DETAIL-02: exact rupees->paise with string math (no
       // Number()*100 float path, which mis-rounds e.g. 1234.10). Rejects
@@ -203,9 +205,8 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       setPendingMap((prev) => new Map(prev).set(bondId, prevStatus));
       setMessage(`Bond ${toStatus} request received — the status will update shortly.`);
       router.refresh();
-      for (const delay of POLL_DELAYS) {
-        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
-      }
+      // SF-15: no timer-based refresh. 202 = received; the Refresh button (AcceptedNotice) re-reads on demand.
+      accepted.accept();
     } finally {
       setBusyBondId(null);
     }
@@ -303,7 +304,9 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
         </div>
       ) : null}
 
-      {message ? (
+      {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
         </p>

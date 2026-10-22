@@ -2,8 +2,9 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ActionButton } from "../../../_components/ds";
+import { useEffect, useState } from "react";
+import { AcceptedNotice, ActionButton } from "../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
 
@@ -20,12 +21,12 @@ type Props = { contractId: string; milestones: ContractMilestone[] };
 // The consumer typically writes the new status within a few seconds; three
 // attempts (immediate, 5 s, 10 s) cover the P99 queue latency without
 // hammering the server.
-const POLL_DELAYS = [5_000, 10_000];
 
 export function MilestoneActions({ contractId, milestones }: Props) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const accepted = useAcceptedWrite();
   const formError = useFormError("milestone");
 
   // GAP-CONTRACTS-DETAIL-06: track which milestone ids have a write in flight
@@ -34,9 +35,6 @@ export function MilestoneActions({ contractId, milestones }: Props) {
   // server-rendered data catches up and clear the pill automatically.
   const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
 
-  // Timeouts we schedule for polling; kept in a ref so the cleanup effect can
-  // cancel them on unmount without the array itself being a dep of the effect.
-  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   // When `milestones` props change (i.e. after router.refresh() propagates),
   // clear any pending entries whose status has changed from what it was before
@@ -57,13 +55,11 @@ export function MilestoneActions({ contractId, milestones }: Props) {
     });
   }, [milestones]);
 
-  // Cancel any outstanding poll timers on unmount.
+
+  // The "received" notice is moot once every pending change has landed in props.
   useEffect(() => {
-    const timers = pollTimers.current;
-    return () => {
-      for (const t of timers) clearTimeout(t);
-    };
-  }, []);
+    if (pendingMap.size === 0 && accepted.phase === "accepted") accepted.reset();
+  }, [pendingMap, accepted]);
 
   const actionable = milestones.filter(
     (m) => m.status !== "completed" && m.status !== "completed_late",
@@ -72,6 +68,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
   async function act(milestoneId: string, kind: "complete" | "late", notes?: string) {
     setBusyId(milestoneId);
     setMessage("");
+    accepted.reset();
     try {
       const today = todayIST();
       const res = await fetch(
@@ -101,9 +98,8 @@ export function MilestoneActions({ contractId, milestones }: Props) {
       );
       // Immediate first refresh; schedule two more at 5 s and 10 s.
       router.refresh();
-      for (const delay of POLL_DELAYS) {
-        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
-      }
+      // SF-15: no timer-based refresh. 202 = received; the Refresh button (AcceptedNotice) re-reads on demand.
+      accepted.accept();
     } finally {
       setBusyId(null);
     }
@@ -155,7 +151,9 @@ export function MilestoneActions({ contractId, milestones }: Props) {
           />
         </div>
       ))}
-      {message ? (
+      {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
         </p>

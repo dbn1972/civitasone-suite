@@ -5,7 +5,7 @@ import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertPaymentConfirmable, isGatewayConfigured, isRefundable } from "./domain.js";
+import { assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled } from "./domain.js";
 import type {
   CreateScheduleBody, CreateIntentBody, RecordOfflineBody,
   ConfirmPaymentBody, RefundRequestBody, RefundDecisionBody,
@@ -59,14 +59,18 @@ export async function confirmPayment(
       mode: body.mode,
       gatewayRef: body.gatewayRef ?? pay.gatewayRef,
       gatewayConfigured: isGatewayConfigured(),
+      sandboxEnabled: isSandboxPaymentEnabled(),
     });
   } catch (err) {
     const code = err instanceof Error ? err.message : "CONFIRM_REJECTED";
+    if (code === "SANDBOX_DISABLED") {
+      throw new HttpError(403, code, "sandbox payment confirmation is disabled");
+    }
     if (code === "PAYMENT_NOT_PENDING") {
       throw new HttpError(409, code, "payment is not pending confirmation");
     }
     if (code === "GATEWAY_NOT_CONFIGURED") {
-      throw new HttpError(409, code, "payment gateway is not configured; use mode=sandbox for Test runs");
+      throw new HttpError(409, code, "payment gateway is not configured; payment cannot be confirmed online");
     }
     if (code === "GATEWAY_REF_REQUIRED") {
       throw new HttpError(400, code, "gatewayRef is required for live confirmation");

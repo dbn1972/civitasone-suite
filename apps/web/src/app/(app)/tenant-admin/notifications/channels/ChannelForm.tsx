@@ -78,7 +78,7 @@ export function ChannelForm() {
 
   return (
     <Card title="Add a channel" padding>
-      <form onSubmit={submit} aria-label="Add notification channel" style={{ display: "grid", gap: 12, maxWidth: 420 }}>
+      <form onSubmit={submit} noValidate aria-label="Add notification channel" style={{ display: "grid", gap: 12, maxWidth: 420 }}>
         <Field label="Channel name" required error={fieldError || undefined}>
           <Input
             value={name}

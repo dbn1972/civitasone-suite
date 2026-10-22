@@ -48,7 +48,7 @@ describe("DomainClient — CONFIRM/WIRING/A11Y (01/02/03/04)", () => {
     render(<DomainClient domains={[]} source="api" />);
     fireEvent.click(screen.getAllByRole("button", { name: "+ Add Domain" })[0]);
     const dialog = screen.getByRole("dialog", { name: "Register Custom Domain" });
-    fireEvent.change(within(dialog).getByLabelText("Domain Name"), { target: { value: "new.example.gov.in" } });
+    fireEvent.change(within(dialog).getByLabelText(/^Domain Name(\s*\*)?$/), { target: { value: "new.example.gov.in" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Register" }));
     await waitFor(() => expect(within(dialog).getByRole("alert").textContent).toMatch(/already|couldn't|could not|try again/i));
     // No new domain row was added.

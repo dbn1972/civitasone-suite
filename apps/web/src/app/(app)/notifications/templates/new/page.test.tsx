@@ -18,8 +18,8 @@ describe("NewTemplatePage (GAP-NOTIFICATIONS-TEMPLATES-01)", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     render(<NewTemplatePage />);
 
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Rent reminder" } });
-    fireEvent.change(screen.getByLabelText(/^body$/i), { target: { value: "Dear {{name}}, your rent is due." } });
+    fireEvent.change(screen.getByLabelText(/^name(\s*\*)?$/i), { target: { value: "Rent reminder" } });
+    fireEvent.change(screen.getByLabelText(/^body(\s*\*)?$/i), { target: { value: "Dear {{name}}, your rent is due." } });
     fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
 
     expect(await screen.findByText("Create this template?")).toBeInTheDocument();
@@ -36,8 +36,8 @@ describe("NewTemplatePage (GAP-NOTIFICATIONS-TEMPLATES-01)", () => {
 
   it("blocks save on an unbalanced placeholder", () => {
     render(<NewTemplatePage />);
-    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: "Broken" } });
-    fireEvent.change(screen.getByLabelText(/^body$/i), { target: { value: "Hi {{name" } });
+    fireEvent.change(screen.getByLabelText(/^name(\s*\*)?$/i), { target: { value: "Broken" } });
+    fireEvent.change(screen.getByLabelText(/^body(\s*\*)?$/i), { target: { value: "Hi {{name" } });
     expect(screen.getByRole("button", { name: /review & create/i })).toBeDisabled();
     expect(screen.getByRole("alert")).toHaveTextContent(/placeholder looks unclosed/i);
   });

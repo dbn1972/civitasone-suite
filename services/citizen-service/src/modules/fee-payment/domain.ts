@@ -71,9 +71,20 @@ export const PAYMENT_CONFIRM_MODES = ["gateway", "sandbox"] as const;
 export type PaymentConfirmMode = (typeof PAYMENT_CONFIRM_MODES)[number];
 
 /**
+ * Sandbox (test) payment capture is a fake-success path: it marks a payment
+ * paid and drives receipt + GL emission without any money moving. It must be
+ * explicitly opted into and can NEVER be enabled in production.
+ */
+export function isSandboxPaymentEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.NODE_ENV === "production") return false;
+  return env.CITIZEN_PAYMENTS_SANDBOX_ENABLED === "true";
+}
+
+/**
  * FN-14 — decide whether an online payment may be confirmed.
  * - gateway mode: requires configured gateway + a non-empty gatewayRef
- * - sandbox mode: labelled Test/Sandbox capture only (never pretends to be live)
+ * - sandbox mode: labelled Test/Sandbox capture only (never pretends to be live);
+ *   throws SANDBOX_DISABLED unless `sandboxEnabled` (see isSandboxPaymentEnabled)
  * Pending-only: already-collected payments cannot be confirmed again.
  */
 export function assertPaymentConfirmable(input: {
@@ -81,11 +92,13 @@ export function assertPaymentConfirmable(input: {
   mode: PaymentConfirmMode;
   gatewayRef?: string | null;
   gatewayConfigured: boolean;
+  sandboxEnabled: boolean;
 }): void {
   if (input.status !== "pending") {
     throw new Error("PAYMENT_NOT_PENDING");
   }
   if (input.mode === "sandbox") {
+    if (!input.sandboxEnabled) throw new Error("SANDBOX_DISABLED");
     return;
   }
   if (!input.gatewayConfigured) {
