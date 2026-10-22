@@ -2,6 +2,19 @@
  * Pure helpers for the inventory hub (GAP-INVENTORY-HOME-02 / -03).
  */
 import type { InventoryLowStockRow } from "./_data";
+import { istDateKey } from "@/lib/formatters";
+import type { ForecastPoint } from "./ForecastChart";
+
+/**
+ * CLOS-S2-05: label each forecast day with its IST calendar date (YYYY-MM-DD),
+ * starting today in IST. IST has no DST, so adding whole days is exact. The
+ * server renders in UTC, where toISOString().slice(0,10) is a day early between
+ * 00:00 and 05:30 IST.
+ */
+export function buildForecastSeries(dailyForecast: number[]): ForecastPoint[] {
+  const start = Date.now();
+  return dailyForecast.map((qty, i) => ({ date: istDateKey(start + i * 86_400_000), qty }));
+}
 
 /**
  * on-hand / reorder-level. A low-stock row is at or below its reorder level, so

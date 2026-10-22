@@ -64,7 +64,8 @@ export interface MunicipalHistoryEvent {
   toStatus: string;
   note: string | null;
   actorId: string;
-  createdAt: string;
+  /** null when the service sent no timestamp: never fabricated as "now". */
+  createdAt: string | null;
 }
 
 /**
@@ -96,7 +97,7 @@ export async function fetchMunicipalHistory(
           toStatus: r.toStatus,
           note: typeof r.note === "string" ? r.note : null,
           actorId: typeof r.actorId === "string" ? r.actorId : "",
-          createdAt: typeof r.createdAt === "string" ? r.createdAt : new Date().toISOString(),
+          createdAt: typeof r.createdAt === "string" ? r.createdAt : null,
         }];
       });
     },

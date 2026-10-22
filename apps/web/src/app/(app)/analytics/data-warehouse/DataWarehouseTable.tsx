@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDateTime } from "@/lib/formatters";
 import { DataTable } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { AnalyticsDataWarehouseRow } from "@/app/_data/loaders";
@@ -23,7 +24,7 @@ export function DataWarehouseTable({ rows, source = "api" }: { rows: AnalyticsDa
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatIndianDateTime(cachedAt)}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   return (

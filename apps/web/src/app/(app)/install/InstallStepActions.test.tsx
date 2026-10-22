@@ -66,4 +66,15 @@ describe("InstallStepActions (GAP-INSTALL-HOME-04/05)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: /Running/i })).toBeInTheDocument());
     resolveFetch(new Response("{}", { status: 202 }));
   });
+
+  // CLOS-S2-01: an offline fetch rejects with TypeError("Failed to fetch"); the
+  // operator must see the catalogued connection copy, never the raw text.
+  it("CLOS-S2-01: a network failure shows connection copy, not 'Failed to fetch'", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<InstallStepActions id="s1" status="pending" title="Seed" isRequired={false} />);
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/couldn't connect/i);
+    expect(alert).not.toHaveTextContent(/failed to fetch/i);
+  });
 });

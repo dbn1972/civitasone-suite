@@ -189,4 +189,29 @@ describe("MonitoringMap (SVC-119)", () => {
     const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
     expect(urls.every((u) => !u.includes("date="))).toBe(true);
   });
+
+  // CLOS-S2-04: an aborted (superseded) load must not clear the loading flag that
+  // the newer in-flight load set.
+  it("CLOS-S2-04: stays in the loading state while the superseding request is still in flight", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+        }),
+      ),
+    );
+    render(<MonitoringMap />);
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("Loading markers…")).toBeInTheDocument();
+
+    // Changing the filter aborts request #1 and starts request #2 (never resolves).
+    fireEvent.change(screen.getByLabelText("Filter by domain"), { target: { value: "infrastructure" } });
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    // Let request #1's AbortError rejection and its finally block run.
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(screen.getByText("Loading markers…")).toBeInTheDocument();
+    expect(screen.queryByText("No markers")).not.toBeInTheDocument();
+  });
 });
