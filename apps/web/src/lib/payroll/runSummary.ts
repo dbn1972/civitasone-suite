@@ -63,35 +63,62 @@ export function latestPaidRun<T extends Pick<PayrollRunDetail, "status" | "payPe
 }
 
 export type PaidPeriodTotals = {
-  /** The latest payPeriod that has at least one paid run. */
+  /**
+   * The latest payPeriod whose REGULAR payroll has a paid run. Only when no
+   * regular run has ever been paid does it fall back to the latest period with
+   * a paid run of any type (so money that was paid is never hidden).
+   */
   payPeriod: string;
-  /** How many paid runs that period has (pay-group runs create one run per pay group). */
+  /** How many paid runs of ANY type that period has: the runs grossMinor is summed over. */
   runCount: number;
+  /**
+   * Headcount: employeeCount summed over the period's paid REGULAR runs only
+   * (pay-group runs of one month are separate regular runs and do add up).
+   * Supplementary, arrears and pensioner runs are excluded: they re-pay
+   * employees already in the regular run or add pensioners, so including them
+   * counts the same people twice.
+   */
   employeeCount: number;
   /**
-   * Sum of those runs' integer-paise gross. null when any of them has no valid
-   * paise value: an unknown total is shown as a dash, never as a partial sum.
+   * Sum of the gross of ALL the period's paid runs (regular, supplementary,
+   * arrears and pensioner): the tile is labelled all paid runs, because
+   * leaving a paid arrears run out would understate the money actually paid in
+   * the period. null when any of them has no valid paise value: an unknown
+   * total is shown as a dash, never as a partial sum.
    */
   grossMinor: bigint | null;
 };
 
 /**
- * GAP-PAYROLL-HOME-03: the Payroll home "Employees Paid" / "Total Gross" tiles for
- * the LATEST period that has been paid. A period can hold several paid runs
- * (createPayGroupRuns makes one run per pay group, and payroll-service refuses a
- * second non-failed regular run for the same pay group and month), so the tile
- * adds up the paid runs OF THAT ONE PERIOD -- picking a single run would
- * understate the month. Earlier periods are never added in (the same people
- * would be counted again each month). Gross is summed in bigint paise.
+ * GAP-PAYROLL-HOME-03: the Payroll home Employees Paid / Total Gross tiles for
+ * the LATEST period whose regular payroll has been paid. A period can hold
+ * several paid regular runs (createPayGroupRuns makes one run per pay group, and
+ * payroll-service refuses a second non-failed regular run for the same pay group
+ * and month), so the headcount adds up the paid REGULAR runs of that one period
+ * -- picking a single run would understate the month. Earlier periods are never
+ * added in (the same people would be counted again each month).
+ *
+ * GET /v1/payroll/runs also lists supplementary, arrears and pensioner runs
+ * (run_type), which coexist with the regular run of a month. They are left out
+ * of the headcount (a paid arrears run re-pays people the regular run already
+ * counted; a pensioner run adds pensioners) but their gross IS in Total Gross,
+ * which is therefore labelled all paid runs. A run with no runType (an older
+ * payroll-service) is a regular run. An unrecognised runType is not regular, so
+ * it can never inflate the headcount. Gross is summed in bigint paise.
  */
 export function latestPaidPeriodTotals<
-  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor">,
+  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor" | "runType">,
 >(runs: readonly T[]): PaidPeriodTotals | null {
   const isPaid = (r: Pick<PayrollRunDetail, "status">) => r.status === "paid" || r.status === "disbursed";
-  let payPeriod: string | null = null;
+  const isRegular = (r: Pick<PayrollRunDetail, "runType">) => (r.runType ?? "regular") === "regular";
+  let regularPeriod: string | null = null;
+  let anyPeriod: string | null = null;
   for (const r of runs) {
-    if (isPaid(r) && (payPeriod === null || cmp(r.payPeriod, payPeriod) > 0)) payPeriod = r.payPeriod;
+    if (!isPaid(r)) continue;
+    if (anyPeriod === null || cmp(r.payPeriod, anyPeriod) > 0) anyPeriod = r.payPeriod;
+    if (isRegular(r) && (regularPeriod === null || cmp(r.payPeriod, regularPeriod) > 0)) regularPeriod = r.payPeriod;
   }
+  const payPeriod = regularPeriod ?? anyPeriod;
   if (payPeriod === null) return null;
   let runCount = 0;
   let employeeCount = 0;
@@ -99,7 +126,7 @@ export function latestPaidPeriodTotals<
   for (const r of runs) {
     if (!isPaid(r) || r.payPeriod !== payPeriod) continue;
     runCount += 1;
-    employeeCount += r.employeeCount;
+    if (isRegular(r)) employeeCount += r.employeeCount;
     const m = parseMinor(r.grossMinor);
     grossMinor = grossMinor === null || m === null ? null : grossMinor + m;
   }

@@ -13,8 +13,9 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
-import { runWithTenant } from "@civitasone/db";
+import { runWithTenant, withTenantScope } from "@civitasone/db";
 import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -209,5 +210,113 @@ describe("payroll run maker-checker (GAP-PAYROLL-DETAIL-02)", () => {
     });
     expect(res.statusCode).toBe(202);
     await memQueue.drain();
+  });
+});
+
+// The revert dialog collects a reason (>= 10 chars) just like approve / disburse; the
+// route used to ignore it, so it was silently dropped. It now rides the command and
+// lands on the audit event.
+describe("payroll run revert carries its reason to the audit event (GAP-PAYROLL-DETAIL-02)", () => {
+  const failedRunId = randomUUID();
+  const failedRun2Id = randomUUID();
+  const failedRun3Id = randomUUID();
+
+  async function insertFailedRun(id: string, runNo: string, month: string) {
+    await runWithTenant(tenantId, () =>
+      db.transaction((tx) =>
+        repo.insertRun(tx, {
+          id, tenantId, runNo, month, departmentId: null, structureId,
+          runType: "regular", ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR",
+          status: "failed", createdBy: MAKER, updatedBy: MAKER,
+        })),
+    );
+  }
+  async function status(id: string) {
+    return runWithTenant(tenantId, () => db.transaction((tx) => repo.findRunByIdTx(tx, id))).then((r) => r?.status);
+  }
+  async function revertAudits(id: string) {
+    return withTenantScope(db as never, tenantId, async (tx: { execute: (q: unknown) => Promise<unknown> }) =>
+      Array.from((await tx.execute(sql`
+        SELECT actor_id, payload FROM _outbox.messages
+         WHERE topic = 'audit.event.record' AND payload->>'resourceId' = ${id} AND payload->>'action' = 'revert'
+      `)) as Iterable<{ actor_id: string; payload: Record<string, unknown> }>));
+  }
+
+  it("a revert with a reason moves the failed run to draft and the audit event carries that reason", async () => {
+    await insertFailedRun(failedRunId, "MC-RUN-FAILED-1", "2026-10");
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/payroll/runs/${failedRunId}/revert`,
+      headers: bearer(CHECKER, ["payroll_admin"]), payload: { reason: "Retrying after the structure fix" },
+    });
+    await memQueue.drain();
+
+    expect(res.statusCode).toBe(202);
+    expect(await status(failedRunId)).toBe("draft");
+    const trail = await revertAudits(failedRunId);
+    expect(trail).toHaveLength(1);
+    expect(trail[0]?.actor_id).toBe(CHECKER);
+    expect(trail[0]?.payload).toMatchObject({
+      service: "payroll", action: "revert", resourceType: "payroll_run", resourceId: failedRunId,
+      outcome: "success", reason: "Retrying after the structure fix",
+    });
+  });
+
+  it("a revert without a body still works (older callers) and its audit event simply has no reason", async () => {
+    await insertFailedRun(failedRun2Id, "MC-RUN-FAILED-2", "2026-11");
+    // A body-less caller sends no content-type either. A JSON content-type with an empty body is rejected by the
+    // body parser on every PATCH route (approve and disburse included) before any handler runs.
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/payroll/runs/${failedRun2Id}/revert`,
+      headers: { authorization: bearer(CHECKER, ["payroll_admin"]).authorization },
+    });
+    await memQueue.drain();
+
+    expect(res.statusCode).toBe(202);
+    expect(await status(failedRun2Id)).toBe("draft");
+    const trail = await revertAudits(failedRun2Id);
+    expect(trail).toHaveLength(1);
+    expect(trail[0]?.payload).not.toHaveProperty("reason");
+  });
+
+  it("a one-character reason is a 400 and the run does not move", async () => {
+    await insertFailedRun(failedRun3Id, "MC-RUN-FAILED-3", "2026-12");
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/payroll/runs/${failedRun3Id}/revert`,
+      headers: bearer(CHECKER, ["payroll_admin"]), payload: { reason: "x" },
+    });
+    await memQueue.drain();
+
+    expect(res.statusCode).toBe(400);
+    expect(await status(failedRun3Id)).toBe("failed");
+    expect(await revertAudits(failedRun3Id)).toHaveLength(0);
+  });
+});
+
+// GAP-PAYROLL-HOME-03: GET /v1/payroll/runs is not filtered by run_type, so every row
+// now says which kind of run it is; the Payroll home headcount counts only regular runs.
+describe("GET /v1/payroll/runs exposes each run's runType (GAP-PAYROLL-HOME-03)", () => {
+  it("lists regular, arrears and pensioner runs of one month with their runType", async () => {
+    const arrearsId = randomUUID();
+    const pensionerId = randomUUID();
+    await runWithTenant(tenantId, () =>
+      db.transaction(async (tx) => {
+        for (const [id, runType, runNo] of [[arrearsId, "arrears", "MC-RUN-ARR-1"], [pensionerId, "pensioner", "MC-RUN-PEN-1"]] as const) {
+          await repo.insertRun(tx, {
+            id, tenantId, runNo, month: "2026-09", departmentId: null, structureId,
+            runType, ddoCode: null, totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR",
+            status: "approved", createdBy: MAKER, updatedBy: MAKER,
+          });
+        }
+      }),
+    );
+
+    const res = await app.inject({ method: "GET", url: "/v1/payroll/runs?limit=100", headers: bearer(CHECKER, ["payroll_admin"]) });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json() as Array<{ id: string; runType?: string; payPeriod: string }>;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    expect(byId.get(runId)?.runType).toBe("regular");
+    expect(byId.get(arrearsId)?.runType).toBe("arrears");
+    expect(byId.get(pensionerId)?.runType).toBe("pensioner");
+    expect(byId.get(arrearsId)?.payPeriod).toBe("2026-09");
   });
 });

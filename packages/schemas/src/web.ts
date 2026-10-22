@@ -932,6 +932,12 @@ export const PayrollRunDetailSchema = z.object({
   grossMinor: z.string().regex(/^-?\d+$/).optional(),
   netMinor: z.string().regex(/^-?\d+$/).optional(),
   deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+  // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+  // arrears | pensioner). Optional so a payload from an older payroll-service
+  // still validates (the web then treats the run as regular). Deliberately a
+  // plain string, not an enum: sendValidated() throws on an unrecognised enum
+  // member, which would 400 the whole run list because of one row.
+  runType: z.string().min(1).max(16).optional(),
   // payroll-critical fix: 'failed' added as a real, distinct status -- it
   // used to be silently remapped to 'draft' server-side (payroll-service's
   // queries.ts mapRunStatus), making a run whose async processing genuinely

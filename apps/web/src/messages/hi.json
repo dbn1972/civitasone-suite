@@ -5114,14 +5114,13 @@
     "statTotalRuns": "कुल रन",
     "statEmployeesPaid": "भुगतान किए गए कर्मचारी",
     "statTotalGross": "कुल सकल वेतन",
-    "statPending": "लंबित",
     "runsCardTitle": "वेतन रन",
     "statPaid": "भुगतान किया गया",
     "statInProgress": "प्रक्रियाधीन",
     "statAwaitingDisbursement": "वितरण की प्रतीक्षा में",
     "statFailed": "विफल",
-    "statEmployeesPaidPeriod": "भुगतान किए गए कर्मचारी ({period})",
-    "statTotalGrossPeriod": "कुल सकल वेतन ({period})"
+    "statEmployeesPaidPeriod": "भुगतान किए गए कर्मचारी, नियमित रन ({period})",
+    "statTotalGrossPeriod": "कुल सकल वेतन, सभी भुगतान किए गए रन ({period})"
   },
   "payrollLoans": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5307,7 +5306,8 @@
     "revertConfirmLabel": "ड्राफ्ट में वापस लाएं",
     "revertDescription": "<strong>{period}</strong> के लिए वेतन रन को ड्राफ्ट स्थिति में वापस लाया जाएगा ताकि इसे ठीक करके पुनः प्रोसेस किया जा सके। अभी तक कोई धनराशि वितरित नहीं की गई है।",
     "makerCheckerApproveHint": "आपने यह रन बनाया है, इसलिए इसे कोई अन्य स्वीकृतकर्ता ही स्वीकृत कर सकता है (मेकर-चेकर)।",
-    "makerCheckerDisburseHint": "आपने यह रन स्वीकृत किया है, इसलिए इसे कोई अन्य अधिकारी ही वितरित कर सकता है (मेकर-चेकर)।"
+    "makerCheckerDisburseHint": "आपने यह रन स्वीकृत किया है, इसलिए इसे कोई अन्य अधिकारी ही वितरित कर सकता है (मेकर-चेकर)।",
+    "makerCheckerDisburseError": "आपने यह रन स्वीकृत किया है, इसलिए आप इसे वितरित नहीं कर सकते। इसे किसी अन्य अधिकारी को वितरित करना होगा।"
   },
   "payrollCommon": {
     "backToPayroll": "पेरोल पर वापस जाएं",
@@ -5866,8 +5866,6 @@
     "confirmSubmitForApproval": "क्या यह निपटान प्रबंधक स्वीकृति के लिए सबमिट किया जाए?",
     "actionFinanceApprove": "वित्त स्वीकृति",
     "confirmFinanceApprove": "क्या यह निपटान वित्त-स्वीकृत के रूप में चिह्नित किया जाए?",
-    "actionMarkDisbursed": "वितरित चिह्नित करें",
-    "confirmMarkDisbursed": "क्या यह निपटान वितरित के रूप में चिह्नित किया जाए?",
     "statusDraft": "ड्राफ्ट",
     "statusManagerApproved": "प्रबंधक द्वारा स्वीकृत",
     "statusFinanceApproved": "वित्त द्वारा स्वीकृत",

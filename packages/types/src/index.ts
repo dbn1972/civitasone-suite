@@ -980,6 +980,13 @@ export type PayrollRunDetail = {
   grossMinor?: string;
   netMinor?: string;
   deductionsMinor?: string;
+  /**
+   * GAP-PAYROLL-HOME-03: payroll_runs.run_type. Absent on a payload from an older
+   * payroll-service, which is treated as "regular". Supplementary, arrears and
+   * pensioner runs coexist with the regular run of a month, so a headcount over a
+   * list of runs must only count the regular ones.
+   */
+  runType?: "regular" | "supplementary" | "arrears" | "pensioner";
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 

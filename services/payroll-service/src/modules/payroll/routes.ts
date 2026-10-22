@@ -105,7 +105,10 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id));
+    // GAP-PAYROLL-DETAIL-02: the web revert dialog collects a reason (>= 10 chars);
+    // it is carried on the command and recorded on the audit event, like approve.
+    const body = runActionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id, body.reason));
   });
 
   /**

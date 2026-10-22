@@ -163,6 +163,53 @@ describe("PayrollRunActions — GAP-PAYROLL-DETAIL-02 maker-checker", () => {
     expect(dialog.textContent).not.toMatch(/couldn't save/i);
   });
 
+  it("a 403 MAKER_CHECKER_VIOLATION on DISBURSE says the approver cannot disburse, not 'someone other than the person who made it'", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER_VIOLATION", message: "raw server text" }), { status: 403 }));
+    // Reached only if the disabled-button hint was bypassed or the page state was stale.
+    renderActions({ status: "completed", currentUserId: OTHER, createdBy: ME, approvedBy: ME });
+    fireEvent.click(screen.getByRole("button", { name: /disburse run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/disbursement authorisation/i), { target: { value: "Bank file checked today" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /disburse now/i }));
+
+    await waitFor(() => expect(dialog).toHaveTextContent("You approved this run, so you cannot disburse it. Another officer needs to disburse it."));
+    expect(dialog.textContent).not.toMatch(/someone other than the person who made it/i);
+    expect(dialog.textContent).not.toMatch(/raw server text/);
+    expect(dialog.textContent).not.toMatch(/couldn't save/i);
+  });
+
+  it("any other 403 on disburse keeps the shared wording instead of the maker-checker sentence", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN", message: "raw server text" }), { status: 403 }));
+    renderActions({ status: "completed", currentUserId: OTHER, createdBy: ME, approvedBy: ME });
+    fireEvent.click(screen.getByRole("button", { name: /disburse run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/disbursement authorisation/i), { target: { value: "Bank file checked today" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /disburse now/i }));
+
+    await waitFor(() => expect(dialog).toHaveTextContent("You don't have permission to do this."));
+    expect(dialog.textContent).not.toMatch(/you cannot disburse it/i);
+    expect(dialog.textContent).not.toMatch(/raw server text/);
+  });
+
+  it("the revert dialog sends the typed reason (>= 10 characters) in the PATCH body, which the server now records on the audit event", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
+    renderActions({ status: "failed" });
+    fireEvent.click(screen.getByRole("button", { name: /revert to draft/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: /revert to draft/i });
+    fireEvent.change(within(dialog).getByLabelText(/reason for revert/i), { target: { value: "too short" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/reason for revert/i), { target: { value: "Retry after the structure fix" } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/payroll/runs/r1/revert");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Retry after the structure fix" });
+  });
+
   it("sends the typed reason in the PATCH body (>= 10 characters is enforced before it is sent)", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
     renderActions({ currentUserId: OTHER, createdBy: ME, approvedBy: null });

@@ -1,3 +1,5 @@
+import { formatMonthYear } from "../formatters";
+
 /**
  * Shared payroll period / financial-year validation (GAP-PAYROLL-COMPARISON-01,
  * GAP-PAYROLL-COSTING-06, GAP-PAYROLL-REGISTER-03, GAP-PAYROLL-RETURNS-07).
@@ -52,4 +54,16 @@ export function examplePeriods(now: Date = new Date()): { previous: string; curr
   const fmt = (yy: number, mm0: number) => `${yy}-${String(mm0 + 1).padStart(2, "0")}`;
   const prev = m === 0 ? fmt(y - 1, 11) : fmt(y, m - 1);
   return { previous: prev, current: fmt(y, m) };
+}
+
+/**
+ * GAP-PAYROLL-HOME-03: a pay period ("2026-09") as a readable month label
+ * ("September 2026") through lib/formatters, for tile and heading text. A value
+ * that is not a real YYYY-MM period (month 00, 13, free text) is returned
+ * unchanged rather than guessed at.
+ */
+export function formatPayPeriodLabel(period: string): string {
+  const trimmed = period.trim();
+  if (!isValidPeriod(trimmed)) return period;
+  return formatMonthYear(Number(trimmed.slice(0, 4)), Number(trimmed.slice(5, 7)) - 1);
 }

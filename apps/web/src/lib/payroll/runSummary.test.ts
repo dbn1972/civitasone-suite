@@ -94,4 +94,85 @@ describe("latestPaidPeriodTotals (GAP-PAYROLL-HOME-03)", () => {
     expect(latestPaidPeriodTotals([p("a", "2026-08", "completed", 1, "1")])).toBeNull();
     expect(latestPaidPeriodTotals([])).toBeNull();
   });
+
+  // The reviewer's finding: GET /v1/payroll/runs also lists supplementary, arrears and
+  // pensioner runs, which coexist with the regular run of the month.
+  describe("run types (regular vs arrears / supplementary / pensioner)", () => {
+    type RT = "regular" | "supplementary" | "arrears" | "pensioner";
+    const q = (id: string, payPeriod: string, status: R["status"], runType: RT | undefined, employeeCount: number, grossMinor: string) =>
+      ({ id, payPeriod, status, employeeCount, grossMinor, ...(runType ? { runType } : {}) });
+
+    it("regular 100 + a paid arrears run of 5 in the same period shows a headcount of 100, not 105", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("arr", "2026-09", "paid", "arrears", 5, "250000"),
+      ]);
+      expect(t?.employeeCount).toBe(100);
+      expect(t?.payPeriod).toBe("2026-09");
+    });
+
+    it("a paid supplementary run and a paid pensioner run add no headcount either", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("sup", "2026-09", "paid", "supplementary", 7, "700000"),
+        q("pen", "2026-09", "paid", "pensioner", 30, "9000000"),
+      ]);
+      expect(t?.employeeCount).toBe(100);
+    });
+
+    it("Total Gross covers ALL the period's paid runs (labelled 'all paid runs'): exact paise, nothing floated", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("arr", "2026-09", "paid", "arrears", 5, "250001"),
+        q("sup", "2026-09", "paid", "supplementary", 7, "700002"),
+        q("pen", "2026-09", "paid", "pensioner", 30, "9000003"),
+      ]);
+      expect(t).toEqual({ payPeriod: "2026-09", runCount: 4, employeeCount: 100, grossMinor: 59950006n });
+    });
+
+    it("several regular pay-group runs of one month still add up (60 + 40 = 100) alongside an arrears run", () => {
+      const t = latestPaidPeriodTotals([
+        q("g1", "2026-09", "paid", "regular", 60, "30000000"),
+        q("g2", "2026-09", "paid", "regular", 40, "20000000"),
+        q("arr", "2026-09", "paid", "arrears", 5, "250000"),
+      ]);
+      expect(t?.employeeCount).toBe(100);
+      expect(t?.runCount).toBe(3);
+    });
+
+    it("an unpaid arrears run (or regular run) is not counted at all", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("arr", "2026-09", "completed", "arrears", 5, "250000"),
+      ]);
+      expect(t).toEqual({ payPeriod: "2026-09", runCount: 1, employeeCount: 100, grossMinor: 50000000n });
+    });
+
+    it("a run with no runType (an older payroll-service) is a regular run, so behaviour is unchanged", () => {
+      const t = latestPaidPeriodTotals([q("a", "2026-09", "paid", undefined, 60, "30000000"), q("b", "2026-09", "paid", undefined, 40, "20000000")]);
+      expect(t).toEqual({ payPeriod: "2026-09", runCount: 2, employeeCount: 100, grossMinor: 50000000n });
+    });
+
+    it("an unrecognised future runType is not regular, so it can never inflate the headcount", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("x", "2026-09", "paid", "bonus" as never, 9, "900000"),
+      ]);
+      expect(t?.employeeCount).toBe(100);
+    });
+
+    it("the period is the latest whose REGULAR payroll is paid: a paid arrears run in a later month with no paid regular run does not make the tile read 0 employees", () => {
+      const t = latestPaidPeriodTotals([
+        q("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        q("arr", "2026-10", "paid", "arrears", 5, "250000"),
+        q("reg10", "2026-10", "processing", "regular", 100, "0"),
+      ]);
+      expect(t).toEqual({ payPeriod: "2026-09", runCount: 1, employeeCount: 100, grossMinor: 50000000n });
+    });
+
+    it("when no regular run has been paid at all, the paid money is still shown (latest period with any paid run), with a headcount of 0", () => {
+      const t = latestPaidPeriodTotals([q("pen", "2026-09", "paid", "pensioner", 30, "9000000")]);
+      expect(t).toEqual({ payPeriod: "2026-09", runCount: 1, employeeCount: 0, grossMinor: 9000000n });
+    });
+  });
 });

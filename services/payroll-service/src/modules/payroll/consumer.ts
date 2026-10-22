@@ -839,14 +839,14 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.runRevert, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; revertedBy: string };
+    const p = msg.payload as { id: string; tenantId: string; revertedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
       assertRunStatusTransition(run.status, "draft");
       await repo.updateRun(tx, p.id, { status: "draft", updatedBy: msg.actorId });
-      await audit(tx, msg, "revert", "payroll_run", p.id);
+      await audit(tx, msg, "revert", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });

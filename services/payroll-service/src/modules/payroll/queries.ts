@@ -171,6 +171,12 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
       // from a float. Additive: the rupee fields are unchanged.
       ...minorTotals(agg.grossMinor, agg.netMinor),
       status: mapRunStatus(r.status),
+      // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+      // arrears | pensioner). Supplementary / arrears / pensioner runs coexist
+      // with the regular run of the same month and re-pay (or add) employees, so
+      // a headcount summed over the list must be able to tell them apart.
+      // Additive: nothing else on the row changes.
+      runType: r.runType,
       // payroll-critical fix: surface why, for a failed run, alongside the
       // now-distinct 'failed' status above (migration 0046). null for every
       // other status and for a failed run that predates this column.

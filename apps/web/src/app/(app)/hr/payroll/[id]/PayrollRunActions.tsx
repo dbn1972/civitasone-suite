@@ -34,6 +34,16 @@ type Props = {
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
 
+/** True when a failed response carries the maker-checker `code`. Reads a clone, so the body stays available to useFormError; never throws. */
+async function isMakerCheckerViolation(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown } | null;
+    return body?.code === "MAKER_CHECKER_VIOLATION";
+  } catch {
+    return false;
+  }
+}
+
 export function PayrollRunActions({
   runId,
   status,
@@ -87,6 +97,14 @@ export function PayrollRunActions({
         body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
+        // The shared catalogue words MAKER_CHECKER_VIOLATION as "needs approval from
+        // someone other than the person who made it", which is right for approve but
+        // wrong for disburse (the rule there is: the approver cannot disburse). Only
+        // reachable when the hint above was bypassed or the page state was stale.
+        if (action === "disburse" && res.status === 403 && (await isMakerCheckerViolation(res))) {
+          setError(t("makerCheckerDisburseError"));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         setError(resolved.message);
         return;

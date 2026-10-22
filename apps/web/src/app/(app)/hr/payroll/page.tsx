@@ -4,6 +4,7 @@ import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loade
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { formatPayPeriodLabel } from "@/lib/payroll/period";
 import { latestPaidPeriodTotals, summariseRunStatuses } from "@/lib/payroll/runSummary";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
@@ -64,14 +65,21 @@ export default async function PayrollPage() {
   // counted again each month, and completed-but-unpaid runs folded into a
   // tile literally labelled "Paid". Use only the paid runs of the LATEST paid
   // period instead, and say which period it is. One period can hold several
-  // paid runs (pay-group runs make one per pay group), so they are added up
-  // within that period -- never across periods.
+  // paid regular runs (pay-group runs make one per pay group), so those are
+  // added up within that period -- never across periods.
+  //
+  // GET /v1/payroll/runs also lists supplementary, arrears and pensioner runs
+  // (runType), which coexist with the regular run of the same month. Employees
+  // Paid counts the REGULAR runs only (a paid arrears run re-pays people the
+  // regular run already counted); Total Gross covers ALL the period's paid runs,
+  // and both tile labels say so.
   //
   // The status tiles come from summariseRunStatuses: Paid + In progress +
   // Awaiting disbursement + Failed always sum to Total runs.
   const counts = errored ? null : summariseRunStatuses(runs);
   const latestPaid = errored ? null : latestPaidPeriodTotals(runs);
-  const latestPeriod = latestPaid?.payPeriod ?? null;
+  // The period as a readable month (September 2026) through lib/formatters, not the raw 2026-09.
+  const latestPeriod = latestPaid ? formatPayPeriodLabel(latestPaid.payPeriod) : null;
   // Money is rendered from the API's integer-paise strings (GAP-PAYROLL-HOME-01),
   // summed in bigint; a paid run whose payload lacks it makes the total "—"
   // (unknown), never a made-up zero or a partial sum.

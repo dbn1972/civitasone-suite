@@ -5179,14 +5179,13 @@
     "statTotalRuns": "Total Runs",
     "statEmployeesPaid": "Employees Paid",
     "statTotalGross": "Total Gross",
-    "statPending": "Pending",
     "runsCardTitle": "Payroll Runs",
     "statPaid": "Paid",
     "statInProgress": "In Progress",
     "statAwaitingDisbursement": "Awaiting Disbursement",
     "statFailed": "Failed",
-    "statEmployeesPaidPeriod": "Employees Paid ({period})",
-    "statTotalGrossPeriod": "Total Gross ({period})"
+    "statEmployeesPaidPeriod": "Employees Paid, regular runs ({period})",
+    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})"
   },
   "payrollRunsTable": {
     "colPeriod": "Period",
@@ -9194,7 +9193,8 @@
     "revertConfirmLabel": "Revert to draft",
     "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed.",
     "makerCheckerApproveHint": "You created this run, so a different approver must approve it (maker-checker).",
-    "makerCheckerDisburseHint": "You approved this run, so a different officer must disburse it (maker-checker)."
+    "makerCheckerDisburseHint": "You approved this run, so a different officer must disburse it (maker-checker).",
+    "makerCheckerDisburseError": "You approved this run, so you cannot disburse it. Another officer needs to disburse it."
   },
   "payrollCommon": {
     "backToPayroll": "Back to Payroll",
@@ -9505,8 +9505,6 @@
     "confirmSubmitForApproval": "Submit this settlement for manager approval?",
     "actionFinanceApprove": "Finance Approve",
     "confirmFinanceApprove": "Mark this settlement as finance-approved?",
-    "actionMarkDisbursed": "Mark Disbursed",
-    "confirmMarkDisbursed": "Mark this settlement as disbursed?",
     "statusDraft": "Draft",
     "statusManagerApproved": "Manager Approved",
     "statusFinanceApproved": "Finance Approved",

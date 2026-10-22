@@ -255,12 +255,12 @@ export async function disburseRun(ctx: RequestContext, id: string, reason?: stri
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revertRun(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function revertRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.runRevert, {
     messageId: deterministicUuid(`payroll-revert:${id}`),
     type: COMMANDS.runRevert,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId },
+    payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId, ...(reason ? { reason } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

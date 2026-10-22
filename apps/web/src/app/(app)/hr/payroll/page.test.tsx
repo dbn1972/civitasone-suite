@@ -121,20 +121,20 @@ describe("PayrollPage", () => {
   it("HOME-01 contract: a paid run with grossMinor=9000000 shows ₹90,000.00 in the Total Gross tile", async () => {
     mockFetchJson({ data: [run("p1", "2026-08", "paid", 5, "9000000")], source: "api" });
     renderPage(await PayrollPage());
-    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹90,000.00");
+    expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("₹90,000.00");
     expect(screen.queryByText("₹900.00")).not.toBeInTheDocument();
   });
 
   it("HOME-01: the tile reads the paise string, not the legacy rupee float (a disagreeing float is ignored)", async () => {
     mockFetchJson({ data: [{ ...run("p1", "2026-08", "paid", 5, "9000000"), grossAmount: 1 }], source: "api" });
     renderPage(await PayrollPage());
-    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹90,000.00");
+    expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("₹90,000.00");
   });
 
   it("HOME-01: a paid run without its paise total shows a dash, not a fabricated ₹0.00", async () => {
     mockFetchJson({ data: [{ id: "p1", payPeriod: "2026-08", status: "paid", employeeCount: 5, grossAmount: 90000, netAmount: 0 }], source: "api" });
     renderPage(await PayrollPage());
-    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("—");
+    expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("—");
   });
 
   it("HOME-03: two paid runs of 100 employees show headcount 100 (the latest run), not 200, and name the period", async () => {
@@ -143,10 +143,10 @@ describe("PayrollPage", () => {
       source: "api",
     });
     renderPage(await PayrollPage());
-    expect(tileValue("statEmployeesPaidPeriod|period=2026-08")).toBe("100");
+    expect(tileValue("statEmployeesPaidPeriod|period=August 2026")).toBe("100");
     expect(screen.queryByText("200")).not.toBeInTheDocument();
     // Gross is also the latest run's alone: 5,00,000.00, not the 10,00,000.00 sum.
-    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹5,00,000.00");
+    expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("₹5,00,000.00");
   });
 
   it("HOME-03: several paid pay-group runs of the latest period are added up (60 + 40 = 100 employees, exact paise gross); earlier periods are not", async () => {
@@ -160,8 +160,8 @@ describe("PayrollPage", () => {
       source: "api",
     });
     renderPage(await PayrollPage());
-    expect(tileValue("statEmployeesPaidPeriod|period=2026-09")).toBe("100");
-    expect(tileValue("statTotalGrossPeriod|period=2026-09")).toBe("₹5,00,000.03");
+    expect(tileValue("statEmployeesPaidPeriod|period=September 2026")).toBe("100");
+    expect(tileValue("statTotalGrossPeriod|period=September 2026")).toBe("₹5,00,000.03");
   });
 
   it("HOME-03: if one of the period's paid runs has no paise total, the gross tile is a dash, not a partial sum", async () => {
@@ -173,8 +173,52 @@ describe("PayrollPage", () => {
       source: "api",
     });
     renderPage(await PayrollPage());
-    expect(tileValue("statEmployeesPaidPeriod|period=2026-09")).toBe("100");
-    expect(tileValue("statTotalGrossPeriod|period=2026-09")).toBe("—");
+    expect(tileValue("statEmployeesPaidPeriod|period=September 2026")).toBe("100");
+    expect(tileValue("statTotalGrossPeriod|period=September 2026")).toBe("—");
+  });
+
+  // Reviewer finding: GET /v1/payroll/runs is not filtered by run_type, so a paid
+  // arrears / supplementary / pensioner run of the same month used to be added to
+  // Employees Paid (the same people counted again).
+  const typed = (id: string, payPeriod: string, status: string, runType: string, employeeCount: number, grossMinor: string) =>
+    ({ ...run(id, payPeriod, status, employeeCount, grossMinor), runType });
+
+  it("HOME-03: a regular run of 100 plus a paid arrears run of 5 in the same period shows 100 employees, and the gross covers both (exact paise)", async () => {
+    mockFetchJson({
+      data: [
+        typed("reg", "2026-09", "paid", "regular", 100, "50000000"),
+        typed("arr", "2026-09", "paid", "arrears", 5, "250001"),
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaidPeriod|period=September 2026")).toBe("100");
+    expect(screen.queryByText("105")).not.toBeInTheDocument();
+    // Total Gross is labelled "all paid runs": 5,00,000.00 + 2,500.01 = 5,02,500.01.
+    expect(tileValue("statTotalGrossPeriod|period=September 2026")).toBe("₹5,02,500.01");
+  });
+
+  it("HOME-03: supplementary and pensioner runs add no headcount, and several regular pay-group runs still add up", async () => {
+    mockFetchJson({
+      data: [
+        typed("g1", "2026-09", "paid", "regular", 60, "30000000"),
+        typed("g2", "2026-09", "paid", "regular", 40, "20000000"),
+        typed("sup", "2026-09", "paid", "supplementary", 7, "700000"),
+        typed("pen", "2026-09", "paid", "pensioner", 30, "9000000"),
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaidPeriod|period=September 2026")).toBe("100");
+    expect(tileValue("statTotalGrossPeriod|period=September 2026")).toBe("₹5,97,000.00"); // 3,00,000 + 2,00,000 + 7,000 + 90,000 in paise, summed in bigint
+  });
+
+  it("HOME-03: the tile labels name the month through lib/formatters, never the raw YYYY-MM string", async () => {
+    mockFetchJson({ data: [run("p1", "2026-08", "paid", 5, "9000000")], source: "api" });
+    renderPage(await PayrollPage());
+    expect(screen.getByText("statEmployeesPaidPeriod|period=August 2026")).toBeInTheDocument();
+    expect(screen.getByText("statTotalGrossPeriod|period=August 2026")).toBeInTheDocument();
+    expect(screen.queryByText(/period=2026-08/)).not.toBeInTheDocument();
   });
 
   it("HOME-03: before any run is paid the tiles use the plain labels and show real zeros", async () => {
