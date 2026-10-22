@@ -60,6 +60,34 @@ describe("ContractorsPage", () => {
     expect(fetchCalls[0].url).toContain("pageSize=100");
   });
 
+  // GAP-WORKS-CONTRACTORS-03 / -06: works-service honours pageSize and reports the true register size in
+  // meta.total; the page must show that size and say honestly that only the first page is listed.
+  it("shows the server-reported total and a 'first N of M' note when the register is larger than the page", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => row({ id: `id-${i}`, name: `Firm ${i}`, performanceRating: i % 2 ? 4 : null }));
+    nextResult = { payload: { data: rows, meta: { limit: 100, offset: 0, page: 1, pageSize: 100, total: 137 } }, source: "api" };
+    render(await ContractorsPage());
+    expect(screen.getByText("Contractors (137)")).toBeInTheDocument();
+    expect(screen.getByText(/Showing the first 100 of 137 contractors/i)).toBeInTheDocument();
+    // the Total tile carries the register size, not the page length
+    const totalTile = screen.getByText("Total").closest(".stat") as HTMLElement;
+    expect(within(totalTile).getByText("137")).toBeInTheDocument();
+  });
+
+  it("shows no truncation note when the server total equals the rows listed", async () => {
+    nextResult = { payload: { data: [row()], meta: { total: 1 } }, source: "api" };
+    render(await ContractorsPage());
+    expect(screen.getByText("Contractors (1)")).toBeInTheDocument();
+    expect(screen.queryByText(/Showing the first/i)).not.toBeInTheDocument();
+  });
+
+  it("without a usable meta.total a full page still gets the cautious 'first N' note (older API)", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => row({ id: `id-${i}`, name: `Firm ${i}` }));
+    nextResult = { payload: { data: rows }, source: "api" };
+    render(await ContractorsPage());
+    expect(screen.getByText(/Showing the first 100 contractors/i)).toBeInTheDocument();
+    expect(screen.getByText("Contractors (100+)")).toBeInTheDocument();
+  });
+
   // GAP-WORKS-CONTRACTORS-01: the Name cell links to the detail page.
   it("links each contractor row's name to /works/contractors/<id>", async () => {
     nextResult = { payload: [row()], source: "api" };

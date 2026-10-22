@@ -1,11 +1,20 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { getProposal, listProposals, countProposals, searchProposals, resolveProposals } from "./repo.js";
 import { canDaoFinalize, validateCoa } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
+
+const pickerSearchSchema = z.object({
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  prefer: z
+    .string()
+    .optional()
+    .transform((s) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean) : []))
+    .pipe(z.array(z.string().regex(/^[a-z_]{1,32}$/)).max(5)),
+});
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
@@ -27,8 +36,19 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ data });
     }
     const qParam = typeof rawQuery.q === "string" ? rawQuery.q : "";
-    if (qParam.trim().length > 0) {
-      const data = await searchProposals(ctx.tenantId, qParam, 20);
+    // Picker mode: a non-empty q, OR any picker-only param (q= sent empty, limit, prefer). An empty-q
+    // picker open must still honour limit/prefer (newest first, eligible statuses first) rather than
+    // fall through to the unordered paginated list. Plain list callers send page/pageSize only.
+    const pickerMode =
+      qParam.trim().length > 0 ||
+      typeof rawQuery.q === "string" ||
+      rawQuery.limit !== undefined ||
+      rawQuery.prefer !== undefined;
+    if (pickerMode) {
+      // Optional, additive: ?limit=<1..50> (default 20) and ?prefer=status1,status2 (those statuses sort first).
+      // Both are validated; a malformed value is a 400, never silently ignored.
+      const picker = pickerSearchSchema.parse(rawQuery);
+      const data = await searchProposals(ctx.tenantId, qParam, picker.limit, picker.prefer);
       return reply.send({ data });
     }
     const query = paginationSchema.parse(req.query);

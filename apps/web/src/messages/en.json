@@ -15763,12 +15763,41 @@
       "submittedTo": "(submitted to {to})"
     },
     "tsNew": {
-      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker."
+      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Works that are not DAO-finalized are listed in the Work picker but cannot be chosen.",
+      "bannerEligible": "The selected work is DAO-finalized, so a technical sanction can be entered for it.",
+      "bannerBlocked": "The selected work is not DAO-finalized, so a technical sanction cannot be entered for it yet. Choose a DAO-finalized work.",
+      "notDaoFinalized": "Not DAO-finalized",
+      "workPlaceholder": "Search works by number or description…",
+      "workSearchFailed": "Could not load the works. Check your connection and try again.",
+      "selectToContinue": "Choose a work and a TS authority to continue."
+    },
+    "measurementNew": {
+      "closedBooks": "{count, plural, one {# measurement book is not listed because it is no longer a draft.} other {# measurement books are not listed because they are no longer drafts.}} Measurements can only be recorded while a measurement book is a draft."
+    },
+    "approvalNames": {
+      "idLabel": "ID {id}",
+      "unknownOfficer": "Unknown officer ({id})"
+    },
+    "boqNew": {
+      "duplicateByCode": "This item code is already on the BoQ for this work. Use a different code, or edit the existing line.",
+      "duplicateByDescription": "A line with this description is already on the BoQ for this work. Change the description, or edit the existing line."
+    },
+    "contractors": {
+      "partialHint": "Counted over the {shown} contractors shown.",
+      "showingFirst": "Showing the first {shown} contractors. Refine the filter to find more.",
+      "showingFirstOfTotal": "Showing the first {shown} of {total} contractors. Refine the filter to find the others."
+    },
+    "contractorRating": {
+      "workLabel": "Work this rating is about (optional)",
+      "workPlaceholder": "Search by work number…",
+      "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",
-      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first."
+      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first.",
+      "belowAvailable": "This gross is less than the value still billable against this measurement book ({available}).",
+      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number."
     },
     "hub": {
       "title": "Works & Billing",

@@ -28,10 +28,50 @@ export async function listBoqItemsByIds(tenantId: string, ids: string[]) {
   });
 }
 
+/**
+ * GAP-WORKS-BOQ-NEW-04: the code/description of every line already on a work, for the synchronous BR-016 duplicate
+ * pre-check on POST /v1/works/boq (the consumer re-checks inside its own transaction).
+ */
+export async function listBoqLineRefs(tenantId: string, workId: string) {
+  return scopedRead(async (tx) => {
+    return tx.select({
+      workId: boqItems.workId,
+      itemCode: boqItems.itemCode,
+      itemDescription: boqItems.itemDescription,
+    }).from(boqItems)
+      .where(and(eq(boqItems.tenantId, tenantId), eq(boqItems.workId, workId)));
+  });
+}
+
+/**
+ * GAP-WORKS-BOQ-WORKID-05: number of BoQ lines on a work and the paise-exact sum of their amounts. This is the "work
+ * amount" a recapitulation is computed on: it is read from the stored lines, never taken from the client.
+ */
+export async function boqWorkTotals(tenantId: string, workId: string): Promise<{ lines: number; totalMinor: bigint }> {
+  return scopedRead(async (tx) => {
+    const rows = await tx
+      .select({
+        lines: sql<number>`cast(count(*) as int)`,
+        totalMinor: sql<string>`coalesce(sum(${boqItems.amountMinor}), 0)::text`,
+      })
+      .from(boqItems)
+      .where(and(eq(boqItems.tenantId, tenantId), eq(boqItems.workId, workId)));
+    return { lines: rows[0]?.lines ?? 0, totalMinor: BigInt(rows[0]?.totalMinor ?? "0") };
+  });
+}
+
+/**
+ * The recapitulation of a work. A work has at most one (POST /boq/recapitulate answers 409 RECAP_EXISTS for a second;
+ * the consumer re-checks under a per-work lock), so this is a single-row read. It still orders explicitly: `version`
+ * is the only recency signal the table carries, and the id breaks a tie so the read is stable rather than whatever
+ * order the planner happened to return, should a duplicate ever be present.
+ */
 export async function getRecapitulation(tenantId: string, workId: string) {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(recapitulation)
-      .where(and(eq(recapitulation.tenantId, tenantId), eq(recapitulation.workId, workId)));
+      .where(and(eq(recapitulation.tenantId, tenantId), eq(recapitulation.workId, workId)))
+      .orderBy(desc(recapitulation.version), desc(recapitulation.id))
+      .limit(1);
     return rows[0] ?? null;
   });
 }
