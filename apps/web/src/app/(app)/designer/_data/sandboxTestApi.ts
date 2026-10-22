@@ -11,6 +11,8 @@ export interface SandboxTestRunDto {
   steps?: TestRunStep[];
   durationMs?: number;
   createdAt?: string;
+  /** True when the draft's design changed after this run (server compares design hashes); such a pass no longer authorises submit. */
+  stale?: boolean;
 }
 
 export interface SandboxRunHistoryRow extends Record<string, unknown> {
@@ -68,6 +70,7 @@ export async function fetchLatestSandboxTest(definitionId: string): Promise<Sand
     status: body.status === "pass" ? "pass" : "fail",
     durationMs: typeof body.durationMs === "number" ? body.durationMs : undefined,
     createdAt: String(body.createdAt ?? ""),
+    ...(typeof body.stale === "boolean" ? { stale: body.stale } : {}),
     steps: body.steps != null ? mapSandboxSteps(body.steps, definitionId) : undefined,
   };
 }

@@ -29,6 +29,8 @@ export interface OfficeOverride {
   slaDays?: number | undefined;
   /** Why this office differs — surfaced to auditors, not citizens. */
   note?: string | undefined;
+  /** Why this office's fee is reduced/waived (e.g. statutory exemption); recorded in the audit event. */
+  feeWaiverReason?: string | undefined;
 }
 
 export class OfficeOverrideError extends Error {}

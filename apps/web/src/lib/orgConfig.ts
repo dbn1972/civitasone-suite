@@ -131,10 +131,28 @@ export const ORG_TYPE_LABELS: Record<OrgType, string> = {
  * address shown in DPDP notices. Resolved from a tenant/deploy setting
  * (NEXT_PUBLIC_DPO_EMAIL) rather than hard-coded per screen, with a neutral,
  * clearly-placeholder fallback so a misconfigured tenant never silently
- * advertises another tenant's address. Pass an explicit value (e.g. from
- * tenant settings) to override.
+ * advertises another tenant's address. Resolution order: the tenant's own
+ * `settings.dpoEmail` (pass it as `configured`, see tenantDpoEmail), then the
+ * deploy-wide NEXT_PUBLIC_DPO_EMAIL, then the placeholder.
  */
 export const DEFAULT_DPO_EMAIL = "dpo@example.gov.in";
+
+const SIMPLE_EMAIL_RE = /^[^\s@<>()"',;:\\]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+/**
+ * The tenant's own DPO address from its tenant-record settings (`settings.dpoEmail`,
+ * as served by GET /v1/tenants/current to any signed-in user of the tenant).
+ * Returns null unless it is a plain, well-formed address: the value is rendered
+ * as a mailto: link, so anything else (spaces, header-injection characters,
+ * a non-string) is ignored and the global fallback applies.
+ */
+export function tenantDpoEmail(settings: unknown): string | null {
+  if (!settings || typeof settings !== "object") return null;
+  const raw = (settings as Record<string, unknown>).dpoEmail;
+  if (typeof raw !== "string") return null;
+  const v = raw.trim();
+  return v.length <= 254 && SIMPLE_EMAIL_RE.test(v) ? v : null;
+}
 
 export function getDpoEmail(configured?: string | null): string {
   const fromArg = configured?.trim();

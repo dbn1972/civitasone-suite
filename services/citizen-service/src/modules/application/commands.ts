@@ -80,6 +80,15 @@ export async function updateDraft(
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+export async function deleteDraft(ctx: RequestContext, id: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.draftDelete, {
+    messageId: randomUUID(), type: COMMANDS.draftDelete,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function submitDraft(
   ctx: RequestContext,
   draftId: string,

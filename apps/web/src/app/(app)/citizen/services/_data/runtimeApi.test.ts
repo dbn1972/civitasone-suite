@@ -1,6 +1,9 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import {
   buildDemandLines,
+  computeFeeBreakup,
+  discardDraft,
+  firstDraftIdForService,
   buildTrackingTimeline,
   feeDisplay,
   formatExpectedByDate,
@@ -250,5 +253,74 @@ describe("isTerminalStatus", () => {
     expect(trackingLaneIndex("closed", false)).toBe(2); // last lane (no fee: submitted/review/issued)
     expect(isTerminalStatus("resolved")).toBe(true);
     expect(trackingLaneIndex("resolved", true)).toBe(3);
+  });
+});
+
+describe("firstDraftIdForService (server-side filter)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("asks the server for only this service's id-only draft instead of downloading every draft", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [{ id: "d1", serviceId: "svc-1", status: "draft" }] }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    expect(await firstDraftIdForService("svc-1")).toBe("d1");
+    const url = new URL(String((fetchMock.mock.calls[0] as unknown[])[0]), "http://x");
+    expect(url.pathname).toBe("/api/proxy/v1/citizen/intake/drafts");
+    expect(url.searchParams.get("serviceId")).toBe("svc-1");
+    expect(url.searchParams.get("status")).toBe("draft");
+    expect(url.searchParams.get("summary")).toBe("true");
+  });
+
+  it("returns null when nothing matches or the call fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ data: [] }), { status: 200 })) as unknown as typeof fetch);
+    expect(await firstDraftIdForService("svc-1")).toBeNull();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })) as unknown as typeof fetch);
+    expect(await firstDraftIdForService("svc-1")).toBeNull();
+  });
+});
+
+describe("discardDraft", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it("DELETEs the draft; 202 and 404 (already gone) are success, other failures throw", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    await discardDraft("d 1");
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/citizen/intake/drafts/d%201");
+    expect(init.method).toBe("DELETE");
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })) as unknown as typeof fetch);
+    await expect(discardDraft("d1")).resolves.toBeUndefined();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })) as unknown as typeof fetch);
+    await expect(discardDraft("d1")).rejects.toThrow();
+  });
+});
+
+describe("computeFeeBreakup / buildDemandLines with a breakup", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const SVC = { name: "Trade License", feeFromMinor: 150000, feeCurrency: "INR" };
+
+  it("maps the compute response and posts the answers as subject", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ baseAmount: 150000, amount: 0, exemptionApplied: "ex1", exemptionLabel: "Senior citizen", currency: "INR" }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const b = await computeFeeBreakup("svc-1", { age: "70" });
+    expect(b).toEqual({ baseMinor: 150000, payableMinor: 0, exemptionLabel: "Senior citizen", currency: "INR" });
+    const init = (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1];
+    expect(JSON.parse(init.body as string)).toEqual({ serviceId: "svc-1", subject: { age: "70" } });
+  });
+
+  it("is null on a missing schedule (404), a network error or a malformed body", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 404 })) as unknown as typeof fetch);
+    expect(await computeFeeBreakup("svc-1", {})).toBeNull();
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("down"); }) as unknown as typeof fetch);
+    expect(await computeFeeBreakup("svc-1", {})).toBeNull();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ nope: 1 }), { status: 200 })) as unknown as typeof fetch);
+    expect(await computeFeeBreakup("svc-1", {})).toBeNull();
+  });
+
+  it("renders base, exemption and payable lines; no exemption line when none applied", () => {
+    const withEx = buildDemandLines(SVC, { baseMinor: 150000, payableMinor: 50000, exemptionLabel: "BPL", currency: "INR" });
+    expect(withEx.map((l) => [l.id, l.amountLabel])).toEqual([["base-fee", "₹1,500"], ["exemption", "−₹1,000"], ["payable", "₹500"]]);
+    const noEx = buildDemandLines(SVC, { baseMinor: 150000, payableMinor: 150000, exemptionLabel: null, currency: "INR" });
+    expect(noEx.map((l) => l.id)).toEqual(["base-fee", "payable"]);
   });
 });
