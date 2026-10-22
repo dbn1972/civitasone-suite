@@ -4,6 +4,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { getProcurementIndents } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { parseIndentStatusFilter } from "../drillThrough";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -46,7 +47,11 @@ export default async function IndentsPage({
   const pageParam = Number(readParam(searchParams, "page") ?? "1");
   const pageNo = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
   const q = readParam(searchParams, "q")?.trim() || undefined;
-  const statusFilter = readParam(searchParams, "status")?.trim() || undefined;
+  // GAP-PROCUREMENT-DASHBOARD-02: `?status=` may carry one status or a comma-
+  // separated set (the dashboard's "Pending Indents" counter counts draft AND
+  // pending); the raw service status `pending` is the list's `pending_approval`.
+  const statusFilters = parseIndentStatusFilter(readParam(searchParams, "status"));
+  const statusFilter = statusFilters.length > 0 ? statusFilters.join(",") : undefined;
   const offset = (pageNo - 1) * PAGE_SIZE;
 
   const { data: indents, source } = await getProcurementIndents({ limit: PAGE_SIZE, offset, q });
@@ -62,7 +67,7 @@ export default async function IndentsPage({
   const countOf = (status: string) => indents.filter((i) => i.status === status).length;
 
   // GAP-PROCUREMENT-INDENTS-03: optional client-chosen status narrowing.
-  const filtered = statusFilter ? indents.filter((i) => i.status === statusFilter) : indents;
+  const filtered = statusFilters.length > 0 ? indents.filter((i) => statusFilters.includes(i.status)) : indents;
 
   // GAP-PROCUREMENT-INDENTS-02: on a failed load the stats must read "we don't
   // know" ("—"), not a fabricated 0. StatCard renders null as "—".
@@ -114,7 +119,7 @@ export default async function IndentsPage({
         <StatCard icon="🚫" tone="bad" label="Rejected" value={stat(countOf("rejected"))} href={statusHref("rejected")} />
       </StatGrid>
 
-      <Card title={statusFilter ? `Indents — ${STATUS_LABELS[statusFilter] ?? statusFilter}` : "All indents"}>
+      <Card title={statusFilter ? `Indents — ${statusFilters.map((s) => STATUS_LABELS[s] ?? s).join(", ")}` : "All indents"}>
         {errored ? (
           // GAP-PROCUREMENT-INDENTS-02: a real retry (RefreshErrorState re-runs
           // the server fetch) instead of a dead ErrorState, and no 0-valued

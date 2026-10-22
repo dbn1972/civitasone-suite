@@ -8,6 +8,7 @@ vi.mock("@/app/_data/apiClient", async () => {
 });
 
 import IndentsPage from "./page";
+import { PENDING_INDENT_STATUSES } from "../drillThrough";
 
 // Capture the path the loader fetched so we can assert the offset/limit the
 // page passed through for server paging (GAP-PROCUREMENT-INDENTS-01).
@@ -85,5 +86,49 @@ describe("IndentsPage", () => {
     route({ data: [indent({ id: "u1", indentNo: "IND-U1", requestedBy: uuid })] });
     render(await IndentsPage({ searchParams: {} }));
     expect(screen.queryByText(uuid)).not.toBeInTheDocument();
+  });
+});
+
+describe("IndentsPage status drill-through (GAP-PROCUREMENT-DASHBOARD-02)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  const mixed = () => ({
+    data: [
+      indent({ id: "d", indentNo: "IND-DRAFT", status: "draft" }),
+      indent({ id: "p", indentNo: "IND-PENDING", status: "pending" }),
+      indent({ id: "a", indentNo: "IND-APPROVED", status: "approved" }),
+      indent({ id: "t", indentNo: "IND-TENDER", status: "tender_required" }),
+    ],
+  });
+
+  it("the dashboard's 'Pending Indents' filter (draft + pending) lists exactly those indents", async () => {
+    route(mixed());
+    render(await IndentsPage({ searchParams: { status: PENDING_INDENT_STATUSES.join(",") } }));
+    expect(screen.getByText("IND-DRAFT")).toBeInTheDocument();
+    expect(screen.getByText("IND-PENDING")).toBeInTheDocument();
+    expect(screen.queryByText("IND-APPROVED")).not.toBeInTheDocument();
+    expect(screen.queryByText("IND-TENDER")).not.toBeInTheDocument();
+    expect(screen.queryByText("No indents in this status")).not.toBeInTheDocument();
+    expect(screen.getByText("Indents — Draft, Pending Approval")).toBeInTheDocument();
+  });
+
+  it("the raw service status 'pending' (older links) means Pending Approval, not an empty list", async () => {
+    route(mixed());
+    render(await IndentsPage({ searchParams: { status: "pending" } }));
+    expect(screen.getByText("IND-PENDING")).toBeInTheDocument();
+    expect(screen.queryByText("IND-DRAFT")).not.toBeInTheDocument();
+    expect(screen.queryByText("No indents in this status")).not.toBeInTheDocument();
+  });
+
+  it("a single status still filters as before, and an unknown status says so", async () => {
+    route(mixed());
+    const { unmount } = render(await IndentsPage({ searchParams: { status: "tender_required" } }));
+    expect(screen.getByText("IND-TENDER")).toBeInTheDocument();
+    expect(screen.queryByText("IND-DRAFT")).not.toBeInTheDocument();
+    unmount();
+
+    route(mixed());
+    render(await IndentsPage({ searchParams: { status: "no_such_status" } }));
+    expect(screen.getByText("No indents in this status")).toBeInTheDocument();
   });
 });
