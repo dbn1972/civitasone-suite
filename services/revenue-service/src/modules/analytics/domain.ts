@@ -9,6 +9,8 @@
  * _Requirements: SVC-140 (Revenue analytics and forecasting)_
  */
 
+import { dcbBalanceEffect } from "../assessment/domain.js";
+
 export class DomainError extends Error {
   constructor(public readonly code: string, message: string) {
     super(message);
@@ -18,13 +20,15 @@ export class DomainError extends Error {
 
 // ── Analytics aggregation ──────────────────────────────────────────────────────
 
-export type DcbEntryType = "demand" | "collection" | "refund" | "adjustment" | "write_off";
+export type DcbEntryType = "demand" | "collection" | "refund" | "adjustment" | "write_off" | "waiver";
 
 export interface PeriodDcbEntry {
   /** Period bucket key, e.g. "2024-04" (month) or "2024-2025" (FY). */
   period: string;
   entryType: DcbEntryType;
   amountMinor: bigint;
+  /** Distinguishes the two legs of an `adjustment` (see dcbBalanceEffect). */
+  narration?: string | null;
 }
 
 export interface PeriodTrend {
@@ -47,8 +51,11 @@ export function collectionEfficiencyBps(demandMinor: bigint, collectionMinor: bi
 
 /**
  * Aggregate raw DCB entries into per-period demand vs collection totals.
- * `demand` entries add to demand; every other entry type is treated as a
- * balance-reducing collection-side flow (mirrors assessment.computeDcbSummary).
+ * `demand` entries add to demand; every other entry type feeds the collection
+ * side by its balance effect (assessment `dcbBalanceEffect`): collection /
+ * write_off / waiver add, a refund subtracts (it re-opens the balance), and an
+ * adjustment's debit leg adds while its credit leg subtracts so the two equal
+ * legs net to zero (mirrors assessment.computeDcbSummary).
  * Output is sorted ascending by period key for deterministic series ordering.
  */
 export function aggregatePeriodSeries(entries: PeriodDcbEntry[]): PeriodTrend[] {
@@ -57,7 +64,7 @@ export function aggregatePeriodSeries(entries: PeriodDcbEntry[]): PeriodTrend[] 
   for (const e of entries) {
     const bucket = byPeriod.get(e.period) ?? { demand: 0n, collection: 0n };
     if (e.entryType === "demand") bucket.demand += e.amountMinor;
-    else bucket.collection += e.amountMinor;
+    else bucket.collection -= dcbBalanceEffect(e);
     byPeriod.set(e.period, bucket);
   }
 

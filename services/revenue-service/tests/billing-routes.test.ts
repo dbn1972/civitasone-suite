@@ -8,6 +8,13 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
 
+const { findBillByAssessmentMock } = vi.hoisted(() => ({ findBillByAssessmentMock: vi.fn() }));
+
+vi.mock("../src/modules/billing/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/billing/repo.js")>();
+  return { ...original, findBillByAssessment: findBillByAssessmentMock };
+});
+
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
 const USER_ID = "u1111111-1111-1111-1111-111111111111";
@@ -93,9 +100,22 @@ describe("POST /v1/revenue/bills/generate", () => {
   const VALID_BODY = { assessmentId: "c1111111-1111-1111-1111-111111111111" };
 
   it("returns 202 with valid body and correct role", async () => {
+    findBillByAssessmentMock.mockResolvedValueOnce(null);
     const res = await app.inject({ method: "POST", url: "/v1/revenue/bills/generate", headers: AUTH, payload: VALID_BODY });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toHaveProperty("messageId");
+    expect(findBillByAssessmentMock).toHaveBeenCalledWith(TENANT_ID, VALID_BODY.assessmentId);
+  });
+
+  it("returns 409 BILL_ALREADY_EXISTS synchronously (and queues nothing) for an already-billed assessment", async () => {
+    const { queue } = await import("../src/shared/infra.js");
+    const publish = queue.publish as unknown as ReturnType<typeof vi.fn>;
+    publish.mockClear();
+    findBillByAssessmentMock.mockResolvedValueOnce({ id: "b-1", billNo: "BILL-2025-0001" });
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/bills/generate", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("BILL_ALREADY_EXISTS");
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it("returns 400 with invalid body (missing assessmentId)", async () => {

@@ -368,6 +368,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         // GAP2-PLATFORM-REVENUE-MONEY-01: waivers.amount_minor is bigint (drizzle
         // mode:"bigint"); pass a bigint, not String(...).
         amountMinor: BigInt(amountMinor),
+        waiverType:  component,
         reason,
         status:      "pending",
         requestedBy: msg.actorId,
@@ -407,7 +408,13 @@ export function registerArrearsConsumers(queue: Queue): void {
       // still-pending waiver raised by a DIFFERENT officer; otherwise leave it
       // untouched and record the rejected attempt in the audit trail.
       const existing = await tx
-        .select({ requestedBy: waivers.requestedBy, status: waivers.status })
+        .select({
+          requestedBy: waivers.requestedBy,
+          status: waivers.status,
+          demandId: waivers.demandId,
+          amountMinor: waivers.amountMinor,
+          waiverType: waivers.waiverType,
+        })
         .from(waivers)
         .where(and(eq(waivers.tenantId, msg.tenantId), eq(waivers.id, waiverId)))
         .limit(1);
@@ -441,6 +448,39 @@ export function registerArrearsConsumers(queue: Queue): void {
           updatedAt:       new Date(),
         })
         .where(and(eq(waivers.tenantId, msg.tenantId), eq(waivers.id, waiverId)));
+
+      if (approve) {
+        // An approved waiver forgives accrued penalty/interest, so it MUST hit
+        // the ledger: append a `waiver` entry (balance-reducing) chained onto
+        // the demand's own running balance. Without this the demand, the DCB
+        // summary and every instalment/outstanding figure kept the waived
+        // amount forever. Same transaction as the status flip, so the two
+        // cannot diverge; the pending->approved guard above makes it
+        // once-only.
+        const demandRows = await tx
+          .select({ assesseeId: demands.assesseeId })
+          .from(demands)
+          .where(and(eq(demands.tenantId, msg.tenantId), eq(demands.id, row.demandId)))
+          .limit(1);
+        const demandRow = demandRows[0];
+        if (!demandRow) {
+          throw new DomainError("DEMAND_NOT_FOUND", `Demand ${row.demandId} for waiver ${waiverId} not found`);
+        }
+        const currentBalance = await getLatestDemandBalance(tx, msg.tenantId, row.demandId);
+        await tx.insert(dcbEntries).values({
+          tenantId: msg.tenantId,
+          assesseeId: demandRow.assesseeId,
+          demandId: row.demandId,
+          entryType: "waiver",
+          amountMinor: row.amountMinor,
+          balanceMinor: currentBalance - row.amountMinor,
+          referenceId: waiverId,
+          referenceType: "waiver",
+          narration: `Waiver approved (${row.waiverType}): ${reason ?? "no remarks"}`,
+          createdBy: msg.actorId,
+        });
+        await cache.invalidate(`${SERVICE}:${msg.tenantId}:dcb:${demandRow.assesseeId}`);
+      }
 
       await enqueue(tx, {
         topic:         "audit.event.record",
