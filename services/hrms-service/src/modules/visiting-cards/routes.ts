@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
-import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
+import { sqlClient as rawSqlClient } from "../../shared/db.js";
+import { STAFF_ROLES } from "../../shared/roles.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { decryptPii } from "../../shared/pii-crypto.js";
 import { escapeHtml } from "../recruitment/application-pdf.js";
@@ -277,6 +278,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/visiting-card/me/share-token — issue or rotate my share token (old link stops working) */
   app.post("/v1/hrms/visiting-card/me/share-token", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!emp) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const token = newShareToken();
@@ -298,6 +300,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
   /** DELETE /v1/hrms/visiting-card/me/share-token — revoke sharing (public link 404s until re-issued) */
   app.delete("/v1/hrms/visiting-card/me/share-token", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, STAFF_ROLES);
     const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!emp) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     await withTenantGuc(ctx.tenantId, (pool) => pool.query(
@@ -465,6 +468,7 @@ function inferTier(designation: string): string {
 /** vCard 3.0 TEXT escaping (RFC 2426 s4): backslash, comma, semicolon, newline; control chars dropped (no line injection). */
 function vEsc(v: string): string {
   return String(v)
+    // eslint-disable-next-line no-control-regex -- intentional: drop C0 control chars to prevent vCard line injection
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
     .replace(/\\/g, "\\\\")
     .replace(/\r\n|\r|\n/g, "\\n")
