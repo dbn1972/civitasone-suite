@@ -133,7 +133,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Money is a JS number (openingBalance/receipts/... reduced with + at page.tsx:13-16), not paise bigint/decimal string as GL and sanctions use (general-ledger/page.tsx:14); large tenants can lose precision.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx:13-16 and StatementsTable.tsx:94-97 add values with `+` and cast `as number`; formatMoney(number) treats them as paise and rounds (lib/formatters.ts:100). Contrast general-ledger/page.tsx:14 (BigInt on string paise). Overstated: integer paise sums are exact up to 2^53 (about ₹9e13), so precision loss for a normal tenant is unlikely; the real risks are contract inconsistency with rule 11 (bigint/decimal-string) and that if the API ever sends strings, `+` would concatenate. The declared type lives in @civitasone/types (absent), so the wire type is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx`, `apps/web/src/app/(app)/finance/accounting/financial-statements/StatementsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `packages/types (FinancialStatementSummary + zod schema)`
@@ -237,7 +237,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Balanced check runs on the full list in page.tsx:17 but totals in GLTable footer run on the filtered list (GLTable.tsx:59-60) - two different totals on one screen.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx:14-17 totals and the Balanced delta use the full list; GLTable.tsx:107-108 and footer :199 total the filtered list (tab + search), so a Payment-only tab correctly shows debit != credit next to a 'Balanced' card. Logic is coherent but unlabelled, which reads as two conflicting totals.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/general-ledger/GLTable.tsx`, `apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx`
@@ -1527,7 +1527,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1790 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1790 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Level (Major / Minor / Sub-minor) is chosen but no parent head can be selected (page.tsx:101-110), so a minor or sub-minor head is created unattached to any major head; the resulting tree cannot be inferred from the form.
 - **Verified evidence:** Create form (new/page.tsx:165-223) has code, name, level select (LEVEL_OPTIONS 25-29), classification, hoaCode; submit body (87-93) has no parent. The header comment (6-9) says the endpoint accepts code, name, level, hoaCode, classification only, so the tree cannot be expressed. Backend schema unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/finance/chart-of-accounts/new/page.tsx`, `services/finance-service (accounts create schema, if parentId not supported)`
@@ -2178,7 +2178,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-06  ·  LOW  ·  partly  ·  theme UUID
 
-- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** PO Ref uses formatInternalRef and shows raw ids in the mono cell for Bill (BillsTable.tsx:46); dates via formatIndianDate.
 - **Verified evidence:** BillsTable.tsx:43 renders formatInternalRef(b.poRef) which returns the raw ref string as-is (formatters.ts:26-29), e.g. 'procurement_po:abc-123' with the type prefix and id - only null/'undefined' become '—'. But the observation's 'raw ids in the mono cell for Bill' is wrong: the mono cell (l.41) is b.billNo, a human bill number, not an id. Dates use formatIndianDate (l.45-46) correctly.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/BillsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2200,7 +2200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** — PR #1786 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1786 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** A failed fetch is indistinguishable from a missing bill: getFinanceBillById falls back to null, so the page renders "Bill not found - may have been removed or the ID is invalid" (page.tsx:17-24) and the DataSourceBadge on the found branch (page.tsx:45) can never show for a load failure.
 - **Verified evidence:** getFinanceBillById (loaders.ts:1900-1907) returns null data with source 'error' on any failure; page.tsx:13-23 renders not-found whenever !bill regardless of source, so 500/403/network errors read 'not found' - true. The found-branch badge (line 41) only shows when bill exists and source==='error' which cannot occur with fetchJson, so it is dead. However apiClient.ts already returns status/errorCode (lines 8-26, 144), so the fix is available.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/[id]/page.tsx`
@@ -2500,7 +2500,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05  ·  LOW  ·  partly  ·  theme MISSING-LINK (was DEADROUTE)
 
-- [x] **Status** — PR #1843 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1843 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Scheme detail has no link to related UCs or fund releases, though the list subtitle promises UC status and progress.
 - **Verified evidence:** Confirmed: detail Card (l.133-145) has only the scheme's own fields and no links to UCs or fund releases. The list subtitle (en.json expenditureSchemeTracking.subtitle) does promise 'milestones, UC status, and progress'. UCs carry only a free-text `scheme` field on create (new/page.tsx:173) so a reliable scheme->UC link may need backend (schemeId); cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/scheme-tracking/[id]/page.tsx`
@@ -2920,7 +2920,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-GST-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** — PR #1807 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1807 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** loading.tsx is one empty .skeleton block for a three-fetch, table-heavy page (gst/loading.tsx).
 - **Verified evidence:** gst/loading.tsx is one `<div className="skeleton" role="status">` (identical to fiscal-years/loading.tsx). The page awaits three fetches then renders header, period card, four stat cards and a tabbed table (page.tsx:57-83).
 - **Files to change:** `apps/web/src/app/(app)/finance/gst/loading.tsx`
@@ -3085,7 +3085,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-MEDICAL-02  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** — PR #1810 (merged) — next.config.mjs now redirects /finance/medical -> /hr/medical before finance/layout.tsx's role gate (employee/manager/HR users no longer hit PermissionDenied); the page-level redirect is kept only as a fallback — whether to delete finance/medical/page.tsx is an optional owner call (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1810 (merged) — next.config.mjs now redirects /finance/medical -> /hr/medical before finance/layout.tsx's role gate (employee/manager/HR users no longer hit PermissionDenied); the page-level redirect is kept only as a fallback — whether to delete finance/medical/page.tsx is an optional owner call (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Finance sidebar and home do not need this route: it exists only for bookmarks, so it can be deleted once analytics show no hits (page.tsx:3-8).
 - **Verified evidence:** Confirmed as a fact, but it is a housekeeping suggestion, not a defect. apps/web/src/app/(app)/finance/medical/page.tsx:3-8 is a comment plus `redirect("/hr/medical")` (line 10). No sidebar, hub tile or navRouteManifest entry references /finance/medical (grep of apps/web/src finds only the file itself). But nothing records hits on the redirect (bare server redirect, no telemetry), so 'delete once analytics show no hits' cannot be acted on today. The folder also still holds orphaned components (MedicalClaimForm.tsx) that nothing imports.
 - **Files to change:** `apps/web/src/app/(app)/finance/medical/page.tsx`, `apps/web/src/app/(app)/finance/medical/MedicalClaimForm.tsx`
@@ -3681,7 +3681,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PFMS-07  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** — PR #1811 (merged) — selecting a bill now also fills the payee name from the bill's vendor (editable, never overwrites typed text, nothing for an Unknown vendor); BillSummary carries no bank data, so account no. and IFSC stay typed (owner call: prefilling them needs an audited vendor-master reveal) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1811 (merged) — selecting a bill now also fills the payee name from the bill's vendor (editable, never overwrites typed text, nothing for an Unknown vendor); BillSummary carries no bank data, so account no. and IFSC stay typed (owner call: prefilling them needs an audited vendor-master reveal) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Payee Account No. and Payee IFSC are entered in plain text and echoed with no masking in the advice flow (PaymentAdviceForm.tsx), and Bill ID is a raw UUID the clerk must copy from elsewhere.
 - **Verified evidence:** True in part: PaymentAdviceForm.tsx:205-217 payee account is a plain text input (maxLength 32), IFSC :232-245, and billId is a raw UUID field validated by uuidRe at :95-101 that the clerk must copy from elsewhere. Overstated: the value is not echoed anywhere; the confirm text shows only payeeName and amount (en.json pfmsPaymentAdviceForm.confirmDescription ~3588) and submit clears the fields (:141). Masking a typed field would hinder verification and no shared <Masked> component exists (grep found none in apps/web or packages/ui-kit). A bills list loader exists: getFinanceBills in app/_data/loaders.ts:1891 (GET /api/v1/finance/bills).
 - **Files to change:** `apps/web/src/app/(app)/finance/pfms/PaymentAdviceForm.tsx`, `apps/web/src/app/(app)/finance/pfms/page.tsx`, `apps/web/src/app/(app)/finance/pfms/PaymentsPanel.tsx`
@@ -4325,7 +4325,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-STATUTORY-TDS-RETURNS-05  ·  LOW  ·  partly  ·  theme OTHER (was PII)
 
-- [x] **Status** — PR #1814 (merged) — TDS table now offers an audited PAN reveal (reason 10-500 chars -> POST /v1/finance/vendor-tds/:id/pan/reveal) to finance_officer/finance_admin/super_admin; masked by default, CSV and offline cache never carry the full PAN (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1814 (merged) — TDS table now offers an audited PAN reveal (reason 10-500 chars -> POST /v1/finance/vendor-tds/:id/pan/reveal) to finance_officer/finance_admin/super_admin; masked by default, CSV and offline cache never carry the full PAN (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Vendor is shown by name only; the PAN needed to reconcile with Form 26AS is not shown (TDSReturnsTable.tsx:19). PAN is a DPDP-adjacent field, so any addition should be masked.
 - **Verified evidence:** TDSReturnsTable.tsx:20 shows vendor_name only, no PAN. True. But this is a missing-field enhancement, not a PII leak; no <Masked> component exists in apps/web (grep found none), and whether VendorTdsEntry contains a PAN cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/finance/statutory/tds-returns/TDSReturnsTable.tsx`, `apps/web/src/app/_components/Masked.tsx`
@@ -4780,7 +4780,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-TREASURY-E-PAYMENTS-01  ·  HIGH  ·  partly  ·  theme DUPLICATE (was I18N)
 
-- [x] **Status** — PR #1817 (merged) — both tiles are kept; the acceptance alternative 'both render identical rows with links' is met by one shared PaymentsTable (EPaymentsTable is now a thin wrapper); merging into one tile + redirect remains an optional owner call (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1817 (merged) — both tiles are kept; the acceptance alternative 'both render identical rows with links' is met by one shared PaymentsTable (EPaymentsTable is now a thin wrapper); merging into one tile + redirect remains an optional owner call (W2 finance rescan: completed by #2136)
 - **First-pass claim:** This route is a second copy of the Payments register: it calls the same endpoint with the same loader contract (loaders.ts:1993-2005) and shows the same four columns minus the tabs, actions and row link (EPaymentsTable.tsx:36-41 vs payments/PaymentsTable.tsx:81-95). Two sidebar tiles lead to one dataset.
 - **Verified evidence:** getFinanceEPayments (loaders.ts:1997-2005) and getPayments (loaders.ts:769-772) both hit /api/v1/finance/payments with paymentsListSchema and mapPayments. EPaymentsTable.tsx has the same four columns (referenceId, beneficiary, amountDisplay, status) as payments/PaymentsTable.tsx:81-95 minus Segmented tabs, reference formatting and rowHref. Tiles: finance/page.tsx:30 (e-Payment Orders) and :46 (Payments). The 'actions' claim is overstated: PaymentsTable has tabs and a row link but no action buttons.
 - **Files to change:** `apps/web/src/app/(app)/finance/treasury/e-payments/page.tsx`, `apps/web/src/app/(app)/finance/treasury/e-payments/EPaymentsTable.tsx`, `apps/web/src/app/(app)/finance/page.tsx`
@@ -5134,7 +5134,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** No period-close check on posting date in the client: the client never checks the period status, so a date in a closed period is only caught, if at all, by the backend (undeterminable; finance/period-close/page.tsx exists as a separate screen).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals reject a postingDate in a closed period with a clear error code?
@@ -5189,7 +5189,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1804 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1804 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Hub tile promises a "hierarchical account tree" (finance/page.tsx:9) but the screen is a flat list; "+ Add Head" is shown to every FINANCE_ROLES member (page.tsx:24) with the create authority enforced only server-side (undeterminable).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/accounts', 'GET /v1/finance/accounts']`
 - **Question:** Which roles may create account heads, and does GET return parentId for building a tree?
@@ -5200,7 +5200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Both actions render for every FINANCE_ROLES member; the maker-checker rule (distinct officer) is stated in dialog copy but enforced only server-side, absent from the snapshot (FinanceActions.tsx:130,145).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/bills/:id/pass', 'POST /v1/finance/bills/:id/pay']`
 - **Question:** Do pass and pay require distinct users (maker != checker) and respective roles?
@@ -5211,7 +5211,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-JOURNAL-ENTRY-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1807 (merged) — POST /v1/finance/journals now answers 409 DUPLICATE_VOUCHER (voucherNo field error) for a typed duplicate and the consumer records a race loser as a failure audit; web shows the message under Voucher Number (W2 finance rescan: completed by #PRNUM)
+- [x] **Status** — PR #1807 (merged) — POST /v1/finance/journals now answers 409 DUPLICATE_VOUCHER (voucherNo field error) for a typed duplicate and the consumer records a race loser as a failure audit; web shows the message under Voucher Number (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Voucher number is typed by hand (placeholder JV-2026-001) rather than allocated by the server, risking duplicates; the backend duplicate handling is undeterminable (finance-service absent).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals enforce a unique voucher number per tenant (409 on duplicate) or allocate it server-side when omitted?
