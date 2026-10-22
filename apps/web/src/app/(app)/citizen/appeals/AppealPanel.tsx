@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { formatIndianDate } from "@/lib/formatters";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -52,7 +53,7 @@ export function AppealPanel() {
 
   const search = useCallback(async (query: string, signal: AbortSignal): Promise<EntityOption[]> => {
     const res = await fetch("/api/proxy/v1/citizen/requests", { signal });
-    if (!res.ok) return [];
+    if (!res.ok) throw new Error("search failed"); // surfaced by EntityPicker's error state, not shown as "no results"
     const body = (await res.json()) as unknown;
     const rows = Array.isArray(body) ? body : Array.isArray((body as { data?: unknown })?.data) ? (body as { data: unknown[] }).data : [];
     const q = query.trim().toLowerCase();
@@ -79,12 +80,12 @@ export function AppealPanel() {
           (b: { code?: unknown }) => ({ code: typeof b?.code === "string" ? b.code : null }),
           () => ({ code: null }),
         );
-        if (code === "FILING_WINDOW_EXPIRED") throw new Error(t("errorWindowExpired"));
+        if (code === "FILING_WINDOW_EXPIRED") throw new UserFacingError(t("errorWindowExpired"));
         throw await userFacingErrorFromResponse(res, "save", "appeal");
       }
       setFiled((await res.json()) as Filed);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("errorGeneric"));
+      setError(e instanceof UserFacingError ? e.message : t("errorGeneric"));
     } finally {
       setBusy(false);
     }

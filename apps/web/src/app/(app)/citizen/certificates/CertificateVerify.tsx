@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
@@ -39,7 +40,7 @@ export function CertificateVerify() {
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setResult((await res.json()) as VerifyResult);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("verifyFailed"));
+      setError(e instanceof UserFacingError ? e.message : t("verifyFailed"));
     } finally {
       setBusy(false);
     }

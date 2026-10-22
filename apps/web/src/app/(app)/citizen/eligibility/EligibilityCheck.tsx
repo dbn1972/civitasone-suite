@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
@@ -31,7 +32,7 @@ export function EligibilityCheck({ services }: { services: EligibilityServiceOpt
     setBusy(true); setError(""); setResult(null);
     try {
       let parsed: unknown = {};
-      try { parsed = JSON.parse(subject); } catch { throw new Error(t("invalidJson")); }
+      try { parsed = JSON.parse(subject); } catch { throw new UserFacingError(t("invalidJson")); }
       const res = await fetch("/api/proxy/v1/citizen/eligibility/evaluate", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -40,7 +41,7 @@ export function EligibilityCheck({ services }: { services: EligibilityServiceOpt
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setResult((await res.json()) as Result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("evaluationFailed"));
+      setError(e instanceof UserFacingError ? e.message : t("evaluationFailed"));
     } finally {
       setBusy(false);
     }
