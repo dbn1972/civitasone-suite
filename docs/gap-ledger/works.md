@@ -86,7 +86,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; work number + officer name resolved web-side (loaders.ts getWorkNumberMap/getOfficerNameMap; approvals.loader.test.ts); columns relabelled Work Number / Authority) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2047; work number + officer name resolved web-side (loaders.ts getWorkNumberMap/getOfficerNameMap; approvals.loader.test.ts); columns relabelled Work Number / Authority) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** register rows now carry `workNumber` from works-service (approval routes stitch it from the proposal module with one batched, tenant-scoped getWorkHeaders read, no cross-module SQL join); the officer NAME comes from the tenant user directory (loaders.ts getOfficerNameMap -> lib/directory/resolveUsers, batched by id, so no 200-user cap). The old loader called GET /api/v1/identity/users which the gateway forwards to identity-service /v1/identity/users, a route that does not exist (the real list is /identity/users, ADMIN-gated); identity-service now also serves GET /v1/identity/users/directory (tenant-scoped, {id, displayName} only), the path every shared directory helper already used. Work Number links to /works/proposals/<id>; a row that could not be resolved reads "ID 3f9a1c20…" / "Unknown officer (aaaa1111…)" with the full id as a tooltip and exports the FULL id to the CSV; the approval number is now the first column (the row link to the detail page) so the work link is not nested in another link. Tests: approvals.loader.test.ts, ApprovalsTable.test.tsx, cluster01-route-validation.test.ts, users-directory.db.test.ts.
 - **W0 note:** partly fixed by #1867 — No backend join for workNumber/authorityName (works-service approval list returns only ids); mapAaRow/mapTsRow prefer str(r.workNumber)/authorityName, fall back to shortId, columns relabelled "Work (ID)"/"Authority (ID)"; Work Number is not linked to the work.
 - **First-pass claim:** Work Number and Authority columns show 8-char UUID prefixes ("3f9a1c20…") not the work number or officer name (_data/loaders.ts:168,171; ApprovalsTable.tsx:10,12) — register is unreadable for officers.
@@ -331,7 +331,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; ts-new picker lists only dao_finalized works (workProposal.ts DAO_FINALIZED) and prefills ?workId= (ts-new/page.tsx + NewTsForm.tsx); NewTsForm.test.tsx) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2047; ts-new picker lists only dao_finalized works (workProposal.ts DAO_FINALIZED) and prefills ?workId= (ts-new/page.tsx + NewTsForm.tsx); NewTsForm.test.tsx) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** a work that is not DAO-finalized is now LISTED as a disabled option with the reason (EntityOption.disabledReason: aria-disabled, reason text, skipped by ArrowUp/ArrowDown, ignored on click/Enter); Create is disabled until a work and a TS authority are chosen (and while the chosen work is not eligible), with an explanation and a submit() guard; the info banner follows the selected work (neutral / eligible / blocked, including a ?workId= prefill); the work search is server-side (GET /v1/works/proposals?q=&limit=&prefer=, returns status, eligible statuses ranked first) instead of the first 200 proposals filtered in the browser; the TS authority picker uses the tenant user directory (the admin-gated users list was unreachable for a works clerk). Eligibility mirrors the server allow-list canEnterTS (dao_finalized, ts_eligible). Tests: EntityPicker.test.tsx (combobox roles, ArrowUp/ArrowDown, disabled options), NewTsForm.test.tsx, cluster01-route-validation.test.ts, cluster01-billing.db.test.ts.
 - **W0 note:** partly fixed by #1867 — EntityPicker (work + TS authority) added, but picker does not disable non-DAO-finalized works (only shows Status sublabel), info banner is static, no ?workId= prefill on ts-new.
 - **First-pass claim:** The DAO-finalized precondition is only prose (page.tsx:82-84); the work is a pasted UUID (page.tsx:104-114), so users learn about a non-finalized proposal only from a server error.
@@ -442,7 +442,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; ts/[id]/page.tsx shows the work number linked to the proposal and the officer name; ts/[id]/page.test.tsx) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2047; ts/[id]/page.tsx shows the work number linked to the proposal and the officer name; ts/[id]/page.test.tsx) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** when the officer lookup fails the TS authority reads "Unknown officer (3f9a1c20…)" (works.approvalNames.unknownOfficer, en + hi) with the full id as a tooltip, and the work falls back to "ID 3f9a1c20…"; the page now skips the work-number / officer lookups when works-service already returned them, and looks the officer up in the tenant user directory by id. Same treatment on the AA detail page so register and detail agree. Tests: ts/[id]/page.test.tsx, aa/[id]/page.test.tsx.
 - **W0 note:** partly fixed by #1867 — Work linked to /works/billing/<workId> but label is still truncated UUID; TS authority still shortId with "(ID)" label; no workNumber/officer name resolution.
 - **First-pass claim:** Work ID and TS Authority are shown as truncated UUIDs (page.tsx:112-113) with no link to the work or officer.
@@ -941,7 +941,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-NEW-MB-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 works: closed by #2039; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2039; W2 works rescan: completed by #2133)
 - **W2 rescan note:** web now reads the FLAT works-service envelope (code at top level) so DUPLICATE_MB_NUMBER lands on the MB number field; billing-mb-duplicate-envelope.test.ts runs the real error handler, new-mb/page.test.tsx uses the real body shape
 - **W0 note:** partly fixed by #1867 — values trimmed before POST; no field-level 409 mapping (generic formError message only) and no duplicate pre-check
 - **First-pass claim:** MB number is free text with no uniqueness feedback until the server responds (page.tsx:130-143).
@@ -1168,7 +1168,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-04  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [x] **Status** (W2 works: closed by #2047; quantity sent as a decimal string (boq/new/page.tsx) and accepted by works-service boqQuantitySchema (boq/validators.ts); boq-quantity-string.test.ts + boq/new/page.test.tsx; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2047; quantity sent as a decimal string (boq/new/page.tsx) and accepted by works-service boqQuantitySchema (boq/validators.ts); boq-quantity-string.test.ts + boq/new/page.test.tsx; W2 works rescan: completed by #2133)
 - **W2 rescan note:** POST /v1/works/boq answers a duplicate line synchronously with 409 DUPLICATE_BOQ_LINE (flat envelope); the form shows it on the item code (or description) field with the data kept, plus an early check on blur against the work BoQ list; Suspense SkeletonCard fallback has a test
 - **W0 note:** partly fixed by #1867 — 409 mapped to inline message and Suspense SkeletonCard done; quantity still sent as Number(), not a decimal string
 - **First-pass claim:** No duplicate-item check within a work; quantity sent as JS number (page.tsx:52). Suspense has no fallback.
@@ -1291,7 +1291,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-03  ·  MEDIUM  ·  partly  ·  theme CAP (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9; W2 works rescan: completed by #2133)
 - **W2 rescan note:** works-service honours ?pageSize/?page (max 200) and returns meta.total; the register shows the true total and Showing the first N of M; w2 tests: contractor-cluster02.test.ts, contractors/page.test.tsx, real-DB paging
 - **First-pass claim:** No pagination param on the request (page.tsx:68 fetches /api/v1/works/contractors without pageSize) and no cache/offline layer, unlike the other list pages that use useSeededResource.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/page.tsx:65 fetches "/api/v1/works/contractors" with no pageSize (other works loaders use ?pageSize=100, e.g. works/_data/loaders.ts:85,133), so the backend default limit applies silently and stats (lines 83-86) and 'Contractors (N)' are computed from that partial page; default is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Also on fetch failure the stat cards show 0 and the table shows 'No contractors registered' (only a badge signals the error) - a failure mask. Overstated: 'FABRICATED' is the wrong theme, and useSeededResource is used only by a few list pages (ModuleListPage, admin/editions), not 'the other list pages' generally.
@@ -1380,7 +1380,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9; W2 works rescan: completed by #2133)
 - **W2 rescan note:** rating-history now carries ratedByName resolved server-side via identity-service user-summaries (fail-open to null; only the asked-for ids returned); contractor-cluster02.test.ts
 - **First-pass claim:** Rated By shows the first 8 chars of a UUID (page.tsx:172); history rows have no comment/criteria so a rating cannot be justified or audited.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/[id]/page.tsx:168-173 maps ratedBy: r.ratedBy?.slice(0, 8) ?? "—"; RatingHistoryRow (apps/web/src/app/(app)/works/contractors/[id]/page.tsx:28-33) and mapRatingHistory (lines 70-90) carry only id, rating, ratedAt, ratedBy - no comment, criteria or work reference, and the write path apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx:46-52 sends only {rating}. Additional: mapRatingHistory falls back to Math.random() as row id (line 81). Whether the rating-history API returns a name/comment is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;).
@@ -1398,7 +1398,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [~] **Status** (W2 works rescan: PARTLY done by #PRNUM; NEEDS OWNER DECISION: the cooling-off length between two ratings of one contractor by one officer, and whether it blocks; ready: works-service enforces WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS (409 RATING_COOLDOWN, unset = off) in route and consumer, the form warns from the same server value, the audit event carries the reason, a rating can link a work (migration 0153); GAP-WORKS-CONTRACTORS-DETAIL-04)
+- [~] **Status** (W2 works rescan: PARTLY done by #2133; NEEDS OWNER DECISION: the cooling-off length between two ratings of one contractor by one officer, and whether it blocks; ready: works-service enforces WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS (409 RATING_COOLDOWN, unset = off) in route and consumer, the form warns from the same server value, the audit event carries the reason, a rating can link a work (migration 0153); GAP-WORKS-CONTRACTORS-DETAIL-04)
 - **First-pass claim:** Rating is one 1–5 star tap with a generic confirm and no reason (ContractorRatingForm.tsx:88-130); a contractor can be re-rated repeatedly with no visible cooldown or per-work link.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx:88-105 star buttons set selectedRating; Submit (110-114) opens ConfirmDialog (117-129) with only description `Rate this contractor N/5 stars?` - no requireReason (ConfirmDialog supports requireReason/reasonLabel/minReasonLength). handleConfirm (41-67) PATCHes {rating} only; nothing on the client prevents repeated re-rating (selectedRating reset at line 61; no cooldown, no per-work link). Whether the backend rejects/limits repeat ratings or emits an audit event is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Note: maker!=checker in the finding is not really applicable to a rating; a per-work link and reason are the meaningful controls.
 - **Files to change:** `apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx`, `services/works-service (not in snapshot)`
@@ -3003,7 +3003,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** POST /v1/works/approvals/aa now validates aaDate as a real calendar date (YYYY-MM-DD or ISO date-time; was an unvalidated string accepted with 202 then thrown in the consumer), requires a strictly positive amount (zero and negative were accepted) no larger than the int8 column, and 404s a work that does not exist (TS create already did); the consumer re-checks date and amount for commands that bypass the route. Tests: cluster01-route-validation.test.ts, approval-consumer-events.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/approvals/aa']`
@@ -3015,7 +3015,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** POST /v1/works/approvals/ts validates tsDate as a real calendar date and requires a strictly positive amount; 403 for a role that cannot create a TS is now covered by a route test (works_viewer, citizen, estimator), together with 400 (bad date, zero/negative/overflow amount), 404, 422 DAO_GATE_BLOCKED and 202; the consumer re-checks both. The status column remains a varchar without a DB CHECK (not changed: the route and consumer enforce the draft/finalized values). Tests: cluster01-route-validation.test.ts, approval-consumer-events.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/approvals/ts']`
@@ -3049,7 +3049,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-WORKID-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 works: closed by #2039; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: closed by #2039; W2 works rescan: completed by #2133)
 - **W2 rescan note:** finalize is idempotent: a repeat of the step the record is already at returns 200 {alreadyApplied} and publishes nothing; both consumers lock the row, no-op a replay and refuse an out-of-order step (INVALID_STEP), so a double DO step raises ONE finance hand-off; GET :workId/{bills,mbs,awards} validate the UUID (400) and the work (404); w2-works-cluster02.db.test.ts (real DB incl. concurrent finalize). CONFIRM: repeat finalize is now 200, previously 422 INVALID_STEP; route-finalization-guards.test.ts updated to the new contract
 - **W0 note:** partly fixed by #1867 — Finalize bill/MB role = broad WRITE_ROLES (no dedicated finalizer role); repeat finalize returns 422 INVALID_STEP rather than idempotent success; step sequence enforced.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
@@ -3073,7 +3073,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** POST /v1/works/billing/bills now requires a strictly positive gross and a non-negative deduction (a negative gross used to pass both cumulative ceilings; zero deductions stay valid and net payable stays gross - deductions); the bill number is trimmed and unique per work, case-insensitively (409 DUPLICATE_BILL_NUMBER from the route, re-checked in the consumer transaction under a per-work advisory lock so two concurrent creates against different MBs cannot both win; the web form shows it under the Bill Number field); 403 wrong role is route-tested. No DB UNIQUE index was added: existing rows may already hold duplicates, so adding one needs a data check first. Tests: cluster01-route-validation.test.ts, orphan-consumers.test.ts, cluster01-billing.db.test.ts (exact paise, concurrency), bills/new/page.test.tsx.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/billing/bills']`
@@ -3085,7 +3085,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-MEASUREMENTS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #2133)
 - **W2 works rescan note (cluster 01):** a measurement can only be recorded against a DRAFT measurement book (409 MB_NOT_OPEN from the route; the consumer re-checks under FOR UPDATE on the MB row), so the measured-value ceiling a bill is checked against cannot change once the finalization chain starts or after do_finalized; quantity is bounded to numeric(18,4) and the optional dimensions to numeric(12,4); route tests cover 401/403/400/404/409/202 and the web form offers only draft books and explains the rest. Tests: cluster01-route-validation.test.ts, orphan-consumers.test.ts, cluster01-billing.db.test.ts, measurements/new/page.test.tsx, errorCatalogue.change.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/billing/measurements']`
@@ -3119,7 +3119,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq routes: all-routes.test.ts GET boq 401/403/200 + boq-workid-existence.test.ts; closed by #1867; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq routes: all-routes.test.ts GET boq 401/403/200 + boq-workid-existence.test.ts; closed by #1867; W2 works rescan: completed by #2133)
 - **W2 rescan note:** workId is UUID-validated on both GETs (400); recap GET tells unknown work (NOT_FOUND) from not computed (RECAPITULATION_NOT_COMPUTED); a recapitulation is computed from the stored BoQ line amounts (paise, summed in SQL) instead of the nonexistent client workAmount, so recap rows can now be produced; a work with no lines is 422 BOQ_EMPTY. Exact-paise real-DB test: work amount 287497, grand total 348555; a work has ONE recapitulation: a repeat or a racing double submit is refused (route 409 RECAP_EXISTS, consumer re-check under a per-work lock) and the stored figures never move, the read orders by version DESC. OPEN QUESTION FOR THE OWNER: may a changed BoQ REPLACE the work recapitulation (recompute in place, version bumped), or is it computed once? Until decided a recapitulation cannot be recomputed after the BoQ changes
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/boq/:workId', 'GET /api/v1/works/boq/:workId/recapitulation']`
@@ -3131,7 +3131,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq create: all-routes.test.ts 202/400 + boq-quantity-string.test.ts; closed by main; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq create: all-routes.test.ts 202/400 + boq-quantity-string.test.ts; closed by main; W2 works rescan: completed by #2133)
 - **W2 rescan note:** BR-015 freeze now also refuses ADDING a line (route 409 BOQ_FROZEN + consumer); rate must be > 0 and PATCH quantity must be > 0 (400); duplicates answered synchronously; 403 on POST boq tested (boq-cluster02-routes.test.ts, w2-works-cluster02.db.test.ts). Owner to confirm: a zero rate is now refused (the finding asked for rate > 0, no statutory value was invented); if provisional or free-issue lines with a zero rate occur in practice that is a policy call
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/boq']`
@@ -3154,7 +3154,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: contractor-routes.test.ts roles + validation + duplicate registration number; closed by main; W2 works rescan: completed by #PRNUM)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: contractor-routes.test.ts roles + validation + duplicate registration number; closed by main; W2 works rescan: completed by #2133)
 - **W2 rescan note:** pageSize/page contract fixed with meta.total; list rows never carry a clear PAN; detail returns the clear PAN only to PII_REVEAL_ROLES; contractor validation errors now carry fieldErrors. Not covered: phone and email are still returned unmasked by the API to READ_ROLES (the web masks them); the finding named PAN only; tracked separately as GAP-WORKS-CONTRACTORS-API-PII-01 (open)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/contractors']`
