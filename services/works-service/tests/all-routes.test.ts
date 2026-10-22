@@ -80,6 +80,14 @@ vi.mock("../src/modules/contractor/repo.js", async (importOriginal) => {
   };
 });
 
+// GAP-WORKS-BOQ-WORKID-05: a recapitulation is computed on the work's stored BoQ lines, so POST .../recapitulate
+// refuses a work with none. The "valid body" test below therefore runs against a work that has lines; the
+// empty-BoQ rejection has its own test (boq-cluster02-routes.test.ts).
+vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
+  return { ...orig, boqWorkTotals: vi.fn(async () => ({ lines: 3, totalMinor: 1250000n })) };
+});
+
 // BR-013 gate (boq/routes.ts POST /v1/works/boq): permissive default so the
 // existing "happy path" BoQ create test doesn't need a real finalized TS
 // row; a dedicated test overrides this for the rejection path.

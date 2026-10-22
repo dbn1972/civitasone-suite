@@ -4,8 +4,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById, boqIndexSummary } from "./repo.js";
-import { canEnterBoq, canModifyBoq, recapitulationBreakdown } from "./domain.js";
+import {
+  listBoqItems, getRecapitulation, listAllBoqItems, getBoqItemById, boqIndexSummary, listBoqLineRefs, boqWorkTotals,
+} from "./repo.js";
+import { canEnterBoq, canModifyBoq, recapitulationBreakdown, isDuplicateBoqLine } from "./domain.js";
 import { hasFinalizedTsForWork } from "../approval/repo.js";
 import { hasTenderForWork, hasPreTenderForWork } from "../tender/repo.js";
 import { getProposal } from "../proposal/repo.js";
@@ -63,7 +65,7 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/boq/:workId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const { workId } = v.workIdParamSchema.parse(req.params);
     const work = await getProposal(ctx.tenantId, workId);
     if (!work) throw new HttpError(404, "NOT_FOUND", "work not found");
     const data = await listBoqItems(ctx.tenantId, workId);
@@ -74,9 +76,12 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/boq/:workId/recapitulation", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const { workId } = v.workIdParamSchema.parse(req.params);
+    // GAP-WORKS-BOQ-WORKID-05: tell "no such work" apart from "this work has no recapitulation yet". Both are 404s
+    // (the page treats a missing recap as "not computed"), but they carry different codes so a caller can act on it.
+    if (!(await getProposal(ctx.tenantId, workId))) throw new HttpError(404, "NOT_FOUND", "work not found");
     const data = await getRecapitulation(ctx.tenantId, workId);
-    if (!data) throw new HttpError(404, "NOT_FOUND", "recapitulation not found");
+    if (!data) throw new HttpError(404, "RECAPITULATION_NOT_COMPUTED", "recapitulation has not been computed for this work");
     // GAP-WORKS-BOQ-WORKID-01: return a per-component breakdown (component,
     // basis, rate %, paise amount) alongside the stored row so the FE can show
     // a reviewer HOW the Grand Total is derived — rather than printing bare
@@ -118,6 +123,19 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "TS_REQUIRED", "BoQ entry requires a finalized technical sanction (TS) for this work");
     }
 
+    // BR-015 applies to ADDING a line as much as to editing or deleting one: once tender details exist the BoQ is
+    // frozen. (The consumer re-checks inside its transaction.)
+    if (!canModifyBoq(await hasTenderDetailsForWork(ctx.tenantId, body.workId))) {
+      throw new HttpError(409, "BOQ_FROZEN", "BoQ cannot be modified once tender details exist for this work");
+    }
+
+    // BR-016, answered synchronously: the duplicate used to be detected only in the async consumer, after the 202
+    // had already been returned, so the clerk was told the line was accepted and it then silently never appeared.
+    const existingLines = await listBoqLineRefs(ctx.tenantId, body.workId);
+    if (isDuplicateBoqLine(existingLines, body.workId, body.itemCode, body.itemDescription)) {
+      throw new HttpError(409, "DUPLICATE_BOQ_LINE", "A BoQ line with the same item code or description already exists for this work");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.addBoqItemCommand(ctx, body));
   });
 
@@ -126,6 +144,15 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.recapitulateSchema.parse(req.body);
+
+    // GAP-WORKS-BOQ-WORKID-05: the work amount is the sum of the work's stored BoQ lines (the consumer reads it again
+    // under its own transaction); the client never supplies it. A work with no lines has nothing to recapitulate.
+    if (!(await getProposal(ctx.tenantId, body.workId))) throw new HttpError(404, "NOT_FOUND", "work not found");
+    const { lines } = await boqWorkTotals(ctx.tenantId, body.workId);
+    if (lines === 0) {
+      throw new HttpError(422, "BOQ_EMPTY", "Add BoQ items to this work before computing the recapitulation");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.recapitulateCommand(ctx, body));
   });
 
