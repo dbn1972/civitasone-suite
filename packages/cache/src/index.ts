@@ -223,7 +223,7 @@ export class Cache {
     const sizeBytes = Buffer.byteLength(serialized, "utf8");
     if (sizeBytes > MAX_CACHE_VALUE_BYTES) {
       console.warn(
-        `[@civitasone/cache] skipping cache write for "${key}": ` +
+        `[@civitasone/cache] skipping cache write for ${JSON.stringify(key)}: ` +
         `${sizeBytes} bytes exceeds the ${MAX_CACHE_VALUE_BYTES}-byte cap ` +
         `(MAX_CACHE_VALUE_BYTES) — value is still returned to the caller, just not cached`,
       );
