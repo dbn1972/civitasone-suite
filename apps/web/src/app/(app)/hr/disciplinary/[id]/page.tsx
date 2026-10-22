@@ -18,6 +18,14 @@ import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
  */
 const DISCIPLINARY_ROLES = HR_STAFF_ROLES;
 
+/**
+ * GAP-HR-DISCIPLINARY-DETAIL-07: the eOffice routing key for the originating
+ * department -- a system identifier the eOffice matrix matches on (every
+ * RaiseEOfficeNote caller passes one: "Finance", "Legal", ...), not display
+ * copy, so it is deliberately NOT translated.
+ */
+const EOFFICE_DEPARTMENT = "HR";
+
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const v = data[key];
@@ -27,13 +35,28 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
   return "—";
 }
 
-export default async function DisciplinaryCaseDetailPage({ params }: { params: { id: string } }) {
+export default async function DisciplinaryCaseDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { from?: string };
+}) {
   const t = await getTranslations("disciplinaryDetail");
+  // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance
+  // so Back returns to it instead of dropping the officer out to the full
+  // disciplinary register. Only that one exact value is honoured, and it maps
+  // to a fixed internal path -- the param is never used as a redirect target.
+  const fromVigilance = searchParams?.from === "vigilance";
+  const tv = fromVigilance ? await getTranslations("vigilance") : null;
+  const backHref = tv ? "/hr/vigilance" : "/hr/disciplinary";
+  const backLabel = tv ? tv("backToVigilance") : t("backLabel");
+  const crumbLabel = tv ? tv("crumbVigilance") : t("crumbDisciplinary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
   if (!canAccess) {
-    return <PermissionDenied module="disciplinary cases" requiredRoles={DISCIPLINARY_ROLES} />;
+    return <PermissionDenied requiredRoles={DISCIPLINARY_ROLES} />;
   }
 
   const { data: dcase, source, status, errorMessage } = await getDisciplinaryCaseById(params.id);
@@ -49,15 +72,15 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
     if (source === "error" && status !== 404) {
       return (
         <div className="page-main wrap">
-          <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+          <nav aria-label={t("breadcrumbLabel")} className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
             <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
-            <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link>
+            <Link href={backHref}>{crumbLabel}</Link>
           </nav>
-          <PageHeader title={t("notFoundTitle")} back="/hr/disciplinary" backLabel={t("backLabel")} />
+          <PageHeader title={t("notFoundTitle")} back={backHref} backLabel={backLabel} />
           <LoadErrorState
             result={{ status, errorMessage }}
-            area="disciplinary case"
-            backHref="/hr/disciplinary"
+            area={t("loadErrorArea")}
+            backHref={backHref}
             requiredRoles={DISCIPLINARY_ROLES}
           />
         </div>
@@ -65,11 +88,11 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
     }
     return (
       <div className="page-main wrap">
-        <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+        <nav aria-label={t("breadcrumbLabel")} className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
-          <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link> <span aria-hidden="true">›</span> {t("crumbNotFound")}
+          <Link href={backHref}>{crumbLabel}</Link> <span aria-hidden="true">›</span> {t("crumbNotFound")}
         </nav>
-        <PageHeader title={t("notFoundTitle")} back="/hr/disciplinary" backLabel={t("backLabel")} />
+        <PageHeader title={t("notFoundTitle")} back={backHref} backLabel={backLabel} />
         <EmptyState icon="📁" title={t("notFoundEmptyTitle")} message={t("notFoundEmptyMessage")} />
       </div>
     );
@@ -138,16 +161,16 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
 
   return (
     <div className="page-main wrap">
-      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+      <nav aria-label={t("breadcrumbLabel")} className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <Link href="/hr">{t("crumbHr")}</Link> <span aria-hidden="true">›</span>{" "}
-        <Link href="/hr/disciplinary">{t("crumbDisciplinary")}</Link> <span aria-hidden="true">›</span>{" "}
+        <Link href={backHref}>{crumbLabel}</Link> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{caseLabel}</span>
       </nav>
 
       <PageHeader
         title={t("title", { caseLabel })}
         subtitle={proceedingType !== "—" ? t("subtitleProceeding", { proceedingType: proceedingTypeLabel }) : undefined}
-        back="/hr/disciplinary" backLabel={t("backLabel")}
+        back={backHref} backLabel={backLabel}
         actions={<StatusPill status={status_} label={humanizeStatus(status_)} />}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
@@ -237,8 +260,8 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <RaiseEOfficeNote
         refType="hr_disciplinary"
         refId={params.id}
-        subject={`Disciplinary case ${caseLabel}`}
-        dept="HR"
+        subject={t("eofficeSubject", { caseLabel })}
+        dept={EOFFICE_DEPARTMENT}
         // GAP-HR-DISCIPLINARY-DETAIL-01: disciplinary data warrants a
         // higher classification than the component's generic "confidential"
         // default -- 'secret' is this fix's own suggested value pending

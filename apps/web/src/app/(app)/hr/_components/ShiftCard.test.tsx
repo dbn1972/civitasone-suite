@@ -7,7 +7,7 @@ const BASE_PROPS = {
   name: "Morning Shift",
   startTime: "06:00",
   endTime: "14:00",
-  breakDuration: "30 min",
+  gracePeriod: "15 min",
   workingHours: "7.5 hrs",
   applicableTo: "Operational Staff",
   status: "active",
@@ -31,9 +31,13 @@ describe("ShiftCard", () => {
     expect(screen.getByText("7.5 hrs")).toBeInTheDocument();
   });
 
-  it("renders break duration", () => {
+  // GAP-HR-SHIFTS-02: the shift model has a grace period, not a break; the
+  // card must label it as such instead of calling it "Break".
+  it("renders the grace period under a Grace label, never a Break label", () => {
     render(<ShiftCard {...BASE_PROPS} />);
-    expect(screen.getByText("30 min")).toBeInTheDocument();
+    expect(screen.getByText("15 min")).toBeInTheDocument();
+    expect(screen.getByText("Grace")).toBeInTheDocument();
+    expect(screen.queryByText("Break")).not.toBeInTheDocument();
   });
 
   it("renders status", () => {

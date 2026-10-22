@@ -200,6 +200,7 @@ import {
   HRDashboardSchema,
   JobOpeningSummaryListSchema,
   LeaveRequestDetailListSchema,
+  LeaveRequestPageSchema,
   OrgChartSchema,
   PayrollRunDetailListSchema,
   PayrollRunFullDetailSchema,
@@ -217,17 +218,13 @@ import {
   attendanceSummaryResponseSchema,
   payrollRunsResponseSchema,
   TrainingProgramSummaryListSchema,
-  vendorListResponseSchema,
-  posListResponseSchema,
   approvalsListResponseSchema,
   tenantModulesResponseSchema,
-  userListResponseSchema,
   roleListResponseSchema,
   crmAccountDetailSchema,
   crmAccountHierarchyListSchema,
   crmAccountsListSchema,
   crmContactsListSchema,
-  crmDealsListSchema,
   crmActivitiesListSchema,
   crmForecastSchema,
   crmVocSummarySchema,
@@ -262,7 +259,6 @@ import {
   AllocationDistributionSummaryListSchema,
   FinanceBudgetAllocationSummaryListSchema,
   BudgetMonitoringSummarySchema,
-  BudgetMonitoringLineListSchema,
   BudgetMonitoringLinesResponseSchema,
   VendorTdsEntryListSchema,
   PfmsBatchSummaryListSchema,
@@ -285,21 +281,13 @@ import {
   FinanceVendorDetailSchema,
   FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
-  IndentSummaryListSchema,
-  IndentDetailSchema,
-  VendorDetailListSchema,
-  VendorDetailSchema,
   RFQSummaryListSchema,
   RFQDetailSchema,
   GRNSummaryListSchema,
   TenderSummaryListSchema,
   TenderDetailSchema,
-  PurchaseOrderListItemListSchema,
-  PODetailSchema,
   CRMDashboardSchema,
-  DealSummaryListSchema,
   ContactDetailSchema,
-  TicketDetailSchema,
   TicketAnalyticsSchema,
   CitizenRequestSummaryListSchema,
   RTISummaryListSchema,
@@ -319,7 +307,6 @@ import {
   GrantReleaseListSchema,
   GrantUtilizationListSchema,
   EstabDashboardSchema,
-  EstabFileSummaryListSchema,
   EstabFileDetailSchema,
   MeetingSummaryListSchema,
   MeetingDetailSchema,
@@ -330,13 +317,7 @@ import {
   LibraryBookSummarySchema,
   LibraryIssueSummaryListSchema,
   AssetDashboardSchema,
-  AssetSummaryListSchema,
-  AssetDetailSchema,
-  MaintenanceSummaryListSchema,
   StockDashboardSchema,
-  StockItemSummaryListSchema,
-  StockItemDetailSchema,
-  StockLedgerEntryListSchema,
   AuditDashboardSchema,
   AuditObservationSummaryListSchema,
   AuditObservationDetailSchema,
@@ -348,7 +329,6 @@ import {
   VigilanceCaseSummaryListSchema,
   InvestigationSummaryListSchema,
   LegalDashboardSchema,
-  LegalCaseSummaryListSchema,
   LegalCaseDetailSchema,
   HearingSummaryListSchema,
   CourtOrderPageSchema,
@@ -362,7 +342,6 @@ import {
   RoleDetailSchema,
   SubscriptionSummarySchema,
   TenantModuleListSchema,
-  AdminUserSummaryListSchema,
   AdminRoleSummaryListSchema,
   TenantAuditEventListSchema,
   ReportDashboardSchema,
@@ -442,33 +421,49 @@ function toText(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
+export function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
   const mapped: AuditRowSummary[] = [];
   for (const row of rows) {
     if (!isRecord(row)) continue;
-    const actor = toText(row.actor) ?? (isRecord(row.actor) ? toText(row.actor.email) ?? toText(row.actor.name) : null);
-    const action = toText(row.action) ?? toText(row.type);
+    // The producers' own context rides in `payload` on the raw audit-service
+    // row (payload.action / payload.outcome / payload.resourceType...); the
+    // flattened /v1 shape has no payload at all.
+    const rowPayload = isRecord(row.payload) ? row.payload : null;
+    // GAP-HR-AUDIT-LOG-08: a raw audit-service row's actor is
+    // {actorId, email?, name?}. Events written by the outbox consumers carry
+    // only the actorId (the identity the gateway stamped), so falling back to
+    // it -- instead of dropping the row for lacking an email/name -- keeps
+    // those events (APAR, disciplinary, ...) on the page. Missing: skipped.
+    const actor =
+      toText(row.actor) ??
+      (isRecord(row.actor) ? toText(row.actor.email) ?? toText(row.actor.name) ?? toText(row.actor.actorId) : null);
+    // GAP-HR-AUDIT-LOG-08: the audit consumer stores every event under the one
+    // generic type "audit.event.record" and keeps the meaningful verb
+    // ("create", "submit"...) in payload.action -- show that, falling back to
+    // the type only for rows that really have no action.
+    const action = toText(row.action) ?? (rowPayload ? toText(rowPayload.action) : null) ?? toText(row.type);
     const resource = toText(row.resource) ?? toText(row.target) ?? "unknown";
-    // GAP-HR-AUDIT-LOG-06: previously defaulted an ambiguous/unrecognised
-    // outcome to "success" (only error/critical severity flipped it to
-    // "failure") -- an audit trail must never call an action successful
-    // when it isn't sure. Flipped the fallback's polarity: only a
-    // positively-known-good severity reads as success now.
-    // GAP2-AUDIT-HOME-11: when the row carries an EXPLICIT outcome string that
-    // is neither success nor failure (e.g. "skipped", "held"), preserve it so
-    // the Result column can render it as its own neutral pill rather than
-    // mislabelling it red "failure". The severity-derived fallback (LOG-06)
-    // only applies when there is no explicit outcome at all.
-    const explicitOutcome = toText(row.outcome);
-    const outcome: AuditRowSummary["outcome"] =
-      explicitOutcome
-        ? explicitOutcome
+    // GAP-HR-AUDIT-LOG-06: an audit trail must never call an action
+    // successful when it isn't sure.
+    //  1. The producer's explicit outcome wins -- top-level (flattened shape)
+    //     or payload.outcome (raw audit-service row, where every outbox
+    //     producer states it). A non-binary value ("skipped", "held") is kept
+    //     verbatim (GAP2-AUDIT-HOME-11) so it renders as its own neutral pill.
+    //  2. Otherwise a positively-known severity decides: error/critical ->
+    //     failure, info/warning -> success.
+    //  3. With neither, the outcome is "unknown" (neutral pill) -- never
+    //     "success", and no longer a red "failure" that was only a guess.
+    const explicitOutcome = toText(row.outcome) ?? (rowPayload ? toText(rowPayload.outcome) : null);
+    const outcome: AuditRowSummary["outcome"] = explicitOutcome
+      ? explicitOutcome
+      : row.severity === "error" || row.severity === "critical"
+        ? "failure"
         : row.severity === "info" || row.severity === "warning"
           ? "success"
-          : "failure";
+          : "unknown";
     if (!actor || !action) continue;
     // GAP-HR-AUDIT-LOG-03: surface the event's own timestamp -- occurredAt
     // for the raw audit-service row shape, timestamp for an already-
@@ -478,7 +473,6 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     // entity's type in payload.resourceType and its id as `target` (the
     // flattened /v1 shape has neither a payload nor a separate id) -- kept
     // so the page can render "Type · id" and link to the entity.
-    const rowPayload = isRecord(row.payload) ? row.payload : null;
     const resourceType = (rowPayload ? toText(rowPayload.resourceType) : null) ?? undefined;
     const resourceId = toText(row.resourceId) ?? (rowPayload ? toText(rowPayload.resourceId) : null) ?? toText(row.target) ?? undefined;
     // GAP-AUDIT-HOME-03: keep the event's own id so the Event Log can show an
@@ -850,36 +844,63 @@ export async function getAuditItems(): Promise<LoaderResult<AuditRowSummary[]>> 
   });
 }
 
+/** Filters the HR audit log page offers; every one narrows the list, the total AND the export identically. */
+export type HrAuditLogFilters = { from?: string; to?: string; resourceType?: string; actor?: string };
+
 /**
- * HR-scoped audit log. GAP-HR-AUDIT-LOG-08: the `resourceType=...` param
- * this used to send was silently dropped -- GET /audit/events on
- * audit-service only ever recognised tenantId/from/to/type, so it did
- * nothing at all (not "excludes most HR modules" as originally suspected;
- * genuinely inert). Removed rather than left in place claiming a scope it
- * never enforced. A real resource-type filter needs a small audit-service
- * change (matching the actor/payload JSONB columns) not made in this pass;
- * `from`/`to` are real, backend-enforced filters already.
+ * The query string shared by the HR audit log's list, total-count and CSV
+ * export requests (GAP-HR-AUDIT-LOG-04/08), so the three can never disagree
+ * about which events match: scoped to the services whose events are HR
+ * actions (audit-service filters on payload.service) plus the optional
+ * date / resource-type / actor narrowing.
+ */
+export function hrAuditFilterParams(filters?: HrAuditLogFilters): URLSearchParams {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  params.set("service", HR_AUDIT_SERVICES.join(","));
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.actor) params.set("actor", filters.actor);
+  return params;
+}
+
+/**
+ * HR-scoped audit log (one page). GAP-HR-AUDIT-LOG-08: scoped by
+ * `service=hrms,payroll` (audit-service filters on payload.service), then
+ * narrowed server-side by resourceType / actor / date range
+ * (GAP-HR-AUDIT-LOG-07).
  */
 export async function getHrAuditLog(
   limit = 50,
   offset = 0,
-  filters?: { from?: string; to?: string; resourceType?: string; actor?: string },
+  filters?: HrAuditLogFilters,
 ): Promise<LoaderResult<AuditRowSummary[]>> {
-  const params = new URLSearchParams();
+  const params = hrAuditFilterParams(filters);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
-  if (filters?.from) params.set("from", filters.from);
-  if (filters?.to) params.set("to", filters.to);
-  // GAP-HR-AUDIT-LOG-08: scope to the services whose events are HR actions
-  // (audit-service filters on payload.service) instead of the whole tenant.
-  params.set("service", HR_AUDIT_SERVICES.join(","));
-  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
-  if (filters?.actor) params.set("actor", filters.actor);
   return fetchJson(`/api/audit/events?${params.toString()}`, [] as AuditRowSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.audit-log",
     responseSchema: auditEventsListSchema,
     mapResponse: mapAuditRows,
+  });
+}
+
+/**
+ * GAP-HR-AUDIT-LOG-04: how many events match the HR audit log's filters in
+ * total (audit-service GET /audit/events/count), so the page can say
+ * "Showing 41-60 of N". Data is null when the count could not be read -- the
+ * page then falls back to the range-only wording instead of guessing a total.
+ */
+export async function getHrAuditLogTotal(filters?: HrAuditLogFilters): Promise<LoaderResult<number | null>> {
+  const params = hrAuditFilterParams(filters);
+  return fetchJson(`/api/audit/events/count?${params.toString()}`, null as number | null, {
+    revalidateSeconds: 30,
+    telemetryKey: "hr.audit-log.total",
+    mapResponse: (payload) => {
+      const total = isRecord(payload) ? payload.total : undefined;
+      return typeof total === "number" && Number.isFinite(total) && total >= 0 ? Math.trunc(total) : null;
+    },
   });
 }
 
@@ -1708,23 +1729,6 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
   return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
-function mapCrmDeals(payload: unknown): CRMDealSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-  const mapped: CRMDealSummary[] = [];
-  const stages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const id = toText(row.id);
-    const name = toText(row.name);
-    const stage = toText(row.stage);
-    const valueDisplay = toText(row.valueDisplay) ?? "—";
-    if (!id || !name || !stage || !stages.has(stage)) continue;
-    mapped.push({ id, name, stage: stage as CRMDealSummary["stage"], valueDisplay });
-  }
-  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
-  return rows.length > 0 && mapped.length === 0 ? null : mapped;
-}
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -3183,6 +3187,58 @@ export async function getLeaveRequestDetails(): Promise<LoaderResult<LeaveReques
   });
 }
 
+/**
+ * GAP-HR-LEAVE-03: one page of the caller's visible leave requests with the real
+ * total and per-status counts over the WHOLE visible set. The plain
+ * getLeaveRequestDetails() above sent no limit/offset, so the backend's default
+ * page (50) silently truncated both the table and the stat tiles that counted
+ * it. `withMeta=1` is the backend's opt-in for the `{ data, meta }` envelope;
+ * every other caller of the endpoint keeps the bare array.
+ */
+export const LEAVE_REQUESTS_PAGE_SIZE = 100;
+
+export type LeaveRequestPage = {
+  rows: LeaveRequestDetail[];
+  total: number;
+  hasMore: boolean;
+  /** 1-based page number actually served. */
+  page: number;
+  pageSize: number;
+  /** Keyed by the same mapped status the rows carry (pending / approved / rejected / cancelled / routing_failed). */
+  statusCounts: Record<string, number>;
+};
+
+const EMPTY_LEAVE_REQUEST_PAGE: LeaveRequestPage = {
+  rows: [], total: 0, hasMore: false, page: 1, pageSize: LEAVE_REQUESTS_PAGE_SIZE, statusCounts: {},
+};
+
+export async function getLeaveRequestPage(opts: { page?: number; pageSize?: number } = {}): Promise<LoaderResult<LeaveRequestPage>> {
+  const pageSize = opts.pageSize ?? LEAVE_REQUESTS_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const offset = (page - 1) * pageSize;
+  return fetchJson<unknown, LeaveRequestPage>(
+    `/api/v1/hrms/leave-requests?withMeta=1&limit=${pageSize}&offset=${offset}`,
+    { ...EMPTY_LEAVE_REQUEST_PAGE, page, pageSize },
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "hr.leave.page",
+      responseSchema: LeaveRequestPageSchema,
+      mapResponse: (p) => {
+        if (!isRecord(p) || !Array.isArray(p.data) || !isRecord(p.meta)) return null;
+        const meta = p.meta as { total?: number; hasMore?: boolean; statusCounts?: Record<string, number> };
+        return {
+          rows: p.data as LeaveRequestDetail[],
+          total: typeof meta.total === "number" ? meta.total : p.data.length,
+          hasMore: meta.hasMore === true,
+          page,
+          pageSize,
+          statusCounts: meta.statusCounts ?? {},
+        };
+      },
+    },
+  );
+}
+
 export async function getPayrollRunDetails(
   opts: { limit?: number; month?: string } = {}
 ): Promise<LoaderResult<PayrollRunDetail[]>> {
@@ -3287,9 +3343,17 @@ export async function getOrgChart(): Promise<LoaderResult<OrgChartNode[]>> {
   });
 }
 
-export async function getEmployeeById(id: string): Promise<LoaderResult<EmployeeDetail | null>> {
+/**
+ * `opts.fresh` skips Next's 60 s data cache for this read (apiClient maps a
+ * missing `revalidateSeconds` to `cache: "no-store"`). It is meant for the
+ * navigation right AFTER an edit (profile `?updated=1`) and for the edit form
+ * itself: `router.refresh()` does not clear the fetch Data Cache, so without
+ * it the redirected-to profile -- and a second edit's seed values -- can show
+ * the pre-edit record for up to a minute. Every other caller keeps the cache.
+ */
+export async function getEmployeeById(id: string, opts?: { fresh?: boolean }): Promise<LoaderResult<EmployeeDetail | null>> {
   return fetchJson<unknown, EmployeeDetail | null>(`/api/v1/hrms/employees/${id}`, null, {
-    revalidateSeconds: 60,
+    ...(opts?.fresh ? {} : { revalidateSeconds: 60 }),
     telemetryKey: "hr.employee.detail",
     responseSchema: EmployeeDetailSchema,
     mapResponse: (p) => (isRecord(p) ? (p as EmployeeDetail) : null),
@@ -3757,39 +3821,6 @@ export async function getCRMDashboard(): Promise<LoaderResult<CRMDashboard>> {
   });
 }
 
-function mapDeals(payload: unknown): DealSummary[] | null {
-  const rows = getArrayPayload(payload);
-  if (!rows) return null;
-  const mapped: DealSummary[] = [];
-  const validStages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
-  const validStatuses = new Set(["active", "won", "lost"]);
-  for (const row of rows) {
-    if (!isRecord(row)) continue;
-    const id = toText(row.id);
-    const dealName = toText(row.dealName) ?? toText(row.name);
-    const stage = toText(row.stage);
-    const status = toText(row.status) ?? "active";
-    if (!id || !dealName || !stage || !validStages.has(stage)) continue;
-    if (!validStatuses.has(status)) continue;
-    mapped.push({
-      id,
-      dealName,
-      contactId: toText(row.contactId) ?? undefined,
-      contactName: toText(row.contactName) ?? undefined,
-      stage: stage as DealSummary["stage"],
-      // GAP-CRM-DEALS-04: DealSummary.amount is now a minor-unit string. (This
-      // mapDeals is currently unused — getDeals uses mapDealSummaries — but keep
-      // it type-correct: emit an exact digit string, "0" when absent/invalid.)
-      amount: typeof row.amount === "number" && Number.isSafeInteger(row.amount) && row.amount >= 0 ? String(row.amount) : "0",
-      owner: toText(row.owner) ?? "—",
-      closeDate: toText(row.closeDate) ?? undefined,
-      probability: typeof row.probability === "number" ? row.probability : 0,
-      status: status as DealSummary["status"],
-    });
-  }
-  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
-  return rows.length > 0 && mapped.length === 0 ? null : mapped;
-}
 
 export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
   return fetchJson<unknown, DealSummary[]>("/api/v1/crm/deals", [], {

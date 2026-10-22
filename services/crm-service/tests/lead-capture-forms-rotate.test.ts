@@ -126,6 +126,31 @@ describe("POST /v1/crm/lead-capture-forms/:id/rotate-key", () => {
     expect(after?.maxPerMinute).toBe(25);
   });
 
+  it("a retry with the same Idempotency-Key returns the key that was stored, and applies once", async () => {
+    const form = await createForm("Rotate retry");
+    const idem = { ...headers(), "x-idempotency-key": randomUUID() };
+    const url = `/v1/crm/lead-capture-forms/${form.id}/rotate-key`;
+
+    const first = await call("POST", url, { headers: idem });
+    const retry = await call("POST", url, { headers: idem });
+    expect(first.statusCode).toBe(202);
+    expect(retry.statusCode).toBe(202);
+    const k1 = (first.json() as { formKey: string }).formKey;
+    const k2 = (retry.json() as { formKey: string }).formKey;
+
+    // What the admin was shown is what is live, on the original request and on the retry.
+    expect(k2).toBe(k1);
+    const row = await formRow(form.id);
+    expect(row?.formKey).toBe(k1);
+    expect(row?.version).toBe(2);
+
+    // A different Idempotency-Key is a new rotation with a different key.
+    const next = await call("POST", url, { headers: { ...headers(), "x-idempotency-key": randomUUID() } });
+    const k3 = (next.json() as { formKey: string }).formKey;
+    expect(k3).not.toBe(k1);
+    expect((await formRow(form.id))?.formKey).toBe(k3);
+  });
+
   it("kills the old key at once and resolves the new one on the anonymous path", async () => {
     const form = await createForm("Old key dies");
     const res = await call("POST", `/v1/crm/lead-capture-forms/${form.id}/rotate-key`);

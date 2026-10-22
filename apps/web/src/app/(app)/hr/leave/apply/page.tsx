@@ -31,6 +31,11 @@ export default async function ApplyLeavePage({
   let resolvedSource = source;
   let noLinkedProfile = false;
   const myEmployeeId = myProfile?.id;
+  // GAP-HR-LEAVE-APPLY-03: the admin list came back with people in it, so this
+  // viewer is HR or a manager choosing WHO the leave is for -- the form then
+  // starts with nobody selected and a searchable picker. Everyone else only
+  // ever applies for themselves (the single-row fallback below).
+  const canPickEmployee = employees.length > 0;
 
   if (employees.length === 0) {
     const mySource = myProfileSourceEarly;
@@ -62,6 +67,16 @@ export default async function ApplyLeavePage({
       // dropdown (previously: "No employees loaded" with no way forward).
       noLinkedProfile = true;
     }
+  } else if (myProfile && !employees.some((e) => e.id === myProfile.id)) {
+    // GAP-HR-LEAVE-APPLY-03: a manager's roster holds only their direct
+    // reports, never the manager -- without this their "Apply for myself"
+    // shortcut would point at a row the form has no label for. (Department is
+    // left blank: the self-service profile carries a department ID, not a
+    // name, and a UUID is not something to show a person.)
+    resolvedEmployees = [
+      { id: myProfile.id, name: myProfile.name ?? "", department: "", status: myProfile.status ?? "active" },
+      ...employees,
+    ];
   }
 
   return (
@@ -74,12 +89,14 @@ export default async function ApplyLeavePage({
       <DataSourceBadge source={resolvedSource} />
       {/* The employee profile's "Apply Leave" quick action links here with
           ?empId= — previously ignored entirely, so it always defaulted to
-          whichever employee happened to be first in the list. */}
+          whichever employee happened to be first in the list. HR / managers
+          now start with nobody selected unless that link names someone. */}
       <ApplyLeaveForm
         employees={resolvedEmployees}
         initialEmployeeId={searchParams?.empId}
         myEmployeeId={myEmployeeId}
         noLinkedProfile={noLinkedProfile}
+        canPickEmployee={canPickEmployee}
       />
     </div>
   );

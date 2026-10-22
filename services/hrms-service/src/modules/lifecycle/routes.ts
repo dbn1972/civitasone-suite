@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -12,6 +12,27 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+// Every status lifecycle.hrms_promotions_status_check allows (migration 0144).
+// GAP-HR-DPC-02: GET /lifecycle/promotions?status= validates against this list.
+const PROMOTION_STATUSES = [
+  "pending", "approved", "rejected", "cancelled", "pending_approval", "completed", "pending_effective",
+] as const;
+// GAP-HR-DPC-02: `?status=` takes one status OR a comma-separated list
+// ("pending_approval,pending_effective"), so a caller can ask for "everything
+// still in flight" in one request. Previously it was an exact match on ONE
+// value, and the DPC page asked for "pending" -- a status no live write path
+// ever creates (create -> completed/pending_effective, eOffice submit ->
+// pending_approval), so its card was always empty.
+const promotionStatusFilter = z.string().max(200).optional().transform((v, ctx) => {
+  if (v === undefined) return undefined;
+  const parts = [...new Set(v.split(",").map((p) => p.trim()).filter(Boolean))];
+  const bad = parts.filter((p) => !(PROMOTION_STATUSES as readonly string[]).includes(p));
+  if (parts.length === 0 || bad.length > 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `status must be one or more of: ${PROMOTION_STATUSES.join(", ")}` });
+    return z.NEVER;
+  }
+  return parts;
+});
 // GAP-HR-RETIREMENT-01: decision packet's recommendation is explicitly
 // "gated to HR admin" for issuing a PPO (a statutory, irreversible pension
 // action) -- narrower than HR_ROLES above, which also admits hr_officer.
@@ -53,11 +74,11 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     // pattern exactly, folded in with SF-17's batch name-resolution.
     const q = z.object({
       employeeId: z.string().uuid().optional(),
-      status: z.string().max(24).optional(),
+      status: promotionStatusFilter,
     }).parse(req.query);
     const conditions = [eq(hrmsPromotions.tenantId, ctx.tenantId)];
     if (q.employeeId) conditions.push(eq(hrmsPromotions.employeeId, q.employeeId));
-    if (q.status) conditions.push(eq(hrmsPromotions.status, q.status));
+    if (q.status) conditions.push(inArray(hrmsPromotions.status, q.status));
     const rows = await scopedRead((tx) => tx.select().from(hrmsPromotions)
       .where(and(...conditions))
       .orderBy(desc(hrmsPromotions.effectiveDate)));

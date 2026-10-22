@@ -1,46 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { GiveKudosButton } from "./GiveKudosButton";
+import { FeedRow, type FeedItem } from "./FeedRow";
+import { BirthdaySharingToggle } from "./BirthdaySharingToggle";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
-type FeedItem = {
-  type: string;
-  id: string;
-  createdAt: string;
-  giver_name?: string;
-  receiver_name?: string;
-  badge?: string;
-  reactions?: number;
-  message?: string;
-  name?: string;
-  department?: string;
-  designation?: string;
-  title?: string;
-  body?: string;
-  category?: string;
-  pinned?: boolean;
-  author?: string;
-  joiningDate?: string;
-} & Record<string, unknown>;
-
 type FeedCounts = { kudos7d: number; birthdaysToday: number; joinees30d: number; announcementsActive: number };
 type FeedData = { items: FeedItem[]; counts: FeedCounts };
-
-// GAP-HR-SOCIAL-FEED-04: this used to be indexed with `item.badge ?? "star"`
-// directly, so any badge value outside these 7 keys (a legacy/stored value,
-// or the map going stale relative to the API's own enum) rendered an empty
-// 28px slot instead of falling back visibly. `badgeEmoji()` below always
-// returns a real emoji.
-const BADGE_EMOJI: Record<string, string> = {
-  star: "⭐", rocket: "🚀", heart: "❤️", trophy: "🏆", fire: "🔥", lightning: "⚡", thumbsup: "👍",
-};
-function badgeEmoji(badge: string | undefined): string {
-  return (badge && BADGE_EMOJI[badge]) || BADGE_EMOJI.star;
-}
 
 async function getData(): Promise<LoaderResult<FeedData>> {
   return fetchJson<unknown, FeedData>(
@@ -71,10 +40,30 @@ async function getData(): Promise<LoaderResult<FeedData>> {
   );
 }
 
+type BirthdaySharing = { linked: boolean; shareBirthday: boolean };
+
+// GAP-HR-SOCIAL-FEED-01 (DPDP): the caller's own birthday-sharing consent. If
+// this read fails the toggle is simply not offered (never guessed as "on").
+async function getBirthdaySharing(): Promise<LoaderResult<BirthdaySharing>> {
+  return fetchJson<unknown, BirthdaySharing>(
+    "/api/v1/hrms/me/birthday-sharing",
+    { linked: false, shareBirthday: false },
+    {
+      telemetryKey: "hr.social-feed.birthday-sharing",
+      mapResponse: (p) => {
+        const d = (p as { data?: Partial<BirthdaySharing> })?.data;
+        if (!d || typeof d !== "object") return null;
+        return { linked: d.linked === true, shareBirthday: d.shareBirthday === true };
+      },
+    },
+  );
+}
+
 export default async function SocialFeedPage() {
   requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("socialFeed");
-  const { data: page, source, status, errorMessage } = await getData();
+  const [{ data: page, source, status, errorMessage }, sharingResult] = await Promise.all([getData(), getBirthdaySharing()]);
+  const canSetBirthdaySharing = sharingResult.source !== "error" && sharingResult.data.linked;
   const feed = page.items;
   const counts = page.counts;
 
@@ -95,6 +84,14 @@ export default async function SocialFeedPage() {
         <StatCard icon="👋" iconBg="var(--goodbg)" label={t("statNewJoineesLabel")}   value={errored ? "—" : counts.joinees30d} />
         <StatCard icon="📢" iconBg="var(--infobg)" label={t("statAnnouncementsLabel")} value={errored ? "—" : counts.announcementsActive} />
       </StatGrid>
+
+      {canSetBirthdaySharing ? (
+        <Card title={t("birthdaySharingTitle")}>
+          <div className="pad">
+            <BirthdaySharingToggle initialShare={sharingResult.data.shareBirthday} />
+          </div>
+        </Card>
+      ) : null}
 
       {/* GAP-HR-SOCIAL-FEED-06: card title used to switch between
           "Feed" (error AND empty) and "Latest Updates" (filled) -- now one
@@ -119,100 +116,7 @@ export default async function SocialFeedPage() {
       ) : (
         <Card title={t("cardTitle")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
-            {feed.map((item) => {
-              if (item.type === "kudos") {
-                return (
-                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 28, flexShrink: 0 }} aria-hidden="true">{badgeEmoji(item.badge)}</span>
-                    <span className="sr-only">{t("kudosTypeLabel")}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <p style={{ fontSize: 14, lineHeight: 1.5 }}>
-                          {t.rich("kudosLine", {
-                            giver: item.giver_name ?? "",
-                            receiver: item.receiver_name ?? "",
-                            strongGiver: (chunks) => <strong>{chunks}</strong>,
-                            strongReceiver: (chunks) => <strong>{chunks}</strong>,
-                          })}
-                        </p>
-                        {/* GAP-HR-SOCIAL-FEED-03: every feed item already
-                            carries createdAt; it was never rendered anywhere,
-                            so a 7-day-old kudos and a today one looked the
-                            same. Rendered for all 4 item types below, not
-                            just this one. */}
-                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
-                      </div>
-                      {Number(item.reactions ?? 0) > 0 && (
-                        <p style={{ marginTop: 4, fontSize: 12, color: "var(--mut)" }}>
-                          {t("reactionsCount", { count: Number(item.reactions) })}
-                        </p>
-                      )}
-                      {item.message && (
-                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
-                          {item.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              }
-              if (item.type === "birthday") {
-                return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg)", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 32 }} aria-hidden="true">🎂</span>
-                    <span className="sr-only">{t("birthdayTypeLabel")}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
-                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
-                      </div>
-                      <p style={{ fontSize: 12, color: "var(--mut)" }}>{item.designation} · {item.department}</p>
-                    </div>
-                  </div>
-                );
-              }
-              if (item.type === "new_joinee") {
-                return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg)", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 32 }} aria-hidden="true">👋</span>
-                    <span className="sr-only">{t("newJoineeTypeLabel")}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
-                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
-                      </div>
-                      <p style={{ fontSize: 12, color: "var(--mut)" }}>{t("joinedAsLine", { designation: item.designation ?? "", department: item.department ?? "" })}</p>
-                    </div>
-                  </div>
-                );
-              }
-              if (item.type === "announcement") {
-                return (
-                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "var(--infobg)" : "transparent" }}>
-                    <span style={{ fontSize: 24 }} aria-hidden="true">{item.pinned ? "📌" : "📢"}</span>
-                    <span className="sr-only">{t("announcementTypeLabel")}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                        <p style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</p>
-                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
-                      </div>
-                      <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 4 }}>{item.body}</p>
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        {item.category && (
-                          <span style={{ fontSize: 11, background: "var(--primary-l)", color: "var(--primary-d)", padding: "2px 8px", borderRadius: 20 }}>
-                            {item.category}
-                          </span>
-                        )}
-                        {item.author && (
-                          <span style={{ fontSize: 11, color: "var(--mut)" }}>{t("byAuthorLine", { author: item.author })}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              }
-              return null;
-            })}
+            {feed.map((item) => <FeedRow key={item.id} item={item} />)}
           </div>
         </Card>
       )}

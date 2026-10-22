@@ -22,9 +22,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const findByIdMock = vi.fn();
 const listByTenantMock = vi.fn();
 const listByIdsMock = vi.fn();
+const countByTenantMock = vi.fn(async (..._args: unknown[]) => 0);
 vi.mock("./repo.js", () => ({
   findById: (...args: unknown[]) => findByIdMock(...args),
   listByTenant: (...args: unknown[]) => listByTenantMock(...args),
+  countByTenant: (...args: unknown[]) => countByTenantMock(...args),
   listByIds: (...args: unknown[]) => listByIdsMock(...args),
 }));
 

@@ -72,4 +72,59 @@ describe("SuccessionPlanCard", () => {
     expect(screen.getByText("Priya Nair")).toBeInTheDocument();
     expect(screen.getByText("Arjun Rao")).toBeInTheDocument();
   });
+  // GAP-HR-SUCCESSION-02: the pipeline returns the nominee's recorded
+  // `developmentPlan` text, but the card read only `devPlanUrl` (which no
+  // endpoint sends), so every successor showed "No plan".
+  describe("development plan (GAP-HR-SUCCESSION-02)", () => {
+    it("shows the recorded plan text and a 'Plan on file' marker instead of 'No plan'", () => {
+      renderCard(
+        basePost({
+          successors: [
+            { employeeId: "e1", name: "Priya Nair", readiness: "ready_now", developmentPlan: "Shadow the Chief Engineer for two quarters" },
+          ],
+        }),
+      );
+      expect(screen.getByText(/Shadow the Chief Engineer for two quarters/)).toBeInTheDocument();
+      expect(screen.getByText("Plan on file")).toBeInTheDocument();
+      expect(screen.queryByText("No plan")).not.toBeInTheDocument();
+    });
+
+    it("still says 'No plan' when no plan text or link exists (including a whitespace-only plan)", () => {
+      renderCard(
+        basePost({
+          successors: [
+            { employeeId: "e1", name: "Priya Nair", readiness: "ready_now" },
+            { employeeId: "e2", name: "Arjun Rao", readiness: "one_two_years", developmentPlan: "   " },
+          ],
+        }),
+      );
+      expect(screen.getAllByText("No plan")).toHaveLength(2);
+      expect(screen.queryByText("Plan on file")).not.toBeInTheDocument();
+    });
+
+    it("prefers a plan link over the marker when a devPlanUrl is supplied", () => {
+      renderCard(
+        basePost({
+          successors: [
+            { employeeId: "e1", name: "Priya Nair", readiness: "ready_now", developmentPlan: "Some plan", devPlanUrl: "/hr/learning/plans/1" },
+          ],
+        }),
+      );
+      expect(screen.getByRole("link", { name: "Development plan for Priya Nair" })).toHaveAttribute("href", "/hr/learning/plans/1");
+      expect(screen.queryByText("Plan on file")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("department (GAP-HR-SUCCESSION-02)", () => {
+    it("shows the department name in the card header", () => {
+      renderCard(basePost({ department: "Finance" }));
+      expect(screen.getByText("Finance")).toBeInTheDocument();
+    });
+
+    it("shows a dash, never an id, when the plan has no department", () => {
+      const { container } = renderCard(basePost({ department: undefined }));
+      expect(screen.getByText("—")).toBeInTheDocument();
+      expect(container.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    });
+  });
 });

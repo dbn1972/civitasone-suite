@@ -82,6 +82,9 @@ a{color:inherit;text-decoration:none}
 .btn.sm{padding:7px 12px;font-size:12.5px}
 /* GAP-RECRUITMENT-TALENT-POOL-07: 44px touch target without per-call inline styles */
 .btn.btn-tall{min-height:44px;box-sizing:border-box}
+/* GAP-HR-SHIFT-REQUESTS-04: compact .btn.sm on fine pointers (mouse) keeps dense tables ~36px per row; touch devices
+   (coarse pointer) still get the 44px WCAG 2.5.5 target without any per-call inline minHeight. */
+@media (pointer:coarse){.btn.sm{min-height:44px;box-sizing:border-box}}
 /* UX-008 tranche 2: was scoped to `.dt-pager .btn:disabled` only (line ~342);
    generalized here since disabled buttons outside a pager had zero disabled
    styling (native browser default only) -- strictly additive, the .dt-pager
@@ -237,6 +240,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* GAP-HR-EMPLOYEES-08: link-style filter chip; the active one is driven by aria-current so server-rendered tab rows need no inline styles. */
 .chip-link{text-decoration:none;border:1px solid var(--line);border-radius:20px;background:var(--bg2)}
 .chip-link[aria-current="page"]{background:var(--primary);color:var(--panel,#fff);border-color:var(--primary)}
+/* GAP-HR-EMPLOYEES-08: wrapper for a row of filter chips (replaces the inline flex style on the row/nav). */
+.chip-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 
 /* ---------------- MOBILE ---------------- */
 .mobile{display:grid;place-items:center;min-height:100vh;background:#0b1220;padding:26px}
@@ -670,3 +675,16 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    that crushed the map to ~90px on a phone. */
 .map-layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);align-items:start}
 @media(min-width:900px){.map-layout{grid-template-columns:minmax(0,1fr) minmax(240px,320px)}}
+
+/* Workforce analytics retirement forecast (GAP-HR-WORKFORCE-ANALYTICS-08): the
+   headline figures and the table wrapper were inline styles. Tone is token-only
+   so it follows the .dark swap; --muted is the neutral "unknown" tone used when
+   the forecast failed to load (never the success green). */
+.wf-fig-row{padding:12px 0;display:flex;gap:24px;flex-wrap:wrap}
+.wf-fig{font-size:28px;font-weight:800}
+.wf-fig--good{color:var(--good)}
+.wf-fig--warn{color:var(--warn)}
+.wf-fig--bad{color:var(--bad)}
+.wf-fig--muted{color:var(--muted)}
+.wf-fig-label{font-size:12px;color:var(--muted)}
+.wf-table{margin-top:12px}

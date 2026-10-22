@@ -16,9 +16,10 @@
  * long as all of them actually read from one shared source.
  *
  * (Consolidating the duplicated literal is the code-quality part of
- * WORKFORCE-07, done here. Whether different tenant editions or employee
- * categories should retire at a different, tenant-configurable age is a
- * genuine business-policy call left open -- not implemented.)
+ * WORKFORCE-07. The age is now also a per-tenant policy (`retirement_age`);
+ * that behaviour -- a tenant age of 58 shifting employees between horizons --
+ * is covered by tests/workforce-planning-tenant-retirement-age.test.ts. This
+ * file keeps asserting the default (no stored policy) is still 60.)
  */
 import { describe, it, expect } from "vitest";
 import { signToken } from "@civitasone/auth";

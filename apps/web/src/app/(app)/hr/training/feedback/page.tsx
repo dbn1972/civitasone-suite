@@ -5,7 +5,6 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
-import { formatIndianDate } from "@/lib/formatters";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
@@ -21,7 +20,13 @@ type Row = {
    */
   score: number | null;
   scoreDisplay: string;
-  submittedOnDisplay: string;
+  /**
+   * GAP-HR-TRAINING-FEEDBACK-04: the RAW ISO date, kept so DataTable sorts the
+   * Submitted column chronologically (a pre-formatted "05 Mar 2026" string
+   * falls through to localeCompare and orders by day-of-month). It renders
+   * through the server-safe `cellType: "date"` (same formatIndianDate).
+   */
+  submittedOn: string | null;
 } & Record<string, unknown>;
 
 type Payload = { rows: Row[]; total: number; truncated: boolean };
@@ -43,10 +48,11 @@ async function getData(): Promise<LoaderResult<Payload>> {
           // GAP-HR-TRAINING-FEEDBACK-02: out of 100, never presented at a
           // 5-point/decimal scale that implies a different kind of rating.
           scoreDisplay: score === null ? "—" : `${score}/100`,
-          // GAP-HR-TRAINING-FEEDBACK-04: formatted here (mapResponse), not
-          // via a DataTable `render:` prop -- see GAP-HR-TRAINING-FEEDBACK-01
-          // for why `render` can't cross the Server Component boundary.
-          submittedOnDisplay: formatIndianDate(typeof f.submittedOn === "string" ? f.submittedOn : null),
+          // GAP-HR-TRAINING-FEEDBACK-04: keep the raw ISO date; the column
+          // renders it with cellType "date" (formatIndianDate, server-safe --
+          // plain data, unlike a `render:` fn which cannot cross the Server
+          // Component boundary, see GAP-HR-TRAINING-FEEDBACK-01) and sorts on it.
+          submittedOn: typeof f.submittedOn === "string" ? f.submittedOn : null,
         };
       });
       return { rows, total: body?.total ?? rows.length, truncated: Boolean(body?.truncated) };
@@ -66,7 +72,7 @@ export default async function TrainingFeedbackPage() {
   const canAccess = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
 
   if (!canAccess) {
-    return <PermissionDenied module="training feedback" requiredRoles={TRAINING_ADMIN_ROLES} />;
+    return <PermissionDenied module="training completion results" requiredRoles={TRAINING_ADMIN_ROLES} />;
   }
 
   const { data, source } = await getData();
@@ -74,11 +80,11 @@ export default async function TrainingFeedbackPage() {
   const isError = source === "error";
   const scoredRows = rows.filter((r) => r.score !== null);
 
-  const columns: { key: keyof Row & string; label: string }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "date" }[] = [
     { key: "employee", label: t("colEmployee") },
     { key: "program", label: t("colProgram") },
     { key: "scoreDisplay", label: t("colScore") },
-    { key: "submittedOnDisplay", label: t("colSubmitted") },
+    { key: "submittedOn", label: t("colSubmitted"), cellType: "date" },
   ];
 
   return (
@@ -103,7 +109,7 @@ export default async function TrainingFeedbackPage() {
       )}
       <Card title={t("cardTitle")}>
         {isError ? (
-          <RefreshErrorState error={toHumanError("load", { area: "training feedback" })} />
+          <RefreshErrorState error={toHumanError("load", { area: "training completion results" })} />
         ) : (
           <DataTable<Row> columns={columns} rows={rows} sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}

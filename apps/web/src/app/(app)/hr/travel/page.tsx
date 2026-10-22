@@ -1,12 +1,13 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TravelRequestForm } from "./TravelRequestForm";
 import { TravelApprovalsTable } from "./TravelApprovalsTable";
+import { TravelRequestsTable } from "./TravelRequestsTable";
 import { mapTravel, mapTravelTeam, type ApiTravelRow, type ApiTravelTeamRow, type Row, type TeamRow } from "./mapTravel";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-TRAVEL-01: only these roles can see/act on the team approval queue
@@ -46,32 +47,21 @@ export default async function TravelRequestsPage() {
   // backend round trip (and its cross-schema employee-name lookups) on
   // every plain-employee page view.
   const teamResult = isApprover ? await getTeamData() : null;
+  // GAP-HR-TRAVEL-01: UI-side segregation-of-duties hint -- the approvals table
+  // never offers Approve / Reject on the viewer's own request. The server is
+  // still the authority (403 SELF_APPROVAL) and does not list it in the queue.
+  const currentUserId = getSessionUserId();
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
-
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" | "date" }[] = [
-    { key: "destination", label: t("colDestination") },
-    { key: "purpose", label: t("colPurpose") },
-    // GAP-HR-TRAVEL-04: cellType "date" (existing DataTable support) instead
-    // of printing the raw value -- a node-postgres DATE column can arrive
-    // as an ISO timestamp ("...T00:00:00.000Z"), and this page never
-    // formatted either shape.
-    { key: "from_date", label: t("colFrom"), cellType: "date" },
-    { key: "to_date", label: t("colTo"), cellType: "date" },
-    { key: "mode", label: t("colMode") },
-    // GAP-HR-TRAVEL-02: advance_required was fetched but never shown.
-    { key: "advanceRequired", label: t("colAdvance"), cellType: "amount" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
-  ];
 
   return (
     <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backToHr")}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
@@ -96,7 +86,7 @@ export default async function TravelRequestsPage() {
                 <RefreshErrorState error={toHumanError("load", { area: "pending approvals" })} backHref="/hr" />
               </div>
             ) : (
-              <TravelApprovalsTable rows={teamResult.data} />
+              <TravelApprovalsTable rows={teamResult.data} currentUserId={currentUserId} />
             )}
           </Card>
         </div>
@@ -109,17 +99,7 @@ export default async function TravelRequestsPage() {
               <RefreshErrorState error={toHumanError("load", { area: "travel requests" })} backHref="/hr" />
             </div>
           ) : (
-            <DataTable<Row>
-              columns={columns}
-              rows={items}
-              sortable
-              filterable
-              filterPlaceholder={t("filterPlaceholder")}
-              pageSize={15}
-              emptyIcon="✈️"
-              emptyTitle={t("emptyTitle")}
-              emptyMessage={t("emptyMessage")}
-            />
+            <TravelRequestsTable rows={items} isApprover={isApprover} />
           )}
         </Card>
       </div>

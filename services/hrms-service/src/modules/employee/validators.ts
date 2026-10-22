@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
-import { employeeStatusEnum } from "./status.js";
+import { EMPLOYEE_STATUSES, employeeStatusEnum, isEmployeeStatus } from "./status.js";
 
 // GET /v1/hrms/employees query params: standard pagination plus an optional
 // tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
@@ -17,6 +17,18 @@ export const employeeListQuery = listQuerySchema.extend({
   // GAP-HR-EMPLOYEES-06: optional server-side status filter (canonical
   // lowercase EMPLOYEE_STATUSES) -- e.g. ?status=separated lists only separated.
   status: employeeStatusEnum.optional(),
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: comma-separated canonical statuses to
+  // EXCLUDE (e.g. ?excludeStatuses=terminated,separated,retired), applied in
+  // the query itself so a 20-row picker page is never spent on people who
+  // cannot be chosen. Unknown values are a 400, not a silent no-op.
+  excludeStatuses: z
+    .string()
+    .optional()
+    .transform((s) => (s ? s.split(",").map((v) => v.trim()).filter(Boolean) : undefined))
+    .refine(
+      (arr) => !arr || (arr.length <= EMPLOYEE_STATUSES.length && arr.every((v) => isEmployeeStatus(v))),
+      { message: `excludeStatuses must be a comma-separated list of: ${EMPLOYEE_STATUSES.join(", ")}` },
+    ),
   // GAP-HR-SF-06 (EntityPicker): optional free-text search for the picker's
   // search(q) adapter -- matches fullName/employeeNo (ILIKE, repo.ts), same
   // DIRECTORY_ROLES gate and PII-free response shape as the existing list
@@ -128,11 +140,22 @@ export type ProbationExtensionBody = z.infer<typeof probationExtensionBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * GAP-HR-EMPLOYEES-DETAIL-EDIT-02: GET masks mobile / bank account ("******7890"),
+ * so a client that echoes a field back -- untouched, or half-edited -- sends
+ * asterisks. No genuine phone number, account number or IFSC ever contains one,
+ * and persisting it would corrupt the stored value (the account number feeds
+ * salary disbursement). Rejected at the boundary with a field-level 400;
+ * commands.ts's isMaskedValue guard stays behind this as a backstop.
+ */
+const noMaskChar = (v: string) => !v.includes("*");
+const MASK_CHAR_MESSAGE = "must not contain '*' -- this looks like a masked placeholder, not a real value";
+
 export const updateEmployeeBody = z.object({
-  mobile:         z.string().max(20).optional(),
+  mobile:         z.string().max(20).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
   email:          z.string().email().optional(),
-  bankAccountNo:  z.string().optional(),
-  bankIfsc:       z.string().max(16).optional(),
+  bankAccountNo:  z.string().refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
+  bankIfsc:       z.string().max(16).refine(noMaskChar, MASK_CHAR_MESSAGE).optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-04: basic pay is NOT editable on this generic
   // profile route. It is money that feeds every payslip, and this path has no
   // maker-checker, no effective date and no arrears handling; payroll's salary

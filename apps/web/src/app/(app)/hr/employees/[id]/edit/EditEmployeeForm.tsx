@@ -4,10 +4,12 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
-import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field, Input } from "@/app/_components/ds";
+import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field, Input, MaskedField } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { acceptedCopy } from "@/lib/acceptedCopy";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import Link from "next/link";
+import { formatMoney } from "@/lib/formatters";
+import { searchEmployees, resolveEmployees, MANAGER_INELIGIBLE_STATUSES } from "@/lib/entityAdapters/employee";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
 import { isIndianStateCode } from "@/lib/india/states";
@@ -15,19 +17,22 @@ import { WorkStateSelect } from "../../WorkStateSelect";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-02: a changed bank account must be plain digits
+// (Indian accounts run 9-18) and an IFSC is 4 letters, a zero, then 6 letters or
+// digits. Checked before anything is sent: a wrong number here misdirects pay.
+const ACCOUNT_RE = /^\d{9,18}$/;
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: kept in sync with hrms-service's
 // validators.ts SENSITIVE_UPDATE_FIELDS (can't import across the service
 // boundary). Any patch touching one of these needs a typed reason.
 const SENSITIVE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
-// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: mirrors hrms-service's employee/status.ts
-// EXITED_STATUSES exactly (not SERVING_STATUSES -- that set is scoped to the
-// "Active" headcount stat and deliberately excludes on_leave/suspended too,
-// which are temporary and still legitimate manager picks per that file's own
-// comment). Duplicated, not imported, for the same cross-service-boundary
-// reason as SENSITIVE_FIELDS above.
-const MANAGER_INELIGIBLE_STATUSES = ["terminated", "separated", "retired"] as const;
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: MANAGER_INELIGIBLE_STATUSES (shared with the
+// Add Employee wizard's manager picker, GAP-HR-EMPLOYEES-NEW-04) mirrors
+// hrms-service's employee/status.ts EXITED_STATUSES exactly -- see its comment
+// in lib/entityAdapters/employee.ts.
+
 
 interface Props {
   employee: EmployeeDetail;
@@ -57,7 +62,19 @@ export function EditEmployeeForm({ employee }: Props) {
   const formId = useId();
   const router = useRouter();
 
-  const [mobile, setMobile] = useState(employee.phone ?? "");
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-02: the API returns phone and bank account
+  // already MASKED ("******7890"). A masked value is never seeded into an
+  // editable input: it is shown read-only ("Current: ...") and the input starts
+  // empty once the user chooses Change, so the only thing that can ever be
+  // submitted is a value somebody deliberately typed.
+  const rec = employee as Record<string, unknown>;
+  const maskedOnly = (v: unknown): string | undefined => (typeof v === "string" && v.includes("*") ? v : undefined);
+  const maskedPhone = maskedOnly(employee.phone);
+  const maskedAccount = maskedOnly(rec.bankAccountNo);
+  const initialMobile = maskedPhone ? "" : (employee.phone ?? "");
+  const initialBankAccountNo = maskedAccount ? "" : ((rec.bankAccountNo as string | undefined) ?? "");
+
+  const [mobile, setMobile] = useState(initialMobile);
   const [email, setEmail] = useState(employee.email ?? "");
   // GAP-HR-SF-06 (EntityPicker) / GAP-HR-EMPLOYEES-DETAIL-EDIT-04: seeded
   // from the real FK (managerId/payStructureId), not a display name. The
@@ -73,7 +90,8 @@ export function EditEmployeeForm({ employee }: Props) {
   const [workStateCode, setWorkStateCode] = useState(employee.workStateCode ?? "");
 
   // Statutory & financial fields
-  const [bankAccountNo, setBankAccountNo] = useState((employee as Record<string,unknown>).bankAccountNo as string ?? "");
+  const [bankAccountNo, setBankAccountNo] = useState(initialBankAccountNo);
+  const [confirmBankAccountNo, setConfirmBankAccountNo] = useState("");
   const [bankIfsc, setBankIfsc] = useState((employee as Record<string,unknown>).bankIfsc as string ?? "");
   const [uanNumber, setUanNumber] = useState((employee as Record<string,unknown>).uanNumber as string ?? "");
   const [esicIpNumber, setEsicIpNumber] = useState((employee as Record<string,unknown>).esicIpNumber as string ?? "");
@@ -88,7 +106,8 @@ export function EditEmployeeForm({ employee }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("error");
-  const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
+  // Inline message per field key (computed at submit time).
+  const [invalidFields, setInvalidFields] = useState<Record<string, string>>({});
   const formError = useFormError("employee record");
   const accepted = useAcceptedWrite();
 
@@ -108,6 +127,7 @@ export function EditEmployeeForm({ employee }: Props) {
     workStateCode: `${formId}-workStateCode`,
     status: `${formId}-status`,
     bankAccountNo: `${formId}-bankAccountNo`,
+    confirmBankAccountNo: `${formId}-confirmBankAccountNo`,
     bankIfsc: `${formId}-bankIfsc`,
     uanNumber: `${formId}-uanNumber`,
     esicIpNumber: `${formId}-esicIpNumber`,
@@ -116,6 +136,9 @@ export function EditEmployeeForm({ employee }: Props) {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // An accepted update is already on its way: never send a second one from
+    // this form (Enter key, programmatic submit), whatever the button state.
+    if (submitted || busy) return;
     setMessage(null);
 
     const trimmedEmail = email.trim();
@@ -129,11 +152,11 @@ export function EditEmployeeForm({ employee }: Props) {
     // changed -- exactly the same "don't re-validate what you're not
     // submitting" logic already applied to the masked bank/UAN/ESIC/PRAN
     // fields below.
-    const mobileChanged = trimmedMobile !== (employee.phone ?? "");
+    const mobileChanged = trimmedMobile !== initialMobile;
 
-    const errs = new Set<string>();
-    if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) errs.add("email");
-    if (mobileChanged && trimmedMobile && !PHONE_RE.test(trimmedMobile)) errs.add("mobile");
+    const errs: Record<string, string> = {};
+    if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) errs.email = tv("emailInvalid");
+    if (mobileChanged && trimmedMobile && !PHONE_RE.test(trimmedMobile)) errs.mobile = tv("mobileInvalid");
 
     const patch: Record<string, string> = {};
     if (mobileChanged) patch.mobile = trimmedMobile;
@@ -149,7 +172,7 @@ export function EditEmployeeForm({ employee }: Props) {
     if (payStructureId && payStructureId !== initialPayStructureId) patch.payStructureId = payStructureId;
     // State of employment: sent only when changed to a real state / UT code (the API cannot clear it, like manager).
     if (workStateCode && workStateCode !== (employee.workStateCode ?? "")) {
-      if (isIndianStateCode(workStateCode)) patch.workStateCode = workStateCode; else errs.add("workStateCode");
+      if (isIndianStateCode(workStateCode)) patch.workStateCode = workStateCode; else errs.workStateCode = t("workStateInvalid");
     }
     // Data-corruption fix: bankAccountNo/bankIfsc arrive here pre-masked by
     // the backend (pii-mask.ts maskValue -- "*******1234"), and this state
@@ -161,7 +184,6 @@ export function EditEmployeeForm({ employee }: Props) {
     // (masked) prop value instead, same "was this actually edited" pattern
     // already used for mobile/email/managerId above, so an untouched field
     // is never submitted.
-    const initialBankAccountNo = (employee as Record<string, unknown>).bankAccountNo as string ?? "";
     const initialBankIfsc = (employee as Record<string, unknown>).bankIfsc as string ?? "";
     const initialUan = (employee as Record<string, unknown>).uanNumber as string ?? "";
     const initialEsic = (employee as Record<string, unknown>).esicIpNumber as string ?? "";
@@ -192,16 +214,27 @@ export function EditEmployeeForm({ employee }: Props) {
       ["esicIpNumber", esicChanged, esicIpNumber] as const,
       ["pran", pranChanged, pran] as const,
     ]) {
-      if (changed && value.includes("*")) errs.add(field);
+      if (changed && value.includes("*")) errs[field] = t("noAsteriskError");
     }
 
-    if (errs.size > 0) {
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-02: shape checks on a CHANGED bank account / IFSC,
+    // and a second typed entry of the account number that must match the first.
+    if (bankAccountChanged && !errs.bankAccountNo) {
+      const account = bankAccountNo.trim();
+      if (!ACCOUNT_RE.test(account)) errs.bankAccountNo = t("bankAccountFormatError");
+      else if (account !== confirmBankAccountNo.trim()) errs.confirmBankAccountNo = t("confirmAccountMismatch");
+    }
+    if (bankIfscChanged && !errs.bankIfsc && !IFSC_RE.test(bankIfsc.trim().toUpperCase())) {
+      errs.bankIfsc = t("ifscFormatError");
+    }
+
+    if (Object.keys(errs).length > 0) {
       setInvalidFields(errs);
       setTone("error");
       setMessage(t("fixHighlightedFields"));
       return;
     }
-    setInvalidFields(new Set());
+    setInvalidFields({});
 
     if (Object.keys(patch).length === 0) {
       setTone("error");
@@ -245,6 +278,9 @@ export function EditEmployeeForm({ employee }: Props) {
       // window instead of re-enabling them immediately, which used to let a
       // second submit go out while the first was still "being applied".
       setSubmitted(true);
+      // Nothing is "saving" any more -- `submitted` (not `busy`) is what keeps
+      // Save/Cancel disabled, so the button stops reading "Saving…" forever.
+      setBusy(false);
       setTone("success");
       setMessage(t("updateSubmitted"));
       // 202: no timed redirect that guesses the update has landed; the user continues from the notice.
@@ -295,7 +331,9 @@ export function EditEmployeeForm({ employee }: Props) {
         </div>
         <AcceptedNotice
           {...accepted.noticeProps}
-          onRefresh={() => { router.push(`/hr/employees/${employee.id}`); router.refresh(); }}
+          // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: ?updated=1 makes the profile fetch fresh
+          // (no 60 s data-cache) and show a "changes are being applied" banner.
+          onRefresh={() => { router.push(`/hr/employees/${employee.id}?updated=1`); router.refresh(); }}
           labels={{ refresh: acceptedCopy().continue }}
         />
 
@@ -336,17 +374,20 @@ export function EditEmployeeForm({ employee }: Props) {
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           }}
         >
-          <Field id={ids.mobile} label={t("mobileLabel")} error={formError.fieldError("mobile") ?? (invalidFields.has("mobile") ? tv("mobileInvalid") : undefined)}>
-            <Input
-              type="tel"
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              placeholder={t("mobilePlaceholder")}
-              autoComplete="tel"
-            />
-          </Field>
+          <MaskedField
+            id={ids.mobile}
+            label={t("mobileLabel")}
+            maskedValue={maskedPhone}
+            value={mobile}
+            onChange={setMobile}
+            error={formError.fieldError("mobile") ?? invalidFields.mobile}
+            currentLabel={t("currentValue", { value: maskedPhone ?? "" })}
+            changeLabel={t("changeBtn")}
+            keepLabel={t("keepCurrentBtn")}
+            inputProps={{ type: "tel", placeholder: t("mobilePlaceholder"), autoComplete: "tel" }}
+          />
 
-          <Field id={ids.email} label={t("emailLabel")} error={formError.fieldError("email") ?? (invalidFields.has("email") ? tv("emailInvalid") : undefined)}>
+          <Field id={ids.email} label={t("emailLabel")} error={formError.fieldError("email") ?? invalidFields.email}>
             <Input
               type="email"
               value={email}
@@ -369,8 +410,12 @@ export function EditEmployeeForm({ employee }: Props) {
               // same way via searchEmployees' excludeStatuses option
               // (entityAdapters/employee.ts), rather than widening the
               // shared, multi-caller directory endpoint's own query surface.
+              // EDIT-05 (continued): excludeStatuses now also goes to the server
+              // (GET /v1/hrms/employees?excludeStatuses=...), so the 20-row page
+              // is never spent on people who cannot be chosen; `strict` makes a
+              // failed lookup a visible "couldn't load" instead of "no matches".
               search={(q, signal) =>
-                searchEmployees(q, signal, { excludeStatuses: MANAGER_INELIGIBLE_STATUSES })
+                searchEmployees(q, signal, { excludeStatuses: MANAGER_INELIGIBLE_STATUSES, strict: true })
                   .then((opts) => opts.filter((o) => o.id !== employee.id))
               }
               resolve={resolveEmployees}
@@ -382,6 +427,7 @@ export function EditEmployeeForm({ employee }: Props) {
               placeholder={t("selectManagerPlaceholder")}
               searchingText={t("pickerSearching")}
               noResultsText={t("pickerNoResults")}
+              searchErrorText={t("pickerSearchError")}
             />
           </Field>
 
@@ -397,13 +443,31 @@ export function EditEmployeeForm({ employee }: Props) {
             />
           </Field>
 
+          {/* GAP-HR-EMPLOYEES-NEW-02: shown read-only, never as an input. Basic
+              pay feeds every payslip and this PATCH route deliberately rejects it
+              (updateEmployeeBody, GAP-HR-EMPLOYEES-DETAIL-EDIT-04: no
+              maker-checker, no effective date, no arrears handling here), so a
+              change goes through a Payroll salary revision. The API only sends
+              the figure to the HR roles, hence the presence check. */}
+          {employee.basicMinor !== undefined && (
+            <div style={{ display: "grid", gap: 4 }}>
+              <span style={labelStyle}>{t("basicPayLabel")}</span>
+              <span style={{ fontSize: 14, color: "var(--ink)", fontWeight: 600 }}>{formatMoney(employee.basicMinor)}</span>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>
+                {t.rich("basicPayRevisionHintRich", {
+                  link: (chunks) => <Link href="/hr/payroll/salary-revisions" style={{ color: "inherit", textDecoration: "underline" }}>{chunks}</Link>,
+                })}
+              </span>
+            </div>
+          )}
+
           <div style={{ display: "grid", gap: 4 }}>
             <WorkStateSelect
               id={ids.workStateCode} value={workStateCode} onChange={setWorkStateCode}
               label={t("workStateLabel")} placeholder={t("selectWorkState")} hint={t("workStateHint")}
               style={inputStyle} labelStyle={labelStyle}
             />
-            {invalidFields.has("workStateCode") && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("workStateInvalid")}</span>}
+            {invalidFields.workStateCode && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{invalidFields.workStateCode}</span>}
           </div>
         </div>
 
@@ -414,21 +478,36 @@ export function EditEmployeeForm({ employee }: Props) {
             {t("statutoryHeading")}
           </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-            <Field id={ids.bankAccountNo} label={t("bankAccountLabel")} error={invalidFields.has("bankAccountNo") ? t("noAsteriskError") : undefined}>
-              <Input
-                type="text"
-                value={bankAccountNo}
-                onChange={(e) => setBankAccountNo(e.target.value)}
-                placeholder={t("bankAccountPlaceholder")}
-                autoComplete="off"
-              />
-              {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-02: a leftover '*' means the
-                  field still contains part of the masked placeholder it was
-                  seeded with, not a real edited value -- caught client-side
-                  before it's ever sent (the backend's isMaskedValue guard
-                  only catches a FULLY-masked string, not a partial one). */}
-            </Field>
-            <Field id={ids.bankIfsc} label={t("bankIfscLabel")} error={invalidFields.has("bankIfsc") ? t("noAsteriskError") : undefined}>
+            {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-02: the account number comes back
+                masked, so it is shown read-only and the input is empty until
+                the user clicks Change; a changed number must be digits and be
+                typed a second time. A leftover '*' (half-edited placeholder)
+                is still caught client-side, and again by the API's validator. */}
+            <MaskedField
+              id={ids.bankAccountNo}
+              label={t("bankAccountLabel")}
+              maskedValue={maskedAccount}
+              value={bankAccountNo}
+              onChange={setBankAccountNo}
+              error={invalidFields.bankAccountNo}
+              currentLabel={t("currentValue", { value: maskedAccount ?? "" })}
+              changeLabel={t("changeBtn")}
+              keepLabel={t("keepCurrentBtn")}
+              inputProps={{ type: "text", inputMode: "numeric", placeholder: t("bankAccountPlaceholder"), autoComplete: "off" }}
+              onEditingChange={(editing) => { if (!editing) setConfirmBankAccountNo(""); }}
+            >
+              <Field id={ids.confirmBankAccountNo} label={t("confirmBankAccountLabel")} error={invalidFields.confirmBankAccountNo}>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={confirmBankAccountNo}
+                  onChange={(e) => setConfirmBankAccountNo(e.target.value)}
+                  placeholder={t("confirmBankAccountPlaceholder")}
+                  autoComplete="off"
+                />
+              </Field>
+            </MaskedField>
+            <Field id={ids.bankIfsc} label={t("bankIfscLabel")} error={invalidFields.bankIfsc}>
               {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-07: IFSC used to display
                   lowercase exactly as typed and only get uppercased in the
                   submit diff -- uppercase as-you-type instead, so what's
@@ -442,7 +521,7 @@ export function EditEmployeeForm({ employee }: Props) {
                 autoComplete="off"
               />
             </Field>
-            <Field id={ids.uanNumber} label={t("uanLabel")} error={invalidFields.has("uanNumber") ? t("noAsteriskError") : undefined}>
+            <Field id={ids.uanNumber} label={t("uanLabel")} error={invalidFields.uanNumber}>
               <Input
                 type="text"
                 value={uanNumber}
@@ -452,7 +531,7 @@ export function EditEmployeeForm({ employee }: Props) {
                 autoComplete="off"
               />
             </Field>
-            <Field id={ids.esicIpNumber} label={t("esicLabel")} error={invalidFields.has("esicIpNumber") ? t("noAsteriskError") : undefined}>
+            <Field id={ids.esicIpNumber} label={t("esicLabel")} error={invalidFields.esicIpNumber}>
               <Input
                 type="text"
                 value={esicIpNumber}
@@ -461,7 +540,7 @@ export function EditEmployeeForm({ employee }: Props) {
                 autoComplete="off"
               />
             </Field>
-            <Field id={ids.pran} label={t("pranLabel")} error={invalidFields.has("pran") ? t("noAsteriskError") : undefined}>
+            <Field id={ids.pran} label={t("pranLabel")} error={invalidFields.pran}>
               <Input
                 type="text"
                 value={pran}

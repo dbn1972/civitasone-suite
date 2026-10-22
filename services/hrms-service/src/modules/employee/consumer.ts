@@ -1,17 +1,21 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type CommandOutcome, type Queue } from "@civitasone/queue";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { payProfileAtDateTx } from "../pay-profile/repo.js";
+import * as importRepo from "../bulk-import/repo.js";
+import { classifyCreateFailure, failureCodeFromOutcome, IMPORT_FAILURE } from "../bulk-import/failure.js";
 
 const AUDIT = "audit.event.record";
 
@@ -29,6 +33,21 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * GAP-HR-EMPLOYEES-IMPORT-02: when a create command that came from a bulk import ends WITHOUT
+ * creating the employee (a terminal refusal, or retries exhausted), record that on its import row so
+ * the batch status route can name it. Runs from the queue's onOutcome hook, which fires outside any
+ * handler -- hence its own tenant context and transaction. Only a stable code is stored, never the
+ * error text. A no-op for a create that was not part of an import (no matching row).
+ */
+async function recordImportRowOutcome(outcome: CommandOutcome): Promise<void> {
+  if (outcome.status === "succeeded") return;
+  const code = failureCodeFromOutcome(outcome);
+  await runWithTenant(outcome.tenantId, () =>
+    db.transaction((tx) => importRepo.markRowFailed(tx, outcome.tenantId, outcome.messageId, code)),
+  );
+}
+
 export function registerEmployeeConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.employeeCreate, async (msg) => {
@@ -39,39 +58,76 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       dateOfBirth?: string; gender?: string; pan?: string; aadhaarRef?: string;
       mobile?: string; email?: string; bankAccountNo?: string; bankIfsc?: string;
       payStructureId?: string;
+      // GAP-HR-EMPLOYEES-IMPORT-05: set by the bulk-import route, which resolves
+      // a row's managerEmployeeNo to this id (tenant-scoped) before queueing.
+      // The single-row create path writes managerId directly in commands.ts and
+      // never reaches this consumer.
+      managerId?: string;
       legalEntityId?: string; costCenterId?: string; locationId?: string;
       esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      // GAP-HR-EMPLOYEES-IMPORT-02: set only by POST /v1/hrms/employees/bulk.
+      importBatchId?: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insertEmployee(tx, {
-        id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,
-        departmentId: p.departmentId, designationId: p.designationId,
-        dateOfJoining: p.dateOfJoining, employeeType: p.employeeType as "permanent",
-        basicMinor: BigInt(p.basicMinor), currency: p.currency as "INR", status: "probation",
-        dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null, pan: p.pan ?? null,
-        aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
-        bankAccountNo: p.bankAccountNo ?? null, bankIfsc: p.bankIfsc ?? null,
-        payStructureId: p.payStructureId ?? null,
-        ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
-        ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
-        ...(p.locationId ? { locationId: p.locationId } : {}),
-        esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ?? null, pran: p.pran ?? null,
-        gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
-        agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
-        createdBy: msg.actorId, updatedBy: msg.actorId,
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        // GAP-HR-EMPLOYEES-IMPORT-05: the route resolved this id moments ago, but
+        // this consumer runs async off a queue, so re-verify it still names an
+        // employee in THIS tenant right before writing (same defence-in-depth the
+        // confirm consumer applies to its precondition). A manager that vanished
+        // in between fails the message loudly rather than creating an employee
+        // whose reportingTo points at nothing -- and so does a manager who has
+        // since exited (terminated / separated / retired), the same rule the
+        // PATCH path enforces (manager-eligibility.ts). Either is a permanent
+        // refusal of THIS message, so it is a CommandRefusal (a NonRetryableError:
+        // dead-lettered at once instead of burning retries, reported on the
+        // import row as INVALID_REFERENCE rather than a generic CREATE_FAILED).
+        if (p.managerId) {
+          const manager = await repo.findByIdTx(tx, p.managerId, p.tenantId);
+          if (!manager) {
+            throw new CommandRefusal(IMPORT_FAILURE.INVALID_REFERENCE, {}, `${IMPORT_FAILURE.INVALID_REFERENCE}: manager ${p.managerId} not found in this tenant`);
+          }
+          if (isExitedStatus(manager.status)) {
+            throw new CommandRefusal(IMPORT_FAILURE.INVALID_REFERENCE, {}, `${IMPORT_FAILURE.INVALID_REFERENCE}: manager ${p.managerId} has status '${manager.status}' and has left the organisation`);
+          }
+        }
+        await repo.insertEmployee(tx, {
+          id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,
+          departmentId: p.departmentId, designationId: p.designationId,
+          dateOfJoining: p.dateOfJoining, employeeType: p.employeeType as "permanent",
+          basicMinor: BigInt(p.basicMinor), currency: p.currency as "INR", status: "probation",
+          dateOfBirth: p.dateOfBirth ?? null, gender: p.gender ?? null, pan: p.pan ?? null,
+          aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
+          bankAccountNo: p.bankAccountNo ?? null, bankIfsc: p.bankIfsc ?? null,
+          payStructureId: p.payStructureId ?? null,
+          managerId: p.managerId ?? null,
+          ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
+          ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
+          ...(p.locationId ? { locationId: p.locationId } : {}),
+          esicIpNumber: p.esicIpNumber ?? null, uanNumber: p.uanNumber ?? null, pran: p.pran ?? null,
+          gstin: p.gstin ?? null, sacCode: p.sacCode ?? null,
+          agencyRef: p.agencyRef ?? null, napsId: p.napsId ?? null,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await enqueue(tx, {
+          topic: EVENTS.employeeCreated, eventType: EVENTS.employeeCreated,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { employeeId: p.id, employeeNo: p.employeeNo, tenantId: p.tenantId },
+        });
+        await audit(tx, msg, "create", "employee", p.id);
+        // Same transaction as the insert: the import row reads 'created' if and only if the employee exists.
+        if (p.importBatchId) await importRepo.markRowCreated(tx, p.tenantId, msg.messageId);
       });
-      await enqueue(tx, {
-        topic: EVENTS.employeeCreated, eventType: EVENTS.employeeCreated,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { employeeId: p.id, employeeNo: p.employeeNo, tenantId: p.tenantId },
-      });
-      await audit(tx, msg, "create", "employee", p.id);
-    });
+    } catch (err) {
+      // A constraint violation (duplicate employee number, vanished department, bad value) can never
+      // succeed on a retry: refuse it with a stable code instead of burning retries on it. Anything
+      // else (connection loss, deadlock) is rethrown untouched and retried as before.
+      throw classifyCreateFailure(err);
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
     // M1: invalidate list cache so new employee appears in paginated lists
     await cache.invalidateResource(msg.tenantId, "employee");
-  });
+  }, { onOutcome: recordImportRowOutcome });
 
   queue.subscribe(COMMANDS.employeeConfirm, async (msg) => {
     const p = msg.payload as {
@@ -406,6 +462,25 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           "EMPLOYEE_EXITED",
           `employee ${p.id} has status '${emp.status}' and can no longer be updated via this endpoint`,
         );
+      }
+      // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: race-safety re-check of the route's
+      // synchronous managerId pre-check (the manager may have exited, or been
+      // re-pointed under this employee, between the 202 and now). A refusal is
+      // deterministic, so it is non-retryable rather than burning retries.
+      if (p.managerId !== undefined && !isSameEmployeeId(p.managerId, emp.managerId)) {
+        try {
+          await assertEligibleManager(
+            async (eid) => {
+              const row = await repo.findByIdTx(tx, eid, p.tenantId);
+              return row ? { status: row.status, managerId: row.managerId ?? null } : null;
+            },
+            p.id,
+            p.managerId,
+          );
+        } catch (err) {
+          if (err instanceof HttpError) throw new NonRetryableError(`[${err.code}] ${err.message}`, err);
+          throw err;
+        }
       }
       const patch: Parameters<typeof repo.updateEmployee>[2] = { updatedBy: msg.actorId };
       const changedFields: string[] = [];

@@ -43,6 +43,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "dsc_config",
   "employee",
   "employee_competency",
+  "employee_import_batch",
   "exemption_ceiling",
   "expense_claim",
   "face_config",
@@ -112,6 +113,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "seniority_list",
   "separation",
   "service_book",
+  "social_feed_birthdays", // GAP-HR-SOCIAL-FEED-01 (DPDP): audit-on-read when a feed response disclosed birthday entries
   "sponsor_bank_config",
   "statutory_ecr",
   "statutory_return",
@@ -147,6 +149,8 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "posting", // ST-M01-09 applyPosting consumer (hrms-service)
   "posting_history", // ST-M01-11 payroll posting-history consumer
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
+  "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
+  "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */
@@ -168,3 +172,18 @@ export function resourceLabel(type: string | undefined, id: string | undefined, 
   if (type) return humanize(type);
   return null;
 }
+
+/**
+ * Start of the range the HR audit log asks for when the auditor has not picked
+ * a From date: the epoch, i.e. the whole trail. audit-service otherwise
+ * defaults a missing `from` to "now minus 7 days" (GAP-HR-AUDIT-LOG-04).
+ */
+export const HR_AUDIT_ALL_TIME_FROM = "1970-01-01T00:00:00.000Z";
+
+/**
+ * The most events one CSV export will contain. Mirrors audit-service's
+ * EXPORT_MAX_ROWS default (50,000, exports/validators.ts), which stays the
+ * authority -- it answers 413 above its cap. Used here only to explain the
+ * limit instead of offering a download that would be refused.
+ */
+export const AUDIT_EXPORT_MAX_ROWS = 50_000;

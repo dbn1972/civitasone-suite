@@ -20,9 +20,15 @@ interface TaskCalendarProps {
   joiningDate?: string;   // ISO string — used to label columns with actual dates
 }
 
-function addDays(iso: string, days: number): string {
+/**
+ * The column's real calendar date: joining date + dueByDay days -- exactly how the overdue rule (page.tsx
+ * deriveStatus, and hrms-service buildOnboardingSummaryRows) computes a task's due date. It used to label
+ * the column with joining + (dueByDay - 1), one day earlier than the date the task actually turns overdue
+ * on (GAP-HR-ONBOARDING-DETAIL-06).
+ */
+function dueDateLabel(iso: string, dueByDay: number): string {
   try {
-    const shifted = addDaysIST(iso, days - 1);
+    const shifted = addDaysIST(iso, dueByDay);
     return shifted === "—" ? "" : formatInIST(shifted, { day: "numeric", month: "short" });
   } catch {
     return "";
@@ -66,7 +72,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
           {days.map((day) => {
             const colTasks = tasks.filter((t) => t.dueByDay === day);
             const hasOverdue = colTasks.some((t) => t.status === "overdue");
-            const actualDate = joiningDate ? addDays(joiningDate, day) : null;
+            const actualDate = joiningDate ? dueDateLabel(joiningDate, day) : null;
 
             return (
               <div

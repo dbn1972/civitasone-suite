@@ -926,6 +926,25 @@ export const LeaveRequestDetailSchema = z.object({
 });
 export const LeaveRequestDetailListSchema = z.array(LeaveRequestDetailSchema);
 
+// GAP-HR-LEAVE-03: GET /v1/hrms/leave-requests?withMeta=1 -- one page of the
+// caller's visible requests plus the real total and per-status counts over the
+// WHOLE visible set (mapped statuses, same vocabulary as the rows), so the HR
+// leave page can show "Showing 1-100 of 340" and true stat tiles instead of
+// counting only the rows that came back. Same `meta` shape as
+// /v1/hrms/leave/applications. The bare-array response above is unchanged for
+// every caller that does not ask for meta.
+export const LeaveRequestPageSchema = z.object({
+  data: LeaveRequestDetailListSchema,
+  meta: z.object({
+    page: z.number().int().positive(),
+    pageSize: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+    total: z.number().int().nonnegative(),
+    hasMore: z.boolean(),
+    statusCounts: z.record(z.string(), z.number().int().nonnegative()),
+  }),
+});
+
 export const PayrollRunDetailSchema = z.object({
   id: z.string(),
   runDate: z.string(),
@@ -1157,6 +1176,11 @@ export const EmployeeDetailSchema = z.object({
   // schema) would silently strip it back out before EditEmployeeForm.tsx
   // ever saw it, exactly like managerId above before that field was added.
   payStructureId: z.string().optional(),
+  // GAP-HR-EMPLOYEES-NEW-02: basic pay in paise. Sent ONLY to the HR roles that
+  // can create the record with it (hrms-service's GET /v1/hrms/employees/:id
+  // gates it); absent for everyone else. Declared here or apps/web's loader
+  // would strip it before the profile page could show it.
+  basicMinor: z.number().int().nonnegative().optional(),
   // Statutory identifiers -- not masked (see hrms-service's shared/pii-mask.ts
   // PII_FIELDS, which deliberately excludes these three), unlike
   // bankAccountNo/bankIfsc/pan above. FINDING-3 (HRMS role-based review):

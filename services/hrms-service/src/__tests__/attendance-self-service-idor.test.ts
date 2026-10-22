@@ -161,14 +161,20 @@ function paramValues(sql: unknown, out: unknown[] = []): unknown[] {
  * both resolve to `rows` without throwing — exactly what every OTHER
  * capturingTx call site in this file already relied on before this gap, now
  * just also tolerant of the two new call shapes.
+ *
+ * GAP-HR-OVERTIME-04 (rescan): that second query is now a per-status
+ * aggregate (`.where(cond).groupBy(status)`, feeding the response `summary`),
+ * so the hybrid is also chainable through `.groupBy`.
  */
 function capturingTx(rows: unknown[]) {
   let captured: unknown;
-  function hybrid(): Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown } {
-    const p = Promise.resolve(rows) as Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown };
+  type Hybrid = Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown; groupBy: () => unknown };
+  function hybrid(): Hybrid {
+    const p = Promise.resolve(rows) as Hybrid;
     p.orderBy = hybrid;
     p.limit = hybrid;
     p.offset = hybrid;
+    p.groupBy = hybrid;
     return p;
   }
   const tx = {
@@ -257,9 +263,14 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
       headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
     });
     expect(r.statusCode).toBe(200);
-    // GAP-HR-OVERTIME-04: this short-circuit now also carries hasMore/total
-    // (both trivially false/0), alongside the pre-existing empty data: [].
-    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
+    // GAP-HR-OVERTIME-04: this short-circuit carries the same envelope as a
+    // populated response -- hasMore/total (trivially false/0) and an
+    // all-zero `summary` (the web reads it for the stat cards) -- alongside
+    // the pre-existing empty data: [].
+    expect(r.json()).toEqual({
+      data: [], hasMore: false, total: 0,
+      summary: { total: 0, pending: 0, approved: 0, rejected: 0, approvedHours: 0 },
+    });
     expect(scopedReadMock).not.toHaveBeenCalled();
   });
 
@@ -294,7 +305,10 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
     });
     expect(r.statusCode).toBe(200);
     // GAP-HR-OVERTIME-04: see the "no linked employee record" test above.
-    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
+    expect(r.json()).toEqual({
+      data: [], hasMore: false, total: 0,
+      summary: { total: 0, pending: 0, approved: 0, rejected: 0, approvedHours: 0 },
+    });
     // Only the reports-lookup scopedRead call happens -- the route must
     // short-circuit before ever building/running the data query.
     expect(scopedReadMock).toHaveBeenCalledTimes(1);

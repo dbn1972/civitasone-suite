@@ -166,4 +166,48 @@ describe("DpcPage", () => {
     expect(screen.getByText("C Rao")).toBeInTheDocument();
     expect(screen.getByText("2.1 yrs")).toBeInTheDocument();
   });
+
+  it("GAP-HR-DPC-02: the batch card asks for the in-flight statuses the workflow really writes, not the never-written 'pending' alone", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockImplementation(fetchJsonFor({
+      "/dpc/eligibility": { data: mockEligibility(), source: "api" },
+      "/lifecycle/promotions": { data: [], source: "api" },
+      "/seniority/lists": { data: [], source: "api" },
+    }));
+
+    await renderDpc();
+
+    const url = fetchJsonMock.mock.calls.map((c) => c[0] as string).find((u) => u.includes("/lifecycle/promotions"))!;
+    const statuses = new URL(url, "http://x").searchParams.get("status")!.split(",");
+    expect(statuses).toEqual(expect.arrayContaining(["pending_approval", "pending_effective"]));
+    // terminal statuses are not "in flight"
+    expect(statuses).not.toContain("completed");
+    expect(statuses).not.toContain("cancelled");
+  });
+
+  it("GAP-HR-DPC-02: an in-flight promotion shows names, never ids, and the card states its own scope", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    const EMP_ID = "0b6f6b1e-3d6e-4c5a-9b6e-1c2d3e4f5a6b";
+    const DESIG_ID = "7a1c9d2e-5b4f-4e8a-8c3d-9e0f1a2b3c4d";
+    fetchJsonMock.mockImplementation(fetchJsonFor({
+      "/dpc/eligibility": { data: mockEligibility(), source: "api" },
+      "/lifecycle/promotions": {
+        data: [{
+          id: "p1", employeeId: EMP_ID, fromDesigId: DESIG_ID, toDesigId: DESIG_ID,
+          employeeName: "B Singh", department: "Revenue", fromDesignationName: "Section Officer", toDesignationName: "Under Secretary",
+          status: "pending_approval", effectiveDate: "2026-07-01", orderRef: "ORD/2026/11",
+        }],
+        source: "api",
+      },
+      "/seniority/lists": { data: [], source: "api" },
+    }));
+
+    const { container } = await renderDpc();
+
+    expect(screen.getByText("B Singh")).toBeInTheDocument();
+    expect(screen.getByText("Under Secretary")).toBeInTheDocument();
+    expect(container.textContent).not.toContain(EMP_ID);
+    expect(container.textContent).not.toContain(DESIG_ID);
+    expect(screen.getByText(/not yet linked to a particular DPC meeting/)).toBeInTheDocument();
+  });
 });

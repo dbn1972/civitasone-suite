@@ -76,3 +76,38 @@ describe("NewDesignationPageClient — GAP-HR-DESIGNATIONS-NEW-04 no forced redi
     expect(pushMock).toHaveBeenCalledWith("/hr/designations");
   });
 });
+
+/**
+ * GAP-HR-DESIGNATIONS-NEW-04: the "Add another" button unmounts the moment it
+ * is pressed, which used to drop keyboard focus to <body>. It now hands focus
+ * to the Code input so the next entry can start immediately.
+ */
+describe("NewDesignationPageClient — GAP-HR-DESIGNATIONS-NEW-04 'Add another' focuses Code", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    pushMock.mockReset();
+    refreshMock.mockReset();
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("moves focus to the Code input when 'Add another' is pressed", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "d1" }), { status: 202 }));
+    renderClient();
+
+    fireEvent.change(screen.getByLabelText(/code/i), { target: { value: "CLERK" } });
+    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Upper Division Clerk" } });
+    fireEvent.click(screen.getByRole("button", { name: /add designation/i }));
+    const addAnother = await screen.findByRole("button", { name: /add another/i });
+    addAnother.focus();
+    expect(addAnother).toHaveFocus();
+
+    fireEvent.click(addAnother);
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: /add another/i })).not.toBeInTheDocument());
+    expect(screen.getByLabelText(/code/i)).toHaveFocus();
+    expect(document.body).not.toHaveFocus();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+});

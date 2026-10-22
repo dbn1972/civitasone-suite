@@ -88,23 +88,6 @@ export function MyKPIStrip({
         <div className="my-kpi-trend">&nbsp;</div>
       </div>
 
-      <style>{`
-        .my-kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 24px 14px; }
-        @media (max-width: 900px) { .my-kpi-strip { grid-template-columns: repeat(2, 1fr); } }
-        .my-kpi-card { background: var(--panel); border-radius: 8px; padding: 14px 16px 12px; box-shadow: 0 1px 3px rgba(15,34,64,.09); border-top: 3px solid transparent; }
-        .my-kpi-blue  { border-top-color: var(--info); }
-        .my-kpi-amber { border-top-color: var(--warn); }
-        .my-kpi-red   { border-top-color: var(--bad); }
-        .my-kpi-slate { border-top-color: var(--line); }
-        .my-kpi-label { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-        .my-kpi-val { font-size: 26px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--ink); }
-        .my-kpi-val-sm { font-size: 18px; }
-        .my-kpi-val-muted { font-size: 20px; color: var(--muted); }
-        .my-kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; color: var(--muted); }
-        .trend-up { color: var(--good); }
-        .trend-urgent { color: var(--bad); font-weight: 700; }
-        .my-kpi-badge { position: absolute; top: 10px; inset-inline-end: 10px; background: var(--bad); color: #fff; font-size: 9px; font-weight: 800; border-radius: 9px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
-      `}</style>
     </div>
   );
 }

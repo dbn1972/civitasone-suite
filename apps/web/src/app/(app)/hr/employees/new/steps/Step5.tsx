@@ -5,8 +5,10 @@ import { INDIAN_STATES_UTS } from "@/lib/india/states";
 import { useTranslations } from "next-intl";
 import { resolveEmployees } from "@/lib/entityAdapters/employee";
 import { resolveCostCenters } from "@/lib/entityAdapters/costCenter";
+import { resolvePayStructures } from "@/lib/entityAdapters/payStructure";
+import { formatMoney } from "@/lib/formatters";
 import type { WizardData } from "../wizardTypes";
-import { ACCENT } from "../wizardTypes";
+import { ACCENT, rupeesToMinorString } from "../wizardTypes";
 
 type Dept = { id: string; name: string };
 type Desig = { id: string; name: string };
@@ -69,6 +71,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
   // Names, never raw ids, for the two picked references.
   const [managerName, setManagerName] = useState("");
   const [costCenterName, setCostCenterName] = useState("");
+  const [payStructureName, setPayStructureName] = useState("");
   useEffect(() => {
     let cancelled = false;
     setManagerName("");
@@ -81,6 +84,19 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
     if (data.costCenterId) resolveCostCenters([data.costCenterId]).then((o) => { if (!cancelled) setCostCenterName(o[0]?.label ?? ""); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [data.costCenterId]);
+  useEffect(() => {
+    let cancelled = false;
+    setPayStructureName("");
+    if (data.payStructureId) resolvePayStructures([data.payStructureId]).then((o) => { if (!cancelled) setPayStructureName(o[0]?.label ?? ""); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [data.payStructureId]);
+
+  // GAP-HR-EMPLOYEES-NEW-02: the review showed the raw string the clerk typed
+  // ("44900.5"); show what will actually be stored, formatted from the same
+  // decimal-safe paise value buildPayload sends. Falls back to the typed text
+  // only if it is unparseable (validateStep blocks that before this step).
+  const basicPayMinor = data.basicPay.trim() ? rupeesToMinorString(data.basicPay.trim()) : null;
+  const basicPayDisplay = basicPayMinor ? formatMoney(basicPayMinor) : data.basicPay.trim();
 
   const SHIFT_LABELS: Record<string, string> = {
     general: t("shiftGeneral"),
@@ -167,7 +183,8 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
         <Row label={t("payGrade")} value={data.grade} />
         <Row label={t("dateOfJoining")} value={data.dateOfJoining} />
         <Row label={t("employmentType")} value={data.employeeType} />
-        <Row label={t("basicPay")} value={data.basicPay} />
+        <Row label={t("basicPay")} value={basicPayDisplay} />
+        <Row label={t("payStructure")} value={payStructureName || (data.payStructureId ? "…" : "")} />
       </section>
 
       {/* Step 3 — Assignment */}

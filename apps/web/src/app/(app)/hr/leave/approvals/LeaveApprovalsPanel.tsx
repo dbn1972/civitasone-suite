@@ -1,8 +1,8 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState, ErrorState, Button } from "../../../../_components/ds";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Card, DataTable, ConfirmDialog, EmptyState, ErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
@@ -46,10 +46,74 @@ type EnrichedTask = WorkflowTask & {
 
 type Decision = "approve" | "reject";
 
+/** Tasks requested per page. */
+const TASK_PAGE_SIZE = 50;
+/**
+ * Safety bound on the paging loop below (50 x 20 = 1,000 pending tasks): an
+ * inbox this deep still renders a visible "showing the first N" notice rather
+ * than looping forever or pretending to be complete.
+ */
+const MAX_TASK_PAGES = 20;
+
+type TaskPage = {
+  data?: WorkflowTask[];
+  pagination?: { hasMore?: boolean; total?: number; cursor?: string };
+};
+
+/**
+ * GAP-HR-LEAVE-APPROVALS-02: every pending leave_app task, following the
+ * server's pagination until it is exhausted. workflow-service filters by
+ * `refType` in SQL (before the page window), so normally this is one page; the
+ * loop and the client-side refType check are the safety net for a server that
+ * ignores the filter (other modules' tasks fill the first pages) -- the old
+ * single fetch of the first 50 tasks of ALL types silently dropped leave
+ * approvals past that window and then said "No pending approvals".
+ */
+type ResponseErrorHandler = (res: Response) => Promise<never>;
+type PendingLeaveTasks = { tasks: WorkflowTask[]; truncated: boolean; checked: number };
+
+async function fetchPendingLeaveTasks(signal: AbortSignal | undefined, onResponseError: ResponseErrorHandler): Promise<PendingLeaveTasks> {
+  const tasks: WorkflowTask[] = [];
+  let offset = 0;
+  let checked = 0;
+  for (let page = 0; page < MAX_TASK_PAGES; page++) {
+    const res = await fetch(
+      `/api/proxy/v1/workflow/tasks?status=pending&refType=leave_app&limit=${TASK_PAGE_SIZE}&offset=${offset}`,
+      { signal },
+    );
+    if (!res.ok) return onResponseError(res);
+    const body = (await res.json()) as TaskPage | WorkflowTask[];
+    const rows = Array.isArray(body) ? body : body.data ?? [];
+    const pagination = Array.isArray(body) ? undefined : body.pagination;
+    checked += rows.length;
+    for (const wt of rows) if (wt.refType === "leave_app" && wt.status === "pending") tasks.push(wt);
+    const next = pagination?.cursor !== undefined ? Number(pagination.cursor) : offset + rows.length;
+    // Done when the server says nothing is left (or gives us nothing to advance on).
+    if (!pagination?.hasMore || rows.length === 0 || !Number.isFinite(next) || next <= offset) {
+      return { tasks, truncated: false, checked };
+    }
+    offset = next;
+  }
+  return { tasks, truncated: true, checked };
+}
+
 export function LeaveApprovalsPanel() {
   const t = useTranslations("leaveApprovals");
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
   const [leaveById, setLeaveById] = useState<Record<string, LeaveDetail>>({});
+  // GAP-HR-LEAVE-APPROVALS-06: leave details already fetched, and the ids whose
+  // enrichment request has already SUCCEEDED (even if the row was legitimately
+  // absent from the response, e.g. scoped out for a delegated approver) --
+  // a background re-sync only ever requests ids it has not resolved yet.
+  const leaveByIdRef = useRef<Record<string, LeaveDetail>>({});
+  const enrichedIdsRef = useRef<Set<string>>(new Set());
+  // Only the newest load may write state (overlapping loads: a decision's
+  // silent re-sync can land while an earlier load is still paging).
+  const loadSeqRef = useRef(0);
+  // GAP-HR-LEAVE-APPROVALS-02: true when the paging safety bound was hit with
+  // more tasks still on the server -- the list is then NOT complete.
+  const [truncated, setTruncated] = useState(false);
+  const [checkedTasks, setCheckedTasks] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<"api" | "error">("api");
@@ -70,53 +134,53 @@ export function LeaveApprovalsPanel() {
   const formError = useFormError("leave application");
 
   const loadTasks = useCallback(async (signal?: AbortSignal, silent = false) => {
+    const seq = ++loadSeqRef.current;
     if (!silent) setLoading(true);
     setError(null);
     setEnrichError(null);
     try {
-      // GAP-HR-LEAVE-APPROVALS-02: ask the server to filter by refType too —
-      // client-side filtering below stays as the real safety net.
-      // workflow-service DOES exist in this repo (services/workflow-
-      // service/); its GET /v1/workflow/tasks route (modules/tasks/
-      // routes.ts, backed by modules/tasks/queries.ts's listTasks) only
-      // honours status/instanceId as list filters today, not refType — so
-      // this query param is currently inert server-side, and the
-      // client-side filter below is doing all of the real narrowing.
-      // Harmless either way; worth wiring up server-side in a follow-up.
-      const taskRes = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50&refType=leave_app", { signal });
-      if (!taskRes.ok) {
-        const resolved = await formError.fromResponse(taskRes, "load");
+      // GAP-HR-LEAVE-APPROVALS-02: workflow-service filters by refType in SQL
+      // and reports hasMore/total/cursor; follow it until exhausted. The
+      // client-side leave_app check inside stays as the safety net.
+      const { tasks: leaveTasks, truncated: more, checked } = await fetchPendingLeaveTasks(signal, async (res) => {
+        const resolved = await formError.fromResponse(res, "load");
         setSource("error");
         throw UserFacingError.from(resolved);
-      }
-      const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
-      const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
-      const leaveTasks = taskRows.filter((wt) => wt.refType === "leave_app" && wt.status === "pending");
+      });
+      if (seq !== loadSeqRef.current) return;
       setTasks(leaveTasks);
+      setTruncated(more);
+      setCheckedTasks(checked);
 
       // GAP-HR-LEAVE-APPROVALS-04: fetch exactly the applications these
       // visible tasks reference (ids=...) instead of the caller's entire
       // tenant/manager-scoped page — narrows what this panel ever
       // requests, on top of (not instead of) the role-based scope GET
       // /leave-requests already enforces server-side.
+      // GAP-HR-LEAVE-APPROVALS-06: ...and only the ones not already resolved,
+      // so a background re-sync after a decision re-requests nothing.
       const ids = Array.from(new Set(leaveTasks.map((wt) => wt.refId).filter((id): id is string => !!id)));
-      if (ids.length === 0) {
-        setLeaveById({});
+      const wanted = ids.filter((id) => !enrichedIdsRef.current.has(id));
+      if (wanted.length === 0) {
+        setLeaveById({ ...leaveByIdRef.current });
         return;
       }
-      const leaveRes = await fetch(`/api/proxy/v1/hrms/leave-requests?ids=${ids.map(encodeURIComponent).join(",")}`, { signal }).catch(() => null);
+      const leaveRes = await fetch(`/api/proxy/v1/hrms/leave-requests?ids=${wanted.map(encodeURIComponent).join(",")}`, { signal }).catch(() => null);
+      if (seq !== loadSeqRef.current) return;
       // Leave context is best-effort: a failure here still shows tasks (with
       // IDs) — Approve/Reject are disabled per-row instead (hasLeaveDetail).
       if (leaveRes && leaveRes.ok) {
         const leaveBody = (await leaveRes.json()) as { data?: LeaveDetail[] } | LeaveDetail[];
         const leaveRows = Array.isArray(leaveBody) ? leaveBody : leaveBody.data ?? [];
-        const map: Record<string, LeaveDetail> = {};
-        for (const l of leaveRows) if (l?.id) map[l.id] = l;
-        setLeaveById(map);
+        for (const l of leaveRows) if (l?.id) leaveByIdRef.current[l.id] = l;
+        for (const id of wanted) enrichedIdsRef.current.add(id);
+        setLeaveById({ ...leaveByIdRef.current });
       } else if (leaveRes) {
         const resolved = await formError.fromResponse(leaveRes, "load");
+        setLeaveById({ ...leaveByIdRef.current });
         setEnrichError(resolved.message);
       } else {
+        setLeaveById({ ...leaveByIdRef.current });
         setEnrichError(formError.fromException("load", new TypeError("no response")).message);
       }
     } catch (e) {
@@ -126,6 +190,7 @@ export function LeaveApprovalsPanel() {
       // failure, and must not paint this now-gone panel's error state onto
       // whatever the user navigated to instead.
       if (e instanceof Error && e.name === "AbortError") return;
+      if (seq !== loadSeqRef.current) return;
       setSource("error");
       setError(formError.fromException("load", e).message);
     } finally {
@@ -274,7 +339,7 @@ export function LeaveApprovalsPanel() {
           </Button>
         </div>
       )}
-      <Card title={t("panelTitle")}>
+      <Card title={loading || error ? t("panelTitle") : t("panelTitleWithCount", { count: tasks.length })}>
         {loading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
             {t("loadingTasks")}
@@ -284,6 +349,12 @@ export function LeaveApprovalsPanel() {
             error={{ what: t("loadErrorTitle"), next: error, actions: ["retry"] }}
             onRetry={() => void loadTasks()}
           />
+        ) : enriched.length === 0 && truncated ? (
+          // GAP-HR-LEAVE-APPROVALS-02: more tasks exist than were searched --
+          // never claim "No pending approvals" for an incomplete search.
+          <div role="alert" style={{ padding: "16px 20px", fontSize: 13 }}>
+            {t("truncatedEmptyMessage", { checked: checkedTasks })}
+          </div>
         ) : enriched.length === 0 ? (
           <EmptyState
             icon="✅"
@@ -291,6 +362,12 @@ export function LeaveApprovalsPanel() {
             message={t("emptyMessage")}
           />
         ) : (
+          <>
+          {truncated && (
+            <p role="status" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 8, background: "var(--warnbg)", fontSize: 13 }}>
+              {t("truncatedNotice", { shown: enriched.length })}
+            </p>
+          )}
           <DataTable<EnrichedTask>
             columns={columns}
             rows={enriched}
@@ -299,6 +376,7 @@ export function LeaveApprovalsPanel() {
             filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
           />
+          </>
         )}
       </Card>
 

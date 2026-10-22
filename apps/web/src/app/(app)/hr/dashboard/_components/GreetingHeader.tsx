@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useDays } from "./useDays";
+import { useDays, useMonthEnds } from "./useDays";
 
 interface Props {
   userName: string;
@@ -51,6 +51,7 @@ function hasValue(value: number | null | undefined): value is number {
 
 export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLeft, today, dayName, actions = DEFAULT_ACTIONS }: Props) {
   const formatDays = useDays();
+  const monthEnds = useMonthEnds();
   // hasValue(pendingCount) is checked first and short-circuits the rest of
   // the chain on purpose: if we don't know the real pending count, we can't
   // conclude "nothing urgent", and silently falling back to the payroll
@@ -61,7 +62,11 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
     : pendingCount > 0
     ? `${pendingCount} item${pendingCount > 1 ? "s" : ""} need${pendingCount === 1 ? "s" : ""} your attention`
     : payrollDaysLeft <= 7
-    ? `Payroll closes in ${formatDays(payrollDaysLeft)}`
+    // GAP-HR-DASHBOARD-05: this used to read "Payroll closes in N days", but
+    // payrollDaysLeft is calendar days to month-end, not a payroll cutoff --
+    // the app has no payroll calendar to source one from (an open product
+    // decision). Same honest relabel HRKPIStrip's card already got.
+    ? monthEnds(formatDays(payrollDaysLeft))
     : "No urgent actions today";
 
   return (
@@ -96,114 +101,6 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
           ))}
         </div>
       </div>
-      <style>{`
-        .greeting-header {
-          /* GAP-HR-DASHBOARD-09: wrapped in var(--token, #same-fallback) --
-             no --dash-greeting-* token is defined anywhere, so this renders
-             identically to the previous bare-hex gradient. Page-local names
-             (not a reuse of an existing design-system token) since this
-             gradient's exact stops are bespoke to this one banner and its
-             own hand-verified WCAG contrast math below, not shared elsewhere. */
-          background: linear-gradient(108deg, var(--dash-greeting-grad-1) 0%, var(--dash-greeting-grad-2) 60%, var(--dash-greeting-grad-3) 100%);
-          padding: 20px 28px 0;
-          position: relative;
-          overflow: hidden;
-        }
-        .greeting-header::after {
-          content: '';
-          display: block;
-          height: 18px;
-          background: var(--page-bg);
-          clip-path: ellipse(54% 100% at 50% 100%);
-          margin: 0 -28px;
-        }
-        .greeting-inner {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 16px;
-          padding-bottom: 14px;
-          flex-wrap: wrap;
-        }
-        .greeting-text {
-          /* Fill the row instead of shrink-wrapping to the greeting text.
-             Content-driven width would otherwise make this box's own size
-             (not just its text) depend on the greeting's length, e.g.
-             "Good morning" (weekday) vs "Good day" (weekend) render at
-             different widths -- shifting this element's bounding box day
-             to day even though its content is masked in visual-regression
-             screenshots (see visual-regression.spec.ts). flex-basis 0 with
-             flex-grow keeps the box's width pinned to the layout instead. */
-          flex: 1 1 0;
-          min-width: 0;
-        }
-        .greeting-eyebrow {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: .12em;
-          text-transform: uppercase;
-          /* UX-005 tranche 10: #6ea3f5 measured 2.88:1 against the lightest
-             gradient stop (#2554a0) -- axe reports this "incomplete"
-             (bgGradient, undecidable) rather than a violation, but the
-             worst-case background is computable directly from the gradient's
-             own stops, and it fails. #bfdbfe clears 4.5:1 at that same
-             worst-case stop (5.18:1), so it holds across the whole gradient. */
-          color: var(--dash-greeting-eyebrow);
-          margin: 0 0 4px;
-        }
-        .greeting-title {
-          font-size: 20px;
-          font-weight: 700;
-          color: var(--dash-greeting-title);
-          letter-spacing: -.02em;
-          margin: 0 0 3px;
-        }
-        .greeting-sub {
-          font-size: 12px;
-          /* UX-005 tranche 10: #7ea8d8 measured 2.97:1 at the gradient's
-             lightest stop -- same bgGradient/incomplete case as
-             .greeting-eyebrow above. #dbeafe clears 4.5:1 there (6.03:1). */
-          color: var(--dash-greeting-sub);
-          margin: 0;
-        }
-        .greeting-actions {
-          display: flex;
-          gap: 8px;
-          align-items: center;
-          padding-top: 4px;
-          flex-shrink: 0;
-        }
-        .btn-ghost-nav {
-          background: rgba(255,255,255,.12);
-          /* UX-005 tranche 10: #c8daf5 over this translucent-white chip,
-             composited on the gradient's lightest stop, measured 3.88:1
-             (bgGradient/incomplete). #fff clears 4.5:1 there (5.50:1),
-             matching .btn-primary-nav's own use of solid white text. */
-          color: var(--dash-greeting-btn-fg);
-          border: 1px solid rgba(255,255,255,.15);
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 500;
-          padding: 7px 14px;
-          text-decoration: none;
-          white-space: nowrap;
-        }
-        .btn-primary-nav {
-          /* This exact hex already matches the established --info token's
-             own fallback value used fleet-wide (e.g. var(--info) in
-             every dashboard SVG icon in this file family) -- reused directly
-             rather than inventing a new page-local name for it. */
-          background: var(--info);
-          color: var(--dash-greeting-btn-fg);
-          border: none;
-          border-radius: 6px;
-          font-size: 12px;
-          font-weight: 600;
-          padding: 7px 14px;
-          text-decoration: none;
-          white-space: nowrap;
-        }
-      `}</style>
     </div>
   );
 }

@@ -16,6 +16,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { getPolicy } from "../policy-settings/repo.js";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "finance_officer"];
 
@@ -23,21 +24,31 @@ const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "finan
  * GAP-HR-WORKFORCE-07: superannuation age used to be two independent literal
  * `60`s (vacancy-forecast's CASE expression and retirement-forecast's WHERE
  * filter) plus a THIRD hardcoded copy as the literal SQL string `'60 years'`
- * inside retirement-forecast's `groupExpr` — three places that could silently
- * diverge if only one were ever edited. Consolidated to one constant, used by
- * every query below (including `groupExpr`, via `AGE_INTERVAL_SQL` rather
- * than a second hardcoded "60 years" string), and surfaced in both
- * endpoints' `meta.retirementAge` so the web can show it as a footnote
- * ("Assumes superannuation at 60 years") instead of asserting it as fact with
- * no visible basis.
+ * inside retirement-forecast's `groupExpr` -- three places that could silently
+ * diverge. It is now ONE per-request value, read from the tenant's
+ * `retirement_age` policy (policy-settings/registry.ts; no stored row == the
+ * historical 60), used by every query below (including `groupExpr`, via the
+ * interval fragment built from it) and surfaced in both endpoints'
+ * `meta.retirementAge` so the web can show "Assumes superannuation at N
+ * years" instead of asserting it as fact with no visible basis.
  *
- * Left open (genuine business-policy call, not an engineering one): whether
- * different tenant editions (Govt/PSU/Small Office) or employee categories
- * (e.g. teachers) should retire at a different age, and whether this should
- * become a tenant-config value. Not implemented here.
+ * Which age applies to which edition / employee category (e.g. teachers) is an
+ * HR-policy decision made by setting the key per tenant; per-category ages
+ * would need employee-level data and are NOT modelled here.
  */
-const RETIREMENT_AGE_YEARS = 60;
-const AGE_INTERVAL_SQL = `INTERVAL '${RETIREMENT_AGE_YEARS} years'`;
+async function resolveRetirementAge(tenantId: string): Promise<number> {
+  return (await getPolicy(tenantId, "retirement_age")).superannuationAge;
+}
+
+/**
+ * The `INTERVAL 'N years'` SQL fragment for the resolved age. `age` is a
+ * zod-validated integer from the policy registry (never request input); the
+ * check below keeps the string interpolation provably numeric regardless.
+ */
+function ageIntervalSql(age: number): string {
+  if (!Number.isInteger(age)) throw new Error(`retirement age must be an integer, got ${String(age)}`);
+  return `INTERVAL '${age} years'`;
+}
 
 /**
  * GAP-HR-WORKFORCE-ANALYTICS-06: per the published HR decision packet
@@ -142,12 +153,15 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
+    const retirementAge = await resolveRetirementAge(ctx.tenantId);
+    const ageInterval = ageIntervalSql(retirementAge);
+
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT
         CASE
-          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
-          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
-          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
+          WHEN (date_of_birth + ${tx.unsafe(ageInterval)}) <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
+          WHEN (date_of_birth + ${tx.unsafe(ageInterval)}) <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
+          WHEN (date_of_birth + ${tx.unsafe(ageInterval)}) <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
           ELSE 'beyond_5_years'
         END AS horizon,
         COUNT(*)::int AS count
@@ -159,7 +173,7 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       ORDER BY horizon
     `);
 
-    return reply.send({ data: rows, meta: { retirementAge: RETIREMENT_AGE_YEARS } });
+    return reply.send({ data: rows, meta: { retirementAge } });
   });
 
   // Retirement forecast — employees retiring by month/quarter/year
@@ -172,13 +186,16 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       years: z.coerce.number().int().min(1).max(10).default(3),
     }).parse(req.query);
 
+    const retirementAge = await resolveRetirementAge(ctx.tenantId);
+    const ageInterval = ageIntervalSql(retirementAge);
+
     let groupExpr: string;
     if (query.granularity === "month") {
-      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY-MM')`;
+      groupExpr = `TO_CHAR(date_of_birth + ${ageInterval}, 'YYYY-MM')`;
     } else if (query.granularity === "quarter") {
-      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY') || '-Q' || EXTRACT(QUARTER FROM date_of_birth + ${AGE_INTERVAL_SQL})`;
+      groupExpr = `TO_CHAR(date_of_birth + ${ageInterval}, 'YYYY') || '-Q' || EXTRACT(QUARTER FROM date_of_birth + ${ageInterval})`;
     } else {
-      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY')`;
+      groupExpr = `TO_CHAR(date_of_birth + ${ageInterval}, 'YYYY')`;
     }
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
@@ -189,13 +206,13 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       WHERE tenant_id = ${ctx.tenantId}
         AND status != 'separated'
         AND date_of_birth IS NOT NULL
-        AND (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)})
+        AND (date_of_birth + ${tx.unsafe(ageInterval)})
             BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${tx.unsafe(String(query.years))} years')
       GROUP BY period
       ORDER BY period
     `);
 
-    return reply.send({ data: rows, meta: { retirementAge: RETIREMENT_AGE_YEARS } });
+    return reply.send({ data: rows, meta: { retirementAge } });
   });
 
   // Analytics KPIs — GAP-HR-WORKFORCE-ANALYTICS-01.

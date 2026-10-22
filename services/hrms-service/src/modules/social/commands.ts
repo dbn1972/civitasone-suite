@@ -29,6 +29,21 @@ async function publish(topic: string, ctx: RequestContext, payload: Record<strin
   return { id, status: "pending", correlationId: ctx.correlationId };
 }
 
+/**
+ * GAP-HR-SOCIAL-FEED-01: set the CALLER'S OWN birthday-sharing consent.
+ * `targetEmployeeId` is the hrms_employees.id the route resolved from the
+ * authenticated actor -- never taken from the request body -- and is named
+ * `targetEmployeeId` (not `employeeId`) because publish() above overwrites
+ * `employeeId` with the actor id.
+ */
+export interface SetBirthdaySharingPayload {
+  targetEmployeeId: string;
+  share: boolean;
+}
+
+export const setBirthdaySharing = (ctx: RequestContext, p: SetBirthdaySharingPayload) =>
+  publish(COMMANDS.birthdaySharingSet, ctx, { ...p });
+
 export interface CreateTravelRequestPayload {
   purpose: string;
   destination: string;

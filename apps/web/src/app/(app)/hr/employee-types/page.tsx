@@ -1,4 +1,6 @@
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
+import { EmployeeTypesTable } from "./_components/EmployeeTypesTable";
+import { humanizeStatus } from "@/lib/formatters";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
@@ -90,16 +92,28 @@ export default async function EmployeeTypesPage() {
         et.statutoryEsi ? "ESI" : null,
         et.statutoryNps ? "NPS" : null,
       ].filter(Boolean).join(", ") || t("none");
+      // GAP-HR-EMPLOYEE-TYPES-03: gratuity / bonus / leave encashment drive
+      // statutory and payroll treatment but were only visible on the edit form
+      // (and not at all to a viewer who cannot manage types). Same compact
+      // "A, B" pattern as the Statutory column; "None" when no flag is on.
+      const benefits = [
+        et.eligibleForGratuity ? t("benefitGratuity") : null,
+        et.eligibleForBonus ? t("benefitBonus") : null,
+        et.leaveEncashment ? t("benefitLeaveEncashment") : null,
+      ].filter(Boolean).join(", ") || t("none");
       return {
-        ...et,
-        // Server-safe row link (DataTable is a client component, so a rowHref function prop
-        // cannot cross the RSC boundary): the full path, or "" when the viewer cannot manage.
-        editHref: canManage ? `/hr/employee-types/${et.id}/edit` : "",
-        payModeLabel: PAY_MODE_LABELS[et.payMode] ?? et.payMode,
+        id: et.id,
+        code: et.code,
+        name: et.name,
+        description: et.description?.trim() ? et.description.trim() : null,
+        // GAP-HR-EMPLOYEE-TYPES-05: an unlisted pay mode (legacy / unexpected data)
+        // used to fall through as the raw code ("weekly"); humanize it instead.
+        payModeLabel: PAY_MODE_LABELS[et.payMode] ?? (et.payMode ? humanizeStatus(et.payMode) : "—"),
         categoryLabel: CATEGORY_LABELS[et.category] ?? et.category,
         paymentRouteLabel: PAYMENT_ROUTE_LABELS[et.paymentRoute] ?? et.paymentRoute,
         taxSectionLabel: et.taxSection === "none" ? t("none") : et.taxSection,
         statutoryLabel: statutory,
+        benefitsLabel: benefits,
         probation: et.defaultProbationMonths > 0 ? t("probationMonths", { months: et.defaultProbationMonths }) : t("probationNone"),
         contract: et.maxContractMonths ? t("contractMaxMonths", { months: et.maxContractMonths }) : t("contractUnlimited"),
         // GAP-HR-EMPLOYEE-TYPES-05: "✅"/"—" glyphs read to a screen reader as
@@ -144,31 +158,28 @@ export default async function EmployeeTypesPage() {
             message={t("emptyMessage")}
           />
         ) : (
-          <DataTable
-            columns={[
-              { key: "code", label: t("colCode") },
-              { key: "name", label: t("colName") },
-              { key: "statusLabel", label: t("colStatus") },
-              { key: "payModeLabel", label: t("colPayMode") },
-              { key: "categoryLabel", label: t("colCategory") },
-              { key: "paymentRouteLabel", label: t("colPaymentRoute") },
-              { key: "taxSectionLabel", label: t("colTaxSection") },
-              { key: "statutoryLabel", label: t("colStatutory") },
-              { key: "probation", label: t("colProbation") },
-              { key: "contract", label: t("colMaxDuration") },
-              { key: "leave", label: t("colLeave") },
-              { key: "payroll", label: t("colPayroll") },
-              { key: "appraisal", label: t("colAppraisal") },
-            ]}
+          <EmployeeTypesTable
             rows={rows}
-            rowLinkKey="editHref" rowLinkPrefix=""
-            sortable
-            filterable
-            filterPlaceholder={t("filterPlaceholder")}
-            pageSize={25}
-            emptyIcon="👥"
-            emptyTitle={t("emptyFilteredTitle")}
-            emptyMessage={t("emptyFilteredMessage")}
+            canManage={canManage}
+            labels={{
+              colCode: t("colCode"),
+              colName: t("colName"),
+              colStatus: t("colStatus"),
+              colPayMode: t("colPayMode"),
+              colCategory: t("colCategory"),
+              colPaymentRoute: t("colPaymentRoute"),
+              colTaxSection: t("colTaxSection"),
+              colStatutory: t("colStatutory"),
+              colBenefits: t("colBenefits"),
+              colProbation: t("colProbation"),
+              colMaxDuration: t("colMaxDuration"),
+              colLeave: t("colLeave"),
+              colPayroll: t("colPayroll"),
+              colAppraisal: t("colAppraisal"),
+              filterPlaceholder: t("filterPlaceholder"),
+              emptyFilteredTitle: t("emptyFilteredTitle"),
+              emptyFilteredMessage: t("emptyFilteredMessage"),
+            }}
           />
         )}
       </Card>

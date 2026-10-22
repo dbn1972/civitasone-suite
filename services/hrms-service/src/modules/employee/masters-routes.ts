@@ -5,12 +5,18 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, count, inArray, notInArray, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
-import { hrmsDepartments, hrmsDesignations, hrmsEmployees } from "./schema.js";
-import { EXITED_STATUSES } from "./status.js";
+import { hrmsDepartments, hrmsDesignations } from "./schema.js";
+import {
+  countActiveEmployeesByDeptTx,
+  departmentUsageTx,
+  designationUsageForOneTx,
+  designationUsageTx,
+} from "./master-usage.js";
 
 const HR_READ_ROLES = [
   "hr_admin",
@@ -79,23 +85,7 @@ const updateDesignationBody = createDesignationBody.partial().extend({
  */
 async function countActiveEmployeesByDept(tenantId: string, deptIds: string[]): Promise<Map<string, number>> {
   if (deptIds.length === 0) return new Map();
-  // Plain row select + in-process tally rather than a SQL GROUP BY -- the
-  // tenant-scoped employee count per department is a small, bounded number
-  // of rows (a tenant's whole workforce, at most), and this keeps the query
-  // shape identical to every other `scopedRead` call in this file.
-  const rows = await scopedRead((tx) => tx
-    .select({ departmentId: hrmsEmployees.departmentId })
-    .from(hrmsEmployees)
-    .where(and(
-      eq(hrmsEmployees.tenantId, tenantId),
-      inArray(hrmsEmployees.departmentId, deptIds),
-      notInArray(hrmsEmployees.status, [...EXITED_STATUSES]),
-    )));
-  const counts = new Map<string, number>();
-  for (const r of rows) {
-    counts.set(r.departmentId, (counts.get(r.departmentId) ?? 0) + 1);
-  }
-  return counts;
+  return scopedRead((tx) => countActiveEmployeesByDeptTx(tx, tenantId, deptIds));
 }
 
 /**
@@ -244,16 +234,8 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     // than silently orphan; whether to instead offer a soft-delete
     // (hrmsDepartments.isActive already exists) is a separate, deeper
     // product decision left open — see this PR's description.
-    const childCountRows = await scopedRead((tx) => tx
-      .select({ childCount: count() })
-      .from(hrmsDepartments)
-      .where(and(eq(hrmsDepartments.tenantId, ctx.tenantId), eq(hrmsDepartments.parentId, id))));
-    // A bare COUNT(*) aggregate always returns exactly one row in practice,
-    // but the array type alone doesn't guarantee that to the compiler --
-    // default to 0 rather than assume/destructure.
-    const childCount = Number(childCountRows[0]?.childCount ?? 0);
-    const employeeCounts = await countActiveEmployeesByDept(ctx.tenantId, [id]);
-    const employeeCount = employeeCounts.get(id) ?? 0;
+    // Shared with the F3 consumer's race re-check (master-usage.ts).
+    const { childCount, employeeCount } = await scopedRead((tx) => departmentUsageTx(tx, ctx.tenantId, id));
     if (childCount > 0 || employeeCount > 0) {
       return reply.code(409).send({
         code: "DEPARTMENT_IN_USE",
@@ -273,6 +255,16 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_READ_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, ctx.tenantId)));
+    // GAP-HR-DESIGNATIONS-02: opt-in per-row usage count so the designations
+    // admin page can warn/disable Delete up front. Off by default (the list
+    // also feeds many form dropdowns that don't need it) and only computed
+    // for the roles that can actually delete -- everyone else just gets the
+    // plain rows, exactly as before.
+    const wantUsage = ["1", "true"].includes(String((req.query as Record<string, unknown>)?.withUsage ?? ""));
+    if (wantUsage && hasAnyRole(ctx, HR_ROLES)) {
+      const usage = await scopedRead((tx) => designationUsageTx(tx, ctx.tenantId, rows.map((r) => r.id)));
+      return reply.send({ data: rows.map((r) => ({ ...r, usageCount: usage.get(r.id)?.total ?? 0 })) });
+    }
     return reply.send({ data: rows });
   });
 
@@ -323,16 +315,21 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
 
     // GAP-HR-DESIGNATIONS-02: delete used to have no reference check at
-    // all -- hrmsEmployees.designationId has no FK, so employees (and any
-    // pay-matrix/vacancy rows keyed off this id) were silently orphaned.
-    const inUse = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)` }).from(hrmsEmployees)
-      .where(and(eq(hrmsEmployees.designationId, id), eq(hrmsEmployees.tenantId, ctx.tenantId))));
-    const inUseCount = Number(inUse[0]?.n ?? 0);
-    if (inUseCount > 0) {
+    // all -- hrmsEmployees.designationId has no FK, so employees (and every
+    // other table keyed off this id) were silently orphaned. The check now
+    // spans every in-service referrer (master-usage.ts DESIGNATION_REFERRERS:
+    // employees, seniority lists, workforce posts, manpower, recruitment,
+    // sanctioned posts, promotion/transfer history), all tenant-scoped.
+    const usage = await scopedRead((tx) => designationUsageForOneTx(tx, ctx.tenantId, id));
+    if (usage.total > 0) {
       return reply.code(409).send({
         code: "DESIGNATION_IN_USE",
-        message: `${inUseCount} employee${inUseCount === 1 ? "" : "s"} still hold this designation — reassign them before deleting it.`,
-        count: inUseCount,
+        message: usage.employees > 0
+          ? `${usage.employees} employee${usage.employees === 1 ? "" : "s"} still hold this designation — reassign them before deleting it.`
+          : `This designation is still referenced by ${usage.total} other record${usage.total === 1 ? "" : "s"} — reassign or remove them before deleting it.`,
+        count: usage.total,
+        employeeCount: usage.employees,
+        references: usage.references,
       });
     }
 

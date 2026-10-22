@@ -5,8 +5,8 @@ import { toHumanError } from "@/lib/messages";
 import { CertificationCard } from "./_components/CertificationCard";
 import { deriveCardStatus, isMandatory, type CertificationStatus } from "@/lib/certifications";
 import { getTranslations } from "next-intl/server";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
-import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
+import { getSessionRoles, requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_SELF_SERVICE_ROLES, HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
   id: string;
@@ -40,6 +40,12 @@ export default async function CertificationsPage() {
   requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("certifications");
   const { data: items, source } = await getData();
+
+  // GAP-HR-CERTIFICATIONS-02: the backend scopes the register (HR = everyone,
+  // a manager = self + direct reports, a bare employee = self only), so name
+  // the holder on each card for exactly the viewers who can see anyone other
+  // than themselves. A bare employee only ever sees their own certificates.
+  const showHolder = getSessionRoles().some((r) => HR_STAFF_MANAGER_ROLES.includes(r));
 
   const valid        = items.filter((i) => deriveCardStatus(i.expiryDate) === "valid").length;
   const expiringSoon = items.filter((i) => deriveCardStatus(i.expiryDate) === "expiring_soon").length;
@@ -157,6 +163,7 @@ export default async function CertificationsPage() {
                 // endpoint exists yet, so this is the lowest-risk real
                 // destination rather than inventing a new one.
                 renewHref={row.trainingId ? `/hr/training/${row.trainingId}` : undefined}
+                {...(showHolder ? { holderName: row.employee, holderDepartment: row.department } : {})}
               />
             ))}
           </div>

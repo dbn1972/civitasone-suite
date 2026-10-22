@@ -46,6 +46,25 @@ import { eq, and } from "drizzle-orm";
 export function isPayMatrixOfficial(): boolean {
   return process.env.PAY_MATRIX_OFFICIAL === "true";
 }
+
+/**
+ * GAP-HR-PAY-MATRIX-01 (step 3): every response that carries pay-matrix
+ * figures says where they came from, so a client (or a person reading a
+ * dry-run) can never mistake a computed figure for a notified one. `official`
+ * mirrors the same switch that gates the live increment; `matrixSource` is the
+ * human-readable form of it; `notice` is present only while the figures are
+ * computed.
+ */
+export const PAY_MATRIX_COMPUTED_NOTICE =
+  "COMPUTED, NOT OFFICIAL: these figures come from entry pay compounded at 3% per cell and rounded up to the next Rs 100. " +
+  "They are not the notified 7th CPC pay matrix and must not be treated as statutory pay. " +
+  "A live annual increment stays blocked until HR/finance loads and signs off the official table.";
+
+function matrixProvenance(): { official: boolean; matrixSource: "official" | "computed"; notice?: string } {
+  return isPayMatrixOfficial()
+    ? { official: true, matrixSource: "official" }
+    : { official: false, matrixSource: "computed", notice: PAY_MATRIX_COMPUTED_NOTICE };
+}
 const ENTRY_PAY_PAISE: Record<number, number> = {
   1: 1800000, 2: 1990000, 3: 2170000, 4: 2550000, 5: 2920000, 6: 3540000,
   7: 4490000, 8: 4760000, 9: 5310000, 10: 5610000, 11: 6770000, 12: 7880000,
@@ -124,7 +143,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
     const q = parsed.data;
     const cells = PAY_MATRIX[q.level] ?? [];
     const basicMinor = cells[q.cell - 1] ?? cells[cells.length - 1] ?? 0;
-    return reply.send({ level: q.level, cell: q.cell, basicMinor: basicMinor.toString(), basicDisplay: `Rs ${(basicMinor / 100).toLocaleString("en-IN")}` });
+    return reply.send({ level: q.level, cell: q.cell, basicMinor: basicMinor.toString(), basicDisplay: `Rs ${(basicMinor / 100).toLocaleString("en-IN")}`, ...matrixProvenance() });
   });
 
   // 7th CPC annual increment run (statutory 1 July). Advances each active
@@ -282,6 +301,9 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       req.log.info({ event: "pay.annual_increment.preview", effectiveDate, dryRun: true, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId }, "annual increment dry run");
       return reply.send({
         status: "preview",
+        // GAP-HR-PAY-MATRIX-01 (step 3): a preview is only as good as the
+        // table behind it -- say so on the response itself.
+        ...matrixProvenance(),
         effectiveDate, dryRun: true,
         employeesScanned: emps.length,
         incremented,
@@ -301,6 +323,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
     req.log.info({ event: "pay.annual_increment.queued", effectiveDate, dryRun: false, employeesScanned: emps.length, incremented, skipped, actorId: ctx.actorId, tenantId: ctx.tenantId, batchId }, "annual increment run queued");
     return reply.code(202).send({
       status: "accepted",
+      ...matrixProvenance(),
       id: batchId,
       effectiveDate, dryRun: false,
       employeesScanned: emps.length,

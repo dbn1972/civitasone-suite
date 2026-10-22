@@ -10,8 +10,15 @@ const baseProps = { daysLeft: 5, monthName: "September 2026", headcount: 245, ca
 describe("PayrollBanner (GAP-HR-DASHBOARD-05)", () => {
   it("pluralizes correctly for exactly 1 day left", () => {
     render(<PayrollBanner {...baseProps} daysLeft={1} />);
-    expect(screen.getByText(/Deadline in 1 day\b/)).toBeInTheDocument();
+    expect(screen.getByText(/Month ends in 1 day\b/)).toBeInTheDocument();
     expect(screen.queryByText(/1 days/)).not.toBeInTheDocument();
+  });
+
+  // GAP-HR-DASHBOARD-05: the count is calendar days to month-end, not a
+  // payroll deadline -- the app has no payroll cutoff calendar to source one.
+  it("does not present calendar month-end as a payroll deadline", () => {
+    render(<PayrollBanner {...baseProps} />);
+    expect(screen.queryByText(/deadline/i)).not.toBeInTheDocument();
   });
 
   it("is a polite status, not an assertive alert", () => {
@@ -42,10 +49,10 @@ describe("PayrollBanner (GAP-HR-DASHBOARD-05)", () => {
       </NextIntlClientProvider>,
     );
     const one = wrap(1);
-    expect(screen.getByText(/Deadline in 1 day\b/)).toBeInTheDocument();
+    expect(screen.getByText(/Month ends in 1 day\b/)).toBeInTheDocument();
     one.unmount();
     wrap(5);
-    expect(screen.getByText(/Deadline in 5 days/)).toBeInTheDocument();
+    expect(screen.getByText(/Month ends in 5 days/)).toBeInTheDocument();
   });
 
   it("englishDays fallback pluralises 0, 1 and many", () => {

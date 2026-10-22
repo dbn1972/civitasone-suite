@@ -1,0 +1,314 @@
+/*
+ * HR dashboard stylesheet (GAP-HR-DASHBOARD-09).
+ *
+ * Everything the dashboard components used to inject through inline <style>
+ * blocks, plus the page-local colour tokens those blocks referenced
+ * (--dash-*, --page-bg). Imported once by page.tsx. Colour values live ONLY
+ * in the two token blocks below (light, then .dark -- the class DarkModeToggle
+ * puts on <html>); every rule after them, and every .tsx file in this
+ * directory, uses var(--token). dashboard.guard.test.ts enforces that, and
+ * checks the avatar / greeting contrast pairs.
+ *
+ * History: an earlier pass stripped the hex fallback from every token
+ * reference here but never defined the tokens themselves, so the greeting
+ * gradient, avatar tints and two chart series silently resolved to nothing.
+ *
+ * Contrast notes (measured at the worst case): the greeting text colours were
+ * chosen against the LIGHTEST stop of the gradient (grad-3) because axe cannot
+ * evaluate text on a gradient -- eyebrow 5.18:1, sub 6.03:1, button 5.50:1.
+ */
+.hr-dashboard-root {
+  --page-bg: #eef2f7;
+
+  --dash-greeting-grad-1: #0f2240;
+  --dash-greeting-grad-2: #1a3a6b;
+  --dash-greeting-grad-3: #2554a0;
+  --dash-greeting-eyebrow: #bfdbfe;
+  --dash-greeting-title: #f0f6ff;
+  --dash-greeting-sub: #dbeafe;
+  --dash-greeting-btn-fg: #ffffff;
+
+  /* Rotating initials-avatar tints: background / foreground pairs. */
+  --dash-avatar-bg-1: #dbeafe;
+  --dash-avatar-fg-1: #1e40af;
+  --dash-avatar-bg-2: #fce7f3;
+  --dash-avatar-fg-2: #9d174d;
+  --dash-avatar-bg-3: #d1fae5;
+  --dash-avatar-fg-3: #065f46;
+  --dash-avatar-bg-4: #fef3c7;
+  --dash-avatar-fg-4: #92400e;
+  --dash-avatar-bg-5: #e0e7ff;
+  --dash-avatar-fg-5: #3730a3;
+  --dash-avatar-bg-6: #fee2e2;
+  --dash-avatar-fg-6: #991b1b;
+
+  /* Department chart series that have no semantic design-system match. */
+  --dash-dept-series-4: #818cf8;
+  --dash-dept-series-7: #a3a3a3;
+
+  /* Text on the saturated notification badges. */
+  --dash-badge-fg: #ffffff;
+}
+
+.dark .hr-dashboard-root {
+  --page-bg: var(--bg);
+
+  /* The banner is a dark navy gradient in both themes; the light text stays. */
+
+  --dash-avatar-bg-1: #1e3a8a;
+  --dash-avatar-fg-1: #bfdbfe;
+  --dash-avatar-bg-2: #831843;
+  --dash-avatar-fg-2: #fbcfe8;
+  --dash-avatar-bg-3: #064e3b;
+  --dash-avatar-fg-3: #a7f3d0;
+  --dash-avatar-bg-4: #78350f;
+  --dash-avatar-fg-4: #fde68a;
+  --dash-avatar-bg-5: #312e81;
+  --dash-avatar-fg-5: #c7d2fe;
+  --dash-avatar-bg-6: #7f1d1d;
+  --dash-avatar-fg-6: #fecaca;
+
+  --dash-dept-series-4: #a5b4fc;
+  --dash-dept-series-7: #a3a3a3;
+}
+
+/* ── Page layout ─────────────────────────────────────────────────────────── */
+.dash-body-grid { display:grid;grid-template-columns:1fr 260px;gap:12px;padding:0 24px 32px; }
+/* HR-staff variant: action inbox / dept chart / quick actions. */
+.dash-body-grid-staff { grid-template-columns:1fr 260px 220px;padding:0 24px 12px; }
+.dash-col-left,.dash-col-center,.dash-col-right { min-width:0; }
+@media (max-width:900px) {
+  .dash-body-grid { grid-template-columns:1fr;padding:0 16px 24px; }
+  .dash-body-grid-staff { grid-template-columns:1fr;padding:0 16px 12px; }
+}
+
+/* ── Greeting banner ─────────────────────────────────────────────────────── */
+.greeting-header {
+  background: linear-gradient(108deg, var(--dash-greeting-grad-1) 0%, var(--dash-greeting-grad-2) 60%, var(--dash-greeting-grad-3) 100%);
+  padding: 20px 28px 0;
+  position: relative;
+  overflow: hidden;
+}
+.greeting-header::after {
+  content: '';
+  display: block;
+  height: 18px;
+  background: var(--page-bg);
+  clip-path: ellipse(54% 100% at 50% 100%);
+  margin: 0 -28px;
+}
+.greeting-inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  flex-wrap: wrap;
+}
+.greeting-text {
+  /* Fill the row instead of shrink-wrapping to the greeting text, so the
+     box's width does not change day to day with the greeting's length
+     (it is masked in the visual-regression screenshots). */
+  flex: 1 1 0;
+  min-width: 0;
+}
+.greeting-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--dash-greeting-eyebrow);
+  margin: 0 0 4px;
+}
+.greeting-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--dash-greeting-title);
+  letter-spacing: -.02em;
+  margin: 0 0 3px;
+}
+.greeting-sub {
+  font-size: 12px;
+  color: var(--dash-greeting-sub);
+  margin: 0;
+}
+.greeting-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+.btn-ghost-nav {
+  background: rgba(255,255,255,.12);
+  color: var(--dash-greeting-btn-fg);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-primary-nav {
+  background: var(--info);
+  color: var(--dash-greeting-btn-fg);
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* ── HR KPI strip ────────────────────────────────────────────────────────── */
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  padding: 0 24px 14px;
+}
+@media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 560px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+.kpi-card {
+  background: var(--panel);
+  border-radius: 8px;
+  padding: 14px 16px 12px;
+  box-shadow: 0 1px 3px rgba(15,34,64,.09);
+  border-top: 3px solid transparent;
+}
+.kpi-blue   { border-top-color: var(--info); }
+.kpi-red    { border-top-color: var(--bad); }
+.kpi-amber  { border-top-color: var(--warn); }
+.kpi-slate  { border-top-color: var(--line); }
+.kpi-label {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
+}
+.kpi-val {
+  font-size: 26px; font-weight: 700; letter-spacing: -.03em;
+  font-variant-numeric: tabular-nums; line-height: 1;
+  color: var(--ink);
+}
+.kpi-val-sm  { font-size: 20px; }
+.kpi-val-muted { font-size: 20px; color: var(--muted); }
+.kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; }
+.trend-up     { color: var(--good); }
+.trend-down   { color: var(--bad); }
+.trend-flat   { color: var(--muted); }
+.trend-urgent { color: var(--bad); font-weight: 700; }
+.kpi-badge {
+  position: absolute; top: 10px; inset-inline-end: 10px;
+  background: var(--bad); color: var(--dash-badge-fg);
+  font-size: 9px; font-weight: 800; border-radius: 9px;
+  min-width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center; padding: 0 5px;
+}
+
+/* ── Employee KPI strip ──────────────────────────────────────────────────── */
+.my-kpi-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 24px 14px; }
+@media (max-width: 900px) { .my-kpi-strip { grid-template-columns: repeat(2, 1fr); } }
+.my-kpi-card { background: var(--panel); border-radius: 8px; padding: 14px 16px 12px; box-shadow: 0 1px 3px rgba(15,34,64,.09); border-top: 3px solid transparent; }
+.my-kpi-blue  { border-top-color: var(--info); }
+.my-kpi-amber { border-top-color: var(--warn); }
+.my-kpi-red   { border-top-color: var(--bad); }
+.my-kpi-slate { border-top-color: var(--line); }
+.my-kpi-label { display: flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.my-kpi-val { font-size: 26px; font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; line-height: 1; color: var(--ink); }
+.my-kpi-val-sm { font-size: 18px; }
+.my-kpi-val-muted { font-size: 20px; color: var(--muted); }
+.my-kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; color: var(--muted); }
+.my-kpi-badge { position: absolute; top: 10px; inset-inline-end: 10px; background: var(--bad); color: var(--dash-badge-fg); font-size: 9px; font-weight: 800; border-radius: 9px; min-width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+
+/* ── Leave action inbox ──────────────────────────────────────────────────── */
+.inbox-panel { background: var(--panel); border-radius:8px; box-shadow:0 1px 3px rgba(15,34,64,.09); overflow:hidden; }
+.inbox-head { padding:13px 16px 11px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+.inbox-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
+.inbox-dot { width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0; }
+.inbox-link { font-size:11px; color:var(--info); font-weight:600; text-decoration:none; }
+.inbox-empty { padding:28px 16px; text-align:center; color:var(--muted); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.inbox-item { display:grid; grid-template-columns:36px 1fr auto; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); }
+.inbox-item:last-child { border-bottom:none; }
+.inbox-avatar { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0; }
+.inbox-name { font-size:13px;font-weight:600;color:var(--ink); }
+.inbox-meta { font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
+.leave-tag { display:inline-flex;align-items:center;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600; }
+.inbox-actions { display:flex;gap:5px;flex-shrink:0;align-items:center; }
+.btn-approve { background:var(--goodbg);color:var(--good);border:1px solid var(--goodbd);border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
+.btn-approve:disabled { opacity:.5;cursor:not-allowed; }
+.btn-decline { background:var(--badbg);color:var(--bad);border:1px solid var(--badbd);border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
+.btn-decline:disabled { opacity:.5;cursor:not-allowed; }
+.inbox-link-approvals { font-size:11px;color:var(--info);font-weight:600;text-decoration:none;white-space:nowrap; }
+.inbox-confirm-summary p { margin:0 0 6px; font-size:13px; }
+.inbox-confirm-summary p:last-child { margin-bottom:0; }
+
+/* ── Employee leave status panel ─────────────────────────────────────────── */
+.my-leave-panel { background: var(--panel); border-radius:8px; box-shadow:0 1px 3px rgba(15,34,64,.09); overflow:hidden; }
+.my-leave-head { padding:13px 16px 11px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
+.my-leave-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
+.my-leave-dot { width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0; }
+.my-leave-link { font-size:11px; color:var(--info); font-weight:600; text-decoration:none; }
+.my-leave-empty { padding:28px 16px; text-align:center; color:var(--muted); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:8px; }
+.my-leave-item { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); }
+.my-leave-item:last-child { border-bottom:none; }
+.my-leave-dates { font-size:13px; font-weight:600; color:var(--ink); }
+.my-leave-meta { font-size:11px; color:var(--muted); margin-top:2px; }
+.my-leave-status-wrap { flex-shrink:0; text-align:end; }
+.my-leave-status { display:inline-flex; align-items:center; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:600; white-space:nowrap; }
+.my-leave-explain { margin-top:4px; font-size:10px; color:var(--bad); max-width:140px; }
+
+/* ── Department headcount chart ──────────────────────────────────────────── */
+.dept-panel { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09);overflow:hidden; }
+.dept-head { padding:13px 16px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between; }
+.dept-title { font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px; }
+.dept-scope-note { font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--bg);border-radius:4px;padding:2px 6px; }
+.dept-link { font-size:11px;color:var(--info);font-weight:600;text-decoration:none; }
+.dept-body { padding:4px 0 8px; }
+.dept-row { padding:8px 16px; }
+.dept-meta { display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px; }
+.dept-name { font-size:12px;font-weight:500;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:75%; }
+.dept-count { font-size:12px;font-weight:700;font-variant-numeric:tabular-nums; }
+.bar-track { height:5px;background:var(--line);border-radius:3px;overflow:hidden; }
+.bar-fill { height:100%;border-radius:3px;transition:width .6s cubic-bezier(.4,0,.2,1); }
+
+/* ── Quick actions panel ─────────────────────────────────────────────────── */
+.qa-panel { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09);overflow:hidden; }
+.qa-head { padding:13px 16px 11px;border-bottom:1px solid var(--line); }
+.qa-title { font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px; }
+.qa-grid { padding:12px;display:flex;flex-direction:column;gap:8px; }
+.qa-btn { display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:7px;border:1px solid var(--line);background:var(--panel);text-decoration:none;transition:border-color .15s,box-shadow .15s; }
+.qa-btn:hover { border-color:var(--info);box-shadow:0 0 0 3px rgba(37,99,235,.08); }
+.qa-icon { width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.qa-label { font-size:12px;font-weight:600;color:var(--ink); }
+.qa-desc { font-size:10px;color:var(--muted);margin-top:1px; }
+
+/* ── Payroll banner ──────────────────────────────────────────────────────── */
+.payroll-banner { margin:10px 0 0;background:var(--warnbg);border:1px solid var(--warnbd);border-inline-start:4px solid var(--warn);border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px; }
+.pb-icon { flex-shrink:0; }
+.pb-text { flex:1; }
+.pb-label { font-size:11px;font-weight:700;color:var(--warn); }
+.pb-sub { font-size:11px;color:var(--ink);margin-top:1px; }
+.pb-btn { background:var(--warn);color:var(--panel);border-radius:5px;font-size:11px;font-weight:700;padding:5px 12px;text-decoration:none;white-space:nowrap;flex-shrink:0; }
+
+/* ── Routing-failure alert and recent-employee table ─────────────────────── */
+.routing-failed-alert { background:var(--badbg);border:1px solid var(--badbd);border-inline-start:4px solid var(--bad);border-radius:6px;padding:10px 14px;margin-bottom:12px; }
+.rf-head { font-size:12px;font-weight:700;color:var(--bad); }
+.rf-list { margin:6px 0 0;padding-inline-start:18px;font-size:11px;color:var(--ink); }
+.rf-list li { margin-bottom:2px; }
+.emp-section { margin:0 24px 32px; }
+@media (max-width:900px) { .emp-section { margin:0 16px 24px; } }
+.emp-section-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
+.emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2); }
+.emp-view-all { font-size:11px;color:var(--info);font-weight:600;text-decoration:none; }
+.emp-table-wrap { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
+.emp-table { width:100%;border-collapse:collapse;font-size:12px; }
+.emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--line);background:var(--bg);white-space:nowrap; }
+.emp-table td { padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle; }
+.emp-table tr:last-child td { border-bottom:none; }
+.emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
+.emp-avatar { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
+.emp-code { color:var(--muted);font-variant-numeric:tabular-nums; }
+.emp-date { color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap; }
+.grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg);color:var(--ink2);border:1px solid var(--line);letter-spacing:.04em; }

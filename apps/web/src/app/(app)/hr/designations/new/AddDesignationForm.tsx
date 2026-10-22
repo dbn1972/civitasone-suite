@@ -11,6 +11,13 @@ import { Button, Field, Input } from "../../../../_components/ds";
 interface Props {
   onCancel: () => void;
   onSuccess?: () => void;
+  /**
+   * GAP-HR-DESIGNATIONS-NEW-04: forwarded to the Code input so the page can
+   * put focus straight back on it after "Add another" (the action buttons
+   * that held focus unmount at that moment, which would otherwise drop it
+   * to <body>).
+   */
+  codeInputRef?: React.Ref<HTMLInputElement>;
 }
 
 /**
@@ -56,7 +63,7 @@ const designationSchema = z.object({
   payGrade: z.string().trim().max(30, "Must be at most 30 characters."),
 });
 
-export function AddDesignationForm({ onCancel, onSuccess }: Props) {
+export function AddDesignationForm({ onCancel, onSuccess, codeInputRef }: Props) {
   const t = useTranslations("addDesignationForm");
   const formId = useId();
   const { fields, validate, reset } = useZodFieldValidation(designationSchema);
@@ -66,6 +73,11 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
   const formError = useFormError("designation");
 
   const statusId = `${formId}-status`;
+  // GAP-HR-DESIGNATIONS-NEW-03: the Optional/leave-blank hints are wired to
+  // their input via aria-describedby so a screen reader announces them when
+  // the field takes focus, not just when someone browses past the text.
+  const levelHintId = `${formId}-level-hint`;
+  const payGradeHintId = `${formId}-paygrade-hint`;
 
   function handleCancel() {
     reset();
@@ -177,6 +189,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
             error={formError.fieldError("code") || fields.code.error}
           >
             <Input
+              ref={codeInputRef}
               value={fields.code.value}
               onChange={fields.code.onChange}
               onBlur={fields.code.onBlur}
@@ -201,7 +214,6 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           </Field>
 
           {/* Level */}
-          {/* Level */}
           <div>
             <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
               <Input
@@ -209,6 +221,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
                 min={MIN_PAY_LEVEL}
                 max={MAX_PAY_LEVEL}
                 step={1}
+                aria-describedby={levelHintId}
                 value={fields.level.value}
                 onChange={fields.level.onChange}
                 onBlur={fields.level.onBlur}
@@ -218,7 +231,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
             {/* GAP-HR-DESIGNATIONS-NEW-03: blank used to silently become
                 level 0 ("unclassified" everywhere it's read back) with
                 nothing on this form saying so. */}
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("levelHint")}</p>
+            <p id={levelHintId} style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("levelHint")}</p>
           </div>
 
           {/* Pay Grade */}
@@ -232,10 +245,11 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
                 onChange={fields.payGrade.onChange}
                 onBlur={fields.payGrade.onBlur}
                 placeholder={t("payGradePlaceholder")}
+                aria-describedby={payGradeHintId}
                 maxLength={30}
               />
             </Field>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("payGradeHint")}</p>
+            <p id={payGradeHintId} style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("payGradeHint")}</p>
           </div>
         </div>
 

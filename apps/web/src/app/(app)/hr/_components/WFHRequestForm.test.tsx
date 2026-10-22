@@ -298,6 +298,60 @@ describe("WFHRequestForm — server-provided eligibility (GAP-HR-WFH-01)", () =>
     expect(await screen.findByTestId("weekly-cap-error")).toBeInTheDocument();
   });
 
+  describe("the weekly count applies only to the week it describes", () => {
+    // The server's count is for its current Mon-Sun week (2099-01-05..2099-01-11 here).
+    const FULL_WEEK = { payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 2, weekStart: "2099-01-05", weekEnd: "2099-01-11" };
+
+    async function pick(from: string, to: string) {
+      fireEvent.change(screen.getByLabelText(/^from date/i), { target: { value: from } });
+      fireEvent.change(screen.getByLabelText(/^to date/i), { target: { value: to } });
+    }
+
+    it("a full week blocks a request inside that week", async () => {
+      stubEligibility(FULL_WEEK);
+      render(<WFHRequestForm employeeId="emp-1" />);
+      await screen.findByTestId("weekly-cap-error");
+      await pick("2099-01-06", "2099-01-07");
+      expect(screen.getByTestId("weekly-cap-error")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
+    });
+
+    it("a full week does NOT block a request for the following week (it has its own allowance)", async () => {
+      stubEligibility(FULL_WEEK);
+      render(<WFHRequestForm employeeId="emp-1" />);
+      await screen.findByTestId("weekly-cap-error");
+      await pick("2099-01-12", "2099-01-13");
+      await waitFor(() => expect(screen.queryByTestId("weekly-cap-error")).toBeNull());
+      expect(screen.getByRole("button", { name: /submit request/i })).not.toBeDisabled();
+    });
+
+    it("a range that runs into the full week from an earlier date is still blocked", async () => {
+      stubEligibility(FULL_WEEK);
+      render(<WFHRequestForm employeeId="emp-1" />);
+      await screen.findByTestId("weekly-cap-error");
+      await pick("2099-01-02", "2099-01-06");
+      expect(screen.getByTestId("weekly-cap-error")).toBeInTheDocument();
+    });
+
+    it("the notice shows before any date is chosen and its edge days (Mon, Sun) are inside the week", async () => {
+      stubEligibility(FULL_WEEK);
+      render(<WFHRequestForm employeeId="emp-1" />);
+      expect(await screen.findByTestId("weekly-cap-error")).toBeInTheDocument();
+      await pick("2099-01-11", "2099-01-11");
+      expect(screen.getByTestId("weekly-cap-error")).toBeInTheDocument();
+      await pick("2099-01-12", "2099-01-12");
+      await waitFor(() => expect(screen.queryByTestId("weekly-cap-error")).toBeNull());
+    });
+
+    it("an older server without week bounds keeps the unconditional behaviour", async () => {
+      stubEligibility({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 2 });
+      render(<WFHRequestForm employeeId="emp-1" />);
+      await screen.findByTestId("weekly-cap-error");
+      await pick("2099-01-12", "2099-01-13");
+      expect(screen.getByTestId("weekly-cap-error")).toBeInTheDocument();
+    });
+  });
+
   it("an unclassified designation (payLevel null) keeps the 'could not be verified' note and does not block", async () => {
     stubEligibility({ payLevel: null, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 });
     render(<WFHRequestForm employeeId="emp-1" />);
@@ -336,5 +390,50 @@ describe("WFHRequestForm — inline validation", () => {
     await waitFor(() => expect(employee).toHaveAttribute("aria-invalid", "true"));
     expect(document.getElementById(employee.getAttribute("aria-describedby") ?? "")).toHaveTextContent(/choose an employee/i);
     expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/wfh-requests", expect.objectContaining({ method: "POST" }));
+  });
+});
+
+/**
+ * GAP-HR-WFH-01: the server answers 422 GAZETTED_NOT_ELIGIBLE /
+ * WEEKLY_WFH_CAP_REACHED (the cap now counts DAYS, so a request the client
+ * could not pre-judge -- Mon-Fri, or stacked on an existing multi-day request
+ * -- is refused here). Each must reach the user as its own plain-language
+ * reason, never the generic "details need changing" text, the code or "422".
+ */
+describe("WFHRequestForm — server policy refusals (GAP-HR-WFH-01)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubServer(code: string) {
+    const fetchMock = vi.fn(async (_url: string, init?: { method?: string }) => {
+      if (init?.method === "POST") {
+        return new Response(JSON.stringify({ code, message: "raw server text 422" }), { status: 422, headers: { "content-type": "application/json" } });
+      }
+      // eligibility lookup: eligible, nothing used yet, so the form is enabled
+      return new Response(JSON.stringify({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function submitFiveDays() {
+    render(<WFHRequestForm employeeId="aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    fireEvent.change(screen.getByLabelText(/^from date/i), { target: { value: "2099-01-05" } });
+    fireEvent.change(screen.getByLabelText(/^to date/i), { target: { value: "2099-01-09" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+  }
+
+  it("WEEKLY_WFH_CAP_REACHED -> the weekly-limit message", async () => {
+    stubServer("WEEKLY_WFH_CAP_REACHED");
+    await submitFiveDays();
+    const alert = await screen.findByText(/weekly work-from-home limit/i);
+    expect(alert.textContent).not.toMatch(/WEEKLY_WFH_CAP_REACHED|422|raw server text/);
+  });
+
+  it("GAZETTED_NOT_ELIGIBLE -> the pay-level message", async () => {
+    stubServer("GAZETTED_NOT_ELIGIBLE");
+    await submitFiveDays();
+    const alert = await screen.findByText(/at this employee's pay level/i);
+    expect(alert.textContent).not.toMatch(/GAZETTED_NOT_ELIGIBLE|422|raw server text/);
   });
 });

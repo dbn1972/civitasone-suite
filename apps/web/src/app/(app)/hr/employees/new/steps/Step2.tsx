@@ -10,7 +10,8 @@ import {
   grid2,
 } from "../wizardTypes";
 import { serviceGroup, type ServiceGroup } from "@/lib/payLevels";
-import { Field, Select, Input } from "@/app/_components/ds";
+import { Field, Select, Input, EntityPicker } from "@/app/_components/ds";
+import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 
 type Dept = { id: string; name: string };
 type Desig = { id: string; name: string; level?: number | null };
@@ -214,6 +215,25 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
             onChange={(e) => onChange("basicPay", e.target.value)}
             onBlur={() => onBlur("basicPay")}
             placeholder={t("basicPayPlaceholder")}
+          />
+        </Field>
+
+        {/* GAP-HR-EMPLOYEES-NEW-02: the pay structure used to be settable only
+            AFTER creation (EditEmployeeForm), so a new employee sat with no
+            structure until someone remembered to edit them. Same payroll
+            pay-structure master and picker the edit form uses; optional. */}
+        <Field label={<>{t("payStructureLabel")}
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 6, fontSize: 11 }}>
+              {t("payStructureHint")}
+            </span></>} style={fieldWrap}>
+          <EntityPicker
+            value={data.payStructureId || null}
+            onChange={(v) => onChange("payStructureId", (Array.isArray(v) ? v[0] : v) ?? "")}
+            search={searchPayStructures}
+            resolve={resolvePayStructures}
+            placeholder={t("payStructurePlaceholder")}
+            searchingText={t("pickerSearching")}
+            noResultsText={t("pickerNoResults")}
           />
         </Field>
       </div>

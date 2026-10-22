@@ -119,4 +119,46 @@ describe("TravelRequestForm — GAP-HR-TRAVEL-05 paise-safe money", () => {
     const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.advanceRequired).toBe(123450);
   });
+
+  function fillWithAdvance(advance: string) {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: /new request/i }));
+    fireEvent.change(screen.getByLabelText(/purpose/i), { target: { value: "Field inspection" } });
+    fireEvent.change(screen.getByLabelText(/destination/i), { target: { value: "Pune" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-10-03" } });
+    fireEvent.change(screen.getByLabelText(/advance/i), { target: { value: advance } });
+    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+  }
+
+  it("1234.5 is sent as 123450 paise", async () => {
+    fillWithAdvance("1234.5");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.advanceRequired).toBe(123450);
+  });
+
+  // GAP-HR-TRAVEL-05 acceptance: '0' -> 0. rupeesToMinorString returns null for
+  // zero unless allowZero is set, so a typed 0 used to be rejected as invalid
+  // even though the route (advanceRequired: int >= 0) accepts it.
+  it("an advance of 0 is accepted and sent as 0", async () => {
+    fillWithAdvance("0");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.advanceRequired).toBe(0);
+    expect(screen.queryByText(/valid amount/i)).toBeNull();
+  });
+
+  it("1.005 (sub-paise) is rejected with the field error and never sent", async () => {
+    fillWithAdvance("1.005");
+    expect(await screen.findByText(/valid amount/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a blank advance is omitted from the body (no advance requested), distinct from 0", async () => {
+    fillWithAdvance("");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body).not.toHaveProperty("advanceRequired");
+  });
 });

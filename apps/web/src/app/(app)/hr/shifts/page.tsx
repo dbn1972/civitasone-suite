@@ -8,6 +8,7 @@ import { ShiftCard } from "../_components/ShiftCard";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { ShiftManager } from "./ShiftManager";
+import { formatShiftDuration, type ShiftDurationTranslator } from "./shiftDuration";
 
 /**
  * ShiftsListPage — displays and manages shift definitions.
@@ -19,10 +20,10 @@ type ApiShift = {
   name: string;
   startTime?: string;
   endTime?: string;
-  breakDuration?: string;
-  breakMinutes?: number;
+  // GAP-HR-SHIFTS-02: listShifts (attendance/repo.ts) returns plain numeric
+  // minutes. It has no break column (only grace_mins), so there is no
+  // break field here -- grace is shown as grace, never relabelled "Break".
   graceMinutes?: number;
-  workingHours?: string;
   workingMinutes?: number;
   applicableTo?: string;
   departments?: string[];
@@ -34,48 +35,43 @@ type Row = {
   name: string;
   startTime: string;
   endTime: string;
-  breakDuration: string;
+  gracePeriod: string;
   workingHours: string;
   applicableTo: string;
   status: string;
   graceMinutes: number;
 } & Record<string, unknown>;
 
-function formatMinutes(minutes: number | undefined): string {
-  if (!minutes) return "—";
-  if (minutes < 60) return `${minutes} min`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return m ? `${h}h ${m}m` : `${h} hrs`;
-}
-
-function mapShifts(apiItems: ApiShift[]): Row[] {
+function mapShifts(apiItems: ApiShift[], t: ShiftDurationTranslator): Row[] {
   return apiItems.map((s) => ({
     id: s.id,
     name: s.name,
     startTime: s.startTime ?? "—",
     endTime: s.endTime ?? "—",
-    breakDuration: s.breakDuration ?? (s.breakMinutes ? `${s.breakMinutes} min` : "—"),
-    workingHours: s.workingHours ?? formatMinutes(s.workingMinutes),
+    // GAP-HR-SHIFTS-02: grace period and working time both come from the
+    // API's numeric minutes (cross-midnight shifts already wrapped by the
+    // backend: 22:00-06:00 -> 480 -> "8h 0m").
+    gracePeriod: formatShiftDuration(s.graceMinutes, t),
+    workingHours: formatShiftDuration(s.workingMinutes, t),
     applicableTo: s.applicableTo ?? (s.departments?.join(", ") ?? "—"),
     status: s.status,
     graceMinutes: s.graceMinutes ?? 0,
   }));
 }
 
-async function getShifts(): Promise<LoaderResult<Row[]>> {
+async function getShifts(t: ShiftDurationTranslator): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/shifts", [], {
     telemetryKey: "hr.shifts",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiShift[] })?.data;
-      return Array.isArray(arr) ? mapShifts(arr as ApiShift[]) : null;
+      return Array.isArray(arr) ? mapShifts(arr as ApiShift[], t) : null;
     },
   });
 }
 
 export default async function ShiftsPage() {
   const t = await getTranslations("shifts");
-  const { data: items, source } = await getShifts();
+  const { data: items, source } = await getShifts(t);
   const canManage = getSessionRoles().some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
   // COMP-004 fix-up (round 3): this page used to silently substitute a
   // hardcoded 4-row GOVT_SHIFTS list whenever the real API call returned
@@ -94,7 +90,7 @@ export default async function ShiftsPage() {
     { key: "name", label: t("colName") },
     { key: "startTime", label: t("colStart") },
     { key: "endTime", label: t("colEnd") },
-    { key: "breakDuration", label: t("colGrace") },
+    { key: "gracePeriod", label: t("colGrace") },
     { key: "workingHours", label: t("colWorkingHours") },
     { key: "applicableTo", label: t("colApplicableTo") },
     { key: "status", label: t("colStatus"), cellType: "status" },

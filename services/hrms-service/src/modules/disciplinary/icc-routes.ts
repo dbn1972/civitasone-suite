@@ -28,6 +28,22 @@ import { db, scopedRead } from "../../shared/db.js";
 import { auditLog } from "../../shared/audit-log.js";
 import { hrmsIccComplaints, hrmsIccHearings } from "./schema.js";
 
+/**
+ * GAP-HR-ICC-05: the register's stat-card buckets, counted server-side over the
+ * whole visible register (never just the page being shown). The groups
+ * partition EXACTLY the statuses hrms_icc_complaints.status may hold (its
+ * hrms_icc_status_check constraint: filed, investigating, hearing, resolved,
+ * dismissed, withdrawn), so the three buckets always sum to the total. (The web
+ * page used to bucket by "inquiry"/"under_inquiry"/"closed"/"disposed" -- words
+ * the column can never contain, so its "Under inquiry" and most of its
+ * "Disposed" counts were permanently short.)
+ */
+export const ICC_STATUS_GROUPS = {
+  filed: ["filed"],
+  underInquiry: ["investigating", "hearing"],
+  disposed: ["resolved", "dismissed", "withdrawn"],
+} as const;
+
 // GAP-HR-ICC-02/06: the register itself (masked) is reachable by hr_admin/
 // super_admin/icc_member -- but SEEING IDENTITY (the detail route below) is
 // icc_member-only, deliberately excluding hr_admin/super_admin. A chairing
@@ -44,7 +60,7 @@ const listQuery = z.object({
 export async function iccRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/icc/complaints", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ICC_ROLES);
-    const body = z.object({
+    z.object({
       complainantId: z.string().uuid(),
       respondentId: z.string().uuid().optional(),
       summary: z.string().min(10).max(5000),
@@ -56,10 +72,13 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
 
   // GAP-HR-ICC-01/02/05: explicit column projection (never complainantId/
   // respondentId/createdBy/tenantId/iccMembersOnly), iccMembersOnly enforced
-  // in the WHERE clause (was selected but never filtered on), summary masked
-  // unless the row is non-confidential OR the caller is icc_member,
-  // limit/offset + total (was a hard, silent LIMIT 100), and an audit event
-  // on every read (GAP-HR-ICC-02 fix step 4).
+  // in the WHERE clause (was selected but never filtered on), summary shown
+  // ONLY to an icc_member (GAP-HR-ICC-01: a `confidential = false` flag no longer
+  // opens the free-text summary to an hr_admin/super_admin -- the text can name
+  // the aggrieved woman and respondent and POSH s.16 makes over-masking the safe
+  // side), limit/offset + a true total + whole-register status counts (was a
+  // hard, silent LIMIT 100; GAP-HR-ICC-05), and an audit event on every read
+  // (GAP-HR-ICC-02 fix step 4).
   app.get("/v1/hrms/icc/complaints", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ICC_ROLES);
     const q = listQuery.parse(req.query);
@@ -79,15 +98,29 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
         filedAt: hrmsIccComplaints.filedAt,
         status: hrmsIccComplaints.status,
         confidential: hrmsIccComplaints.confidential,
-        totalCount: sql<number>`count(*) over()`.mapWith(Number),
       })
       .from(hrmsIccComplaints)
       .where(and(...conditions))
-      .orderBy(desc(hrmsIccComplaints.filedAt))
+      // `id` breaks filedAt ties so limit/offset paging never repeats or skips a row.
+      .orderBy(desc(hrmsIccComplaints.filedAt), desc(hrmsIccComplaints.id))
       .limit(q.limit)
       .offset(q.offset));
 
-    const total = rows[0]?.totalCount ?? 0;
+    // GAP-HR-ICC-05: total and stat buckets over the WHOLE visible register, in
+    // their own aggregate (a window count rode on the page rows and read 0 for a
+    // page past the end). Only compile-time constants reach the IN lists.
+    const inGroup = (g: readonly string[]) => sql.join(g.map((st) => sql`${st}`), sql`, `);
+    const aggregate = await scopedRead((tx) => tx
+      .select({
+        total: sql<number>`count(*)`.mapWith(Number),
+        filed: sql<number>`count(*) filter (where ${hrmsIccComplaints.status} in (${inGroup(ICC_STATUS_GROUPS.filed)}))`.mapWith(Number),
+        underInquiry: sql<number>`count(*) filter (where ${hrmsIccComplaints.status} in (${inGroup(ICC_STATUS_GROUPS.underInquiry)}))`.mapWith(Number),
+        disposed: sql<number>`count(*) filter (where ${hrmsIccComplaints.status} in (${inGroup(ICC_STATUS_GROUPS.disposed)}))`.mapWith(Number),
+      })
+      .from(hrmsIccComplaints)
+      .where(and(...conditions)));
+    const agg = aggregate[0];
+    const total = agg?.total ?? 0;
     const data = rows.map((r) => ({
       id: r.id,
       // Fallback for any pre-migration-0157 row a backfill somehow missed --
@@ -96,7 +129,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       filedAt: r.filedAt,
       status: r.status,
       confidential: r.confidential,
-      summary: (!r.confidential || isIccMember) ? r.summary : null,
+      summary: isIccMember ? r.summary : null,
     }));
 
     await db.transaction((tx) => auditLog(tx, {
@@ -108,7 +141,11 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
       payload: { count: data.length },
     }));
 
-    return reply.send({ data, total });
+    return reply.send({
+      data,
+      total,
+      stats: { filed: agg?.filed ?? 0, underInquiry: agg?.underInquiry ?? 0, disposed: agg?.disposed ?? 0 },
+    });
   });
 
   // GAP-HR-ICC-02/03: the ONLY route that ever returns complainantId/
@@ -149,7 +186,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/icc/complaints/:id/hearings", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ICC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       hearingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       notes: z.string().max(5000).optional(),
       finding: z.string().max(24).optional(),

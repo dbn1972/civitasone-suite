@@ -5,6 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { STAGE_LABEL_KEYS } from "@/lib/apar/stages";
+import { reviewingDecisionFromHistory } from "@/lib/apar/reviewingDecision";
 import { getSessionName } from "@/lib/auth/roleGuard";
 import { AparStageActions, type AparActions } from "./AparStageActions";
 
@@ -30,7 +31,13 @@ type StageHistory = {
   override: boolean;
   remarks: string | null;
   createdAt: string;
+  // The stage-transition payload (e.g. the Reviewing Officer's concur/vary
+  // decision). The API empties it for the appraisee before disclosure.
+  payload?: unknown;
 } & Record<string, unknown>;
+
+/** One row of the grade-band table GET /v1/hrms/apar/:id returns (engine.ts GRADE_BANDS). */
+type GradeBand = { band: string; min: number | null };
 
 type AparDetail = {
   appraisal: {
@@ -66,6 +73,9 @@ type AparDetail = {
   // GAP-HR-APAR-DETAIL-01: so this page never has to guess stage ownership
   // itself -- see apar/routes.ts's computeAparActions.
   actions: AparActions;
+  // GAP-HR-APAR-DETAIL-05: the grade scale, sourced from the backend engine's
+  // own band table so the page never keeps a second, hand-typed copy.
+  gradeBands?: GradeBand[];
 };
 
 async function getApar(id: string): Promise<LoaderResult<AparDetail | null>> {
@@ -79,15 +89,16 @@ async function getApar(id: string): Promise<LoaderResult<AparDetail | null>> {
 }
 
 /**
- * GAP-HR-APAR-DETAIL-05: the DoPT/SPARROW grade bands (engine.ts's
- * bandForGrade), duplicated here as a display-only constant rather than a
- * shared package — this is the only web-side consumer, and the values are
- * a fixed statutory scale, not business logic that changes independently
- * on each side. Keep in sync with services/hrms-service/src/modules/apar/
- * engine.ts's bandForGrade if that scale is ever revised (confirm with HR
- * first — see this GAP's Risk note).
+ * GAP-HR-APAR-DETAIL-05: i18n key for each band name the API can send
+ * (engine.ts AparBand). An unrecognised band falls back to the raw text.
  */
-const GRADE_BAND_SCALE = "Outstanding ≥9 · Very Good ≥7 · Good ≥5 · Average ≥4 · else Below Average";
+const BAND_LABEL_KEYS: Record<string, string> = {
+  "Outstanding": "bandOutstanding",
+  "Very Good": "bandVeryGood",
+  "Good": "bandGood",
+  "Average": "bandAverage",
+  "Below Average": "bandBelowAverage",
+};
 
 /**
  * GAP-HR-APAR-DETAIL-05: the same weighted-mean formula as the backend's
@@ -161,7 +172,16 @@ export default async function AparDetailPage({
     );
   }
 
-  const { appraisal, scores, history, actions } = detail;
+  const { appraisal, scores, history, actions, gradeBands } = detail;
+  const bandName = (band: string) => (BAND_LABEL_KEYS[band] ? t(BAND_LABEL_KEYS[band]!) : band);
+  // GAP-HR-APAR-DETAIL-05: "Outstanding ≥9 · Very Good ≥7 · ... · else Below Average",
+  // built from the API's band table and translated, not a hard-coded English string.
+  const gradeScale = gradeBands && gradeBands.length > 0
+    ? gradeBands
+        .map((b) => (b.min === null ? t("gradeScaleElse", { band: bandName(b.band) }) : t("gradeScaleItem", { band: bandName(b.band), min: b.min })))
+        .join(" · ")
+    : null;
+  const reviewingDecision = reviewingDecisionFromHistory(history);
   const stageLabelKeyForStatus = STAGE_LABEL_KEYS[appraisal.status as keyof typeof STAGE_LABEL_KEYS];
   const stageLabel = stageLabelKeyForStatus ? t(stageLabelKeyForStatus) : appraisal.status;
   const scoredCount = scores.filter((s) => !!s.score).length;
@@ -264,6 +284,7 @@ export default async function AparDetailPage({
         <StatCard
           icon="\U0001f4ca" iconBg="var(--warnbg)"
           label={provisionalScore !== null ? t("statProvisionalScore") : t("statAvgScore")}
+          hint={provisionalScore !== null ? t("statProvisionalScoreHint") : t("statAvgScoreHint")}
           value={provisionalScore !== null ? provisionalScore.toFixed(1) : avgScore}
         />
         <StatCard icon="\U0001f4dc" iconBg="var(--bg)" label={t("statStageChanges")}  value={history.length} />
@@ -276,11 +297,19 @@ export default async function AparDetailPage({
           <div>
             <span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("gradeLabel")}</span>
             <strong>{appraisal.overallGrade ?? "—"}</strong>
-            <span style={{ marginInlineStart: 8, fontSize: 11, color: "var(--mut)" }} title={GRADE_BAND_SCALE}>
-              ({GRADE_BAND_SCALE})
-            </span>
+            {gradeScale && (
+              <span style={{ marginInlineStart: 8, fontSize: 11, color: "var(--mut)" }} title={gradeScale}>
+                ({gradeScale})
+              </span>
+            )}
           </div>
-          {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("bandLabel")}</span><strong>{appraisal.overallBand}</strong></div>}
+          {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("bandLabel")}</span><strong>{bandName(appraisal.overallBand)}</strong></div>}
+          {/* GAP-HR-APAR-DETAIL-05: once a Grade exists it sits next to the
+              unweighted Simple Average stat above, and the two can differ --
+              say so rather than leave them to be read as the same number. */}
+          {appraisal.overallGrade != null && scoredCount > 0 && (
+            <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("gradeVsAverageNote")}</p>
+          )}
           {/* GAP-HR-APAR-DETAIL-02: names, never the raw UUID; '—' when this
               tenant's directory has no name for the id. */}
           {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerName ?? "—"}</div>}
@@ -311,6 +340,25 @@ export default async function AparDetailPage({
           <div style={{ padding: "0 20px 16px" }}>
             <p style={{ color: "var(--mut)", fontSize: 12, marginBottom: 4 }}>{t("reviewingRemarksLabel")}</p>
             <p style={{ fontSize: 14 }}>{appraisal.reviewingRemarks}</p>
+          </div>
+        )}
+        {/* GAP-HR-APAR-DETAIL-03 (step 3): the Reviewing Officer's concur /
+            vary decision and any score variations, read from the stage
+            history (they are not on the appraisal row). Absent for the
+            appraisee before disclosure -- the API empties that payload. */}
+        {reviewingDecision && (
+          <div style={{ padding: "0 20px 16px" }}>
+            <p style={{ color: "var(--mut)", fontSize: 12, marginBottom: 4 }}>{t("reviewingDecisionLabel")}</p>
+            <p style={{ fontSize: 14 }}>
+              {reviewingDecision.decision === "concur" ? t("decisionConcur") : t("decisionVary")}
+            </p>
+            {reviewingDecision.variations.length > 0 && (
+              <ul style={{ margin: "4px 0 0", paddingInlineStart: 20, fontSize: 13 }}>
+                {reviewingDecision.variations.map((v) => (
+                  <li key={v.attribute}>{t("variationLine", { attribute: v.attribute, score: v.score })}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {appraisal.acceptingRemarks && (

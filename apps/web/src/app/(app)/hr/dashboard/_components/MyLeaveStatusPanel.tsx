@@ -69,21 +69,6 @@ export function MyLeaveStatusPanel({ items }: { items: MyLeaveStatusItem[] }) {
         })
       )}
 
-      <style>{`
-        .my-leave-panel { background: var(--panel); border-radius:8px; box-shadow:0 1px 3px rgba(15,34,64,.09); overflow:hidden; }
-        .my-leave-head { padding:13px 16px 11px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-        .my-leave-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
-        .my-leave-dot { width:8px;height:8px;border-radius:50%;background:var(--info);flex-shrink:0; }
-        .my-leave-link { font-size:11px; color:var(--info); font-weight:600; text-decoration:none; }
-        .my-leave-empty { padding:28px 16px; text-align:center; color:var(--muted); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-        .my-leave-item { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); }
-        .my-leave-item:last-child { border-bottom:none; }
-        .my-leave-dates { font-size:13px; font-weight:600; color:var(--ink); }
-        .my-leave-meta { font-size:11px; color:var(--muted); margin-top:2px; }
-        .my-leave-status-wrap { flex-shrink:0; text-align:end; }
-        .my-leave-status { display:inline-flex; align-items:center; padding:2px 9px; border-radius:20px; font-size:10px; font-weight:600; white-space:nowrap; }
-        .my-leave-explain { margin-top:4px; font-size:10px; color:var(--bad); max-width:140px; }
-      `}</style>
     </div>
   );
 }

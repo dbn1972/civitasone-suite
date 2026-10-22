@@ -40,6 +40,12 @@ export interface EmployeePickerProps {
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
   inputRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Called with true when the employee search fails (so a form can hold back
+   * "Next"/"Submit" instead of letting the user proceed on a lookup that did
+   * not load) and false when a later search succeeds -- GAP-HR-PROMOTION-05.
+   */
+  onFailedChange?: (failed: boolean) => void;
 }
 
 /**
@@ -63,6 +69,7 @@ export function EmployeePicker({
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
   inputRef,
+  onFailedChange,
 }: EmployeePickerProps) {
   const t = useTranslations("employeePicker");
   const knownRef = useRef<Map<string, EntityOption>>(
@@ -99,6 +106,8 @@ export function EmployeePicker({
       searchingText={t("searching")}
       noResultsText={t("noResults")}
       searchErrorText={t("searchFailed")}
+      retryText={t("retry")}
+      onFailedChange={onFailedChange}
       disabled={disabled}
       id={id}
       aria-label={ariaLabel}

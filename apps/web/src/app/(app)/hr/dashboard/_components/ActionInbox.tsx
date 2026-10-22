@@ -18,9 +18,8 @@ const LEAVE_COLORS: Record<string, { bg: string; color: string }> = {
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((n) => n[0]).join("").toUpperCase();
 }
-// GAP-HR-DASHBOARD-09: wrapped in var(--token, #same-fallback) instead of
-// bare hex -- no token is defined anywhere, so every fallback renders
-// identically to before this change.
+// GAP-HR-DASHBOARD-09: the tint pairs are defined in dashboard.css
+// (--dash-avatar-bg-N / --dash-avatar-fg-N), with legible light and dark values.
 const AVATAR_BG = ["var(--dash-avatar-bg-1)", "var(--dash-avatar-bg-2)", "var(--dash-avatar-bg-3)", "var(--dash-avatar-bg-4)", "var(--dash-avatar-bg-5)", "var(--dash-avatar-bg-6)"];
 const AVATAR_FG = ["var(--dash-avatar-fg-1)", "var(--dash-avatar-fg-2)", "var(--dash-avatar-fg-3)", "var(--dash-avatar-fg-4)", "var(--dash-avatar-fg-5)", "var(--dash-avatar-fg-6)"];
 
@@ -124,28 +123,6 @@ export function ActionInbox({ initialItems, canDecide }: Props) {
         })
       )}
 
-      <style>{`
-        .inbox-panel { background: var(--panel); border-radius:8px; box-shadow:0 1px 3px rgba(15,34,64,.09); overflow:hidden; }
-        .inbox-head { padding:13px 16px 11px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
-        .inbox-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
-        .inbox-dot { width:8px;height:8px;border-radius:50%;background:var(--bad);flex-shrink:0; }
-        .inbox-link { font-size:11px; color:var(--info); font-weight:600; text-decoration:none; }
-        .inbox-empty { padding:28px 16px; text-align:center; color:var(--muted); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:8px; }
-        .inbox-item { display:grid; grid-template-columns:36px 1fr auto; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); }
-        .inbox-item:last-child { border-bottom:none; }
-        .inbox-avatar { width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0; }
-        .inbox-name { font-size:13px;font-weight:600;color:var(--ink); }
-        .inbox-meta { font-size:11px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px;flex-wrap:wrap; }
-        .leave-tag { display:inline-flex;align-items:center;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:600; }
-        .inbox-actions { display:flex;gap:5px;flex-shrink:0;align-items:center; }
-        .btn-approve { background:var(--goodbg);color:var(--good);border:1px solid var(--goodbd);border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
-        .btn-approve:disabled { opacity:.5;cursor:not-allowed; }
-        .btn-decline { background:var(--badbg);color:var(--bad);border:1px solid var(--badbd);border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
-        .btn-decline:disabled { opacity:.5;cursor:not-allowed; }
-        .inbox-link-approvals { font-size:11px;color:var(--info);font-weight:600;text-decoration:none;white-space:nowrap; }
-        .inbox-confirm-summary p { margin:0 0 6px; font-size:13px; }
-        .inbox-confirm-summary p:last-child { margin-bottom:0; }
-      `}</style>
     </div>
   );
 }

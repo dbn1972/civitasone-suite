@@ -3,7 +3,7 @@
 /**
  * Transfer-with-eOffice-approval — the request-first raise flow.
  *
- * UX: Replaces raw UUID inputs with searchable name-based dropdowns.
+ * UX: Replaces raw UUID inputs with searchable name-based pickers.
  * Two-step wizard: 1) Select employee + destination  2) Approval routing + justification
  *
  *   1) POST .../transfer/submit-approval  → creates a pending_approval transfer
@@ -11,21 +11,31 @@
  *   2) POST /v1/estab/files/from-module   → raises the eFile against that
  *      request id (refType "hr_transfer"); it routes SO→US→DS and, on approval,
  *      the hrms eoffice-consumer effects the transfer.
+ *
+ * GAP-HR-TRANSFER-06: no lookup ever degrades to a raw-id text box. The
+ * employee is chosen with the server-searching EmployeePicker (GET
+ * /v1/hrms/employees?q=, tenant-scoped, so it reaches past the old
+ * limit=200 list), the destination department has its own loading / error /
+ * forbidden state (an honest message + Retry, never a UUID input), "Next" is
+ * disabled until the departments have actually loaded, and the "From"
+ * department is shown by NAME only -- when it cannot be determined the field
+ * says so and the wizard refuses to continue rather than send an empty
+ * fromDeptId (the backend would 400 on it anyway).
  */
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { Button, Field, Input, Select, Textarea, type EntityOption } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
+import { resolveEmployees } from "@/lib/entityAdapters/employee";
 import { useFormError } from "@/lib/useFormError";
 import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
 
-type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
 type PayStructureOption = { id: string; name?: string; code?: string };
-type LookupStatus = "loading" | "ok" | "error";
+type LookupStatus = "loading" | "ok" | "error" | "forbidden";
 
 interface Props {
   /**
@@ -35,12 +45,22 @@ interface Props {
    * resolves the id to a real employee record server-side (name only --
    * EmployeeDetailSchema has no departmentId, only a department NAME) and
    * passes it down; validated as a real, existing employee before use,
-   * never trusted as a raw pass-through id. The department is filled in
-   * here once the employees list loads, via the exact same
-   * departmentId/department resolution the manual employee <select>'s
-   * onChange already does below -- not re-derived a second way.
+   * never trusted as a raw pass-through id. The department is resolved here
+   * through the same employee-directory lookup the picker uses, so a
+   * prefilled employee is always selectable and shown by name.
    */
   prefillEmployee?: { id: string; name: string } | null;
+}
+
+/** The employee list/search/detail endpoints expose the department NAME only
+ * ("—" when unresolved), never its id; the id is recovered by matching that
+ * name against the tenant's department list. A name that matches zero or more
+ * than one department is treated as unknown -- never guessed. */
+function resolveFromDepartment(name: string, departments: Department[]): Department | null {
+  const wanted = name.trim();
+  if (!wanted || wanted === "—") return null;
+  const matches = departments.filter((d) => d.name.trim() === wanted);
+  return matches.length === 1 ? (matches[0] as Department) : null;
 }
 
 export function TransferWithApproval({ prefillEmployee }: Props = {}) {
@@ -48,7 +68,6 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const tr = useTranslations("transferUi");
   const [open, setOpen] = useState(Boolean(prefillEmployee));
   const [step, setStep] = useState<1 | 2>(1);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [payStructures, setPayStructures] = useState<PayStructureOption[]>([]);
   const [deptStatus, setDeptStatus] = useState<LookupStatus>("loading");
@@ -62,8 +81,10 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const formError = useFormError("transfer request");
 
   const [employeeId, setEmployeeId] = useState(prefillEmployee?.id ?? "");
-  const [fromDeptId, setFromDeptId] = useState("");
-  const [fromDeptName, setFromDeptName] = useState("");
+  // Label ("Name (EMP-001)") and current-department NAME of the chosen employee.
+  const [employeeLabel, setEmployeeLabel] = useState(prefillEmployee?.name ?? "");
+  const [employeeDeptName, setEmployeeDeptName] = useState("");
+  const [employeeDeptResolving, setEmployeeDeptResolving] = useState(Boolean(prefillEmployee));
   const [toDeptId, setToDeptId] = useState("");
   // HIGH fix (PR #1552 review): optional -- omitting it means "no pay-
   // structure change", not an error. Backend already accepts it on both
@@ -84,29 +105,34 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   // idempotency key and the old code always restarted from step 1.
   const [submittedTransferId, setSubmittedTransferId] = useState<string | null>(null);
 
-  // Load employees, departments, and officers when form opens
+  // The prefilled employee is always an option, labelled by name, even when
+  // they would never surface in the picker's first 20 search results.
+  const prefillId = prefillEmployee?.id;
+  const prefillOption = useMemo<EntityOption | undefined>(
+    () => (prefillEmployee ? { id: prefillEmployee.id, label: prefillEmployee.name } : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the id: the server re-sends an equal object each render
+    [prefillEmployee?.id, prefillEmployee?.name],
+  );
+
+  // Load departments and pay structures when the form opens
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     setDeptStatus("loading"); setPayStructureStatus("loading");
     void (async () => {
       try {
-        const [empRes, deptRes, psRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal }),
+        const [deptRes, psRes] = await Promise.all([
           fetch("/api/proxy/v1/hrms/departments?limit=200", { signal: controller.signal }),
           // Same endpoint/pattern as EditEmployeeForm.tsx's pay-structure picker.
           fetch("/api/proxy/v1/payroll/structures?limit=200", { signal: controller.signal }),
         ]);
-        if (empRes.ok) {
-          const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
-          setEmployees(Array.isArray(body) ? body : (body.data ?? []));
-        }
         if (deptRes.ok) {
           const body = (await deptRes.json()) as { data?: Department[] } | Department[];
           setDepartments(Array.isArray(body) ? body : (body.data ?? []));
           setDeptStatus("ok");
         } else {
-          setDeptStatus("error");
+          // A real 403 is a permission boundary -- retrying can never fix it.
+          setDeptStatus(deptRes.status === 403 ? "forbidden" : "error");
         }
         if (psRes.ok) {
           const body = (await psRes.json()) as { data?: PayStructureOption[] } | PayStructureOption[];
@@ -127,36 +153,50 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
     return () => controller.abort();
   }, [open, reloadKey]);
 
-  // GAP-HR-TRANSFER-09: once the employees list loads, fill in the
-  // prefilled employee's current department -- the exact same resolution
-  // the Employee <select>'s own onChange uses below, just triggered by data
-  // arriving instead of a user pick.
+  // GAP-HR-TRANSFER-09: a prefilled employee arrives as {id, name} only; look
+  // up their current department NAME through the same directory endpoint the
+  // picker uses (GET /v1/hrms/employees?ids=).
   useEffect(() => {
-    if (!prefillEmployee || employeeId !== prefillEmployee.id || fromDeptId) return;
-    const emp = employees.find((x) => x.id === prefillEmployee.id);
-    if (emp?.departmentId) {
-      setFromDeptId(emp.departmentId);
-      setFromDeptName(emp.department ?? departments.find((d) => d.id === emp.departmentId)?.name ?? "");
-    }
-  }, [employees, departments, prefillEmployee, employeeId, fromDeptId]);
+    if (!open || !prefillId || employeeId !== prefillId) return;
+    let cancelled = false;
+    setEmployeeDeptResolving(true);
+    resolveEmployees([prefillId])
+      .then((opts) => {
+        if (cancelled) return;
+        setEmployeeDeptName(opts[0]?.sublabel ?? "");
+        if (opts[0]?.label) setEmployeeLabel(opts[0].label);
+      })
+      .catch(() => { /* leaves the department unknown -> "Not available", wizard blocked */ })
+      .finally(() => { if (!cancelled) setEmployeeDeptResolving(false); });
+    return () => { cancelled = true; };
+  }, [open, prefillId, employeeId]);
+
+  const fromDept = useMemo(
+    () => (deptStatus === "ok" ? resolveFromDepartment(employeeDeptName, departments) : null),
+    [deptStatus, employeeDeptName, departments],
+  );
+  const fromDeptPending = Boolean(employeeId) && (deptStatus === "loading" || employeeDeptResolving);
+  const fromDeptDisplay = !employeeId ? "" : fromDept ? fromDept.name : fromDeptPending ? tr("loadingDepts") : tr("notAvailable");
 
   const reset = () => {
     setEmployeeId(prefillEmployee?.id ?? "");
-    setFromDeptId("");
-    setFromDeptName("");
+    setEmployeeLabel(prefillEmployee?.name ?? "");
+    setEmployeeDeptName("");
+    setEmployeeDeptResolving(Boolean(prefillEmployee));
     setToDeptId("");
     setPayStructureId("");
     setEffectiveDate(""); setCurrentWith(""); setNote("");
     setSubmittedTransferId(null);
+    setFieldErrors({});
     setStep(1);
   };
-
-  const selectedEmployee = employees.find((e) => e.id === employeeId) ?? (prefillEmployee && prefillEmployee.id === employeeId ? { id: prefillEmployee.id, name: prefillEmployee.name } : undefined);
 
   const validateStep1 = (): boolean => {
     const errs: typeof fieldErrors = {};
     if (!employeeId) errs.employeeId = tr("errSelectEmployee");
+    else if (!fromDept) errs.employeeId = tr("errFromDeptUnavailable");
     if (!toDeptId) errs.toDeptId = tr("errSelectDest");
+    else if (fromDept && toDeptId === fromDept.id) errs.toDeptId = tr("errSameDept");
     if (!effectiveDate) errs.effectiveDate = tr("errEffectiveDate");
     setFieldErrors(errs);
     setError("");
@@ -178,6 +218,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const submit = useCallback(async () => {
     if (!validateStep2()) return;
     setError("");
+    // Never send an empty fromDeptId (the backend requires a UUID).
+    if (!fromDept) { setError(tr("errFromDeptUnavailable")); return; }
+    const fromDeptId = fromDept.id;
     setSaving(true);
     try {
       // Resume from an already-created request instead of re-running step 1.
@@ -219,7 +262,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
         body: JSON.stringify({
           refType: "hr_transfer",
           refId: transferId,
-          subject: tr("efileSubject", { name: selectedEmployee?.name ?? employeeId.slice(0, 8) }),
+          subject: tr("efileSubject", { name: employeeLabel || employeeId.slice(0, 8) }),
           dept: "HR",
           classification: "confidential",
           priority: "normal",
@@ -247,7 +290,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- validateStep2 is redefined each render but only closes over values already listed in this array (initiatedBy, currentWith, note[, t]).
-  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast, formError, tr]);
+  }, [employeeId, employeeLabel, fromDept, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, submittedTransferId, toast, formError, tr]);
+
+  const toDeptName = departments.find((d) => d.id === toDeptId)?.name ?? tr("notAvailable");
 
   return (
     <>
@@ -275,36 +320,26 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <Field label={tr("employee")} required error={fieldErrors.employeeId}>
-                  <Select
-                    value={employeeId}
-                    onChange={(e) => {
-                      const id = e.target.value;
-                      setEmployeeId(id);
-                      const emp = employees.find((x) => x.id === id);
-                      if (emp?.departmentId) {
-                        setFromDeptId(emp.departmentId);
-                        setFromDeptName(emp.department ?? departments.find((d) => d.id === emp.departmentId)?.name ?? "");
-                      }
+                  {/* GAP-HR-TRANSFER-06: server-side name search (EmployeePicker
+                      -> GET /v1/hrms/employees?q=) instead of a native <select>
+                      over the first 200 employees; a failed search shows the
+                      picker's own "could not load" alert, never "No matches". */}
+                  <EmployeePicker
+                    value={employeeId || null}
+                    initialOption={prefillOption}
+                    placeholder={tr("selectEmployee")}
+                    onChange={(id, option) => {
+                      setEmployeeId(id ?? "");
+                      setEmployeeLabel(option?.label ?? "");
+                      setEmployeeDeptName(option?.sublabel ?? "");
+                      setEmployeeDeptResolving(false);
                     }}
-                  >
-                    <option value="">{tr("selectEmployee")}</option>
-                    {/* GAP-HR-TRANSFER-09: the prefilled employee must always
-                        be selectable even if they fall outside this
-                        unsearched limit=200 list. */}
-                    {prefillEmployee && !employees.some((e) => e.id === prefillEmployee.id) && (
-                      <option value={prefillEmployee.id}>{prefillEmployee.name}</option>
-                    )}
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` (${e.department})` : ""}
-                      </option>
-                    ))}
-                  </Select>
+                  />
                 </Field>
 
                 <Field label={tr("fromDept")} disabled>
                   <Input
-                    value={fromDeptName || (departments.find((d) => d.id === fromDeptId)?.name ?? fromDeptId)}
+                    value={fromDeptDisplay}
                     readOnly
                     style={{ color: "var(--ink2)" }}
                     aria-label={tr("fromDeptAria")}
@@ -316,12 +351,16 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       silently swap in a raw "Department ID" text box --
                       asking a clerk to type a UUID with no guidance on
                       where to find one. Shows an honest error + retry
-                      instead; Next already can't proceed without a real
-                      selection (validateStep1). */}
-                  {deptStatus === "error" ? (
+                      instead (or a permission message for a real 403);
+                      "Next" is disabled until the list has loaded. */}
+                  {deptStatus === "error" || deptStatus === "forbidden" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--bad)", fontSize: "0.75rem" }}>{tr("deptLoadFailed")}</span>
-                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
+                      <span role="alert" style={{ color: "var(--bad)", fontSize: "0.75rem" }}>
+                        {deptStatus === "forbidden" ? tr("deptForbidden") : tr("deptLoadFailed")}
+                      </span>
+                      {deptStatus === "error" && (
+                        <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
+                      )}
                     </div>
                   ) : (
                     <Select
@@ -330,7 +369,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       disabled={deptStatus === "loading"}
                     >
                       <option value="">{deptStatus === "loading" ? tr("loadingDepts") : tr("selectDest")}</option>
-                      {departments.filter((d) => d.id !== fromDeptId).map((d) => (
+                      {departments.filter((d) => d.id !== fromDept?.id).map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </Select>
@@ -361,7 +400,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                 <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>{tr("cancel")}</Button>
-                <Button style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
+                <Button style={{ minHeight: 44 }} disabled={deptStatus !== "ok" || employeeDeptResolving} onClick={() => validateStep1() && setStep(2)}>
                   {tr("next")}
                 </Button>
               </div>
@@ -375,9 +414,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                   {tr("alreadyCreated")}
                 </div>
               )}
-              {selectedEmployee && (
+              {employeeId && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--infobg)", borderRadius: 8, border: "1px solid var(--infobd)" }}>
-                  <strong>{selectedEmployee.name}</strong> → {departments.find((d) => d.id === toDeptId)?.name ?? toDeptId}
+                  <strong>{employeeLabel || tr("unknown")}</strong> → {toDeptName}
                   {effectiveDate && <> · {tr("effectiveOn", { date: effectiveDate })}</>}
                 </div>
               )}

@@ -177,3 +177,52 @@ describe("TransferPage", () => {
     });
   });
 });
+
+// GAP-HR-TRANSFER-08: every status lands in exactly one stat bucket, so the
+// cards add up to the total. Cancelled rows (an eOffice rejection) and a legacy
+// "pending" row used to be counted nowhere.
+describe("stat cards add up to the total (GAP-HR-TRANSFER-08)", () => {
+  // StatCard markup: <div class="lab">label</div><div class="val">value</div>. Matched on the
+  // .lab class because words like "Pending" are also status labels elsewhere on the page.
+  const statValue = (label: string): number => {
+    const lab = Array.from(document.querySelectorAll(".lab")).find((el) => el.textContent === label);
+    if (!lab) throw new Error(`no stat card labelled ${label}`);
+    return Number((lab.nextElementSibling as HTMLElement).textContent);
+  };
+
+  it("sums the bucket cards to the total, counting cancelled and legacy pending rows", async () => {
+    mockRoles = ["hr_admin"];
+    const mk = (status: string, i: number) => ({ id: `t${i}`, employeeId: `emp-${i}`, fromDeptId: "a", toDeptId: "b", status });
+    fetchJsonMock.mockResolvedValue({
+      data: ["requested", "pending", "pending_approval", "ordered", "pending_effective", "relieved", "joined", "completed", "cancelled", "cancelled"].map(mk),
+      source: "api",
+    });
+
+    const ui = await TransferPage({});
+    render(ui);
+
+    const total = statValue("Total Transfers");
+    expect(total).toBe(10);
+    const buckets = ["Completed / Joined", "Pending", "Order Issued", "Relieved", "Cancelled"].map(statValue);
+    expect(buckets).toEqual([2, 3, 2, 1, 2]);
+    expect(buckets.reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  it("shows the filter bar and the view toggle once there are transfers, with one search box", async () => {
+    mockRoles = ["hr_admin"];
+    fetchJsonMock.mockResolvedValue({ data: [{ id: "t1", employeeId: "emp-1", fromDeptId: "a", toDeptId: "b", status: "requested" }], source: "api" });
+    const ui = await TransferPage({});
+    render(ui);
+    expect(screen.getByRole("tab", { name: "Cards" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Table" })).toBeInTheDocument();
+    expect(screen.getAllByRole("searchbox")).toHaveLength(1);
+  });
+
+  it("on a load error shows the error state and no filter bar", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    const ui = await TransferPage({});
+    render(ui);
+    expect(screen.queryByLabelText("Filter by status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
-import { getLeaveRequestDetails } from "../../../_data/loaders";
+import { getLeaveRequestPage } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -16,11 +16,16 @@ import { toHumanError } from "@/lib/messages";
 const HR_ROLES = HR_STAFF_ROLES;
 const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 
-export default async function LeaveManagementPage() {
+// Upper bound on ?page= so a hand-typed huge number cannot ask the API for an
+// absurd offset.
+const MAX_PAGE = 10_000;
+
+export default async function LeaveManagementPage({ searchParams }: { searchParams?: { page?: string } }) {
   const t = await getTranslations("leave");
   const roles = getSessionRoles();
   const isAdminOrManager = roles.some((r: string) => ADMIN_OR_MANAGER_ROLES.includes(r));
   const isAdmin = roles.some((r: string) => HR_ROLES.includes(r));
+  const isManagerOnly = roles.includes("manager") && !isAdmin;
   // GAP-HR-LEAVE-POLICIES-01: the Policies link used to be gated on `isAdmin`
   // (hr_admin/hr_officer/super_admin — this page's own HR_ROLES), but the
   // destination page and backend only ever admitted hr_admin/super_admin/
@@ -30,7 +35,15 @@ export default async function LeaveManagementPage() {
   // never again promise access the destination doesn't grant.
   const canManagePolicies = roles.some((r: string) => LEAVE_POLICY_ADMIN_ROLES.includes(r));
 
-  const { data: allRequests, source } = await getLeaveRequestDetails();
+  // GAP-HR-LEAVE-03: the page used to ask for "the requests" with no limit or
+  // offset, so the backend's default page (50) silently truncated the table AND
+  // the stat tiles that counted it, with no hint anything was missing. It now
+  // asks for one explicit page and gets back the real total + per-status counts
+  // over everything the viewer can see.
+  const requestedPage = Number.parseInt(searchParams?.page ?? "1", 10);
+  const pageNo = Number.isFinite(requestedPage) && requestedPage >= 1 ? Math.min(requestedPage, MAX_PAGE) : 1;
+  const { data: leavePage, source } = await getLeaveRequestPage({ page: pageNo });
+  const allRequests = leavePage.rows;
   // GAP-HR-LEAVE-04: no client-side re-scoping here anymore. GET
   // /v1/hrms/leave-requests (leave/routes.ts) already applies
   // resolveLeaveReadScope server-side — HR sees the full tenant, a manager
@@ -44,10 +57,20 @@ export default async function LeaveManagementPage() {
   // `roles` below is UI-only (which nav links/nudges to show).
   const leaveRequests = allRequests;
 
-  const total = leaveRequests.length;
-  const pending = leaveRequests.filter((r) => r.status === "pending").length;
-  const approved = leaveRequests.filter((r) => r.status === "approved").length;
-  const rejected = leaveRequests.filter((r) => r.status === "rejected").length;
+  // Tiles count the viewer's WHOLE visible set (server-side counts), not just
+  // the rows of the page being shown.
+  const total = leavePage.total;
+  const pending = leavePage.statusCounts.pending ?? 0;
+  const approved = leavePage.statusCounts.approved ?? 0;
+  const rejected = leavePage.statusCounts.rejected ?? 0;
+
+  const pageOffset = (leavePage.page - 1) * leavePage.pageSize;
+  const showingFrom = leaveRequests.length > 0 ? pageOffset + 1 : 0;
+  const showingTo = pageOffset + leaveRequests.length;
+  const lastPage = Math.max(1, Math.ceil(total / leavePage.pageSize));
+  const prevPage = leavePage.page > 1 ? Math.min(leavePage.page - 1, lastPage) : null;
+  const nextPage = leavePage.hasMore ? leavePage.page + 1 : null;
+
 
   // GAP-HR-LEAVE-01: a failed fetch (source==='error') used to read as good
   // news — real zeros on every stat tile and DataTable's own "All clear — no
@@ -56,6 +79,9 @@ export default async function LeaveManagementPage() {
   // and locations/page.tsx already do: null stat values (StatCard renders a
   // dash) and a RefreshErrorState card instead of the table.
   const errored = source === "error";
+  // The pager is only worth showing when it tells the viewer something: more
+  // requests exist than this page shows, or they are looking at a later page.
+  const showPager = !errored && (total > leaveRequests.length || leavePage.page > 1);
 
   const columns: { key: keyof LeaveRequestDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "date" }[] = [
     { key: "employeeName", label: t("colEmployee") },
@@ -141,6 +167,39 @@ export default async function LeaveManagementPage() {
               </div>
             }
           />
+        )}
+        {/* GAP-HR-LEAVE-04: a manager-only viewer sees their direct reports'
+            requests here by design (GET /leave-requests scopes managers to
+            direct reports, never themselves -- the same list feeds the
+            approvals queue, where a manager's own request must not appear).
+            Say so, and say where their own requests are. */}
+        {!errored && isManagerOnly && (
+          <p style={{ margin: 0, padding: "10px 16px 12px", fontSize: 12.5, color: "var(--mut)" }}>
+            {t.rich("managerOwnRequestsHintRich", {
+              historyLink: (chunks) => <Link href="/hr/leave/history" style={{ color: "inherit", textDecoration: "underline" }}>{chunks}</Link>,
+            })}
+          </p>
+        )}
+        {/* GAP-HR-LEAVE-03: the table above only holds ONE page of the requests
+            the viewer can see, so say so -- "Showing 1-100 of 340" with
+            Previous / Next -- instead of letting a truncated list pass for the
+            whole picture. Links, not client state: every page is a real URL. */}
+        {showPager && (
+          <nav
+            aria-label={t("pagerLabel")}
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, padding: "12px 16px", borderTop: "1px solid var(--line)", fontSize: 13 }}
+          >
+            <span role="status">
+              {leaveRequests.length > 0
+                ? t("pagerShowing", { from: showingFrom, to: showingTo, total })
+                : t("pagerEmptyPage", { total })}
+            </span>
+            <span style={{ display: "flex", gap: 8 }}>
+              {prevPage !== null && <Link href={`/hr/leave?page=${prevPage}`} rel="prev" className="btn ghost">{t("pagerPrev")}</Link>}
+              {nextPage !== null && <Link href={`/hr/leave?page=${nextPage}`} rel="next" className="btn ghost">{t("pagerNext")}</Link>}
+            </span>
+            <span style={{ flexBasis: "100%", color: "var(--mut)", fontSize: 12 }}>{t("pagerNote")}</span>
+          </nav>
         )}
       </Card>
     </div>

@@ -7,6 +7,8 @@
  * re-reads the list before the consumer has run must not be served a snapshot taken
  * before its own change was queued.
  */
+import { createHmac } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { commandId } from "../../shared/idempotency.js";
@@ -110,18 +112,41 @@ export async function updateCaptureForm(
 }
 
 /**
+ * The key a rotate request returns MUST be the key the consumer stores. The messageId
+ * comes from the client Idempotency-Key, so a retry reuses it and the consumer's
+ * markProcessed drops the second command; a fresh random key minted per request would
+ * then be shown to the admin without ever being stored. So when a client key is present
+ * the form key is derived deterministically from the messageId (HMAC with the service's
+ * CRM_PII_KEY, so it is not computable from the client-held Idempotency-Key alone) and a
+ * retry returns the same key that the first command stored. With no client key, or no
+ * server secret to derive from, the key is random and the messageId is fresh too, so
+ * every command that is published carries exactly the key that is returned.
+ */
+function rotationIdentity(ctx: RequestContext, id: string): { messageId: string; formKey: string } {
+  const scope = `${COMMANDS.rotateLeadCaptureFormKey}:${id}`;
+  const secret = process.env.CRM_PII_KEY;
+  if (ctx.idempotencyKey && secret && secret.length >= 16) {
+    const messageId = commandId(ctx, scope);
+    const formKey = createHmac("sha256", secret)
+      .update(`lead-capture-form-key:${ctx.tenantId}:${messageId}`)
+      .digest("hex");
+    return { messageId, formKey };
+  }
+  return { messageId: idempotentId({}), formKey: repo.generateFormKey() };
+}
+
+/**
  * GAP-CRM-LEAD-FORMS-01: rotate a form's public key in place. The new key is minted
- * HERE (server-side, same generator as create) and returned once so the admin can
- * re-embed the form; it rides the command envelope only, never an emitted event. A
- * retry that reuses the client idempotency key collapses to one applied command,
- * exactly like create.
+ * HERE (server-side) and returned once so the admin can re-embed the form; it rides the
+ * command envelope only, never an emitted event. A retry that reuses the client
+ * idempotency key collapses to one applied command AND returns the same key (see
+ * rotationIdentity).
  */
 export async function rotateCaptureFormKey(
   ctx: RequestContext,
   id: string,
 ): Promise<Accepted & { formKey: string }> {
-  const messageId = commandId(ctx, `${COMMANDS.rotateLeadCaptureFormKey}:${id}`);
-  const formKey = repo.generateFormKey();
+  const { messageId, formKey } = rotationIdentity(ctx, id);
   await queue.publish(COMMANDS.rotateLeadCaptureFormKey, {
     messageId,
     type: COMMANDS.rotateLeadCaptureFormKey,

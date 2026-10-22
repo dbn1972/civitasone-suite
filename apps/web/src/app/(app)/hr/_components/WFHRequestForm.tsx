@@ -108,7 +108,15 @@ export function WFHRequestForm({
   // selected so the banner/submit-disable are real, not "could not be
   // verified" for everyone. Explicit props (tests, callers that already know)
   // still win. The server re-enforces on submit regardless.
-  const [elig, setElig] = useState<{ payLevel: number | null; maxPayLevel: number; enforceGazettedExclusion: boolean; weeklyWfhCount: number } | null>(null);
+  const [elig, setElig] = useState<{
+    payLevel: number | null;
+    maxPayLevel: number;
+    enforceGazettedExclusion: boolean;
+    weeklyWfhCount: number;
+    /** Monday-Sunday ("YYYY-MM-DD") of the week `weeklyWfhCount` describes. Absent on an older server. */
+    weekStart?: string;
+    weekEnd?: string;
+  } | null>(null);
   useEffect(() => {
     setElig(null);
     if (!employeeId) return;
@@ -128,7 +136,22 @@ export function WFHRequestForm({
 
   // DoPT OM 2022 eligibility gates
   const isGazetted = enforceGazetted && knownPayLevel !== undefined && knownPayLevel > gazettedLimit;
-  const weeklyCapReached = knownWeekly !== undefined && knownWeekly >= 2;
+  // The server's count is for ONE week (its current ISO week); the cap is per
+  // week, so a full current week must not block a request for a LATER week --
+  // otherwise someone who used both days this week could never file for next
+  // week from the form, though the server would accept it. Apply the count only
+  // when the chosen dates touch the week it describes (or no date is chosen
+  // yet, where "you have used this week's days" is still the useful notice).
+  // An explicit weeklyWfhCount prop, or an older server without the week
+  // bounds, keeps the unconditional behaviour. The server stays authoritative
+  // either way and re-checks every touched week on submit.
+  const countWeek =
+    weeklyWfhCount === undefined && elig?.weekStart && elig?.weekEnd
+      ? { start: elig.weekStart, end: elig.weekEnd }
+      : null;
+  const rangeEnd = toDate && toDate >= fromDate ? toDate : fromDate;
+  const rangeTouchesCountWeek = !countWeek || !fromDate || (fromDate <= countWeek.end && rangeEnd >= countWeek.start);
+  const weeklyCapReached = knownWeekly !== undefined && knownWeekly >= 2 && rangeTouchesCountWeek;
   const payLevelUnknown = knownPayLevel === undefined;
 
   // SF-15: the POST below is a 202-accepted async write (CLAUDE.md CQRS

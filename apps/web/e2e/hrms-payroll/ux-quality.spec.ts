@@ -67,7 +67,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   }
 
   test('form shows balance alongside leave type (prevents over-application)', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     // Wait for leave context to load
     await page.waitForLoadState('networkidle');
     // The leave type selector should show balance info ("Casual Leave (5 days balance)")
@@ -82,7 +82,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('shows calculated duration in real-time as dates are picked', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -93,7 +93,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('submit button is disabled while form is submitting (prevents double-submit)', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     await page.waitForLoadState('networkidle');
     // Fill form
     await fillValidRequest(page, '2024-08-12', '2024-08-12');
@@ -109,7 +109,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('shows success message with clear next action after submission', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -121,7 +121,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('form fields reset after successful submission (ready for next task)', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -135,7 +135,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('inline validation on invalid date range (to < from)', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -147,7 +147,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('clear breadcrumb navigation (user always knows where they are)', async ({ page }) => {
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     // Should have breadcrumb or back nav showing: HR > Leave > Apply
     const nav = page.getByRole('navigation', { name: /breadcrumb/i }).or(page.getByRole('link', { name: /leave/i })).first();
     await expect(nav).toBeVisible();
@@ -381,7 +381,7 @@ test.describe('UX Quality — Feedback & Error Recovery', () => {
       }),
     );
     try {
-      await page.goto('/hr/leave/apply');
+      await page.goto('/hr/leave/apply?empId=emp-001');
       await page.waitForLoadState('load', { timeout: 20000 });
     } catch {
       return; // page crash — skip gracefully
@@ -428,7 +428,7 @@ test.describe('UX Quality — Responsive & Touch', () => {
 
   test('form inputs have adequate size on mobile', async ({ page }) => {
     await mockLeaveContext(page);
-    await page.goto('/hr/leave/apply');
+    await page.goto('/hr/leave/apply?empId=emp-001');
     // Let the form hydrate and its selects populate first, or the handles below go stale
     // when React re-renders them mid-measurement.
     await page.waitForLoadState('networkidle');

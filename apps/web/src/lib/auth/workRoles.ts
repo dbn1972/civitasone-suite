@@ -16,6 +16,21 @@ export const HR_MASTERS_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 export const HR_STAFF_MANAGER_ROLES = [...HR_STAFF_ROLES, "manager"];
 /** HR staff + manager + employee: modules with a self-service half (apar, benefits, regularisation view). */
 export const HR_SELF_SERVICE_ROLES = [...HR_STAFF_MANAGER_ROLES, "employee"];
+/**
+ * Who may FILE a work-from-home request: hr_admin + hr_officer + super_admin +
+ * employee (hrms-service attendance/routes.ts POST /v1/hrms/wfh-requests,
+ * `requireRole(ctx, [...HR_ROLES, "employee"])`). Deliberately NOT
+ * HR_SELF_SERVICE_ROLES: a manager-only session decides its team's requests
+ * (HR_STAFF_MANAGER_ROLES) but cannot file one, so the form must not be shown.
+ */
+export const WFH_REQUEST_FILER_ROLES = [...HR_STAFF_ROLES, "employee"];
+/**
+ * Roles that may FILE an overtime request: backend POST /v1/hrms/overtime-requests
+ * is requireRole([...HR_ROLES, "employee"]) (attendance/routes.ts). A bare
+ * "manager" is rejected with 403, so the New Request entry points are hidden
+ * for them (GAP-HR-OVERTIME-03 / GAP-HR-OVERTIME-NEW-02). Server stays the authority.
+ */
+export const OVERTIME_REQUEST_ROLES = [...HR_STAFF_ROLES, "employee"];
 /** HR staff + finance_admin: loan/advance decide + export tier (loans-routes.ts HR_ROLES). */
 export const HR_FINANCE_DECIDER_ROLES = [...HR_STAFF_ROLES, "finance_admin"];
 /** Roles that can open /hr/loans (loans-routes.ts). */
@@ -300,6 +315,15 @@ export const PAYROLL_CONFIG_ROLES = ["payroll_admin", "super_admin"];
 /** W1 SF-09b: payroll run/admin tier (mirrors roleGuard.PAYROLL_ADMIN_ROLES; kept here so pages whose tests mock roleGuard can share it). */
 export const PAYROLL_STAFF_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
+/**
+ * Roles that can OPEN the payroll runs page (hr/payroll/page.tsx renders
+ * PermissionDenied for anyone else, and GET /v1/payroll/runs 403s them).
+ * Mirrors roleGuard.PAYROLL_READER_ROLES; kept here so pages whose tests mock
+ * roleGuard (hr/dashboard) can share it. workRoles.payrollReader.test.ts keeps
+ * the two from drifting.
+ */
+export const PAYROLL_READER_ROLES = [...PAYROLL_STAFF_ROLES, "hr_admin", "finance_officer"];
+
 /** W1 SF-09b: payroll salary-slip / structure admin tier (payroll-service payroll/routes.ts). */
 export const PAYROLL_SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
 
@@ -314,12 +338,16 @@ export const ICC_IDENTITY_ROLES = ["icc_member"];
  * Two corrections from the gap catalogue's first-pass list
  * (["hr_admin", "super_admin", "admin"]), re-derived from the actual role
  * catalogue rather than assumed:
- *  - Dropped the bare "admin" role: it is not in Keycloak's realm roles
- *    (infra/keycloak/civitasone-realm.json), not in HR_ROLES/
- *    EMPLOYEE_ADMIN_ROLES above, and packages/auth's toRequestContext reads
- *    `roles` straight off the verified JWT payload — "admin" is simply never
- *    issued to any principal in this system (the one other place it
- *    appears, FINANCE_ROLES above, is an unrelated module's role list).
+ *  - Did NOT carry over the bare "admin" role. It IS a defined Keycloak realm
+ *    role (infra/keycloak/civitasone-realm.json) and hr/layout.tsx admits it
+ *    (HR_BASELINE_ROLES), and employee-types / office-locations accept it —
+ *    but granting it authority over leave-entitlement policy (which feeds
+ *    leave debit and payroll LOP) is a policy call nobody has made, so it is
+ *    deliberately absent here AND from policy-admin-routes.ts's HR_ADMIN_ROLES.
+ *    The hub tile (hrTileAccess.ts) uses THIS constant, so an "admin"-only
+ *    session is no longer offered a tile that ends in PermissionDenied.
+ *    OWNER DECISION pending: should "admin" manage leave policies? If yes,
+ *    add it to this list and to the backend list in the same change.
  *  - Added tenant_admin/platform_admin: both already clear hr/layout.tsx's
  *    HR_ROLES (so they reach this page today) but were denied by the old,
  *    narrower list here and by the backend — the exact same dead-end class

@@ -29,7 +29,7 @@ vi.mock("../src/shared/db.js", async (io) => ({
 }));
 vi.mock("../src/modules/leave/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
-  findAllocById: async () => ({ id: ALLOC, balanceDays: 30, totalDays: 30 }),
+  findAllocById: async () => ({ id: ALLOC, employeeId: EMP, leaveTypeId: LEAVE_TYPE, balanceDays: 30, totalDays: 30 }),
   listLeaveTypesByTenant: async () => [{ id: LEAVE_TYPE, code: "EOL" }],
   // DEF-LM-002: the apply flow now also checks for date overlaps. This test
   // isolates the engagement gate, so report no overlaps.

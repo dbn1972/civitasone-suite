@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError } from "zod";
-import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -15,6 +15,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { assertEligibleManager, isSameEmployeeId } from "./manager-eligibility.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -111,7 +112,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const managerScope = PAYROLL_DIRECTORY_ROLES.some((r) => ctx.roles.includes(r))
       ? undefined
       : await resolveManagerScope(ctx, req);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status));
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {
@@ -282,7 +283,12 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
           : "you may only view your own employee record");
       }
     }
-    const detail = await queries.getEmployeeDetail(id, ctx.tenantId);
+    // GAP-HR-EMPLOYEES-NEW-02: basic pay is returned to the HR roles that can
+    // create the record with it (HR_ROLES) and to nobody else -- a manager
+    // reading a direct report, or an employee reading their own record, gets the
+    // same detail as before, without the pay field.
+    const includePay = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const detail = await queries.getEmployeeDetail(id, ctx.tenantId, { includePay });
     if (!detail) throw new HttpError(404, "NOT_FOUND", "employee not found");
     return reply.send(detail);
   });
@@ -321,6 +327,20 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
     if (isExitedStatus(emp.status)) {
       throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
+    }
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: a CHANGED managerId must be a real,
+    // serving colleague who does not (transitively) report to this employee --
+    // never self, never exited staff. An unchanged value is not re-validated, so
+    // an unrelated edit is not blocked because the existing manager has since left.
+    if (body.managerId !== undefined && !isSameEmployeeId(body.managerId, emp.managerId)) {
+      await assertEligibleManager(
+        async (eid) => {
+          const row = await repo.findById(eid, ctx.tenantId);
+          return row ? { status: row.status, managerId: row.managerId ?? null } : null;
+        },
+        id,
+        body.managerId,
+      );
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEmployee(ctx, id, body));
   });

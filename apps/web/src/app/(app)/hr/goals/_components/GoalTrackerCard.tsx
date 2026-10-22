@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Field, Input, Textarea } from "@/app/_components/ds";
+import { Button, Field, Input, Textarea, useToastOptional } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { translateFormErrors } from "../../_components/translateFormErrors";
 import { validateCheckin, type CheckinErrors } from "./checkinSchema";
@@ -26,19 +26,27 @@ export interface GoalTrackerCardProps {
   onEdit?: (id: string) => void;
 }
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  on_track:  { label: "On Track",  bg: "var(--goodbg)", color: "var(--good)" },
-  active:    { label: "On Track",  bg: "var(--goodbg)", color: "var(--good)" },
-  at_risk:   { label: "At Risk",   bg: "#fff7e6", color: "var(--warn)" },
-  behind:    { label: "Behind",    bg: "var(--badbg)", color: "var(--bad)" },
-  achieved:  { label: "Achieved",  bg: "var(--infobg)", color: "var(--info)" },
-  completed: { label: "Achieved",  bg: "var(--infobg)", color: "var(--info)" },
+// GAP-HR-GOALS-05: only colours live here -- every visible label is resolved
+// through useTranslations("goals") inside the component (hi follows the
+// active locale), and no bare hex remains (tokens only).
+type StatusKey = "on_track" | "active" | "at_risk" | "behind" | "achieved" | "completed";
+const STATUS_CONFIG: Record<StatusKey, { bg: string; color: string }> = {
+  on_track:  { bg: "var(--goodbg)", color: "var(--good)" },
+  active:    { bg: "var(--goodbg)", color: "var(--good)" },
+  at_risk:   { bg: "var(--warnbg)", color: "var(--warn)" },
+  behind:    { bg: "var(--badbg)", color: "var(--bad)" },
+  achieved:  { bg: "var(--infobg)", color: "var(--info)" },
+  completed: { bg: "var(--infobg)", color: "var(--info)" },
 };
 
-const CASCADE_CONFIG: Record<CascadeLevel, { label: string; bg: string }> = {
-  org:        { label: "Org",        bg: "var(--infobg)" },
-  dept:       { label: "Dept",       bg: "var(--primary-soft)" },
-  individual: { label: "Individual", bg: "var(--goodbg)" },
+function isStatusKey(v: unknown): v is StatusKey {
+  return typeof v === "string" && Object.prototype.hasOwnProperty.call(STATUS_CONFIG, v);
+}
+
+const CASCADE_CONFIG: Record<CascadeLevel, { bg: string }> = {
+  org:        { bg: "var(--infobg)" },
+  dept:       { bg: "var(--primary-soft)" },
+  individual: { bg: "var(--goodbg)" },
 };
 
 function daysLeft(dateStr: string): number {
@@ -47,16 +55,17 @@ function daysLeft(dateStr: string): number {
 }
 
 function DueDateChip({ dueDate }: { dueDate: string }) {
+  const t = useTranslations("goals");
   const days = daysLeft(dueDate);
   const overdue  = days < 0;
   const urgent   = days >= 0 && days <= 7;
-  const bg    = overdue ? "var(--badbg)" : urgent ? "#fff7e6" : "var(--bg)";
+  const bg    = overdue ? "var(--badbg)" : urgent ? "var(--warnbg)" : "var(--bg)";
   const color = overdue ? "var(--bad)" : urgent ? "var(--warn)" : "var(--ink2)";
   const label = overdue
-    ? `${Math.abs(days)}d overdue`
+    ? t("dueOverdue", { days: Math.abs(days) })
     : days === 0
-    ? "Due today"
-    : `${days}d left`;
+    ? t("dueToday")
+    : t("dueLeft", { days });
   return (
     <span style={{ fontSize: 11, fontWeight: 600, background: bg, color, borderRadius: 4, padding: "2px 6px" }}>
       {label}
@@ -83,10 +92,38 @@ export function GoalTrackerCard({
   const [liveStatus, setLiveStatus] = useState<GoalStatus>(status);
   const [busy, setBusy] = useState(false);
   const [checkinError, setCheckinError] = useState("");
+  const [savedNotice, setSavedNotice] = useState("");
   const [fieldErrors, setFieldErrors] = useState<CheckinErrors>({});
   const formError = useFormError("goal check-in");
+  // Prefer the app-wide toast (survives the form closing / a router.refresh()
+  // re-render); a bare unit-test render has no ToastProvider, so fall back to
+  // a local role=status line so the confirmation is still shown and announced.
+  const dsToast = useToastOptional();
 
-  const sc  = STATUS_CONFIG[liveStatus] ?? STATUS_CONFIG.active;
+  // GAP-HR-GOALS-04: this card seeds its state from props once, so after the
+  // post-check-in router.refresh() delivered the server's recomputed health
+  // the badge/progress kept showing the optimistic value. Resync whenever the
+  // server-supplied props actually change.
+  useEffect(() => {
+    setLiveProgress(progress);
+    setLiveStatus(status);
+    setCheckinProgress(progress);
+  }, [progress, status]);
+
+  const sc  = STATUS_CONFIG[isStatusKey(liveStatus) ? liveStatus : "active"];
+  const statusLabel: Record<StatusKey, string> = {
+    on_track: t("statusOnTrack"),
+    active: t("statusOnTrack"),
+    at_risk: t("statusAtRisk"),
+    behind: t("statusBehind"),
+    achieved: t("statusAchieved"),
+    completed: t("statusAchieved"),
+  };
+  const cascadeLabel: Record<CascadeLevel, string> = {
+    org: t("cascadeOrg"),
+    dept: t("cascadeDept"),
+    individual: t("cascadeIndividual"),
+  };
   const cc  = CASCADE_CONFIG[cascadeLevel];
   const pct = Math.min(Math.max(liveProgress, 0), 100);
 
@@ -124,6 +161,7 @@ export function GoalTrackerCard({
 
     setBusy(true);
     setCheckinError("");
+    setSavedNotice("");
     try {
       const res = await fetch(`/api/proxy/v1/hrms/goals/${id}/checkin`, {
         method: "POST",
@@ -139,14 +177,33 @@ export function GoalTrackerCard({
         setBusy(false);
         return;
       }
-      // Mirrors the backend's own status derivation exactly (pulse-routes.ts:
-      // `progress >= 100 ? "completed" : "active"`) so the card reflects the
-      // real post-write state without waiting on the parent list to refetch.
+      // GAP-HR-GOALS-04: POST .../checkin now answers with the goal's real
+      // post-write `health` (progress vs time to the due date, a manually set
+      // at_risk/behind surviving) -- use it instead of guessing "active", which
+      // showed On Track on a goal that was in fact behind. A service that does
+      // not send it yet keeps the old completed/active derivation.
+      let nextStatus: GoalStatus = checkinProgress >= 100 ? "completed" : "active";
+      try {
+        const body = (await res.json()) as { health?: unknown; goalStatus?: unknown } | null;
+        const health = body?.health;
+        const goalStatus = body?.goalStatus;
+        if (isStatusKey(health)) nextStatus = health;
+        else if (isStatusKey(goalStatus)) nextStatus = goalStatus;
+      } catch {
+        // empty / non-JSON body: the fallback above stands.
+      }
       setLiveProgress(checkinProgress);
-      setLiveStatus(checkinProgress >= 100 ? "completed" : "active");
+      setLiveStatus(nextStatus);
       setShowCheckin(false);
       setCheckinNote("");
       setBusy(false);
+      // GAP-HR-GOALS-01: an explicit confirmation of the save (the form used to
+      // just close). 100% also completes the goal, so say so.
+      const message = checkinProgress >= 100
+        ? t("checkinCompleted")
+        : t("checkinSaved", { progress: checkinProgress });
+      if (dsToast) dsToast.toast.success(message);
+      else setSavedNotice(message);
       router.refresh();
     } catch {
       setCheckinError(t("networkError"));
@@ -174,18 +231,18 @@ export function GoalTrackerCard({
           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
             {cascadeLevel !== "org" && (
               <>
-                <span style={{ fontSize: 11, color: "var(--mut)" }}>Org</span>
+                <span style={{ fontSize: 11, color: "var(--mut)" }}>{cascadeLabel.org}</span>
                 <span style={{ fontSize: 11, color: "var(--line)" }}>→</span>
               </>
             )}
             {cascadeLevel === "individual" && (
               <>
-                <span style={{ fontSize: 11, color: "var(--mut)" }}>Dept</span>
+                <span style={{ fontSize: 11, color: "var(--mut)" }}>{cascadeLabel.dept}</span>
                 <span style={{ fontSize: 11, color: "var(--line)" }}>→</span>
               </>
             )}
             <span style={{ fontSize: 11, fontWeight: 600, background: cc.bg, borderRadius: 4, padding: "1px 5px" }}>
-              {cc.label}
+              {cascadeLabel[cascadeLevel]}
             </span>
             <span style={{
               fontSize: 11, fontWeight: 500, background: "var(--bg)", color: "var(--ink2)",
@@ -201,7 +258,7 @@ export function GoalTrackerCard({
           )}
           {parentGoalTitle && (
             <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--mut)" }}>
-              Cascaded from: <em>{parentGoalTitle}</em>
+              {t("cascadedFrom")} <em>{parentGoalTitle}</em>
             </p>
           )}
         </div>
@@ -210,7 +267,7 @@ export function GoalTrackerCard({
           flexShrink: 0, fontSize: 11, fontWeight: 700, background: sc.bg, color: sc.color,
           borderRadius: 20, padding: "3px 8px", textTransform: "uppercase", letterSpacing: "0.05em",
         }}>
-          {sc.label}
+          {statusLabel[isStatusKey(liveStatus) ? liveStatus : "active"]}
         </span>
       </div>
 
@@ -239,6 +296,10 @@ export function GoalTrackerCard({
           />
         </div>
       </div>
+
+      {savedNotice && (
+        <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--good)" }}>{savedNotice}</p>
+      )}
 
       {/* Footer: due date + actions */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>

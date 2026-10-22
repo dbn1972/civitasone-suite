@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Field } from "./Field";
 import { EntityPicker } from "./EntityPicker";
 import type { EntityOption, EntityPickerProps } from "./EntityPicker";
@@ -74,6 +74,33 @@ describe("EntityPicker", () => {
     expect(search).toHaveBeenCalledTimes(2);
     expect(search.mock.calls[1]![0]).toBe("Asha");
     expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
+
+  it("opt-in searchRetryLabel adds a Try again button that re-runs the CURRENT query (GAP-HR-LEAVE-BALANCE-05)", async () => {
+    const search = vi
+      .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(OPTIONS);
+    render(<Harness search={search} searchErrorText="Could not load the list." searchRetryLabel="Try again" />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load the list.");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls[1]![0]).toBe("Asha"); // same query, no retyping
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows no retry button unless searchRetryLabel is given (existing callers unchanged)", async () => {
+    const search = vi.fn(async () => { throw new Error("boom"); });
+    render(<Harness search={search} searchErrorText="Could not load the list." />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("clears the error and lists results once a later search succeeds", async () => {
@@ -183,5 +210,56 @@ describe("EntityPicker", () => {
     const hidden = container.querySelectorAll('input[type="hidden"][name="managerIds"]');
     expect(hidden).toHaveLength(2);
     expect(Array.from(hidden).map((el) => (el as HTMLInputElement).value).sort()).toEqual(["e1", "e2"]);
+  });
+  // GAP-HR-PROMOTION-05
+  describe("retryText / onFailedChange", () => {
+    it("shows a Retry button beside the error that re-runs the last query, and recovers", async () => {
+      const search = vi
+        .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+        .mockRejectedValueOnce(new Error("HTTP 500"))
+        .mockResolvedValueOnce(OPTIONS);
+      render(<Harness search={search} retryText="Retry" />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+
+      expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+      expect(search).toHaveBeenCalledTimes(2);
+      expect(search.mock.calls[1]![0]).toBe("Asha");
+      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    });
+
+    it("has no Retry button unless retryText is given (every existing caller is unchanged)", async () => {
+      render(<Harness search={vi.fn(async () => { throw new Error("boom"); })} />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "x" } });
+      await screen.findByRole("alert");
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("a caller that sets BOTH searchRetryLabel and retryText gets exactly one retry button (the inline one)", async () => {
+      render(<Harness search={vi.fn(async () => { throw new Error("boom"); })} searchErrorText="Could not load the list." searchRetryLabel="Try again" retryText="Retry" />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "x" } });
+      const alert = await screen.findByRole("alert");
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    });
+
+    it("reports the failed state to the form: true after a failed search, false once a later one succeeds", async () => {
+      const seen: boolean[] = [];
+      const search = vi
+        .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+        .mockRejectedValueOnce(new Error("boom"))
+        .mockResolvedValueOnce(OPTIONS);
+      render(<Harness search={search} retryText="Retry" onFailedChange={(f) => seen.push(f)} />);
+      expect(seen).toEqual([false]);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "As" } });
+      await screen.findByRole("alert");
+      expect(seen[seen.length - 1]).toBe(true);
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      await screen.findByText("Asha Rao");
+      expect(seen[seen.length - 1]).toBe(false);
+    });
   });
 });

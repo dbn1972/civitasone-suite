@@ -111,6 +111,7 @@ vi.mock("../employee/actor-link.js", () => ({
 
 import { registerF3_apar_Consumers } from "./f3-consumer.js";
 import { COMMANDS } from "../../topics.js";
+import { enqueue, markProcessed } from "../../shared/outbox.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const EMP = "30000000-cccc-4000-8000-000000000001";
@@ -331,6 +332,141 @@ describe("F3 apar consumer — op routing", () => {
     expect(R.updateAppraisal).not.toHaveBeenCalled();
     expect(insertValuesMock).not.toHaveBeenCalled();
     expect(q.dlq).toEqual([]);
+    await q.stop();
+  });
+});
+
+/**
+ * GAP-HR-AUDIT-LOG-08: the central audit trail (what the HR audit log page
+ * reads) used to hear nothing about APAR. f3-consumer.ts imported `enqueue` and
+ * never called it, and the audit handlers in ./consumer.ts have no production
+ * publisher. Every one of the seven f3 ops now emits exactly one
+ * `audit.event.record`, in the transaction that made the write.
+ */
+describe("GAP-HR-AUDIT-LOG-08: every APAR mutation emits one audit.event.record, in its own transaction", () => {
+  // Free text / confidential content that must never reach the audit payload.
+  const FREE_TEXT = ["TEXT-SELF-APPRAISAL", "TEXT-PEN-PICTURE", "TEXT-REVIEW-REMARKS", "TEXT-ACCEPT-REMARKS", "TEXT-REPRESENTATION", "TEXT-SCORE-REMARK"];
+
+  const aparId = randomUUID();
+  const CASES: Array<{
+    name: string; op: string; actor: string; status: string; resourceId: string;
+    extra: Record<string, unknown>; expected: Record<string, unknown>;
+  }> = [
+    {
+      name: "create", op: "apar_routes__0", actor: HR, status: "self_pending", resourceId: aparId,
+      extra: { id: aparId, params: {}, body: { employeeId: EMP, appraisalPeriod: "2025-26", reportingOfficerId: RO, reviewingOfficerId: RV, acceptingAuthorityId: AA } },
+      expected: { action: "create", employeeId: EMP, appraisalPeriod: "2025-26", fromStage: null, toStage: "self_pending" },
+    },
+    {
+      name: "self-appraisal", op: "apar_routes__1", actor: EMP, status: "self_pending", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { selfAppraisal: "TEXT-SELF-APPRAISAL" } },
+      expected: { action: "self_appraisal", employeeId: EMP, fromStage: "self_pending", toStage: "reporting_officer", actorRole: "appraisee", override: false },
+    },
+    {
+      name: "reporting officer scores", op: "apar_routes__2", actor: RO, status: "reporting_officer", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { penPicture: "TEXT-PEN-PICTURE", scores: [{ attribute: "integrity", weight: 60, score: 9, remarks: "TEXT-SCORE-REMARK" }, { attribute: "leadership", weight: 40, score: 8 }] } },
+      expected: { action: "reporting", employeeId: EMP, fromStage: "reporting_officer", toStage: "reviewing_officer", actorRole: "reporting_officer", override: false, scoreCount: 2 },
+    },
+    {
+      name: "reviewing officer (concur)", op: "apar_routes__3", actor: RV, status: "reviewing_officer", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { decision: "concur", remarks: "TEXT-REVIEW-REMARKS" } },
+      expected: { action: "reviewing", fromStage: "reviewing_officer", toStage: "accepting_authority", actorRole: "reviewing_officer", override: false, decision: "concur", variationCount: 0 },
+    },
+    {
+      name: "reviewing officer (vary)", op: "apar_routes__3", actor: RV, status: "reviewing_officer", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { decision: "vary", remarks: "TEXT-REVIEW-REMARKS", variations: [{ attribute: "integrity", score: 7 }] } },
+      expected: { action: "reviewing", decision: "vary", variationCount: 1 },
+    },
+    {
+      name: "accepting authority", op: "apar_routes__4", actor: AA, status: "accepting_authority", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { remarks: "TEXT-ACCEPT-REMARKS" } },
+      expected: { action: "accept", employeeId: EMP, fromStage: "accepting_authority", toStage: "disclosed", actorRole: "accepting_authority", override: false },
+    },
+    {
+      name: "representation", op: "apar_routes__5", actor: EMP, status: "disclosed", resourceId: APAR,
+      extra: { params: { id: APAR }, body: { representation: "TEXT-REPRESENTATION" } },
+      expected: { action: "representation", employeeId: EMP, fromStage: "disclosed", toStage: "representation", actorRole: "appraisee", override: false },
+    },
+    {
+      name: "finalise", op: "apar_routes__6", actor: HR, status: "representation", resourceId: APAR,
+      extra: { params: { id: APAR }, body: {} },
+      expected: { action: "finalise", employeeId: EMP, fromStage: "representation", toStage: "finalised", actorRole: "hr" },
+    },
+  ];
+
+  for (const c of CASES) {
+    it(`${c.name}: exactly one event, on the write's own tx, with tenant + actor and ids only`, async () => {
+      R.findAppraisal.mockResolvedValue(appraisal({ status: c.status }));
+      const q = await run(c.actor, { op: c.op, ...(c.extra.id ? {} : { id: randomUUID() }), ...c.extra });
+      expect(q.dlq).toEqual([]);
+
+      expect(vi.mocked(enqueue)).toHaveBeenCalledTimes(1);
+      const [txArg, evt] = vi.mocked(enqueue).mock.calls[0]! as [unknown, Record<string, any>];
+      // Same transaction handle the write ran on (markProcessed / appendHistory got it too).
+      expect(txArg).toBe(mockTx);
+      expect(R.appendHistory.mock.calls[0]![0]).toBe(mockTx);
+      expect(evt).toMatchObject({
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: TENANT, actorId: c.actor,
+      });
+      expect(evt.correlationId).toMatch(/^corr-/);
+      expect(evt.payload).toMatchObject({
+        service: "hrms", resourceType: "apar", resourceId: c.resourceId, outcome: "success", ...c.expected,
+      });
+      // After the write and its history row, never before: a failed write leaves no audit event.
+      expect(vi.mocked(enqueue).mock.invocationCallOrder[0]!).toBeGreaterThan(R.appendHistory.mock.invocationCallOrder[0]!);
+
+      const wire = JSON.stringify(evt);
+      for (const t of FREE_TEXT) expect(wire, `${t} leaked into the audit event`).not.toContain(t);
+      expect(evt.payload).not.toHaveProperty("overallGrade");
+      expect(evt.payload).not.toHaveProperty("overallBand");
+      await q.stop();
+    });
+  }
+
+  it("records a super_admin acting out of turn as an audited override on the audit event too", async () => {
+    const admin = "30000000-cccc-4000-8000-00000000009f";
+    const q = await run(admin, { op: "apar_routes__1", id: randomUUID(), params: { id: APAR }, body: { selfAppraisal: "entered by HR" } });
+    expect(q.dlq).toEqual([]);
+    expect(vi.mocked(enqueue).mock.calls[0]![1]).toMatchObject({
+      actorId: admin, payload: { action: "self_appraisal", actorRole: "super_admin", override: true },
+    });
+    await q.stop();
+  });
+
+  it("a redelivered command (markProcessed false) writes nothing and emits nothing", async () => {
+    vi.mocked(markProcessed).mockResolvedValueOnce(false);
+    const q = await run(EMP, { op: "apar_routes__1", id: randomUUID(), params: { id: APAR }, body: { selfAppraisal: "x" } });
+    expect(q.dlq).toEqual([]);
+    expect(R.updateAppraisal).not.toHaveBeenCalled();
+    expect(vi.mocked(enqueue)).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("a rejected write (version conflict) emits no audit event", async () => {
+    R.updateAppraisal.mockRejectedValueOnce(new Error("VERSION_CONFLICT"));
+    const q = await run(EMP, { op: "apar_routes__1", id: randomUUID(), params: { id: APAR }, body: { selfAppraisal: "x" } });
+    expect(q.dlq).toHaveLength(1);
+    expect(vi.mocked(enqueue)).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("a rejected op (appraisal not found / no scores) emits no audit event", async () => {
+    R.findAppraisal.mockResolvedValue(null);
+    const q1 = await run(HR, { op: "apar_routes__6", id: randomUUID(), params: { id: APAR }, body: {} });
+    expect(q1.dlq).toHaveLength(1);
+    R.findAppraisal.mockResolvedValue(appraisal({ status: "accepting_authority" }));
+    R.listScores.mockResolvedValue([]);
+    const q2 = await run(AA, { op: "apar_routes__4", id: randomUUID(), params: { id: APAR }, body: { remarks: "r" } });
+    expect(q2.dlq).toHaveLength(1);
+    expect(vi.mocked(enqueue)).not.toHaveBeenCalled();
+    await q1.stop();
+    await q2.stop();
+  });
+
+  it("ops that belong to another module emit nothing from this consumer", async () => {
+    const q = await run(HR, { op: "some_other_module_routes__0", id: randomUUID(), params: {}, body: {} });
+    expect(vi.mocked(enqueue)).not.toHaveBeenCalled();
     await q.stop();
   });
 });

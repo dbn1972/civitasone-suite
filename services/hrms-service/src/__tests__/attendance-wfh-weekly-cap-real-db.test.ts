@@ -110,3 +110,61 @@ describe("POST /v1/hrms/wfh-requests — weekly cap (GAP-HR-WFH-01, partial)", (
     expect(r.statusCode).toBe(202);
   });
 });
+
+// GAP-HR-WFH-01 (rescan): the cap is counted in DAYS. Until now it counted
+// existing request ROWS whose fromDate fell in the week and ignored the new
+// request's own span, so one Monday-Friday request (a single row) passed.
+// 2026-04-06, 04-13, 04-20, 05-04, 05-11 and 05-18 are Mondays.
+describe("POST /v1/hrms/wfh-requests — weekly cap is counted in days (GAP-HR-WFH-01)", () => {
+  const post = (fromDate: string, toDate: string) => app.inject({
+    method: "POST", url: "/v1/hrms/wfh-requests", headers: auth(EMP_SUB, ["employee"]),
+    payload: { employeeId: empId, fromDate, toDate },
+  });
+
+  it("rejects a SINGLE Monday-to-Friday request: one row, five days (422 WEEKLY_WFH_CAP_REACHED)", async () => {
+    const r = await post("2026-04-06", "2026-04-10");
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("WEEKLY_WFH_CAP_REACHED");
+  });
+
+  it("rejects a 3-day request even in an otherwise empty week, and allows a 2-day one", async () => {
+    expect((await post("2026-04-13", "2026-04-15")).statusCode).toBe(422);
+    expect((await post("2026-04-13", "2026-04-14")).statusCode).toBe(202);
+  });
+
+  it("an existing MULTI-day request counts by its days: Mon-Tue on file (one row) leaves no room for a Thursday", async () => {
+    await seedWfh(empId, "2026-04-20", "2026-04-21", "approved");
+    const r = await post("2026-04-23", "2026-04-23");
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("WEEKLY_WFH_CAP_REACHED");
+  });
+
+  it("a request that straddles two ISO weeks is counted per week (Sun | Mon+Tue is within the cap; Fri-Sun is not)", async () => {
+    expect((await post("2026-05-17", "2026-05-19")).statusCode).toBe(202); // Sun | Mon, Tue
+    expect((await post("2026-05-15", "2026-05-17")).statusCode).toBe(422); // Fri, Sat, Sun = 3 calendar days
+  });
+
+  it("a day already held by an existing request is not double-counted", async () => {
+    await seedWfh(empId, "2026-05-04", "2026-05-05", "pending");
+    expect((await post("2026-05-05", "2026-05-05")).statusCode).toBe(202);
+    expect((await post("2026-05-06", "2026-05-06")).statusCode).toBe(422);
+  });
+
+  it("an impossible calendar date is a 400, not a 500", async () => {
+    const r = await post("2026-13-45", "2026-13-46");
+    expect(r.statusCode).toBe(400);
+  });
+
+  it("GET /wfh-eligibility reports DAYS used in the current week (a Mon-Tue row = 2), with the cap", async () => {
+    const now = new Date();
+    const dow = (now.getUTCDay() + 6) % 7; // Monday = 0
+    const monday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - dow));
+    const day = (offset: number) => new Date(monday.getTime() + offset * 86_400_000).toISOString().slice(0, 10);
+    await seedWfh(empId, day(0), day(1), "approved");
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/wfh-eligibility?employeeId=${empId}`, headers: auth(EMP_SUB, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    // weekStart/weekEnd name the Monday-Sunday week the count is for, so the request form applies the
+    // count only to dates inside it (a later week has its own, separate allowance).
+    expect(r.json()).toMatchObject({ weeklyWfhCount: 2, weeklyCap: 2, weekStart: day(0), weekEnd: day(6) });
+  });
+});

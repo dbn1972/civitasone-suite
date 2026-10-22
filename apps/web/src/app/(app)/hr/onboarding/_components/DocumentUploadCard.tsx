@@ -6,7 +6,7 @@
  * and a status chip (Pending / Uploaded / Verified / Rejected).
  */
 
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useFormError } from "@/lib/useFormError";
 
 export type DocStatus = "pending" | "uploaded" | "verified" | "rejected";
@@ -20,8 +20,25 @@ export interface OnboardingDocument {
   uploadedFileName?: string;
   /** Object-storage key of the uploaded file, if any (GAP-HR-ONBOARDING-DETAIL-02). */
   storageKey?: string | null;
-  /** FileUpload DS category */
+  /**
+   * FileUpload DS category. Defaults to "attachment": the admin-service presign endpoint
+   * accepts pdf/doc/docx/xls/xlsx/jpg/png (10 MB) for it -- the "document" category does NOT accept
+   * images, so a scanned ID proof (jpg/png) 400'd at presign (GAP-HR-ONBOARDING-DETAIL-02).
+   */
   category?: "resume" | "attachment" | "document" | "photo";
+}
+
+/**
+ * Extensions this card offers. Must stay within what the presign endpoint allows for the "attachment"
+ * category (services/admin-service uploads/routes.ts ALLOWED_TYPES): an extension outside it is rejected
+ * server-side, so it is refused up front with a clear message instead of surfacing as a failed upload.
+ */
+const ALLOWED_EXTENSIONS = ["pdf", "jpg", "png", "docx"] as const;
+const ACCEPT_ATTRIBUTE = ALLOWED_EXTENSIONS.map((e) => `.${e}`).join(",");
+
+function hasAllowedExtension(fileName: string): boolean {
+  const ext = fileName.includes(".") ? fileName.split(".").pop()!.toLowerCase() : "";
+  return (ALLOWED_EXTENSIONS as readonly string[]).includes(ext);
 }
 
 const STATUS_CONFIG: Record<
@@ -68,6 +85,14 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
   const [dragging, setDragging] = useState(false);
   const [localFile, setLocalFile] = useState<string | null>(doc.uploadedFileName ?? null);
   const [localStatus, setLocalStatus] = useState<DocStatus>(doc.status);
+  // GAP-HR-ONBOARDING-DETAIL-02: local state is an optimistic overlay (e.g. "uploaded" the moment the PUT
+  // succeeds), but the server record is the truth. useState only reads its initial value once, so after a
+  // Verify/Reject (or any other change) and router.refresh() the card kept showing the OLD status and
+  // buttons until a full reload. Re-adopt the server's values whenever they change.
+  useEffect(() => {
+    setLocalStatus(doc.status);
+    setLocalFile(doc.uploadedFileName ?? null);
+  }, [doc.status, doc.uploadedFileName]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -87,6 +112,11 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
   const formError = useFormError("document upload");
 
   async function handleFile(file: File) {
+    if (!hasAllowedExtension(file.name)) {
+      setUploadSuccessMessage(null);
+      setUploadError("Unsupported file type — upload a PDF, JPG, PNG or DOCX file.");
+      return;
+    }
     if (file.size > 10 * 1024 * 1024) {
       // GAP-HR-ONBOARDING-DETAIL-03: a real inline, role=alert message
       // instead of a browser alert() -- consistent with every other error
@@ -102,7 +132,7 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
       const res = await fetch("/api/proxy/v1/admin/uploads/presign", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ category: doc.category ?? "document", filename: file.name, contentType: file.type }),
+        body: JSON.stringify({ category: doc.category ?? "attachment", filename: file.name, contentType: file.type }),
       });
       if (res.ok) {
         const { uploadUrl, key, headers } = await res.json() as { uploadUrl: string; key: string; headers: Record<string, string> };
@@ -281,7 +311,7 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
           <input
             ref={inputRef}
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png,.docx"
+            accept={ACCEPT_ATTRIBUTE}
             style={{ display: "none" }}
             onChange={(e) => {
               const f = e.target.files?.[0];

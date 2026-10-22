@@ -8,6 +8,11 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
+const rolesMock = vi.fn<() => string[]>(() => []);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+}));
+
 import DesignationsPage from "./page";
 
 const MOCK_ITEMS = [{ id: "d1", code: "CLK", name: "Clerk", level: 1, payGrade: "PG1" }];
@@ -23,7 +28,11 @@ async function renderPage() {
 }
 
 describe("DesignationsPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue([]);
+  });
 
   it("renders designations and real stat counts on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_ITEMS, source: "api" });
@@ -65,5 +74,39 @@ describe("DesignationsPage", () => {
     expect(screen.getByText("Unique Levels")).toBeInTheDocument();
     // Two distinct real levels (4, 6); level 0 does not count as a third.
     expect(screen.getAllByText("2").length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-02: admins ask the API for per-row usage counts (so the
+ * table can say why Delete is unavailable); everyone else gets the plain list
+ * -- the API ignores the flag for them anyway, so there is nothing to gain by
+ * sending it.
+ */
+describe("DesignationsPage — GAP-HR-DESIGNATIONS-02 usage counts", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    rolesMock.mockReset();
+  });
+
+  it("requests withUsage for a masters admin", async () => {
+    rolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_ITEMS, source: "api" });
+    await renderPage();
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toBe("/api/v1/hrms/designations?withUsage=true");
+  });
+
+  it("does not request usage for a read-only role", async () => {
+    rolesMock.mockReturnValue(["manager"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_ITEMS, source: "api" });
+    await renderPage();
+    expect(fetchJsonMock.mock.calls[0]?.[0]).toBe("/api/v1/hrms/designations");
+  });
+
+  it("disables Delete for an in-use designation the admin sees", async () => {
+    rolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [{ ...MOCK_ITEMS[0], usageCount: 4 }], source: "api" });
+    await renderPage();
+    expect(screen.getByRole("button", { name: "Delete Clerk" })).toHaveAttribute("aria-disabled", "true");
   });
 });

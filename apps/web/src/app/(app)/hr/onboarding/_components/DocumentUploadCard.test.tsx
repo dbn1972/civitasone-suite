@@ -179,4 +179,80 @@ describe("DocumentUploadCard", () => {
       expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
     });
   });
+
+  // GAP-HR-ONBOARDING-DETAIL-02: the card used to read doc.status once (useState initial value) and never
+  // again, so after HR clicked Verify/Reject and the page refreshed with the new server status, the chip
+  // still read "Uploaded" and the Verify/Reject buttons stayed until a full reload.
+  describe("re-adopts the server status after a refresh", () => {
+    const UPLOADED: OnboardingDocument = { id: "pan", name: "PAN Card", required: true, status: "uploaded", uploadedFileName: "pan.pdf", storageKey: "k1" };
+
+    it("Verify: the chip becomes Verified and the Verify/Reject buttons and upload zone go away", () => {
+      const { rerender } = render(<DocumentUploadCard documents={[UPLOADED]} onVerify={vi.fn()} onReject={vi.fn()} />);
+      expect(screen.getByText("Uploaded")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
+
+      rerender(<DocumentUploadCard documents={[{ ...UPLOADED, status: "verified" }]} onVerify={vi.fn()} onReject={vi.fn()} />);
+
+      expect(screen.getAllByText("Verified").length).toBeGreaterThan(0);
+      expect(screen.queryByText("Uploaded")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Upload PAN Card/ })).not.toBeInTheDocument();
+    });
+
+    it("Reject: the chip becomes Rejected, the actions go away, and the employee can upload a replacement", () => {
+      const { rerender } = render(<DocumentUploadCard documents={[UPLOADED]} onVerify={vi.fn()} onReject={vi.fn()} />);
+      rerender(<DocumentUploadCard documents={[{ ...UPLOADED, status: "rejected" }]} onVerify={vi.fn()} onReject={vi.fn()} />);
+
+      expect(screen.getByText("Rejected")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Upload PAN Card/ })).toBeInTheDocument();
+    });
+
+    it("keeps the optimistic Uploaded status after a successful upload while the server record is still catching up", async () => {
+      mockUploadSuccess();
+      const { rerender } = render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      fireEvent.change(screen.getByLabelText("Choose file for PAN Card (required)"), {
+        target: { files: [new File(["x"], "pan.pdf", { type: "application/pdf" })] },
+      });
+      await screen.findByText("Uploaded");
+
+      // A re-render with the SAME (still pending) server props must not wipe the optimistic status.
+      rerender(<DocumentUploadCard documents={[{ ...REQUIRED_DOC }]} />);
+      expect(screen.getByText("Uploaded")).toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-ONBOARDING-DETAIL-02 caveat: the card offered JPG/JPEG/PNG but uploaded under the "document"
+  // category, which the presign endpoint restricts to office documents -- every image 400'd.
+  describe("offered file types match what the upload endpoint accepts", () => {
+    it("only offers PDF/JPG/PNG/DOCX in the file picker", () => {
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      expect(screen.getByLabelText("Choose file for PAN Card (required)")).toHaveAttribute("accept", ".pdf,.jpg,.png,.docx");
+    });
+
+    it("presigns an image under the 'attachment' category (the one that allows jpg/png)", async () => {
+      mockUploadSuccess();
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      fireEvent.change(screen.getByLabelText("Choose file for PAN Card (required)"), {
+        target: { files: [new File(["x"], "pan.JPG", { type: "image/jpeg" })] },
+      });
+      await screen.findByRole("status");
+      expect(global.fetch).toHaveBeenNthCalledWith(
+        1,
+        "/api/proxy/v1/admin/uploads/presign",
+        expect.objectContaining({ body: JSON.stringify({ category: "attachment", filename: "pan.JPG", contentType: "image/jpeg" }) }),
+      );
+    });
+
+    it("refuses an extension the endpoint would reject (e.g. .jpeg, .xlsx) up front, with no network call", () => {
+      global.fetch = vi.fn();
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      fireEvent.change(screen.getByLabelText("Choose file for PAN Card (required)"), {
+        target: { files: [new File(["x"], "scan.jpeg", { type: "image/jpeg" })] },
+      });
+      expect(screen.getByRole("alert")).toHaveTextContent(/unsupported file type/i);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
 });

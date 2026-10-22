@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useDays } from "./useDays";
+import { useDays, useMonthEnds } from "./useDays";
 
 interface Props {
   daysLeft: number;
@@ -16,6 +16,11 @@ interface Props {
 
 export function PayrollBanner({ daysLeft, monthName, headcount, canRunPayroll }: Props) {
   const formatDays = useDays();
+  // GAP-HR-DASHBOARD-05: this line used to say "Deadline in N days", which
+  // presented calendar days to month-end as a payroll deadline. The app has no
+  // payroll cutoff calendar to source a real one from, so it now says what it
+  // actually counts.
+  const monthEnds = useMonthEnds();
   return (
     // GAP-HR-DASHBOARD-05: role="status" (polite), not role="alert"
     // (assertive) -- an approaching payroll deadline is informational, not
@@ -27,17 +32,9 @@ export function PayrollBanner({ daysLeft, monthName, headcount, canRunPayroll }:
       </div>
       <div className="pb-text">
         <div className="pb-label">Payroll Processing</div>
-        <div className="pb-sub">{monthName} cycle · {headcount != null ? headcount.toLocaleString("en-IN") : "—"} employees · Deadline in {formatDays(daysLeft)}</div>
+        <div className="pb-sub">{monthName} cycle · {headcount != null ? headcount.toLocaleString("en-IN") : "—"} employees · {monthEnds(formatDays(daysLeft))}</div>
       </div>
       {canRunPayroll && <Link href="/hr/payroll" className="pb-btn">Start Run →</Link>}
-      <style>{`
-        .payroll-banner { margin:10px 0 0;background:var(--warnbg);border:1px solid var(--warnbd);border-inline-start:4px solid var(--warn);border-radius:6px;padding:10px 14px;display:flex;align-items:center;gap:10px; }
-        .pb-icon { flex-shrink:0; }
-        .pb-text { flex:1; }
-        .pb-label { font-size:11px;font-weight:700;color:var(--warn); }
-        .pb-sub { font-size:11px;color:var(--ink);margin-top:1px; }
-        .pb-btn { background:var(--warn);color:var(--panel);border-radius:5px;font-size:11px;font-weight:700;padding:5px 12px;text-decoration:none;white-space:nowrap;flex-shrink:0; }
-      `}</style>
     </div>
   );
 }

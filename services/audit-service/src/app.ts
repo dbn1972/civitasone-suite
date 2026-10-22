@@ -7,6 +7,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { eventRoutes } from "./modules/events/routes.js";
 import { exportRoutes } from "./modules/exports/routes.js";
@@ -31,6 +32,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // Per-user rate limiting (300 req/min keyed by actorId, ops paths excluded),
+  // same shape as hrms-service. Registered so the routes that read or export
+  // the audit trail can carry route-level limits (GAP-HR-AUDIT-LOG-04).
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
