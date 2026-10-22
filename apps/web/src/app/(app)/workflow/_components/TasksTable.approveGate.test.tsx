@@ -34,8 +34,17 @@ function appTask(appId: string): WorkflowTask {
   };
 }
 
-function checklistResponse(items: Array<{ docType: string; mandatory: boolean; provided: boolean }>) {
-  return new Response(JSON.stringify({ items: items.map((i) => ({ ...i, verified: false })) }), { status: 200 });
+/** Answers the batched POST /verification-lane/batch the checklist now uses: every requested lane gets `items`. */
+function checklistAnswer(items: Array<{ docType: string; mandatory: boolean; provided: boolean }>) {
+  return async (_url: unknown, init?: RequestInit): Promise<Response> => {
+    const lanes = (JSON.parse(String(init?.body)) as { lanes: Array<{ laneKey: string; serviceId?: string; applicationId?: string }> }).lanes;
+    return new Response(JSON.stringify({
+      data: lanes.map((l) => ({
+        laneKey: l.laneKey, serviceId: l.serviceId ?? null, applicationId: l.applicationId ?? null, ok: true,
+        items: items.map((i) => ({ ...i, verified: false })),
+      })),
+    }), { status: 200 });
+  };
 }
 
 describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () => {
@@ -54,7 +63,7 @@ describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () =>
   it("disables Approve with a visible reason when the checklist failed to load, and re-enables after a successful Retry", async () => {
     const fetchMock = vi.spyOn(global, "fetch")
       .mockResolvedValueOnce(new Response("{}", { status: 500 }))
-      .mockResolvedValue(checklistResponse([{ docType: "id", mandatory: true, provided: true }]));
+      .mockImplementation(checklistAnswer([{ docType: "id", mandatory: true, provided: true }]));
     render(<TasksTable tasks={[appTask("aaaa0002-0000-0000-0000-000000000002")]} currentUserId={ME} showStatusFilter={false} />);
     await waitFor(() => expect(screen.getByText(/checklist could not be loaded/)).toBeInTheDocument());
     expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
@@ -67,7 +76,7 @@ describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () =>
   });
 
   it("disables Approve with a visible reason when mandatory documents are missing", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue(checklistResponse([
+    vi.spyOn(global, "fetch").mockImplementation(checklistAnswer([
       { docType: "id", mandatory: true, provided: false },
       { docType: "addr", mandatory: true, provided: false },
       { docType: "photo", mandatory: false, provided: false },
@@ -81,7 +90,7 @@ describe("TasksTable Approve gating — GAP-WORKFLOW-INSTANCES-DETAIL-02", () =>
   });
 
   it("keeps Approve enabled when every mandatory document is provided", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValue(checklistResponse([
+    vi.spyOn(global, "fetch").mockImplementation(checklistAnswer([
       { docType: "id", mandatory: true, provided: true },
       { docType: "photo", mandatory: false, provided: false },
     ]));

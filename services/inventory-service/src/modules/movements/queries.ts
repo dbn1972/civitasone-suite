@@ -74,16 +74,20 @@ export type LowStockView = {
   onHandQty: number; reorderLevel: number; suggestedReorderQty: number;
 };
 
-export async function listLowStock(tenantId: string, limit: number, offset: number): Promise<{ data: LowStockView[] }> {
+export async function listLowStock(tenantId: string, limit: number, offset: number): Promise<{ data: LowStockView[]; meta: { total: number; limit: number; offset: number } }> {
   const hash = `list:${limit}:${offset}`;
   return cache.listOrLoad(tenantId, RESOURCE.lowStock, hash, async () => {
-    const rows = await repo.listLowStock(tenantId, limit, offset);
+    const [rows, total] = await Promise.all([
+      repo.listLowStock(tenantId, limit, offset),
+      repo.countLowStock(tenantId),
+    ]);
     return {
       data: rows.map((r) => ({
         itemId: r.itemId, storeId: r.storeId, name: r.name, sku: r.sku,
         onHandQty: r.onHandQty, reorderLevel: r.reorderLevel,
         suggestedReorderQty: suggestedReorderQty(r.onHandQty, r.reorderLevel, r.reorderQty),
       })),
+      meta: { total, limit, offset },
     };
   });
 }

@@ -58,6 +58,8 @@ export function AssetsTable({ assets, source = "api", cacheKey = "assets.registe
   // A failed fetch with nothing cached is unknown, not zero.
   const unknown = provenance === "error-no-data";
   const stats = computeAssetStats(rows);
+  // An empty register has no percentage or block value to report: show a dash, not 0% / ₹0.00.
+  const noRows = rows.length === 0;
 
   const tableRows: Row[] = rows.map((a) => ({
     id: a.id,
@@ -82,9 +84,9 @@ export function AssetsTable({ assets, source = "api", cacheKey = "assets.registe
     <>
       <StatGrid>
         <StatCard icon="🖥️" tone="warn" label={typeFilter === "fixed" ? "Fixed Assets" : "Assets"} value={unknown ? null : stats.count.toLocaleString("en-IN")} />
-        <StatCard icon="✅" tone="info" label="Active / in use" value={unknown ? null : `${stats.activePct}%`} />
-        <StatCard icon="💰" tone="good" label="Gross Block" value={unknown ? null : formatMoney(stats.grossBlock)} />
-        <StatCard icon="📉" tone="warn" label="Net Book Value" value={unknown ? null : formatMoney(stats.netBlock)} />
+        <StatCard icon="✅" tone="info" label="Active / in use" value={unknown || noRows ? null : `${stats.activePct}%`} />
+        <StatCard icon="💰" tone="good" label="Gross Block" value={unknown || noRows ? null : formatMoney(stats.grossBlock)} />
+        <StatCard icon="📉" tone="warn" label="Net Book Value" value={unknown || noRows ? null : formatMoney(stats.netBlock)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">

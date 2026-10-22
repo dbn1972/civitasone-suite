@@ -182,7 +182,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
               />
               {/* GAP-ASSETS-FLEET-MAINTENANCE-06: states what the system actually does today. */}
               <p id={odometerHelpId} style={{ fontSize: 12, margin: 0, color: "var(--ink2)" }}>
-                Optional reference reading. It is saved with the job, but the job is scheduled and flagged overdue by its date only; reaching this reading does not trigger it.
+                Optional. The job is flagged overdue once its date passes, or once the vehicle's recorded odometer reaches this reading.
               </p>
               {errors.odometerThresholdKm && <p id={odometerErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.odometerThresholdKm}</p>}
             </div>

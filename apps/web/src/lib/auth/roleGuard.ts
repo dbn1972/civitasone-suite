@@ -135,6 +135,13 @@ export const RECOMMENDATION_READER_ROLES = [
 ];
 
 /**
+ * Roles shown the CSV export on the stock-movements summary (inventory/reconcile).
+ * Strictest safe default: the same inventory manager tier that approves counts;
+ * inventory-service still authorises every ledger read.
+ */
+export const INVENTORY_LEDGER_EXPORT_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+
+/**
  * Roles permitted to approve/reject a cycle count. Mirrors inventory-service's
  * APPROVE_ROLES in modules/cycle-count/routes.ts (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02);
  * the server remains the authority (it also enforces maker != checker).

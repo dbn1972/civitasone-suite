@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, getTableColumns } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   fleetVehicles, fleetMaintenance, fleetDevices, fleetDeviceTelemetry,
@@ -86,14 +86,27 @@ export async function insertMaintenance(tx: Writer, row: FleetMaintenanceInsert)
   await tx.insert(fleetMaintenance).values(row);
 }
 
+/**
+ * A scheduled job is odometer-due once its vehicle's current reading has reached
+ * the job's odometer threshold. Either side missing means the threshold cannot be
+ * evaluated (not due). Only a "scheduled" job can be due.
+ */
+export function isOdometerExceeded(status: string, thresholdKm: number | null, vehicleOdometerKm: number | null): boolean {
+  return status === "scheduled" && thresholdKm !== null && vehicleOdometerKm !== null && vehicleOdometerKm >= thresholdKm;
+}
+
 export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
-  return scopedRead((tx) => tx.select().from(fleetMaintenance)
+  // The vehicle's current odometer is joined in so odometerThresholdKm can be evaluated.
+  const rows = await scopedRead((tx) => tx.select({ ...getTableColumns(fleetMaintenance), vehicleOdometerKm: fleetVehicles.odometerKm })
+    .from(fleetMaintenance)
+    .leftJoin(fleetVehicles, and(eq(fleetVehicles.id, fleetMaintenance.vehicleId), eq(fleetVehicles.tenantId, fleetMaintenance.tenantId)))
     .where(eq(fleetMaintenance.tenantId, tenantId))
     .orderBy(desc(fleetMaintenance.createdAt))
     .limit(opts?.limit ?? 50)
     .offset(opts?.offset ?? 0));
+  return rows.map((r) => ({ ...r, odometerExceeded: isOdometerExceeded(r.status, r.odometerThresholdKm, r.vehicleOdometerKm) }));
 }
 
 // ── devices ──────────────────────────────────────────────────────────────
@@ -246,6 +259,9 @@ export async function cancelMaintenance(tx: Writer, id: string, tenantId: string
 
 // ── fleet dashboard ──────────────────────────────────────────────────────
 
+/** SQL twin of isOdometerExceeded() for scheduled jobs (the dashboard filters status itself). */
+const odometerExceededSql = sql<boolean>`(${fleetMaintenance.odometerThresholdKm} is not null and ${fleetVehicles.odometerKm} is not null and ${fleetVehicles.odometerKm} >= ${fleetMaintenance.odometerThresholdKm})`;
+
 export async function getFleetDashboard(tenantId: string): Promise<{
   totalVehicles: number;
   availableVehicles: number;
@@ -262,16 +278,18 @@ export async function getFleetDashboard(tenantId: string): Promise<{
     scopedRead((tx) =>
       tx.select({
         scheduledDate: fleetMaintenance.scheduledDate,
+        odometerExceeded: odometerExceededSql,
         cnt: sql`cast(count(*) as int)`,
       })
         .from(fleetMaintenance)
+        .leftJoin(fleetVehicles, and(eq(fleetVehicles.id, fleetMaintenance.vehicleId), eq(fleetVehicles.tenantId, fleetMaintenance.tenantId)))
         .where(
           and(
             eq(fleetMaintenance.tenantId, tenantId),
             eq(fleetMaintenance.status, 'scheduled'),
           ),
         )
-        .groupBy(fleetMaintenance.scheduledDate),
+        .groupBy(fleetMaintenance.scheduledDate, odometerExceededSql),
     ),
   ]);
 
@@ -292,6 +310,8 @@ export async function getFleetDashboard(tenantId: string): Promise<{
   for (const row of maintenanceCounts) {
     const d = row.scheduledDate ? new Date(row.scheduledDate) : null;
     const c = Number(row.cnt ?? 0);
+    // The vehicle has reached the job's odometer threshold: overdue whatever its date.
+    if (row.odometerExceeded) { overdueMaintenance += c; continue; }
     if (!d) { scheduledMaintenance += c; continue; }
     if (d.getTime() < today.getTime()) {
       overdueMaintenance += c;
