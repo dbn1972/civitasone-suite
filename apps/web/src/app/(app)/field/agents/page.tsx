@@ -1,21 +1,19 @@
-import { Card, DataTable, PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { Card, DataTable, LoadErrorState, PageHeader } from "../../../_components/ds";
 import { getFieldAgentsDetailed, type FieldAgentRow } from "../_data";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const { data, source } = await getFieldAgentsDetailed();
+  const result = await getFieldAgentsDetailed();
+  const { data, source } = result;
 
   if (source === "error") {
     return (
       <>
         <PageHeader title="Agents" subtitle="Agents with assigned field tasks and their task counts." back="/field" backLabel="Field Operations" />
         <Card title="Agents">
-          <RefreshErrorState
-            error={{ what: "Could not load field agents", next: "Check your connection and try again.", actions: ["retry", "back"] }}
-            source={{ area: "field agents" }}
-            backHref="/field"
-          />
+          {/* A 403 (a non-supervisor reached this URL directly) is an access decision, not an outage: Retry cannot help. */}
+          <LoadErrorState result={result} area="field agents" backHref="/field" backLabel="Field Operations" />
         </Card>
       </>
     );

@@ -801,6 +801,13 @@ export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
 export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
 
 /**
+ * Roles permitted to open the tenant-wide field agent roster. Mirrors field-service's
+ * GET /v1/field/agents gate (supervisors only); the server stays the authority, this
+ * only decides whether the hub offers the tile.
+ */
+export const FIELD_AGENT_ROSTER_ROLES = ["field_admin", "super_admin"];
+
+/**
  * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
  * visitor policy (/visitor/admin). Mirrors visitor-service config-registry
  * CONFIG_WRITE_ROLES exactly (modules/config-registry/routes.ts) — only
