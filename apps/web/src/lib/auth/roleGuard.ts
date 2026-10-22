@@ -1052,6 +1052,13 @@ export const DESIGNER_AUTHOR_ROLES = ["citizen_admin", "super_admin"];
 export const WORKFLOW_DESIGNER_AUTHOR_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
 /**
+ * Roles permitted to read the admin legacy-delegations report. Mirrors workflow-service's delegations
+ * ADMIN_ROLES (modules/delegations/routes.ts: workflow_admin, super_admin, tenant_admin) on
+ * GET /v1/workflow/delegations/legacy-report. UI gating only; the service enforces the same.
+ */
+export const WORKFLOW_DELEGATION_ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
+
+/**
  * GAP2-ANALYTICS-ROLES-01: roles permitted to READ the analytics module
  * (KPI library, Data Warehouse, AI Insights, Dashboards, Queries, Exports).
  * MUST mirror analytics-service's canonical ANALYTICS_READ_ROLES
