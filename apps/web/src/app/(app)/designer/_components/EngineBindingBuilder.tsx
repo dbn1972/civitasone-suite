@@ -14,6 +14,8 @@ import {
   type EnginePreviewResultUi,
 } from "@/app/_components/ds/designer/engineBindingTypes";
 import { formatMoney } from "@/lib/formatters";
+import { isNetworkFailure } from "@/lib/userFacingError";
+import { toHumanError } from "@/lib/messages";
 import { rupeesInputToMinorNumber } from "@/lib/money";
 import {
   bindingFromDescriptor,
@@ -168,7 +170,12 @@ export function EngineBindingBuilder({
       } catch (e) {
         if (e instanceof Error && e.name === "AbortError") return;
         setPreview(null);
-        setPreviewError(e instanceof Error ? e.message : "Preview failed.");
+        if (isNetworkFailure(e)) {
+          const human = toHumanError("load", { area: "engine preview" });
+          setPreviewError(`${human.what} ${human.next}`);
+        } else {
+          setPreviewError(e instanceof Error ? e.message : "Preview failed.");
+        }
       }
     }, 300);
     return () => controller.abort();

@@ -53,6 +53,12 @@ export function GovernanceLinkageBuilder({
     return () => { live = false; };
   }, []);
 
+  const retryPositions = () => {
+    fetchTenantPositions()
+      .then((rows) => { setPositions(rows); setPositionsFailed(false); })
+      .catch(() => setPositionsFailed(true));
+  };
+
   return (
     <section style={{ display: "grid", gap: 24 }}>
       {/* ── FN-27 ── */}
@@ -76,7 +82,7 @@ export function GovernanceLinkageBuilder({
               {positionsFailed ? (
                 <p style={{ ...hint, color: "var(--bad)" }}>
                   Could not load positions.{" "}
-                  <button type="button" onClick={() => { fetchTenantPositions().then(setPositions).catch(() => {}); }} style={{ fontSize: 12 }}>Retry</button>
+                  <button type="button" onClick={retryPositions} style={{ fontSize: 12 }}>Retry</button>
                 </p>
               ) : (
                 <select
@@ -160,7 +166,7 @@ export function GovernanceLinkageBuilder({
             {positionsFailed ? (
               <p style={{ ...hint, color: "var(--bad)" }}>
                 Could not load positions.{" "}
-                <button type="button" onClick={() => { fetchTenantPositions().then(setPositions).catch(() => {}); }} style={{ fontSize: 12 }}>Retry</button>
+                <button type="button" onClick={retryPositions} style={{ fontSize: 12 }}>Retry</button>
               </p>
             ) : (
               <select

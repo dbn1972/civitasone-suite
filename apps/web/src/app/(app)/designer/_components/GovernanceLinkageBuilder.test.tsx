@@ -4,7 +4,7 @@
  * snake_case tokens. We mock fetchTenantPositions so the dropdown is populated.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 
 const fetchPositions = vi.fn();
 vi.mock("../_data/workflowBuilderApi", () => ({
@@ -52,5 +52,24 @@ describe("GovernanceLinkageBuilder position picker (GAP-DESIGNER-DETAIL-B1-04)",
     await waitFor(() => {
       expect(screen.getByText(/Could not load positions/i)).toBeTruthy();
     });
+  });
+
+  // CLOS-S1-01: a successful Retry must clear the error banner.
+  it("clears the error banner and shows the select after a successful Retry", async () => {
+    fetchPositions.mockRejectedValueOnce(new Error("boom"));
+    render(<GovernanceLinkageBuilder {...baseProps} appeal={{ appealable: true }} />);
+    await waitFor(() => expect(screen.getByText(/Could not load positions/i)).toBeTruthy());
+    fireEvent.click(screen.getByText("Retry"));
+    await waitFor(() => expect(screen.queryByText(/Could not load positions/i)).toBeNull());
+    expect(screen.getByLabelText("Appellate authority designation")).toBeTruthy();
+  });
+
+  it("keeps the error banner when the Retry also fails", async () => {
+    fetchPositions.mockRejectedValue(new Error("boom"));
+    render(<GovernanceLinkageBuilder {...baseProps} rti={{ published: true }} />);
+    await waitFor(() => expect(screen.getByText(/Could not load positions/i)).toBeTruthy());
+    fireEvent.click(screen.getByText("Retry"));
+    await waitFor(() => expect(fetchPositions).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(/Could not load positions/i)).toBeTruthy();
   });
 });

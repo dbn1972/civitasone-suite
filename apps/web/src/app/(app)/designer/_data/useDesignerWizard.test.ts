@@ -79,4 +79,24 @@ describe("useDesignerWizard — onSubmit never falls back to a raw '<Verb> faile
 
     expect(result.current.error).toBe("We couldn't save your service definition. Nothing was changed.");
   });
+
+  // CLOS-S1-03
+  it("never shows the raw browser 'Failed to fetch' when submit fails offline", async () => {
+    submitForApproval.mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result } = renderHook(() => useDesignerWizard("def-1", "b1"));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await result.current.onSubmit(); });
+    expect(result.current.error).not.toMatch(/failed to fetch/i);
+    expect(result.current.error).toMatch(/couldn't save/i);
+  });
+
+  it("never shows the raw browser 'Failed to fetch' when the draft load fails offline", async () => {
+    fetchServiceDefinition.mockReset().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result } = renderHook(() => useDesignerWizard("def-1", "b1"));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.error).not.toBeNull();
+    expect(result.current.error).not.toMatch(/failed to fetch/i);
+    expect(result.current.error).toMatch(/couldn't load/i);
+  });
 });
