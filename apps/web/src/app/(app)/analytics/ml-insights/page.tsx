@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, StatusPill, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
-import { getMLDomainOverview, type MLDomainSummary } from "./_data";
-import { metricForDomain } from "./_metrics";
+import { getMLDomainOverview } from "./_data";
 
 const DOMAIN_META: Record<string, { label: string; icon: string; iconBg: string; href: string }> = {
   leads: { label: "Lead Scoring", icon: "🎯", iconBg: "var(--infobg)", href: "/analytics/ml-insights/leads" },
@@ -15,23 +13,8 @@ const DOMAIN_META: Record<string, { label: string; icon: string; iconBg: string;
   transactions: { label: "Anomaly Detection", icon: "🔍", iconBg: "var(--warnbg)", href: "/analytics/ml-insights/anomalies" },
 };
 
-/** A model not retrained within this many days is treated as stale. */
-const STALE_AFTER_DAYS = 90;
-
 function formatPct(value: number | null): string {
   return value == null || Number.isNaN(value) ? "—" : `${Math.round(value * 100)}%`;
-}
-
-function isStale(lastTrainedAt: string | null): boolean {
-  if (!lastTrainedAt) return false;
-  const t = new Date(lastTrainedAt).getTime();
-  if (Number.isNaN(t)) return false;
-  return Date.now() - t > STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
-}
-
-/** A domain is "active" only if it has a model AND that model is not stale. */
-function isActive(d: MLDomainSummary): boolean {
-  return d.modelVersion !== null && !isStale(d.lastTrainedAt);
 }
 
 export default async function MLInsightsHubPage() {
@@ -44,7 +27,7 @@ export default async function MLInsightsHubPage() {
       <div className="page-main wrap">
         <PageHeader
           title="ML Insights"
-          subtitle="Model performance, prediction accuracy, and explainability metrics across all ML-powered domains."
+          subtitle="Prediction volume, average confidence and fallback rate across all ML-powered domains."
           back="/analytics"
         />
         <RefreshErrorState error={toHumanError("load", { area: "ML domain summary" })} backHref="/analytics" />
@@ -53,25 +36,24 @@ export default async function MLInsightsHubPage() {
   }
 
   const totalPredictions = domains.reduce((sum, d) => sum + d.totalPredictions, 0);
-  const activeDomains = domains.filter(isActive).length;
+  // A domain "has predictions" when ml-service reported at least one in the window.
+  const domainsWithPredictions = domains.filter((d) => d.totalPredictions > 0).length;
 
   return (
     <div className="page-main wrap">
       <PageHeader
         title="ML Insights"
-        subtitle="Model performance, prediction accuracy, and explainability metrics across all ML-powered domains."
+        subtitle="Prediction volume, average confidence and fallback rate across all ML-powered domains."
         back="/analytics"
       />
       <StatGrid>
         <StatCard icon="🤖" tone="info" label="Total Predictions (30d)" value={totalPredictions.toLocaleString("en-IN")} />
-        {/* No cross-metric "Avg. Accuracy": the domains report different, non-
-            comparable metrics (AUC-ROC / Precision / MAPE↓), so averaging them
-            is arithmetically meaningless. GAP-ANALYTICS-ML-INSIGHTS-02. */}
-        <StatCard icon="📈" tone="good" label="Domains with model" value={`${domains.filter((d) => d.modelVersion !== null).length}/${Object.keys(DOMAIN_META).length}`} />
-        <StatCard icon="✅" tone="info" label="Active (not stale)" value={`${activeDomains}/${Object.keys(DOMAIN_META).length}`} />
+        {/* No cross-domain "Avg. Accuracy": ml-service reports only mean prediction
+            confidence per domain, which is not accuracy. GAP-ANALYTICS-ML-INSIGHTS-02. */}
+        <StatCard icon="📈" tone="good" label="Domains with predictions" value={`${domainsWithPredictions}/${Object.keys(DOMAIN_META).length}`} />
       </StatGrid>
       {domains.length === 0 && (
-        <p style={{ color: "var(--mut)", marginTop: 12 }}>No ML models are active yet.</p>
+        <p style={{ color: "var(--mut)", marginTop: 12 }}>No ML predictions have been recorded in the last 30 days.</p>
       )}
       <section
         aria-label="ML domain cards"
@@ -80,12 +62,9 @@ export default async function MLInsightsHubPage() {
       >
         {Object.entries(DOMAIN_META).map(([key, meta]) => {
           const domainData = domains.find((d) => d.domain === key);
-          const metric = metricForDomain(key);
-          const metricDirection = metric.higherIsBetter ? "higher is better" : "lower is better";
-          const stale = domainData ? isStale(domainData.lastTrainedAt) : false;
           const ariaLabel = domainData
-            ? `${meta.label} — ${metric.label} ${formatPct(domainData.accuracy)} (${metricDirection})${stale ? ", model stale" : ""}`
-            : `${meta.label} — no model active`;
+            ? `${meta.label} — average confidence ${formatPct(domainData.avgConfidence)}, ${domainData.totalPredictions.toLocaleString("en-IN")} predictions`
+            : `${meta.label} — no predictions yet`;
           return (
             <Link
               key={key}
@@ -99,23 +78,20 @@ export default async function MLInsightsHubPage() {
                   {meta.icon}
                 </span>
                 <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{meta.label}</h2>
-                {stale && <StatusPill status="stale" label="Stale" />}
               </div>
               {domainData ? (
                 <dl
                   style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 16, rowGap: 4, fontSize: 14, color: "var(--ink2)", margin: 0 }}
                 >
-                  <dt>{metric.label}{metric.higherIsBetter ? "" : " ↓"}</dt>
-                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{formatPct(domainData.accuracy)}</dd>
+                  <dt>Avg. confidence</dt>
+                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{formatPct(domainData.avgConfidence)}</dd>
                   <dt>Predictions</dt>
                   <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{domainData.totalPredictions.toLocaleString("en-IN")}</dd>
                   <dt>Fallback Rate</dt>
                   <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{formatPct(domainData.fallbackRate)}</dd>
-                  <dt>Last trained</dt>
-                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{domainData.lastTrainedAt ? formatIndianDate(domainData.lastTrainedAt) : "—"}</dd>
                 </dl>
               ) : (
-                <p style={{ color: "var(--mut)", fontSize: 14, margin: 0 }}>No model active</p>
+                <p style={{ color: "var(--mut)", fontSize: 14, margin: 0 }}>No predictions yet</p>
               )}
             </Link>
           );

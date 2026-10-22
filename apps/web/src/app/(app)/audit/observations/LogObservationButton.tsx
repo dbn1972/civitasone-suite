@@ -11,7 +11,7 @@ interface FormState {
   auditeeRef: string;
   finding: string;
   category: "performance" | "compliance" | "financial";
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: "low" | "medium" | "high" | "critical";
   amountRupees: string;
 }
 
@@ -162,6 +162,7 @@ export function LogObservationButton() {
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
                     <option value="high">High</option>
+                    <option value="critical">Critical</option>
                   </select>
                 </div>
               </div>

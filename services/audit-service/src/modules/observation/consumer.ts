@@ -22,7 +22,7 @@ export function registerObservationConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; obsNo: string; planId?: string; auditeeRef: string;
       // P0-3: amountInvolvedMinor (PAISE) carried as string end-to-end; BigInt()-parsed here.
-      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: string | number; reason?: string;
+      finding: string; category?: string; riskLevel?: string; amountInvolvedMinor?: string | number; dueDate?: string; reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -30,6 +30,7 @@ export function registerObservationConsumers(queue: Queue): void {
         id: p.id, tenantId: p.tenantId, obsNo: p.obsNo, planId: p.planId ?? null,
         auditeeRef: p.auditeeRef, finding: p.finding, category: p.category ?? "compliance",
         riskLevel: p.riskLevel ?? "medium", amountInvolvedMinor: BigInt(p.amountInvolvedMinor ?? 0n),
+        dueDate: p.dueDate ?? null,
         status: "open", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "observation", p.id, p.reason);
@@ -59,6 +60,12 @@ export function registerObservationConsumers(queue: Queue): void {
         status: "replied", updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
       if (replyRows !== 1) throw new StaleWriteError("observation", p.observationId);
+      // Persist the reply itself (it used to be dropped, leaving the detail view empty).
+      await repo.insertReply(tx, {
+        tenantId: p.tenantId, observationId: p.observationId, replyText: p.replyText,
+        respondedByRef: p.respondedByRef, attachmentRef: p.attachmentRef ?? null,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
       await audit(tx, msg, "reply", "observation", p.observationId, p.reason);
       // Notify the audit team
       await enqueue(tx, {
@@ -97,6 +104,7 @@ export function registerObservationConsumers(queue: Queue): void {
         status: newStatus, updatedBy: msg.actorId, version: (obs.version ?? 1) + 1,
       });
       if (reviewRows !== 1) throw new StaleWriteError("observation", p.observationId);
+      await repo.recordLatestReplyDecision(tx, p.observationId, p.tenantId, p.decision, p.remarks ?? null, msg.actorId);
       await audit(tx, msg, p.decision === "accepted" ? "reply_accepted" : "reply_rejected", "observation", p.observationId, p.remarks);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "observation", p.observationId));

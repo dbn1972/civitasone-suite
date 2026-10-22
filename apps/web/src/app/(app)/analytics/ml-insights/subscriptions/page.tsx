@@ -21,7 +21,6 @@ export default async function SubscriptionsInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Subscriptions Scored",
-        accuracy: "AUC-ROC",
         fallbackRate: "Fallback Rate",
         topFactor: "Top Factor",
       }}
