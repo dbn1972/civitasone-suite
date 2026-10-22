@@ -775,11 +775,11 @@ describe("mapStockLedgerEntries — GAP-STOCK-LEDGER-02/03: no id fragments", ()
 describe("mapEstabFileSummaries — status and IST days (GAP-ESTAB-DASHBOARD-01)", () => {
   const base = { id: "11111111-1111-4111-8111-111111111111", fileNo: "F/1", subject: "S", classification: "public" };
 
-  it("keeps every service status instead of folding closed and draft into active", () => {
+  it("keeps closed, transferred and archived as they are and presents a draft as active (a file in work)", () => {
     const statuses = ["draft", "active", "closed", "transferred", "archived"].map(
       (status) => mapEstabFileSummaries([{ ...base, status }])?.[0]?.status,
     );
-    expect(statuses).toEqual(["draft", "active", "closed", "transferred", "archived"]);
+    expect(statuses).toEqual(["active", "active", "closed", "transferred", "archived"]);
   });
 
   it("keeps the register-only 'pending' and 'disposed', and treats a missing or unknown status as active", () => {

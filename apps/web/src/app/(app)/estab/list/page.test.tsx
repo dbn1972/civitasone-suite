@@ -92,7 +92,9 @@ describe("EstabFilesListPage", () => {
     const { container } = render(await EstabFilesListPage());
     const tile = (label: string) => Array.from(container.querySelectorAll(".lab")).find((l) => l.textContent === label)?.parentElement as HTMLElement;
     expect(tile("Closed").textContent).toContain("2");
-    expect(tile("Active Files").textContent).toContain("1");
+    // Active Files is the dashboard's office-wide figure (DASH.filesActive), not a count of the
+    // loaded rows, so a closed row neither adds to nor takes from it.
+    expect(tile("Active Files").textContent).toContain("7");
   });
 
   it("GAP-ESTAB-LIST-03: banner does not promise SLA on pendency", async () => {

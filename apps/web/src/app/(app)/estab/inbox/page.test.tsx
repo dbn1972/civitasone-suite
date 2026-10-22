@@ -152,13 +152,13 @@ describe("EstabInboxPage — 'Active on desk' uses the service status (GAP-ESTAB
 
   it("counts draft and active files with the officer, but not pending (awaiting receipt) or finished ones", async () => {
     getEstabFilesMock.mockResolvedValueOnce({
-      data: [
+      data: desk([
         file({ id: "a", status: "active" }),
         file({ id: "d", status: "draft" }),
         file({ id: "p", status: "pending" }),
         file({ id: "c", status: "closed" }),
         file({ id: "x", status: "archived" }),
-      ],
+      ]),
       source: "api",
     });
     render(await EstabInboxPage());
