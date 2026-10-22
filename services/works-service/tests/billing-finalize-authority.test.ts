@@ -179,6 +179,51 @@ describe("billing finalize authority + maker-checker", () => {
     expect(res.statusCode).toBe(202);
   });
 
+  // GAP-WORKS-BILLING-WORKID-07: finalize is idempotent. A repeat of the step the record is ALREADY at is answered
+  // 200 with the current state and publishes nothing (so no duplicate event / finance hand-off); the same authority
+  // checks apply first, and a step that is genuinely out of order is still 422.
+  describe("repeat finalize is an idempotent success (WORKID-07)", () => {
+    const publishSpy = async () => {
+      const { queue } = await import("../src/shared/infra.js");
+      return queue.publish as unknown as ReturnType<typeof vi.fn>;
+    };
+
+    it("a bill already at the requested step returns 200 {alreadyApplied} and publishes no command", async () => {
+      const publish = await publishSpy();
+      publish.mockClear();
+      getBill.mockResolvedValue({ id: BILL_ID, status: "do_finalized", createdBy: ACTOR_A });
+      const res = await finalizeBill(roleAuth(["do"]), "do_finalized");
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({ id: BILL_ID, status: "do_finalized", alreadyApplied: true });
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("an MB already at the requested step returns 200 {alreadyApplied} and publishes no command", async () => {
+      const publish = await publishSpy();
+      publish.mockClear();
+      getMb.mockResolvedValue({ id: MB_ID, status: "so_finalized", issuedBy: ACTOR_A, createdBy: ACTOR_A });
+      const res = await finalizeMb(roleAuth(["section_officer"]), "so_finalized");
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({ id: MB_ID, status: "so_finalized", alreadyApplied: true });
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("the replay is still refused to a caller who does not hold that step (403), and to the maker (422)", async () => {
+      getBill.mockResolvedValue({ id: BILL_ID, status: "dao_finalized", createdBy: ACTOR_A });
+      expect((await finalizeBill(roleAuth(["estimator"]), "dao_finalized")).statusCode).toBe(403);
+      const self = await finalizeBill(roleAuth(["works_admin"], ACTOR_A), "dao_finalized");
+      expect(self.statusCode).toBe(422);
+      expect(self.json().error.code).toBe("SELF_APPROVAL_FORBIDDEN");
+    });
+
+    it("a step that is neither the current one nor the next one is still 422 INVALID_STEP", async () => {
+      getBill.mockResolvedValue({ id: BILL_ID, status: "so_finalized", createdBy: ACTOR_A });
+      const res = await finalizeBill(roleAuth(["dao"]), "dao_finalized");
+      expect(res.statusCode).toBe(422);
+      expect(res.json().error.code).toBe("INVALID_STEP");
+    });
+  });
+
   // GAP-WORKS-BILLING-05: bills register role gate + response envelope.
   it("GET /v1/works/billing/bills is 403 without a billing read role", async () => {
     listBills.mockClear();

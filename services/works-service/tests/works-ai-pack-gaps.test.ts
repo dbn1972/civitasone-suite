@@ -111,6 +111,8 @@ describe("Gap 1 — Finance hand-off on bill DO-finalization", () => {
       workId: WORK_ID,
       grossAmountMinor: 500000n,
       netPayableMinor: 450000n,
+      // The DO step is only reachable from dao_finalized (WORKS-BILLING-WORKID-07: the consumer re-checks the step).
+      status: "dao_finalized",
     }]);
     mockSelectMap.set(awards, [{
       id: AWARD_ID,
@@ -134,7 +136,7 @@ describe("Gap 1 — Finance hand-off on bill DO-finalization", () => {
   });
 
   it("does not emit finance.bill.create for intermediate finalization steps", async () => {
-    mockSelectMap.set(bills, [{ id: BILL_ID, billNumber: "B1", awardId: AWARD_ID, workId: WORK_ID, grossAmountMinor: 1n, netPayableMinor: 1n }]);
+    mockSelectMap.set(bills, [{ id: BILL_ID, billNumber: "B1", awardId: AWARD_ID, workId: WORK_ID, grossAmountMinor: 1n, netPayableMinor: 1n, status: "auditor_finalized" }]);
     const h = await billingHandlers();
     await h[COMMANDS.billFinalize]({
       ...queueMessage(TENANT_A, ACTOR_A, "msg-fin-2"),
