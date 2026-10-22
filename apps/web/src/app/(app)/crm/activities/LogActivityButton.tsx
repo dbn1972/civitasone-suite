@@ -6,6 +6,7 @@ import { useFormError } from "@/lib/useFormError";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useTranslations } from "next-intl";
 import { browserFetch } from "@/lib/api/browserClient";
+import { accountLinkErrorKeyFromResponse } from "@/lib/crm/accountLinkError";
 import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { validateActivityForm, type ActivityFormErrors } from "./activityFormSchema";
 import { LOGGABLE_ACTIVITY_TYPES } from "./activityTypes";
@@ -29,6 +30,7 @@ export function LogActivityButton({
 } = {}) {
   const router = useRouter();
   const tType = useTranslations("crmActivityTypes");
+  const tAccountLink = useTranslations("crmAccountLinkError");
   const [open, setOpen] = useState(false);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [contactsStatus, setContactsStatus] = useState<ContactsStatus>("idle");
@@ -98,6 +100,12 @@ export function LogActivityButton({
         }),
       });
       if (!res.ok) {
+        // F5: the linked account was merged away / deactivated (or is unknown): say so inline.
+        const linkKey = await accountLinkErrorKeyFromResponse(res);
+        if (linkKey) {
+          setError(tAccountLink(linkKey));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         setFieldErrors({ subject: resolved.fieldErrors.subject, text: resolved.fieldErrors.text });
         throw UserFacingError.from(resolved);

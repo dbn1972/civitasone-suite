@@ -11,6 +11,7 @@ import { ConsentField, type ConsentValue } from "../../../../../_components/crm/
 import { DuplicateCheckPanel } from "../../../../../_components/crm/DuplicateCheckPanel";
 import { duplicateCheck, parseFieldErrors, readJsonBody, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { accountLinkErrorKeyFromResponse } from "@/lib/crm/accountLinkError";
 import { Button, ConfirmDialog, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { ArrowLeft } from "lucide-react";
@@ -125,6 +126,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
     channel: initial.consentChannel ?? "",
   });
   const tConsent = useTranslations("crm.consent");
+  const tAccountLink = useTranslations("crmAccountLinkError");
   const [consentError, setConsentError] = useState("");
   // GAP-CRM-CONTACTS-NEW-02: the linked account. Seeded from the saved
   // accountId; the label is resolved by the picker's resolve() on first render.
@@ -391,6 +393,12 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
           const fes = parseFieldErrors(await readJsonBody(res));
           if (Object.keys(fes).length > 0) {
             setFieldErrors(fes);
+            return;
+          }
+          // F5: the linked account was merged away / deactivated (or is unknown): say so inline.
+          const linkKey = await accountLinkErrorKeyFromResponse(res);
+          if (linkKey) {
+            setError(tAccountLink(linkKey));
             return;
           }
           throw new Error(await errorMessageFromResponse(res));

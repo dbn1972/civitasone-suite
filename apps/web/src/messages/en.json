@@ -14063,6 +14063,10 @@
     "leaveStay": "Stay on this page",
     "area": "matching rules"
   },
+  "crmAccountLinkError": {
+      "inactive": "This account has been merged or deactivated, so nothing can be linked to it. Choose the active account it was merged into, or clear the account, and try again.",
+      "notFound": "The selected account could not be found. Choose a different account or clear the account, and try again."
+  },
   "crmEditContactForm": {
     "leadStatus": "Lead status",
     "changeStatus": "Change status",
