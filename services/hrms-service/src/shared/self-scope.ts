@@ -18,10 +18,9 @@ const HR_ROLES = SELF_SCOPE_HR_ROLES;
  * can close the same IDOR class with the SAME judgment call rather than a
  * second, divergent implementation.
  *
- * A privileged caller (HR_ROLES or manager) gets the `requested` id passed
- * through unchanged -- this module, like training, has no "manager scoped to
- * direct reports" precedent of its own, so manager pass-through is accepted
- * (documented risk, same as training). A bare "employee" caller is ALWAYS
+ * A privileged HR caller gets the `requested` id passed through unchanged. A
+ * manager is limited to self + direct reports (owner decision 2, 2026-10-14;
+ * 403 otherwise). A bare "employee" caller is ALWAYS
  * forced onto their OWN linked hrms_employees record (resolveEmployeeForActor:
  * userRef + verified-email fallback), regardless of the employeeId they
  * requested. Returns null when a bare-employee caller has no resolvable
@@ -34,8 +33,16 @@ export async function resolveOwnEmployeeIdIfBareEmployee(
   requested: string | undefined,
   hrRoles: readonly string[] = HR_ROLES,
 ): Promise<string | undefined | null> {
-  const isPrivileged = [...hrRoles, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return requested;
+  if (hrRoles.some((r) => ctx.roles.includes(r))) return requested;
+  if (ctx.roles.includes("manager")) {
+    // Owner decision 2 (2026-10-14, general HR rule): a manager reads only
+    // themselves or their direct reports -- 403 otherwise. An undefined
+    // `requested` still passes through (callers apply their own scope).
+    if (requested !== undefined && !(await canReadEmployeeRecord(ctx, requested, hrRoles))) {
+      throw new HttpError(403, "FORBIDDEN", "you may only access records of yourself or your direct reports");
+    }
+    return requested;
+  }
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
