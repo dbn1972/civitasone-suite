@@ -33,3 +33,6 @@ export const createRebateRuleBody = z.object({
   discountBps: z.number().int().min(1).max(10000),
   validUntilDaysBeforeDue: z.number().int().min(0).max(365),
 });
+
+/** rate_head_id is a uuid column: validate before it reaches Postgres (22P02 -> 500). */
+export const rateHeadIdQuery = z.object({ rateHeadId: z.string().uuid() });

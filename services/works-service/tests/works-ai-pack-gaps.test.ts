@@ -445,7 +445,7 @@ describe("Gap 6 — Bid confidentiality", () => {
     listQuotations.mockResolvedValue([sampleQuote]);
     const res = await app.inject({
       method: "GET",
-      url: "/v1/works/tenders/00000000-tend-4000-8000-000000000001/quotations",
+      url: "/v1/works/tenders/00000000-1111-4000-8000-000000000001/quotations",
       headers: { authorization: `Bearer ${bearerToken(jwtPayload(TENANT_A, ["works_viewer"]))}` },
     });
     expect(res.statusCode).toBe(200);
@@ -457,7 +457,7 @@ describe("Gap 6 — Bid confidentiality", () => {
     listQuotations.mockResolvedValue([sampleQuote]);
     const res = await app.inject({
       method: "GET",
-      url: "/v1/works/tenders/00000000-tend-4000-8000-000000000001/quotations",
+      url: "/v1/works/tenders/00000000-1111-4000-8000-000000000001/quotations",
       headers: { authorization: `Bearer ${bearerToken(jwtPayload(TENANT_A, ["works_operator"]))}` },
     });
     expect(res.json().data[0].contractorName).toBe("Secret Bidder Pvt Ltd");

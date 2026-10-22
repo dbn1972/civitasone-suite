@@ -47,7 +47,8 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { tenderId } = req.params as { tenderId: string };
-    const rows = await listQuotations(ctx.tenantId, tenderId);
+    const id = v.idParamSchema.parse({ id: tenderId }).id;
+    const rows = await listQuotations(ctx.tenantId, id);
     const showDetails = canViewBidDetails(ctx.roles);
     const data = rows.map((q) => {
       const normalized = {
