@@ -191,3 +191,95 @@ describe("Generate Bill form - measured-value ceiling (GAP-WORKS-BILLING-BILLS-N
     expect(postCall(fetchSpy)).toBeUndefined();
   });
 });
+
+describe("Generate Bill form - e-MB gross starts from the MB's billable value (GAP-WORKS-BILLING-BILLS-NEW-02)", () => {
+  const params = () => new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
+
+  it("in e-MB mode the gross is prefilled with the value still billable against the chosen MB", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = params();
+    mockFetch(202, "60000"); // 600.00 rupees still billable
+    render(<NewBillPage />);
+    await screen.findByTestId("mb-position");
+    await waitFor(() => expect(screen.getByLabelText(/Gross Amount/i)).toHaveValue(600));
+    // starting at the full billable value is not a "below" case
+    expect(screen.queryByTestId("mb-below-available")).not.toBeInTheDocument();
+  });
+
+  it("does not overwrite a gross the clerk has already typed", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = params();
+    mockFetch(202, "60000");
+    render(<NewBillPage />);
+    // type before the MB position arrives
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "250" } });
+    await screen.findByTestId("mb-position");
+    expect(screen.getByLabelText(/Gross Amount/i)).toHaveValue(250);
+  });
+
+  it("abstract mode does not prefill the gross (only e-MB bills start from the measurements)", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = params();
+    mockFetch(202, "60000");
+    render(<NewBillPage />);
+    fireEvent.change(screen.getByLabelText(/Bill Mode/i), { target: { value: "abstract" } });
+    await screen.findByTestId("mb-position");
+    expect(screen.getByLabelText(/Gross Amount/i)).toHaveValue(null);
+    // the ceiling hint is still shown: the server enforces the same measured-value ceiling in both modes
+    expect(screen.getByTestId("mb-position")).toHaveTextContent(/Still billable: .*600/);
+  });
+
+  it("shows a neutral note, not an error, when an e-MB gross is below the billable value, and still posts it", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = params();
+    const spy = mockFetch(202, "60000");
+    render(<NewBillPage />);
+    await screen.findByTestId("mb-position");
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/1" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "400" } });
+    const note = await screen.findByTestId("mb-below-available");
+    expect(note).toHaveTextContent(/less than the value still billable.*600/);
+    fireEvent.click(screen.getByRole("button", { name: /Generate Bill/i }));
+    await waitFor(() => expect(postCall(spy)).toBeDefined());
+    expect(JSON.parse((postCall(spy)![1] as RequestInit).body as string).grossAmountMinor).toBe("40000");
+  });
+
+  it("the note is not shown in abstract mode", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = params();
+    mockFetch(202, "60000");
+    render(<NewBillPage />);
+    fireEvent.change(screen.getByLabelText(/Bill Mode/i), { target: { value: "abstract" } });
+    await screen.findByTestId("mb-position");
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "400" } });
+    expect(screen.queryByTestId("mb-below-available")).not.toBeInTheDocument();
+  });
+});
+
+describe("Generate Bill form - duplicate bill number (GAP-WORKS-BILLING-BILLS-NEW-05)", () => {
+  it("maps a 409 DUPLICATE_BILL_NUMBER to a field message under Bill Number, keeping the form data", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
+    vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if ((init?.method ?? "GET").toUpperCase() === "POST") {
+        return Promise.resolve(new Response(JSON.stringify({ code: "DUPLICATE_BILL_NUMBER", message: "Bill number already used for this work" }), { status: 409 }));
+      }
+      if (url.endsWith(`/mb/${MB}/measured-value`)) {
+        return Promise.resolve(new Response(JSON.stringify({ data: { mbId: MB, measuredValueMinor: "100000", billedMinor: "0", availableMinor: "100000" } }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    }) as typeof fetch);
+    render(<NewBillPage />);
+    await screen.findByTestId("mb-position");
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate Bill/i }));
+    const alert = await screen.findByText("This bill number is already used for this work. Choose a different number.");
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.getByLabelText(/Bill Number/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/Bill Number/i)).toHaveValue("RA/1");
+    // editing the number clears the message
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2" } });
+    expect(screen.queryByText(/already used for this work/)).not.toBeInTheDocument();
+  });
+});

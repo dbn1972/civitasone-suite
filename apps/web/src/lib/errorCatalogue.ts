@@ -232,6 +232,18 @@ const MAKER_CHECKER_MESSAGE: DomainMessage = {
 };
 
 export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
+  // works-service: a measurement can only be recorded while its measurement book is a draft (billing MB_NOT_OPEN).
+  MB_NOT_OPEN: {
+    en: {
+      what: "This measurement book is no longer open for new measurements.",
+      next: "Measurements can only be recorded while a measurement book is a draft. Choose a draft measurement book.",
+    },
+    hi: {
+      what: "यह माप पुस्तिका अब नई माप दर्ज करने के लिए खुली नहीं है।",
+      next: "माप तभी दर्ज की जा सकती है जब माप पुस्तिका ड्राफ़्ट अवस्था में हो। कोई ड्राफ़्ट माप पुस्तिका चुनें।",
+    },
+    actions: ["back", "help"],
+  },
   // Every "you cannot decide your own request" code the services emit (verified in services/*).
   SELF_APPROVAL_FORBIDDEN: SELF_APPROVAL_MESSAGE,
   SELF_APPROVAL: SELF_APPROVAL_MESSAGE,
