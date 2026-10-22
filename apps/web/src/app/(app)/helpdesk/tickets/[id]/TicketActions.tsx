@@ -43,12 +43,9 @@ export function TicketActions({ ticketId, status, canAct = true }: Props) {
   // composer / form state
   const [reply, setReply] = useState("");
   // GAP-HELPDESK-TICKETS-DETAIL-03: reply can be a citizen-visible reply or an
-  // internal note; the composer must say which, and label the success message
-  // accordingly. citizen-service's /notes endpoint stores a note; there is no
-  // isInternal column today (verified in citizen-service helpdesk/schema.ts),
-  // so an "Internal note" prefixes the body with [INTERNAL] until the backend
-  // grows a real flag — recorded as a DECISION, and it stops a staff aside
-  // from silently being labelled a citizen reply.
+  // internal (staff-only) note; the composer must say which. An internal note
+  // is sent with a real `isInternal: true` flag, which citizen-service stores
+  // in citizen_ticket_notes.is_internal and never returns to the citizen.
   const [replyKind, setReplyKind] = useState<"citizen" | "internal">("citizen");
   const [assigneeId, setAssigneeId] = useState("");
   // Track the chosen agent's display label so the confirm dialog can name them.
@@ -107,13 +104,10 @@ export function TicketActions({ ticketId, status, canAct = true }: Props) {
     e.preventDefault();
     setResult(null);
     try {
-      // GAP-HELPDESK-TICKETS-DETAIL-03: when "Internal note" is selected, prefix
-      // the body with [INTERNAL] so it's distinguishable from citizen-visible
-      // messages. The backend has no isInternal flag today (citizen-service
-      // helpdesk/schema.ts citizen_ticket_notes lacks the column); this is a
-      // convention until the column is added.
-      const body = replyKind === "internal" ? `[INTERNAL] ${reply}` : reply;
-      await request("POST", `/v1/citizen/tickets/${ticketId}/notes`, { body });
+      await request("POST", `/v1/citizen/tickets/${ticketId}/notes`, {
+        body: reply,
+        ...(replyKind === "internal" ? { isInternal: true } : {}),
+      });
       onSuccess(replyKind === "internal" ? "Internal note added." : "Reply sent to the citizen.");
     } catch (caught) {
       setResult({ kind: "err", text: formError.fromException("save", caught).message });

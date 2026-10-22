@@ -36,12 +36,12 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.ticketNote, async (msg) => {
-    const p = msg.payload as { id: string; ticketId: string; tenantId: string; body: string };
+    const p = msg.payload as { id: string; ticketId: string; tenantId: string; body: string; isInternal?: boolean };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertNote(tx, {
         id: p.id, tenantId: p.tenantId, ticketId: p.ticketId,
-        authorId: msg.actorId, body: p.body,
+        authorId: msg.actorId, body: p.body, isInternal: p.isInternal === true,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "note", "citizen_ticket", p.ticketId);
