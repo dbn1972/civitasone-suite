@@ -861,7 +861,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  partly  ·  theme MASTERDATA (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: on new-file and DAK open-file the department is a pick-list of the enrolled operator divisions; the typed-in fallback now appears ONLY when no master exists to pick from (no operators enrolled yet, or the role cannot read the directory), never after a network/server failure (a disabled select plus an alert instead). Remaining: (a) which master is authoritative, operator divisions or hrms departments (GET /v1/hrms/departments is HR-role gated, so estab roles cannot read it), and (b) whether estab-service must reject a dept outside the master once operators are adopted (greenfield tenants would stay unrestricted, as for the other operator checks). Typo departments can still be created through the API or in a tenant with no operators.)
+- **Previous status:** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. The department on new-file and on DAK open-file is now a pick-list of the enrolled operator divisions (useEstabDivisions) with no free-text fallback and no silent 'ADMIN'. Still open: (a) which master is authoritative (operator divisions vs hrms departments) and (b) whether estab-service must reject a dept outside it. Not built because rejecting would block greenfield tenants that have no operators yet.
 - **W0-10 note:** review found the W0 tick partly — department select built from operators' divisions (files/new/page.tsx:74) but free-text input fallback remains (:416) so typos possible; dak/page.tsx:316 open-file dept still free text 'e.g. ADMIN'; no master dept endpoint/backend validation; still falls back to 'ADMIN' (:154)
 - **First-pass claim:** Department is a free-text input defaulting to "ADMIN" (page.tsx:20,41); the register filters and dak/open-file also hard-code ADMIN, so typos create orphan departments.
@@ -911,7 +912,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number) (W2 estab rescan: completed by #PRNUM)
+- **W2 estab rescan note:** Create now sends the officer straight to the file with ?created=1 and the file page shows 'File {fileNo} has been created' (the 202 ack carries no fileNo: the gapless number is allocated when the command is processed, so none is invented); the detail loader no longer validates the raw DTO against a schema it never matched (public/draft/null holder/createdAt), so the page loads for a fresh file. Tests: files/new/page.test.tsx (real 202 ack), files/[id]/page.test.tsx (banner + being-created), _data/loaders.estabFiles.test.ts (real service DTO).
 - **First-pass claim:** Success message omits the allocated file number and redirects after 800 ms (page.tsx:57-62); an officer who is redirected away cannot copy the number from the banner.
 - **Verified evidence:** files/new/page.tsx:56-62 reads only body.id and shows a fixed message without the file number, then redirects after 800 ms. The response may carry fileNo but that is cannot-verify. Theme I18N is wrong; it is copy.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`
@@ -947,7 +949,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (closed by #2104, verified implementation present in codebase)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: stale pending-approval copy on the new-booking page replaced (bookings are confirmed once processed); check-out no longer hard-codes chargesMinor 0, the officer states the charges (exact integer paise, blank is not 0, no tariff assumed). Remaining: no approve/reject step or endpoint exists. Owner: is a booking approval step wanted (who approves, maker-checker so the requester cannot approve), and should check-out charges come from a tariff rather than being entered?)
+- **Previous status:** (closed by #2104, verified implementation present in codebase)
 - **W2 PQ-A note (#2037):** no approval step or endpoint exists for room bookings (estab-service facilities has only book/checkin/checkout); check-in/out are now shown only to estab officer roles and the subtitle no longer claims approvals. Needs owner decision: is a booking approval step wanted (new endpoint plus maker-checker)?
 - **W0-10 note:** review found the W0 tick partly — Check-in/check-out with ConfirmDialog added (BookingsTable.tsx:44-113) but no approve/reject, no role/approver gating, subtitle still says 'Room booking and approvals.' (guesthouse/page.tsx:32; fix step 5 unmet), checkout hard-codes chargesMinor:0 (BookingsTable.tsx:~50)
 - **First-pass claim:** Page advertises "approvals" and counts "Pending Approval" (page.tsx:33,43) but offers no way to approve, reject, check in or check out — nothing in guesthouse/ mutates a booking; a pending request is a dead end.
@@ -967,7 +970,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #PRNUM)
+- **W2 estab rescan note:** The service now sends the full check-in/out instants (facilities/queries.ts) instead of YYYY-MM-DD cut from them, so the register shows the booked time (01 Oct 14:00 IST) and an early-morning IST booking lands on the right day; the page never renders a time for a bare date. Tests: estab-cluster03-real-db.test.ts (real DB, IST boundary), guesthouse/page.test.tsx.
 - **First-pass claim:** Table omits sponsoring department and timing; Dates show dd/mm/yyyy only although check-in/out are datetime values (page.tsx:19-22, new/page.tsx:205-235).
 - **Verified evidence:** page.tsx:23 renders dates via formatIndianDate (lib/formatters.ts:2-8), which is dd/mm/yyyy date-only in the server's locale timezone, so time-of-day is dropped although the form collects datetime (new/page.tsx:206-236). BookingRow (BookingsTable.tsx:6-14) has no sponsor-department column; whether the summary type carries sponsorDept is unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/page.tsx`, `apps/web/src/app/(app)/estab/guesthouse/BookingsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1018,7 +1022,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the free-text Room ID field is gone; the room is always chosen by name (101 · deluxe (2-bed)) from the directory, with distinct states for loading, directory failed (alert), no rooms registered and none available; tests submit the id chosen from the picker. Remaining: nothing in estab-service or the web creates estab_rooms (only scripts/dev/seed-all.mjs), so a real tenant has no rooms to pick. Owner: who maintains the room directory and how, an in-app add-room screen for an establishment administrator (needs a guesthouse list and an add-room command) or a per-tenant import?)
+- **Previous status:** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Officers must type a room UUID (new/page.tsx:36-40,139-160); the page itself admits the picker is "pending a rooms directory API". A clerk cannot know a room's UUID, so the form is unusable without out-of-band data.
 - **Verified evidence:** guesthouse/new/page.tsx:8-9,37-40 require roomId to match UUID_RE; input at :139-151 is a free-text 'Room UUID' field; help text at :152-155 says 'A room picker is pending a rooms directory API'. No rooms list loader exists in _data/loaders.ts and hrms-service has no guesthouse code, so the rooms endpoint is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ds/RoomPicker.tsx (new) or generic EntityPicker`
@@ -1125,7 +1130,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #PRNUM)
+- **W2 estab rescan note:** held-count now returns count (live files) and movableCount (exactly the files the handover consumer reassigns, one shared predicate HANDOVER_MOVES_STATUS); the dialog and preview state movableCount and say how many other files stay; the handover cannot start while the count is loading, failed or 0 ('Check again' retries). estab_division_admin, whom the handover screen admits, can now read the count. Tests: estab-cluster03-real-db.test.ts (count == files moved), HandoverPanel.test.tsx. Owner question remaining as a note, not a blocker: drafts and closed files are not moved today (see OWNER DECISION in the cluster report).
 - **First-pass claim:** The confirm dialog never says how many files will move (HandoverPanel.tsx:173-183); fileCount is only known after the fact in history.
 - **Verified evidence:** ConfirmDialog description (HandoverPanel.tsx:173-183) says 'every file' but shows no count; fileCount exists only on history rows (type at :14, column at :165). No count preview endpoint is visible.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1154,7 +1160,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-05  ·  LOW  ·  partly  ·  theme LOADERROR (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #PRNUM)
+- **W2 estab rescan note:** load() settles the roster and the history independently: a history-only 500 leaves the officer pickers populated and Hand over reachable, an operators-only 500 blocks the form while the history still loads. Tests: HandoverPanel.test.tsx (history 500 leaves form usable; roster 500 blocks form but history loads; both fail).
 - **First-pass claim:** Load-error copy: the specific messages built at :44-45 are discarded and a generic ErrorState is shown (HandoverPanel.tsx:155); the form stays usable with empty pickers.
 - **Verified evidence:** load() builds specific messages (:42-43) and stores err.message in loadError (:49), but the render uses toHumanError('load',{area:'handover history'}) (:155), discarding them. However the 'form usable' claim is overstated: pickers are empty so the Hand over button (:143) stays disabled until officers are selected. The error covers both operators and history yet is placed only in the history card; the shared RefreshErrorState is not used.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1189,7 +1196,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263)) (W2 estab rescan: completed by #PRNUM)
+- **W2 estab rescan note:** GET /v1/estab/files/mine now matches a file held under the officer's login id OR their hrms employee id (resolveActorEmployeeId bridge, fails closed with 503), excludes everyone else's and other tenants' files, and reports { operator: { adopted, enrolled } }; My Desk shows an explanation (not 'Nothing on your desk') for a non-enrolled user. Tests: estab-cluster03-real-db.test.ts (real DB: own + forwarded + others excluded + 503), inbox/page.test.tsx, _data/loaders.estabFiles.test.ts.
 - **First-pass claim:** "My Desk" is not filtered to the signed-in officer: it uses getEstabFiles() for every file and counts status "active" as "Active on desk" (inbox/page.tsx:9,30,51). The register page even says this page is "the real per-desk view" (list/FilesTable.tsx:19-21) — but nothing compares currentHolder to the user.
 - **Verified evidence:** inbox/page.tsx:18 calls getEstabFiles() (all files, /api/v1/estab/files, loaders.ts:3658); :30 'Active on desk' = every status 'active' file; InboxPanel.tsx:48-55 filters only by status. currentHolder is mapped (apiMappers.ts:740) and shown but never compared to the user. list/FilesTable.tsx:17-19 comment states inbox is the per-desk view. The signed-in identity is available only via /api/auth/session (userId); whether userId equals the operator employeeId is unverified.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2734,7 +2742,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: POST /v1/estab/handovers stays admin-only (estab_officer 403, covered), the web layout mirrors it (new layout test), from == to is refused (400), the bulk custody move (only the files counted by the preview), one movement per file and one audit event per batch are now covered by a real-DB consumer test. Remaining: any estab_division_admin can still move any officer's files tenant-wide; fromOfficerId is not checked against the caller's authority. Owner: should a division admin be limited to officers of their own division(s) (estab_admin and super_admin staying tenant-wide), taken from the caller's operator desk, and what happens for a division admin who is not enrolled as an operator?)
+- **Previous status:** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
 - **First-pass claim:** A page that bulk-moves custody of every file on a desk has no role gate (page.tsx:6-12, HandoverPanel.tsx:20-186); it depends wholly on server-side authorisation that is not in the snapshot.
 - **Service:** `estab-service`  ·  **Endpoint(s):** `['GET /v1/estab/operators', 'GET /v1/estab/handovers', 'POST /v1/estab/handovers']`
 - **Question:** Does POST handovers restrict bulk custody transfer to a supervisor/admin role and limit source desk to the caller's authority, with audit?

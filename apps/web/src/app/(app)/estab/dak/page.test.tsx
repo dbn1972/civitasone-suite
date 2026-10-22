@@ -10,7 +10,11 @@ const identity = vi.hoisted(() => ({ roles: ["estab_officer"] as string[] }));
 vi.mock("@/lib/auth/useSessionIdentity", () => ({
   useSessionIdentity: () => ({ loaded: true, userId: "u1", roles: identity.roles }),
 }));
-const divisions = vi.hoisted(() => ({ value: { loaded: true, failed: false, divisions: ["Admin", "Finance"] } }));
+const divisions = vi.hoisted(() => ({
+  value: { loaded: true, failed: false, forbidden: false, divisions: ["Admin", "Finance"] } as {
+    loaded: boolean; failed: boolean; forbidden?: boolean; divisions: string[];
+  },
+}));
 vi.mock("@/lib/estab/useEstabDivisions", () => ({ useEstabDivisions: () => divisions.value }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -72,8 +76,8 @@ describe("DAK-01: open-file requires classification dialog", () => {
     });
   });
 
-  it("when the department list is unavailable (403 or none enrolled), Department is a typed field and its value is posted", async () => {
-    divisions.value = { loaded: true, failed: true, divisions: [] };
+  it("when the department list is unavailable (403 for this role), Department is a typed field and its value is posted", async () => {
+    divisions.value = { loaded: true, failed: true, forbidden: true, divisions: [] };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
       if (String(input).includes("open-file")) return Promise.resolve(jsonResponse({ id: "file-new" }));
       return Promise.resolve(jsonResponse({ data: [RECEIVED_ROW] }));
@@ -100,6 +104,23 @@ describe("DAK-01: open-file requires classification dialog", () => {
     const dept = screen.getByLabelText(/Department/i) as HTMLSelectElement;
     expect(Array.from(dept.options).map((o) => o.value)).toEqual(["", "Admin", "Finance"]);
     expect(screen.queryByPlaceholderText(/ADMIN/i)).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-FILES-NEW-03: when the department list failed to load (network/server), Department is a disabled select with an alert, never a typed field", async () => {
+    divisions.value = { loaded: true, failed: true, forbidden: false, divisions: [] };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [RECEIVED_ROW] }));
+    render(<DakRegistryPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
+    await screen.findByText(/Open file from DAK/i);
+    const dept = screen.getByLabelText(/Department/i) as HTMLSelectElement;
+    expect(dept.tagName).toBe("SELECT");
+    expect(dept.disabled).toBe(true);
+    const why = screen.getByText(/Departments could not be loaded/i);
+    expect(why.getAttribute("role")).toBe("alert");
+    fireEvent.change(screen.getByLabelText(/Classification/i), { target: { value: "confidential" } });
+    fireEvent.click(screen.getByRole("button", { name: /Open the file/i }));
+    expect(await screen.findByText("Select a department.")).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("open-file"))).toBe(false);
   });
 
   it("GAP-ESTAB-FILES-NEW-03: with no departments enrolled Department is an enabled typed field and says why", async () => {

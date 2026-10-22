@@ -249,3 +249,57 @@ describe("EstabFileDetailPage — a closed file is read-only (GAP-ESTAB-FILES-DE
     });
   }
 });
+
+describe("EstabFileDetailPage - the allocated file number after create (GAP-ESTAB-FILES-NEW-06)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+  });
+
+  const FILE = {
+    id: "f1",
+    fileNo: "ESTAB-A/00042/2026",
+    subject: "Fresh file",
+    classification: "unclassified",
+    department: "ADMIN",
+    createdBy: "",
+    createdDate: "2026-10-22",
+    currentHolder: "",
+    status: "active",
+    noteSheets: [],
+    dispatchHistory: [],
+    attachments: [],
+    movementHistory: [],
+  };
+
+  it("arriving with ?created=1 shows the file number the service allocated, in a status banner", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "api", data: FILE });
+    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    const banner = screen.getByText(/File ESTAB-A\/00042\/2026 has been created/);
+    expect(banner.getAttribute("role")).toBe("status");
+  });
+
+  it("without the flag there is no created banner (the number is still the page title)", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "api", data: FILE });
+    render(await EstabFileDetailPage({ params: { id: "f1" } }));
+    expect(screen.queryByText(/has been created/)).toBeNull();
+    expect(screen.getByText(/ESTAB-A\/00042\/2026 · Fresh file/)).toBeInTheDocument();
+  });
+
+  it("?created=1 before the create command has been processed says it is being created, with a refresh link (not an error)", async () => {
+    // The file does not exist yet: the loader collapses that 404 into source "error".
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
+    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    expect(screen.getByText("Creating your file…")).toBeInTheDocument();
+    expect(screen.getByText(/file number is assigned as soon as it is processed/).getAttribute("role")).toBe("status");
+    expect(screen.getByRole("link", { name: "Refresh" })).toHaveAttribute("href", "/estab/files/f1?created=1");
+    // Not the "couldn't load the file" error state.
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("?created=1 with a real failure (not a 404) is still the ordinary retryable error, not 'being created'", async () => {
+    fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    expect(screen.queryByText("Creating your file…")).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+});

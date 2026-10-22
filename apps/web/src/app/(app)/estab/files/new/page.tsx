@@ -6,6 +6,7 @@ import { Button, PageHeader, Term, ConfirmDialog, useConfirmAction } from "@/app
 import { useFormError } from "@/lib/useFormError";
 import { useEstabT } from "@/lib/estab/useEstabT";
 import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
+import { deptFieldMode } from "@/lib/estab/deptField";
 
 // Classification options are exactly the four tiers the estab-service actually
 // stores and enforces as an ordered clearance lattice
@@ -35,6 +36,7 @@ export default function NewFilePage() {
   const [department, setDepartment] = useState("");
   const depts = useEstabDivisions();
   const divisions = depts.divisions;
+  const deptMode = deptFieldMode(depts);
   const [initialNote, setInitialNote] = useState("");
   const [dakNo, setDakNo] = useState("");
   const [parentFileId, setParentFileId] = useState("");
@@ -174,19 +176,19 @@ export default function NewFilePage() {
         body: JSON.stringify(payload),
       });
       if (res.status === 202 || res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { id?: string; fileNo?: string };
+        // The service acknowledges with { id, status, correlationId }. The gapless CSMOP file number
+        // is allocated when the create command is PROCESSED, so it is not in this response and must
+        // not be invented here. The file's own page shows it (a one-time ?created=1 banner, and the
+        // number is the page title), so the officer is sent straight there.
+        const body = (await res.json().catch(() => ({}))) as { id?: string };
         // Latch created so the button cannot fire a second POST.
         setCreated(true);
-        // Show the allocated file number so the officer can record it even if
-        // they are navigated away (NEW-06).
-        setToast({
-          type: "success",
-          message: body.fileNo
-            ? `File ${body.fileNo} created with an opening yellow note. Opening it now…`
-            : "File created with an opening yellow note. Opening it now…",
-        });
         if (body.id) {
-          router.push(`/estab/files/${body.id}`);
+          setToast({ type: "success", message: t("fileCreatedOpening") });
+          router.push(`/estab/files/${encodeURIComponent(body.id)}?created=1`);
+        } else {
+          setToast({ type: "success", message: t("fileCreatedRegister") });
+          router.push("/estab/list");
         }
         return;
       }
@@ -402,8 +404,9 @@ export default function NewFilePage() {
               <label htmlFor="department" className="l">
                 {t("dept")}
               </label>
-              {depts.loaded && divisions.length === 0 /* ux-001-ok: depts.failed is surfaced by the note below; both states fall back to typed entry */ ? (
-                /* No pick-list available (list not readable by this role, or no operators enrolled yet): type it. */
+              {deptMode === "typed" ? (
+                /* No department master exists to pick from (no operators enrolled yet, or this role cannot read the
+                   directory), so there is nothing to validate a typed name against: type it. */
                 <input
                   id="department"
                   type="text"
@@ -420,28 +423,32 @@ export default function NewFilePage() {
                   }}
                 />
               ) : (
-              <select
-                id="department"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                aria-required="true"
-                disabled={!depts.loaded}
-                style={{
-                  width: "100%",
-                  padding: "8px 12px",
-                  border: "1px solid var(--line)",
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
-              >
-                <option value="">{t("deptSelect")}</option>
-                {divisions.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+                <select
+                  id="department"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  aria-required="true"
+                  aria-describedby={deptMode === "blocked" ? "department-note" : undefined}
+                  disabled={deptMode !== "pick"}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid var(--line)",
+                    borderRadius: 8,
+                    fontSize: 13,
+                  }}
+                >
+                  <option value="">{t("deptSelect")}</option>
+                  {divisions.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               )}
-              {depts.loaded && divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
-                <span role="note" className="sub" style={{ fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
+              {deptMode === "typed" ? (
+                <span id="department-note" role="note" className="sub" style={{ fontSize: 12 }}>{t("deptNone")}</span>
+              ) : null}
+              {deptMode === "blocked" ? (
+                <span id="department-note" role="alert" className="sub" style={{ fontSize: 12, color: "var(--bad)" }}>{t("deptLoadFailed")}</span>
               ) : null}
             </div>
             <div

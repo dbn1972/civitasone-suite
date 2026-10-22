@@ -17,11 +17,13 @@ import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
 import { isTopSecret, isFileReadOnly } from "./domain.js";
 import { queue } from "../../shared/infra.js";
 import {
-  isMoveAllowed, isAccessAllowed,
+  isMoveAllowed, isAccessAllowed, isActiveOperator,
   clearanceRankFor, tenantHasOperators, CLASSIFICATION_RANK,
 } from "../operators/eligibility.js";
+import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * GAP-ESTAB-LIST-01: drop files above the viewer's clearance from a LIST/SEARCH result, so a
@@ -283,39 +285,57 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.openFileFromInward(ctx, id, body));
   });
 
-  // GAP-ESTAB-HANDOVER-03: count of files CURRENTLY on an officer's desk, so a
-  // charge-handover confirm dialog can preview how many files will move. Reader
-  // roles only; a count is not classified content.
-  // GAP-ESTAB-INBOX-01: "My Desk" — files currently on the authenticated
-  // officer's desk. Uses ctx.actorId (the Keycloak sub) as the holder identity,
-  // which matches the default currentWith on file creation. Files explicitly
-  // moved to the operator's HRMS employeeId will also match when the operator
-  // directory uses the same id as the Keycloak sub. This gap is documented in
-  // the hrms-client; for now this is the best we can do without an identity
-  // bridge.
+  // GAP-ESTAB-INBOX-01: "My Desk" - files currently on the authenticated officer's desk.
+  //
+  // A file's holder is stored under two id spaces: the identity-provider subject of whoever opened
+  // it (ctx.actorId, the default currentWith on create) and the hrms employee id of an officer a
+  // file was forwarded to from the operator directory (fileMove). The desk therefore matches BOTH,
+  // bridging actor -> employee through hrms (resolveActorEmployeeId). The bridge fails closed: if
+  // hrms cannot answer, a partial desk would read as "nothing forwarded to you", so the route says
+  // so (503) instead of returning the actor-only subset.
+  //
+  // The response also says whether the caller is an enrolled eOffice operator, so the screen can
+  // explain an empty desk for someone who cannot be forwarded files at all.
   app.get("/v1/estab/files/mine", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    // actorId is the Keycloak sub — may not be a UUID in test/dev. If it isn't
-    // a valid UUID, the officer has no files on any desk, so return empty.
-    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRe.test(ctx.actorId)) {
-      return reply.send({ data: [], actorId: ctx.actorId });
-    }
     const { limit, offset } = z.object({
       limit: z.coerce.number().int().min(1).max(200).default(100),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
-    const files = await queries.listFilesByHolder(ctx.tenantId, ctx.actorId, limit, offset);
-    return reply.send({ data: files, actorId: ctx.actorId });
+    const adopted = await tenantHasOperators(ctx.tenantId);
+    // actorId is the Keycloak sub - may not be a UUID in test/dev. A non-UUID cannot be a holder
+    // (current_with is a uuid column) and cannot be bridged, so the officer has no desk.
+    if (!UUID_RE.test(ctx.actorId)) {
+      return reply.send({ data: [], actorId: ctx.actorId, employeeId: null, operator: { adopted, enrolled: false } });
+    }
+    let employeeId: string | null;
+    try {
+      employeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId);
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(503, "HRMS_UNAVAILABLE", "could not confirm your officer identity right now; try again shortly");
+      }
+      throw err;
+    }
+    const holderIds = [...new Set([ctx.actorId, ...(employeeId && UUID_RE.test(employeeId) ? [employeeId] : [])])];
+    const files = await queries.listFilesByHolder(ctx.tenantId, holderIds, limit, offset);
+    const enrolled = employeeId ? await isActiveOperator(ctx.tenantId, employeeId) : false;
+    return reply.send({ data: files, actorId: ctx.actorId, employeeId, operator: { adopted, enrolled } });
   });
 
+  // GAP-ESTAB-HANDOVER-03: how many files are CURRENTLY on an officer's desk, so a charge-handover
+  // confirm dialog can preview the blast radius. `count` is every live (non-terminal) file;
+  // `movableCount` is the subset a charge handover will actually reassign (the same predicate the
+  // handover consumer uses), so a preview never overstates what moves. Reader roles plus the
+  // division admin: the charge-handover screen admits estab_division_admin (it may POST a
+  // handover), and its confirm dialog needs this count. A count is not classified content.
   app.get("/v1/estab/files/held-count", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, [...READER_ROLES, "estab_division_admin"]);
     const { officerId } = z.object({ officerId: z.string().uuid() }).parse(req.query);
-    const count = await queries.countFilesByHolder(ctx.tenantId, officerId);
-    return reply.send({ officerId, count });
+    const counts = await queries.countFilesByHolder(ctx.tenantId, officerId);
+    return reply.send({ officerId, count: counts.live, movableCount: counts.movable });
   });
 
   app.get("/v1/estab/files", async (req, reply) => {

@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, asc, sql, ilike, or, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments,
@@ -196,36 +196,55 @@ export async function listFilesByTenant(tenantId: string, limit: number): Promis
 }
 
 /**
- * GAP-ESTAB-HANDOVER-03: count the files CURRENTLY on an officer's desk
- * (currentWith = officerId), excluding terminal states (archived/disposed) —
- * those don't move in a charge handover. Server-side count so the confirm
- * dialog preview isn't understated by a capped client list. Tenant-scoped,
- * runs inside db.transaction so the RLS GUC is set.
+ * The ONE status a charge handover moves. The handover consumer selects files with
+ * `status = HANDOVER_MOVES_STATUS` and the held-count preview counts the same predicate, so the
+ * number the confirm dialog states is exactly the number of files that move
+ * (GAP-ESTAB-HANDOVER-03). Draft and closed files on the desk are NOT moved today; they are counted
+ * separately (`live` vs `movable`) so the screen can say so rather than overstate.
  */
-export async function countFilesByHolder(tenantId: string, officerId: string): Promise<number> {
+export const HANDOVER_MOVES_STATUS = "active";
+
+export type HolderCounts = {
+  /** Files on the desk that are not in a terminal state (archived / disposed). */
+  live: number;
+  /** The subset a charge handover will actually reassign (status = HANDOVER_MOVES_STATUS). */
+  movable: number;
+};
+
+/**
+ * GAP-ESTAB-HANDOVER-03: count the files CURRENTLY on an officer's desk (currentWith = officerId).
+ * `live` excludes terminal states (archived/disposed); `movable` is what a charge handover moves.
+ * Server-side count so the confirm dialog preview isn't understated by a capped client list.
+ * Tenant-scoped, runs inside db.transaction so the RLS GUC is set.
+ */
+export async function countFilesByHolder(tenantId: string, officerId: string): Promise<HolderCounts> {
   const rows = await db.transaction((tx) => tx.execute(sql`
-    SELECT count(*)::int AS n
+    SELECT count(*) FILTER (WHERE f.status NOT IN ('archived', 'disposed'))::int AS live,
+           count(*) FILTER (WHERE f.status = ${HANDOVER_MOVES_STATUS})::int AS movable
       FROM files.estab_files f
      WHERE f.tenant_id = ${tenantId}::uuid
        AND f.current_with = ${officerId}::uuid
-       AND f.status NOT IN ('archived', 'disposed')
   `));
-  return Number((rows as unknown as Array<{ n: number }>)[0]?.n ?? 0);
+  const row = (rows as unknown as Array<{ live: number; movable: number }>)[0];
+  return { live: Number(row?.live ?? 0), movable: Number(row?.movable ?? 0) };
 }
 
 /**
- * GAP-ESTAB-INBOX-01: list files held by a specific officer — this is "My
- * Desk". Returns non-terminal files (not archived/disposed, matching
- * countFilesByHolder) where currentWith matches, paginated in SQL with a
- * stable order. Runs inside db.transaction for RLS GUC injection.
+ * GAP-ESTAB-INBOX-01: list files held by an officer - this is "My Desk". `holderIds` is every id the
+ * officer is known by: the files module stores a holder as the creator's identity-provider subject
+ * (a file the officer opened) OR as an hrms employee id (a file forwarded to them from the operator
+ * directory), so a desk must match both (see the /files/mine route). Returns non-terminal files (not
+ * archived/disposed) where currentWith matches any of them, paginated in SQL with a stable order.
+ * Runs inside db.transaction for RLS GUC injection.
  */
 export async function listFilesByHolder(
-  tenantId: string, officerId: string, limit = 100, offset = 0,
+  tenantId: string, holderIds: readonly string[], limit = 100, offset = 0,
 ): Promise<FileRow[]> {
+  if (holderIds.length === 0) return [];
   return db.transaction((tx) =>
     tx.select().from(estabFiles).where(and(
       eq(estabFiles.tenantId, tenantId),
-      eq(estabFiles.currentWith, officerId),
+      inArray(estabFiles.currentWith, [...holderIds]),
       sql`${estabFiles.status} NOT IN ('archived', 'disposed')`,
     )).orderBy(desc(estabFiles.createdAt), asc(estabFiles.id)).limit(limit).offset(offset),
   );
