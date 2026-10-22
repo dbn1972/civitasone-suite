@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -8,6 +8,7 @@ vi.mock('@/app/_data/apiClient', async () => {
   const actual = await vi.importActual<typeof import('@/app/_data/apiClient')>('@/app/_data/apiClient')
   return { ...actual, fetchJson: (...args: unknown[]) => fetchJsonMock(...args) }
 })
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }))
 vi.mock('next-intl/server', () => ({
   getTranslations: async () => (key: string) => key,
 }))
@@ -144,18 +145,55 @@ describe('WorkforceAnalyticsPage', () => {
 
     const soonValue = screen.getByText('retiringWithin6').previousSibling as HTMLElement;
     expect(soonValue).toHaveTextContent('—')
-    // Read the raw `style` attribute string (not the jsdom-parsed CSSOM,
-    // which may not round-trip a `var(...)` value) so this checks exactly
-    // what React rendered, regardless of jsdom's CSS-value parsing.
-    const rawStyle = soonValue.getAttribute('style') ?? ''
-    expect(rawStyle).not.toContain('--good')
-    expect(rawStyle).not.toContain('--bad')
-    expect(rawStyle).toContain('--muted')
+    // GAP-HR-WORKFORCE-ANALYTICS-08: tone is a ds class now, not inline
+    // style -- the neutral muted tone on error, never the good/bad tones.
+    expect(soonValue).toHaveClass('wf-fig--muted')
+    expect(soonValue).not.toHaveClass('wf-fig--good')
+    expect(soonValue).not.toHaveClass('wf-fig--bad')
+    expect(soonValue.getAttribute('style')).toBeNull()
 
     expect(screen.queryByText('2026-10')).not.toBeInTheDocument()
     // headcount/kpis cards are unaffected by retirement's own failure.
     expect(screen.getByText('statTotalHeadcount').closest('.stat')).toHaveTextContent('135')
     expect(screen.getByText('statAvgTenure').closest('.stat')).toHaveTextContent('8.4')
+  })
+
+  it('retirement table collapses to a labelled card stack on narrow screens (GAP-HR-WORKFORCE-ANALYTICS-08)', async () => {
+    mockLoaders({})
+    render(await WorkforceAnalyticsPage())
+    const table = screen.getByRole('table')
+    // mobileStack opt-in: civitas-ds.css only restyles `.tbl--stack` below 768px.
+    expect(table).toHaveClass('tbl', 'tbl--stack')
+    // Each cell carries the label the stacked layout prints (data-label -> ::before).
+    const firstRow = within(table).getAllByRole('row')[1]
+    const cells = within(firstRow).getAllByRole('cell')
+    expect(cells.map((c) => c.getAttribute('data-label'))).toEqual(['colPeriod', 'colRetiringCount'])
+  })
+
+  it('retirement table sorts by clicking a column header (GAP-HR-WORKFORCE-ANALYTICS-08)', async () => {
+    mockLoaders({})
+    render(await WorkforceAnalyticsPage())
+    const table = screen.getByRole('table')
+    const header = within(table).getByRole('columnheader', { name: /colRetiringCount/ })
+    const periodsInOrder = () =>
+      within(table).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[0].textContent)
+
+    fireEvent.click(header)
+    const first = periodsInOrder()
+    expect(header.getAttribute('aria-sort')).not.toBe('none')
+    fireEvent.click(header)
+    const second = periodsInOrder()
+    // Toggling direction reverses the two fixture rows (counts 1 and 2).
+    expect(second).toEqual([...first].reverse())
+    expect(new Set(first)).toEqual(new Set(['2026-10', '2027-03']))
+  })
+
+  it('the retirement block has no inline style attributes -- layout and tone are ds classes (GAP-HR-WORKFORCE-ANALYTICS-08)', () => {
+    const source = fs.readFileSync(path.resolve(__dirname, 'page.tsx'), 'utf8')
+    const start = source.indexOf('{/* Retirement risk */}')
+    expect(start).toBeGreaterThan(-1)
+    const block = source.slice(start)
+    expect(block).not.toMatch(/style=\{\{/)
   })
 
   it('a plain employee session sees PermissionDenied, not a broken-looking all-error page (GAP-HR-WORKFORCE-ANALYTICS-06)', async () => {

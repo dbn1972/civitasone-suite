@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { HR_TILE_ROLE_OVERRIDES, hasHrTileAccess } from "./hrTileAccess";
+import { HR_ROLES, LEAVE_POLICY_ADMIN_ROLES } from "./workRoles";
 
 /**
  * The complete set of tile hrefs on the HR hub (hr/page.tsx's hrCategories),
@@ -116,6 +117,21 @@ describe("hasHrTileAccess", () => {
   it("GAP-HR-LOCATIONS-NEW-02: office geofences are offered only to the roles that may create them", () => {
     expect(hasHrTileAccess("/hr/office-locations", ["hr_officer"])).toBe(false);
     expect(hasHrTileAccess("/hr/office-locations", ["hr_admin"])).toBe(true);
+  });
+
+  it("GAP-HR-LEAVE-POLICIES-02: the Leave Policies tile is offered to exactly the roles the page (and policy-admin-routes) admit — for every role hr/layout admits, plus 'admin'", () => {
+    for (const role of [...HR_ROLES, "admin"]) {
+      expect(
+        hasHrTileAccess("/hr/leave-policies", [role]),
+        `${role}: tile visibility must equal LEAVE_POLICY_ADMIN_ROLES membership`,
+      ).toBe(LEAVE_POLICY_ADMIN_ROLES.includes(role));
+    }
+    // the previously-drifted cases, named: the tile used to show for "admin" (denied by the page)
+    // and hide for tenant_admin / platform_admin (admitted by the page)
+    expect(hasHrTileAccess("/hr/leave-policies", ["admin"])).toBe(false);
+    expect(hasHrTileAccess("/hr/leave-policies", ["tenant_admin"])).toBe(true);
+    expect(hasHrTileAccess("/hr/leave-policies", ["platform_admin"])).toBe(true);
+    expect(hasHrTileAccess("/hr/leave-policies", ["hr_officer"])).toBe(false);
   });
 
   it("apar stays visible to employee (APAR_ROLES admits self-service employee/manager)", () => {

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 import { DepartmentsTable } from "./DepartmentsTable";
 
 type TestDept = { id: string; code: string; name: string; parentId: string | null; employeeCount: number };
@@ -179,5 +180,107 @@ describe("DepartmentsTable — delete-blocked advisory hint (GAP-HR-DEPARTMENTS-
     const depts = [{ id: "d1", code: "IT", name: "Information Technology", parentId: null, employeeCount: 0 }];
     renderTable(true, depts);
     expect(screen.getByRole("button", { name: /^Delete/ })).not.toHaveAttribute("title");
+  });
+});
+
+/**
+ * GAP-HR-DEPARTMENTS-01: a row the API sent no employeeCount for used to render
+ * "0" (and an "0 employees" aria-label) -- a fabricated count that also made
+ * delete look safe. Unknown now reads as an em dash with no count label.
+ */
+describe("DepartmentsTable — missing employeeCount is unknown, not zero (GAP-HR-DEPARTMENTS-01)", () => {
+  function renderLoose(depts: Array<Record<string, unknown>>) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <DepartmentsTable depts={depts as any} canEdit={true} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("renders an em dash, not 0, for a department without employeeCount, and no count aria-label", () => {
+    const { container } = renderLoose([{ id: "d1", code: "IT", name: "Information Technology", parentId: null }]);
+    expect(screen.getByTitle(/employee count unavailable/i)).toHaveTextContent("—");
+    expect(screen.queryByText("0")).not.toBeInTheDocument();
+    expect(container.querySelector('[aria-label*="employee" i]')).toBeNull();
+  });
+
+  it("still renders a genuine zero as 0 with its label", () => {
+    renderLoose([{ id: "d1", code: "IT", name: "Information Technology", parentId: null, employeeCount: 0 }]);
+    expect(screen.getByLabelText("0 employees")).toHaveTextContent("0");
+    expect(screen.queryByTitle(/employee count unavailable/i)).not.toBeInTheDocument();
+  });
+
+  it("renders a real count with a pluralised label", () => {
+    renderLoose([{ id: "d1", code: "IT", name: "Information Technology", parentId: null, employeeCount: 1 }]);
+    expect(screen.getByLabelText("1 employee")).toHaveTextContent("1");
+  });
+});
+
+/**
+ * GAP-HR-DEPARTMENTS-02 (acceptance 3): a 409 DEPARTMENT_IN_USE leaves the node
+ * in the tree and tells the clerk why, in terms of departments -- not the
+ * generic "changed by someone else" conflict copy.
+ */
+describe("DepartmentsTable — 409 DEPARTMENT_IN_USE keeps the node and explains (GAP-HR-DEPARTMENTS-02)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("leaves the department in the tree and shows the in-use message in the dialog", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "DEPARTMENT_IN_USE", message: "This department still has sub-departments or employees assigned to it.", childCount: 0, employeeCount: 5 }),
+        { status: 409 },
+      ),
+    );
+    renderTable();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Information Technology" }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete department/i }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    await waitFor(() => expect(dialog).toHaveTextContent(/still has sub-departments or employees/i));
+    expect(dialog).not.toHaveTextContent(/changed by someone else/i);
+    expect(dialog.textContent).not.toMatch(/\b409\b/);
+    // Still in the tree behind the dialog, and the delete was attempted exactly once.
+    expect(screen.getByText("Information Technology")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((fetchMock.mock.calls[0] as [string, RequestInit])[1].method).toBe("DELETE");
+  });
+
+  it("removes the node only after a successful delete", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 202 }));
+    renderTable();
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete Information Technology" }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete department/i }));
+
+    await waitFor(() => expect(screen.queryByText("Information Technology")).not.toBeInTheDocument());
+  });
+});
+
+/**
+ * GAP-HR-DEPARTMENTS-07: Hindi had no editAria / deleteAria (or the delete-
+ * blocked hint, parent select labels), so a Hindi session fell back to the raw
+ * key path for the per-row accessible names.
+ */
+describe("departmentsTable i18n — Hindi covers every English key (GAP-HR-DEPARTMENTS-07)", () => {
+  it("has every key the English namespace has", () => {
+    const missing = Object.keys(enMessages.departmentsTable).filter((k) => !(k in hiMessages.departmentsTable));
+    expect(missing).toEqual([]);
+  });
+
+  it("renders the per-row Edit/Delete accessible names in Hindi, naming the department", () => {
+    render(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <DepartmentsTable depts={DEPTS} canEdit={true} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Information Technology संपादित करें" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Information Technology हटाएँ" })).toBeInTheDocument();
   });
 });

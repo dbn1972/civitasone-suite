@@ -49,7 +49,7 @@ describe("SkillMatrix", () => {
     ]);
     const images = screen.getAllByRole("img");
     expect(images).toHaveLength(1);
-    expect(images[0]).toHaveAccessibleName("Arjun Rao: Intermediate, 1 level below requirement");
+    expect(images[0]).toHaveAccessibleName("Arjun Rao: Intermediate, 1 level below baseline");
   });
 
   it("filters by employee and by category", () => {
@@ -64,5 +64,52 @@ describe("SkillMatrix", () => {
   it("shows the no-match message when nothing fits the filter", () => {
     renderMatrix([]);
     expect(screen.getByText("No skill records match the filter.")).toBeInTheDocument();
+  });
+
+  // GAP-HR-SKILLS-03: with the baseline at Advanced (3), an intermediate
+  // employee is one level short (amber), advanced meets it (green) and expert
+  // fills all four dots (green).
+  describe("baseline colouring (GAP-HR-SKILLS-03)", () => {
+    /** Background colours of the FILLED dots in the row for `employee`. */
+    function filledDotColours(employee: string): string[] {
+      const row = screen.getByText(employee).closest("tr") as HTMLElement;
+      return Array.from(row.querySelectorAll<HTMLElement>('div[aria-hidden="true"]'))
+        .map((dot) => dot.style.background)
+        .filter((bg) => bg !== "var(--panel)");
+    }
+
+    it("intermediate is amber with 2 dots, advanced green with 3, expert green with 4", () => {
+      renderMatrix([
+        { skill: "Drizzle ORM", category: "Technical", employee: "Arjun Rao", proficiency: 2, requiredLevel: 3 },
+        { skill: "Drizzle ORM", category: "Technical", employee: "Meera Iyer", proficiency: 3, requiredLevel: 3 },
+        { skill: "Drizzle ORM", category: "Technical", employee: "Priya Nair", proficiency: 4, requiredLevel: 3 },
+      ]);
+      expect(filledDotColours("Arjun Rao")).toEqual(["var(--warn)", "var(--warn)"]);
+      expect(filledDotColours("Meera Iyer")).toEqual(["var(--good)", "var(--good)", "var(--good)"]);
+      expect(filledDotColours("Priya Nair")).toEqual(["var(--good)", "var(--good)", "var(--good)", "var(--good)"]);
+    });
+
+    it("names the baseline in the legend, defaulting to Advanced", () => {
+      renderMatrix([{ skill: "Drizzle ORM", category: "Technical", employee: "Arjun Rao", proficiency: 2 }]);
+      expect(screen.getByText("Baseline for all skills: Advanced")).toBeInTheDocument();
+    });
+
+    it("a record with no requiredLevel is measured against the baseline (intermediate -> one below)", () => {
+      renderMatrix([{ skill: "Drizzle ORM", category: "Technical", employee: "Arjun Rao", proficiency: 2 }]);
+      expect(screen.getByRole("img")).toHaveAccessibleName("Arjun Rao: Intermediate, 1 level below baseline");
+    });
+
+    it("a different baselineLevel is reflected in the legend", () => {
+      render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <SkillMatrix
+            baselineLevel={2}
+            records={[{ skill: "Drizzle ORM", category: "Technical", employee: "Arjun Rao", proficiency: 2 }]}
+          />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.getByText("Baseline for all skills: Intermediate")).toBeInTheDocument();
+      expect(screen.getByRole("img")).toHaveAccessibleName("Arjun Rao: Intermediate, Meets baseline");
+    });
   });
 });

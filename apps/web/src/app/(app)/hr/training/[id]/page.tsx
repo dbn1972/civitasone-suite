@@ -7,6 +7,9 @@ import { formatIndianDate, formatClockTime12h } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { EnrollButton } from "./EnrollButton";
+import { NominateEmployeeForm } from "./NominateEmployeeForm";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type SessionRow = {
   id: string;
@@ -63,12 +66,12 @@ async function getSessions(trainingId: string) {
  * to their OWN resolveEmployeeForActor id regardless of what employeeId they
  * submit, while HR can nominate any employeeId. That decision is not
  * pending; it is already built, audited and live. This page only adds the
- * missing UI reaching that already-secured endpoint -- self-enrol only
- * ("Enroll me"), not an HR-nominates-a-colleague picker: that needs its own
- * employee-search backend endpoint (EntityPicker itself already exists,
- * ds/EntityPicker.tsx, but no employee-search adapter or route backs it
- * anywhere in this repo yet), which is a separate, undecided piece of scope
- * -- flagged in the PR description rather than half-built here.
+ * missing UI reaching that already-secured endpoint: "Enroll me" for the
+ * viewer, and -- for HR staff only (hr_admin / hr_officer / super_admin, the
+ * backend HR_ROLES) -- a "Nominate an employee" picker built on the existing
+ * searchEmployees / resolveEmployees EntityPicker adapters (the earlier note
+ * here that no employee-search adapter existed was wrong; they back a dozen
+ * forms). Everyone else stays self-enrol only.
  */
 export default async function TrainingDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("trainingDetail");
@@ -106,6 +109,9 @@ export default async function TrainingDetailPage({ params }: { params: { id: str
   const seatsLeft = program.maxCapacity != null ? program.maxCapacity - program.enrolledCount : null;
   const full = seatsLeft !== null && seatsLeft <= 0;
   const canEnroll = program.status === "upcoming" && !full;
+  // Mirrors training/routes.ts HR_ROLES (the only callers POST /nominations lets
+  // choose someone other than themselves).
+  const isHrStaff = getSessionRoles().some((r: string) => HR_STAFF_ROLES.includes(r));
   const disabledReason = program.status !== "upcoming" ? t("notOpenForEnrolment") : full ? t("fullDisabled") : undefined;
 
   const sessionColumns: { key: keyof SessionRow & string; label: string; cellType?: "status" }[] = [
@@ -175,7 +181,15 @@ export default async function TrainingDetailPage({ params }: { params: { id: str
 
         <div className="px-4 pb-4">
           {canEnroll ? (
-            <EnrollButton trainingId={program.id} employeeId={myProfile?.id ?? null} />
+            <>
+              {/* An HR user with no linked employee record has nothing to self-enrol
+                  with, and "contact HR" would be addressed to themselves -- they
+                  nominate others below instead. */}
+              {(!isHrStaff || myProfile?.id) && (
+                <EnrollButton trainingId={program.id} employeeId={myProfile?.id ?? null} />
+              )}
+              {isHrStaff && <NominateEmployeeForm trainingId={program.id} />}
+            </>
           ) : (
             <p className="text-sm text-slate-500">{disabledReason}</p>
           )}

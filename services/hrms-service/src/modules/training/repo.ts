@@ -58,6 +58,27 @@ export async function insertNomination(tx: Writer, row: typeof hrmsNominations.$
   await tx.insert(hrmsNominations).values(row);
 }
 
+/**
+ * GAP-HR-TRAINING-01: hrms_nominations is unique on (tenant, training, employee),
+ * so a second nomination for the same pair can only ever fail inside the queue
+ * consumer -- after the caller was already told 202. The command checks this
+ * first so the duplicate is a synchronous, explainable 409 instead.
+ */
+export async function findNominationByTrainingAndEmployee(
+  tenantId: string, trainingId: string, employeeId: string,
+): Promise<{ id: string; status: string } | undefined> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: hrmsNominations.id, status: hrmsNominations.status })
+    .from(hrmsNominations)
+    .where(and(
+      eq(hrmsNominations.tenantId, tenantId),
+      eq(hrmsNominations.trainingId, trainingId),
+      eq(hrmsNominations.employeeId, employeeId),
+    ))
+    .limit(1));
+  return rows[0];
+}
+
 export async function listTrainingsByTenant(tenantId: string, limit = 100) {
   return scopedRead((tx) => tx.select().from(hrmsTrainings)
     .where(eq(hrmsTrainings.tenantId, tenantId))
@@ -91,6 +112,20 @@ export async function listCompletedNominationsForAdmin(tenantId: string, limit =
     .where(and(eq(hrmsNominations.tenantId, tenantId), eq(hrmsNominations.status, "completed")))
     .orderBy(desc(hrmsNominations.updatedAt))
     .limit(limit));
+}
+
+/**
+ * GAP-HR-TRAINING-FEEDBACK-04: the real number of completed nominations for the
+ * tenant, independent of listCompletedNominationsForAdmin's LIMIT 500 -- the
+ * feedback endpoint used to report `total: data.length` (== the cap), so its
+ * "Showing latest 500 of N" notice always read N = 500.
+ */
+export async function countCompletedNominationsForAdmin(tenantId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(hrmsNominations)
+    .where(and(eq(hrmsNominations.tenantId, tenantId), eq(hrmsNominations.status, "completed"))));
+  return rows[0]?.count ?? 0;
 }
 
 export async function countNominationsByTraining(tenantId: string, trainingIds: string[]): Promise<Map<string, number>> {

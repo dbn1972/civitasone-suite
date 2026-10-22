@@ -710,7 +710,11 @@ describe("HRMS routes — Service Book & Bulk Import & Internal", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/employees/bulk/status/${FAKE}`, headers: { authorization: `Bearer ${token()}` } });
     await app.close();
-    expect(r.statusCode).not.toBe(404);
+    // GAP-HR-EMPLOYEES-IMPORT-02: the route exists; an unknown batch id is now an honest 404 from the
+    // handler itself (NOT_FOUND, "import batch not found") rather than a made-up "completed". A missing
+    // ROUTE would 404 without this body, so this still proves registration.
+    expect(r.statusCode).toBe(404);
+    expect(r.json()).toMatchObject({ code: "NOT_FOUND", message: "import batch not found" });
   });
 
   it("GET /v1/hrms/internal/payroll-input", async () => {

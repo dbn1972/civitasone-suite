@@ -160,8 +160,45 @@ describe("GET /v1/hrms/service-book/me — self-service (GAP-HR-SERVICE-BOOK-06)
       headers: { authorization: `Bearer ${reportToken}` },
     });
     expect(r.statusCode).toBe(200);
-    const rows = JSON.parse(r.body).data as Array<{ description: string }>;
-    expect(rows.map((x) => x.description)).toEqual(["Joined as report"]);
+    // The /me payload uses the SAME row shape as the HR list (eventType / detail /
+    // status / orderNo), not the raw table columns -- the page reads those, so the
+    // raw shape hid the attested status and crashed the badge on a missing eventType.
+    const rows = JSON.parse(r.body).data as Array<Record<string, unknown>>;
+    expect(rows.map((x) => x.detail)).toEqual(["Joined as report"]);
+    expect(rows[0]).toMatchObject({
+      employeeId: REPORT_ID, employee: "Service Book Scope Report", eventType: "join",
+      effectiveDate: "2020-01-01", orderNo: "—", status: "recorded",
+    });
+    // Internal columns never reach the employee.
+    for (const internal of ["recordedBy", "attestedBy", "attestRemarks", "entryType", "description", "attested"]) {
+      expect(rows[0]).not.toHaveProperty(internal);
+    }
+  });
+
+  it("makes the attested status visible to the employee: an attested entry reads status 'attested'", async () => {
+    await asTenant((tx) => tx`
+      INSERT INTO lifecycle.hrms_service_book_entries
+        (id, tenant_id, employee_id, entry_type, effective_date, description, recorded_by, document_ref, attested, attested_by, attested_at)
+      VALUES (gen_random_uuid(), ${TENANT}, ${REPORT_ID}, 'promotion', '2023-04-01', 'Promoted to Section Officer', ${SEED_ACTOR}, 'PROM/2023/07', true, ${SEED_ACTOR}, now())
+    `);
+    const r = await app.inject({
+      method: "GET", url: "/v1/hrms/service-book/me",
+      headers: { authorization: `Bearer ${reportToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const rows = JSON.parse(r.body).data as Array<{ detail: string; eventType: string; status: string; orderNo: string }>;
+    expect(rows.find((x) => x.detail === "Promoted to Section Officer")).toMatchObject({
+      eventType: "promotion", status: "attested", orderNo: "PROM/2023/07",
+    });
+    expect(rows.find((x) => x.detail === "Joined as report")).toMatchObject({ status: "recorded" });
+  });
+
+  it("an employee cannot read another employee's service book (403)", async () => {
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/employees/${OUTSIDER_ID}/service-book`,
+      headers: { authorization: `Bearer ${reportToken}` },
+    });
+    expect(r.statusCode).toBe(403);
   });
 
   it("a caller with no linked employee record gets an empty list, not an error", async () => {

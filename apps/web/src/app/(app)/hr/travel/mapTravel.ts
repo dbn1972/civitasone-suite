@@ -30,6 +30,8 @@ export type Row = {
   // never shown. Kept as a number (paise) for cellType:"amount"; null means
   // "no advance requested", not zero.
   advanceRequired: number | null;
+  // GAP-HR-TRAVEL-01: the approver's reason for a rejected request, shown to
+  // the requester. "—" when there is none (pending / approved / no reason).
   rejectionReason: string;
   // GAP-HR-TRAVEL-02: an approved request can be claimed as an expense
   // (social/routes.ts already accepts travelRequestId on POST /expenses).
@@ -38,6 +40,13 @@ export type Row = {
 
 export type TeamRow = Row & {
   employee: string;
+  /**
+   * GAP-HR-TRAVEL-01: the requester's actor id (claims.hrms_travel_requests.
+   * employee_id == the requester's JWT sub). The approvals table compares it
+   * with the signed-in user so a decision control is NEVER offered on the
+   * viewer's own request (the server answers SELF_APPROVAL 403 regardless).
+   */
+  employeeId: string;
 };
 
 export function mapTravel(rows: ApiTravelRow[]): Row[] {
@@ -50,7 +59,7 @@ export function mapTravel(rows: ApiTravelRow[]): Row[] {
     mode: r.mode,
     status: r.status,
     advanceRequired: r.advance_required ?? null,
-    rejectionReason: r.rejection_reason ?? "—",
+    rejectionReason: r.status === "rejected" && r.rejection_reason ? r.rejection_reason : "—",
     canClaim: r.status === "approved",
   }));
 }
@@ -59,5 +68,6 @@ export function mapTravelTeam(rows: ApiTravelTeamRow[]): TeamRow[] {
   return mapTravel(rows).map((row, i) => ({
     ...row,
     employee: rows[i]!.employeeName ?? "Unknown employee",
+    employeeId: rows[i]!.employee_id,
   }));
 }

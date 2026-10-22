@@ -107,7 +107,9 @@ test.describe('HR', () => {
         }),
       }),
     );
-    await page.goto('/hr/leave/apply');
+    // ?empId= preselects the employee: HR / managers now start with nobody chosen
+    // (GAP-HR-LEAVE-APPLY-03), and the Leave Type select stays disabled until someone is.
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     // Wait for hydration + the leave-context load (the Leave Type select is disabled until it
     // arrives); clicking before that submitted the un-hydrated form natively and flaked.
     await expect(page.getByLabel('Leave Type')).toBeEnabled();

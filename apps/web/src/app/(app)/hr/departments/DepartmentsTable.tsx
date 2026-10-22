@@ -30,6 +30,19 @@ const inputStyle: React.CSSProperties = {
   minHeight: 36,
 };
 
+const countBadgeStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "var(--infobg)",
+  color: "var(--info)",
+  borderRadius: 12,
+  fontSize: 11,
+  fontWeight: 600,
+  padding: "1px 8px",
+  minWidth: 28,
+};
+
 // ── Single tree node ───────────────────────────────────────────────────────
 
 type NodeProps = {
@@ -196,24 +209,22 @@ function DeptNode({
             <span style={{ flex: 1, fontSize: 14, fontWeight: depth === 0 ? 600 : 400 }}>
               {node.name}
             </span>
-            {/* Employee count badge */}
-            <span
-              aria-label={t("employeeCountAriaLabel", { count: node.employeeCount ?? 0 })}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "var(--infobg)",
-                color: "var(--info)",
-                borderRadius: 12,
-                fontSize: 11,
-                fontWeight: 600,
-                padding: "1px 8px",
-                minWidth: 28,
-              }}
-            >
-              {node.employeeCount ?? 0}
-            </span>
+            {/* Employee count badge. GAP-HR-DEPARTMENTS-01: a row the API sent
+                no count for (older/degraded response) must read "unknown",
+                not a fabricated "0 employees" -- so it renders an em dash
+                and carries no count aria-label at all. */}
+            {typeof node.employeeCount === "number" ? (
+              <span
+                aria-label={t("employeeCountAriaLabel", { count: node.employeeCount })}
+                style={countBadgeStyle}
+              >
+                {node.employeeCount}
+              </span>
+            ) : (
+              <span title={t("employeeCountUnavailable")} style={countBadgeStyle}>
+                —
+              </span>
+            )}
             {hasChildren && (
               <span
                 style={{

@@ -25,11 +25,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 
-const { findByIdMock, rowsMock, listByTenantMock, listByIdsMock } = vi.hoisted(() => ({
+const { findByIdMock, rowsMock, listByTenantMock, listByIdsMock, countByTenantMock } = vi.hoisted(() => ({
   findByIdMock: vi.fn(),
   rowsMock: vi.fn(),
   listByTenantMock: vi.fn(async () => []),
   listByIdsMock: vi.fn(async () => []),
+  // GAP-HR-LEAVE-ALLOCATE-04: the real total behind the browse/search page.
+  countByTenantMock: vi.fn(async () => 0),
 }));
 
 // getEmployeeDetail resolves the main employee row (and, when managerId is
@@ -37,6 +39,7 @@ const { findByIdMock, rowsMock, listByTenantMock, listByIdsMock } = vi.hoisted((
 // directly rather than the underlying db primitives.
 vi.mock("../src/modules/employee/repo.js", () => ({
   listByTenant: (...a: unknown[]) => listByTenantMock(...a),
+  countByTenant: (...a: unknown[]) => countByTenantMock(...a),
   // GAP-HR-SF-06: batch id lookup backing listEmployees' resolve(ids) path.
   listByIds: (...a: unknown[]) => listByIdsMock(...a),
   findById: (...a: unknown[]) => findByIdMock(...a),
@@ -100,6 +103,38 @@ function baseRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => { vi.clearAllMocks(); });
+
+// GAP-HR-EMPLOYEES-NEW-02: basic pay on the detail record is opt-in per call, so
+// a role that must not see it can never receive it from a shared/cached shape.
+describe("getEmployeeDetail — basic pay (GAP-HR-EMPLOYEES-NEW-02)", () => {
+  async function detail(opts?: { includePay?: boolean }, basicMinor: unknown = 4490050n) {
+    const id = randomUUID();
+    findByIdMock.mockResolvedValueOnce(baseRow({ id, basicMinor }));
+    rowsMock.mockResolvedValueOnce([{ name: "Finance" }]);
+    rowsMock.mockResolvedValueOnce([{ name: "Officer", payGrade: null }]);
+    return getEmployeeDetail(id, TENANT, opts);
+  }
+
+  it("includes basicMinor (paise, as a number) when the caller asks for pay", async () => {
+    const result = await detail({ includePay: true });
+    expect(result?.basicMinor).toBe(4490050);
+    expect(typeof result?.basicMinor).toBe("number");
+  });
+
+  it("keeps a recorded zero (it is a real figure, not missing data)", async () => {
+    expect((await detail({ includePay: true }, 0n))?.basicMinor).toBe(0);
+  });
+
+  it("omits basicMinor by default and when includePay is false", async () => {
+    expect(await detail()).not.toHaveProperty("basicMinor");
+    expect(await detail({ includePay: false })).not.toHaveProperty("basicMinor");
+  });
+
+  it("drops a value beyond the safe-integer range rather than returning a rounded, wrong figure", async () => {
+    const result = await detail({ includePay: true }, 9007199254740993n);
+    expect(result).not.toHaveProperty("basicMinor");
+  });
+});
 
 describe("getEmployeeDetail", () => {
   it("returns null when the employee row is not found", async () => {
@@ -203,8 +238,57 @@ describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
     rowsMock.mockResolvedValueOnce([]); // departments
     rowsMock.mockResolvedValueOnce([]); // designations (#1686)
     await listEmployees(TENANT, 20, 0, undefined, undefined, "Asha");
-    // #1759 added a trailing `status` filter argument to repo.listByTenant.
-    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha", undefined);
+    // #1759 added a trailing `status` filter argument to repo.listByTenant;
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-05 added `excludeStatuses` after it.
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha", undefined, undefined);
+    // GAP-HR-LEAVE-ALLOCATE-04: the total is counted over the SAME filters as the page.
+    expect(countByTenantMock).toHaveBeenCalledWith(TENANT, undefined, undefined, "Asha", undefined, undefined);
+  });
+
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: the manager picker excludes exited staff in the query itself.
+  it("passes excludeStatuses through to repo.listByTenant as the last argument", async () => {
+    listByTenantMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    await listEmployees(TENANT, 20, 0, undefined, undefined, "Zed", undefined, undefined, ["terminated", "separated", "retired"]);
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Zed", undefined, ["terminated", "separated", "retired"]);
+    // ... and the total is counted over the same exclusion, so the page and its total cannot disagree.
+    expect(countByTenantMock).toHaveBeenCalledWith(TENANT, undefined, undefined, "Zed", undefined, ["terminated", "separated", "retired"]);
+  });
+
+  // GAP-HR-LEAVE-ALLOCATE-04: pagination used to carry only hasMore/pageSize,
+  // with hasMore guessed from `rows.length === limit`.
+  describe("pagination carries the real total (GAP-HR-LEAVE-ALLOCATE-04)", () => {
+    const row = (n: number) => ({
+      id: `e${n}`, employeeNo: `E${n}`, fullName: `Person ${n}`, departmentId: "d1", designationId: "g1",
+      employeeType: "permanent", status: "confirmed", email: null, dateOfJoining: "2020-01-01",
+    });
+
+    it("returns total from the count query, not the page size", async () => {
+      listByTenantMock.mockResolvedValueOnce([row(1), row(2)]);
+      countByTenantMock.mockResolvedValueOnce(340);
+      rowsMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      const result = await listEmployees(TENANT, 20, 0, undefined, undefined, "per");
+      expect(result.pagination.total).toBe(340);
+      expect(result.pagination.pageSize).toBe(20);
+      expect(result.pagination.hasMore).toBe(true);
+    });
+
+    it("hasMore is exact: false when the page ends exactly on the last row (rows.length === limit used to say true)", async () => {
+      listByTenantMock.mockResolvedValueOnce([row(1), row(2)]);
+      countByTenantMock.mockResolvedValueOnce(2);
+      rowsMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      const result = await listEmployees(TENANT, 2, 0);
+      expect(result.pagination).toMatchObject({ total: 2, hasMore: false });
+    });
+
+    it("hasMore accounts for the offset", async () => {
+      listByTenantMock.mockResolvedValueOnce([row(3)]);
+      countByTenantMock.mockResolvedValueOnce(5);
+      rowsMock.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+      const result = await listEmployees(TENANT, 2, 2);
+      expect(result.pagination).toMatchObject({ total: 5, hasMore: true });
+    });
   });
 
   it("ids takes the batch-lookup path (repo.listByIds), bypassing repo.listByTenant entirely", async () => {

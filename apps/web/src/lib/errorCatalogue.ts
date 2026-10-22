@@ -240,6 +240,33 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
   // Maker-checker: the approver must be a different person from the maker.
   MAKER_CHECKER: MAKER_CHECKER_MESSAGE,
   MAKER_CHECKER_VIOLATION: MAKER_CHECKER_MESSAGE,
+  // GAP-HR-WFH-01: hrms-service POST /v1/hrms/wfh-requests answers 422 with one
+  // of these two codes. They are policy outcomes (not a typo to fix), so they
+  // must read as their specific reason, never "Some details need changing".
+  // The pay-level threshold and the on/off switch are per-tenant policy, so
+  // the copy deliberately names neither a level nor a staff group.
+  GAZETTED_NOT_ELIGIBLE: {
+    en: {
+      what: "Work from home isn't available at this employee's pay level.",
+      next: "It is limited to the pay levels your office has made eligible. Ask HR if you think this is wrong.",
+    },
+    hi: {
+      what: "इस कर्मचारी के वेतन स्तर पर घर से कार्य उपलब्ध नहीं है।",
+      next: "यह केवल उन वेतन स्तरों के लिए है जिन्हें आपके कार्यालय ने पात्र माना है। यदि आपको लगता है कि यह ग़लत है तो एचआर से पूछें।",
+    },
+    actions: ["back", "help"],
+  },
+  WEEKLY_WFH_CAP_REACHED: {
+    en: {
+      what: "These dates would go over the weekly work-from-home limit.",
+      next: "Choose fewer days, or dates in a different week, and try again.",
+    },
+    hi: {
+      what: "इन तिथियों से सप्ताह की घर से कार्य की सीमा पार हो जाएगी।",
+      next: "कम दिन चुनें, या किसी दूसरे सप्ताह की तिथियाँ चुनें, फिर दोबारा प्रयास करें।",
+    },
+    actions: ["retry", "help"],
+  },
   // GAP-CHANGE-DETAIL-05: admin-service change domain codes
   // (services/admin-service/src/modules/change/domain.ts). Each is a specific,
   // actionable governance reason that must read differently from a generic
@@ -331,6 +358,21 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     hi: {
       what: "जब तक यह कहीं और इस्तेमाल में है, यह नहीं हो सकता।",
       next: "पहले जो इस पर निर्भर है उसे बदलें या दूसरे को सौंपें, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
+  // GAP-HR-DEPARTMENTS-02: DELETE /v1/hrms/departments/:id answers 409 with this
+  // code while the department still has sub-departments or active employees.
+  // Without its own entry the generic 409 "changed by someone else" copy was
+  // shown, which tells the clerk the wrong thing to do.
+  DEPARTMENT_IN_USE: {
+    en: {
+      what: "This department still has sub-departments or employees.",
+      next: "Move or reassign them first, then try again.",
+    },
+    hi: {
+      what: "इस विभाग में अभी भी उप-विभाग या कर्मचारी हैं।",
+      next: "पहले उन्हें किसी दूसरे विभाग में भेजें या सौंपें, फिर प्रयास करें।",
     },
     actions: ["back", "help"],
   },

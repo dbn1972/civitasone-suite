@@ -87,7 +87,7 @@ export default async function PayMatrixPage({
           role="note"
           style={{
             background: "var(--warnbg)",
-            border: "1px solid var(--warn-line)",
+            border: "1px solid var(--warnbd)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,

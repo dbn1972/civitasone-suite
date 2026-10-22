@@ -3,8 +3,9 @@
  * ServiceBookView — Sprint 14 / Lifecycle Phase 2
  * Paginated read-only chronological table of a complete service record.
  * Columns: date, event type badge, employee, details, order ref, attested.
- * Client-side filter by employee name, event type and attested status;
- * 15 rows per page.
+ * Client-side filter by event type and attested status; 15 rows per page.
+ * The employee scope itself is chosen server-side (?empId=, see
+ * ServiceBookEmployeePicker) -- GAP-HR-SERVICE-BOOK-04.
  */
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
@@ -56,9 +57,11 @@ function eventConfig(t: Translator): Record<string, { icon: string; color: strin
   };
 }
 
-function EventBadge({ type, eventCfg }: { type: string; eventCfg: Record<string, { icon: string; color: string; bg: string; label: string }> }) {
-  const cfg = eventCfg[type];
-  const label = cfg?.label ?? humanizeStatus(type);
+function EventBadge({ type, eventCfg }: { type: string | undefined; eventCfg: Record<string, { icon: string; color: string; bg: string; label: string }> }) {
+  // A row with no event type (an older/partial API payload) must degrade to the generic "Other" badge, never
+  // throw: humanizeStatus does status.trim(), which crashed the whole table on `undefined` (GAP-HR-SERVICE-BOOK-06).
+  const cfg = type ? eventCfg[type] : eventCfg.other;
+  const label = cfg?.label ?? humanizeStatus(type ?? "");
   const icon = cfg?.icon ?? "📌";
   const color = cfg?.color ?? "var(--mut)";
   const bg = cfg?.bg ?? "var(--bg)";
@@ -84,26 +87,19 @@ const PAGE_SIZE = 15;
 
 interface Props {
   entries: ServiceEntry[];
-  /** Pre-filter to a single employee — supplied by parent when rendering a per-employee view */
-  employeeId?: string;
-  /** Self-service view (GAP-HR-SERVICE-BOOK-06): the caller already sees only
-   * their own entries server-side, so a name filter box would only ever
-   * filter within their own single-employee data — hidden as noise. */
-  hideEmployeeFilter?: boolean;
 }
 
-export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Props) {
+export function ServiceBookView({ entries }: Props) {
   const t = useTranslations("serviceBookView");
   const eventCfg = eventConfig(t);
   const [page, setPage]           = useState(0);
-  const [empFilter, setEmpFilter] = useState(employeeId ?? "");
   const [typeFilter, setTypeFilter] = useState("all");
   // GAP-HR-SERVICE-BOOK-01: lets HR jump straight to entries still awaiting
   // competent-authority sign-off.
   const [unattestedOnly, setUnattestedOnly] = useState(false);
 
   const eventTypes = useMemo(
-    () => ["all", ...Array.from(new Set(entries.map((e) => e.eventType)))],
+    () => ["all", ...Array.from(new Set(entries.map((e) => e.eventType).filter(Boolean)))],
     [entries],
   );
 
@@ -113,18 +109,10 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
       (a, b) =>
         new Date(a.effectiveDate).getTime() - new Date(b.effectiveDate).getTime(),
     );
-    if (empFilter) {
-      const q = empFilter.toLowerCase();
-      r = r.filter(
-        (e) =>
-          (e.employee ?? "").toLowerCase().includes(q) ||
-          (e.employeeId ?? "").toLowerCase().includes(q),
-      );
-    }
     if (typeFilter !== "all") r = r.filter((e) => e.eventType === typeFilter);
     if (unattestedOnly) r = r.filter((e) => e.status !== "attested");
     return r;
-  }, [entries, empFilter, typeFilter, unattestedOnly]);
+  }, [entries, typeFilter, unattestedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamp current page if filter reduced results
@@ -150,21 +138,6 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
           flexWrap: "wrap", alignItems: "center",
         }}
       >
-        {!hideEmployeeFilter && (
-          <input
-            type="search"
-            placeholder={t("searchEmployeePlaceholder")}
-            value={empFilter}
-            onChange={(e) => { setEmpFilter(e.target.value); setPage(0); }}
-            style={{
-              padding: "7px 12px", borderRadius: 6,
-              border: "1px solid var(--line)",
-              fontSize: "0.875rem", background: "var(--bg)",
-              color: "var(--ink)", flex: "1 1 180px", minWidth: 160,
-            }}
-            aria-label={t("filterByEmployeeAriaLabel")}
-          />
-        )}
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}

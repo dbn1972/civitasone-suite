@@ -11,6 +11,8 @@ interface QuickAction {
 
 import type React from "react";
 
+const RUN_PAYROLL_LABEL = "Run Payroll";
+
 const ACTIONS: QuickAction[] = [
   {
     label: "Add Employee",
@@ -20,7 +22,7 @@ const ACTIONS: QuickAction[] = [
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>,
   },
   {
-    label: "Run Payroll",
+    label: RUN_PAYROLL_LABEL,
     desc: "Current month cycle",
     href: "/hr/payroll",
     iconColor: "var(--goodbg)",
@@ -48,14 +50,15 @@ const ACTIONS: QuickAction[] = [
 
 // Manager-role counterpart: "manager" is isHRStaff (HR_DASHBOARD_READER_ROLES
 // in hr/dashboard/page.tsx includes it, so a manager reaches this branch of
-// the dashboard, not the plain-employee one below) but is NOT in
-// EMPLOYEE_ADMIN_ROLES (hr/employees/new/page.tsx's own POST gate) -- "Add
-// Employee" 403s for that role same as for a plain employee. Run
-// Payroll/Approve Leaves/Download Report all lead to pages that render
-// successfully for a manager (hr/payroll's own canAdminister flag just hides
-// the run-payroll form inside the page; hr/leave/approvals is manager
-// territory), so only the one blocked action is dropped, not the whole set.
-const MANAGER_ACTIONS: QuickAction[] = ACTIONS.filter((a) => a.label !== "Add Employee");
+// the dashboard, not the plain-employee one below) but is in NEITHER
+// EMPLOYEE_ADMIN_ROLES (hr/employees/new/page.tsx's own POST gate) NOR
+// PAYROLL_READER_ROLES (hr/payroll/page.tsx renders PermissionDenied for any
+// other role, and GET /v1/payroll/runs 403s them). "Add Employee" and "Run
+// Payroll" therefore both lead a manager straight to a permission wall, and
+// are dropped; Approve Leaves / Download Report work for a manager.
+// (GAP-HR-DASHBOARD-05: this comment used to claim the payroll page renders
+// for a manager and kept Run Payroll in the set.)
+const MANAGER_ACTIONS: QuickAction[] = ACTIONS.filter((a) => a.label !== "Add Employee" && a.label !== RUN_PAYROLL_LABEL);
 
 // Employee-role counterpart: none of ACTIONS above apply to a plain
 // employee (add-employee/run-payroll/approve-leaves/download-org-report
@@ -89,9 +92,16 @@ interface Props {
   variant?: "admin" | "employee" | "manager";
   /** Only used when variant="employee", to build the "My Profile" link. Omitted (no linked employee record yet) simply drops that one action. */
   myEmployeeId?: string | null;
+  /**
+   * GAP-HR-DASHBOARD-05: whether the viewer can open /hr/payroll at all
+   * (PAYROLL_READER_ROLES). "Run Payroll" is dropped from the admin set when
+   * false -- e.g. hr_officer is HR staff but gets PermissionDenied there.
+   * Defaults to true so callers that don't compute it keep today's set.
+   */
+  canViewPayroll?: boolean;
 }
 
-export function QuickActionsPanel({ variant = "admin", myEmployeeId }: Props = {}) {
+export function QuickActionsPanel({ variant = "admin", myEmployeeId, canViewPayroll = true }: Props = {}) {
   const actions: QuickAction[] = variant === "employee"
     ? [
         ...EMPLOYEE_ACTIONS,
@@ -105,7 +115,9 @@ export function QuickActionsPanel({ variant = "admin", myEmployeeId }: Props = {
       ]
     : variant === "manager"
     ? MANAGER_ACTIONS
-    : ACTIONS;
+    : canViewPayroll
+    ? ACTIONS
+    : ACTIONS.filter((a) => a.label !== RUN_PAYROLL_LABEL);
 
   return (
     <div className="qa-panel">
@@ -126,17 +138,6 @@ export function QuickActionsPanel({ variant = "admin", myEmployeeId }: Props = {
           </Link>
         ))}
       </div>
-      <style>{`
-        .qa-panel { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09);overflow:hidden; }
-        .qa-head { padding:13px 16px 11px;border-bottom:1px solid var(--line); }
-        .qa-title { font-size:12px;font-weight:700;display:flex;align-items:center;gap:7px; }
-        .qa-grid { padding:12px;display:flex;flex-direction:column;gap:8px; }
-        .qa-btn { display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:7px;border:1px solid var(--line);background:var(--panel);text-decoration:none;transition:border-color .15s,box-shadow .15s; }
-        .qa-btn:hover { border-color:var(--info);box-shadow:0 0 0 3px rgba(37,99,235,.08); }
-        .qa-icon { width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
-        .qa-label { font-size:12px;font-weight:600;color:var(--ink); }
-        .qa-desc { font-size:10px;color:var(--muted);margin-top:1px; }
-      `}</style>
     </div>
   );
 }

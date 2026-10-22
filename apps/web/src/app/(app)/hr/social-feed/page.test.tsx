@@ -123,3 +123,47 @@ describe("SocialFeedPage", () => {
     expect(screen.getByText("We couldn't connect.")).toBeInTheDocument();
   });
 });
+
+// GAP-HR-SOCIAL-FEED-01 (DPDP): the employee's own birthday-sharing consent.
+describe("SocialFeedPage birthday-sharing consent (GAP-HR-SOCIAL-FEED-01)", () => {
+  const EMPTY_COUNTS = { kudos7d: 0, birthdaysToday: 0, joinees30d: 0, announcementsActive: 0 };
+  function mockFeedAndSharing(sharing: unknown) {
+    fetchJsonMock.mockImplementation((url: unknown) =>
+      Promise.resolve(typeof url === "string" && url.includes("/me/birthday-sharing") ? sharing : loaderResult([], EMPTY_COUNTS)),
+    );
+  }
+  // braces: a beforeEach that RETURNS the mock would make vitest call it as a teardown hook
+  beforeEach(() => { fetchJsonMock.mockReset(); });
+
+  it("offers the opt-in control, unchecked, to an employee who has not opted in", async () => {
+    mockFeedAndSharing({ data: { linked: true, shareBirthday: false }, source: "api" });
+    await renderPage();
+    expect(screen.getByText("Birthday sharing")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Show my birthday on the social feed" })).not.toBeChecked();
+  });
+
+  it("shows it checked for an employee who already opted in", async () => {
+    mockFeedAndSharing({ data: { linked: true, shareBirthday: true }, source: "api" });
+    await renderPage();
+    expect(screen.getByRole("checkbox", { name: "Show my birthday on the social feed" })).toBeChecked();
+  });
+
+  it("does not offer it when the account has no linked employee record", async () => {
+    mockFeedAndSharing({ data: { linked: false, shareBirthday: false }, source: "api" });
+    await renderPage();
+    expect(screen.queryByText("Birthday sharing")).not.toBeInTheDocument();
+  });
+
+  it("does not offer it (and never guesses 'on') when the consent read failed", async () => {
+    mockFeedAndSharing({ data: { linked: false, shareBirthday: false }, source: "error", status: 500 });
+    await renderPage();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("reads the consent from the self-only endpoint", async () => {
+    mockFeedAndSharing({ data: { linked: true, shareBirthday: false }, source: "api" });
+    await renderPage();
+    const urls = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(urls).toContain("/api/v1/hrms/me/birthday-sharing");
+  });
+});

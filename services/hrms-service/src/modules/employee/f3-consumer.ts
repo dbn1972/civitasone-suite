@@ -1,18 +1,39 @@
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, boolean } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
+import { departmentUsageTx, designationUsageForOneTx } from "./master-usage.js";
 import { hrmsEmployees } from "./schema.js";
-import { checkMandatoryConditions } from "./activation-domain.js";
 import { wouldCreateCycle, type ManagerGraph } from "./manager-domain.js";
 import { hrmsEmployeeNominees, hrmsEmployeeAddresses } from "./schema.js";
 import { hrmsDepartments, hrmsDesignations } from "./schema.js";
 const log = pino({ name: "hrms-f3-employee" });
+
+/** Central audit topic (same constant/payload shape as ./consumer.ts). */
+const AUDIT = "audit.event.record";
+
+/**
+ * GAP-HR-DEPARTMENTS-02 / GAP-HR-DESIGNATIONS-02: master-data deletes were the
+ * only mutation in this consumer with no audit trail. Enqueued in the same
+ * transaction as the delete itself, so the event exists iff the row is gone.
+ */
+async function auditMasterDelete(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  resourceType: "department" | "designation",
+  resourceId: string,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT, eventType: AUDIT,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "hrms", action: "delete", resourceType, resourceId, outcome: "success" },
+  });
+}
 
 /**
  * Write-side view of the per-tenant employee-type master. The canonical
@@ -92,7 +113,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .set({ fitnessStatus: body.fitnessStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, rows[0].version)));
                   return updated;
-            break;
           }
           case "employee_agent1_gap_routes__1": {
             // F3 reconstruction: the code-gen that stubbed
@@ -155,7 +175,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .set({ status: body.revertToStatus, updatedBy: msg.actorId, updatedAt: new Date() })
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
                   return { id: targetId, status: body.revertToStatus };
-            break;
           }
           case "employee_agent1_gap_routes__3": {
             // Fetch current employee
@@ -208,7 +227,6 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
 
                   return { id: targetId, ...body };
-            break;
           }
           case "employee_employee_types_routes__0": {
             // F3 reconstruction: `employeeTypeMaster` was never imported (the
@@ -333,7 +351,24 @@ export function registerF3_employee_Consumers(queue: Queue): void {
           case "employee_masters_routes__3": {
             // Restored: department DELETE. Existence already checked
             // synchronously by the route.
-            await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.id, targetId));
+            //
+            // GAP-HR-DEPARTMENTS-02: repeat the route's reference guard here
+            // too -- the route's check-then-publish is not atomic, so a child
+            // department or employee could be attached to this department in
+            // the window between the route's 202 and this consumer actually
+            // running the delete (neither employee.department_id nor
+            // parent_id has a database FK to stop it). NonRetryableError:
+            // retrying can never make a referenced department deletable, so
+            // the command goes straight to the DLQ and the delete is skipped.
+            const usage = await departmentUsageTx(tx, p.tenantId, targetId);
+            if (usage.childCount > 0 || usage.employeeCount > 0) {
+              throw new NonRetryableError(
+                `DEPARTMENT_IN_USE: department ${targetId} still has ${usage.childCount} sub-department(s) and ${usage.employeeCount} active employee(s); delete skipped`,
+              );
+            }
+            await tx.delete(hrmsDepartments)
+              .where(and(eq(hrmsDepartments.id, targetId), eq(hrmsDepartments.tenantId, p.tenantId)));
+            await auditMasterDelete(tx, msg, "department", targetId);
             break;
           }
           case "employee_masters_routes__4": {
@@ -350,15 +385,21 @@ export function registerF3_employee_Consumers(queue: Queue): void {
           }
           case "employee_masters_routes__5": {
             // GAP-HR-DESIGNATIONS-02: repeat the reference guard here too --
-            // the route's check-then-publish isn't atomic, so an employee
-            // could be assigned this designation in the window between the
-            // route's 202 and this consumer actually running the delete.
-            const inUse = await tx.select({ n: sql<number>`count(*)` }).from(hrmsEmployees)
-              .where(and(eq(hrmsEmployees.designationId, targetId), eq(hrmsEmployees.tenantId, p.tenantId)));
-            if (Number(inUse[0]?.n ?? 0) > 0) {
-              throw new HttpError(409, "DESIGNATION_IN_USE", "designation is still referenced by one or more employees");
+            // the route's check-then-publish isn't atomic, so a record could
+            // be pointed at this designation in the window between the
+            // route's 202 and this consumer actually running the delete. The
+            // guard spans every in-service referrer (master-usage.ts), not
+            // just employees. NonRetryableError: retrying can never make a
+            // referenced designation deletable, so skip + DLQ.
+            const usage = await designationUsageForOneTx(tx, p.tenantId, targetId);
+            if (usage.total > 0) {
+              throw new NonRetryableError(
+                `DESIGNATION_IN_USE: designation ${targetId} is still referenced by ${usage.total} record(s) (${Object.keys(usage.references).join(", ")}); delete skipped`,
+              );
             }
-            await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.id, targetId));
+            await tx.delete(hrmsDesignations)
+              .where(and(eq(hrmsDesignations.id, targetId), eq(hrmsDesignations.tenantId, p.tenantId)));
+            await auditMasterDelete(tx, msg, "designation", targetId);
             break;
           }
           case "employee_nominee_address_routes__0": {

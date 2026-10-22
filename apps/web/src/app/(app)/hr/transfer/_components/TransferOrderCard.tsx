@@ -14,7 +14,10 @@ import { validateIssueOrder, toIssueOrderBody, type IssueOrderForm, type IssueOr
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
-import { isEofficeStatus, DIRECT_PIPELINE, directPipelineIndex } from "@/lib/hr/transferStatus";
+import {
+  isEofficeStatus, DIRECT_PIPELINE, directPipelineIndex, transferStatusLabel, transferStatusTone,
+  ISSUE_ORDER_FROM, RELIEVE_FROM, JOIN_FROM,
+} from "@/lib/hr/transferStatus";
 
 export type TransferRow = {
   id: string;
@@ -59,7 +62,7 @@ function todayIST(): string {
 export function TransferOrderCard({ transfer, onAction }: Props) {
   // GAP-HR-TRANSFER-10: all copy comes from the transferUi namespace.
   const tr = useTranslations("transferUi");
-  const statusText = (s: string) => (tr.has(`status.${s}`) ? tr(`status.${s}`) : s);
+  const statusText = (s: string) => transferStatusLabel(tr, s);
   const { toast } = useToast();
   const router = useRouter();
   const [acting, setActing] = useState(false);
@@ -74,7 +77,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
   const statusLabel = statusText(transfer.status);
   const currentIdx = directPipelineIndex(transfer.status);
   const today = todayIST();
-  const isClosed = ["joined", "completed", "cancelled"].includes(transfer.status);
+  const isClosed = ["joined", "completed", "cancelled", "rejected"].includes(transfer.status);
   const isCancelled = transfer.status === "cancelled";
   const isEoffice = isEofficeStatus(transfer.status);
   const empLabel = transfer.employee ?? transfer.employeeId ?? tr("unknown");
@@ -115,7 +118,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             {fromLabel} &rarr; {toLabel}
           </p>
         </div>
-        <StatusPill status={transfer.status} label={statusLabel} />
+        <StatusPill status={transfer.status} label={statusLabel} variant={transferStatusTone(transfer.status)} />
       </div>
 
       <div className="pad" style={{ paddingTop: 4 }}>
@@ -236,7 +239,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             freshly-created transfer. */}
         {!isClosed && !isEoffice && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {transfer.status === "requested" && (
+            {ISSUE_ORDER_FROM.includes(transfer.status) && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => {
                   setIssueForm({ orderNo: "", orderDate: today, orderRef: "" });
@@ -247,7 +250,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 {acting ? tr("processing") : tr("issueOrder")}
               </Button>
             )}
-            {transfer.status === "ordered" && !transfer.relievedDate && (
+            {RELIEVE_FROM.includes(transfer.status) && !transfer.relievedDate && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "relieve",
@@ -259,7 +262,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 {acting ? tr("processing") : tr("markRelieved")}
               </Button>
             )}
-            {transfer.status === "relieved" && !transfer.joinedDate && (
+            {JOIN_FROM.includes(transfer.status) && !transfer.joinedDate && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "join",

@@ -8,7 +8,7 @@
  *  - leaveApply    → inserts leave_app, publishes leaveApplied + workflow.instance.create
  *  - leaveApprove  → status "approved", debit balance, leaveApproved + notification
  *  - leaveReject   → status "rejected", notification
- *  - Balance check → DomainError "INSUFFICIENT_LEAVE_BALANCE"
+ *  - Balance check → FAILED audit + applicant notice for INSUFFICIENT_LEAVE_BALANCE (no silent throw)
  *  - Status guard  → DomainError "INVALID_STATUS_TRANSITION" (approve already-approved)
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -273,9 +273,53 @@ describe("leaveApply command", () => {
     await q.stop();
   });
 
-  it("throws DomainError INSUFFICIENT_LEAVE_BALANCE when daysApplied > balanceDays", async () => {
+  // GAP-HR-LEAVE-APPLY-04: this used to assert the consumer THREW a DomainError
+  // inside the transaction -- a silent async failure (the applicant had already
+  // been told "202 accepted"; the message just retried/dead-lettered). The
+  // contract is now: nothing is inserted, no workflow is started, and the
+  // failure is recorded as a FAILED audit event AND notified to the applicant.
+  it("an INSUFFICIENT_LEAVE_BALANCE at consume time is observable (FAILED audit + applicant notice), inserts nothing, and no longer throws", async () => {
     // Balance is 15, requesting 20.
     findAllocByIdMock.mockResolvedValue({ ...mockAlloc, balanceDays: 15 });
+    const q = await buildQueue();
+
+    let caught: Error | null = null;
+    dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
+      try {
+        await cb(mockTx);
+      } catch (e) {
+        caught = e as Error;
+        throw e;
+      }
+    });
+
+    const appId = randomUUID();
+    await q.publish(
+      COMMANDS.leaveApply,
+      makeMsg(COMMANDS.leaveApply, {
+        id: appId, tenantId: TENANT, employeeId: EMP,
+        leaveTypeId: LT_ID, allocId: ALLOC_ID,
+        fromDate: "2025-06-01", toDate: "2025-06-22", daysApplied: 20, // > balance of 15
+      }),
+    );
+    await settle();
+
+    expect(caught).toBeNull();
+    expect(insertLeaveAppMock).not.toHaveBeenCalled();
+    expect(enqueuedMessages.find((m) => m.topic === EVENTS.leaveApplied)).toBeUndefined();
+    expect(enqueuedMessages.find((m) => m.topic === "workflow.instance.create")).toBeUndefined();
+    const audit = enqueuedMessages.find((m) => m.topic === "audit.event.record");
+    expect(audit?.payload).toMatchObject({
+      resourceType: "leave_app", resourceId: appId, outcome: "failure",
+      metadata: { reason: "INSUFFICIENT_LEAVE_BALANCE", requestedDays: 20, balanceDays: 15 },
+    });
+    const notice = enqueuedMessages.find((m) => m.topic === "notification.send");
+    expect(notice?.payload).toMatchObject({ eventType: "hrms.leave.apply_failed", recipientId: EMP });
+    await q.stop();
+  });
+
+  it("only the balance shortfall is handled that way - any other consumer error (e.g. a missing allocation) still throws", async () => {
+    findAllocByIdMock.mockResolvedValue(null as never);
     const q = await buildQueue();
 
     let caught: Error | null = null;
@@ -293,13 +337,13 @@ describe("leaveApply command", () => {
       makeMsg(COMMANDS.leaveApply, {
         id: randomUUID(), tenantId: TENANT, employeeId: EMP,
         leaveTypeId: LT_ID, allocId: ALLOC_ID,
-        fromDate: "2025-06-01", toDate: "2025-06-22", daysApplied: 20, // > balance of 15
+        fromDate: "2025-06-01", toDate: "2025-06-03", daysApplied: 3,
       }),
     );
     await settle();
     expect(caught).not.toBeNull();
-    expect(caught).toBeInstanceOf(DomainError);
-    expect((caught as unknown as DomainError).code).toBe("INSUFFICIENT_LEAVE_BALANCE");
+    expect((caught as unknown as Error).message).toMatch(/not found/);
+    expect(enqueuedMessages.find((m) => m.topic === "audit.event.record")).toBeUndefined();
     await q.stop();
   });
 });

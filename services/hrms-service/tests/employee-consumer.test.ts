@@ -176,6 +176,57 @@ describe("employeeCreate command", () => {
     expect((audit!.payload as any).action).toBe("create");
     await q.stop();
   });
+
+  // GAP-HR-EMPLOYEES-IMPORT-05: the bulk-import route resolves managerEmployeeNo
+  // -> managerId and queues it on this command; the consumer used to drop it, so
+  // an imported employee's reportingTo never showed the manager.
+  it("persists the managerId a bulk import resolved, so the new employee reports to that manager", async () => {
+    const managerId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: managerId, tenantId: TENANT, status: "confirmed" });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.employeeCreate, makeMsg(COMMANDS.employeeCreate, {
+      id: randomUUID(), tenantId: TENANT, employeeNo: "E100", fullName: "Reports To Someone",
+      departmentId: randomUUID(), designationId: randomUUID(),
+      dateOfJoining: "2025-01-15", employeeType: "permanent",
+      basicMinor: 5000000, currency: "INR", managerId,
+    }));
+    await drainOrFail(q);
+    expect(insertEmployeeMock).toHaveBeenCalledOnce();
+    const row = insertEmployeeMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(row.managerId).toBe(managerId);
+    // The manager was re-checked inside the same tenant before the write.
+    expect(findByIdMock).toHaveBeenCalledWith(expect.anything(), managerId, TENANT);
+    await q.stop();
+  });
+
+  it("leaves managerId null (and does no manager lookup) when the row names no manager", async () => {
+    const q = await buildQueue();
+    await q.publish(COMMANDS.employeeCreate, makeMsg(COMMANDS.employeeCreate, {
+      id: randomUUID(), tenantId: TENANT, employeeNo: "E101", fullName: "No Manager",
+      departmentId: randomUUID(), designationId: randomUUID(),
+      dateOfJoining: "2025-01-15", employeeType: "permanent",
+      basicMinor: 5000000, currency: "INR",
+    }));
+    await drainOrFail(q);
+    const row = insertEmployeeMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(row.managerId).toBeNull();
+    expect(findByIdMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("does not create the employee when the named manager no longer exists in the tenant", async () => {
+    findByIdMock.mockResolvedValue(null);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.employeeCreate, makeMsg(COMMANDS.employeeCreate, {
+      id: randomUUID(), tenantId: TENANT, employeeNo: "E102", fullName: "Orphan",
+      departmentId: randomUUID(), designationId: randomUUID(),
+      dateOfJoining: "2025-01-15", employeeType: "permanent",
+      basicMinor: 5000000, currency: "INR", managerId: randomUUID(),
+    }));
+    await drainOrFail(q);
+    expect(insertEmployeeMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
 });
 
 describe("employeeConfirm command", () => {

@@ -6,9 +6,13 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { randomUUID } from "node:crypto";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { isExitedStatus } from "../employee/status.js";
+import * as importRepo from "./repo.js";
+import { RECORD_CHUNK_SIZE, type BulkImportItem, type BulkImportRecordItem } from "./command.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -86,12 +90,19 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     // the single-row/edit paths but isn't wired into this bulk path, so
     // this stays a narrower, explicit check rather than silently skipping
     // cycle detection here.
+    //
+    // An exited (terminated / separated / retired) employee cannot be a
+    // reporting manager -- the same rule PATCH /v1/hrms/employees/:id
+    // enforces (employee/manager-eligibility.ts, GAP-HR-EMPLOYEES-DETAIL-EDIT-05),
+    // since an exited manager breaks approval routing. `status` is read here so
+    // a row naming one gets a row-level error instead of being queued.
     const managerNos = body.employees.map((e) => e.managerEmployeeNo).filter((v): v is string => !!v);
     const managerRows = managerNos.length > 0
-      ? await scopedRead((tx) => tx.select({ id: hrmsEmployees.id, employeeNo: hrmsEmployees.employeeNo }).from(hrmsEmployees)
+      ? await scopedRead((tx) => tx.select({ id: hrmsEmployees.id, employeeNo: hrmsEmployees.employeeNo, status: hrmsEmployees.status }).from(hrmsEmployees)
           .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.employeeNo, managerNos))))
       : [];
     const managerIdByNo = new Map(managerRows.map((r) => [r.employeeNo, r.id]));
+    const exitedManagerNos = new Set(managerRows.filter((r) => isExitedStatus(r.status)).map((r) => r.employeeNo));
     const fileNos = new Set(body.employees.map((e) => e.employeeNo));
 
     body.employees.forEach((emp, idx) => {
@@ -122,6 +133,9 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
           // ordering/dependency guarantee between them), so a same-file
           // manager reference cannot be resolved to a real id here.
           fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `${emp.managerEmployeeNo} is in this same file, not an existing employee -- import managers first, then re-import with this column.` });
+        } else if (exitedManagerNos.has(emp.managerEmployeeNo)) {
+          // Exists in this tenant but has left the organisation: not an eligible manager (see the note above).
+          fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `${emp.managerEmployeeNo} has left the organisation (terminated, separated or retired) and cannot be a reporting manager.` });
         }
       }
     });
@@ -130,40 +144,58 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, correlationId: ctx.correlationId });
     }
 
-    // Queue each employee creation
-    for (const emp of body.employees) {
-      const id = randomUUID();
+    // GAP-HR-EMPLOYEES-IMPORT-02: this route only publishes (CQRS -- see f3-leftover-hrms-cqrs.test.ts). The record
+    // command's consumer commits the batch and one pending row per employee, and only THEN publishes the per-employee
+    // create commands, so the batchId in the 202 becomes a real, pollable record and each create has a row to mark
+    // 'created' (atomically with the employee insert) or 'failed'. The row id doubles as the create command's messageId
+    // and as the new employee's id. Until the consumer has run, GET .../status answers 404 for the new id.
+    const items: BulkImportRecordItem[] = body.employees.map((emp, idx) => {
       const { managerEmployeeNo, ...rest } = emp;
-      await queue.publish("hrms.employee.create", {
-        messageId: id, type: "hrms.employee.create",
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-        payload: {
-          id, tenantId: ctx.tenantId, ...rest, currency: "INR",
+      const id = randomUUID();
+      return {
+        id, rowNo: idx + 1, employeeNo: emp.employeeNo,
+        create: {
+          id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
           ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
         },
-      });
+      };
+    });
+    const total = items.length;
+    const chunks: BulkImportRecordItem[][] = [];
+    for (let i = 0; i < total; i += RECORD_CHUNK_SIZE) chunks.push(items.slice(i, i + RECORD_CHUNK_SIZE));
+    const envelope = <T>(type: string, payload: T) => ({
+      messageId: randomUUID(), type,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload,
+    });
+
+    let published = 0;
+    try {
+      for (const chunk of chunks) {
+        await queue.publish(COMMANDS.employeeBulkImportRecord, envelope(COMMANDS.employeeBulkImportRecord, { batchId, total, items: chunk }));
+        published++;
+      }
+    } catch (err) {
+      // The queue broke part-way. The chunks never published would leave their rows unrecorded -- the batch reading
+      // "processing" forever -- so tell the consumer to record them as failed. Best effort (the queue is what just
+      // broke); the chunk whose publish threw is included, as it may in fact have been delivered. Then surface the error.
+      const unsent: BulkImportItem[] = chunks.slice(published).flat().map(({ id, rowNo, employeeNo }) => ({ id, rowNo, employeeNo }));
+      await queue.publish(COMMANDS.employeeBulkImportNotQueued, envelope(COMMANDS.employeeBulkImportNotQueued, { batchId, total, items: unsent }))
+        .catch((markErr) => req.log.error({ markErr }, "could not record un-queued import rows"));
+      throw err;
     }
 
     return sendAccepted(reply, acceptedResponseSchema, { id: batchId, status: "accepted" as const, correlationId: ctx.correlationId });
   });
 
-  app.get("/v1/hrms/employees/bulk/status/:batchId", async (req, reply) => {
+  // GAP-HR-EMPLOYEES-IMPORT-02: real per-row state. ImportForm polls this every couple of seconds,
+  // hence the explicit (generous) per-route limit. 404 for an id that is not a batch of THIS tenant.
+  app.get("/v1/hrms/employees/bulk/status/:batchId", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    // NOT WIRED TO REAL STATE (pre-existing -- left as-is by the HRMS
-    // role-based review's finding-2 fix, which is scoped to making
-    // ImportForm.tsx call the bulk endpoint correctly, not to building batch
-    // tracking). This always answers "completed" regardless of what the
-    // queued hrms.employee.create messages actually did -- there is no
-    // import_batches table or equivalent behind it, and batchId isn't even
-    // persisted anywhere by the POST handler above, so this route cannot
-    // presently distinguish a real batch id from a made-up one. Do not wire
-    // ImportForm.tsx (or any client) to poll this expecting per-row
-    // success/failure -- it would report "completed" even when every queued
-    // row failed downstream. Needs a real import_batches table (or
-    // equivalent) written by employee/consumer.ts per processed row before
-    // this can honestly answer per-row status.
-    return reply.send({ batchId: (req.params as any).batchId, status: "completed", message: "Batch processed via CQRS" });
+    const { batchId } = z.object({ batchId: z.string().uuid() }).parse(req.params);
+    const status = await importRepo.getBatchStatus(ctx.tenantId, batchId);
+    if (!status) throw new HttpError(404, "NOT_FOUND", "import batch not found");
+    return reply.send(status);
   });
 
   app.setErrorHandler((err, req, reply) => {

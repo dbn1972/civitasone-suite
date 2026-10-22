@@ -108,7 +108,6 @@ export function ShiftRequestsTable({
             <Button
               variant="primary"
               size="sm"
-              style={{ minHeight: 44 }}
               onClick={() => { setDialogError(undefined); setPending({ row, decision: "approve" }); }}
             >
               {t("approveBtn")}
@@ -116,7 +115,6 @@ export function ShiftRequestsTable({
             <Button
               variant="ghost"
               size="sm"
-              style={{ minHeight: 44 }}
               onClick={() => { setDialogError(undefined); setPending({ row, decision: "reject" }); }}
             >
               {t("rejectBtn")}

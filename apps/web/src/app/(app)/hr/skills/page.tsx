@@ -6,6 +6,7 @@ import { SkillMatrix, type SkillRecord } from "./_components/SkillMatrix";
 import { getTranslations } from "next-intl/server";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
+import { SKILL_BASELINE_LEVEL, toLevel } from "@/lib/skillLevels";
 
 type Row = {
   id: string;
@@ -23,26 +24,6 @@ type SkillsPayload = {
   total: number;
   hasMore: boolean;
 };
-
-// GAP-HR-SKILLS-03: mapped 1:1 onto the backend's actual assessed_level
-// vocabulary (beginner/intermediate/advanced/expert — see
-// gap-features/routes.ts POST /v1/hrms/skills/assessments), plus the older
-// synonyms the same endpoint's history could still hold. Level 3 was
-// previously unreachable (both advanced and expert mapped to 4).
-const LEVEL_MAP: Record<string, number> = {
-  expert: 4,
-  advanced: 3,
-  proficient: 3, // legacy synonym
-  intermediate: 2,
-  developing: 2, // legacy synonym
-  beginner: 1,
-  basic: 1, // legacy synonym
-};
-
-function toLevel(proficiency: string): 0 | 1 | 2 | 3 | 4 {
-  const lvl = LEVEL_MAP[(proficiency ?? "").toLowerCase()] ?? 0;
-  return lvl as 0 | 1 | 2 | 3 | 4;
-}
 
 async function getData(): Promise<LoaderResult<SkillsPayload>> {
   return fetchJson<unknown, SkillsPayload>("/api/v1/hrms/skills", { items: [], total: 0, hasMore: false }, {
@@ -73,7 +54,9 @@ export default async function SkillsPage() {
     category: row.category,
     employee: row.employee,
     proficiency: toLevel(row.proficiency),
-    requiredLevel: 3, // baseline shown in the legend; see GAP-HR-SKILLS-03 fix notes
+    // GAP-HR-SKILLS-03: one baseline for every skill, named in the matrix
+    // legend; there is no per-role requirement API to read yet.
+    requiredLevel: SKILL_BASELINE_LEVEL,
   }));
 
   return (
@@ -99,7 +82,7 @@ export default async function SkillsPage() {
             </div>
           ) : (
             <>
-              <SkillMatrix records={matrixRecords} />
+              <SkillMatrix records={matrixRecords} baselineLevel={SKILL_BASELINE_LEVEL} />
               {hasMore && (
                 <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
                   {t("truncationNotice", { shown: items.length, total })}

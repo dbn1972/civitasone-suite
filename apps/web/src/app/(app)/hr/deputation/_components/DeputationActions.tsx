@@ -50,6 +50,8 @@ export function DeputationActions({ id, employeeLabel }: Props) {
         onSuccess={() => router.refresh()}
         confirmTitle={t("card.repatriateConfirmTitle")}
         confirmDescription={t("card.repatriateConfirmDescription", { name: employeeLabel })}
+        confirmLabel={t("card.confirmBtn")}
+        cancelLabel={t("card.dismissBtn")}
       />
       <ActionButton
         label={t("card.cancel")}
@@ -58,6 +60,8 @@ export function DeputationActions({ id, employeeLabel }: Props) {
         onSuccess={() => router.refresh()}
         confirmTitle={t("card.cancelConfirmTitle")}
         confirmDescription={t("card.cancelConfirmDescription", { name: employeeLabel })}
+        confirmLabel={t("card.confirmBtn")}
+        cancelLabel={t("card.dismissBtn")}
       />
     </div>
   );

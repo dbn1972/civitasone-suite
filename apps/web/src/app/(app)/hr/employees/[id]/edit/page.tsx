@@ -30,7 +30,10 @@ export default async function EditEmployeePage({
     return <PermissionDenied module="editing employee details" requiredRoles={EMPLOYEE_ADMIN_ROLES} />;
   }
 
-  const { data: employee, source, status } = await getEmployeeById(params.id);
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: an edit form must start from the current
+  // record, not a copy cached up to 60 s ago (the diff-to-patch logic compares
+  // against these values).
+  const { data: employee, source, status } = await getEmployeeById(params.id, { fresh: true });
   const t = await getTranslations("employeeEdit");
 
   // SF-02: only a real 404 is "not found"; other failures are load errors.

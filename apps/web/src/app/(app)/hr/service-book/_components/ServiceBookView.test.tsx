@@ -13,10 +13,10 @@ function makeEntries(count: number): ServiceEntry[] {
   }));
 }
 
-function renderView(entries: ServiceEntry[], props: { employeeId?: string; hideEmployeeFilter?: boolean } = {}) {
+function renderView(entries: ServiceEntry[]) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <ServiceBookView entries={entries} {...props} />
+      <ServiceBookView entries={entries} />
     </NextIntlClientProvider>,
   );
 }
@@ -121,11 +121,48 @@ describe("ServiceBookView columns", () => {
   });
 });
 
-// GAP-HR-SERVICE-BOOK-06: a self-service caller's own data has no useful
-// employee-name filter (it is already scoped to just them).
-describe("ServiceBookView self-service", () => {
-  it("hides the employee filter box when hideEmployeeFilter is set", () => {
-    renderView(makeEntries(3), { hideEmployeeFilter: true });
+// GAP-HR-SERVICE-BOOK-04: the free-text employee box is gone from the table -- the employee scope is a
+// server-side search-select on the page (ServiceBookEmployeePicker, ?empId=), so a typed name fragment can
+// no longer pretend to search the tenant while only filtering the rows that happened to load.
+describe("ServiceBookView employee scope", () => {
+  it("has no free-text employee filter box (the page owns the employee picker)", () => {
+    renderView(makeEntries(3));
     expect(screen.queryByLabelText("Filter by employee name")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Search employee…")).not.toBeInTheDocument();
+  });
+
+  it("still filters by event type", () => {
+    renderView([
+      { id: "a", employee: "A", eventType: "join", effectiveDate: "2020-01-01" },
+      { id: "b", employee: "B", eventType: "transfer", effectiveDate: "2020-01-02" },
+    ]);
+    fireEvent.change(screen.getByLabelText("Filter by event type"), { target: { value: "transfer" } });
+    expect(screen.queryByText("A")).not.toBeInTheDocument();
+    expect(screen.getByText("B")).toBeInTheDocument();
+  });
+});
+
+// GAP-HR-SERVICE-BOOK-06: the self-service payload is the same row shape as the HR list. These rows are the
+// real shape GET /v1/hrms/service-book/me now returns (verbatim keys), and the attested status must be visible.
+describe("ServiceBookView with the real /me payload shape", () => {
+  const ME_ROWS = [
+    { id: "m1", employeeId: "emp-1", employee: "Priya Nair", eventType: "join", detail: "Joined as Section Officer", effectiveDate: "2020-01-01", orderNo: "—", status: "recorded" },
+    { id: "m2", employeeId: "emp-1", employee: "Priya Nair", eventType: "promotion", detail: "Promoted", effectiveDate: "2023-04-01", orderNo: "PROM/2023/07", status: "attested" },
+  ];
+
+  it("shows each entry's event badge and its attested / recorded status", () => {
+    renderView(ME_ROWS);
+    expect(screen.getByText("Joined as Section Officer").closest("tr")).toHaveTextContent("Joining");
+    expect(screen.getByText("Joined as Section Officer").closest("tr")).toHaveTextContent("Recorded");
+    expect(screen.getByText("Promoted").closest("tr")).toHaveTextContent("Promotion");
+    expect(screen.getByText("Promoted").closest("tr")).toHaveTextContent("Attested");
+    expect(screen.getByText("PROM/2023/07")).toBeInTheDocument();
+  });
+
+  it("does not crash on a row that carries no eventType (an older/raw payload) -- it degrades to the generic badge", () => {
+    expect(() =>
+      renderView([{ id: "x", employee: "Legacy Row", effectiveDate: "2020-01-01", entryType: "join", description: "raw shape" } as unknown as ServiceEntry]),
+    ).not.toThrow();
+    expect(screen.getByText("Legacy Row").closest("tr")).toHaveTextContent("Other");
   });
 });

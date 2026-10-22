@@ -2,15 +2,17 @@
  * tenantScoped — wrap a Queue so every subscribed handler runs inside
  * the message's tenant context (RLS-safe).
  */
-import type { Queue } from "@civitasone/queue";
+import type { Queue, SubscribeOptions } from "@civitasone/queue";
 import { withTenantConsumer } from "@civitasone/db";
 
 export function tenantScoped(queue: Queue): Queue {
   return new Proxy(queue, {
     get(target, prop, receiver) {
       if (prop === "subscribe") {
-        return <T>(topic: string, handler: (msg: T) => Promise<void>): void =>
-          target.subscribe(topic, withTenantConsumer(handler as never) as never);
+        // `options` (e.g. onOutcome) is passed straight through: the handler is tenant-wrapped,
+        // but a SubscribeOptions hook runs outside any handler and sets its own tenant context.
+        return <T>(topic: string, handler: (msg: T) => Promise<void>, options?: SubscribeOptions): void =>
+          target.subscribe(topic, withTenantConsumer(handler as never) as never, options);
       }
       const value = Reflect.get(target, prop, receiver);
       return typeof value === "function" ? value.bind(target) : value;

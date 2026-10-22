@@ -140,6 +140,40 @@ describe("ProbationConfirmationCard", () => {
     expect(screen.getByRole("button", { name: "Extend probation" })).toBeDisabled();
   });
 
+  // GAP-HR-CONFIRMATION-05: the probation length is no longer a hard-coded 2 years -- the
+  // server derives it per employee type, and the card shows the configured length.
+  it("shows the configured probation period beside the Probation End, not an assumed 2 years", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[{ ...ROW, probationMonths: 12, probationEnd: "2025-01-01" }]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("12 months probation")).toBeInTheDocument();
+    expect(screen.queryByText(/2-year/i)).not.toBeInTheDocument();
+  });
+
+  it("singularises a one-month period and omits the hint when the API sends no period", () => {
+    const { rerender } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[{ ...ROW, probationMonths: 1 }]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("1 month probation")).toBeInTheDocument();
+    rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[ROW]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.queryByText(/month probation|months probation/)).not.toBeInTheDocument();
+  });
+
+  it("the empty state no longer promises a fixed 2-year probation", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[]} /></NextIntlClientProvider>);
+    expect(screen.getByText("No employees currently on probation")).toBeInTheDocument();
+    expect(screen.getByText("Employees on probation appear here once added to the service book.")).toBeInTheDocument();
+    expect(screen.queryByText(/2-year/i)).not.toBeInTheDocument();
+  });
+
   // GAP-HR-CONFIRMATION-09: recommendation badge and status badge no longer
   // rely on a bare emoji for meaning -- redundant announcement fixed via
   // aria-hidden on the glyph, with the text label carrying the real name.
@@ -147,5 +181,45 @@ describe("ProbationConfirmationCard", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     const badge = screen.getByRole("status", { name: /manager recommendation: recommended/i });
     expect(badge).toBeInTheDocument();
+  });
+});
+
+// GAP-HR-CONFIRMATION-01 (interim): hrms-service has no manager-recommendation store, so
+// GET /v1/hrms/confirmations never sends managerRecommendation. The card must not tell HR that a
+// manager is "Awaiting" a recommendation nobody has a way to give. Whether Confirm is blocked without
+// one is an owner decision, so Confirm/Extend are deliberately NOT gated here.
+describe("ProbationConfirmationCard manager recommendation chip (GAP-HR-CONFIRMATION-01)", () => {
+  const show = (row: ConfirmationRow) =>
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[row]} /></NextIntlClientProvider>);
+  const { managerRecommendation: _drop, ...WITHOUT } = ROW;
+  void _drop;
+
+  it("says no recommendation is on record, not 'Awaiting Manager', when the API sends none", () => {
+    show(WITHOUT as ConfirmationRow);
+    expect(screen.getByText(enMessages.confirmation.recNotRecorded)).toBeInTheDocument();
+    expect(screen.queryByText("Awaiting Manager")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(`Manager recommendation: ${enMessages.confirmation.recNotRecorded}`)).toBeInTheDocument();
+  });
+
+  it("treats an explicit null the same way", () => {
+    show({ ...ROW, managerRecommendation: null });
+    expect(screen.getByText(enMessages.confirmation.recNotRecorded)).toBeInTheDocument();
+    expect(screen.queryByText("Awaiting Manager")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["pending", "Awaiting Manager"],
+    ["recommended", "Recommended"],
+    ["not_recommended", "Not Recommended"],
+  ] as const)("shows an explicit %s recommendation as given", (value, label) => {
+    show({ ...ROW, managerRecommendation: value });
+    expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.queryByText(enMessages.confirmation.recNotRecorded)).not.toBeInTheDocument();
+  });
+
+  it("does not gate Confirm / Extend on a recommendation (that policy is undecided)", () => {
+    show(WITHOUT as ConfirmationRow);
+    expect(screen.getByRole("button", { name: "Confirm Priya Nair" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Extend probation for Priya Nair" })).toBeEnabled();
   });
 });

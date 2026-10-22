@@ -272,7 +272,12 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
 
-    const nominations = await repo.listCompletedNominationsForAdmin(ctx.tenantId);
+    const [nominations, total] = await Promise.all([
+      repo.listCompletedNominationsForAdmin(ctx.tenantId),
+      // GAP-HR-TRAINING-FEEDBACK-04: a genuine COUNT(*), not data.length (which
+      // equals the LIMIT 500 cap and made the page's "latest 500 of N" read 500).
+      repo.countCompletedNominationsForAdmin(ctx.tenantId),
+    ]);
     if (nominations.length === 0) return reply.send({ data: [], total: 0, truncated: false });
 
     const trainingIds = [...new Set(nominations.map((n) => n.trainingId))];
@@ -294,7 +299,8 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
 
     const data = nominations.map((n) => projectFeedbackRow(n, trainingMap, employeeMap));
 
-    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
+    // `truncated` is "there are more than we are showing", so exactly 500 rows is not truncated.
+    return reply.send({ data, total: Math.max(total, data.length), truncated: total > data.length });
   });
 
   app.setErrorHandler(errorHandler);

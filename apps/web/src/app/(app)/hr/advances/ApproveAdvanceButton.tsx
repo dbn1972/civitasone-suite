@@ -12,10 +12,13 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function ApproveAdvanceButton({ id }: { id: string }) {
+  // GAP-HR-ADVANCES-07: every label / dialog string comes from advances.* (no English literals).
+  const t = useTranslations("advances");
   const router = useRouter();
   const [dialog, setDialog] = useState<"approve" | "reject" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -48,17 +51,17 @@ export function ApproveAdvanceButton({ id }: { id: string }) {
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <Button size="sm" variant="primary" onClick={() => { setDialog("approve"); setError(undefined); }}>
-        Approve
+        {t("approveBtn")}
       </Button>
       <Button size="sm" variant="ghost" onClick={() => { setDialog("reject"); setError(undefined); }}>
-        Reject
+        {t("rejectBtn")}
       </Button>
 
       <ConfirmDialog
         open={dialog === "approve"}
-        title="Approve this salary advance?"
-        description="The employee will be notified and the amount will be recovered from future salary as configured."
-        confirmLabel="Approve"
+        title={t("approveDialogTitle")}
+        description={t("approveDialogDescription")}
+        confirmLabel={t("approveBtn")}
         busy={busy}
         errorMessage={error}
         onConfirm={() => decide("approve")}
@@ -66,12 +69,12 @@ export function ApproveAdvanceButton({ id }: { id: string }) {
       />
       <ConfirmDialog
         open={dialog === "reject"}
-        title="Reject this salary advance?"
-        description="The employee will be notified of the rejection and the reason below."
-        confirmLabel="Reject"
+        title={t("rejectDialogTitle")}
+        description={t("rejectDialogDescription")}
+        confirmLabel={t("rejectBtn")}
         danger
         requireReason
-        reasonLabel="Reason for rejection"
+        reasonLabel={t("rejectReasonLabel")}
         maxReasonLength={500}
         busy={busy}
         errorMessage={error}

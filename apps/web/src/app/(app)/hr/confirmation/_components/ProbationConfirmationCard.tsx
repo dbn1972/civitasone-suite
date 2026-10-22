@@ -1,7 +1,9 @@
 "use client";
 /**
  * ProbationConfirmationCard / ProbationConfirmationList — Sprint 14 / Lifecycle Phase 2
- * Card grid for employees due for confirmation after 2-year probation (CCS Rules).
+ * Card grid for employees due for confirmation once their probation period ends
+ * (CCS Rules). The period is configured per employee type on the server
+ * (GAP-HR-CONFIRMATION-05); the card shows the configured length it was derived from.
  * Each card: probation start, due date, manager recommendation badge, Confirm/Extend buttons.
  *
  * "Confirm" calls the real PATCH /v1/hrms/employees/:id/confirm. "Extend" now
@@ -29,6 +31,11 @@ export type ConfirmationRow = {
   department?: string;
   designation?: string;
   joiningDate: string;
+  /**
+   * The probation period (months) the default end was derived from -- the employee type's
+   * configured length (server: employee/probation-period.ts). Absent on an older API response.
+   */
+  probationMonths?: number;
   probationEnd: string;
   dueDate: string;
   managerRecommendation?: "recommended" | "not_recommended" | "pending" | null;
@@ -51,6 +58,17 @@ const REC_CONFIG: Record<string, { label: string; badge: string; color: string; 
   pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn)", bg: "var(--warnbg)" },
 };
 
+// GAP-HR-CONFIRMATION-01 (interim, pending an owner decision): hrms-service has
+// no manager-recommendation store or endpoint yet (who records it, and whether
+// Confirm is blocked without it, is an undecided policy -- see
+// docs/gap-ledger/hr.md), so GET /v1/hrms/confirmations never sends
+// `managerRecommendation`. The card used to default that absence to "pending",
+// i.e. it told every HR user a manager was "Awaiting" a recommendation nobody
+// has any way to give. An ABSENT value is now shown as what it is -- no
+// recommendation on record -- and only an explicit "pending" from the API reads
+// "Awaiting Manager". Confirm/Extend are unchanged (not gated on it).
+const REC_NOT_RECORDED = { badge: "—", color: "var(--mut)", bg: "var(--bg)" };
+
 // GAP-HR-CONFIRMATION-02: today's date in IST, for the confirmation-date
 // input's default and its upper bound (a confirmation cannot be postdated
 // into the future).
@@ -62,9 +80,11 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   const [action, setAction] = useState<LocalAction>("default");
   const router = useRouter();
   const tv = useTranslations("hrFormErrors");
+  const t = useTranslations("confirmation");
   const days = daysUntilIST(row.dueDate);
   const due  = days !== null ? dueMeta(days) : { label: "Date not set", color: "var(--mut)" };
-  const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
+  const known = row.managerRecommendation ? REC_CONFIG[row.managerRecommendation] : undefined;
+  const rec  = known ?? { ...REC_NOT_RECORDED, label: t("recNotRecorded") };
   const confirmFormError = useFormError("probation confirmation");
   const extendFormError = useFormError("probation extension");
 
@@ -231,7 +251,14 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         </div>
         <div>
           <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Probation End</dt>
-          <dd style={{ margin: 0, fontWeight: 500 }}>{formatIndianDate(row.probationEnd)}</dd>
+          <dd style={{ margin: 0, fontWeight: 500 }}>
+            {formatIndianDate(row.probationEnd)}
+            {typeof row.probationMonths === "number" && row.probationMonths > 0 && (
+              <span style={{ display: "block", fontSize: "0.6875rem", fontWeight: 400, color: "var(--mut)" }}>
+                {t("probationPeriodHint", { months: row.probationMonths })}
+              </span>
+            )}
+          </dd>
         </div>
         <div>
           <dt style={{ color: "var(--mut)", marginBottom: 2 }}>Confirmation Due</dt>
@@ -256,7 +283,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       >
         <div
           role="status"
-          aria-label={`Manager recommendation: ${rec.label}`}
+          aria-label={t("recAria", { label: rec.label })}
           style={{
             display: "flex", alignItems: "center", gap: 7,
             padding: "5px 12px", borderRadius: 20,
@@ -381,6 +408,7 @@ interface ListProps {
 // (joining date), which is only a proxy for due date and is wrong whenever
 // confirmationDate overrides it.
 export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
+  const t = useTranslations("confirmation");
   const [search, setSearch] = useState("");
   const [bucket, setBucket] = useState<Bucket>("all");
 
@@ -413,10 +441,10 @@ export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
       <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }}>
         <div style={{ fontSize: 40, marginBottom: 12 }} aria-hidden="true">✅</div>
         <p style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 500 }}>
-          No employees currently on probation
+          {t("emptyTitle")}
         </p>
         <p style={{ margin: "4px 0 0", fontSize: "0.8125rem" }}>
-          Employees in their 2-year probation period appear here once added to the service book.
+          {t("emptyMessage")}
         </p>
       </div>
     );

@@ -55,7 +55,15 @@ describe("GreetingHeader", () => {
 
   it("falls back to the payroll briefing when nothing is pending and payroll closes soon", () => {
     render(<GreetingHeader {...baseProps} pendingCount={0} payrollDaysLeft={5} />);
-    expect(within(getGreeting()).getByText(/Payroll closes in 5 days/)).toBeInTheDocument();
+    expect(within(getGreeting()).getByText(/Month ends in 5 days/)).toBeInTheDocument();
+  });
+
+  // GAP-HR-DASHBOARD-05: payrollDaysLeft is calendar days to month-end, not a
+  // payroll cutoff (the app has no payroll calendar to source one from), so
+  // the briefing must not call it a payroll deadline.
+  it("never presents calendar month-end as a payroll cutoff", () => {
+    render(<GreetingHeader {...baseProps} pendingCount={0} payrollDaysLeft={5} />);
+    expect(within(getGreeting()).queryByText(/payroll closes/i)).not.toBeInTheDocument();
   });
 
   describe("fabricated zero vs honest — (absent data)", () => {
@@ -85,7 +93,7 @@ describe("GreetingHeader", () => {
       render(<GreetingHeader {...baseProps} pendingCount={null} payrollDaysLeft={3} />);
       const greeting = getGreeting();
       expect(within(greeting).getByText(/We couldn't load your pending actions/)).toBeInTheDocument();
-      expect(within(greeting).queryByText(/Payroll closes in 3 days/)).not.toBeInTheDocument();
+      expect(within(greeting).queryByText(/Month ends in 3 days/)).not.toBeInTheDocument();
     });
   });
 
@@ -99,7 +107,7 @@ describe("GreetingHeader", () => {
 
     it("still shows the payroll briefing for a genuine 0 pending count when payroll closes soon", () => {
       render(<GreetingHeader {...baseProps} pendingCount={0} payrollDaysLeft={1} />);
-      expect(within(getGreeting()).getByText(/Payroll closes in 1 day\b/)).toBeInTheDocument();
+      expect(within(getGreeting()).getByText(/Month ends in 1 day\b/)).toBeInTheDocument();
     });
   });
 });

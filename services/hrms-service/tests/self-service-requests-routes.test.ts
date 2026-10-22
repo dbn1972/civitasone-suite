@@ -189,6 +189,24 @@ describe("POST /v1/hrms/wfh-requests", () => {
     await app.close();
   });
 
+  // GAP-HR-WFH-02: POST allows HR + employee only. A manager decides their
+  // reports' requests but does not file them, so a manager-ONLY token is 403
+  // -- whether it names itself, a report, or anyone else -- and the web page
+  // hides the form for that role instead of showing one that always fails.
+  it("403 — a manager-only token cannot file a WFH request (filing is HR + employee only)", async () => {
+    const app = await buildApp();
+    for (const employeeId of [REQUESTER, OTHER_EMP]) {
+      const r = await app.inject({
+        method: "POST", url: "/v1/hrms/wfh-requests",
+        headers: { ...auth(REQUESTER, ["manager"]), "content-type": "application/json" },
+        payload: { ...validBody, employeeId },
+      });
+      expect(r.statusCode).toBe(403);
+      expect(r.json().code).toBe("FORBIDDEN");
+    }
+    await app.close();
+  });
+
   it("202 — hr_admin can file on behalf of another employee", async () => {
     const app = await buildApp();
     const r = await app.inject({

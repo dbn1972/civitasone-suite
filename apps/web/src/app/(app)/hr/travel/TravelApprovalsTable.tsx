@@ -5,25 +5,39 @@
  * AdvancesTable.tsx / hr/overtime/OvertimeTable.tsx -- the Actions column
  * needs a render() callback DataTable cannot accept from a Server
  * Component.
+ *
+ * Segregation of duties: a decision control is offered only on a PENDING
+ * request that is NOT the viewer's own. The server already answers 403
+ * SELF_APPROVAL and never lists the actor's own requests in this queue; this
+ * is the matching UI guard so a stray own-row (e.g. a stale cache) can never
+ * show Approve / Reject.
  */
+import { useTranslations } from "next-intl";
 import { DataTable } from "../../../_components/ds";
 import { TravelApprovalActions } from "./TravelApprovalActions";
 import type { TeamRow } from "./mapTravel";
 
-export function TravelApprovalsTable({ rows }: { rows: TeamRow[] }) {
+export function TravelApprovalsTable({ rows, currentUserId }: { rows: TeamRow[]; currentUserId: string | null }) {
+  const t = useTranslations("travel");
   const columns: { key: keyof TeamRow & string; label: string; cellType?: "status" | "amount" | "date"; render?: (row: TeamRow) => React.ReactNode }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "destination", label: "Destination" },
-    { key: "purpose", label: "Purpose" },
-    { key: "from_date", label: "From", cellType: "date" },
-    { key: "to_date", label: "To", cellType: "date" },
-    { key: "mode", label: "Mode" },
-    { key: "advanceRequired", label: "Advance", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "destination", label: t("colDestination") },
+    { key: "purpose", label: t("colPurpose") },
+    { key: "from_date", label: t("colFrom"), cellType: "date" },
+    { key: "to_date", label: t("colTo"), cellType: "date" },
+    { key: "mode", label: t("colMode") },
+    { key: "advanceRequired", label: t("colAdvance"), cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
     {
       key: "id" as const,
-      label: "Actions",
-      render: (row: TeamRow) => (row.status === "pending" ? <TravelApprovalActions id={row.id} /> : null),
+      label: t("colActions"),
+      render: (row: TeamRow) => {
+        if (row.status !== "pending") return null;
+        if (currentUserId !== null && row.employeeId === currentUserId) {
+          return <span style={{ color: "var(--mut)", fontSize: 12 }}>{t("ownRequestNote")}</span>;
+        }
+        return <TravelApprovalActions id={row.id} />;
+      },
     },
   ];
 
@@ -33,11 +47,11 @@ export function TravelApprovalsTable({ rows }: { rows: TeamRow[] }) {
       rows={rows}
       sortable
       filterable
-      filterPlaceholder="Filter by employee, destination or status…"
+      filterPlaceholder={t("approvalsFilterPlaceholder")}
       pageSize={15}
       emptyIcon="✈️"
-      emptyTitle="No requests to review"
-      emptyMessage="Your direct reports' travel requests will appear here for approval."
+      emptyTitle={t("approvalsEmptyTitle")}
+      emptyMessage={t("approvalsEmptyMessage")}
     />
   );
 }

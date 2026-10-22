@@ -16,11 +16,13 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveSelfOrReportsScopedEmployeeId } from "../../shared/self-scope.js";
 import { getPolicy } from "../policy-settings/repo.js";
 import { isGazettedForWfh, resolveEmployeePayLevel } from "./wfh-eligibility.js";
+import { WFH_WEEKLY_DAY_CAP, findWfhWeeklyOverflow, isValidIsoDate, isoWeekBounds, wfhDaysUsedInWeek } from "./wfh-week-cap.js";
 import { scopedRead } from "../../shared/db.js";
 import { batchEmployees } from "../../shared/batch-resolve.js";
+import { summariseOvertimeByStatus } from "./overtime-summary.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { eq, and, desc, inArray, count, gte, lte } from "drizzle-orm";
+import { eq, and, desc, inArray, count, sum, gte, lte } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 /**
@@ -39,23 +41,6 @@ function employeeScopeCondition(column: AnyPgColumn, scope: string | string[] | 
 /** True when a resolved scope means "authorized for nothing" -- caller must respond with an empty list, never fall through to unfiltered. */
 function isEmptyScope(scope: string | string[] | undefined | null): boolean {
   return scope === null || (Array.isArray(scope) && scope.length === 0);
-}
-
-/**
- * The Mon-Sun calendar week (as "YYYY-MM-DD" bounds) containing `dateStr`,
- * computed in UTC. Used by GAP-HR-WFH-01's weekly-cap check below; see that
- * call site for why UTC (coarse) rather than IST-precise is the deliberate
- * choice here.
- */
-function isoWeekBoundsUtc(dateStr: string): { start: string; end: string } {
-  const d = new Date(`${dateStr}T00:00:00.000Z`);
-  const day = d.getUTCDay(); // 0=Sun..6=Sat
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() + mondayOffset);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  return { start: monday.toISOString().slice(0, 10), end: sunday.toISOString().slice(0, 10) };
 }
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -584,7 +569,9 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: employees may only read their own OT requests
     const effectiveEmpId = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
-      return reply.send({ data: [], hasMore: false, total: 0 });
+      // Same envelope as the populated response (the web reads `summary`
+      // for its stat cards), with every counter zero.
+      return reply.send({ data: [], hasMore: false, total: 0, summary: summariseOvertimeByStatus([]) });
     }
     // FORCE-RLS fix: was a bare db.select() against attendance.hrms_overtime_requests
     // (FORCE ROW LEVEL SECURITY — migration 0148), so under the NOBYPASSRLS
@@ -597,14 +584,30 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
       employeeScopeCondition(hrmsOvertimeRequests.employeeId, effectiveEmpId),
     );
-    const [rows, totalResult] = await scopedRead(async (tx) => [
+    // GAP-HR-OVERTIME-04: one grouped aggregate over the SAME where-clause as
+    // the page query (so it honours the caller's tenant/self/direct-report
+    // scope and any empId filter) yields the real total plus the per-status
+    // counts and approved hours. The web stat cards used to count the rows
+    // of whatever page was loaded, so Pending / Approved / Approved Hours
+    // undercounted as soon as the list spanned more than one page.
+    const [rows, byStatus] = await scopedRead(async (tx) => [
       await tx.select().from(hrmsOvertimeRequests)
         .where(whereCond)
-        .orderBy(desc(hrmsOvertimeRequests.requestDate))
+        // request_date is NOT unique (many requests share a day), and
+        // Postgres returns tied rows in an unspecified order that can differ
+        // between (limit, offset) windows -- ordering by date alone made
+        // consecutive pages overlap and silently skip rows. id (the primary
+        // key) is the unique tiebreak that makes LIMIT/OFFSET paging total.
+        .orderBy(desc(hrmsOvertimeRequests.requestDate), desc(hrmsOvertimeRequests.id))
         .limit(q.limit + 1)
         .offset(q.offset),
-      await tx.select({ value: count() }).from(hrmsOvertimeRequests).where(whereCond),
+      await tx.select({
+        status: hrmsOvertimeRequests.status,
+        n: count(),
+        hours: sum(hrmsOvertimeRequests.hoursRequested),
+      }).from(hrmsOvertimeRequests).where(whereCond).groupBy(hrmsOvertimeRequests.status),
     ]);
+    const summary = summariseOvertimeByStatus(byStatus);
     const hasMore = rows.length > q.limit;
     const page = hasMore ? rows.slice(0, q.limit) : rows;
     // GAP-HR-OVERTIME-02: resolve employeeName/employeeNo via the shared
@@ -619,7 +622,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
         employeeNo: empMap.get(r.employeeId)?.employeeNo,
       })),
       hasMore,
-      total: totalResult[0]?.value ?? 0,
+      total: summary.total,
+      summary,
     });
   });
 
@@ -709,22 +713,32 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     await assertSelfOrHr(ctx, q.employeeId, "check WFH eligibility");
     const policy = await getPolicy(ctx.tenantId, "wfh_eligibility");
     const { payLevel } = await resolveEmployeePayLevel(ctx.tenantId, q.employeeId);
-    const { start, end } = isoWeekBoundsUtc(new Date().toISOString().slice(0, 10));
-    const week = await scopedRead((tx) => tx.select({ id: hrmsWfhRequests.id }).from(hrmsWfhRequests)
+    // GAP-HR-WFH-01: the figure is DAYS used this ISO week (union of the
+    // employee's pending/approved ranges clamped to the week), not the number
+    // of request rows -- a Mon-Tue request is 2 days, and a request that began
+    // last week but runs into this one still counts for the days inside it.
+    const today = new Date().toISOString().slice(0, 10);
+    const { start, end } = isoWeekBounds(today);
+    const week = await scopedRead((tx) => tx.select({ fromDate: hrmsWfhRequests.fromDate, toDate: hrmsWfhRequests.toDate }).from(hrmsWfhRequests)
       .where(and(
         eq(hrmsWfhRequests.tenantId, ctx.tenantId),
         eq(hrmsWfhRequests.employeeId, q.employeeId),
         inArray(hrmsWfhRequests.status, ["pending", "approved"]),
-        gte(hrmsWfhRequests.fromDate, start),
         lte(hrmsWfhRequests.fromDate, end),
+        gte(hrmsWfhRequests.toDate, start),
       )));
     return reply.send({
       payLevel,
       maxPayLevel: policy.maxPayLevel,
       enforceGazettedExclusion: policy.enforceGazettedExclusion,
       gazetted: isGazettedForWfh(payLevel, policy),
-      weeklyWfhCount: week.length,
-      weeklyCap: 2,
+      weeklyWfhCount: wfhDaysUsedInWeek(week, today),
+      weeklyCap: WFH_WEEKLY_DAY_CAP,
+      // The week (Monday-Sunday, "YYYY-MM-DD") the count above describes. The
+      // cap is per ISO week, so a client must only apply this count to a
+      // request that touches this week -- not to a request for a later one.
+      weekStart: start,
+      weekEnd: end,
     });
   });
 
@@ -736,6 +750,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       fromDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       toDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       reason:     z.string().max(500).optional(),
+    }).refine((d) => isValidIsoDate(d.fromDate), {
+      // A shape-only regex let "2026-13-45" through, which then threw a
+      // RangeError (500) inside the week maths below.
+      message: "fromDate must be a real calendar date", path: ["fromDate"],
+    }).refine((d) => isValidIsoDate(d.toDate), {
+      message: "toDate must be a real calendar date", path: ["toDate"],
     }).refine((d) => d.toDate >= d.fromDate, {
       message: "toDate must be on or after fromDate", path: ["toDate"],
     }).parse(req.body);
@@ -747,7 +767,9 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     //      7th CPC pay-matrix level (1-18; 0 = unclassified, never blocked --
     //      see wfh-eligibility.ts); the threshold (default: Level 10 and above excluded) and
     //      an on/off switch are per-tenant policy (wfh_eligibility);
-    //  (2) the 2-requests-per-ISO-week cap (DoPT OM 2022) below.
+    //  (2) the 2-DAYS-per-ISO-week cap (DoPT OM 2022) below, counted in days
+    //      (wfh-week-cap.ts), so one long request or a request stacked on an
+    //      existing one cannot slip past a row-count.
     // Coarse Mon-Sun UTC week boundary (not IST-precise) -- same "don't let this
     // slip through" philosophy already used by the overtime future-date guard
     // above, not a display-facing date computation.
@@ -757,18 +779,24 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "GAZETTED_NOT_ELIGIBLE",
         `work from home is not available at pay Level ${payLevel} (eligible up to Level ${wfhPolicy.maxPayLevel})`);
     }
-    const { start: weekStart, end: weekEnd } = isoWeekBoundsUtc(body.fromDate);
-    const sameWeek = await scopedRead((tx) => tx.select({ id: hrmsWfhRequests.id }).from(hrmsWfhRequests)
+    const capError = (weekStart: string, days: number): HttpError => new HttpError(422, "WEEKLY_WFH_CAP_REACHED",
+      `this request would put ${days} WFH days in the week starting ${weekStart}; the DoPT OM 2022 limit is ${WFH_WEEKLY_DAY_CAP} days per week`);
+    // The request alone already over the cap (e.g. Mon-Fri): refuse before any
+    // read, which also bounds the existing-rows window below to <= 3 weeks.
+    const alone = findWfhWeeklyOverflow(body, []);
+    if (alone) throw capError(alone.weekStart, alone.days);
+    const windowStart = isoWeekBounds(body.fromDate).start;
+    const windowEnd = isoWeekBounds(body.toDate).end;
+    const overlapping = await scopedRead((tx) => tx.select({ fromDate: hrmsWfhRequests.fromDate, toDate: hrmsWfhRequests.toDate }).from(hrmsWfhRequests)
       .where(and(
         eq(hrmsWfhRequests.tenantId, ctx.tenantId),
         eq(hrmsWfhRequests.employeeId, body.employeeId),
         inArray(hrmsWfhRequests.status, ["pending", "approved"]),
-        gte(hrmsWfhRequests.fromDate, weekStart),
-        lte(hrmsWfhRequests.fromDate, weekEnd),
+        lte(hrmsWfhRequests.fromDate, windowEnd),
+        gte(hrmsWfhRequests.toDate, windowStart),
       )));
-    if (sameWeek.length >= 2) {
-      throw new HttpError(422, "WEEKLY_WFH_CAP_REACHED", "the 2-day-per-week WFH limit (DoPT OM 2022) is already reached for this week");
-    }
+    const overflow = findWfhWeeklyOverflow(body, overlapping);
+    if (overflow) throw capError(overflow.weekStart, overflow.days);
 
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });

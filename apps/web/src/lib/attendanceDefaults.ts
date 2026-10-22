@@ -22,18 +22,45 @@
  * config/page.tsx formats these into display strings (attendance/config's
  * own doc comment explains the 24h "HH:mm" convention for time fields;
  * lib/formatters.ts's formatClockTime12h renders them for display) and
- * passes them as ICU template parameters to messages/en.json's *Val keys,
- * so the actual number is always code-supplied -- a translator can still
- * adjust the surrounding wording/grammar per locale, but can no longer
- * silently redefine a policy value.
+ * passes them as ICU template parameters to the `attendanceConfig.*Tpl`
+ * keys in every locale file, so the actual number is always code-supplied --
+ * a translator can still adjust the surrounding wording/grammar per locale,
+ * but can no longer silently redefine a policy value. (The keys were named
+ * `*Val` while the locale files still held literal values; they are now
+ * templates and renamed `*Tpl`.) The "attendanceConfig locale catalogue"
+ * block in app/(app)/hr/attendance/config/page.test.tsx enforces that every
+ * locale's template takes exactly the parameters the English one does and
+ * carries no literal number of its own.
+ *
+ * The four non-numeric rows are code-supplied too, as closed codes
+ * (WeeklyOffPattern / ApproverLevel / CoEarnedRule) rendered through an ICU
+ * `select` in each locale, rather than English sentences passed through
+ * `{value}` -- the latter would show English text on the Hindi page.
+ *
+ * PROVENANCE (GAP-HR-ATTENDANCE-CONFIG-01, still open): none of these values
+ * has been traced to attendance-engine code. A repo-wide search of
+ * services/ and packages/ finds no late-mark, OT-rate, CL-deduction or
+ * comp-off constants anywhere, and hrms-service exposes no attendance
+ * config endpoint. They have NOT been verified against any engine, so there
+ * is no "last verified" version to record; the page banner says so. Whoever
+ * owns attendance policy must confirm each value (or supply the source of
+ * truth) before this reference is relied on -- that is an owner decision,
+ * not something to infer here.
  */
+/** Weekly-off pattern; add a code (and its `select` arm in every locale) to support another. */
+export type WeeklyOffPattern = "sat_sun";
+/** Who approves; add a code (and its `select` arm in every locale) to support another. */
+export type ApproverLevel = "supervisor";
+/** When a compensatory off is earned. */
+export type CoEarnedRule = "holiday_or_weekly_off";
+
 export interface AttendanceDefaults {
   officeStartTime: string;
   officeEndTime: string;
   graceMinutes: number;
   halfDayCutoffTime: string;
   minHoursForFullDay: number;
-  weeklyOffDays: string;
+  weeklyOffPattern: WeeklyOffPattern;
   lateMarkGraceMinutes: number;
   lateMarkTriggerTime: string;
   halfDayIfAfterTime: string;
@@ -43,11 +70,11 @@ export interface AttendanceDefaults {
   otRateWeekdayMultiplier: number;
   otRateWeeklyOffMultiplier: number;
   otMaxHoursPerDay: number;
-  otApprovalText: string;
-  coEarnedWhen: string;
+  otApprovedBy: ApproverLevel;
+  coEarnedRule: CoEarnedRule;
   coMustAvailWithinDays: number;
   coMaxAccumulation: number;
-  coApprovalText: string;
+  coApprovedBy: ApproverLevel;
 }
 
 export const ATTENDANCE_DEFAULTS: AttendanceDefaults = {
@@ -56,7 +83,7 @@ export const ATTENDANCE_DEFAULTS: AttendanceDefaults = {
   graceMinutes: 15,
   halfDayCutoffTime: "12:30",
   minHoursForFullDay: 7.5,
-  weeklyOffDays: "Saturday & Sunday",
+  weeklyOffPattern: "sat_sun",
   lateMarkGraceMinutes: 15,
   lateMarkTriggerTime: "09:45",
   halfDayIfAfterTime: "12:30",
@@ -66,9 +93,9 @@ export const ATTENDANCE_DEFAULTS: AttendanceDefaults = {
   otRateWeekdayMultiplier: 1.5,
   otRateWeeklyOffMultiplier: 2,
   otMaxHoursPerDay: 4,
-  otApprovalText: "Yes (supervisor)",
-  coEarnedWhen: "Worked on a holiday / weekly off",
+  otApprovedBy: "supervisor",
+  coEarnedRule: "holiday_or_weekly_off",
   coMustAvailWithinDays: 30,
   coMaxAccumulation: 3,
-  coApprovalText: "Yes (supervisor)",
+  coApprovedBy: "supervisor",
 };
