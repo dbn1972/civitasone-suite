@@ -5,7 +5,9 @@
  *   - an allowed change writes the rule AND exactly one audit event carrying the exact before/after
  *     (paise strings + frequency), in the same transaction as the write;
  *   - a partial update (COALESCE keeps the omitted fields) audits the true before and the true after;
- *   - the audit is tenant-scoped.
+ *   - the audit is tenant-scoped;
+ *   - a command redelivered with the SAME messageId (to a fresh consumer, so the in-memory queue dedup
+ *     cannot mask the DB guard) is skipped by markProcessed: one write, one audit.
  *
  * Requires DATABASE_URL pointing at a disposable, migrated instance (see vitest.config.ts REL-035).
  */
@@ -16,7 +18,9 @@ import { signToken } from "@civitasone/auth";
 import { withTenantScope } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
+import { MemoryQueue } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
+import { COMMANDS } from "../src/topics.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 
 // vitest.config.ts sets JWT_SECRET for every suite.
@@ -123,15 +127,26 @@ describe("POST /v1/payroll/statutory/state-rules -- role gate and before/after a
     expect(await lwfRow("MH")).toMatchObject({ emp: "2500" });
   });
 
-  it("a redelivered command is idempotent: still one audit event for it", async () => {
+  it("a command redelivered with the same messageId is skipped by markProcessed: still one write and one audit event", async () => {
     const before = (await stateAudits("KA")).length;
-    const res = await app.inject({
-      method: "POST", url: "/v1/payroll/statutory/state-rules", headers: auth(ADMIN_USER, ["payroll_admin"]),
-      payload: { stateCode: "KA", lwfEmployee: 100 },
-    });
-    expect(res.statusCode).toBe(202);
-    await until(() => stateAudits("KA"), (a) => a.length >= before + 1);
-    await new Promise((r) => setTimeout(r, 300));
-    expect((await stateAudits("KA")).length).toBe(before + 1);
+    const envelope = {
+      messageId: randomUUID(), type: COMMANDS.stateRulesUpsert,
+      tenantId: TENANT, actorId: ADMIN_USER, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { tenantId: TENANT, stateCode: "KA", lwfEmployee: 100 },
+    };
+    // Each delivery goes to its OWN MemoryQueue, so that queue's per-instance (topic, messageId) dedup set is
+    // empty both times: only the DB-level markProcessed in the consumer can stop the second delivery. (A single
+    // POST never redelivers, and publishing twice to one queue would be swallowed before reaching the consumer.)
+    for (let delivery = 1; delivery <= 2; delivery++) {
+      const consumerQueue = new MemoryQueue();
+      registerPayrollConsumers(consumerQueue);
+      await consumerQueue.publish(COMMANDS.stateRulesUpsert, envelope);
+      await consumerQueue.drain();
+      expect(consumerQueue.dlq, `delivery ${delivery} must not dead-letter`).toHaveLength(0);
+    }
+    const audits = await stateAudits("KA");
+    expect(audits.length).toBe(before + 1);
+    expect(audits[audits.length - 1]!.payload).toMatchObject({ newValue: { lwfEmployeeMinor: "100" } });
+    expect(await lwfRow("KA")).toMatchObject({ emp: "100" });
   });
 });

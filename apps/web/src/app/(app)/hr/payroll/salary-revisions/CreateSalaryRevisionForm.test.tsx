@@ -233,6 +233,39 @@ describe("CreateSalaryRevisionForm", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  // Review hardening: the wire carries JSON numbers (doubles), so a paise figure above 2^53-1 would be rounded silently.
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: an amount above 2^53-1 paise is refused before the dialog opens, never rounded onto the wire", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderForm();
+    await fillValidForm();
+    // 90,071,992,547,409.92 rupees = 9,007,199,254,740,992 paise = 2^53: the first figure a double cannot hold exactly
+    fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "90071992547409.92" } });
+    fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "90071992547409.92" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    expect(screen.getByText("Amount is too large to record. Check the figure and try again.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: the largest exact figure (2^53-1 paise) is accepted and POSTed exactly", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    renderForm();
+    await fillValidForm();
+    // 90,071,992,547,409.91 rupees = 9,007,199,254,740,991 paise = Number.MAX_SAFE_INTEGER
+    fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "90071992547409.91" } });
+    fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "90071992547409.91" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
+    await confirmWithReason();
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes("v1/payroll/salary-revisions"));
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.newBasicMinor).toBe(9007199254740991);
+    expect(body.newGrossMinor).toBe(9007199254740991);
+  });
+
   it("with the tenant's second-approver switch OFF the confirmation keeps the 'appears shortly' copy", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),

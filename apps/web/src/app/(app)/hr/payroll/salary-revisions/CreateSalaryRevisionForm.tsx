@@ -46,6 +46,12 @@ import { parseRupeesToMinor } from "@/lib/money";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { REVISION_TYPES, REVISION_TYPE_FORM_LABEL_KEYS, type RevisionType } from "@/lib/payroll/revisionTypes";
 
+/**
+ * The API takes JSON numbers, which are IEEE doubles: a paise figure above 2^53-1 would be
+ * rounded silently on the wire. Larger figures are refused here (the API refuses them too).
+ */
+const MAX_WIRE_MINOR = BigInt(Number.MAX_SAFE_INTEGER);
+
 type InvalidField = "employeeId" | "orderNo" | "effectiveDate" | "oldBasic" | "newBasic" | "oldGross" | "newGross" | null;
 
 /**
@@ -157,6 +163,23 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
       fail("newGross", t("newGrossRequiredError"), newGrossRef);
       return;
     }
+    // Refuse a figure that Number() could not carry exactly (> 2^53-1 paise) instead of rounding it.
+    if (oldBasicMinor > MAX_WIRE_MINOR) {
+      fail("oldBasic", t("amountTooLargeError"), oldBasicRef);
+      return;
+    }
+    if (newBasicMinor > MAX_WIRE_MINOR) {
+      fail("newBasic", t("amountTooLargeError"), newBasicRef);
+      return;
+    }
+    if (oldGrossMinor > MAX_WIRE_MINOR) {
+      fail("oldGross", t("amountTooLargeError"), oldGrossRef);
+      return;
+    }
+    if (newGrossMinor > MAX_WIRE_MINOR) {
+      fail("newGross", t("amountTooLargeError"), newGrossRef);
+      return;
+    }
 
     // GAP-PAYROLL-SALARY-REVISIONS-03: previously unvalidated -- a "new"
     // amount below the "old" one (other than an explicit correction, which
@@ -179,8 +202,8 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
       return;
     }
 
-    // The API takes JSON integers; Number() is exact for any real pay figure
-    // (< 2^53 paise = 90 trillion rupees) and only happens here, at the wire edge.
+    // The API takes JSON integers; Number() is exact because every figure was bounded
+    // to <= Number.MAX_SAFE_INTEGER paise above, and it only happens here, at the wire edge.
     setPending({
       oldBasicMinor: Number(oldBasicMinor),
       newBasicMinor: Number(newBasicMinor),

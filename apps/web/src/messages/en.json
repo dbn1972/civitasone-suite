@@ -1942,6 +1942,7 @@
     "newGrossRequiredError": "New gross must be a positive value in rupees.",
     "newBasicBelowOldError": "New basic is below old basic — use revision type \"Correction\" if this is intentional.",
     "newGrossBelowBasicError": "New gross cannot be less than new basic.",
+    "amountTooLargeError": "Amount is too large to record. Check the figure and try again.",
     "recordedMessage": "Salary revision to {amount} for employee {employeeId} submitted. It is saved in the background and will appear in the history below shortly.",
     "confirmTitle": "Record this salary revision?",
     "confirmLabel": "Record revision",

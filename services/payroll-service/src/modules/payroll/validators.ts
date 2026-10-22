@@ -225,10 +225,12 @@ export const reimbursementRejectBody = z.object({
 export const createSalaryRevisionBody = z.object({
   employeeId:    z.string().uuid(),
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  oldBasicMinor: z.number().int().nonnegative(),
-  newBasicMinor: z.number().int().positive(),
-  oldGrossMinor: z.number().int().nonnegative(),
-  newGrossMinor: z.number().int().positive(),
+  // .safe(): these arrive as JSON numbers (doubles); one above 2^53-1 paise would already have been
+  // rounded by JSON.parse, so it is refused rather than stored as a different amount.
+  oldBasicMinor: z.number().int().safe().nonnegative(),
+  newBasicMinor: z.number().int().safe().positive(),
+  oldGrossMinor: z.number().int().safe().nonnegative(),
+  newGrossMinor: z.number().int().safe().positive(),
   revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
   // GAP-PAYROLL-SALARY-REVISIONS-02: a revision rewrites HRMS basic pay, so it must cite its sanctioning order.
   orderNo:       z.string().trim().min(1).max(64),
