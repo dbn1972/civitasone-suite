@@ -50,7 +50,7 @@ describe("POST /v1/workflow/delegations", () => {
         delegateId,
         roles: ["workflow_user"],
         fromDate: "2025-01-01",
-        toDate: "2025-12-31",
+        toDate: "2025-03-31",
         reason: "on leave",
       },
     });
@@ -68,35 +68,40 @@ describe("POST /v1/workflow/delegations", () => {
     expect(created.delegateId).toBe(delegateId);
     expect(created.delegatorId).toBe(ACTOR_ID);
     expect(created.fromDate).toBe("2025-01-01");
-    expect(created.toDate).toBe("2025-12-31");
+    expect(created.toDate).toBe("2025-03-31");
     expect(created.isActive).toBe(true);
   });
 
-  it("creates a delegation with no toDate (open-ended)", async () => {
+  // Changed from "creates a delegation with no toDate (open-ended)": an end date is now
+  // mandatory (owner decision), so an open-ended delegation is rejected.
+  it("rejects an open-ended delegation (toDate is mandatory)", async () => {
     const app = await buildApp();
-    const delegateId = randomUUID();
     const res = await app.inject({
       method: "POST",
       url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${makeToken()}` },
-      payload: {
-        delegateId,
-        roles: ["workflow_user"],
-        fromDate: "2025-06-01",
-      },
-    });
-    expect(res.statusCode).toBe(202);
-    const created = await waitFor(async () => {
-      const g = await app.inject({
-        method: "GET",
-        url: "/v1/workflow/delegations",
-        headers: { authorization: `Bearer ${makeToken()}` },
-      });
-      const rows = g.json().data as Array<{ delegateId: string; toDate: string | null }>;
-      return rows.find((r) => r.delegateId === delegateId) ?? null;
+      payload: { delegateId: randomUUID(), roles: ["workflow_user"], fromDate: "2025-06-01" },
     });
     await app.close();
-    expect(created.toDate).toBeNull();
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("rejects a delegation longer than 90 days with 400, accepts exactly 90", async () => {
+    const app = await buildApp();
+    const post = (toDate: string) => app.inject({
+      method: "POST",
+      url: "/v1/workflow/delegations",
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: { delegateId: randomUUID(), roles: ["workflow_user"], fromDate: "2025-01-01", toDate },
+    });
+    const tooLong = await post("2025-04-02"); // 91 days
+    const ok = await post("2025-04-01");      // 90 days
+    const backwards = await post("2024-12-31");
+    await app.close();
+    expect(tooLong.statusCode).toBe(400);
+    expect(tooLong.json().code).toBe("DELEGATION_TOO_LONG");
+    expect(ok.statusCode).toBe(202);
+    expect(backwards.statusCode).toBe(400);
   });
 
   it("returns 400 for invalid date format", async () => {
@@ -109,6 +114,7 @@ describe("POST /v1/workflow/delegations", () => {
         delegateId: randomUUID(),
         roles: ["workflow_user"],
         fromDate: "not-a-date",
+        toDate: "2025-02-01",
       },
     });
     await app.close();
@@ -125,6 +131,7 @@ describe("POST /v1/workflow/delegations", () => {
         delegateId: randomUUID(),
         roles: ["workflow_user"],
         fromDate: "2025-01-01",
+        toDate: "2025-02-01",
       },
     });
     await app.close();
@@ -157,7 +164,7 @@ describe("GET /v1/workflow/delegations", () => {
         method: "POST",
         url: "/v1/workflow/delegations",
         headers: { authorization: `Bearer ${makeToken()}` },
-        payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01" },
+        payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01", toDate: "2025-02-01" },
       });
       expect(created.statusCode).toBe(202);
     }
@@ -185,7 +192,7 @@ describe("DELETE /v1/workflow/delegations/:id", () => {
       method: "POST",
       url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01" },
+      payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01", toDate: "2025-02-01" },
     });
     expect(createRes.statusCode).toBe(202);
     const created = await waitFor(async () => {

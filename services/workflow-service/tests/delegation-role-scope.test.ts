@@ -5,7 +5,14 @@
  * two cooperating plain workflow_users could complete a task needing e.g.
  * estab_deputy_secretary. Real-DB tests (disposable Postgres).
  */
-import { describe, it, expect, afterAll, afterEach } from "vitest";
+import { describe, it, expect, afterAll, afterEach, beforeEach, vi } from "vitest";
+
+// Live identity lookup (use-time check) is stubbed: userId -> current role keys,
+// or undefined to simulate identity-service being unreachable (fail closed).
+const identity = vi.hoisted(() => ({ roles: new Map<string, string[] | undefined>() }));
+vi.mock("../src/shared/identity-client.js", () => ({
+  fetchUserRoleKeys: async (_t: string, userId: string) => identity.roles.get(userId),
+}));
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
@@ -15,6 +22,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import * as delegationRepo from "../src/modules/delegations/repo.js";
+import { registerDelegationConsumers } from "../src/modules/delegations/consumer.js";
 import { completeTask, claimTask } from "../src/modules/tasks/commands.js";
 import { COMMANDS } from "../src/topics.js";
 import { TestQueue, seedDefinition, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
@@ -24,6 +32,7 @@ const ROLE = "estab_deputy_secretary";
 
 const tenants: string[] = [];
 function newTenant(): string { const t = randomUUID(); tenants.push(t); return t; }
+beforeEach(() => identity.roles.clear());
 afterEach(async () => { if (tenants.length) { await cleanup(...tenants); tenants.length = 0; } });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -82,7 +91,45 @@ describe("delegation role scope: task gate", () => {
     const taskId = await setupTask(tenantId, randomUUID());
     const delegator = randomUUID(); const delegateId = randomUUID();
     await delegate(tenantId, delegator, delegateId, [ROLE]);
+    identity.roles.set(delegator, [ROLE]);
     const res = await asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, ["workflow_user"]), taskId, "approve"));
+    expect(res.status).toBe("accepted");
+  });
+
+  it("USE-TIME: a delegator who has since LOST the role no longer satisfies the gate (complete + claim)", async () => {
+    const tenantId = newTenant();
+    const taskId = await setupTask(tenantId, randomUUID());
+    const delegator = randomUUID(); const delegateId = randomUUID();
+    await delegate(tenantId, delegator, delegateId, [ROLE]);
+    identity.roles.set(delegator, ["workflow_user"]); // role was removed after creation
+    await expect(asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, ["workflow_user"]), taskId, "approve")))
+      .rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
+    await expect(asTenant(tenantId, () => claimTask(ctxFor(tenantId, delegateId, ["workflow_user"]), taskId)))
+      .rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
+  });
+
+  it("USE-TIME: fails CLOSED when identity-service cannot be asked", async () => {
+    const tenantId = newTenant();
+    const taskId = await setupTask(tenantId, randomUUID());
+    const delegator = randomUUID(); const delegateId = randomUUID();
+    await delegate(tenantId, delegator, delegateId, [ROLE]);
+    identity.roles.set(delegator, undefined);
+    await expect(asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, ["workflow_user"]), taskId, "approve")))
+      .rejects.toMatchObject({ status: 403, code: "ROLE_NOT_AUTHORIZED" });
+  });
+
+  it("USE-TIME: the assignee-lock passthrough also requires the delegator to still hold the role", async () => {
+    const tenantId = newTenant();
+    const taskId = await setupTask(tenantId, randomUUID());
+    const delegator = randomUUID(); const delegateId = randomUUID();
+    // task claimed by the delegator, then a role-holding delegate tries to act for them
+    await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET assignee_id = ${delegator} WHERE id = ${taskId}`);
+    await delegate(tenantId, delegator, delegateId, [ROLE]);
+    identity.roles.set(delegator, ["workflow_user"]);
+    await expect(asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, [ROLE]), taskId, "approve")))
+      .rejects.toMatchObject({ status: 403, code: "NOT_ASSIGNEE" });
+    identity.roles.set(delegator, [ROLE]);
+    const res = await asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, [ROLE]), taskId, "approve"));
     expect(res.status).toBe("accepted");
   });
 
@@ -100,6 +147,7 @@ describe("delegation role scope: task gate", () => {
     const taskId = await setupTask(tenantId, submitter);
     const delegateId = randomUUID();
     await delegate(tenantId, submitter, delegateId, [ROLE]);
+    identity.roles.set(submitter, [ROLE]);
     await expect(asTenant(tenantId, () => completeTask(ctxFor(tenantId, delegateId, ["workflow_user"]), taskId, "approve")))
       .rejects.toMatchObject({ status: 403, code: "SELF_APPROVAL_DENIED" });
   });
@@ -115,7 +163,7 @@ describe("delegation role scope: creation", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${tok(actor, tenantId, ["workflow_user"])}` },
-      payload: { delegateId: randomUUID(), roles: [ROLE], fromDate: "2025-01-01" },
+      payload: { delegateId: randomUUID(), roles: [ROLE], fromDate: "2025-01-01", toDate: "2025-02-01" },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
@@ -130,7 +178,7 @@ describe("delegation role scope: creation", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${tok(randomUUID(), tenantId, ["workflow_user"])}` },
-      payload: { delegateId: randomUUID(), fromDate: "2025-01-01" },
+      payload: { delegateId: randomUUID(), fromDate: "2025-01-01", toDate: "2025-02-01" },
     });
     await app.close();
     expect(res.statusCode).toBe(400);
@@ -142,9 +190,80 @@ describe("delegation role scope: creation", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${tok(randomUUID(), tenantId, ["workflow_user", "workflow_admin"])}` },
-      payload: { delegateId: randomUUID(), roles: ["workflow_user", ROLE], fromDate: "2025-01-01" },
+      payload: { delegateId: randomUUID(), roles: ["workflow_user", ROLE], fromDate: "2025-01-01", toDate: "2025-02-01" },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
+  });
+
+  // Owner decision: super_admin gets no implicit "all roles" when delegating.
+  it("super_admin cannot delegate a role it does not literally hold", async () => {
+    const tenantId = newTenant();
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/workflow/delegations",
+      headers: { authorization: `Bearer ${tok(randomUUID(), tenantId, ["super_admin"])}` },
+      payload: { delegateId: randomUUID(), roles: [ROLE], fromDate: "2025-01-01", toDate: "2025-02-01" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("DELEGATION_ROLE_NOT_HELD");
+  });
+});
+
+describe("delegation role scope: revoke on role change", () => {
+  it("cancels the delegator's delegations that rely on a role they lost, with an audit entry; keeps the rest", async () => {
+    const tenantId = newTenant();
+    const delegator = randomUUID();
+    const q = new TestQueue();
+    registerDelegationConsumers(q);
+    await delegate(tenantId, delegator, randomUUID(), [ROLE]);          // relies on the lost role
+    await delegate(tenantId, delegator, randomUUID(), ["workflow_user"]); // still held
+    identity.roles.set(delegator, ["workflow_user"]);
+    await q.deliver("identity.rbac.role.revoked", { roleId: randomUUID(), userId: delegator },
+      { tenantId, actorId: randomUUID(), messageId: randomUUID() });
+    const rows = await sqlAsTenant<{ roles: string[]; is_active: boolean }>(tenantId,
+      sql`SELECT roles, is_active FROM workflow.workflow_delegations WHERE tenant_id = ${tenantId}`);
+    expect(rows.find((r) => r.roles.includes(ROLE))!.is_active).toBe(false);
+    expect(rows.find((r) => r.roles.includes("workflow_user"))!.is_active).toBe(true);
+    const audit = await sqlAsTenant<{ n: number }>(tenantId,
+      sql`SELECT count(*)::int AS n FROM _outbox.messages WHERE tenant_id = ${tenantId} AND topic = 'audit.event.record' AND payload->>'reason' = 'delegator_lost_role'`);
+    expect(audit[0]!.n).toBe(1);
+  });
+
+  it("does nothing when the identity lookup fails (the use-time check remains the control)", async () => {
+    const tenantId = newTenant();
+    const delegator = randomUUID();
+    const q = new TestQueue();
+    registerDelegationConsumers(q);
+    await delegate(tenantId, delegator, randomUUID(), [ROLE]);
+    identity.roles.set(delegator, undefined);
+    await q.deliver("identity.rbac.role.revoked", { roleId: randomUUID(), userId: delegator },
+      { tenantId, actorId: randomUUID(), messageId: randomUUID() });
+    const rows = await sqlAsTenant<{ is_active: boolean }>(tenantId, sql`SELECT is_active FROM workflow.workflow_delegations WHERE tenant_id = ${tenantId}`);
+    expect(rows[0]!.is_active).toBe(true);
+  });
+});
+
+describe("delegation role scope: legacy report", () => {
+  const tok = (sub: string, tid: string, roles: string[]) => signToken({ sub, tid, roles, sid: "s" }, SECRET);
+
+  it("admin sees active legacy (empty-roles) delegations with their creator; scoped ones and non-admins are excluded", async () => {
+    const tenantId = newTenant();
+    const creator = randomUUID();
+    await delegate(tenantId, creator, randomUUID(), []);
+    await delegate(tenantId, randomUUID(), randomUUID(), ["workflow_user"]);
+    const app = await buildApp();
+    const ok = await app.inject({ method: "GET", url: "/v1/workflow/delegations/legacy-report",
+      headers: { authorization: `Bearer ${tok(randomUUID(), tenantId, ["workflow_admin"])}` } });
+    const denied = await app.inject({ method: "GET", url: "/v1/workflow/delegations/legacy-report",
+      headers: { authorization: `Bearer ${tok(randomUUID(), tenantId, ["workflow_user"])}` } });
+    const noAuth = await app.inject({ method: "GET", url: "/v1/workflow/delegations/legacy-report" });
+    await app.close();
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().total).toBe(1);
+    expect(ok.json().data[0].createdBy).toBe(creator);
+    expect(denied.statusCode).toBe(403);
+    expect(noAuth.statusCode).toBe(401);
   });
 });
