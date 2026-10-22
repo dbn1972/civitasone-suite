@@ -2,8 +2,9 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
-import { ActionButton } from "@/app/_components/ds";
+import { useState, useEffect } from "react";
+import { AcceptedNotice, ActionButton } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 
 type RowProps = { id: string; status: string };
@@ -15,42 +16,24 @@ export function CapaRowAction({ id, status }: RowProps) {
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("capa");
 
-  // GAP-INSPECTION-CAPA-04: track the status at the time of a 202 action
-  // so a follow-up refresh can detect whether the async consumer applied it.
-  const priorStatusRef = useRef<string | null>(null);
-  const [pollDue, setPollDue] = useState(false);
+  // SF-15: a 202 means "received", not "done". Remember the status at the time of
+  // the 202 and show the shared AcceptedNotice (with a manual Refresh) instead of a
+  // timer that guesses the write has landed (GAP-INSPECTION-CAPA-04 /
+  // GAP-INSPECTION-INSPECTIONS-02 asked for an honest "still processing" state).
+  const accepted = useAcceptedWrite();
+  const [priorStatus, setPriorStatus] = useState<string | null>(null);
 
-  // When the follow-up refresh completes and pollDue is set, compare status.
+  // The server data caught up (status changed): drop the notice.
   useEffect(() => {
-    if (!pollDue) return;
-    setPollDue(false);
-    if (priorStatusRef.current === null) return;
-    if (status === priorStatusRef.current) {
-      setMessage(
-        "Status unchanged — the request may still be processing. Refresh to check again.",
-      );
-    } else {
-      setMessage("");
-    }
-    priorStatusRef.current = null;
-  }, [pollDue, status]);
+    if (priorStatus === null || status === priorStatus) return;
+    setMessage("");
+    setPriorStatus(null);
+    accepted.reset();
+  }, [status, priorStatus, accepted]);
 
-  // If status changes while a poll is pending, clear pending state immediately.
-  useEffect(() => {
-    if (priorStatusRef.current === null) return;
-    if (status !== priorStatusRef.current) {
-      setMessage("");
-      priorStatusRef.current = null;
-      setPollDue(false);
-    }
-  }, [status]);
-
-  function scheduleFollowUp(priorStatus: string): void {
-    priorStatusRef.current = priorStatus;
-    setTimeout(() => {
-      router.refresh();
-      setPollDue(true);
-    }, 5000);
+  function markAccepted(prior: string): void {
+    setPriorStatus(prior);
+    accepted.accept();
   }
 
   const canStart = status === "open";
@@ -65,6 +48,8 @@ export function CapaRowAction({ id, status }: RowProps) {
     setBusy(true);
     setError(undefined);
     setMessage("");
+    setPriorStatus(null);
+    accepted.reset();
     try {
       const res = await fetch(`/api/proxy/v1/inspection/capa/${id}/start`, { method: "POST" });
       if (res.status !== 202 && !res.ok) {
@@ -72,7 +57,7 @@ export function CapaRowAction({ id, status }: RowProps) {
       }
       setMessage("Start requested — the status will update shortly.");
       router.refresh();
-      scheduleFollowUp(status);
+      markAccepted(status);
     } catch (e) {
       setError(formError.fromException("save", e).message);
     } finally {
@@ -125,7 +110,7 @@ export function CapaRowAction({ id, status }: RowProps) {
             onSuccess={() => {
               setMessage("Completion requested — the status will update shortly.");
               router.refresh();
-              scheduleFollowUp(status);
+              markAccepted(status);
             }}
           />
         ) : null}
@@ -140,12 +125,14 @@ export function CapaRowAction({ id, status }: RowProps) {
             onSuccess={() => {
               setMessage("Verification requested — the status will update shortly.");
               router.refresh();
-              scheduleFollowUp(status);
+              markAccepted(status);
             }}
           />
         ) : null}
       </div>
-      {message ? (
+      {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
         <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
           {message}
         </span>

@@ -5,6 +5,11 @@ import { ThemeActions } from "./ThemeActions";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
+// ConfirmDialog always renders an (empty) role="alert" live region for submit
+// errors, so a bare role query matches it. Select only the contrast warning.
+const wcagAlerts = () =>
+  screen.queryAllByRole("alert").filter((el) => /WCAG AA/i.test(el.textContent ?? ""));
+
 describe("ThemeActions — contrast warning (GAP-THEMES-TOKENS-03)", () => {
   it("shows a WCAG AA alert in the confirm dialog when tokens fail AA", async () => {
     const failTokens = [
@@ -15,8 +20,8 @@ describe("ThemeActions — contrast warning (GAP-THEMES-TOKENS-03)", () => {
     // Click "Publish theme" to open the confirm dialog
     await userEvent.click(screen.getByRole("button", { name: /publish theme/i }));
     // The alert must appear inside the open dialog
-    expect(screen.getByRole("alert")).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent(/fail WCAG AA/i);
+    expect(wcagAlerts()).toHaveLength(1);
+    expect(wcagAlerts()[0]).toHaveTextContent(/fail WCAG AA/i);
   });
 
   it("shows NO WCAG alert when all colour pairs pass AA", async () => {
@@ -26,12 +31,12 @@ describe("ThemeActions — contrast warning (GAP-THEMES-TOKENS-03)", () => {
     ];
     render(<ThemeActions tokens={passTokens} />);
     await userEvent.click(screen.getByRole("button", { name: /publish theme/i }));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(wcagAlerts()).toHaveLength(0);
   });
 
   it("shows NO WCAG alert when no tokens are provided", async () => {
     render(<ThemeActions />);
     await userEvent.click(screen.getByRole("button", { name: /publish theme/i }));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(wcagAlerts()).toHaveLength(0);
   });
 });

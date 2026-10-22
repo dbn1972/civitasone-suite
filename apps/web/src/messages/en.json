@@ -3667,6 +3667,19 @@
     "totalOutstanding": "Outstanding principal",
     "newLoan": "+ New loan"
   },
+  "help": {
+    "pageTitle": "Help Centre",
+    "pageSubtitle": "Short guides for the main modules, plus a plain-English glossary. Pick a topic, or look up a word you're unsure about.",
+    "guidesHeading": "Guides by module",
+    "guidesNote": "Guides for other modules are being added. For anything not listed, raise a ticket from",
+    "emptyTitle": "No guides for your enabled modules",
+    "emptyMessage": "Your office has not turned on any modules with a guide yet. Raise a ticket from Helpdesk if you need help.",
+    "openHelpdesk": "Open Helpdesk",
+    "wordsHeading": "Words explained",
+    "wordsIntro": "Government and accounting words you'll see around the system, in plain English.",
+    "stuckSetup": "Getting Started",
+    "stuckNote": "Still stuck? Open {setupLink} to walk through setup again, or raise a ticket from {helpdeskLink}."
+  },
   "sanctionApproval": {
     "chooseHint": "Approve directly (approving authority, a different officer from the proposer) or route through eOffice file noting.",
     "eofficeOnlyHint": "Route this sanction through eOffice file noting; the eOffice decision approves it. Only a finance administrator can approve directly.",

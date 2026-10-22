@@ -91,50 +91,48 @@ describe("InspectionRowAction", () => {
 
   // GAP-INSPECTION-INSPECTIONS-02: after a 202, the Start button is disabled
   // while the follow-up poll is in flight to prevent duplicate commands.
-  it("disables the Start button while the follow-up poll is pending", async () => {
-    vi.useFakeTimers();
+  it("disables the Start button until the 202 outcome is visible", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
     render(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="scheduled" />);
 
-    // Click and flush fetch/state updates without advancing the fake 5s timer.
+    // Click and flush fetch/state updates.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Start" }));
     });
 
     expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument();
-    // 5s timer has not fired yet — button should be disabled (pending).
+    // Outcome not yet visible — button should be disabled (pending).
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
-
-    vi.useRealTimers();
   });
 
-  // GAP-INSPECTION-INSPECTIONS-02: if status is still the same after the
-  // follow-up refresh, the component should show a "still processing" warning.
-  it("shows a stale warning when status is unchanged 5s after a 202", async () => {
-    vi.useFakeTimers();
+  // GAP-INSPECTION-INSPECTIONS-02 + SF-15: after a 202 the row says "received" and
+  // offers a manual Refresh (no timer-based refresh). While the outcome is
+  // unknown the action stays disabled; after a Refresh that leaves the status
+  // unchanged it is re-enabled with an honest "still being applied" hint.
+  it("shows an accepted notice with a manual Refresh after a 202, and no timer refresh", async () => {
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
-    render(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="scheduled" />);
+    const { rerender } = render(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="scheduled" />);
 
-    // Click and flush fetch/state updates without advancing the fake timer.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Start" }));
     });
 
     expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(setTimeoutSpy.mock.calls.some(([, d]) => d === 5000)).toBe(false);
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
 
-    // Advance past the 5-second follow-up timer; act() flushes the React state
-    // updates that the timer callback (setPollDue) triggers.
-    await act(async () => {
-      vi.advanceTimersByTime(6000);
-    });
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/still being applied/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
 
-    // router.refresh() was called again; status prop still "scheduled" -> stale warning.
-    expect(screen.getByRole("status")).toHaveTextContent(/unchanged.*may still be processing/i);
-
-    vi.useRealTimers();
+    rerender(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="in_progress" />);
+    expect(screen.queryByText(/status will update shortly/i)).not.toBeInTheDocument();
   });
 });

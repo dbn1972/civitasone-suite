@@ -88,8 +88,8 @@ describe("TradeLicensesTable expiry + status (GAP-REVENUE-TRADE-LICENSES-05)", (
     render(<TradeLicensesPage />);
     const expiredRow = (await screen.findByText("Expired Co")).closest("tr")!;
     const cancelledRow = (await screen.findByText("Cancelled Co")).closest("tr")!;
-    const expiredPill = within(expiredRow).getByText("expired");
-    const cancelledPill = within(cancelledRow).getByText("cancelled");
+    const expiredPill = within(expiredRow).getByText("Expired");
+    const cancelledPill = within(cancelledRow).getByText("Cancelled");
     expect(expiredPill.className).not.toBe(cancelledPill.className);
     expect(expiredPill.className).toContain("warn");
     expect(cancelledPill.className).toContain("bad");
@@ -230,8 +230,11 @@ describe("TradeLicensesTable — DataTable (GAP-REVENUE-TRADE-LICENSES-05)", () 
   it("renders an active license with 'Active' status pill (tone good)", async () => {
     mockFetchRows([makeRow({ status: "active", businessName: "Green Store" })]);
     render(<TradeLicensesPage />);
-    await waitFor(() => expect(screen.getByText("Green Store")).toBeInTheDocument());
-    expect(screen.getByText("Active")).toBeInTheDocument();
+    const row = (await screen.findByText("Green Store")).closest("tr")!;
+    // "Active" is also a KPI card label, so scope the pill lookup to the row.
+    // The status pill renders humanised (sentence-case) text with the good tone.
+    const pill = within(row).getByText("Active");
+    expect(pill.className).toContain("good");
   });
 
   it("renders a cancelled license with a distinct bad-tone pill", async () => {

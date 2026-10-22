@@ -6,8 +6,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 const getMeetingsMock = vi.fn();
+const getMeetingsPageMock = vi.fn();
 vi.mock("./_data/loaders", () => ({
   getMeetings: (...args: unknown[]) => getMeetingsMock(...args),
+  getMeetingsPage: (...args: unknown[]) => getMeetingsPageMock(...args),
 }));
 
 const getSessionRolesMock = vi.fn<() => string[]>();
@@ -30,15 +32,24 @@ const meeting = (id: string, status: string): Row => ({ id, status });
 const ok = (rows: Row[]): Result => ({ data: rows, source: "api" });
 const err = (): Result => ({ data: [], source: "error" });
 
-function mockLists(all: Result, inProgress: Result = ok([])) {
+// The page reads the true totals from getMeetingsPage (GAP-MEETING-HOME-02) and
+// the status breakdown from getMeetings. Both mocks are driven from the same
+// fixtures; the page mock reports total = fixture length (or an explicit total).
+function mockLists(all: Result, inProgress: Result = ok([]), totals?: { all: number; inProgress: number }) {
   getMeetingsMock.mockImplementation((status?: string) =>
     Promise.resolve(status === "in_progress" ? inProgress : all),
   );
+  getMeetingsPageMock.mockImplementation((q?: { status?: string }) => {
+    const src = q?.status === "in_progress" ? inProgress : all;
+    const total = totals ? (q?.status === "in_progress" ? totals.inProgress : totals.all) : src.data.length;
+    return Promise.resolve({ data: { rows: [], page: 1, pageSize: 1, total }, source: src.source });
+  });
 }
 
 describe("MeetingHomePage", () => {
   beforeEach(() => {
     getMeetingsMock.mockReset();
+    getMeetingsPageMock.mockReset();
     getSessionRolesMock.mockReset();
     getSessionRolesMock.mockReturnValue(MEETING_CONFIG_ADMIN_ROLES);
   });
@@ -73,6 +84,13 @@ describe("MeetingHomePage", () => {
     const links = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
     expect(links).toContain("/meeting/meetings?status=adjourned");
     expect(links).toContain("/meeting/meetings?status=minutes_pending");
+  });
+
+  it("GAP-MEETING-HOME-02: totals come from the server-side meta total, not the fetched page length", async () => {
+    mockLists(ok([meeting("m1", "scheduled")]), ok([]), { all: 1234, inProgress: 56 });
+    render(await MeetingHomePage());
+    expect(screen.getByText("1,234")).toBeInTheDocument();
+    expect(screen.getByText("56")).toBeInTheDocument();
   });
 
   it("GAP-MEETING-HOME-04: a plain member does not see the Admin Configuration tile", async () => {

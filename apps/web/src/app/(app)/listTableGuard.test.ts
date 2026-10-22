@@ -85,8 +85,6 @@ const BARE_TABLE_ALLOW: readonly string[] = [
   "tenant-admin/activation/ActivationView.tsx",
   "tenant-admin/platform-config/CacheTtlEditor.tsx",
   "tenant-admin/platform-config/page.tsx",
-  "visitor/guard/GuardConsole.tsx",
-  "visitor/host/HostPortal.tsx",
   "works/boq/[workId]/page.tsx",
 ];
 
