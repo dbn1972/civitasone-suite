@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { isDevLoginEnabled } from "@/lib/auth/env";
+import { AuthShell } from "../../_components/AuthShell";
 import { DevLoginForm } from "./DevLoginForm";
 
 export const dynamic = "force-dynamic";
@@ -7,12 +8,14 @@ export const dynamic = "force-dynamic";
 /**
  * GAP-AUTH-DEV-05: replaced all inline CSSProperties hex literals with
  * Tailwind utility classes (the DS token layer for this project).
+ * GAP-AUTH-FORGOT-05 / GAP-AUTH-LOGIN-05: wrapped in the shared AuthShell so login, forgot and dev
+ * share one centred-card layout.
  */
 export default function DevLoginPage({ searchParams }: { searchParams: { error?: string; next?: string } }) {
   if (!isDevLoginEnabled()) notFound();
   const next = searchParams?.next ?? "";
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-950 flex items-center justify-center p-6">
+    <AuthShell>
       <style>{`
         .devlogin-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #334155; }
         .devlogin-label-hint { font-weight: 400; color: #64748b; }
@@ -23,7 +26,7 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
         .devlogin-btn:focus-visible { outline: 2px solid #1e1b4b; outline-offset: 2px; }
         .devlogin-btn:disabled { opacity: 0.6; cursor: progress; }
       `}</style>
-      <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
+      <div className="w-full">
         <div role="note" className="mb-5 rounded-lg border border-amber-400 bg-amber-50 px-3 py-2.5 text-center text-xs font-semibold text-amber-800">
           ⚠ TEST ENVIRONMENT — not for production data
         </div>
@@ -47,6 +50,6 @@ export default function DevLoginPage({ searchParams }: { searchParams: { error?:
           <div className="flex justify-between py-0.5"><span className="font-semibold text-indigo-600 font-mono">auditor</span><span>Audit (read-only)</span></div>
         </div>
       </div>
-    </main>
+    </AuthShell>
   );
 }
