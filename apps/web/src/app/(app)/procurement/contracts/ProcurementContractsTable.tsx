@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { DataTable } from "../../../_components/ds";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { poHrefFromRef } from "@/lib/procurement-po-ref";
 
 export type ContractRow = {
   id: string;
@@ -20,10 +21,6 @@ export type ContractRow = {
   /** Linked PO reference as stored, "" when none. */
   poRef: string;
 } & Record<string, unknown>;
-
-// A PO reference is either the opaque `procurement_po:<uuid>` composite, a bare
-// uuid, or free text typed on the create form. Only a uuid can be linked.
-const PO_UUID = /^(?:procurement_po:)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 
 type SortableRow = ContractRow & { expirySort: number; valueSort: number };
 
@@ -65,8 +62,8 @@ export function ProcurementContractsTable({ rows }: { rows: ContractRow[] }) {
           label: "PO",
           render: (r) => {
             if (!r.poRef) return "—";
-            const m = PO_UUID.exec(r.poRef);
-            return m ? <Link href={`/procurement/orders/${m[1]}`}>{t("viewPo")}</Link> : r.poRef;
+            const href = poHrefFromRef(r.poRef);
+            return href ? <Link href={href}>{t("viewPo")}</Link> : r.poRef;
           },
         },
         { key: "status", label: "Status", cellType: "status" },

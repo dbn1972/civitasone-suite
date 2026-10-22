@@ -65,6 +65,56 @@ describe("BidEvaluationTable", () => {
     expect(within(table).getAllByText("(tie)").length).toBe(2);
   });
 
+  it("GAP-BID-04: a rank-1 bid in each of two tenders is NOT a tie (ranks are per tender)", () => {
+    // ROWS has TND-1 (ranks 1, 2) and TND-2 (rank 1): two L1s, no tie anywhere.
+    seed(ROWS, "live");
+    render(<BidEvaluationTable evaluations={ROWS} source="api" />);
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByText("L1").length).toBe(2);
+    expect(within(table).queryByText("(tie)")).not.toBeInTheDocument();
+  });
+
+  it("GAP-BID-04: flags a tie only inside the tender that has it", () => {
+    const mixed: BidEvaluation[] = [
+      { id: "m1", tender: "TND-A", tenderId: "a", bidder: "A1", technicalScore: 50, financialScore: 50, totalScore: 50, rank: 1, status: "technically_qualified" },
+      { id: "m2", tender: "TND-A", tenderId: "a", bidder: "A2", technicalScore: 50, financialScore: 50, totalScore: 50, rank: 1, status: "technically_qualified" },
+      { id: "m3", tender: "TND-B", tenderId: "b", bidder: "B1", technicalScore: 70, financialScore: 70, totalScore: 70, rank: 1, status: "technically_qualified" },
+    ];
+    seed(mixed, "live");
+    render(<BidEvaluationTable evaluations={mixed} source="api" />);
+    const table = screen.getByRole("table");
+    expect(within(table).getAllByText("L1").length).toBe(3);
+    // Only TND-A's two bids carry the marker; TND-B's lone rank-1 bid does not.
+    expect(within(table).getAllByText("(tie)").length).toBe(2);
+    const b1Row = within(table).getByText("B1").closest("tr") as HTMLElement;
+    expect(within(b1Row).queryByText("(tie)")).not.toBeInTheDocument();
+  });
+
+  it("GAP-BID-04: falls back to the tender ref when tenderId is missing, so different refs never tie", () => {
+    const noIds: BidEvaluation[] = [
+      { id: "k1", tender: "TND-X", bidder: "A", technicalScore: 1, financialScore: 1, totalScore: 1, rank: 1, status: "awarded" },
+      { id: "k2", tender: "TND-Y", bidder: "B", technicalScore: 1, financialScore: 1, totalScore: 1, rank: 1, status: "awarded" },
+      { id: "k3", tender: "TND-Z", bidder: "C", technicalScore: 1, financialScore: 1, totalScore: 1, rank: 1, status: "awarded" },
+      { id: "k4", tender: "TND-Z", bidder: "D", technicalScore: 1, financialScore: 1, totalScore: 1, rank: 1, status: "awarded" },
+    ];
+    seed(noIds, "live");
+    render(<BidEvaluationTable evaluations={noIds} source="api" />);
+    expect(within(screen.getByRole("table")).getAllByText("(tie)").length).toBe(2); // C and D only
+  });
+
+  it("GAP-BID-04: an unranked bid (rank 0) shows a dash, never L1 or a tie", () => {
+    const unranked: BidEvaluation[] = [
+      { id: "u1", tender: "TND-U", tenderId: "u", bidder: "A", technicalScore: 80, financialScore: null, totalScore: 80, rank: 0, status: "technically_qualified" },
+      { id: "u2", tender: "TND-U", tenderId: "u", bidder: "B", technicalScore: 75, financialScore: null, totalScore: 75, rank: 0, status: "technically_qualified" },
+    ];
+    seed(unranked, "live");
+    render(<BidEvaluationTable evaluations={unranked} source="api" />);
+    const table = screen.getByRole("table");
+    expect(within(table).queryByText("L1")).not.toBeInTheDocument();
+    expect(within(table).queryByText("(tie)")).not.toBeInTheDocument();
+    expect(within(table).queryByText("0")).not.toBeInTheDocument();
+  });
+
   it("GAP-BID-05: links the tender ref to the tender detail page when tenderId is present", () => {
     seed(ROWS, "live");
     render(<BidEvaluationTable evaluations={ROWS} source="api" />);
