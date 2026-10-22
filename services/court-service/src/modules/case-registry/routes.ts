@@ -9,6 +9,18 @@ import * as repo from "./repo.js";
 import * as domain from "./domain.js";
 
 /** Roles permitted to register/mutate cases. */
+/** CLOS-S4-03: a real YYYY-MM-DD calendar date (the regex alone let 2026-13-45 reach Postgres -> 500). */
+function isRealIsoDate(v: string | undefined): v is string {
+  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
+/** Today's date in IST (courts run on IST; the UTC date is a day behind from 00:00 to 05:30 IST). */
+function istToday(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
 const COURT_WRITE_ROLES = ["registrar", "court_admin", "super_admin"];
 /**
  * Roles permitted to read the registry (write roles + read-only court staff).
@@ -56,8 +68,7 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_READ_ROLES);
     const q = req.query as { asOf?: string; limit?: string; offset?: string };
-    const asOf = q.asOf && /^\d{4}-\d{2}-\d{2}$/.test(q.asOf)
-      ? q.asOf : new Date().toISOString().slice(0, 10);
+    const asOf = isRealIsoDate(q.asOf) ? q.asOf : istToday();
     const limit = Math.min(Number(q.limit ?? 100) || 100, 500);
     const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
     const items = await repo.listOverdueCases(ctx.tenantId, asOf, limit, offset);
@@ -69,9 +80,8 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, COURT_READ_ROLES);
     const q = req.query as { from?: string; to?: string };
-    const rx = /^\d{4}-\d{2}-\d{2}$/;
-    const from = q.from && rx.test(q.from) ? q.from : "1970-01-01";
-    const to = q.to && rx.test(q.to) ? q.to : new Date().toISOString().slice(0, 10);
+    const from = isRealIsoDate(q.from) ? q.from : "1970-01-01";
+    const to = isRealIsoDate(q.to) ? q.to : istToday();
     const a = await repo.caseAnalytics(ctx.tenantId, from, to);
     const clearanceRatePct = domain.clearanceRatePct(a.instituted, a.disposed);
     return reply.send({ period: { from, to }, ...a, clearanceRatePct, source: "db" });
