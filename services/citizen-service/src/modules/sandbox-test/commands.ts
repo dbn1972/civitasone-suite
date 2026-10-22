@@ -58,8 +58,22 @@ export async function assertLatestTestPassed(ctx: RequestContext, definitionId: 
   const def = await catalogueRepo.findDefinitionById(definitionId, ctx.tenantId);
   if (!def) throw new HttpError(404, "NOT_FOUND", "service definition not found");
   if (!isRunCurrent(latest.definitionHash, def)) {
-    throw new HttpError(409, "TEST_STALE", "the design changed after the last passing sandbox test; run the test again before submit");
+    throw new HttpError(409, "TEST_STALE", "the design changed after the last passing sandbox test; run the test again before submit or publish");
   }
+}
+
+/**
+ * Transactional form of the same gate for the publish consumer: the design that
+ * goes live must be the design the latest passing run tested, even if it was
+ * edited after submit.
+ */
+export async function isLatestTestCurrentTx(
+  tx: Parameters<typeof repo.latestRunForDefinitionTx>[0],
+  tenantId: string,
+  def: Parameters<typeof definitionDesignHash>[0] & { id: string },
+): Promise<boolean> {
+  const latest = await repo.latestRunForDefinitionTx(tx, tenantId, def.id);
+  return !!latest && latest.status === "pass" && isRunCurrent(latest.definitionHash, def);
 }
 
 /** True when a run's recorded hash matches the definition as it stands. NULL (pre-0040) is never current. */

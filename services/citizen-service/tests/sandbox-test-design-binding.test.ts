@@ -10,7 +10,8 @@ import type { RequestContext } from "@civitasone/types";
 import { db, sqlClient } from "../src/shared/db.js";
 import * as catalogueRepo from "../src/modules/catalogue/repo.js";
 import * as sandboxRepo from "../src/modules/sandbox-test/repo.js";
-import { assertLatestTestPassed, runSandboxTest } from "../src/modules/sandbox-test/commands.js";
+import { assertLatestTestPassed, isLatestTestCurrentTx, runSandboxTest } from "../src/modules/sandbox-test/commands.js";
+import { publishDefinition } from "../src/modules/catalogue/commands.js";
 import { definitionDesignHash } from "../src/modules/sandbox-test/design-hash.js";
 
 const TENANT = randomUUID();
@@ -80,5 +81,24 @@ describe("sandbox pass is bound to the tested design", () => {
     const def = (await current())!;
     await record("pass", definitionDesignHash(def));
     expect(await codeOf(runWithTenant(TENANT, () => assertLatestTestPassed(ctx, DEF_ID)))).toBeNull();
+  });
+
+  it("pass -> submit -> edit -> publish is rejected as TEST_STALE (API and consumer gate)", async () => {
+    const checker = { ...ctx, actorId: randomUUID() } as unknown as RequestContext;
+    await runWithTenant(TENANT, () => db.transaction((tx) =>
+      catalogueRepo.updateDefinition(tx, DEF_ID, TENANT, { hoaCode: "0070-60-800-01", updatedBy: ACTOR } as never)));
+    const def = (await current())!;
+    await record("pass", definitionDesignHash(def));
+    // maker submits (consumer effect), then edits the design after the passing test
+    await runWithTenant(TENANT, () => db.transaction((tx) =>
+      catalogueRepo.updateDefinition(tx, DEF_ID, TENANT, { submittedBy: ACTOR, updatedBy: ACTOR } as never)));
+    await runWithTenant(TENANT, () => db.transaction((tx) =>
+      catalogueRepo.updateDefinition(tx, DEF_ID, TENANT, { slaDays: 99, updatedBy: ACTOR } as never)));
+    expect(await codeOf(runWithTenant(TENANT, () => publishDefinition(checker, DEF_ID)))).toBe("TEST_STALE");
+    const edited = (await current())!;
+    expect(await runWithTenant(TENANT, () => db.transaction((tx) => isLatestTestCurrentTx(tx, TENANT, edited)))).toBe(false);
+    // re-testing the edited design makes the consumer gate pass again
+    await record("pass", definitionDesignHash(edited));
+    expect(await runWithTenant(TENANT, () => db.transaction((tx) => isLatestTestCurrentTx(tx, TENANT, edited)))).toBe(true);
   });
 });

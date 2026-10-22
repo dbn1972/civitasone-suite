@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertDefinitionPublishable } from "./domain.js";
+import { isLatestTestCurrentTx } from "../sandbox-test/commands.js";
 
 const AUDIT = "audit.event.record";
 
@@ -190,6 +191,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (!def || def.status !== "draft" || !def.submittedBy) return;
       if (def.submittedBy === msg.actorId) return;
       try { assertDefinitionPublishable(def); } catch { return; }
+      if (!(await isLatestTestCurrentTx(tx, msg.tenantId, def))) return;
       await repo.updateDefinition(tx, p.id, msg.tenantId, {
         status: "published", publishedBy: msg.actorId, publishedAt: new Date(), updatedBy: msg.actorId,
       });
