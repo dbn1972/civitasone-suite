@@ -219,6 +219,7 @@ describe("Arrears Consumer", () => {
       // Return a write-off with makerUserId = actor-1
       mockSelectLimit.mockResolvedValueOnce([{
         id: "wo-1",
+        status: "pending",
         makerUserId: "actor-1",
         assesseeId: "assessee-1",
         amountMinor: 100000n,

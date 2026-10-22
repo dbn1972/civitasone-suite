@@ -27,7 +27,13 @@ const mockInsertReturning = vi.fn().mockResolvedValue([{ id: "new-1" }]);
 const mockInsertValues = vi.fn().mockReturnValue({ returning: mockInsertReturning });
 const mockInsert = vi.fn().mockReturnValue({ values: mockInsertValues });
 
-const mockSetWhere = vi.fn().mockResolvedValue(undefined);
+// update().set().where() is awaited directly by some handlers and chained with
+// .returning() by the decide handlers (conditional status = 'pending' claim).
+const mockSetWhere = vi.fn().mockImplementation(() => {
+  const p: any = Promise.resolve(undefined);
+  p.returning = vi.fn().mockResolvedValue([{ id: "claimed" }]);
+  return p;
+});
 const mockSet = vi.fn().mockReturnValue({ where: mockSetWhere });
 const mockUpdate = vi.fn().mockReturnValue({ set: mockSet });
 
@@ -71,6 +77,9 @@ vi.mock("../src/modules/collection/domain.js", () => ({
   validateReceipt: vi.fn(),
   validateRefund: vi.fn(),
   validateAdjustment: vi.fn(),
+  DomainError: class DomainError extends Error {
+    constructor(public code: string, message: string) { super(message); }
+  },
   assertMakerChecker: (m: string, c: string) => { if (m === c) throw new Error("MAKER_CHECKER_VIOLATION"); },
 }));
 
@@ -112,7 +121,10 @@ describe("Collection Consumer — refundCreate/refundDecide gaps", () => {
   });
 
   it("refundDecide approve: inserts DCB entry and enqueues events", async () => {
-    txSelectResults = [[{ id: "rf-1", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 50000n, reason: "Over" }]];
+    txSelectResults = [
+      [{ id: "rf-1", status: "pending", receiptId: "rc-1", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 50000n, reason: "Over" }],
+      [{ demandId: "dm-1" }], // the refunded receipt's demand
+    ];
     await handlers["revenue.refund.decide"]!(msg({ actorId: "checker-1", payload: { refundId: "rf-1", approve: true, reason: "OK" } }));
     expect(mockUpdate).toHaveBeenCalled();
     expect(mockInsert).toHaveBeenCalledTimes(1);
@@ -121,7 +133,7 @@ describe("Collection Consumer — refundCreate/refundDecide gaps", () => {
   });
 
   it("refundDecide reject: no DCB, only audit", async () => {
-    txSelectResults = [[{ id: "rf-2", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 30000n, reason: "E" }]];
+    txSelectResults = [[{ id: "rf-2", status: "pending", receiptId: "rc-2", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 30000n, reason: "E" }]];
     await handlers["revenue.refund.decide"]!(msg({ actorId: "checker-1", payload: { refundId: "rf-2", approve: false } }));
     expect(mockInsert).not.toHaveBeenCalled();
     expect(mockEnqueue).toHaveBeenCalledTimes(1);

@@ -88,9 +88,12 @@ describe("AssessmentsTable", () => {
 
   it("surfaces a clerk-safe message on a same-user decision, never the raw server code/message (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: { code: "MAKER_CHECKER_VIOLATION", message: "decider must differ from maker" } }), {
-        status: 409,
-      }),
+      // Real response of PATCH /v1/revenue/assessments/:id/remit-decide (409): the assessment
+      // module has no local error handler, so the app-level { code, message, ... } shape applies.
+      new Response(
+        JSON.stringify({ code: "MAKER_CHECKER_VIOLATION", message: "the maker of a remission cannot decide it (separation of duties)", correlationId: "c-1", retryable: false }),
+        { status: 409 },
+      ),
     );
 
     render(<AssessmentsTable assessments={[ROW]} />);

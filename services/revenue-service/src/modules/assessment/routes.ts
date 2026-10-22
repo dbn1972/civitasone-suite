@@ -4,7 +4,7 @@
  * _Requirements: SVC-131, Requirement 6_
  */
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -53,6 +53,14 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = remitDecideBody.parse(req.body);
+    // Synchronous pre-check (409): the consumer fails silently otherwise.
+    const pending = await repo.findPendingRemission(ctx.tenantId, id);
+    if (!pending) {
+      throw new HttpError(409, "REMISSION_NOT_PENDING", "no pending remission for this assessment");
+    }
+    if (pending.makerUserId === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the maker of a remission cannot decide it (separation of duties)");
+    }
     const result = await commands.remitDecide(ctx, id, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
