@@ -9,6 +9,7 @@ import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState, Ent
 import { useFormError } from "@/lib/useFormError";
 import { humanizeStatus, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { SIGN_RECORDS_COPY } from "../_shared/signatureCopy";
 
 // GAP-ESTAB-DFA-04: extended Dfa type to include fields the API already returns.
 type Dfa = {
@@ -238,7 +239,7 @@ export function DfaPanel({
   }, [load, pollUntil, fromResponse]);
 
   // GAP-ESTAB-DFA-02: Approve now has requireReason. Actions still server-enforced
-  // (APPROVER_ROLES, maker≠checker in consumer). Sign description is Phase 2 honest.
+  // (APPROVER_ROLES, maker≠checker in consumer). The Sign dialog states what signing records via the shared SIGN_RECORDS_COPY.
   const actionsFor = (d: Dfa) => {
     // GAP-ESTAB-DFA-02: segregation of duties. The drafter may not approve or
     // sign their own DFA (server: 403 MAKER_CHECKER_VIOLATION); a viewer
@@ -280,7 +281,7 @@ export function DfaPanel({
         return (
           <ActionButton label="Sign" className="btn primary"
             confirmTitle="Record signing of this DFA?"
-            confirmDescription={<><DraftPreview d={d} /><p style={{ marginTop: 8 }}>Records who signed and when. Cryptographic e-Sign/DSC arrives in Phase 2.</p></>}
+            confirmDescription={<><DraftPreview d={d} /><p style={{ marginTop: 8 }}>{SIGN_RECORDS_COPY}</p></>}
             confirmLabel="Sign" onConfirm={() => act(d.id, "sign")} />
         );
       case "signed":

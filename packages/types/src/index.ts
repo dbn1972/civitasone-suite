@@ -1793,7 +1793,8 @@ export type GrantUtilization = {
 
 // Establishment types
 export type EstabDashboard = {
-  filesPending: number;
+  /** Files with status "active" (the service count; the File Register shows the same figure). */
+  filesActive: number;
   meetingsToday: number;
   vehiclesInUse: number;
   complianceItemsDue: number;
@@ -1811,7 +1812,12 @@ export type EstabFileSummary = {
   createdBy: string;
   createdDate: string;
   currentHolder?: string;
-  status: "active" | "pending" | "archived" | "disposed";
+  /**
+   * The service status, kept as it is: draft | active | closed | transferred | archived come
+   * from estab-service (files.estab_files CHECK); "pending" and "disposed" are register
+   * vocabulary the web also understands. Closed and archived files are finished (never overdue).
+   */
+  status: "draft" | "active" | "pending" | "closed" | "transferred" | "archived" | "disposed";
   dueDate?: string;
   tags: string[];
 };

@@ -104,6 +104,9 @@ describe("EstabFileDetailPage — note sheet when/officer/signedAt (FILES-DETAIL
     // The draft note content and the green note content both render.
     expect(screen.getByText("Draft proposal.")).toBeInTheDocument();
     expect(screen.getByText("Approved at my level.")).toBeInTheDocument();
+    // A signed note is called what it is (signed into the hash-chained trail, no DSC), never "e-Signed".
+    expect(screen.getByText(/Green \(approved\) · Signed \(hash-chained note\)/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/e-Signed/i);
   });
 });
 

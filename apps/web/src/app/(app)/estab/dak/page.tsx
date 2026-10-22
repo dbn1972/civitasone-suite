@@ -3,7 +3,7 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Button, PageHeader, StatusPill, DataTable, EmptyState, ErrorState, EntityPicker,
   ConfirmDialog, // GAP-ESTAB-DAK-01: confirmation before opening file
@@ -17,7 +17,8 @@ import { ESTAB_FILES_WRITE_ROLES } from "@/lib/estab/roles";
 import { useEstabT } from "@/lib/estab/useEstabT";
 import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
 import { usePagedRegister } from "@/lib/estab/usePagedRegister";
-import { DAK_MODES, EMPTY_DAK_FORM, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
+import { startBoundedPoll } from "@/lib/estab/boundedPoll";
+import { DAK_MODES, EMPTY_DAK_FORM, dakLookupTerm, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
 const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
@@ -73,6 +74,46 @@ export default function DakRegistryPage() {
   const [openFileBusy, setOpenFileBusy] = useState(false);
   const [openFileError, setOpenFileError] = useState("");
 
+  // GAP-ESTAB-DAK-03: polls that look up the number and barcode of an accepted registration; cancelled on unmount.
+  const cancels = useRef<Array<() => void>>([]);
+  const mounted = useRef(true);
+  // The latest reload (it follows the current search term), for callbacks that outlive a render.
+  const reloadRef = useRef(reg.reload);
+  reloadRef.current = reg.reload;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancels.current.forEach((cancel) => cancel());
+      cancels.current = [];
+    };
+  }, []);
+
+  /**
+   * GAP-ESTAB-DAK-03: the 202 carries only the row id, because the DAK number and barcode are
+   * allocated when the service processes the registration. Look the row up by that id a bounded
+   * number of times, and put the number and barcode in the message once it is there. `term` is
+   * what the register search finds the row by (dakLookupTerm: the typed number, else the start of
+   * the subject, cut to the 100 characters the search accepts), whatever its received date.
+   */
+  function watchRegistration(rowId: string, term: string) {
+    const cancel = startBoundedPoll<InwardRow>({
+      check: async () => {
+        const res = await fetch(`/api/proxy/v1/estab/inward?limit=${PAGE_SIZE}&q=${encodeURIComponent(term)}`);
+        if (!res.ok) return null;
+        const body = (await res.json()) as { data?: InwardRow[] };
+        return (body.data ?? []).find((r) => r.id === rowId) ?? null;
+      },
+      onResolved: (row) => {
+        if (!mounted.current) return;
+        setMessage(t("dakRegisteredWithBarcode", { dakNo: row.dakNo, barcode: row.barcode ?? "—" }));
+        void reloadRef.current();
+      },
+      onExhausted: () => { /* the message already says the number appears in the register once processed */ },
+    });
+    cancels.current.push(cancel);
+  }
+
   // A failed "Load more" keeps the rows on screen and says so.
   useEffect(() => {
     if (reg.moreError) setActionError(formError.fromException("load", reg.moreError).message);
@@ -99,11 +140,21 @@ export default function DakRegistryPage() {
         body: JSON.stringify(checked.payload),
       });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-      // The register is written asynchronously (202), so the DAK number and barcode the
-      // service assigns are not in the response; they show in the register once processed.
+      // The register is written asynchronously (202), so the DAK number and barcode the service
+      // assigns are not in the response. Say what is known now, then replace it with the
+      // allocated number and barcode as soon as the row exists (watchRegistration).
+      let rowId: string | null = null;
+      try {
+        const accepted = (await res.json()) as { id?: unknown };
+        if (typeof accepted.id === "string") rowId = accepted.id;
+      } catch {
+        /* the body is optional */
+      }
       setForm({ ...EMPTY_DAK_FORM });
       setMessage(form.dakNo.trim() ? t("dakRegisteredNo", { dakNo: form.dakNo.trim() }) : t("dakRegisteredAuto"));
       await reg.reload();
+      const term = dakLookupTerm(checked.payload);
+      if (rowId && term) watchRegistration(rowId, term);
     } catch (err) {
       setActionError(formError.fromException("save", err).message);
     }

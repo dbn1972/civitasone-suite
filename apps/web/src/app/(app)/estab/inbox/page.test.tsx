@@ -91,3 +91,30 @@ describe("EstabInboxPage", () => {
     expect(screen.queryByText(/^Overdue$/)).not.toBeInTheDocument();
   });
 });
+
+describe("EstabInboxPage — 'Active on desk' uses the service status (GAP-ESTAB-DASHBOARD-01)", () => {
+  beforeEach(() => {
+    getEstabFilesMock.mockReset();
+  });
+
+  const tileValue = (label: string) => {
+    const tile = Array.from(document.querySelectorAll(".stat")).find((el) => el.querySelector(".lab")?.textContent === label);
+    return tile?.querySelector(".val")?.textContent;
+  };
+
+  it("counts draft and active files with the officer, but not pending (awaiting receipt) or finished ones", async () => {
+    getEstabFilesMock.mockResolvedValueOnce({
+      data: [
+        file({ id: "a", status: "active" }),
+        file({ id: "d", status: "draft" }),
+        file({ id: "p", status: "pending" }),
+        file({ id: "c", status: "closed" }),
+        file({ id: "x", status: "archived" }),
+      ],
+      source: "api",
+    });
+    render(await EstabInboxPage());
+    expect(tileValue("Active on desk")).toBe("2");
+    expect(tileValue("Awaiting receipt")).toBe("1");
+  });
+});

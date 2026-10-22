@@ -771,3 +771,34 @@ describe("mapStockLedgerEntries — GAP-STOCK-LEDGER-02/03: no id fragments", ()
     expect(row?.party).toBeUndefined();
   });
 });
+
+describe("mapEstabFileSummaries — status and IST days (GAP-ESTAB-DASHBOARD-01)", () => {
+  const base = { id: "11111111-1111-4111-8111-111111111111", fileNo: "F/1", subject: "S", classification: "public" };
+
+  it("keeps every service status instead of folding closed and draft into active", () => {
+    const statuses = ["draft", "active", "closed", "transferred", "archived"].map(
+      (status) => mapEstabFileSummaries([{ ...base, status }])?.[0]?.status,
+    );
+    expect(statuses).toEqual(["draft", "active", "closed", "transferred", "archived"]);
+  });
+
+  it("keeps the register-only 'pending' and 'disposed', and treats a missing or unknown status as active", () => {
+    expect(mapEstabFileSummaries([{ ...base, status: "pending" }])?.[0]?.status).toBe("pending");
+    expect(mapEstabFileSummaries([{ ...base, status: "disposed" }])?.[0]?.status).toBe("disposed");
+    expect(mapEstabFileSummaries([{ ...base }])?.[0]?.status).toBe("active");
+    expect(mapEstabFileSummaries([{ ...base, status: "mystery" }])?.[0]?.status).toBe("active");
+  });
+
+  it("resolves due and created instants to their IST calendar day (19:00 UTC is already the next day in IST)", () => {
+    const [row] = mapEstabFileSummaries([{ ...base, dueBy: "2026-10-20T19:00:00.000Z", createdAt: "2026-10-20T19:00:00.000Z" }]) ?? [];
+    expect(row?.dueDate).toBe("2026-10-21");
+    expect(row?.createdDate).toBe("2026-10-21");
+  });
+
+  it("leaves a bare date and an absent due date alone", () => {
+    const [row] = mapEstabFileSummaries([{ ...base, dueDate: "2026-11-02", createdDate: "2026-10-01" }]) ?? [];
+    expect(row?.dueDate).toBe("2026-11-02");
+    expect(row?.createdDate).toBe("2026-10-01");
+    expect(mapEstabFileSummaries([{ ...base }])?.[0]?.dueDate).toBeUndefined();
+  });
+});
