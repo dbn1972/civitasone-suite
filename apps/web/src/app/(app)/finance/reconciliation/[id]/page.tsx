@@ -1,6 +1,7 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, LoadErrorState, StatusPill } from "@/app/_components/ds";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getFinanceActorNames } from "@/app/_data/loaders";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import type { RunRow } from "../RunsTable";
@@ -53,6 +54,7 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
   }
 
   const canAct = canActOnExceptions(getSessionRoles());
+  const actorNames = await getFinanceActorNames(detail.breaks.map((b) => b.resolvedBy));
   const inProgress = isRunInProgress(run.status);
   const sourceUnmatched = unmatchedCount(run.sourceCount, run.matchedCount);
   const targetUnmatched = unmatchedCount(run.targetCount, run.matchedCount);
@@ -104,7 +106,7 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
 
       <div id="exceptions">
         <Card title="Exceptions for this run">
-          <ExceptionsPanel exceptions={detail.breaks} canAct={canAct} />
+          <ExceptionsPanel exceptions={detail.breaks} canAct={canAct} actorNames={actorNames} />
         </Card>
       </div>
     </div>

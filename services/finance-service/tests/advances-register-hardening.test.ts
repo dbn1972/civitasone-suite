@@ -224,7 +224,7 @@ describe("passer != payer", () => {
     const pay = (sub: string) => app.inject({
       method: "POST", url: "/v1/finance/payments/eft",
       headers: { authorization: `Bearer ${signToken({ sub, tid: TENANT, roles: ["finance_officer"], sid: "s" }, SECRET)}`, "content-type": "application/json" },
-      payload: { billId: BILL, ddoCode: "DDO123", mode: "NEFT", amountMinor: "500000" },
+      payload: { billId: BILL, ddoCode: "DDO123", mode: "NEFT", amountMinor: "500000", reason: "Payment against passed bill BILL-PP-1" },
     });
     const same = await pay(PASSER);
     expect(same.statusCode).toBe(409);

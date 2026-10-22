@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState, SkeletonBar } from "@/app/_components/ds";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getFinanceActorNames } from "@/app/_data/loaders";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { RunsTable, type RunRow } from "./RunsTable";
@@ -58,6 +59,9 @@ export default async function ReconciliationWorkbenchPage() {
   // Newest run by date, not runs[0]: the API order is not a contract (GAP-FINANCE-RECONCILIATION-07).
   const lastRunStartedAt = latestStartedAt(runs);
 
+  // Who closed a break: names for the resolver ids, so a written-off row reads "Asha Rao", not an id.
+  const actorNames = await getFinanceActorNames(exceptions.map((e) => e.resolvedBy));
+
   const openExceptions = exceptions.filter((e) => e.status === "open" || e.status === "investigating").length;
   const unbalancedRuns = runs.filter((r) => !r.balanced).length;
 
@@ -89,7 +93,7 @@ export default async function ReconciliationWorkbenchPage() {
         {exceptionsResult.source === "error" && exceptions.length === 0 ? (
           <LoadErrorState result={exceptionsResult} area="reconciliation exceptions" backHref="/finance" />
         ) : (
-          <ExceptionsPanel exceptions={exceptions} canAct={canAct} />
+          <ExceptionsPanel exceptions={exceptions} canAct={canAct} actorNames={actorNames} />
         )}
       </Card>
 

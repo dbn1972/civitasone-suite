@@ -5645,7 +5645,8 @@
     "payeeAccountNoConfirmLabel": "Re-enter account number",
     "payeeAccountNoMismatch": "Account numbers do not match.",
     "billSearchLabel": "Search bills",
-    "billSearchPlaceholder": "Search by bill number or vendor…"
+    "billSearchPlaceholder": "Search by bill number or vendor…",
+    "payeeFromBill": "Filled from the bill's vendor. Check it matches the account holder's name before you continue."
   },
   "pfmsPaymentStatusLookup": {
     "title": "Check Payment Status",
@@ -9996,7 +9997,8 @@
     "clear": "Clear",
     "clearAriaLabel": "Clear selected employee",
     "searchFailed": "Could not load employees. Check your connection and try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "noDirectoryAccess": "Your role cannot search the employee directory, so an officer cannot be chosen here. Ask your administrator for access."
   },
   "directoryPicker": {
     "placeholder": {
@@ -10304,11 +10306,14 @@
     "confirmDescription": "Releasing initiates an outward {mode} disbursement of {amount} to {vendor} against bill {billNo}. A different officer from the bill's creator must make this payment (maker-checker). This is irreversible once submitted to the gateway.",
     "fallbackVendor": "the vendor",
     "confirmLabel": "Release payment",
+    "reasonLabel": "Authorising officer and reason for this payment",
+    "hiddenBills": "Passed bills not listed: {count}. You created or passed them, so a different officer must release their payments.",
     "err": {
       "billRequired": "Choose a passed bill to pay.",
       "ddoRequired": "Choose a DDO (6-12 letters or digits).",
       "modeRequired": "Choose a payment mode.",
-      "amountMissing": "The bill has no payable amount."
+      "amountMissing": "The bill has no payable amount.",
+      "reasonRequired": "Give the reason for this payment (10 to 500 characters)."
     }
   },
   "financeVendorForm": {
@@ -12441,6 +12446,8 @@
     "reveal": "Reveal",
     "hide": "Hide",
     "maskedAria": "{label} (masked)",
+    "revealAria": "Reveal {label} for {context}",
+    "hideAria": "Hide {label} for {context}",
     "title": "Reveal {label}?",
     "description": "Showing the {label} is recorded in the audit trail with your name and the reason below. It is hidden again after 30 seconds.",
     "confirm": "Reveal",
@@ -12480,6 +12487,7 @@
     "approveTitle": "Approve {name}?",
     "approveDescription": "The vendor becomes active and can be chosen for bills and payments. Check the PAN and bank details first: a wrong account diverts payments.",
     "approveConfirm": "Approve",
+    "approveReasonLabel": "Reason for approving (what you checked)",
     "approvalSubmitted": "Approval submitted. The vendor will show as active in a moment.",
     "rejectLabel": "Reject vendor",
     "rejectTitle": "Reject {name}?",
@@ -12498,6 +12506,7 @@
     "approveTitle": "Approve the bank change for {name}?",
     "approveDescription": "Future payments to this vendor go to the new account. Confirm the proposal against the vendor's signed letter first.",
     "approveConfirm": "Approve change",
+    "approveReasonLabel": "Reason for approving (what you checked)",
     "approved": "Approval submitted. The bank details will update in a moment.",
     "rejectLabel": "Reject change",
     "rejectTitle": "Reject the bank change for {name}?",

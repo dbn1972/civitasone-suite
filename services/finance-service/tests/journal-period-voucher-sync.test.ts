@@ -143,12 +143,12 @@ describe("POST /v1/finance/journals: period is checked before anything is queued
 
 describe("POST /v1/finance/journals: duplicate typed voucher number (VOUCHERS-NEW-05)", () => {
   useApp();
-  it("409 DUPLICATE_VOUCHER_NO as a voucherNo field error when the number is taken (also by a pending draft)", async () => {
+  it("409 DUPLICATE_VOUCHER as a voucherNo field error when the number is taken (also by a pending draft)", async () => {
     await draft(T, { voucherNo: "JV-2026-001" });
     const publish = vi.spyOn(queue, "publish");
     const res = await post({ voucherNo: "JV-2026-001", postingDate: "2026-05-10" });
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ code: "DUPLICATE_VOUCHER_NO", fieldErrors: [{ field: "voucherNo", message: expect.stringMatching(/already exists/) }] });
+    expect(res.json()).toMatchObject({ code: "DUPLICATE_VOUCHER", fieldErrors: [{ field: "voucherNo", message: expect.stringMatching(/already exists/) }] });
     expect(publish).not.toHaveBeenCalled();
   });
 

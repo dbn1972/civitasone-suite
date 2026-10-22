@@ -470,56 +470,77 @@ export function registerGlConsumers(queue: Queue): void {
   // (gl/spine.ts) straight to finance.gl.post above, unaffected.
   queue.subscribe(COMMANDS.journalCreate, async (msg) => {
     const p = msg.payload as StandardJournal;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      // Structural check repeated here (also re-checked by postJournal() at
-      // actual posting time): cheap, pure, and guards against a stored draft
-      // being tampered with between create and approve.
-      assertJournalBalances(p.lines);
-      // Same rationale, same defense-in-depth: reject a manually-created
-      // zero-amount draft here too, not just at the HTTP layer
-      // (validators.ts) — a checker must never be asked to approve a draft
-      // with nothing to post. See assertJournalHasAmount()'s doc comment
-      // (gl/domain.ts).
-      assertJournalHasAmount(p.lines);
-      // GAP-FINANCE-JOURNAL-ENTRY-04 defense in depth (the route checks too): no
-      // manual draft may post to a sub-ledger control account.
-      try {
-        assertNoControlAccounts(await budgetRepo.findControlAccountRefsTx(
-          tx as Parameters<typeof budgetRepo.findControlAccountRefsTx>[0], p.tenantId, p.lines.map((l: JournalLine) => l.accountCode),
-        ));
-      } catch (err) {
-        if (err instanceof GlDomainError) throw new NonRetryableError(err.message);
-        throw err;
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        // Structural check repeated here (also re-checked by postJournal() at
+        // actual posting time): cheap, pure, and guards against a stored draft
+        // being tampered with between create and approve.
+        assertJournalBalances(p.lines);
+        // Same rationale, same defense-in-depth: reject a manually-created
+        // zero-amount draft here too, not just at the HTTP layer
+        // (validators.ts) — a checker must never be asked to approve a draft
+        // with nothing to post. See assertJournalHasAmount()'s doc comment
+        // (gl/domain.ts).
+        assertJournalHasAmount(p.lines);
+        // GAP-FINANCE-JOURNAL-ENTRY-04 defense in depth (the route checks too): no
+        // manual draft may post to a sub-ledger control account.
+        try {
+          assertNoControlAccounts(await budgetRepo.findControlAccountRefsTx(
+            tx as Parameters<typeof budgetRepo.findControlAccountRefsTx>[0], p.tenantId, p.lines.map((l: JournalLine) => l.accountCode),
+          ));
+        } catch (err) {
+          if (err instanceof GlDomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
+        // finance_journals has UNIQUE(tenant_id, voucher_no). The real gapless
+        // number is only allocated at actual-posting time (approval) — see
+        // postJournal()'s voucher-numbering block — so a still-pending draft
+        // cannot store the literal "AUTO" sentinel verbatim: a SECOND pending
+        // draft for the same tenant (the common case — most manual entries
+        // don't set a custom voucher number) would collide on this exact
+        // constraint before either was ever approved. `DRAFT-<id>` is unique
+        // per row (journal.id is the primary key) and is itself recognised as
+        // "needs allocation" by postJournal(), same as "AUTO".
+        const rawVoucherNo = p.voucherNo;
+        const needsAllocation = voucherNeedsAllocation(rawVoucherNo);
+        const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
+        await repo.insertJournal(tx, {
+          id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
+          type: p.type, postingDate: p.postingDate, lines: p.lines,
+          status: "pending_approval", createdBy: msg.actorId, updatedBy: msg.actorId,
+          budgetOverride: p.budgetOverride ?? false, overrideReason: p.overrideReason ?? null,
+          ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
+          ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
+          ...(p.profitCenterId ? { profitCenterId: p.profitCenterId } : {}),
+          ...(p.operatingUnitId ? { operatingUnitId: p.operatingUnitId } : {}),
+        });
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "finance", action: "create_journal_draft", resourceType: "journal", resourceId: p.id, outcome: "success" },
+        });
+      });
+    } catch (err) {
+      // GAP-FINANCE-JOURNAL-ENTRY-06: UNIQUE (tenant_id, voucher_no). The route
+      // pre-check (gl/routes.ts) turns a typed duplicate into a synchronous 409,
+      // but two concurrent creates can still collide. The aborted transaction
+      // rolled everything back (including the inbox marker), so record the
+      // rejection in a fresh one -- an audit event with outcome "failure"
+      // instead of a retry loop / silent drop -- and stop retrying.
+      if (repo.isVoucherNoViolation(err)) {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { service: "finance", action: "create_journal_draft_rejected_duplicate_voucher", resourceType: "journal", resourceId: p.id, outcome: "failure" },
+          });
+        });
+        return;
       }
-      // finance_journals has UNIQUE(tenant_id, voucher_no). The real gapless
-      // number is only allocated at actual-posting time (approval) — see
-      // postJournal()'s voucher-numbering block — so a still-pending draft
-      // cannot store the literal "AUTO" sentinel verbatim: a SECOND pending
-      // draft for the same tenant (the common case — most manual entries
-      // don't set a custom voucher number) would collide on this exact
-      // constraint before either was ever approved. `DRAFT-<id>` is unique
-      // per row (journal.id is the primary key) and is itself recognised as
-      // "needs allocation" by postJournal(), same as "AUTO".
-      const rawVoucherNo = p.voucherNo;
-      const needsAllocation = voucherNeedsAllocation(rawVoucherNo);
-      const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
-      await repo.insertJournal(tx, {
-        id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
-        type: p.type, postingDate: p.postingDate, lines: p.lines,
-        status: "pending_approval", createdBy: msg.actorId, updatedBy: msg.actorId,
-        budgetOverride: p.budgetOverride ?? false, overrideReason: p.overrideReason ?? null,
-        ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
-        ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
-        ...(p.profitCenterId ? { profitCenterId: p.profitCenterId } : {}),
-        ...(p.operatingUnitId ? { operatingUnitId: p.operatingUnitId } : {}),
-      });
-      await enqueue(tx, {
-        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "finance", action: "create_journal_draft", resourceType: "journal", resourceId: p.id, outcome: "success" },
-      });
-    });
+      throw err;
+    }
     await cache.invalidateResource(msg.tenantId, "journals");
   });
 

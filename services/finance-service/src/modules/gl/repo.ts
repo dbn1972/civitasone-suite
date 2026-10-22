@@ -24,19 +24,36 @@ export async function findJournalById(id: string): Promise<JournalRow | null> {
 }
 
 /** Idempotency check inside a tx: has this journal id already been posted? */
-/**
- * GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: the journal (any status, including a pending_approval draft, which holds its
- * typed number against UNIQUE(tenant_id, voucher_no)) already using this exact voucher number, or null.
- */
-export async function findJournalByVoucherNo(tenantId: string, voucherNo: string): Promise<{ id: string } | null> {
-  const rows = await scopedRead((tx) => tx.select({ id: financeJournals.id }).from(financeJournals)
-    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.voucherNo, voucherNo))).limit(1));
-  return rows[0] ?? null;
-}
-
 export async function findJournalByIdTx(tx: Writer, id: string): Promise<JournalRow | null> {
   const rows = await (tx as typeof db).select().from(financeJournals).where(eq(financeJournals.id, id)).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-06: the journal (any status, including a
+ * pending_approval draft) that already holds this hand-typed voucher number
+ * for the tenant, or null. Exact match: finance_journals' UNIQUE
+ * (tenant_id, voucher_no) is case-sensitive too.
+ */
+export async function findJournalByVoucherNo(tenantId: string, voucherNo: string): Promise<{ id: string; status: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeJournals.id, status: financeJournals.status }).from(financeJournals)
+    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.voucherNo, voucherNo)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-06: true only for a UNIQUE violation (23505) on the
+ * (tenant_id, voucher_no) constraint, so a collision on the primary key (a
+ * redelivered command) is never misreported as a duplicate voucher number. The
+ * driver error may be wrapped (`cause`), so both levels are inspected.
+ */
+export function isVoucherNoViolation(err: unknown): boolean {
+  for (const e of [err, (err as { cause?: unknown } | null | undefined)?.cause]) {
+    const pg = e as { code?: string; constraint_name?: string; constraint?: string } | null | undefined;
+    if (pg?.code === "23505" && /voucher_no/.test(pg.constraint_name ?? pg.constraint ?? "")) return true;
+  }
+  return false;
 }
 
 /** Mark a journal reversed and link the reversing journal (controlled status transition). */

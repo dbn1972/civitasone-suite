@@ -145,6 +145,11 @@ export function BillPassPayActions({
   id, status, threeWayMatch, canPass = true, canRelease = true, viewerId = null, createdBy = null, passedBy = null,
 }: {
   id: string; status: string; threeWayMatch?: string;
+  /**
+   * GAP-FINANCE-PAYMENTS-01: false hides "Release payment" from the officer who created or passed the
+   * bill (finance-service refuses them: MAKER_CHECKER_VIOLATION / PAYER_IS_PASSER). UI hint only.
+   */
+  canRelease?: boolean;
   /** GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: false hides "Pass bill" for roles the server 403s (approve is APPROVER_ROLES). */
   canPass?: boolean;
   /** false hides "Release payment" for roles the server 403s (POST payments/eft is FINANCE_ROLES). */
@@ -158,7 +163,7 @@ export function BillPassPayActions({
   const router = useRouter();
   const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
-  const canPay = s === "passed"; // finance-service emits "passed" (a pass maps approved -> passed)
+  const canPay = s === "passed" && canRelease; // finance-service emits "passed" (a pass maps approved -> passed)
   const passBlocked = billPassBlockedReason(status, threeWayMatch);
   const passConflict = billSodConflict("pass", viewerId, createdBy, passedBy);
   const releaseConflict = billSodConflict("release", viewerId, createdBy, passedBy);

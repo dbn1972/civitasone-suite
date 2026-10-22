@@ -16,6 +16,8 @@ import * as mastersRepo from "../masters/repo.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
+import { actorsQuery } from "./validators.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -251,6 +253,19 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       createdBy: payment.createdBy,
       createdAt: payment.createdAt,
     });
+  });
+
+  // Actor id -> display name for the finance detail and register pages (payments, vendors, cheques, audit paras,
+  // reconciliation exceptions), so a clerk reads "Asha Rao", never a raw user id. The web loader
+  // (getFinanceActorNames) has always asked for this route. Display enrichment only: tenant-scoped, returns just
+  // {id, name} for the (at most 50) ids asked for, and fails OPEN to an empty list when identity-service is
+  // unreachable (the web then shows "User 1a2b3c4d").
+  app.get("/v1/finance/actors", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...FINANCE_ROLES, "audit_officer"]);
+    const { ids } = actorsQuery.parse(req.query);
+    const names = await fetchUserNames(ctx.tenantId, ids);
+    return reply.send({ data: [...names].map(([id, name]) => ({ id, name })) });
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-04: the decision context the detail page needs and the base payment

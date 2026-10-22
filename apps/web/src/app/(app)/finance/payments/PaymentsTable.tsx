@@ -30,10 +30,38 @@ type Row = {
 const TABS = ["All", "Pending", "Released"] as const;
 type Tab = (typeof TABS)[number];
 
-export function PaymentsTable({ payments, source = "api" }: { payments: Payment[]; source?: "api" | "error" }) {
+/**
+ * GAP-FINANCE-TREASURY-E-PAYMENTS-01: /finance/treasury/e-payments reads the same dataset as this register, so it
+ * renders THIS table (same reference, same exact-paise amount, same tabs, same row links) instead of a second copy
+ * that showed the raw reference and sorted the amount as text. The few knobs below are the only differences between
+ * the two screens: their own offline-cache key, headings and CSV export.
+ */
+export interface PaymentsTableLabels {
+  title?: string;
+  searchPlaceholder?: string;
+  emptyIcon?: string;
+  emptyTitle?: string;
+  emptyMessage?: string;
+}
+
+export function PaymentsTable({
+  payments,
+  source = "api",
+  cacheKey = "finance.payments",
+  labels = {},
+  exportConfig,
+}: {
+  payments: Payment[];
+  source?: "api" | "error";
+  /** Offline-cache key for the rows (each screen keeps its own). */
+  cacheKey?: string;
+  labels?: PaymentsTableLabels;
+  /** Opt-in audited CSV export (`audit` is the server-safe resource key). The register has none. */
+  exportConfig?: { audit: string; filename: string };
+}) {
   const [activeTab, setActiveTab] = useState<Tab>("All");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Payment[]>(
-    "finance.payments",
+    cacheKey,
     payments,
     source,
     (d) => d.length === 0,
@@ -60,7 +88,7 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
 
   return (
     <Card
-      title="Payments register"
+      title={labels.title ?? "Payments register"}
       link={
         <Segmented
           options={[...TABS]}
@@ -86,6 +114,8 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
             // Sort on paise; show the formatted amount (falls back to the API's own
             // display string only when no numeric value could be derived).
             render: (row) => (row.amountMinor !== null ? formatMoney(row.amountMinor) : row.amountDisplay),
+            // The CSV carries what the screen shows (exact paise through formatMoney), not the raw paise integer.
+            csv: (row) => (row.amountMinor !== null ? String(formatMoney(row.amountMinor)) : row.amountDisplay),
           },
           {
             key: "status",
@@ -100,8 +130,12 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
         rowHref={(row) => (row.id ? `/finance/payments/${row.id}` : "")}
         sortable
         filterable
-        filterPlaceholder="Search payments…"
+        filterPlaceholder={labels.searchPlaceholder ?? "Search payments…"}
         pageSize={15}
+        {...(exportConfig ? { exportable: true, exportAudit: exportConfig.audit, exportFilename: exportConfig.filename } : {})}
+        {...(labels.emptyIcon ? { emptyIcon: labels.emptyIcon } : {})}
+        {...(labels.emptyTitle ? { emptyTitle: labels.emptyTitle } : {})}
+        {...(labels.emptyMessage ? { emptyMessage: labels.emptyMessage } : {})}
       />
     </Card>
   );

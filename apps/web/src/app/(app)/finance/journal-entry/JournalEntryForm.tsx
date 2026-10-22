@@ -1,7 +1,7 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
@@ -131,19 +131,22 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-FINANCE-JOURNAL-ENTRY-06 / VOUCHERS-NEW-05/06: the id of the input to focus once a server refusal tied to that field
+  // closes the confirm dialog. Focus cannot move in the same tick as the close: the page behind an open Modal is `inert`
+  // (a browser ignores focus() on it) and Modal restores focus to the button that opened it when it unmounts. This effect
+  // runs after both of those are undone.
+  const focusAfterClose = useRef<string | null>(null);
+  useEffect(() => {
+    if (confirmOpen || !focusAfterClose.current) return;
+    const id = focusAfterClose.current;
+    focusAfterClose.current = null;
+    document.getElementById(id)?.focus();
+  }, [confirmOpen]);
   // GAP-FINANCE-VOUCHERS-NEW-02: after a successful post with a redirectTo the
   // clerk stays on a success panel (no instant hard navigation) and chooses
   // between viewing the GL and posting another voucher.
   const [posted, setPosted] = useState<{ voucherNo: string | null; queued: boolean } | null>(null);
   const formError = useFormError("journal entry");
-  // Which input to focus after the server refuses the entry because of that field's value.
-  const [focusField, setFocusField] = useState<string | null>(null);
-  useEffect(() => {
-    if (focusField) {
-      document.getElementById(focusField)?.focus();
-      setFocusField(null);
-    }
-  }, [focusField]);
   // EVT-4 (accounting-high-findings): one idempotency key per logical
   // submission attempt. The backend mechanism (idempotentId() in
   // @civitasone/auth, tenant-scoped as of PR #1565) and the full header path
@@ -297,14 +300,16 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     const resolved = await formError.fromResponse(res, "save");
     setStatus("error");
     setMessage(resolved.message);
-    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06: a refusal tied to a field of THIS form (the voucher number is
-    // already used, the posting date is in a closed period) is fixed in that field. Close the confirm dialog so the
-    // message under the field is visible, keep everything the officer typed, and move focus there. Nothing was
-    // queued or posted, so there is no redirect and no success panel.
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06 and GAP-FINANCE-JOURNAL-ENTRY-06: a refusal tied to a field of THIS
+    // form (the voucher number is already used, the posting date is in a closed period) is fixed in that field. Close
+    // the confirm dialog so the message under the field is visible, keep everything the officer typed, and move focus
+    // there once the dialog is gone (see focusAfterClose). Nothing was queued or posted (the server refuses before
+    // enqueueing), so there is no redirect and no success panel, and the same idempotency key is safe to reuse for the
+    // corrected submit.
     const fieldToFix = resolved.fieldErrors.voucherNo ? "jv-voucher" : resolved.fieldErrors.postingDate ? "jv-date" : null;
     if (fieldToFix) {
+      focusAfterClose.current = fieldToFix;
       setConfirmOpen(false);
-      setFocusField(fieldToFix);
       return;
     }
     // Any other failure is shown inside the dialog by throwing for ConfirmDialog's busy/error flow.

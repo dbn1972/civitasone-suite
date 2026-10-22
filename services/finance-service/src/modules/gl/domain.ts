@@ -1,5 +1,6 @@
 /** Pure GL domain logic. */
 import type { JournalLine } from "./schema.js";
+import { voucherNeedsAllocation } from "./posting-rules.js";
 
 export class DomainError extends Error {
   constructor(public code: string, message: string) {
@@ -69,3 +70,11 @@ export function assertNoControlAccounts(controlRefs: readonly string[]): void {
     );
   }
 }
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-06: true when the caller did NOT supply a voucher
+ * number of its own (omitted, blank, or the "AUTO" sentinel), so the server
+ * allocates the gapless one. Anything else is a hand-typed number that must be
+ * unique per tenant (finance_journals UNIQUE (tenant_id, voucher_no)).
+ */
+export const isAutoVoucherNo = voucherNeedsAllocation;

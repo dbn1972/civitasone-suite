@@ -821,6 +821,10 @@ export type BillSummary = {
   /** Human PO number (e.g. "PO-2026-014") snapshotted from the GRN the bill was drafted from; absent on hand-lodged / older bills. */
   poNumber?: string;
   threeWayMatch: "matched" | "pending" | "partial" | "unmatched" | "na";
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the bill's creator (maker). */
+  createdBy?: string;
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the officer who passed the bill, while status is "passed". */
+  passedBy?: string;
 };
 
 export type BillDetail = BillSummary & {

@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button, EntityPicker, type EntityOption } from "./ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchPayrollEmployees, resolvePayrollEmployees } from "@/lib/entityAdapters/payrollEmployee";
+import type { EmployeeDirectory } from "@/lib/employeeDirectory";
 
 export interface EmployeePickerProps {
   /** Selected employee id, or null when nothing is chosen. */
@@ -34,9 +35,12 @@ export interface EmployeePickerProps {
    * Which directory backs the search. "hrms" (default) is the HR employee
    * directory (HR roles only). "payroll" is the payroll employee lookup,
    * open to payroll_admin / payroll_officer / finance_officer
-   * (GAP-PAYROLL-LOANS-01) -- use it on payroll screens.
+   * (GAP-PAYROLL-LOANS-01) -- use it on payroll screens. "none" means the
+   * caller's role can reach neither directory (see lib/employeeDirectory.ts):
+   * no picker is rendered, just a plain note, instead of a search that can
+   * only 403 (GAP-FINANCE-PAYMENTS-DETAIL-02).
    */
-  directory?: "hrms" | "payroll";
+  directory?: EmployeeDirectory;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
   inputRef?: React.Ref<HTMLInputElement>;
@@ -117,6 +121,9 @@ export function EmployeePicker({
     />
   );
 
+  if (directory === "none") {
+    return <p role="note" style={{ fontSize: 13, color: "var(--ink2)", margin: 0 }}>{t("noDirectoryAccess")}</p>;
+  }
   if (!clearable) return picker;
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>

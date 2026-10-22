@@ -1,8 +1,8 @@
+import { idempotentId } from "@civitasone/auth";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { idempotentId } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { findControlAccountRefs } from "../budget/repo.js";
 import { getPeriodStatusDb } from "../period-close/repo.js";
@@ -83,14 +83,14 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: a posting date in a closed period is a 422 here, not a draft that can
     // never be approved.
     await assertPeriodAcceptsPosting(ctx.tenantId, body.postingDate, body.type);
-    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: a typed voucher number must be unique per tenant. The UNIQUE(tenant_id,
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / GAP-FINANCE-JOURNAL-ENTRY-06 (same check, built by two clusters; one kept): a typed voucher number must be unique per tenant. The UNIQUE(tenant_id,
     // voucher_no) index stays the authority for a true race (the consumer would dead-letter the loser), but a plain
     // duplicate is answered here, as a field error on voucherNo, instead of a 202 followed by a silently dropped
     // draft. A retry of THIS request (same idempotency key -> same journal id) is not a duplicate of itself.
     if (!voucherNeedsAllocation(body.voucherNo)) {
       const taken = await repo.findJournalByVoucherNo(ctx.tenantId, body.voucherNo);
       if (taken && taken.id !== idempotentId(ctx)) {
-        throw new HttpError(409, "DUPLICATE_VOUCHER_NO", "voucher number already exists", [
+        throw new HttpError(409, "DUPLICATE_VOUCHER", "voucher number already exists", [
           { field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." },
         ]);
       }

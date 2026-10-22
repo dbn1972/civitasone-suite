@@ -38,7 +38,7 @@ Priority queue: 1 open, 211 closed (0 entries ticked by W0-07 to match closed mo
 | documents | 0 | 21 | 0 |
 | domains | 0 | 5 | 1 |
 | establishment | 0 | 4 | 0 |
-| finance | 0 | 311 | 0 |
+| finance | 0 | 307 | 4 |
 | fleet | 0 | 9 | 0 |
 | grants | 0 | 82 | 4 |
 | help | 0 | 9 | 0 |
