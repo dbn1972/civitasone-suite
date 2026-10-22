@@ -55,9 +55,21 @@ export async function findById(id: string, tenantId: string): Promise<TaskView |
   return toView(row);
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<TaskView[]> {
+/**
+ * GAP-PROCUREMENT-APPROVALS-01: optional server-side `refType` narrowing shared
+ * by every list/count below, so a module's queue (e.g. the four procurement
+ * refTypes) is filtered in SQL BEFORE limit/offset instead of being cut out of a
+ * tenant-wide first page client-side. Empty/undefined = no narrowing (the
+ * behaviour every pre-existing caller relies on).
+ */
+function refTypePredicate(refTypes?: readonly string[]) {
+  return refTypes && refTypes.length > 0 ? inArray(tasks.refType, [...refTypes]) : undefined;
+}
+
+export async function listByTenant(tenantId: string, limit: number, offset: number, refTypes?: readonly string[]): Promise<TaskView[]> {
+  const refPredicate = refTypePredicate(refTypes);
   const rows = await scopedRead((tx) => tx.select().from(tasks)
-    .where(eq(tasks.tenantId, tenantId))
+    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : [])))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
     .offset(offset));
@@ -70,9 +82,10 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
  * instead of only the length of the first page. Tenant-scoped via scopedRead
  * (RLS), mirrors listByTenant's WHERE.
  */
-export async function countByTenant(tenantId: string): Promise<number> {
+export async function countByTenant(tenantId: string, refTypes?: readonly string[]): Promise<number> {
+  const refPredicate = refTypePredicate(refTypes);
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
-    .where(eq(tasks.tenantId, tenantId)));
+    .where(and(eq(tasks.tenantId, tenantId), ...(refPredicate ? [refPredicate] : []))));
   return rows[0]?.n ?? 0;
 }
 
@@ -86,9 +99,11 @@ export async function listByInstance(
   instanceId: string,
   limit: number,
   offset: number,
+  refTypes?: readonly string[],
 ): Promise<TaskView[]> {
+  const refPredicate = refTypePredicate(refTypes);
   const rows = await scopedRead((tx) => tx.select().from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId)))
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId), ...(refPredicate ? [refPredicate] : [])))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
     .offset(offset));
@@ -96,9 +111,10 @@ export async function listByInstance(
 }
 
 /** GAP-APPROVALS-HOME-01 — exact total of one instance's tasks (mirrors listByInstance's WHERE). */
-export async function countByInstance(tenantId: string, instanceId: string): Promise<number> {
+export async function countByInstance(tenantId: string, instanceId: string, refTypes?: readonly string[]): Promise<number> {
+  const refPredicate = refTypePredicate(refTypes);
   const rows = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(tasks)
-    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId))));
+    .where(and(eq(tasks.tenantId, tenantId), eq(tasks.instanceId, instanceId), ...(refPredicate ? [refPredicate] : []))));
   return rows[0]?.n ?? 0;
 }
 
@@ -144,7 +160,9 @@ export async function listPendingForRoles(
   roles: string[],
   limit: number,
   offset: number,
+  refTypes?: readonly string[],
 ): Promise<TaskView[]> {
+  const refPredicate = refTypePredicate(refTypes);
   // L1 — filter by role in SQL (not in app code after a limit*3 fetch, which
   // silently dropped matching tasks beyond the window). A task with no roleRef
   // is unrestricted; super_admin sees every pending task.
@@ -161,6 +179,7 @@ export async function listPendingForRoles(
       eq(tasks.status, "pending"),
       eq(tasks.isCall, false),
       ...(rolePredicate ? [rolePredicate] : []),
+      ...(refPredicate ? [refPredicate] : []),
     ))
     .orderBy(desc(tasks.updatedAt))
     .limit(limit)
@@ -175,7 +194,8 @@ export async function listPendingForRoles(
  * unified approvals page's Pending stat reflects every item an approver has,
  * not just the first page. Tenant-scoped via scopedRead (RLS).
  */
-export async function countPendingForRoles(tenantId: string, roles: string[]): Promise<number> {
+export async function countPendingForRoles(tenantId: string, roles: string[], refTypes?: readonly string[]): Promise<number> {
+  const refPredicate = refTypePredicate(refTypes);
   const isSuperAdmin = roles.includes("super_admin");
   const rolePredicate = isSuperAdmin
     ? undefined
@@ -189,6 +209,7 @@ export async function countPendingForRoles(tenantId: string, roles: string[]): P
       eq(tasks.status, "pending"),
       eq(tasks.isCall, false),
       ...(rolePredicate ? [rolePredicate] : []),
+      ...(refPredicate ? [refPredicate] : []),
     )));
   return rows[0]?.n ?? 0;
 }
