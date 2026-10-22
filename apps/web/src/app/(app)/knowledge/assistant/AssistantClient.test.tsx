@@ -97,4 +97,39 @@ describe("AssistantClient", () => {
     expect(JSON.parse((escalateCall[1] as RequestInit).body as string).priority).toBe("High");
     expect(await screen.findByText(/Ref: CCCCCCCC/)).toBeInTheDocument();
   });
+
+  // CLOS-S2-02: raw network / parse exception text must never reach the user.
+  it("CLOS-S2-02: ask() on a network failure shows connection copy, not 'Failed to fetch'", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<AssistantClient />);
+    fireEvent.change(screen.getByPlaceholderText(/annual leave/i), { target: { value: "how?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ask/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/couldn't connect/i);
+    expect(alert).not.toHaveTextContent(/failed to fetch/i);
+  });
+
+  it("CLOS-S2-02: ask() on a non-JSON 200 does not show the raw SyntaxError text", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true, status: 200, headers: new Headers(),
+      json: async () => { throw new SyntaxError("Unexpected token < in JSON at position 0"); },
+    } as unknown as Response);
+    render(<AssistantClient />);
+    fireEvent.change(screen.getByPlaceholderText(/annual leave/i), { target: { value: "how?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ask/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).not.toHaveTextContent(/unexpected token/i);
+  });
+
+  it("CLOS-S2-02: escalate() on a network failure shows connection copy, not 'Failed to fetch'", async () => {
+    fetchMock.mockResolvedValueOnce(makeRes(true, 200, { data: { ...answered, answered: false } }));
+    fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<AssistantClient />);
+    fireEvent.change(screen.getByPlaceholderText(/annual leave/i), { target: { value: "how?" } });
+    fireEvent.click(screen.getByRole("button", { name: /^ask/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /escalate|ticket/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/couldn't connect/i);
+    expect(alert).not.toHaveTextContent(/failed to fetch/i);
+  });
 });

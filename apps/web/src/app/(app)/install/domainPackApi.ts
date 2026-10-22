@@ -9,7 +9,7 @@ import {
   findCatalogEntry,
   type DomainPackCatalogEntry,
 } from "./domainPackCatalog";
-import { toHumanError } from "@/lib/messages";
+import { humanErrorFromFailure, toHumanError } from "@/lib/messages";
 
 export type DomainPackListItem = DomainPackCatalogEntry & {
   id?: string;
@@ -129,21 +129,35 @@ export async function activateDomainPackStage3(
   domainPackKey: string = MUNICIPAL_DOMAIN_PACK.domainPackKey,
   packKeys?: string[],
 ): Promise<DomainPackActivateResult> {
-  const res = await fetch("/api/proxy/v1/install/stages/3/domain-pack/activate", {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      domainPackKey,
-      ...(packKeys?.length ? { packKeys } : {}),
-    }),
-  });
+  // CLOS-S2-03: a rejected fetch (TypeError "Failed to fetch") or a malformed 202
+  // body (SyntaxError) must surface catalogued copy, never the raw exception text.
+  let res: Response;
+  try {
+    res = await fetch("/api/proxy/v1/install/stages/3/domain-pack/activate", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({
+        domainPackKey,
+        ...(packKeys?.length ? { packKeys } : {}),
+      }),
+    });
+  } catch {
+    const human = humanErrorFromFailure({ kind: "save", area: "domain pack", forceKind: "network" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
 
   if (!(res.ok || res.status === 202)) {
     const human = toHumanError("save", { area: "domain pack" });
     throw new Error(`${human.what} ${human.next}`);
   }
 
-  const body = (await res.json()) as Partial<DomainPackActivateResult>;
+  let body: Partial<DomainPackActivateResult>;
+  try {
+    body = (await res.json()) as Partial<DomainPackActivateResult>;
+  } catch {
+    const human = humanErrorFromFailure({ kind: "save", area: "domain pack", forceKind: "unknown" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   return {
     id: str(body.id),
     status: str(body.status) || "accepted",

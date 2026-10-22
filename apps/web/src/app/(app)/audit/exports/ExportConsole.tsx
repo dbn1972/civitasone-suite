@@ -2,7 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime, istDateKey } from "@/lib/formatters";
 import { ActionButton, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -50,10 +50,9 @@ function isoEnd(d: string): string {
 }
 
 function defaultRange(): { from: string; to: string } {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(from.getDate() - 30);
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  // CLOS-S1-13: the default window is IST calendar days, not UTC days.
+  const now = Date.now();
+  return { from: istDateKey(now - 30 * 86_400_000), to: istDateKey(now) };
 }
 
 export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean } = {}) {
@@ -76,6 +75,9 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
   // Previously it was a fire-and-forget setTimeout, so starting job B while
   // job A's safety timer was still pending would stop B's polling early.
   const safetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // CLOS-S1-14: hold the toast dismiss timer so a newer toast is not cleared
+  // early by an older toast's timer, and nothing fires after unmount.
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -95,6 +97,12 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
   }, []);
 
   useEffect(() => () => stopPolling(), [stopPolling]);
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    [],
+  );
 
   // GAP-AUDIT-EXPORTS-05: on mount, resume polling for a job that was running
   // when the page was reloaded. Seed a minimal "queued" job so the Current job
@@ -134,7 +142,8 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
 
   const flash = useCallback((kind: "ok" | "err" | "info", text: string) => {
     setToast({ kind, text });
-    window.setTimeout(() => setToast(null), 6000);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(null), 6000);
   }, []);
 
   const pollOnce = useCallback(

@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, PageHeader, EntityPicker, type EntityOption } from "../../../../_components/ds";
-import { humanizeStatus } from "@/lib/formatters";
+import { humanizeStatus, istDateKey } from "@/lib/formatters";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { getServiceTypes, serviceTypeOptions, DEFAULT_SERVICE_TYPES } from "@/lib/crm/serviceTypes";
@@ -184,7 +184,8 @@ export default function NewServiceRequestPage() {
     }
     if (dueAtValue === "" || dueAtDerived) {
       const target = new Date(Date.now() + sla * 3_600_000);
-      const iso = target.toISOString().slice(0, 10);
+      // CLOS-S1-15: the IST calendar day of the target instant, not its UTC day.
+      const iso = istDateKey(target);
       setDueAtValue(iso);
       setDueAtDerived(true);
     }

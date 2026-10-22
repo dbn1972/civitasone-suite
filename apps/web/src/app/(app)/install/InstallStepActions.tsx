@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 export function InstallStepActions({
   id,
@@ -17,6 +18,7 @@ export function InstallStepActions({
   isRequired: boolean;
 }) {
   const router = useRouter();
+  const formError = useFormError("install step");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSkip, setConfirmSkip] = useState(false);
@@ -31,7 +33,9 @@ export function InstallStepActions({
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : `Could not ${verb} this step. Please try again.`);
+      // CLOS-S2-01: UserFacingError text passes through; a network failure or any
+      // other exception gets catalogued copy, never the raw `Failed to fetch`.
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }
