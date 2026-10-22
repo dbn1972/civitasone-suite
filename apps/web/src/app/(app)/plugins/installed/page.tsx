@@ -1,10 +1,13 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
-import { getPlugins } from "../../../_data/loaders";
+import { getTranslations } from "next-intl/server";
+import { getPluginRegistryCatalog } from "../_data";
 import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
 import { lifecycleOf } from "../pluginLifecycle";
 import { getSessionRoles, hasAnyRole, PLUGIN_MANAGE_ROLES } from "@/lib/auth/roleGuard";
+
+const INSTALLED_STATES: ReadonlySet<string> = new Set(["installed", "enabled", "active", "disabled"]);
 
 type PluginRow = {
 	id?: string;
@@ -13,8 +16,15 @@ type PluginRow = {
 } & Record<string, unknown>;
 
 export default async function Page() {
-	const { data, source } = await getPlugins();
-	const plugins = data as PluginRow[];
+	// GAP: Installed must list the SAME resource its Enable/Disable act on. Those verbs target
+	// registry rows (/v1/plugins/:id/enable|disable), and marketplace install creates registry
+	// rows, so read the registry (GET /v1/plugins), not the unrelated /v1/plugins/items.
+	const { data, source } = await getPluginRegistryCatalog();
+	const t = await getTranslations("pluginInstalled");
+	// "Installed" = provisioned and not removed: drop never-installed (uploaded) and uninstalled rows.
+	const plugins = data
+		.filter((p) => INSTALLED_STATES.has((p.status ?? "").trim().toLowerCase()))
+		.map((p): PluginRow => ({ ...p, status: p.status ?? "" }));
 	const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MANAGE_ROLES);
 
 	const errored = source === "error";
@@ -62,7 +72,7 @@ export default async function Page() {
 						message="Tenant plugins will appear here once they are provisioned for your organisation."
 					/>
 				) : (
-					<PluginsTable rows={plugins} canManage={canManage} />
+					<PluginsTable rows={plugins} canManage={canManage} labels={{ disableReasonLabel: t("disableReasonLabel") }} />
 				)}
 			</div>
 		</div>

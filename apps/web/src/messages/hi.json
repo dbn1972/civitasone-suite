@@ -16238,6 +16238,9 @@
     "confirmLabel": "समीक्षा जमा करें",
     "commentLabel": "टिप्पणी (वैकल्पिक)"
   },
+  "pluginInstalled": {
+    "disableReasonLabel": "अक्षम करने का कारण (ऑडिट लॉग में दर्ज होगा)"
+  },
   "pluginMarketplace": {
     "install": "इंस्टॉल करें",
     "installed": "इंस्टॉल हो गया",

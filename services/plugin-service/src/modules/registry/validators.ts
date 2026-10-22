@@ -14,6 +14,12 @@ export const configurePluginBody = z.object({
 });
 export type ConfigurePluginBody = z.infer<typeof configurePluginBody>;
 
+/** Disabling a plugin removes the feature for every tenant user, so the audited reason is mandatory. */
+export const disablePluginBody = z.object({
+  reason: z.string().trim().min(3, "state the reason for disabling (min 3 characters)").max(500),
+});
+export type DisablePluginBody = z.infer<typeof disablePluginBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const pluginViewSchema = z.object({

@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { installPluginBody, configurePluginBody, idParam, pluginsListSchema } from "./validators.js";
+import { installPluginBody, configurePluginBody, disablePluginBody, idParam, pluginsListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -58,7 +58,8 @@ export async function registryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = idParam.parse(req.params);
-    sendAccepted(reply, acceptedResponseSchema, await commands.pluginDisable(ctx, id));
+    const { reason } = disablePluginBody.parse(req.body ?? {});
+    sendAccepted(reply, acceptedResponseSchema, await commands.pluginDisable(ctx, id, reason));
   });
 
   // Uninstall (DELETE)

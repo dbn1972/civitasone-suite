@@ -8,9 +8,9 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache } from "../../shared/infra.js";
 import { db, readScoped } from "../../shared/db.js";
 import * as commands from "./commands.js";
-import { grantFeatureBody, roleParam, grantIdParam, evaluateQuery } from "./validators.js";
+import { grantFeatureBody, revokeFeatureBody, roleParam, grantIdParam, evaluateQuery } from "./validators.js";
 import { roleFeatureGrants } from "./schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { assertMayManageFeature, findGrantFeatureKey } from "./authorize.js";
 import { isPlatformCaller } from "./authority.js";
 
@@ -33,7 +33,7 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const rows = await cache.getOrLoad(
       cache.makeKey(ctx.tenantId, RESOURCE, "list"),
-      async () => readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants).where(eq(roleFeatureGrants.tenantId, ctx.tenantId))),
+      async () => readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants).where(and(eq(roleFeatureGrants.tenantId, ctx.tenantId), isNull(roleFeatureGrants.revokedAt)))),
     );
     return reply.send({ data: rows });
   });
@@ -44,7 +44,7 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { role } = safeParse(roleParam, req.params);
     const rows = await readScoped(ctx.tenantId, (tx) => tx.select().from(roleFeatureGrants)
-      .where(and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.roleName, role))));
+      .where(and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.roleName, role), isNull(roleFeatureGrants.revokedAt))));
     return reply.send({ data: rows });
   });
 
@@ -64,12 +64,13 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(grantIdParam, req.params);
+    const body = safeParse(revokeFeatureBody, req.body ?? {});
     if (!isPlatformCaller(ctx.roles)) {
       const featureKey = await findGrantFeatureKey(ctx, id);
       if (featureKey === null) throw new HttpError(404, "NOT_FOUND", "role feature grant not found");
       await assertMayManageFeature(ctx, featureKey);
     }
-    const result = await commands.revokeFeature(ctx, id);
+    const result = await commands.revokeFeature(ctx, id, body);
     return reply.code(202).send(result);
   });
 
@@ -83,6 +84,7 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
         eq(roleFeatureGrants.tenantId, ctx.tenantId),
         inArray(roleFeatureGrants.roleName, roles),
         eq(roleFeatureGrants.granted, true),
+        isNull(roleFeatureGrants.revokedAt),
       )));
     const featureKeys = [...new Set(rows.map((r) => r.featureKey))];
     return reply.send({ data: featureKeys, roles });

@@ -18,6 +18,7 @@ import { scopedRead } from "../../shared/db.js";
 import { checkIns } from "./schema.js";
 import { digitalPasses } from "../digital-pass/schema.js";
 import { visitRequests } from "../visit-request/schema.js";
+import { getPolicyNumber, MS_PER_HOUR, MS_PER_MINUTE } from "../config-registry/policy.js";
 
 export interface ActiveVisitor {
   passId: string;
@@ -26,7 +27,10 @@ export interface ActiveVisitor {
   hostEmployeeId: string;
   checkInTime: string | null;
   validUntil: string | null;
+  /** Past valid_until + the tenant grace (check_in.overstay_grace_minutes) — same rule as the overstay worker. */
   overstay: boolean;
+  /** Past valid_until + the tenant escalation window (check_in.overstay_escalation_hours). */
+  escalated: boolean;
 }
 
 /**
@@ -41,6 +45,12 @@ export async function listActiveVisitors(
     eq(digitalPasses.status, "checked_in"),
   ];
   if (locationId) conditions.push(eq(digitalPasses.locationId, locationId));
+
+  // Tenant-configured overstay thresholds (defaults preserve prior behaviour: 0 grace, 2h escalation).
+  const { graceMs, escalationMs } = await scopedRead(async (tx) => ({
+    graceMs: (await getPolicyNumber(tx, tenantId, "check_in.overstay_grace_minutes")) * MS_PER_MINUTE,
+    escalationMs: (await getPolicyNumber(tx, tenantId, "check_in.overstay_escalation_hours")) * MS_PER_HOUR,
+  }));
 
   const rows = await scopedRead((tx) => tx
     .select({
@@ -74,6 +84,9 @@ export async function listActiveVisitors(
 
   return rows.map((r) => {
     const ci = latestInByPass.get(r.passId) ?? null;
+    // Same rule as the overstay worker: a pass is only escalated once it is overstayed (grace elapsed).
+    const overdueMs = r.validUntil ? now.getTime() - r.validUntil.getTime() : null;
+    const overstay = overdueMs !== null && overdueMs > graceMs;
     return {
       passId: r.passId,
       locationId: r.locationId,
@@ -81,7 +94,8 @@ export async function listActiveVisitors(
       hostEmployeeId: r.hostEmployeeId,
       checkInTime: ci ? ci.toISOString() : null,
       validUntil: r.validUntil ? r.validUntil.toISOString() : null,
-      overstay: r.validUntil ? r.validUntil.getTime() < now.getTime() : false,
+      overstay,
+      escalated: overstay && overdueMs !== null && overdueMs > escalationMs,
     };
   });
 }

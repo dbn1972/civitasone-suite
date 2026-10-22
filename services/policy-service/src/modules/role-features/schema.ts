@@ -2,7 +2,7 @@
  * role_features module — Drizzle schema. Lives in its OWN Postgres schema `role_features`.
  * L2 rule: this module's repo queries ONLY `role_features.*`.
  */
-import { pgSchema, uuid, varchar, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, boolean, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const roleFeaturesSchema = pgSchema("role_features");
 
@@ -13,6 +13,12 @@ export const roleFeatureGrants = roleFeaturesSchema.table("role_feature_grants",
   featureKey: varchar("feature_key", { length: 200 }).notNull(),
   granted: boolean("granted").notNull().default(true),
   grantedBy: uuid("granted_by").notNull(),
+  /** Why the grant was made (optional, audited). */
+  reason: text("reason"),
+  /** Soft revoke: set when the grant is revoked; revoked rows are history, never active. */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by"),
+  revokeReason: text("revoke_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   version: integer("version").notNull().default(1),
