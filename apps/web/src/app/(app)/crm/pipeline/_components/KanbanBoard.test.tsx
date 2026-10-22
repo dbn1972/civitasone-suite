@@ -16,18 +16,22 @@ function render(ui: ReactElement) {
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+const seeded = vi.hoisted(() => ({ keys: [] as string[] }));
 vi.mock("@/lib/sync/resource", () => ({
   useSeededResource: <T,>(
-    _key: string,
+    key: string,
     initialData: T,
     _source: string,
     _isEmpty: (d: T) => boolean,
-  ) => ({
-    data: initialData,
-    fromCache: false,
-    offline: false,
-    cachedAt: null,
-  }),
+  ) => {
+    seeded.keys.push(key);
+    return {
+      data: initialData,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+    };
+  },
 }));
 
 const PIPELINE: PipelineView = {
@@ -138,16 +142,19 @@ describe("KanbanBoard", () => {
   it("deal cards are draggable", () => {
     render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
 
-    const card = screen.getByRole("button", { name: /Enterprise License/i });
+    // GAP-CRM-PIPELINE-06: the card is a labelled group (not a role=button wrapping the
+    // link), still draggable with the mouse.
+    const card = screen.getByRole("group", { name: /Enterprise License/i });
     expect(card).toHaveAttribute("draggable", "true");
   });
 
   it("deal cards have accessible keyboard instructions", () => {
     render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
 
-    const card = screen.getByRole("button", { name: /Enterprise License/i });
-    expect(card).toHaveAttribute("tabIndex", "0");
-    expect(card.getAttribute("aria-label")).toContain("arrow keys");
+    // The keyboard move control is a real, natively focusable <button> handle.
+    const handle = screen.getByRole("button", { name: /Enterprise License/i });
+    expect(handle.tagName).toBe("BUTTON");
+    expect(handle.getAttribute("aria-label")).toContain("arrow keys");
   });
 
   it("displays error message on version conflict (409)", async () => {
@@ -364,6 +371,45 @@ describe("KanbanBoard", () => {
     expect(screen.queryByLabelText("Pipeline")).not.toBeInTheDocument();
   });
 
+  // GAP-CRM-PIPELINE-05 (W2 rescan): selecting a pipeline that has no engagements returned the
+  // empty state WITHOUT the picker, stranding the user on it. The picker is part of every state.
+  describe("pipeline picker survives the empty and error states (GAP-CRM-PIPELINE-05)", () => {
+    const SECOND: PipelineView = {
+      id: "pipe-2",
+      name: "Govt Pipeline",
+      stages: [
+        { id: "g-intake", name: "Intake", probability: 20, ordinal: 0 },
+        { id: "g-tender", name: "Tender", probability: 50, ordinal: 1 },
+      ],
+      status: "active",
+    };
+
+    it("keeps the picker next to the empty state so another pipeline can be chosen", () => {
+      render(<KanbanBoard pipeline={SECOND} pipelines={[PIPELINE, SECOND]} deals={[]} source="api" />);
+      expect(screen.getByText("No engagements in pipeline")).toBeInTheDocument();
+      const picker = screen.getByLabelText("Pipeline") as HTMLSelectElement;
+      expect(picker.value).toBe("pipe-2");
+      expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual(["Sales Pipeline", "Govt Pipeline"]);
+    });
+
+    it("keeps the picker next to the load-error state too", () => {
+      render(<KanbanBoard pipeline={SECOND} pipelines={[PIPELINE, SECOND]} deals={[]} source="error" />);
+      expect(screen.getByText(/couldn't be loaded/i)).toBeInTheDocument();
+      expect(screen.getByLabelText("Pipeline")).toBeInTheDocument();
+    });
+  });
+
+  // GAP-CRM-PIPELINE-05 (W2 rescan): the offline copy is per pipeline, so a failed load of one
+  // pipeline can never fall back to another pipeline's cached engagements.
+  it("keys the seeded/offline engagement cache by pipeline", () => {
+    seeded.keys.length = 0;
+    render(<KanbanBoard pipeline={PIPELINE} deals={DEALS} source="api" />);
+    expect(seeded.keys.at(-1)).toBe("crm.pipeline.deals.pipe-1");
+    seeded.keys.length = 0;
+    render(<KanbanBoard pipeline={null} deals={DEALS} source="api" />);
+    expect(seeded.keys.at(-1)).toBe("crm.pipeline.deals.all");
+  });
+
   // GAP-CRM-OPPORTUNITIES-02: both boards go through one client function, so a
   // Kanban move sends the same route, verb and payload keys as the list view's
   // changeOpportunityStage for the same move.
@@ -420,5 +466,19 @@ describe("KanbanBoard", () => {
         expect(alert.textContent).toContain("valueMinor");
       });
     });
+  });
+  // GAP-CRM-PIPELINE-04 (W2 rescan): one vocabulary on the pipeline screen. The loadError,
+  // probability-replace and version-conflict messages still said "deal" while everything else
+  // said "engagement". (Which noun the CRM standardises on — Engagement vs Opportunity — is an
+  // owner decision; this only guarantees the screen does not mix two of them.)
+  it("pipeline-screen copy uses one noun: no 'deal(s)' in any of its message namespaces", () => {
+    const ns = ["crmKanbanBoard", "crmStageColumn", "crmPipelinePage", "crmDealCard"] as const;
+    const offenders: string[] = [];
+    for (const n of ns) {
+      for (const [key, value] of Object.entries((enMessages as unknown as Record<string, Record<string, string>>)[n]!)) {
+        if (/\bdeals?\b/i.test(value)) offenders.push(`${n}.${key}: ${value}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

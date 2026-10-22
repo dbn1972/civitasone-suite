@@ -102,6 +102,21 @@ describe("assignment normalisers", () => {
     expect(a[1].name).not.toBe("a2");
   });
 
+  // GAP-CRM-CONTACTS-DETAIL-01: GET /v1/crm/teams/agents now carries the person's
+  // display `name` (identity-service summaries) next to the workload columns it
+  // always had, so the owner pickers label people instead of "Unnamed agent".
+  it("normaliseAgents keeps the display name from the real teams/agents row shape", () => {
+    const a = normaliseAgents({
+      data: [
+        { id: "w1", agentId: "u7", name: "Nita Shah", maxLeads: 10, currentLoad: 2, available: true, skills: [], version: 1 },
+        { id: "w2", agentId: "u8", maxLeads: 10, currentLoad: 5, available: true, skills: [], version: 1 },
+      ],
+    });
+    expect(a[0]).toMatchObject({ agentId: "u7", name: "Nita Shah", activeLeads: 2 });
+    // an agent identity could not name keeps the honest placeholder, never the uuid
+    expect(a[1]).toMatchObject({ agentId: "u8", name: "Unnamed agent" });
+  });
+
   it("normaliseEscalationRules coerces trigger", () => {
     const r = normaliseEscalationRules([{ trigger: "unattended", thresholdMinutes: 30 }, { trigger: "x" }]);
     expect(r[0].trigger).toBe("unattended");
@@ -256,5 +271,44 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     expect(fetchMock.mock.calls.at(-1)![0]).toBe("v1/crm/escalation-rules/e1");
     fetchMock.mockResolvedValueOnce(res({}, 202));
     expect((await acceptLead("l1")).accepted).toBe(true);
+  });
+});
+
+// GAP-CRM-ASSIGNMENT-DIRECTORY-04: a 409 IN_USE on delete carries WHAT still uses the
+// entry, instead of collapsing into the generic "changed by someone else" conflict.
+describe("deleteResource IN_USE refusal (GAP-CRM-ASSIGNMENT-DIRECTORY-04)", () => {
+  it("throws ResourceInUseError with the referencing rules and branches", async () => {
+    const { deleteResource, ResourceInUseError } = await import("@/lib/crm/assignment");
+    fetchMock.mockResolvedValueOnce(
+      res(
+        {
+          code: "IN_USE",
+          message: "cannot delete: still referenced by 2 assignment rules and 1 branch.",
+          references: {
+            assignmentRules: [{ id: "r1", name: "North zone" }, { id: "r2", name: "Large deals" }],
+            assignmentRuleCount: 2,
+            branches: [{ id: "b1", name: "Pune" }],
+            branchCount: 1,
+          },
+        },
+        409,
+      ),
+    );
+    const err = await deleteResource("territories", "t1").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ResourceInUseError);
+    expect((err as InstanceType<typeof ResourceInUseError>).references).toEqual({
+      assignmentRules: ["North zone", "Large deals"],
+      assignmentRuleCount: 2,
+      branches: ["Pune"],
+      branchCount: 1,
+    });
+  });
+
+  it("a 409 that is not IN_USE stays the generic human conflict message", async () => {
+    const { deleteResource, ResourceInUseError } = await import("@/lib/crm/assignment");
+    fetchMock.mockResolvedValueOnce(res({ code: "VERSION_CONFLICT", message: "stale" }, 409));
+    const err = await deleteResource("partners", "p1").catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(ResourceInUseError);
+    expect((err as Error).message).not.toMatch(/VERSION_CONFLICT|stale/);
   });
 });

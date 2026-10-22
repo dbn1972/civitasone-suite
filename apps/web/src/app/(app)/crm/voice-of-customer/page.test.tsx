@@ -5,6 +5,12 @@ vi.mock("../../../_data/loaders", () => ({
   getCrmSentimentSummary: vi.fn(),
   getCrmCitizenRatings: vi.fn(),
 }));
+// Expose the window the export button is given, so it can be compared with the figures'.
+vi.mock("../../../_components/crm/ServerExportButton", () => ({
+  ServerExportButton: ({ filters }: { filters?: { from?: string; to?: string } }) => (
+    <div data-testid="export" data-from={filters?.from ?? ""} data-to={filters?.to ?? ""} />
+  ),
+}));
 vi.mock("./ThemeTable", () => ({
   ThemeTable: ({ themes }: { themes: Array<{ theme: string }> }) => (
     <div
@@ -155,19 +161,57 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
-  // GAP-CRM-VOICE-OF-CUSTOMER-01: the page now forwards from/to to the loader
-  // so the aggregate is recomputed server-side for the chosen window.
-  it("passes the ?from/?to window to the loader", async () => {
+  // GAP-CRM-VOICE-OF-CUSTOMER-01: the page forwards the chosen window to the loader so the
+  // aggregate is recomputed server-side for it. The server's filters are ISO INSTANTS (a bare
+  // yyyy-mm-dd is a 400), so the day range is sent as the IST day's first and last instants.
+  it("passes the ?from/?to window to the loader as ISO instants the server accepts", async () => {
     render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01", to: "2026-09-30" } })));
-    expect(mockedSummary).toHaveBeenCalledWith({ from: "2026-09-01", to: "2026-09-30" });
+    expect(mockedSummary).toHaveBeenCalledTimes(1);
+    expect(mockedSummary).toHaveBeenCalledWith({ from: "2026-08-31T18:30:00.000Z", to: "2026-09-30T18:29:59.999Z" });
     expect(screen.getByText(/Window: 2026-09-01 to 2026-09-30/)).toBeInTheDocument();
   });
 
-  // Invalid (inverted) range must NOT be sent to the server; show a note and the
-  // full aggregate instead.
-  it("drops an inverted range (from > to), warns, and loads all activity", async () => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-30", to: "2026-09-01" } })));
+  it("sends nothing at all for the default all-time view", async () => {
+    render(withIntl(await VoiceOfCitizenPage({})));
     expect(mockedSummary).toHaveBeenCalledWith({});
+    expect(screen.getByText(/Window: all time/)).toBeInTheDocument();
+  });
+
+  it("a half-open window sends only the side it has", async () => {
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01" } })));
+    expect(mockedSummary).toHaveBeenCalledWith({ from: "2026-08-31T18:30:00.000Z" });
+  });
+
+  // The download must cover exactly the window on screen - same conversion, same instants.
+  it("exports exactly the same window as the figures", async () => {
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01", to: "2026-09-30" } })));
+    const summaryWindow = mockedSummary.mock.calls[0]![0];
+    const exp = screen.getByTestId("export");
+    expect(exp).toHaveAttribute("data-from", summaryWindow!.from);
+    expect(exp).toHaveAttribute("data-to", summaryWindow!.to);
+  });
+
+  // An invalid window must NOT be sent to the server, and must NOT quietly show the all-time
+  // answer to a question the reader did not ask: say so, fetch nothing, leave the control to fix it.
+  it("an inverted range (from > to) shows a validation message and fetches nothing", async () => {
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-30", to: "2026-09-01" } })));
+    expect(mockedSummary).not.toHaveBeenCalled();
+    expect(mockedRatings).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent(/isn.t valid/i);
+    // The figures are not shown (no all-time numbers dressed up as this window's)...
+    expect(screen.queryByText("Overall Sentiment")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("export")).not.toBeInTheDocument();
+    // ...but the period control is, so the reader can choose a valid one.
+    expect(screen.getByRole("tab", { name: "30 days" })).toBeInTheDocument();
+  });
+
+  it.each([
+    ["not a real day", { from: "2026-02-31", to: "2026-03-05" }],
+    ["month 13", { from: "2026-13-01" }],
+    ["garbage", { to: "yesterday" }],
+  ])("a %s is invalid too: no fetch, no crash", async (_label, sp) => {
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: sp })));
+    expect(mockedSummary).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/isn.t valid/i);
   });
 

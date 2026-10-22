@@ -30,6 +30,7 @@ import type {
 } from "@civitasone/types";
 import { formatMoney, istDatePart } from "@/lib/formatters";
 import { parseRupeesToPaise } from "@/lib/money";
+import { normalizeDealStage, toWireStage } from "@/lib/crm/dealStages";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -571,23 +572,6 @@ export function mapCycleCountDetail(payload: unknown): CycleCountDetail | null {
   };
 }
 
-const DEAL_STAGES = new Set(["prospecting", "qualification", "proposal", "negotiation", "closed_won", "closed_lost"]);
-
-function normalizeDealStage(raw: string | null): DealSummary["stage"] | null {
-  if (!raw) return null;
-  const key = raw.trim();
-  const lower = key.toLowerCase().replace(/\s+/g, "_");
-  // Handle exact matches
-  if (DEAL_STAGES.has(lower)) return lower as DealSummary["stage"];
-  // Handle PascalCase/legacy variants
-  if (lower === "lead" || lower === "prospecting") return "prospecting";
-  if (lower === "proposal" || lower === "qualification") return "proposal";
-  if (lower === "negotiation") return "negotiation";
-  if (lower === "won" || lower === "closed_won") return "closed_won";
-  if (lower === "lost" || lower === "closed_lost") return "closed_lost";
-  return "prospecting";
-}
-
 export function mapDealSummaries(payload: unknown): DealSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -615,7 +599,8 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
       amount: parseMinorString(row.valueMinor) ?? parseMinorString(row.amount) ?? "0",
       owner: toText(row.owner) ?? "—",
       closeDate: toText(row.closeDate) ?? undefined,
-      probability: typeof row.probability === "number" ? row.probability : 0,
+      // GAP-CRM-OPPORTUNITIES-NEW-06: a missing probability stays missing (rendered as a dash).
+      ...(typeof row.probability === "number" && Number.isFinite(row.probability) ? { probability: row.probability } : {}),
       status,
       version: typeof row.version === "number" ? row.version : undefined,
     });
@@ -627,17 +612,12 @@ export function mapCrmDealSummaries(payload: unknown): CRMDealSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: CRMDealSummary[] = [];
-  const stages = new Set(["Lead", "Proposal", "Negotiation", "Won", "Lost"]);
   for (const row of rows) {
     if (!isRecord(row)) continue;
     const id = toText(row.id);
     const name = toText(row.name);
-    const stageRaw = toText(row.stage);
-    const stage =
-      stageRaw === "lead" ? "Lead"
-        : stageRaw && stages.has(stageRaw) ? stageRaw as CRMDealSummary["stage"]
-          : stageRaw ? (stageRaw.charAt(0).toUpperCase() + stageRaw.slice(1).toLowerCase()) as CRMDealSummary["stage"]
-            : null;
+    // GAP-CRM-DEALS-NEW-02: stage vocabulary lives in lib/crm/dealStages.
+    const stage = toWireStage(toText(row.stage));
     const valueDisplay = toText(row.valueDisplay) ?? "—";
     if (!id || !name || !stage) continue;
     mapped.push({ id, name, stage, valueDisplay });
@@ -667,6 +647,21 @@ export function mapCrmAccounts(payload: unknown): CRMAccountSummary[] | null {
     });
   }
   return mapped;
+}
+
+/**
+ * GAP-CRM-ACCOUNTS-DETAIL-01: one account from GET /v1/crm/accounts/:id. The body is
+ * `{ data: <account> }` (a bare account is tolerated). Reuses the list-row mapper so
+ * the by-id and list shapes cannot drift, and carries the by-id-only `descendantCount`.
+ */
+export function mapCrmAccount(payload: unknown): CRMAccountSummary | null {
+  const body = isRecord(payload) && "data" in payload ? payload.data : payload;
+  const first = mapCrmAccounts([body])?.[0];
+  if (!first) return null;
+  const descendantCount = isRecord(body) ? body.descendantCount : undefined;
+  return typeof descendantCount === "number" && Number.isFinite(descendantCount)
+    ? { ...first, descendantCount }
+    : first;
 }
 
 export function mapCrmAccountNodes(payload: unknown): CRMAccountNode[] | null {

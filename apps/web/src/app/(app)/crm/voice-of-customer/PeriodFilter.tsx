@@ -12,12 +12,15 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Segmented } from "../../../_components/ds";
+import { addDaysIST, todayIST } from "@/lib/formatters";
 
-/** yyyy-mm-dd for a date N days before today (today when days === 0), in local time. */
+/**
+ * yyyy-mm-dd for the IST calendar day N days before today (today when days === 0). IST, not the
+ * browser's zone and not UTC: the old toISOString() slice was the UTC date, which is "yesterday"
+ * for the first five and a half hours of every IST day.
+ */
 function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
+  return addDaysIST(todayIST(), -days);
 }
 
 // Keys are stable ids; the visible labels are resolved with t() at render time.
@@ -39,7 +42,7 @@ function activeLabel(from?: string, to?: string): string {
   return "custom";
 }
 
-export function PeriodFilter({ from, to }: { from?: string; to?: string }) {
+export function PeriodFilter({ from, to }: { from?: string; to?: string } = {}) {
   const t = useTranslations("crmPeriodFilter");
   const router = useRouter();
   const pathname = usePathname();

@@ -1,12 +1,12 @@
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
-import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState, Masked } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { RtiActions } from "./RtiActions";
 import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
 import { rupeesNumberToMinorString } from "@/lib/money";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { sectionLabel } from "@/lib/crm/rti";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
+import { localisedSectionLabel } from "@/lib/crm/rti";
 import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
 
 type Translate = (key: string, values?: Record<string, string | number>) => string;
@@ -57,6 +57,9 @@ interface RtiDetail {
   feeAmountMinor?: string | number | null;
   mode?: string | null;
   receivedAt?: string;
+  /** GAP-CRM-RTI-DETAIL-04: origin of the latest s.6(3) transfer (null/absent = never transferred). */
+  previousDepartmentRef?: string | null;
+  transferredAt?: string | null;
   dueAt?: string;
   firstAppealDueAt?: string;
   respondedAt?: string;
@@ -77,11 +80,6 @@ function fmt(dt?: string) {
   return formatIndianDateTime(dt);
 }
 
-const SECTION_KEY: Record<string, string> = {
-  "s.6": "section6",
-  "s.11": "section11",
-};
-
 // crm-service's RTI route ACL (rti-route.ts CRM_ROLES). A user outside this
 // set is 403'd by every RTI mutation endpoint, so the UI neither offers the
 // actions nor reveals applicant PII to them.
@@ -98,10 +96,13 @@ const FAA_OUTCOME_KEY: Record<string, string> = {
 };
 
 /**
- * GAP-CRM-RTI-DETAIL-03 / F1-02: the applicant's name and contact are masked
- * SERVER-SIDE for roles outside the CRM PII-read set (crm-service
- * modules/rti/rti-route.ts + shared/pii-reveal.ts). The page renders whatever
- * the server returned — no client-side masking.
+ * GAP-CRM-RTI-DETAIL-03 / F1-02: the applicant's name and contact are personal data.
+ * This page asks the server for them MASKED for every viewer (`?maskPii=true`, which can
+ * only reduce what crm-service returns -- it already masks for roles outside the CRM
+ * PII-read set). A PII-read role then gets the audited reveal control: a stated reason
+ * is required and crm-service writes the `pii_reveal` audit event before it returns the
+ * clear value (POST /v1/crm/pii/reveal). Everyone else sees the masked value and no
+ * Reveal button. The page never holds a clear value for anyone.
  */
 
 export default async function RtiDetailPage({
@@ -110,11 +111,13 @@ export default async function RtiDetailPage({
   params: { id: string };
 }) {
   const t = await getTranslations("crmRtiDetail");
+  const tSection = await getTranslations("crmRtiSections");
   const roles = getSessionRoles();
   const canAct = roles.some((role) => CRM_RTI_ROLES.includes(role));
   const canDecide = roles.some((role) => RTI_APPELLATE_ROLES.includes(role));
+  const canRevealPii = hasAnyRole(roles, CRM_PII_READ_ROLES);
   const result = await fetchJson<unknown, RtiDetail | null>(
-    `/api/v1/crm/rti/${params.id}`,
+    `/api/v1/crm/rti/${params.id}?maskPii=true`,
     null,
     { revalidateSeconds: 0, telemetryKey: "crm.rti.detail",
       mapResponse: (p) => {
@@ -210,11 +213,21 @@ export default async function RtiDetailPage({
               <dt style={{ color: "var(--ink2)" }}>{t("reference")}</dt>
               <dd><code style={{ fontSize: 13 }}>{r.referenceNo ?? "—"}</code></dd>
               <dt style={{ color: "var(--ink2)" }}>{t("section")}</dt>
-              <dd>{SECTION_KEY[r.section] ? t(SECTION_KEY[r.section]) : r.section}</dd>
+              <dd>{localisedSectionLabel(tSection, r.section)}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("status")}</dt>
               <dd><StatusPill status={r.status} /></dd>
               <dt style={{ color: "var(--ink2)" }}>{t("department")}</dt>
-              <dd>{r.departmentRef}</dd>
+              <dd>
+                {r.departmentRef}
+                {/* GAP-CRM-RTI-DETAIL-04: where a transferred request came from, and when. */}
+                {r.previousDepartmentRef ? (
+                  <span style={{ display: "block", fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
+                    {r.transferredAt
+                      ? t("transferredFrom", { from: r.previousDepartmentRef, date: fmt(r.transferredAt) })
+                      : t("transferredFromNoDate", { from: r.previousDepartmentRef })}
+                  </span>
+                ) : null}
+              </dd>
               <dt style={{ color: "var(--ink2)" }}>{t("fee")}</dt>
               <dd>{feeDisplay(r, t)}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("modeOfReceipt")}</dt>
@@ -321,18 +334,43 @@ export default async function RtiDetailPage({
               }}
             >
               <dt style={{ color: "var(--ink2)" }}>{t("name")}</dt>
-              <dd style={{ fontWeight: 600 }}>{r.applicantName}</dd>
+              <dd style={{ fontWeight: 600 }}>
+                <Masked
+                  kind="name"
+                  value={r.applicantName}
+                  fallback="—"
+                  ariaLabel={t("maskedAriaLabel", { label: t("revealNameLabel") })}
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "rti",
+                    resourceId: r.id,
+                    field: "applicantName",
+                    label: t("revealNameLabel"),
+                  }}
+                />
+              </dd>
               <dt style={{ color: "var(--ink2)" }}>{t("contact")}</dt>
               <dd style={{ wordBreak: "break-all" }}>
-                {r.applicantContact ?? "—"}
+                <Masked
+                  kind={r.applicantContact?.includes("@") ? "email" : "phone"}
+                  value={r.applicantContact}
+                  fallback="—"
+                  ariaLabel={t("maskedAriaLabel", { label: t("revealContactLabel") })}
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "rti",
+                    resourceId: r.id,
+                    field: "applicantContact",
+                    label: t("revealContactLabel"),
+                  }}
+                />
               </dd>
             </dl>
-            {/* GAP-CRM-RTI-DETAIL-03 / F1-02+F1-06: DPDP notice. The SERVER
-                masks the applicant's name (partially) and contact for roles
-                outside the CRM PII-read set and sends the clear value only to
-                those roles, so the page renders what the server returned. */}
+            {/* GAP-CRM-RTI-DETAIL-03 / F1-02+F1-06: DPDP notice. Only a PII-read
+                role can reveal (reason + audit event); the notice says exactly
+                that, and a role without access is told it cannot see the value. */}
             <p style={{ margin: "0 16px 12px", fontSize: 11, color: "var(--ink2)", lineHeight: 1.5 }}>
-              {canAct ? t("applicantDataNoticeLogged") : t("applicantDataNoticeMasked")}
+              {canRevealPii ? t("applicantDataNoticeLogged") : t("applicantDataNoticeMasked")}
             </p>
           </Card>
           {/* F6-01: status transition timeline. */}

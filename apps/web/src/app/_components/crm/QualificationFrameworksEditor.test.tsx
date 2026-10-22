@@ -256,4 +256,71 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
     expect(document.activeElement).toBe(names[2]);
     expect(screen.getByText(/new framework added/i)).toBeInTheDocument();
   });
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-04: there is no authoritative business-line list,
+  // so a line no saved framework uses (a typo like "goverment") is confirmed, with the
+  // near-match named, instead of saving silently and never matching a lead.
+  async function draftFrameworkWithLine(line: string) {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
+    vi.mocked(lq.createFramework).mockResolvedValue(undefined);
+    renderWithIntl(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+    const names = await screen.findAllByLabelText("Name");
+    fireEvent.change(names[1]!, { target: { value: "MEDDIC" } });
+    fireEvent.change(screen.getAllByLabelText("Business line")[1]!, { target: { value: line } });
+    fireEvent.click(screen.getAllByRole("button", { name: /add question/i })[1]!);
+    fireEvent.change(screen.getAllByLabelText(/question 1 text/i)[1]!, { target: { value: "Has budget?" } });
+  }
+
+  it("asks to confirm a business line that no saved framework uses and names the near-match", async () => {
+    await draftFrameworkWithLine("Goverment ");
+    fireEvent.click(screen.getAllByRole("button", { name: /save framework/i })[1]!);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/“goverment”/i);
+    expect(dialog).toHaveTextContent(/did you mean “government”/i);
+    expect(dialog).toHaveTextContent(/business lines in use: government/i);
+    expect(lq.createFramework).not.toHaveBeenCalled();
+
+    // Cancel keeps the draft and saves nothing.
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(lq.createFramework).not.toHaveBeenCalled();
+
+    // Confirming a genuinely new line saves the canonical (trimmed, lowercase) value.
+    fireEvent.click(screen.getAllByRole("button", { name: /save framework/i })[1]!);
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: /use this business line/i }));
+    await waitFor(() => expect(lq.createFramework).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(lq.createFramework).mock.calls[0][0]).toMatchObject({ name: "MEDDIC", businessLine: "goverment" });
+  });
+
+  it("does not interrupt a save whose business line matches a saved one (case and spacing ignored)", async () => {
+    await draftFrameworkWithLine(" Government ");
+    fireEvent.click(screen.getAllByRole("button", { name: /save framework/i })[1]!);
+    await waitFor(() => expect(lq.createFramework).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(vi.mocked(lq.createFramework).mock.calls[0][0]).toMatchObject({ businessLine: "government" });
+  });
+
+  it("lists saved business lines that have no active framework", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({
+      data: [
+        fw,
+        { id: "f2", name: "Old SMB", businessLine: "SMB", active: false, questions: [{ id: "q2", text: "Q", weight: 1 }] },
+        { id: "f3", name: "PSU A", businessLine: "psu", active: false, questions: [{ id: "q3", text: "Q", weight: 1 }] },
+        { id: "f4", name: "PSU B", businessLine: "psu", active: true, questions: [{ id: "q4", text: "Q", weight: 1 }] },
+      ],
+      source: "api",
+    });
+    renderWithIntl(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    // smb has only an inactive framework; government and psu each have an active one.
+    expect(screen.getByText(/no active framework for: smb\./i)).toBeInTheDocument();
+  });
+
+  it("shows no 'no active framework' hint when every saved business line has an active framework", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
+    renderWithIntl(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    expect(screen.queryByText(/no active framework for/i)).not.toBeInTheDocument();
+  });
 });

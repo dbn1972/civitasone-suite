@@ -7,7 +7,7 @@
  * isolated by RLS, and that the escalation cycle picks up overdue leads and emits
  * the escalation event with ageing details.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -17,6 +17,15 @@ import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
 import { runTenantEscalation, runEscalationCycle, startEscalationScheduler } from "../src/modules/assignment/scheduler.js";
+
+// GAP-CRM-ESCALATION-RULES-01: the escalation-rule routes now verify a recipient role against
+// the tenant's role directory (policy-service). There is no policy-service in this suite, so
+// the lookup is stubbed with the one role these flows use; the rules are real DB round-trips.
+vi.mock("../src/shared/user-directory.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/user-directory.js")>()),
+  listDirectoryRoles: vi.fn(async () => [{ key: "sales_manager", label: "sales_manager" }]),
+  listDirectoryUsers: vi.fn(async () => ({ users: [], truncated: false })),
+}));
 
 process.env.CRM_PII_KEY ??= "test_pii_key_for_crm_domain_tests_aaaa";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";

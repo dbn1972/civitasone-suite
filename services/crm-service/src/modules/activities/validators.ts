@@ -78,6 +78,10 @@ export const updateActivityBody = z.object({
 export const overdueTasksQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
+  // GAP-CRM-TASK-ESCALATION-01: only tasks overdue by at least this many minutes
+  // - the same arithmetic the escalation scheduler uses - so a rule's preview can
+  // show how many tasks it matches right now (meta.total) without paging them.
+  minAgeMinutes: z.coerce.number().int().min(0).max(525600).optional(),
 });
 
 export const overdueTaskViewSchema = z.object({
@@ -86,6 +90,9 @@ export const overdueTaskViewSchema = z.object({
   text: z.string(),
   dueDate: z.string(),
   ownerId: z.string().uuid(),
+  // GAP-CRM-TASK-ESCALATION-02: the owner's display name, resolved server-side so a
+  // viewer who cannot list identity users still sees a name rather than an id.
+  ownerName: z.string().nullable().optional(),
   subjectType: z.enum(["contact", "deal", "account"]).nullable(),
   subjectId: z.string().uuid().nullable(),
 });

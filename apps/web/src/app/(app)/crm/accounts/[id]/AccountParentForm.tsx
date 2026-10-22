@@ -1,17 +1,18 @@
 "use client";
 
-import type { CRMAccountSummary } from "@civitasone/types";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { Button, ConfirmDialog, Field, Select } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, type EntityOption } from "@/app/_components/ds";
+import { resolveCrmAccounts, searchCrmAccounts } from "@/lib/entityAdapters/crmAccount";
 
 type Props = {
   accountId: string;
   accountName: string;
   currentParentId: string | null;
-  options: CRMAccountSummary[];
+  /** The current parent's name (when known), so the picker opens labelled instead of resolving it. */
+  currentParentName?: string | null;
   /** Number of sub-accounts that move with this account (GAP-CRM-ACCOUNTS-DETAIL-03). */
   subtreeSize?: number;
 };
@@ -27,7 +28,7 @@ type Props = {
  * `body.message || "..."`, echoing the backend's raw text for any code other
  * than CYCLE_DETECTED).
  */
-export function AccountParentForm({ accountId, accountName, currentParentId, options, subtreeSize = 0 }: Props) {
+export function AccountParentForm({ accountId, accountName, currentParentId, currentParentName, subtreeSize = 0 }: Props) {
   const router = useRouter();
   const t = useTranslations("crmAccountParentForm");
   const [open, setOpen] = useState(false);
@@ -37,6 +38,25 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
   const [parentId, setParentId] = useState(currentParentId ?? "");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const formError = useFormError("parent account");
+  // GAP-CRM-ACCOUNTS-DETAIL-01: the parent is chosen through a server-side search
+  // (this account and its whole subtree are excluded by the server, so a move that
+  // would create a cycle can't be selected) rather than from the capped accounts
+  // list. The labels the picker has seen are remembered for the confirm dialog.
+  const labels = useRef(new Map<string, string>());
+  if (currentParentId && currentParentName) labels.current.set(currentParentId, currentParentName);
+  const searchAccounts = useCallback(
+    async (query: string, signal: AbortSignal): Promise<EntityOption[]> => {
+      const found = await searchCrmAccounts(query, signal, { excludeSubtreeOf: accountId, strict: true });
+      for (const o of found) labels.current.set(o.id, o.label);
+      return found;
+    },
+    [accountId],
+  );
+  const resolveAccounts = useCallback(async (ids: string[]): Promise<EntityOption[]> => {
+    const found = await resolveCrmAccounts(ids);
+    for (const o of found) labels.current.set(o.id, o.label);
+    return found;
+  }, []);
 
   // GAP-CRM-ACCOUNTS-DETAIL-03: re-parenting moves the whole subtree, so a
   // submit opens a confirmation first rather than firing the PATCH directly.
@@ -84,7 +104,7 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
     }
   }
 
-  const targetName = parentId ? options.find((a) => a.id === parentId)?.name ?? t("anotherAccount") : t("topLevel");
+  const targetName = parentId ? labels.current.get(parentId) ?? t("anotherAccount") : t("topLevel");
   const subtreeClause = subtreeSize > 0 ? t("subtreeClause", { count: subtreeSize }) : "";
 
   return (
@@ -96,14 +116,29 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={requestConfirm} className="pad" style={{ maxWidth: 520 }}>
             <h4 style={{ marginTop: 0 }}>Move {accountName}</h4>
-            <Field label="Reports to">
-              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
-                <option value="">Top level (no parent)</option>
-                {options.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </Select>
+            <Field label={t("reportsTo")}>
+              <EntityPicker
+                value={parentId || null}
+                onChange={(next) => setParentId(typeof next === "string" ? next : "")}
+                search={searchAccounts}
+                resolve={resolveAccounts}
+                {...(currentParentId && currentParentName
+                  ? { initialOptions: [{ id: currentParentId, label: currentParentName }] }
+                  : {})}
+                placeholder={t("searchPlaceholder")}
+                noResultsText={t("noMatches")}
+                searchingText={t("searching")}
+                searchErrorText={t("searchError")}
+              />
             </Field>
+            {/* The picker has no "no parent" entry, so top level is an explicit action. */}
+            {parentId ? (
+              <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setParentId("")}>
+                {t("makeTopLevel")}
+              </Button>
+            ) : (
+              <p style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0" }}>{t("topLevel")}</p>
+            )}
             <Button type="submit" disabled={busy} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
               {busy ? "Saving…" : "Save hierarchy"}
             </Button>

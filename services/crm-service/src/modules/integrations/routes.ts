@@ -1,6 +1,6 @@
 /**
  * AC-004 — email/calendar linking (FRAMEWORK ONLY; live provider sync deferred).
- *   GET    /v1/crm/linked-accounts                — the tenant's linked mailboxes/calendars
+ *   GET    /v1/crm/linked-accounts                — the caller's linked mailboxes/calendars (admin: the tenant's)
  *   POST   /v1/crm/linked-accounts                 — connect (records intent, status=pending)
  *   DELETE /v1/crm/linked-accounts/:id             — disconnect
  *   POST   /v1/crm/synced-items                    — link an external email/meeting to a record
@@ -19,6 +19,16 @@ import * as commands from "./commands.js";
 import { connectLinkedAccountBody, linkSyncedItemBody, idParam } from "./validators.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+/**
+ * GAP-CRM-LINKED-ACCOUNTS-01: a linked mailbox/calendar is one user's personal data
+ * (DPDP). Everyone but an admin only ever sees or disconnects the accounts THEY
+ * registered; an admin keeps tenant-wide visibility so an offboarded user's link can
+ * still be found and revoked.
+ */
+const LINKED_ACCOUNT_ADMIN_ROLES = ["crm_admin", "super_admin"];
+function seesAllLinkedAccounts(roles: string[]): boolean {
+  return LINKED_ACCOUNT_ADMIN_ROLES.some((r) => roles.includes(r));
+}
 
 const syncedItemsQuery = z.object({
   subjectType: z.enum(["contact", "account", "deal"]),
@@ -33,6 +43,7 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
       SELECT id, user_id AS "userId", provider, external_email AS "externalEmail", status, scopes,
              connected_at AS "connectedAt", created_at AS "createdAt"
       FROM crm.linked_accounts WHERE tenant_id = ${ctx.tenantId}
+        ${seesAllLinkedAccounts(ctx.roles) ? sql`` : sql`AND user_id = ${ctx.actorId}`}
       ORDER BY created_at DESC
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows, meta: { total: rows.length, liveSyncDeferred: true } });
@@ -52,7 +63,10 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const found = (await scopedRead((tx) => tx.execute(sql`
       SELECT id FROM crm.linked_accounts WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        ${seesAllLinkedAccounts(ctx.roles) ? sql`` : sql`AND user_id = ${ctx.actorId}`}
     `))) as unknown as Array<{ id: string }>;
+    // Someone else's account is reported exactly like a missing one (404), never 403,
+    // so the id of another user's mailbox link cannot be probed.
     if (found.length === 0) throw new HttpError(404, "NOT_FOUND", "linked account not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.disconnectLinkedAccount(ctx, id));
   });
@@ -64,6 +78,7 @@ export async function integrationRoutes(app: FastifyInstance): Promise<void> {
     // The linked account must exist in this tenant before we attach items to it.
     const la = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, status FROM crm.linked_accounts WHERE id = ${body.linkedAccountId} AND tenant_id = ${ctx.tenantId}
+        ${seesAllLinkedAccounts(ctx.roles) ? sql`` : sql`AND user_id = ${ctx.actorId}`}
     `))) as unknown as Array<{ id: string; status: string }>;
     if (la.length === 0) throw new HttpError(404, "NOT_FOUND", "linked account not found");
     // GAP-CRM-LINKED-ACCOUNTS-01 (DPDP, fail-closed): a mailbox/calendar is

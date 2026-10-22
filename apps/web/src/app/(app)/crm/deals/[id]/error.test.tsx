@@ -8,14 +8,17 @@ import ErrorBoundary from "./error";
 // placeholder area="CRM [Id]", so the clerk saw "...the CRM [Id]...". It must
 // name the deal and link back to the engagements list.
 describe("Deal detail error boundary", () => {
-  it("renders a deal-specific message, not the 'CRM [Id]' placeholder", () => {
+  it("renders an engagement-specific message, not the 'CRM [Id]' placeholder", () => {
     render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
         <ErrorBoundary error={new Error("boom")} reset={() => {}} />
       </NextIntlClientProvider>,
     );
-    // The friendly sentence names "deal" and never leaks the placeholder.
-    expect(screen.getByText(/deal/i)).toBeInTheDocument();
+    // The friendly sentence names the record by its canonical noun - "engagement"
+    // (GAP-CRM-DEALS-07: one term across the deals screens) - and never leaks the
+    // placeholder.
+    expect(screen.getByRole("heading", { name: /engagement/i })).toBeInTheDocument();
+    expect(screen.queryByText(/\bdeal\b/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/CRM \[Id\]/i)).not.toBeInTheDocument();
   });
 

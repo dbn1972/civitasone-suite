@@ -153,6 +153,8 @@ export async function getRtiById(
              r.second_appeal_ref       AS "secondAppealRef",
              r.disposed_at             AS "disposedAt",
              r.disposal_reason         AS "disposalReason",
+             r.previous_department_ref AS "previousDepartmentRef",
+             r.transferred_at          AS "transferredAt",
              r.created_by          AS "createdBy",
              r.created_at          AS "createdAt",
              r.updated_at          AS "updatedAt"
@@ -316,24 +318,33 @@ export async function forwardRti(
     `)) as unknown as Array<{ status: string }>;
     const rows = (await tx.execute(sql`
       UPDATE crm.rti_requests
-      SET status         = 'TRANSFERRED',
-          department_ref = ${departmentRef},
-          updated_at     = now()
+      SET status                  = 'TRANSFERRED',
+          -- GAP-CRM-RTI-DETAIL-04: every right-hand side reads the PRE-update row,
+          -- so previous_department_ref captures the department being left.
+          previous_department_ref = department_ref,
+          department_ref          = ${departmentRef},
+          transferred_at          = now(),
+          updated_at              = now()
       WHERE id          = ${id}::uuid
         AND tenant_id   = ${tenantId}
         AND status NOT IN ('DISPOSED', 'RESPONDED')
       RETURNING id, status,
-                department_ref AS "departmentRef",
-                updated_at     AS "updatedAt"
+                department_ref          AS "departmentRef",
+                previous_department_ref AS "previousDepartmentRef",
+                transferred_at          AS "transferredAt",
+                updated_at              AS "updatedAt"
     `)) as unknown as RtiRow[];
     if (!rows[0]) return null;
+    const previousDepartmentRef = (rows[0]["previousDepartmentRef"] as string | null) ?? null;
     await recordStatusHistory(tx, {
       tenantId,
       resourceType: "rti_request",
       resourceId: id,
       fromStatus: prev[0]?.status ?? null,
       toStatus: "TRANSFERRED",
-      note: `Transferred to ${departmentRef}`,
+      note: previousDepartmentRef
+        ? `Transferred from ${previousDepartmentRef} to ${departmentRef}`
+        : `Transferred to ${departmentRef}`,
       actorId,
     });
     // GAP2-CRM-RTI-AUDIT-03: a department transfer is a statutory act -> audit it.
@@ -342,7 +353,7 @@ export async function forwardRti(
       action: "forward",
       resourceType: "rti_request",
       resourceId: id,
-      payload: { rtiId: id, status: "TRANSFERRED", departmentRef },
+      payload: { rtiId: id, status: "TRANSFERRED", departmentRef, previousDepartmentRef },
     });
     return rows[0];
   });

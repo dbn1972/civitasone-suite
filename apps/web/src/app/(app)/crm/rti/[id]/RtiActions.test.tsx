@@ -200,7 +200,11 @@ describe("RtiActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Respond" }));
     await waitFor(() => expect(screen.getByText("Record the response to this RTI request?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Response to applicant"), { target: { value: "Information enclosed as annexure A to this reply." } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    // GAP-CRM-RTI-DETAIL-02: step 1 only moves to the read-back; nothing is sent yet.
+    fireEvent.click(screen.getByRole("button", { name: "Review response" }));
+    expect(await screen.findByText("Check the response before sending")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send response" }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     const [url, init] = fetchSpy.mock.calls[0];
@@ -222,12 +226,79 @@ describe("RtiActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Respond" }));
     await waitFor(() => expect(screen.getByText("Record the response to this RTI request?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Response to applicant"), { target: { value: "see attached" } });
-    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    // Under 20 characters: the hint says so and the Review step is not reachable.
+    expect(screen.getByText(/12 of 10000 characters \(at least 20 required\)/)).toBeInTheDocument();
+    const review = screen.getByRole("button", { name: "Review response" });
+    expect(review).toBeDisabled();
+    fireEvent.click(review);
 
-    // Confirm is gated by minReasonLength, so no request is sent and no refresh.
+    // Neither the read-back nor a request appears; no refresh.
     await waitFor(() => {});
+    expect(screen.queryByText("Check the response before sending")).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-RTI-DETAIL-02: the exact text is read back in a separate step, and
+  // "Back to edit" returns to the draft intact (nothing sent).
+  it("reads the response back before sending and lets the clerk go back to edit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: RTI_ID } }), { status: 200 }),
+    );
+    const draft = "Information is enclosed as annexure A.\nThe fee has been refunded.";
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><RtiActions id={RTI_ID} status="RECEIVED" /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Respond" }));
+    fireEvent.change(await screen.findByLabelText("Response to applicant"), { target: { value: `  ${draft}  ` } });
+    fireEvent.click(screen.getByRole("button", { name: "Review response" }));
+
+    // The read-back shows the exact (trimmed) text that will be recorded.
+    const readBack = await screen.findByLabelText("Response text to be sent");
+    expect(readBack).toHaveTextContent("Information is enclosed as annexure A.");
+    expect(readBack).toHaveTextContent("The fee has been refunded.");
+    expect(readBack.textContent).toBe(draft);
+
+    // Back to edit: the draft is still in the textarea and nothing was sent.
+    fireEvent.click(screen.getByRole("button", { name: "Back to edit" }));
+    expect(await screen.findByLabelText("Response to applicant")).toHaveValue(`  ${draft}  `);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    // Review again and send: the trimmed text is what goes over the wire.
+    fireEvent.click(screen.getByRole("button", { name: "Review response" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Send response" }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body).toEqual({ responseText: draft });
+  });
+
+  it("keeps the read-back open with a clerk-safe error when sending the response fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "RTI request already disposed" }), { status: 409 }),
+    );
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><RtiActions id={RTI_ID} status="RECEIVED" /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Respond" }));
+    fireEvent.change(await screen.findByLabelText("Response to applicant"), { target: { value: "Information is enclosed as annexure A." } });
+    fireEvent.click(screen.getByRole("button", { name: "Review response" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Send response" }));
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText("RTI request already disposed")).not.toBeInTheDocument();
+    expect(screen.getByText("Check the response before sending")).toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-RTI-NEW-04 / DETAIL-04: an "Other" authority is folded to the canonical
+  // casing of a listed one, exactly like the New RTI form.
+  it("folds an 'Other' authority typed in different casing to the listed authority", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: RTI_ID } }), { status: 200 }),
+    );
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><RtiActions id={RTI_ID} status="RECEIVED" /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Forward" }));
+    await waitFor(() => expect(screen.getByText("Forward this RTI request?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Public authority to transfer to"), { target: { value: "__other__" } });
+    fireEvent.change(screen.getByLabelText("Other authority name"), { target: { value: "  ministry   of finance " } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string)).toEqual({ departmentRef: "Ministry of Finance" });
   });
 
   it("raises a first appeal via the proxied endpoint", async () => {

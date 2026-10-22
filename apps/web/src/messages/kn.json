@@ -258,6 +258,12 @@
     "stuckSetup": "Getting Started",
     "stuckNote": "Still stuck? Open {setupLink} to walk through setup again, or raise a ticket from {helpdeskLink}."
   },
+  "crm": {
+    "dashboard": {
+      "title": "CRM ಡ್ಯಾಶ್‌ಬೋರ್ಡ್",
+      "subtitle": "ಸರ್ಕಾರಿ ಪಾಲುದಾರರು ಮತ್ತು ಮಾರಾಟಗಾರರ ಸಂವಹನ ನೋಂದಣಿ"
+    }
+  },
   "attendanceConfig": {
     "title": "ಹಾಜರಾತಿ ನಿಯಮಗಳು",
     "subtitle": "ತಡ ಗುರುತುಗಳು, ಅರ್ಧ ದಿನ, ಹೆಚ್ಚುವರಿ ಸಮಯ ಮತ್ತು ವಾರದ ರಜೆಗಳನ್ನು ಹೇಗೆ ಲೆಕ್ಕಹಾಕಲಾಗುತ್ತದೆ (ಓದಲು ಮಾತ್ರ).",

@@ -75,14 +75,9 @@ describe("EditContactForm", () => {
   it("does not PATCH the contact when nothing core/consent changed", async () => {
     render(<EditContactForm params={{ id: "c1" }} initial={initial} />);
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
-    // Only the classification endpoint is hit; the contact PATCH is skipped.
-    const contactPatch = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
-    expect(contactPatch).toBeUndefined();
-    const classificationCall = browserFetchMock.mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].includes("/classification"),
-    );
-    expect(classificationCall).toBeDefined();
+    // Nothing changed: neither the contact PATCH nor the classification PATCH is sent.
+    expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
   });
 
   // GAP-CRM-CONTACTS-DETAIL-EDIT-03: PATCH ok but classification fails -> the
@@ -95,8 +90,9 @@ describe("EditContactForm", () => {
       return Promise.resolve(makeRes(true, 200, {}));
     });
     render(<EditContactForm params={{ id: "c1" }} initial={initial} />);
-    // Change a core field so the PATCH runs.
+    // Change a core field so the PATCH runs, and the classification so it is sent.
     fireEvent.change(screen.getByLabelText("Designation"), { target: { value: "VP" } });
+    fireEvent.change(screen.getByLabelText("Temperature"), { target: { value: "hot" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(screen.getByText(/details were saved, but the classification/i)).toBeInTheDocument());
@@ -126,9 +122,9 @@ describe("EditContactForm", () => {
   });
 
   // GAP-CRM-CONTACTS-NEW-02: the Organisation field is an account picker; a
-  // contact already linked to an account seeds it (resolve) and unlinking sends
-  // accountId: null on save.
-  it("seeds the linked account and sends accountId: null when the account is cleared", async () => {
+  // contact already linked to an account seeds it (resolve), and saving without
+  // touching the link re-sends nothing.
+  it("seeds the linked account into the picker and does not re-send the link when it is unchanged", async () => {
     browserFetchMock.mockImplementation((path: string) => {
       if (path === "v1/crm/accounts") {
         return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
@@ -140,11 +136,91 @@ describe("EditContactForm", () => {
     // The account picker shows the seeded account name (from initial.organization).
     const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
     await waitFor(() => expect(picker.value).toBe("Acme"));
-    // Clear the account link.
-    fireEvent.change(picker, { target: { value: "" } });
-    fireEvent.keyDown(picker, { key: "Backspace" });
-    // Clearing via the input empties the query; explicitly unlink by selecting none.
+    // Saving without touching the link sends nothing: no contact PATCH (so no
+    // accountId), and the untouched classification is not re-sent either.
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-01 + GAP-CRM-CONTACTS-NEW-02: clearing the
+  // Organisation on an account-linked contact unlinks it - the PATCH carries an
+  // explicit accountId: null (the backend accepts null to unlink). The picker has
+  // no clear control of its own, so the form offers "Unlink account".
+  it("unlinks the account and sends accountId: null when the link is cleared", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
+    await waitFor(() => expect(picker.value).toBe("Acme"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlink account" }));
+    // Unlinked: the "Linked to" line is gone and the free-text organisation input is offered.
+    expect(screen.queryByText(/Linked to/)).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Or type a new organisation")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
     await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    expect(patchCall).toBeDefined();
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body.accountId).toBeNull();
+    expect(body).toHaveProperty("accountId");
+    expect(body).not.toHaveProperty("leadStatus");
+  });
+
+  it("unlinking and typing a new organisation sends accountId: null together with the new company", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    await waitFor(() =>
+      expect((screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement).value).toBe("Acme"),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Unlink account" }));
+    fireEvent.change(screen.getByPlaceholderText("Or type a new organisation"), { target: { value: "Globex" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ accountId: null, company: "Globex" });
+  });
+
+  // GAP-CRM-CONTACTS-NEW-02: re-pointing a contact at ANOTHER account sends that account's id AND its
+  // name as the company. (The picker hands back only an id and resolve() runs only for unseen ids, so
+  // the label used to stay the OLD account's name: the contact kept the old company beside a new link.)
+  it("re-pointing the link to another account sends the new accountId with the NEW account's name as company", async () => {
+    browserFetchMock.mockImplementation((path: string) => {
+      if (path === "v1/crm/accounts") {
+        return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }, { id: "acc-2", name: "Beta Department" }] }));
+      }
+      return Promise.resolve(makeRes(true, 200, {}));
+    });
+    const linked = { ...initial, accountId: "acc-1" };
+    render(<EditContactForm params={{ id: "c1" }} initial={linked} />);
+    const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
+    await waitFor(() => expect(picker.value).toBe("Acme"));
+
+    fireEvent.change(picker, { target: { value: "Beta" } });
+    fireEvent.mouseDown(await screen.findByText("Beta Department"));
+    // The "Linked to" line names the account just picked, not the one it replaced.
+    await waitFor(() => expect(screen.getByText("Beta Department", { selector: "strong" })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(browserFetchMock.mock.calls.some((c) => c[0] === "v1/crm/contacts/c1")).toBe(true));
+    const patchCall = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
+    const body = JSON.parse((patchCall![1] as { body: string }).body) as Record<string, unknown>;
+    expect(body).toEqual({ accountId: "acc-2", company: "Beta Department" });
   });
 });

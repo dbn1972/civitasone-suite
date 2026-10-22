@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -25,9 +25,10 @@ vi.mock("next/navigation", () => ({
 // GAP-CRM-RTI-DETAIL-02/03: the page now reads the session roles to gate
 // actions and PII. Mock the shared guard so tests can set the viewer's roles.
 const getSessionRolesMock = vi.fn<() => string[]>(() => ["crm_user"]);
-vi.mock("@/lib/auth/roleGuard", () => ({
-  getSessionRoles: () => getSessionRolesMock(),
-}));
+vi.mock("@/lib/auth/roleGuard", async (orig) => {
+  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
+  return { ...actual, getSessionRoles: () => getSessionRolesMock() };
+});
 
 import RtiDetailPage from "./page";
 
@@ -111,17 +112,113 @@ describe("RtiDetailPage", () => {
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
   });
 
-  // GAP-CRM-RTI-DETAIL-03 / F1-02 + F1-06: the SERVER masks the applicant
-  // contact for roles outside the CRM PII-read set and sends the clear value
-  // only to those roles. A PII-read role (crm_admin) gets the clear value from
-  // the API and the page renders it verbatim (no client masking).
-  it("shows the contact in clear to a PII-read role (server sends the clear value)", async () => {
-    getSessionRolesMock.mockReturnValue(["crm_admin"]);
-    fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
+  // GAP-CRM-RTI-DETAIL-03 / F1-02 + F1-06: the page asks the server for the
+  // applicant name + contact MASKED for every viewer (?maskPii=true), so even a
+  // PII-read role (crm_admin) sees the masked form first and reaches the clear
+  // value only through the audited reveal (reason + pii_reveal audit event).
+  describe("applicant PII: masked by default, audited reveal (GAP-CRM-RTI-DETAIL-03)", () => {
+    const MASKED = { applicantName: "Anil S•••", applicantContact: "******0000" };
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it("requests the detail with ?maskPii=true so no viewer is sent the clear value", async () => {
+      getSessionRolesMock.mockReturnValue(["crm_admin"]);
+      fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
+      await RtiDetailPage({ params: { id: RTI.id } });
+      expect(fetchJsonMock.mock.calls[0][0]).toBe(`/api/v1/crm/rti/${RTI.id}?maskPii=true`);
+    });
+
+    it("a PII-read role sees the masked values plus a Reveal control for each, and never the clear value", async () => {
+      getSessionRolesMock.mockReturnValue(["crm_admin"]);
+      fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
+      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+      expect(screen.getByText("Anil S•••")).toBeInTheDocument();
+      expect(screen.getByText("******0000")).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(2);
+      expect(container.textContent).not.toContain("Anil Sharma");
+      expect(container.textContent).not.toContain("9876500000");
+      expect(screen.getByText(/revealing a value needs a stated reason and is recorded in the audit log/i)).toBeInTheDocument();
+    });
+
+    it("Reveal asks for a reason, calls the audited endpoint for the RTI contact, then shows the clear value", async () => {
+      getSessionRolesMock.mockReturnValue(["crm_admin"]);
+      fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response(JSON.stringify({ data: { value: "9876500000" } }), { status: 200 }));
+      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+      // The contact is the second Reveal control (name, then contact).
+      fireEvent.click(screen.getAllByRole("button", { name: "Reveal" })[1]!);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "Need to send the response by phone" } });
+      const dialog = screen.getByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: "Reveal" }));
+
+      expect(await screen.findByText("9876500000")).toBeInTheDocument();
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("/api/proxy/v1/crm/pii/reveal");
+      expect(JSON.parse(init.body as string)).toEqual({
+        resourceType: "rti",
+        resourceId: RTI.id,
+        field: "applicantContact",
+        reason: "Need to send the response by phone",
+      });
+    });
+
+    it("a role without PII access sees the masked values, NO Reveal button and the not-permitted notice", async () => {
+      getSessionRolesMock.mockReturnValue(["crm_user"]);
+      fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
+      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+      expect(screen.getByText("Anil S•••")).toBeInTheDocument();
+      expect(screen.getByText("******0000")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+      expect(screen.getByText(/you do not have permission to view the full contact/i)).toBeInTheDocument();
+      // The old "Access is logged" claim must not appear for a viewer who cannot reveal anything.
+      expect(screen.queryByText(/recorded in the audit log/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-CRM-RTI-DETAIL-04: a transferred request says where it came from and when.
+  it("shows 'Transferred from X on <date>' when the API returns the previous department", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: { ...RTI, status: "TRANSFERRED", departmentRef: "Department of Revenue", previousDepartmentRef: "Ministry of Finance", transferredAt: "2026-08-03T05:30:00.000Z" },
+      source: "api",
+    });
     const ui = await RtiDetailPage({ params: { id: RTI.id } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
-    expect(screen.getByText("9876500000")).toBeInTheDocument();
-    expect(screen.getByText(/Access is logged/)).toBeInTheDocument();
+    expect(screen.getByText("Department of Revenue")).toBeInTheDocument();
+    expect(screen.getByText(/Transferred from Ministry of Finance on /)).toBeInTheDocument();
+  });
+
+  it("omits the transfer line for a request that was never transferred", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { ...RTI, previousDepartmentRef: null, transferredAt: null }, source: "api" });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.queryByText(/Transferred from/)).not.toBeInTheDocument();
+  });
+
+  it("names the origin even when the transfer time was not recorded", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { ...RTI, previousDepartmentRef: "Ministry of Finance", transferredAt: null }, source: "api" });
+    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText("Transferred from Ministry of Finance")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-RTI-06: the section reads exactly like the register table, the filter and the new form.
+  it("renders the canonical full section label for s.6 and s.11", async () => {
+    fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
+    const six = await RtiDetailPage({ params: { id: RTI.id } });
+    const { unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{six}</NextIntlClientProvider>);
+    expect(screen.getByText("§6 — Information Request")).toBeInTheDocument();
+    unmount();
+    fetchJsonMock.mockResolvedValue({ data: { ...RTI, section: "s.11" }, source: "api" });
+    const eleven = await RtiDetailPage({ params: { id: RTI.id } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{eleven}</NextIntlClientProvider>);
+    expect(screen.getByText("§11 — Third-party Information")).toBeInTheDocument();
   });
 
   it("renders the server-masked contact and hides actions for a viewer without a CRM role", async () => {
@@ -221,6 +318,10 @@ describe("RtiDetailPage", () => {
     expect(screen.getByText("Appeal allowed; furnish the budget breakup within 15 days.")).toBeInTheDocument();
     expect(screen.getByText("Information furnished as directed by the FAA.")).toBeInTheDocument();
     expect(screen.getByText(/disposed \(on /i)).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    // No lifecycle action is offered on a disposed (read-only) record; the only buttons
+    // left are the audited Reveal controls on the masked applicant data.
+    const buttonLabels = screen.queryAllByRole("button").map((b) => b.textContent);
+    expect(buttonLabels.length).toBeGreaterThan(0);
+    expect(buttonLabels.every((label) => label === "Reveal")).toBe(true);
   });
 });

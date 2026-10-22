@@ -10,6 +10,8 @@ import {
   quotationTotalMinor,
   quotationTaxMinor,
   gstSplit,
+  discountBps,
+  quotationDiscountBps,
   displayGrandTotalMinor,
   isAllowedCurrency,
   ALLOWED_CURRENCIES,
@@ -145,5 +147,40 @@ describe("F4 money follow-ups (web)", () => {
     expect(gstSplit("18000", "27", "07")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" });
     expect(gstSplit("18000", "", "")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "18000" });
     expect(gstSplit("0", "27", "27")).toEqual({ cgstMinor: "0", sgstMinor: "0", igstMinor: "0" });
+  });
+});
+
+describe("list-price discount maths (GAP-CRM-QUOTATIONS-05, mirrors crm-service effectiveDiscountBps)", () => {
+  it("discountBps: 500 against a 1000 list is 5000 bps (50%), floored, 0 at/above list", () => {
+    expect(discountBps("1000", "500")).toBe(5000);
+    expect(discountBps("1000", "999")).toBe(10);
+    expect(discountBps("3", "2")).toBe(3333); // floor(1/3 * 10000)
+    expect(discountBps("1000", "1000")).toBe(0);
+    expect(discountBps("1000", "1500")).toBe(0);
+  });
+
+  it("discountBps: null when there is no usable list price", () => {
+    expect(discountBps(null, "500")).toBeNull();
+    expect(discountBps(undefined, "500")).toBeNull();
+    expect(discountBps("0", "500")).toBeNull();
+    expect(discountBps("abc", "500")).toBeNull();
+    expect(discountBps("1000", "x")).toBeNull();
+  });
+
+  it("quotationDiscountBps weighs lines by quantity and ignores lines without a list price", () => {
+    // 2 x list 1000 quoted 500, plus 1 x list 1000 quoted 1000 -> ref 3000, quoted 2000 -> 3333 bps.
+    expect(
+      quotationDiscountBps([
+        { listUnitMinor: "1000", unitPriceMinor: "500", quantity: 2 },
+        { listUnitMinor: "1000", unitPriceMinor: "1000", quantity: 1 },
+        { listUnitMinor: null, unitPriceMinor: "1", quantity: 99 }, // free-text line: no reference
+      ]),
+    ).toBe(3333);
+  });
+
+  it("quotationDiscountBps is 0 for a premium, an empty quote or no reference at all", () => {
+    expect(quotationDiscountBps([{ listUnitMinor: "1000", unitPriceMinor: "1200", quantity: 3 }])).toBe(0);
+    expect(quotationDiscountBps([])).toBe(0);
+    expect(quotationDiscountBps([{ listUnitMinor: null, unitPriceMinor: "5", quantity: 1 }])).toBe(0);
   });
 });

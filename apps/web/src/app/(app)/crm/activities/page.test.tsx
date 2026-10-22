@@ -1,6 +1,8 @@
 import { todayIST } from "@/lib/formatters";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
 vi.mock("../../../_data/loaders", () => ({ getCRMActivities: vi.fn() }));
 vi.mock("./ActivitiesTable", () => ({
@@ -8,7 +10,7 @@ vi.mock("./ActivitiesTable", () => ({
     <div data-testid="act-table" data-initial-segment={initialSegment ?? ""} />
   ),
 }));
-vi.mock("./LogActivityButton", () => ({ LogActivityButton: () => <button>Log Interaction</button> }));
+vi.mock("./LogActivityButton", () => ({ LogActivityButton: () => <button>Log Activity</button> }));
 vi.mock("../../../_components/DataSourceBadge", () => ({ DataSourceBadge: () => null }));
 
 import Page from "./page";
@@ -31,6 +33,17 @@ const mockActivities = [
 beforeEach(() => mocked.mockReset());
 
 describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
+  // The screen has ONE name: the header, the outage card heading and the dashboard
+  // stat all derive from / equal the CRM hub tile title (not a re-typed literal).
+  it("header equals the CRM hub tile title, in en and hi", async () => {
+    const hubTitle = enMessages.crm.hub.tiles.activities.title;
+    mocked.mockResolvedValue({ data: mockActivities, source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.getByRole("heading", { name: hubTitle })).toBeInTheDocument();
+    expect(enMessages.crmActivitiesTable.heading).toBe(hubTitle);
+    expect(hiMessages.crmActivitiesTable.heading).toBe(hiMessages.crm.hub.tiles.activities.title);
+  });
+
   it("renders heading 'Activities' (matching the hub/nav/URL, not 'Stakeholder Interactions')", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
     render(await Page({ searchParams: {} }));

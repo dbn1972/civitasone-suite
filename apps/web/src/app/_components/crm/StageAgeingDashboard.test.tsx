@@ -73,18 +73,19 @@ describe("StageAgeingDashboard (OP-005)", () => {
     render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
-    // The new row defaults to the first pipeline; pick one of ITS stages by key.
-    fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "qual" } });
+    // The new row defaults to the first pipeline; pick one of ITS stages. The limit is keyed by the
+    // stage NAME (what deals.stage stores), not the web-derived slug key ("qual").
+    fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "Qualify" } });
     fireEvent.change(screen.getByLabelText(/days limit for 1/i), { target: { value: "14" } });
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
-    await waitFor(() => expect(op.createStageLimit).toHaveBeenCalledWith(expect.objectContaining({ pipelineId: "p1", stage: "qual", maxDays: 14, enabled: true })));
+    await waitFor(() => expect(op.createStageLimit).toHaveBeenCalledWith(expect.objectContaining({ pipelineId: "p1", stage: "Qualify", maxDays: 14, enabled: true })));
   });
 
   it("blocks a zero-day limit", async () => {
     render(<StageAgeingDashboard />);
     await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
-    fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "qual" } });
+    fireEvent.change(screen.getByLabelText(/stage for limit 1/i), { target: { value: "Qualify" } });
     fireEvent.change(screen.getByLabelText(/days limit for 1/i), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
     expect(await screen.findByText(/greater than zero/i)).toBeInTheDocument();
@@ -132,7 +133,7 @@ describe("StageAgeingDashboard (OP-005)", () => {
   it("sends enabled:false when the Enabled toggle is unticked and saved", async () => {
     vi.mocked(op.updateStageLimit).mockResolvedValue(undefined);
     vi.mocked(op.getStageLimits).mockResolvedValue({
-      data: [{ id: "l1", pipelineId: "p1", stage: "qual", maxDays: 14, enabled: true }],
+      data: [{ id: "l1", pipelineId: "p1", stage: "Qualify", maxDays: 14, enabled: true }],
       source: "api",
     });
     render(<StageAgeingDashboard />);
@@ -160,6 +161,28 @@ describe("StageAgeingDashboard (OP-005)", () => {
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
   });
 
+  // GAP-CRM-OPPORTUNITY-AGEING-03 (W2 rescan): the live endpoint now resolves the owner's
+  // name server-side. A row with an owner id but no resolvable name must not print the id
+  // or a bare dash; a row with no owner says Unassigned.
+  it("never shows a bare dash or raw id in Owner: unresolved owner => Unknown user, no owner => Unassigned", async () => {
+    vi.mocked(op.getStageAgeing).mockResolvedValue({
+      data: [
+        { id: "d1", name: "Named owner", stage: "qual", stageName: "Qualify", daysInStage: 30, limitDays: 14, exceededBy: 16, ownerId: "0c1d2e3f-0000-4000-8000-000000000001", ownerName: "Asha Rao" },
+        { id: "d2", name: "Unresolved owner", stage: "qual", stageName: "Qualify", daysInStage: 31, limitDays: 14, exceededBy: 17, ownerId: "0c1d2e3f-0000-4000-8000-000000000002" },
+        { id: "d3", name: "No owner", stage: "qual", stageName: "Qualify", daysInStage: 32, limitDays: 14, exceededBy: 18 },
+      ],
+      source: "api",
+    });
+    render(<StageAgeingDashboard canConfig={false} />);
+    await waitFor(() => expect(screen.getByText("No owner")).toBeInTheDocument());
+    const rowOf = (name: string) => screen.getByText(name).closest("tr")!;
+    expect(rowOf("Named owner")).toHaveTextContent("Asha Rao");
+    expect(rowOf("Unresolved owner")).toHaveTextContent("Unknown user");
+    expect(rowOf("Unresolved owner")).not.toHaveTextContent("0c1d2e3f");
+    expect(rowOf("No owner")).toHaveTextContent("Unassigned");
+    expect(screen.queryByText("—")).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-OPPORTUNITY-AGEING-04: the error state has a Retry that re-fetches and
   // never claims "saved information".
   it("shows a Retry on a failed ageing load that re-fetches", async () => {
@@ -169,6 +192,10 @@ describe("StageAgeingDashboard (OP-005)", () => {
     render(<StageAgeingDashboard />);
     const retry = await screen.findByRole("button", { name: /retry/i });
     expect(screen.queryByText(/showing saved information/i)).not.toBeInTheDocument();
+    // ONE message: the "Couldn't load — showing nothing" badge is not stacked on top of the
+    // error state (GAP-CRM-OPPORTUNITY-AGEING-04 rescan).
+    expect(screen.getByText(/couldn.t load the ageing list/i)).toBeInTheDocument();
+    expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
     fireEvent.click(retry);
     await waitFor(() => expect(screen.getByText("Recovered deal")).toBeInTheDocument());
   });
@@ -186,5 +213,77 @@ describe("StageAgeingDashboard (OP-005)", () => {
     expect(screen.queryByRole("button", { name: /add stage limit/i })).not.toBeInTheDocument();
     // The limits endpoint is not even called for a non-admin.
     expect(op.getStageLimits).not.toHaveBeenCalled();
+  });
+});
+
+// GAP-CRM-OPPORTUNITY-AGEING-01 (W2 crm cluster 07): a limit matches deals by the stage NAME
+// (crm-service stores deals.stage as the name and joins sl.stage = d.stage exactly), so the
+// dashboard must offer, validate and save the NAME - never the web-derived slug key.
+describe("StageAgeingDashboard stage NAME keying (GAP-CRM-OPPORTUNITY-AGEING-01)", () => {
+  const MIXED: op.Pipeline = {
+    id: "p2",
+    name: "Field Services",
+    enabled: true,
+    stages: [
+      { key: "intake", name: "Intake", mandatoryFields: [], gate: false },
+      { key: "site_visit_scheduled", name: "Site Visit Scheduled", mandatoryFields: [], gate: false },
+    ],
+  };
+  beforeEach(() => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [PIPELINE, MIXED], source: "api" });
+  });
+
+  it("saves 'Site Visit Scheduled' - the exact stage name deals carry - not the slug 'site_visit_scheduled'", async () => {
+    vi.mocked(op.createStageLimit).mockResolvedValue(undefined);
+    render(<StageAgeingDashboard />);
+    await waitFor(() => expect(screen.getByText(/no stage limits yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add stage limit/i }));
+    fireEvent.change(screen.getByLabelText(/pipeline for limit 1/i), { target: { value: "p2" } });
+    const stageSelect = screen.getByLabelText(/stage for limit 1/i) as HTMLSelectElement;
+    expect(Array.from(stageSelect.options).map((o) => o.value).filter(Boolean)).toEqual(["Intake", "Site Visit Scheduled"]);
+    fireEvent.change(stageSelect, { target: { value: "Site Visit Scheduled" } });
+    fireEvent.change(screen.getByLabelText(/days limit for 1/i), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(op.createStageLimit).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(op.createStageLimit).mock.calls[0]![0];
+    expect(body.stage).toBe("Site Visit Scheduled");
+    expect(body.stage).not.toBe("site_visit_scheduled");
+  });
+
+  it("treats a saved limit stored under the old slug key as an orphan and says which stage to re-pick", async () => {
+    vi.mocked(op.getStageLimits).mockResolvedValue({
+      data: [{ id: "l9", pipelineId: "p2", stage: "site_visit_scheduled", maxDays: 7, enabled: true }],
+      source: "api",
+    });
+    render(<StageAgeingDashboard />);
+    const alert = await screen.findByText(/saved under the key “site_visit_scheduled”, which matches no deal/i);
+    expect(alert).toHaveTextContent(/Choose the stage “Site Visit Scheduled” again/);
+    expect(alert).toHaveAttribute("role", "alert");
+    expect(screen.getByLabelText(/stage for limit 1/i)).toHaveAttribute("aria-invalid", "true");
+    // It cannot be saved as-is: the dead key would just be re-sent.
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/one of that pipeline's stages/i)).toBeInTheDocument();
+    expect(op.updateStageLimit).not.toHaveBeenCalled();
+  });
+
+  it("does not show a blank stage for a legacy limit with no pipeline: it is listed, and flagged when it matches no pipeline stage", async () => {
+    vi.mocked(op.getStageLimits).mockResolvedValue({
+      data: [
+        { id: "g1", stage: "Intake", maxDays: 10, enabled: true }, // real stage name in some pipeline
+        { id: "g2", stage: "proposel", maxDays: 10, enabled: true }, // matches nothing anywhere
+      ],
+      source: "api",
+    });
+    render(<StageAgeingDashboard />);
+    await waitFor(() => expect(screen.getByLabelText(/stage for limit 1/i)).toBeInTheDocument());
+    const first = screen.getByLabelText(/stage for limit 1/i) as HTMLSelectElement;
+    expect(first.value).toBe("Intake");
+    expect(screen.getByText(/Intake — applies to all pipelines/i)).toBeInTheDocument();
+    expect(screen.getByText(/applies to every pipeline/i)).toBeInTheDocument();
+    // The second one matches no stage in any pipeline: flagged as an orphan, not silently "fine".
+    const second = screen.getByLabelText(/stage for limit 2/i) as HTMLSelectElement;
+    expect(second.value).toBe("proposel");
+    expect(second).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/not in the selected pipeline/i)).toBeInTheDocument();
   });
 });

@@ -11,8 +11,10 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { Button, EntityPicker, type EntityOption } from "../ds";
-import { browserFetch } from "@/lib/api/browserClient";
+import { type ListRow } from "@/lib/crm/pagedList";
+import { fetchAccountsByIds, searchAccountsByName } from "@/lib/crm/accountLookup";
 import { rupeesToMinorString } from "@/lib/money";
+import { valueMinorFitsUpdate } from "@/lib/crm/opportunityBody";
 import { formatMoney } from "@/lib/formatters";
 import {
   getPipelines,
@@ -40,37 +42,35 @@ const MAX_QUANTITY = 100_000_000;
 
 const inputStyle = { padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
+/** Most matches the account picker lists. */
+const ACCOUNT_PICKER_LIMIT = 20;
+
+function namedAccounts(rows: ListRow[]): Array<{ id: string; name: string }> {
+  return rows.filter((a): a is { id: string; name: string } => typeof a.id === "string" && typeof a.name === "string" && a.id !== "" && a.name !== "");
+}
+
 /**
- * Account search for the EntityPicker. Accounts are listed from the existing
- * `GET /v1/crm/accounts` endpoint; the result is filtered client-side on the typed
- * query (the list endpoint has no server-side search param). Returns [] on any failure
- * so the picker degrades to "no results" rather than throwing.
+ * Account search for the EntityPicker: the server filters by name (`GET /v1/crm/accounts?search=`),
+ * so a keystroke costs ONE request of at most 20 rows and an account anywhere in the tenant is
+ * findable (GAP-CRM-OPPORTUNITIES-NEW-02). It used to page the whole list on every keystroke
+ * and read it to the end for a query that matched nothing. Returns [] on any failure so the
+ * picker degrades to "no results" rather than throwing.
  */
 async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   try {
-    const res = await browserFetch("v1/crm/accounts", { signal });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
-    const q = query.trim().toLowerCase();
-    return (body.data ?? [])
-      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
-      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
-      .slice(0, 20)
+    return namedAccounts(await searchAccountsByName(query, ACCOUNT_PICKER_LIMIT, signal))
+      .slice(0, ACCOUNT_PICKER_LIMIT)
       .map((a) => ({ id: a.id, label: a.name }));
   } catch {
     return [];
   }
 }
 
+/** Labels for already-chosen account ids: one lookup by id, not a walk of the list. */
 async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {
   try {
-    const res = await browserFetch("v1/crm/accounts", {});
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
-    const want = new Set(ids);
-    return (body.data ?? [])
-      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name && want.has(a.id)))
-      .map((a) => ({ id: a.id, label: a.name }));
+    const { rows } = await fetchAccountsByIds(ids);
+    return namedAccounts(rows).map((a) => ({ id: a.id, label: a.name }));
   } catch {
     return [];
   }
@@ -140,8 +140,11 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
     }
   }, [selectedPipeline, stage]);
 
-  const valueMinor = valueRupees.trim() ? rupeesToMinorString(valueRupees.trim()) : "0";
-  const valueValid = valueMinor !== null;
+  // allowZero: an existing zero-value deal opens as "0.00" and must stay saveable (a blank field is already "0").
+  const valueMinor = valueRupees.trim() ? rupeesToMinorString(valueRupees.trim(), { allowZero: true }) : "0";
+  // The edit PATCH carries the value as a JSON number, so an edit refuses what would not survive as one.
+  const valueFitsSave = valueMinor === null || !opportunity?.id || valueMinorFitsUpdate(valueMinor);
+  const valueValid = valueMinor !== null && valueFitsSave;
   const probNum = Number(probability);
   const probValid = probability.trim() === "" || (Number.isFinite(probNum) && probNum >= 0 && probNum <= 100);
   const qtyNum = Number(quantity);
@@ -176,7 +179,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
     setMissing([]);
     setSubmitAttempted(true);
     if (!canSubmit) {
-      if (!valueValid) setError("Enter the deal value as a plain rupee amount (max 2 decimals).");
+      if (!valueValid) setError(valueMinor === null ? "Enter the deal value as a plain rupee amount (max 2 decimals)." : "The deal value is too large to save.");
       else if (!probValid) setError("Probability must be a whole number between 0 and 100.");
       else if (!qtyValid) setError("Quantity must be a whole number.");
       else setError("Name, pipeline and stage are required.");
@@ -186,7 +189,11 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
       ...(opportunity?.id ? { id: opportunity.id } : {}),
       name: name.trim(),
       pipelineId,
-      stage,
+      // crm-service resolves a deal's stage by its NAME (deals.stage stores the name and the
+      // create route matches pipeline stages by name), so send the stage name - the web-derived
+      // slug key ("qualification") matches no configured stage and was refused INVALID_STAGE.
+      stage: selectedStage?.name ?? stage,
+      ...(selectedStage?.id ? { stageId: selectedStage.id } : {}),
       valueMinor: valueMinor ?? "0",
       // GAP-CRM-OPPORTUNITIES-NEW-06: omit probability/quantity when left blank
       // so an untouched form does not persist a real-looking 0 (which would

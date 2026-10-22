@@ -1,5 +1,4 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader } from "../../../../_components/ds";
 import { getSessionRoles, hasAnyRole, CRM_KYC_APPROVER_ROLES } from "@/lib/auth/roleGuard";
 import { OnboardingDetail } from "./OnboardingDetail";
 
@@ -11,10 +10,14 @@ export default async function Page({ params }: { params: { id: string } }) {
   // server from the session and pass it down so the client never offers an
   // outcome that is guaranteed to 403 — the server remains the authority.
   const canApproveKyc = hasAnyRole(getSessionRoles(), CRM_KYC_APPROVER_ROLES);
+  // GAP-CRM-ONBOARDING-DETAIL-01: the page header is rendered by OnboardingDetail so the h1
+  // can name the customer once the case loads; the server page supplies the translated
+  // fallback title and back link.
   return (
-    <>
-      <PageHeader title={t("title")} back="/crm/onboarding" backLabel={t("backLabel")} />
-      <OnboardingDetail id={params.id} canApproveKyc={canApproveKyc} />
-    </>
+    <OnboardingDetail
+      id={params.id}
+      canApproveKyc={canApproveKyc}
+      header={{ title: t("title"), backHref: "/crm/onboarding", backLabel: t("backLabel") }}
+    />
   );
 }

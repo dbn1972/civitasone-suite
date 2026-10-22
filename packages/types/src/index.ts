@@ -510,6 +510,11 @@ export interface CRMAccountSummary {
   ownerId?: string | null;
   /** F5-02: ISO timestamp of the latest activity linked to the account. */
   lastContactAt?: string | null;
+  /**
+   * Active sub-accounts anywhere below this account. Only the by-id endpoint
+   * (GET /v1/crm/accounts/:id) returns it; list rows omit it.
+   */
+  descendantCount?: number;
 }
 
 /** Minimal account node used for hierarchy breadcrumbs and child lists. */
@@ -1462,7 +1467,11 @@ export type DealSummary = {
   amount: string;
   owner: string;
   closeDate?: string;
-  probability: number;
+  /**
+   * Win probability 0-100. Absent when the service sent none (GAP-CRM-OPPORTUNITIES-NEW-06): the
+   * UI shows a dash rather than coercing a missing value to a real-looking 0%.
+   */
+  probability?: number;
   status: "open" | "won" | "lost";
   /** Optimistic-lock row version (services/crm-service deals.version) — required by PATCH .../stage. */
   version?: number;

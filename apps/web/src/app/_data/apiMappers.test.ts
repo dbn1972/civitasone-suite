@@ -1,5 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries, mapStockItemSummaries, mapStockLedgerEntries } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccount, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries, mapStockItemSummaries, mapStockLedgerEntries } from "./apiMappers";
+
+// GAP-CRM-ACCOUNTS-DETAIL-01: the by-id endpoint's `{ data: <account> }` body.
+describe("mapCrmAccount", () => {
+  it("maps a single account from the { data } envelope and carries descendantCount", () => {
+    const mapped = mapCrmAccount({
+      data: { id: "a1", name: "Ministry", industry: "Energy", website: null, parentId: "p1", contactCount: "4", ownerId: "o1", descendantCount: 3 },
+    });
+    expect(mapped).toMatchObject({ id: "a1", name: "Ministry", parentId: "p1", contactCount: 4, ownerId: "o1", descendantCount: 3 });
+  });
+
+  it("tolerates a bare account and omits descendantCount when absent or not a number", () => {
+    const bare = mapCrmAccount({ id: "a1", name: "Ministry" });
+    expect(bare?.id).toBe("a1");
+    expect(bare && "descendantCount" in bare).toBe(false);
+    expect(mapCrmAccount({ data: { id: "a1", name: "Ministry", descendantCount: "3" } })).not.toHaveProperty("descendantCount");
+  });
+
+  it("returns null for an unusable body so the loader reports an error, not a blank account", () => {
+    expect(mapCrmAccount({ data: { id: "a1" } })).toBeNull();
+    expect(mapCrmAccount(null)).toBeNull();
+    expect(mapCrmAccount({ data: [] })).toBeNull();
+  });
+});
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {

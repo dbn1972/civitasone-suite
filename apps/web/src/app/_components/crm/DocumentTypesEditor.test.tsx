@@ -168,15 +168,16 @@ describe("DocumentTypesEditor (DM-002)", () => {
     await waitFor(() => expect(dm.updateDocumentType).toHaveBeenCalledWith("t1", expect.objectContaining({ name: "PAN document" })));
   });
 
-  it("deletes a type through the confirm dialog with a required reason (GAP-CRM-DOCUMENT-TYPES-03)", async () => {
-    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card" })], source: "api" });
+  it("deletes an unused type through the confirm dialog with a required reason (GAP-CRM-DOCUMENT-TYPES-03)", async () => {
+    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card", documentCount: 0 })], source: "api" });
     vi.mocked(dm.deleteDocumentType).mockResolvedValue();
     render(<DocumentTypesEditor />);
     await screen.findByDisplayValue("PAN card");
     fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
     const dialog = await screen.findByRole("alertdialog");
-    // Copy states the outcome for existing documents.
-    expect(within(dialog).getByText(/keep their type and are not deleted/i)).toBeInTheDocument();
+    // Copy states the real outcome: nothing is filed under this type, so it is simply removed.
+    expect(within(dialog).getByText(/has no documents filed under it/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/keep their type/i)).not.toBeInTheDocument();
     const confirmBtn = within(dialog).getByRole("button", { name: /^Delete$/i });
     // Confirm is blocked until a reason is given.
     expect(confirmBtn).toBeDisabled();
@@ -186,5 +187,55 @@ describe("DocumentTypesEditor (DM-002)", () => {
     await waitFor(() => expect(dm.deleteDocumentType).toHaveBeenCalledWith("t1", "superseded by new catalogue"));
     // Only the deleted row leaves local state (no wholesale reload).
     await waitFor(() => expect(screen.queryByDisplayValue("PAN card")).not.toBeInTheDocument());
+  });
+
+  // The foreign key from documents to their type cannot be satisfied by deleting a
+  // type that documents still use, so the editor says so up front instead of
+  // offering a Delete that can only fail, and points at the Enabled switch.
+  it("disables Delete for a type that documents still use and says how many (GAP-CRM-DOCUMENT-TYPES-03)", async () => {
+    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card", documentCount: 3 })], source: "api" });
+    render(<DocumentTypesEditor />);
+    await screen.findByDisplayValue("PAN card");
+    const del = screen.getByRole("button", { name: /^Delete$/i });
+    expect(del).toBeDisabled();
+    const hint = screen.getByText(/3 documents use this type, so it can.t be deleted/i);
+    expect(hint).toHaveTextContent(/turn off enabled/i);
+    // The button is programmatically tied to the explanation.
+    expect(del.getAttribute("aria-describedby")).toBe(hint.id);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("uses the singular for exactly one document", async () => {
+    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card", documentCount: 1 })], source: "api" });
+    render(<DocumentTypesEditor />);
+    await screen.findByDisplayValue("PAN card");
+    expect(screen.getByText(/1 document uses this type/i)).toBeInTheDocument();
+  });
+
+  it("does not claim documents 'keep' a type when usage is unknown; the server still guards the delete", async () => {
+    // Older API: no documentCount reported -> undefined, NOT zero.
+    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card" })], source: "api" });
+    render(<DocumentTypesEditor />);
+    await screen.findByDisplayValue("PAN card");
+    const del = screen.getByRole("button", { name: /^Delete$/i });
+    expect(del).not.toBeDisabled();
+    fireEvent.click(del);
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/the delete is refused/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/keep their type/i)).not.toBeInTheDocument();
+  });
+
+  it("surfaces the server's refusal when a type turned out to be in use", async () => {
+    vi.mocked(dm.getDocumentTypes).mockResolvedValue({ data: [type({ name: "PAN card", documentCount: 0 })], source: "api" });
+    vi.mocked(dm.deleteDocumentType).mockRejectedValue(new Error("1 document still uses this document type, so it cannot be deleted."));
+    render(<DocumentTypesEditor />);
+    await screen.findByDisplayValue("PAN card");
+    fireEvent.click(screen.getByRole("button", { name: /^Delete$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/reason for deletion/i), { target: { value: "cleanup" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /^Delete$/i }));
+    expect(await screen.findByText(/still uses this document type/i)).toBeInTheDocument();
+    // The row stays.
+    expect(screen.getByDisplayValue("PAN card")).toBeInTheDocument();
   });
 });

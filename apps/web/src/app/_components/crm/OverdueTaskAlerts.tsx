@@ -5,13 +5,14 @@
  * overdue count is gated on source==="error" → "—" + saved-info badge, never a
  * fabricated zero. Ageing is shown in plain words (e.g. "2d 3h").
  */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { StatGrid, StatCard, EmptyState, DataTable, Modal, Button } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import {
-  getOverdueTasks, snoozeTask, reassignTask, getEscalationUsers, formatAgeing,
+  getOverdueTaskPage, snoozeTask, reassignTask, getEscalationUsers, formatAgeing, OVERDUE_PAGE_SIZE,
   type OverdueTask, type AaSource, type EscalationUser,
 } from "@/lib/crm/activityAccount";
 import { todayIST, addDaysIST, formatIndianDateTime } from "@/lib/formatters";
@@ -85,10 +86,11 @@ function ReasonField({ value, onChange, id }: { value: string; onChange: (v: str
  * event and stays the authority on role/tenant.
  */
 function ReassignControl({
-  task, users, onDone,
-}: { task: OverdueTask; users: EscalationUser[]; onDone: () => void }) {
+  task, users, usersTruncated, usersUnavailable, onDone,
+}: { task: OverdueTask; users: EscalationUser[]; usersTruncated: boolean; usersUnavailable: boolean; onDone: () => void }) {
   const t = useTranslations("crmOverdueTaskAlerts");
   const formError = useFormError("task");
+  const ownerFieldId = useId();
   const [open, setOpen] = useState(false);
   const [ownerId, setOwnerId] = useState("");
   const [reason, setReason] = useState("");
@@ -118,7 +120,7 @@ function ReassignControl({
         className="btn"
         style={{ fontSize: 13 }}
         disabled={choices.length === 0}
-        title={choices.length === 0 ? t("noUsersToReassign") : undefined}
+        title={choices.length === 0 ? (usersUnavailable ? t("usersUnavailable") : t("noUsersToReassign")) : undefined}
         onClick={() => { setError(undefined); setOwnerId(""); setReason(""); setOpen(true); }}
       >
         {t("reassign")}
@@ -128,17 +130,20 @@ function ReassignControl({
           <p style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
             {t.rich("reassignIntro", { subject: task.subject || t("thisTask"), strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-            <span>{t("newOwner")}</span>
-            <select
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+            <label htmlFor={ownerFieldId}>{t("newOwner")}</label>
+            {/* A truncated directory adds a server-side name search, so nobody is unreachable. */}
+            <DirectoryUserSelect
+              id={ownerFieldId}
               value={ownerId}
-              onChange={(e) => setOwnerId(e.target.value)}
+              onChange={setOwnerId}
+              users={users}
+              truncated={usersTruncated}
+              excludeId={task.ownerId ?? null}
+              leading={<option value="">{t("selectUser")}</option>}
               style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
-            >
-              <option value="">{t("selectUser")}</option>
-              {choices.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          </label>
+            />
+          </div>
           <ReasonField id={`reassign-reason-${task.id}`} value={reason} onChange={setReason} />
           {error ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{error}</p> : null}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -226,6 +231,10 @@ function SnoozeControl({ task, onSnoozed }: { task: OverdueTask; onSnoozed: () =
 export function OverdueTaskAlerts() {
   const t = useTranslations("crmOverdueTaskAlerts");
   const [tasks, setTasks] = useState<OverdueTask[]>([]);
+  // GAP-CRM-TASK-ESCALATION-02: server-side paging. `total` is the REAL number of overdue
+  // tasks (meta.total); `page` is the 0-based page the reader is on.
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [source, setSource] = useState<AaSource | "loading">("loading");
   // GAP-CRM-TASK-ESCALATION-06: bump to re-run the fetch after a snooze so the
   // snoozed (no-longer-overdue) task drops off the list.
@@ -233,9 +242,17 @@ export function OverdueTaskAlerts() {
   // GAP-CRM-TASK-ESCALATION-06: the identity directory, for owner names and
   // the Reassign picker. A failed load just leaves names unresolved.
   const [users, setUsers] = useState<EscalationUser[]>([]);
+  const [usersUnavailable, setUsersUnavailable] = useState(false);
+  // True = the loaded list is not the whole directory (large tenant): the Reassign picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
   useEffect(() => {
     let live = true;
-    void getEscalationUsers().then(({ data }) => { if (live) setUsers(data); });
+    void getEscalationUsers().then(({ data, source: s, truncated }) => {
+      if (!live) return;
+      setUsers(data);
+      setUsersTruncated(truncated === true);
+      setUsersUnavailable(s === "error");
+    });
     return () => { live = false; };
   }, []);
   const names = new Map(users.map((u) => [u.id, u.name] as const));
@@ -243,17 +260,27 @@ export function OverdueTaskAlerts() {
   useEffect(() => {
     let live = true;
     setSource("loading");
-    void getOverdueTasks().then(({ data, source: s }) => {
+    void getOverdueTaskPage({ limit: OVERDUE_PAGE_SIZE, offset: page * OVERDUE_PAGE_SIZE }).then(({ data, source: s }) => {
       if (!live) return;
-      setTasks(data);
+      // The last task on the last page was just snoozed/reassigned: step back to the new last page
+      // rather than showing an empty page of a non-empty list.
+      if (s === "api" && data.tasks.length === 0 && data.total > 0 && page > 0) {
+        setPage(Math.max(0, Math.ceil(data.total / OVERDUE_PAGE_SIZE) - 1));
+        return;
+      }
+      setTasks(data.tasks);
+      setTotal(data.total);
       setSource(s);
     });
     return () => {
       live = false;
     };
-  }, [reload]);
+  }, [reload, page]);
 
   const isError = source === "error";
+  const pageCount = Math.max(1, Math.ceil(total / OVERDUE_PAGE_SIZE));
+  const firstShown = total === 0 ? 0 : page * OVERDUE_PAGE_SIZE + 1;
+  const lastShown = page * OVERDUE_PAGE_SIZE + tasks.length;
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -262,7 +289,7 @@ export function OverdueTaskAlerts() {
           icon="🔴"
           iconBg="var(--badbg)"
           label={t("statLabel")}
-          value={source === "loading" ? "…" : isError ? "—" : tasks.length.toLocaleString("en-IN")}
+          value={source === "loading" ? "…" : isError ? "—" : total.toLocaleString("en-IN")}
         />
       </StatGrid>
 
@@ -280,11 +307,11 @@ export function OverdueTaskAlerts() {
         ) : tasks.length === 0 ? (
           <EmptyState icon="✅" title={t("emptyTitle")} message={t("emptyMessage")} />
         ) : (
-          // GAP-CRM-TASK-ESCALATION-02: paginate (50/page) so a large overdue
-          // backlog can't render an unbounded table; Owner is masked, never a raw id.
+          <>
+          {/* GAP-CRM-TASK-ESCALATION-02: the server pages (50 per page) and reports the real
+              total, so a large backlog is fully reachable and the count is honest. */}
           <DataTable<OverdueTask & Record<string, unknown>>
             rows={tasks as Array<OverdueTask & Record<string, unknown>>}
-            pageSize={50}
             columns={[
               {
                 key: "subject",
@@ -311,7 +338,7 @@ export function OverdueTaskAlerts() {
                 label: "",
                 render: (row) => (
                   <div style={{ display: "flex", gap: 6 }}>
-                    <ReassignControl task={row} users={users} onDone={() => setReload((n) => n + 1)} />
+                    <ReassignControl task={row} users={users} usersTruncated={usersTruncated} usersUnavailable={usersUnavailable} onDone={() => setReload((n) => n + 1)} />
                     <SnoozeControl task={row} onSnoozed={() => setReload((n) => n + 1)} />
                   </div>
                 ),
@@ -321,6 +348,30 @@ export function OverdueTaskAlerts() {
             emptyTitle={t("emptyTitle")}
             emptyMessage={t("emptyMessage")}
           />
+          <nav
+            aria-label={t("pagerAria")}
+            style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "10px 12px" }}
+          >
+            <p role="status" aria-live="polite" style={{ margin: 0, fontSize: 13, color: "var(--muted)" }}>
+              {t("showing", {
+                from: firstShown.toLocaleString("en-IN"),
+                to: lastShown.toLocaleString("en-IN"),
+                total: total.toLocaleString("en-IN"),
+              })}
+            </p>
+            {pageCount > 1 ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Button type="button" variant="ghost" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
+                  {t("previousPage")}
+                </Button>
+                <span style={{ fontSize: 13 }}>{t("pageOf", { page: page + 1, pages: pageCount })}</span>
+                <Button type="button" variant="ghost" size="sm" disabled={page >= pageCount - 1} onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}>
+                  {t("nextPage")}
+                </Button>
+              </div>
+            ) : null}
+          </nav>
+          </>
         )}
       </div>
     </div>

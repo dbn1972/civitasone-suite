@@ -15,6 +15,12 @@ export interface CaseHistoryEntry {
   toStatus: string;
   note: string | null;
   actorId: string;
+  /**
+   * GAP-CRM-SERVICE-REQUESTS-DETAIL-03: who made the change, as a display NAME resolved by
+   * crm-service. null/absent when it could not be resolved - the entry then says the name is
+   * unavailable. The id itself is never shown.
+   */
+  actorName?: string | null;
   at: string;
 }
 
@@ -66,6 +72,9 @@ export function CaseStatusTimeline({
             {e.note ? (
               <p style={{ margin: 0, fontSize: 13, color: "var(--ink)", whiteSpace: "pre-wrap" }}>{e.note}</p>
             ) : null}
+            <span style={{ fontSize: 12, color: "var(--ink2)" }}>
+              {e.actorName ? t("by", { name: e.actorName }) : t("byUnknown")}
+            </span>
           </li>
         ))}
       </ol>

@@ -52,6 +52,16 @@ describe("LeadFormsPage", () => {
     expect(screen.getByText(/DPDP Act 2023 requires consent/i)).toBeInTheDocument();
   });
 
+  // GAP-CRM-LEAD-FORMS-03: the tile and the row pill name the condition identically.
+  it("names the consent-gap condition the same on the stat tile and the status pill", async () => {
+    getFormsMock.mockResolvedValue({ data: [form({ enabled: true, requireConsent: false })], source: "api" });
+    render(await LeadFormsPage());
+    // Tile label + row pill: two elements, one wording, no "Consent not required".
+    expect(screen.getAllByText("Consent gap")).toHaveLength(2);
+    expect(screen.queryByText("Consent not required")).not.toBeInTheDocument();
+    expect(screen.queryByText("unlawful")).not.toBeInTheDocument();
+  });
+
   it("does not show the consent-gap note when every form is lawful", async () => {
     getFormsMock.mockResolvedValue({ data: [form({ requireConsent: true })], source: "api" });
     render(await LeadFormsPage());

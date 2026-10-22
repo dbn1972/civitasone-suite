@@ -48,7 +48,8 @@ describe("OpportunityForm (OP-003)", () => {
     expect(payload.valueMinor).toBe("150050");
     expect(payload.probability).toBe(40);
     expect(payload.pipelineId).toBe("p1");
-    expect(payload.stage).toBe("qual");
+    // The backend matches a pipeline stage by NAME, so the name is sent - not the web-derived key "qual".
+    expect(payload.stage).toBe("Qualify");
   });
 
   it("blocks an invalid probability without calling the API", async () => {
@@ -218,5 +219,131 @@ describe("OpportunityForm quantity bound (server cap 100,000,000)", () => {
     fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
     await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
     expect(vi.mocked(op.createOpportunity).mock.calls[0][0].quantity).toBe(100000000);
+  });
+});
+
+// GAP-CRM-OPPORTUNITIES-NEW-02 (W2 crm cluster 07): the chosen account is part of the POST body
+// (the backend now persists it, and the account view lists the deal).
+describe("OpportunityForm account link (GAP-CRM-OPPORTUNITIES-NEW-02)", () => {
+  const ACCOUNTS = [
+    { id: "acc-1", name: "Acme Corp" },
+    { id: "acc-2", name: "Beta Industries" },
+  ];
+
+  /**
+   * Serve GET /api/proxy/v1/crm/accounts like the real list route: limit (<= 200) and offset
+   * paging, `search` (name contains, ignoring case), `ids` (comma-separated lookup), meta.total
+   * counting the matches.
+   */
+  function serveAccounts(all: Array<{ id: string; name: string }>) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const limit = Number(url.searchParams.get("limit") ?? 50);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const search = (url.searchParams.get("search") ?? "").trim().toLowerCase();
+      const ids = url.searchParams.get("ids")?.split(",");
+      const matching = all.filter(
+        (a) => (!search || a.name.toLowerCase().includes(search)) && (!ids || ids.includes(a.id)),
+      );
+      return new Response(JSON.stringify({ data: matching.slice(offset, offset + limit), meta: { total: matching.length } }), { status: 200 });
+    });
+  }
+
+  it("selecting an account puts its id in the POST body", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-acct");
+    const fetchSpy = serveAccounts(ACCOUNTS);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Acme renewal" } });
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Acme" } });
+    fireEvent.mouseDown(await screen.findByText("Acme Corp"));
+    expect(await screen.findByDisplayValue("Acme Corp")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0].accountId).toBe("acc-1");
+    fetchSpy.mockRestore();
+  });
+
+  const accountRequests = (fetchSpy: ReturnType<typeof serveAccounts>) =>
+    fetchSpy.mock.calls.map((c) => new URL(String(c[0]), "http://localhost")).filter((u) => u.pathname.endsWith("/v1/crm/accounts"));
+
+  it("an account deep in a long list is found with ONE server-side search, not by paging the list", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    const many = Array.from({ length: 460 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` })).concat([{ id: "acc-late", name: "Zenith Utilities" }]);
+    const fetchSpy = serveAccounts(many);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Zenith" } });
+    expect(await screen.findByText("Zenith Utilities")).toBeInTheDocument();
+    const calls = accountRequests(fetchSpy);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.searchParams.get("search")).toBe("Zenith");
+    expect(calls[0]!.searchParams.get("limit")).toBe("20");
+    expect(calls[0]!.searchParams.has("offset")).toBe(false); // never walks pages
+    fetchSpy.mockRestore();
+  });
+
+  it("a query that matches nothing costs one request and says so (it does not read the whole list)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    const many = Array.from({ length: 460 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` }));
+    const fetchSpy = serveAccounts(many);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Nonexistent Ltd" } });
+    await waitFor(() => expect(accountRequests(fetchSpy)).toHaveLength(1));
+    await screen.findByText(/no (matches|results)/i);
+    expect(accountRequests(fetchSpy)).toHaveLength(1);
+    fetchSpy.mockRestore();
+  });
+
+  it("an account prefilled from ?accountId= is sent without the user touching the picker", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-prefill");
+    const fetchSpy = serveAccounts(ACCOUNTS);
+    renderWithIntl(<OpportunityForm initialAccountId="acc-2" initialAccountLabel="Beta Industries" />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Beta expansion" } });
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0].accountId).toBe("acc-2");
+    fetchSpy.mockRestore();
+  });
+
+  it("omits accountId entirely when no account is chosen (the link stays optional)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-none");
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Quick capture" } });
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0]).not.toHaveProperty("accountId");
+  });
+});
+
+describe("OpportunityForm stage identity (W2 crm cluster 07)", () => {
+  it("sends the stage NAME and the stage's own id (crm-service matches stages by name), never the derived slug key", async () => {
+    const withIds: op.Pipeline = {
+      id: "p9",
+      name: "Field Services",
+      enabled: true,
+      stages: [
+        { key: "site_visit_scheduled", name: "Site Visit Scheduled", id: "stage-uuid-1", mandatoryFields: [], gate: false },
+        { key: "quoted", name: "Quoted", id: "stage-uuid-2", mandatoryFields: [], gate: false },
+      ],
+    };
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [withIds], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-stage");
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Survey" } });
+    fireEvent.change(screen.getByLabelText(/^stage$/i), { target: { value: "quoted" } }); // option values are still the keys
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    const payload = vi.mocked(op.createOpportunity).mock.calls[0][0];
+    expect(payload.stage).toBe("Quoted");
+    expect(payload.stageId).toBe("stage-uuid-2");
+    expect(payload.stage).not.toBe("quoted");
   });
 });

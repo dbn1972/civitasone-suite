@@ -198,6 +198,18 @@ describe("DocumentsPanel (DM-001/002/003)", () => {
     expect(await screen.findByText(/document-type list could not be loaded/i)).toBeInTheDocument();
   });
 
+  // GAP-CRM-ACCOUNTS-DETAIL-02: even if the control is shown, the server (403 for a
+  // non-admin) is the authority: the refusal surfaces and nothing is marked verified.
+  it("surfaces a refused verification (403) and does not claim success", async () => {
+    vi.mocked(dm.getDocuments).mockResolvedValue({ data: [doc()], source: "api" });
+    vi.mocked(dm.verifyDocument).mockRejectedValue(new Error("You don't have permission to do this."));
+    render(<DocumentsPanel subjectType="contact" subjectId="c1" canVerify />);
+    await screen.findByText("PAN card");
+    fireEvent.click(screen.getByRole("button", { name: /^Verify$/i }));
+    expect(await screen.findByText("You don't have permission to do this.")).toBeInTheDocument();
+    expect(screen.queryByText(/marked verified/i)).not.toBeInTheDocument();
+  });
+
   it("does not show verify/reject when canVerify is false", async () => {
     vi.mocked(dm.getDocuments).mockResolvedValue({ data: [doc()], source: "api" });
     render(<DocumentsPanel subjectType="contact" subjectId="c1" />);

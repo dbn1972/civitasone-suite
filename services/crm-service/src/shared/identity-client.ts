@@ -1,3 +1,8 @@
+/**
+ * Exact, single-user check against identity-service (the source of truth for users).
+ * Display names and the user/role pickers live in user-directory.ts; this file is only
+ * the point lookup that must never be answered from a cache or a truncated list.
+ */
 const IDENTITY_URL = process.env.IDENTITY_SERVICE_URL ?? "http://127.0.0.1:3001";
 
 /**

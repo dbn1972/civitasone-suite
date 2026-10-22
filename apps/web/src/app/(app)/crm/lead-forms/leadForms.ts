@@ -18,14 +18,16 @@ export type FormHealth = "live" | "paused" | "unlawful";
  * GAP-CRM-LEAD-FORMS-03: human labels for the health enum. The raw value
  * "unlawful" must never be printed verbatim as a pill label — it is both an
  * internal enum and a legal conclusion the UI should not assert. The condition
- * is "enabled without requiring consent", surfaced as "Consent gaps" on the
- * tile; the per-row pill says "Consent not required" (what is actually true of
- * the form's configuration). The enum stays internal.
+ * is "enabled without requiring consent". The per-row pill and the page tile
+ * use the SAME words ("Consent gap") so there is one name for one condition;
+ * the live catalogues (crmLeadFormsTable.health_unlawful and
+ * crmLeadFormsPage.statConsentGaps) are kept equal by a test. The enum stays
+ * internal.
  */
 export const HEALTH_LABEL: Record<FormHealth, string> = {
   live: "Live",
   paused: "Paused",
-  unlawful: "Consent not required",
+  unlawful: "Consent gap",
 };
 
 /** The DPDP explanation shown when any form is in the consent-gap state. */

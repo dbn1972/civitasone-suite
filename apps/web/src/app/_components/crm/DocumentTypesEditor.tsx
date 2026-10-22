@@ -35,6 +35,10 @@ let SEQ = 0;
 function toRow(t: DocumentType): Row {
   return { ...t, key: t.id ?? `new-${SEQ++}` };
 }
+/** A saved type that at least one document row is filed under (cannot be deleted). */
+function isInUse(row: Row): boolean {
+  return Boolean(row.id) && (row.documentCount ?? 0) > 0;
+}
 function blank(): DocumentType {
   return { code: "", name: "", appliesTo: [], mandatory: false, expiryRequired: false, verificationRequired: false, enabled: true };
 }
@@ -258,10 +262,25 @@ export function DocumentTypesEditor() {
                   <Button type="button" style={{ minHeight: 40 }} disabled={busyKey === row.key || !rowValid(row)} onClick={() => save(row)}>
                     {busyKey === row.key ? "Saving…" : "Save"}
                   </Button>
-                  <Button type="button" variant="danger" style={{ minHeight: 40 }} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)}>
+                  {/* GAP-CRM-DOCUMENT-TYPES-03: a saved type that documents still use cannot be
+                      deleted (the server answers 409 TYPE_IN_USE); say so up front and point at
+                      the Enabled switch instead of offering a button that can only fail. */}
+                  <Button
+                    type="button"
+                    variant="danger"
+                    style={{ minHeight: 40 }}
+                    disabled={busyKey === row.key || isInUse(row)}
+                    aria-describedby={isInUse(row) ? `${headingId}-inuse-${row.key}` : undefined}
+                    onClick={() => setConfirmKey(row.key)}
+                  >
                     Delete
                   </Button>
                 </div>
+                {isInUse(row) ? (
+                  <p id={`${headingId}-inuse-${row.key}`} style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 0" }}>
+                    {t("inUseHint", { count: row.documentCount ?? 0 })}
+                  </p>
+                ) : null}
               </li>
               );
             })}
@@ -282,7 +301,12 @@ export function DocumentTypesEditor() {
         title="Delete this document type?"
         description={
           confirmRow
-            ? t("deleteDescription", { name: confirmRow.name || confirmRow.code })
+            ? // GAP-CRM-DOCUMENT-TYPES-03: state the real outcome. A type no document uses
+              // is simply removed; if the backend did not report usage, say the server will
+              // refuse an in-use delete rather than claim documents "keep" a type they cannot.
+              confirmRow.documentCount === undefined && confirmRow.id
+              ? t("deleteDescriptionUnknown", { name: confirmRow.name || confirmRow.code })
+              : t("deleteDescriptionUnused", { name: confirmRow.name || confirmRow.code })
             : ""
         }
         confirmLabel="Delete"

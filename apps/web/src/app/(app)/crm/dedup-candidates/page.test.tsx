@@ -14,6 +14,13 @@ function render(ui: ReactElement) {
 import DedupCandidatesPage from "./page";
 import * as api from "@/lib/crm/dedupCandidates";
 
+// The viewer's roles drive whether the audited Reveal control is offered
+// (GAP-CRM-DEDUP-CANDIDATES-01). Default: no roles loaded -> masked text only.
+const identity = vi.hoisted(() => ({ roles: [] as string[] }));
+vi.mock("@/lib/auth/useSessionIdentity", () => ({
+  useSessionIdentity: () => ({ loaded: true, userId: "u1", roles: identity.roles }),
+}));
+
 vi.mock("@/lib/crm/dedupCandidates", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/dedupCandidates")>();
   return {
@@ -60,6 +67,7 @@ const PAIR_MID = { ...PAIR, pairId: "pair-002", confidence: 65 };
 const PAIR_LOW = { ...PAIR, pairId: "pair-003", confidence: 45 };
 
 beforeEach(() => {
+  identity.roles = [];
   vi.mocked(api.getDedupCandidates).mockReset();
   vi.mocked(api.mergeDedupPair).mockReset();
   vi.mocked(api.dismissDedupPair).mockReset();
@@ -107,6 +115,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("shows the merge confirm dialog when Merge button is clicked", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
       data: [PAIR],
       source: "api",
@@ -133,6 +142,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("calls mergeDedupPair and removes the pair on confirm", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
       data: [PAIR],
       source: "api",
@@ -166,6 +176,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("GAP-CRM-DEDUP-CANDIDATES-02: Swap makes the right contact the primary in the POST body", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
     vi.mocked(api.mergeDedupPair).mockResolvedValue(undefined);
 
@@ -186,6 +197,34 @@ describe("DedupCandidatesPage", () => {
       expect(api.mergeDedupPair).toHaveBeenCalledWith("bbb-222", "aaa-111", "right record is the better source"),
     );
   });
+
+  // POST /v1/crm/contacts/merge answers 403 to everyone but crm_admin / super_admin, so a
+  // plain crm_user used to be walked through a danger confirmation and then refused.
+  it("offers Merge (and the Swap that only decides which record a merge keeps) to crm_admin and super_admin", async () => {
+    for (const role of ["crm_admin", "super_admin"]) {
+      identity.roles = [role];
+      vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+      const { unmount } = render(<DedupCandidatesPage />);
+      await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+      expect(screen.getByRole("button", { name: /merge → keep/i }), role).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /swap/i }), role).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it.each([["crm_user"], ["tenant_admin"], ["admin"], ["platform_admin"], [""]])(
+    "offers no Merge or Swap to %j, but still lets them review and Dismiss the pair",
+    async (role) => {
+      identity.roles = role ? [role] : []; // "" = roles still unknown
+      vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+      render(<DedupCandidatesPage />);
+      await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: /merge → keep/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /swap/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /dismiss pair/i })).toBeInTheDocument();
+      expect(api.mergeDedupPair).not.toHaveBeenCalled();
+    },
+  );
 
   it("GAP-CRM-DEDUP-CANDIDATES-03: Dismiss opens a confirm and calls no API until confirmed", async () => {
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
@@ -333,4 +372,153 @@ describe("DedupCandidatesPage", () => {
     expect(screen.getByText(/Page 1 of 2/i)).toBeInTheDocument();
   });
 
+});
+
+// GAP-CRM-DEDUP-CANDIDATES-01: crm-service now masks email/phone before they leave
+// the server, and the clear value is reachable only through the audited reveal.
+const MASKED_LEFT = { ...LEFT, email: "p***@example.com", phone: "*******3210" };
+const MASKED_RIGHT = { ...RIGHT, email: "p***@example.com", phone: "*******3211" };
+const MASKED_PAIR = {
+  pairId: "pair-masked",
+  confidence: 85,
+  left: MASKED_LEFT,
+  right: MASKED_RIGHT,
+  matchedFields: ["name", "company"],
+  diffFields: ["phone", "lastActivity"],
+};
+
+describe("DedupCandidatesPage PII reveal (GAP-CRM-DEDUP-CANDIDATES-01)", () => {
+  async function renderPage(pair: typeof MASKED_PAIR | typeof PAIR = MASKED_PAIR) {
+    vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [pair as never], source: "api" });
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+  }
+
+  it("shows server-masked email/phone as received, with no Reveal button for a plain crm_user", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage();
+    expect(screen.getAllByText("p***@example.com").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("*******3210")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+
+  // Review finding: any value containing "*" used to be trusted as already masked, so a
+  // CLEAR email with "*" in its (RFC 5322 valid) local part rendered unmasked while the
+  // web was deployed ahead of crm-service. Only the server's mask SHAPE is passed through.
+  it("still masks a clear email/phone that merely contains '*' (crm-service not yet upgraded)", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage({
+      ...MASKED_PAIR,
+      left: { ...LEFT, email: "a*b@example.com", phone: "+91-98765*43210" },
+      right: { ...RIGHT, email: "c*d@example.com", phone: "+91-98765*43211" },
+    });
+    expect(screen.queryByText("a*b@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("c*d@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-98765*43210")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-98765*43211")).not.toBeInTheDocument();
+    expect(screen.getAllByText("a***@e******.c**")).toHaveLength(1);
+    expect(screen.getAllByText("c***@e******.c**")).toHaveLength(1);
+    expect(screen.getByText("91XXXXXXX210")).toBeInTheDocument();
+    expect(screen.getByText("91XXXXXXX211")).toBeInTheDocument();
+  });
+
+  it("passes the server's own short-number mask ('****') through as received", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage({
+      ...MASKED_PAIR,
+      left: { ...MASKED_LEFT, phone: "****" },
+      right: { ...MASKED_RIGHT, phone: "****" },
+    });
+    expect(screen.getAllByText("****").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("offers no Reveal button while the viewer's roles are still unknown", async () => {
+    identity.roles = [];
+    await renderPage();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+
+  it.each([["crm_admin"], ["super_admin"], ["tenant_admin"]])(
+    "offers Reveal on all four email/phone cells to %s, and not on name/company/last activity",
+    async (role) => {
+      identity.roles = [role];
+      await renderPage();
+      expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(4);
+    },
+  );
+
+  it("revealing calls the audited endpoint for that contact+field with the typed reason, then shows the clear value", async () => {
+    identity.roles = ["crm_admin"];
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "priya@example.com" } }), { status: 200 }));
+    await renderPage();
+    expect(screen.queryByText("priya@example.com")).not.toBeInTheDocument();
+
+    // First Reveal button = the kept (left) contact's email.
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" })[0]!);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason for revealing/i), { target: { value: "Confirming the duplicate by email" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Reveal" }));
+
+    expect(await screen.findByText("priya@example.com")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/crm/pii/reveal");
+    expect(JSON.parse(init.body as string)).toEqual({
+      resourceType: "contact",
+      resourceId: MASKED_LEFT.id,
+      field: "email",
+      reason: "Confirming the duplicate by email",
+    });
+  });
+
+  it("never reveals without a reason of at least 10 characters (no request is made)", async () => {
+    identity.roles = ["crm_admin"];
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    await renderPage();
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" })[0]!);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason for revealing/i), { target: { value: "too short" } });
+    expect(within(dialog).getByRole("button", { name: "Reveal" })).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("highlights the fields the SERVER says differ, even when the masked text is identical", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage();
+    const rows = Array.from(document.querySelectorAll(".dedup-grid-row")).filter((r) => r.getAttribute("role") === "row");
+    const byLabel = (label: string) => rows.find((r) => r.querySelector('[role="rowheader"]')?.textContent === label);
+    // phone masks to different strings AND is in diffFields; email masks identically and is not.
+    expect(byLabel("Phone")?.querySelectorAll(".dedup-diff").length).toBe(2);
+    expect(byLabel("Email")?.querySelectorAll(".dedup-diff").length).toBe(0);
+    expect(byLabel("Last activity")?.querySelectorAll(".dedup-diff").length).toBe(2);
+  });
+
+  it("highlights a phone that differs on the clear values even if both mask the same (server diffFields wins)", async () => {
+    identity.roles = ["crm_user"];
+    const sameMask = {
+      ...MASKED_PAIR,
+      left: { ...MASKED_LEFT, phone: "*******3210" },
+      right: { ...MASKED_RIGHT, phone: "*******3210" },
+      diffFields: ["phone"],
+    };
+    await renderPage(sameMask);
+    const rows = Array.from(document.querySelectorAll(".dedup-grid-row")).filter((r) => r.getAttribute("role") === "row");
+    const phoneRow = rows.find((r) => r.querySelector('[role="rowheader"]')?.textContent === "Phone");
+    expect(phoneRow?.querySelectorAll(".dedup-diff").length).toBe(2);
+  });
+
+  it("lists the match reasons from the server", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage();
+    expect(screen.getByText("Matched on: Name, Company")).toBeInTheDocument();
+  });
+
+  it("still masks a clear email/phone from a server that has not been upgraded", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage(PAIR);
+    expect(screen.queryByText("priya@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-9876543210")).not.toBeInTheDocument();
+  });
 });

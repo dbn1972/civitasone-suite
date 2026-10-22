@@ -113,6 +113,55 @@ describe("Custom Fields Validators", () => {
     });
   });
 
+  // GAP-CRM-CUSTOM-FIELDS-01: the privacy keys the admin screen writes are typed at the
+  // boundary, so a value a later masking/export reader depends on cannot be malformed.
+  describe("validationSchema privacy keys (GAP-CRM-CUSTOM-FIELDS-01)", () => {
+    const base = { entityType: "contacts", fieldName: "Aadhaar", fieldType: "text" } as const;
+
+    it("accepts sensitive with visibleToRoles and keeps them verbatim", () => {
+      const vs = { required: true, sensitive: true, visibleToRoles: ["crm_admin", "tenant_admin"] };
+      const result = createCustomFieldBody.safeParse({ ...base, validationSchema: vs });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.validationSchema).toEqual(vs);
+    });
+
+    it("accepts sensitive without roles, a null blob, and unknown keys (passed through)", () => {
+      expect(createCustomFieldBody.safeParse({ ...base, validationSchema: { sensitive: true } }).success).toBe(true);
+      expect(createCustomFieldBody.safeParse({ ...base, validationSchema: null }).success).toBe(true);
+      const r = createCustomFieldBody.safeParse({ ...base, validationSchema: { maxLength: 12 } });
+      expect(r.success).toBe(true);
+      if (r.success) expect(r.data.validationSchema).toEqual({ maxLength: 12 });
+    });
+
+    it.each([
+      ["a non-boolean sensitive", { sensitive: "yes" }],
+      ["a numeric sensitive", { sensitive: 1 }],
+      ["a string visibleToRoles", { sensitive: true, visibleToRoles: "crm_admin" }],
+      ["a role that is not an identifier", { sensitive: true, visibleToRoles: ["CRM Admin!"] }],
+      ["a non-string role", { sensitive: true, visibleToRoles: [42] }],
+      ["more than 20 roles", { sensitive: true, visibleToRoles: Array.from({ length: 21 }, (_, i) => `role_${i}`) }],
+      ["a non-boolean required", { required: "true" }],
+      ["non-string options", { options: [1, 2] }],
+      ["a non-object blob", "sensitive"],
+    ])("rejects %s", (_label, vs) => {
+      expect(createCustomFieldBody.safeParse({ ...base, validationSchema: vs }).success).toBe(false);
+      expect(updateCustomFieldBody.safeParse({ validationSchema: vs }).success).toBe(false);
+    });
+
+    it("refuses visibleToRoles on a field that is not sensitive (it would read as restricted while open to all)", () => {
+      for (const vs of [{ visibleToRoles: ["crm_admin"] }, { sensitive: false, visibleToRoles: ["crm_admin"] }]) {
+        const r = createCustomFieldBody.safeParse({ ...base, validationSchema: vs });
+        expect(r.success).toBe(false);
+        if (!r.success) expect(r.error.issues[0]?.message).toBe("VISIBLE_TO_ROLES_REQUIRES_SENSITIVE");
+      }
+    });
+
+    it("applies the same rules to a PATCH", () => {
+      expect(updateCustomFieldBody.safeParse({ validationSchema: { sensitive: true, visibleToRoles: ["crm_admin"] } }).success).toBe(true);
+      expect(updateCustomFieldBody.safeParse({ validationSchema: { visibleToRoles: ["crm_admin"] } }).success).toBe(false);
+    });
+  });
+
   describe("updateCustomFieldBody", () => {
     it("accepts partial updates", () => {
       const result = updateCustomFieldBody.safeParse({ fieldName: "new_name" });

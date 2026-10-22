@@ -10,6 +10,7 @@
  * counts as a duplicate. No DB, no I/O — unit-testable.
  */
 import { scoreCandidate, type DedupRule, type DedupCandidate, type DedupField } from "./dedup-domain.js";
+import { maskEmail, maskPhone } from "../../shared/pii-crypto.js";
 
 /** A contact snapshot carried to the review UI (id + the comparison fields). */
 export interface DedupPairContact {
@@ -89,4 +90,39 @@ function snapshot(c: DedupPairInput): DedupPairContact {
     company: c.company ?? null,
     lastActivity: c.lastActivity ?? null,
   };
+}
+
+/** The fields the review screen lays out side by side. */
+export type DedupDisplayField = "name" | "email" | "phone" | "company" | "lastActivity";
+const DISPLAY_FIELDS: readonly DedupDisplayField[] = ["name", "email", "phone", "company", "lastActivity"];
+
+/** A pair as sent to the review screen: PII masked, plus which fields differ. */
+export interface DedupReviewPair extends DedupCandidatePair {
+  /**
+   * Display fields whose values differ between the two contacts, computed on the CLEAR
+   * values (trimmed, case-insensitive) BEFORE masking. A masked value keeps only a few
+   * characters, so two different phone numbers can mask identically; the screen needs
+   * this list to highlight the real differences without ever seeing the clear PII.
+   */
+  diffFields: DedupDisplayField[];
+}
+
+const norm = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
+
+function maskedSnapshot(c: DedupPairContact): DedupPairContact {
+  return { ...c, email: maskEmail(c.email), phone: maskPhone(c.phone) };
+}
+
+/**
+ * GAP-CRM-DEDUP-CANDIDATES-01 (DPDP data minimisation): a duplicate reviewer needs enough
+ * of a contact to RECOGNISE a match, not the full email and phone of both people. The
+ * server is the authority, so the pair list is masked here with the same canonical
+ * maskEmail/maskPhone the contacts module uses, for every caller. The clear value is
+ * available only through the audited reveal (POST /v1/crm/pii/reveal, resourceType
+ * "contact"), which enforces the PII-read role set and writes a pii_reveal audit event.
+ * Name and company stay clear so the pair is still recognisable.
+ */
+export function toReviewPair(pair: DedupCandidatePair): DedupReviewPair {
+  const diffFields = DISPLAY_FIELDS.filter((f) => norm(pair.left[f]) !== norm(pair.right[f]));
+  return { ...pair, diffFields, left: maskedSnapshot(pair.left), right: maskedSnapshot(pair.right) };
 }

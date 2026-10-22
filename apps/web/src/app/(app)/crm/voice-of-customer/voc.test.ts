@@ -12,10 +12,12 @@ import {
   SCORE_MAX,
   SCORE_MIN,
   formatAverageScore,
+  isCalendarDate,
   moodOf,
   rankThemes,
   shareOf,
   themeLabel,
+  toApiWindow,
   topConcern,
 } from "./voc";
 
@@ -186,5 +188,54 @@ describe("MOOD_LABEL polarity wording", () => {
   it("labels the neutral band 'Neutral', matching the mix card", () => {
     expect(MOOD_LABEL.neutral).toBe("Neutral");
     expect(Object.values(MOOD_LABEL)).not.toContain("Mixed");
+  });
+});
+
+// GAP-CRM-VOICE-OF-CUSTOMER-01: crm-service's sentiment filters are ISO INSTANTS (zod datetime()),
+// but the period control works in calendar days. A bare yyyy-mm-dd is rejected with a 400, which
+// sent the page to its error state for every chosen window.
+describe("isCalendarDate", () => {
+  it("accepts real calendar days only", () => {
+    expect(isCalendarDate("2026-09-30")).toBe(true);
+    expect(isCalendarDate("2028-02-29")).toBe(true); // leap day
+    expect(isCalendarDate("2026-02-29")).toBe(false); // not a leap year
+    expect(isCalendarDate("2026-02-31")).toBe(false);
+    expect(isCalendarDate("2026-13-01")).toBe(false);
+    expect(isCalendarDate("2026-00-10")).toBe(false);
+    expect(isCalendarDate("2026-9-3")).toBe(false);
+    expect(isCalendarDate("not-a-date")).toBe(false);
+    expect(isCalendarDate("")).toBe(false);
+    expect(isCalendarDate("2026-09-30T00:00:00Z")).toBe(false);
+  });
+});
+
+describe("toApiWindow", () => {
+  it("turns a day range into the IST day's first and last instants, as UTC ISO strings the server accepts", () => {
+    // 2026-09-01 00:00 IST = 2026-08-31T18:30Z ; 2026-09-30 23:59:59.999 IST = 2026-09-30T18:29:59.999Z
+    expect(toApiWindow({ from: "2026-09-01", to: "2026-09-30" })).toEqual({
+      from: "2026-08-31T18:30:00.000Z",
+      to: "2026-09-30T18:29:59.999Z",
+    });
+  });
+
+  it("produces strings that satisfy zod's datetime() (ISO, UTC, Z suffix)", () => {
+    const w = toApiWindow({ from: "2026-01-05", to: "2026-12-31" });
+    for (const v of [w.from, w.to]) expect(v).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  });
+
+  it("leaves a missing side missing, and an empty range empty", () => {
+    expect(toApiWindow({ from: "2026-09-01" })).toEqual({ from: "2026-08-31T18:30:00.000Z" });
+    expect(toApiWindow({ to: "2026-09-30" })).toEqual({ to: "2026-09-30T18:29:59.999Z" });
+    expect(toApiWindow({})).toEqual({});
+  });
+
+  it("drops a value that is not a real day instead of throwing (new Date(...).toISOString() would)", () => {
+    expect(() => toApiWindow({ from: "2026-02-31", to: "garbage" })).not.toThrow();
+    expect(toApiWindow({ from: "2026-02-31", to: "garbage" })).toEqual({});
+  });
+
+  it("keeps a single-day window ordered (from <= to), so the server never rejects it as inverted", () => {
+    const w = toApiWindow({ from: "2026-09-15", to: "2026-09-15" });
+    expect(new Date(w.from!).getTime()).toBeLessThan(new Date(w.to!).getTime());
   });
 });

@@ -56,6 +56,17 @@ describe("opportunity normalisers (OP-001..006)", () => {
     expect(normaliseOpportunity({ id: "d2", value: "25000" })!.valueMinor).toBe("25000");
   });
 
+  // GAP-CRM-OPPORTUNITIES-NEW-06: an absent probability/quantity stays absent; a real 0 is kept.
+  it("does not fabricate a 0% probability or 0 quantity when the service sent none", () => {
+    const blank = normaliseOpportunity({ id: "d1", name: "Deal", valueMinor: 100, probability: null, quantity: null });
+    expect(blank).not.toHaveProperty("probability");
+    expect(blank).not.toHaveProperty("quantity");
+    const zero = normaliseOpportunity({ id: "d2", name: "Deal", valueMinor: 100, probability: 0, quantity: 0 });
+    expect(zero!.probability).toBe(0);
+    expect(zero!.quantity).toBe(0);
+    expect(normaliseOpportunity({ id: "d3", name: "Deal", probability: "35" })!.probability).toBe(35);
+  });
+
   it("normalises kanban columns and funnel rows", () => {
     const k = normaliseKanban({ columns: [{ stage: "qual", stageName: "Qualify", deals: [{ id: "d1", name: "x" }] }] });
     expect(k).toHaveLength(1);

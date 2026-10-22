@@ -109,6 +109,128 @@ describe("F1-01 grievances mask citizenPhone/citizenEmail server-side", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// GAP-CRM-GRIEVANCES-DETAIL-05: default-masked detail read + audited reveal
+// ──────────────────────────────────────────────────────────────────────────
+describe("GAP-CRM-GRIEVANCES-DETAIL-05 grievance detail ?pii=masked", () => {
+  async function createGrievance(tid: string): Promise<string> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/grievances",
+      headers: authHeaders(["crm_admin"], tid),
+      payload: {
+        citizenName: "Asha Rao",
+        citizenPhone: PHONE,
+        citizenEmail: EMAIL,
+        category: "water",
+        subject: "No supply",
+        priority: "normal",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json().data.id as string;
+  }
+
+  it("masks phone and email for a PII-read role when pii=masked, with no raw value anywhere in the body", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?pii=masked`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().data;
+    expect(row.citizenPhone).toBe("******3210");
+    expect(row.citizenEmail).toBe("c***@example.in");
+    expect(res.body).not.toContain(PHONE);
+    expect(res.body).not.toContain(EMAIL);
+  });
+
+  it("is additive: the same admin call without pii=masked still returns the clear value", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.json().data.citizenPhone).toBe(PHONE);
+  });
+
+  it("rejects an unknown pii mode instead of silently returning clear data", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?pii=clear`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // The service-request and RTI detail reads spell the same switch `?maskPii=true`. Both spellings are
+  // accepted on every detail read that honours the switch (shared maskPiiQuery), so a caller never has to
+  // know which resource uses which, and the original grievance spelling above keeps working.
+  it.each(["maskPii=true", "maskPii=1", "pii=masked&maskPii=false"])(
+    "masks for a PII-read role on ?%s too (one convention across detail reads)",
+    async (query) => {
+      const tid = randomUUID();
+      const id = await createGrievance(tid);
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/crm/grievances/${id}?${query}`,
+        headers: authHeaders(["crm_admin"], tid),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.citizenPhone).toBe("******3210");
+      expect(res.json().data.citizenEmail).toBe("c***@example.in");
+      expect(res.body).not.toContain(PHONE);
+      expect(res.body).not.toContain(EMAIL);
+    },
+  );
+
+  it.each(["maskPii=false", "maskPii=0"])("?%s keeps the role-based behaviour (clear value for a PII-read role)", async (query) => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?${query}`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.citizenPhone).toBe(PHONE);
+  });
+
+  it("rejects an unknown maskPii value instead of silently returning clear data", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?maskPii=maybe`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("the clear value is then only reachable through the audited reveal, which a crm_user cannot call", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const reveal = (roles: string[]) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/crm/pii/reveal",
+        headers: authHeaders(roles, tid),
+        payload: { resourceType: "grievance", resourceId: id, field: "citizenPhone", reason: "citizen asked for a callback" },
+      });
+    expect((await reveal(["crm_user"])).statusCode).toBe(403);
+    const ok = await reveal(["crm_admin"]);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().data.value).toBe(PHONE);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 // F1-02 RTI
 // ──────────────────────────────────────────────────────────────────────────
 describe("F1-02 rti mask applicantName (partial) + applicantContact", () => {
@@ -418,5 +540,67 @@ describe("F1-05 POST /v1/crm/pii/reveal (audited)", () => {
       payload: { resourceType: "grievance", resourceId: randomUUID(), field: "citizenPhone", reason: "service follow up" },
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// GAP-CRM-ONBOARDING-DETAIL-05 (W2 crm cluster 07): the audited reveal path covers
+// onboarding.kycReference too -- the field the case-detail page's MaskedReveal control
+// reveals once the policy masks it for the viewer.
+// ──────────────────────────────────────────────────────────────────────────
+describe("F1-05 POST /v1/crm/pii/reveal covers onboarding.kycReference", () => {
+  const KYC_REF = "KYCPROV-WXYZ9876";
+
+  async function seedCase(tid: string): Promise<string> {
+    const id = randomUUID();
+    await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${tid}, true)`;
+      await tx`
+        INSERT INTO crm.onboarding_cases
+          (id, tenant_id, deal_id, account_id, stage, kyc_status, kyc_reference, created_by, updated_by)
+        VALUES
+          (${id}::uuid, ${tid}::uuid, ${randomUUID()}::uuid, ${randomUUID()}::uuid,
+           'verification', 'submitted', ${KYC_REF}, ${randomUUID()}::uuid, ${randomUUID()}::uuid)
+      `;
+    });
+    return id;
+  }
+
+  it("403 for a crm_user: a non-approver can neither see nor reveal the KYC reference", async () => {
+    const tid = randomUUID();
+    const id = await seedCase(tid);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/pii/reveal",
+      headers: authHeaders(["crm_user"], tid),
+      payload: { resourceType: "onboarding", resourceId: id, field: "kycReference", reason: "verifying the provider check" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain(KYC_REF);
+  });
+
+  it("a KYC approver reveals the clear reference AND a pii_reveal audit event is written without the value", async () => {
+    const tid = randomUUID();
+    const id = await seedCase(tid);
+    const reason = "re-checking the provider reference before approval";
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/pii/reveal",
+      headers: authHeaders(["crm_admin"], tid),
+      payload: { resourceType: "onboarding", resourceId: id, field: "kycReference", reason },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.value).toBe(KYC_REF);
+
+    const auditRows = (await sqlClient`
+      SELECT payload FROM _outbox.messages
+      WHERE tenant_id = ${tid}::uuid
+        AND topic = 'audit.event.record'
+        AND payload->>'action' = 'pii_reveal'
+        AND payload->>'resourceType' = 'onboarding'
+        AND payload->>'resourceId' = ${id}
+    `) as unknown as Array<{ payload: Record<string, unknown> }>;
+    expect(auditRows.length).toBeGreaterThan(0);
+    for (const r of auditRows) expect(JSON.stringify(r.payload)).not.toContain(KYC_REF);
   });
 });

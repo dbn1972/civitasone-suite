@@ -1,6 +1,6 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **58 open**, 4388 closed, 206 blocked or obsolete.
+Total: **58 open**, 4368 closed, 226 blocked or obsolete.
 
 Priority queue: 5 open, 207 closed (0 entries ticked by W0-07 to match closed module items).
 
@@ -31,7 +31,7 @@ Priority queue: 5 open, 207 closed (0 entries ticked by W0-07 to match closed mo
 | citizen | 0 | 125 | 9 |
 | contact | 0 | 3 | 3 |
 | contracts | 0 | 23 | 0 |
-| crm | 0 | 353 | 6 |
+| crm | 0 | 333 | 26 |
 | dashboard | 0 | 11 | 0 |
 | designer | 0 | 60 | 10 |
 | developer-portal | 0 | 6 | 0 |

@@ -105,8 +105,12 @@ export interface Product {
   activeFrom: string;
   activeTo: string;
   enabled: boolean;
-  /** Audit: who last changed this product and when, when the API returns them. */
+  /**
+   * Audit: who last changed this product and when. `updatedBy` is the identity user id (never
+   * shown); `updatedByName` is the display name the API resolves for it (GAP-CRM-PRODUCTS-01).
+   */
   updatedBy?: string;
+  updatedByName?: string;
   updatedAt?: string;
 }
 
@@ -131,6 +135,7 @@ export function normaliseProduct(raw: unknown): Product | null {
     activeTo: str(r.activeTo),
     enabled: bool(r.enabled, true),
     updatedBy: str(r.updatedBy) || undefined,
+    updatedByName: str(r.updatedByName) || undefined,
     updatedAt: str(r.updatedAt) || undefined,
   };
 }
@@ -160,16 +165,72 @@ export async function getProducts(): Promise<LoaderResult<Product[]>> {
   }
 }
 
+/**
+ * A blank optional text field is not a value. crm-service validates optional text as
+ * `min(1)` (and dates as ISO), so the editors' empty strings were rejected 400 on every save
+ * that left e.g. Category, Unit or an Active window blank. On CREATE a blank is simply left
+ * out; on UPDATE a blank clears a clearable field (null) or leaves a required one alone.
+ */
+function blankable(v: string | null | undefined, mode: "create" | "update"): string | null | undefined {
+  const t = (v ?? "").trim();
+  if (t !== "") return t;
+  return mode === "update" ? null : undefined;
+}
+
+/** The exact JSON the products API accepts (unknown keys such as audit fields are not sent). */
+export function serialiseProduct(p: Product, mode: "create" | "update"): string {
+  return JSON.stringify({
+    category: blankable(p.category, mode),
+    code: mode === "create" ? p.code.trim() : undefined,
+    name: p.name.trim(),
+    // `unit` is NOT NULL server-side: a blank unit means "keep / default", never "clear".
+    unit: p.unit.trim() || undefined,
+    taxRateBps: p.taxRateBps,
+    hsnSac: blankable(p.hsnSac, mode),
+    priceMinor: p.priceMinor,
+    currency: p.currency,
+    activeFrom: blankable(p.activeFrom, mode),
+    activeTo: blankable(p.activeTo, mode),
+    enabled: p.enabled,
+  });
+}
+
 export async function createProduct(p: Product): Promise<void> {
-  const res = await browserFetch("v1/crm/products", { method: "POST", body: JSON.stringify(p) });
+  const res = await browserFetch("v1/crm/products", { method: "POST", body: serialiseProduct(p, "create") });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
 export async function updateProduct(id: string, p: Product): Promise<void> {
   // PATCH, not PUT: the service registers only `app.patch("/v1/crm/products/:id")`,
   // so a PUT matched no route and Fastify answered 404 — product edits never saved.
-  const res = await browserFetch(`v1/crm/products/${id}`, { method: "PATCH", body: JSON.stringify(p) });
+  const res = await browserFetch(`v1/crm/products/${id}`, { method: "PATCH", body: serialiseProduct(p, "update") });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+}
+
+/** GAP-CRM-PRODUCTS-01: how many quotations / price books still reference a product. */
+export interface ProductUsage {
+  quotations: number;
+  priceBooks: number;
+}
+
+export function normaliseProductUsage(raw: unknown): ProductUsage | null {
+  const body = raw && typeof raw === "object" && "data" in (raw as object) ? (raw as { data: unknown }).data : raw;
+  if (!body || typeof body !== "object") return null;
+  const r = body as Record<string, unknown>;
+  if (typeof r.quotations !== "number" || typeof r.priceBooks !== "number") return null;
+  return { quotations: r.quotations, priceBooks: r.priceBooks };
+}
+
+/** Null data + source "error" when the count could not be read: the caller must say "unknown", never "unused". */
+export async function getProductUsage(id: string): Promise<LoaderResult<ProductUsage | null>> {
+  try {
+    const res = await browserFetch(`v1/crm/products/${encodeURIComponent(id)}/usage`);
+    if (!res.ok) return { data: null, source: "error" };
+    const usage = normaliseProductUsage(await res.json());
+    return usage ? { data: usage, source: "api" } : { data: null, source: "error" };
+  } catch {
+    return { data: null, source: "error" };
+  }
 }
 
 export async function deleteProduct(id: string): Promise<void> {
@@ -199,7 +260,10 @@ export interface PriceBook {
    * price and when. Present whenever the API returns them.
    */
   version?: number;
+  /** Identity user id of the last editor (never shown — see updatedByName). */
   updatedBy?: string;
+  /** Display name the API resolves for `updatedBy` (GAP-CRM-PRICE-BOOKS-01); absent when unresolved. */
+  updatedByName?: string;
   updatedAt?: string;
 }
 
@@ -235,6 +299,7 @@ export function normalisePriceBook(raw: unknown): PriceBook | null {
     enabled: bool(r.enabled, true),
     ...(r.version !== undefined ? { version: num(r.version) } : {}),
     ...(str(r.updatedBy) ? { updatedBy: str(r.updatedBy) } : {}),
+    ...(str(r.updatedByName) ? { updatedByName: str(r.updatedByName) } : {}),
     ...(str(r.updatedAt) ? { updatedAt: str(r.updatedAt) } : {}),
   };
 }
@@ -255,16 +320,128 @@ export async function getPriceBooks(): Promise<LoaderResult<PriceBook[]>> {
   }
 }
 
+/**
+ * The exact JSON the price-books API accepts. A blank Segment / Geography / Channel means
+ * "any" (a wildcard book): the API rejects an empty string (`min(1)`), so on CREATE a blank is
+ * left out and on UPDATE it is sent as null to clear a previously-set scope. `reason` (the
+ * maker's stated reason for editing a LIVE book) is recorded in the book's change history.
+ */
+export function serialisePriceBook(p: PriceBook, mode: "create" | "update", reason?: string): string {
+  const scope = (v: string): string | null | undefined => {
+    const t = v.trim();
+    if (t !== "") return t;
+    return mode === "update" ? null : undefined;
+  };
+  const why = reason?.trim();
+  return JSON.stringify({
+    name: p.name.trim(),
+    segment: scope(p.segment),
+    currency: p.currency,
+    geography: scope(p.geography),
+    channel: scope(p.channel),
+    enabled: p.enabled,
+    entries: p.entries,
+    reason: why ? why : undefined,
+  });
+}
+
 export async function createPriceBook(p: PriceBook): Promise<void> {
-  const res = await browserFetch("v1/crm/price-books", { method: "POST", body: JSON.stringify(p) });
+  const res = await browserFetch("v1/crm/price-books", { method: "POST", body: serialisePriceBook(p, "create") });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
-export async function updatePriceBook(id: string, p: PriceBook): Promise<void> {
+export async function updatePriceBook(id: string, p: PriceBook, opts: { reason?: string } = {}): Promise<void> {
   // PATCH, not PUT — the service registers `app.patch("/v1/crm/price-books/:id")`.
   // PUT on this path is only defined for `/:id/items`, so the header edit 404'd.
-  const res = await browserFetch(`v1/crm/price-books/${id}`, { method: "PATCH", body: JSON.stringify(p) });
+  const res = await browserFetch(`v1/crm/price-books/${id}`, {
+    method: "PATCH",
+    body: serialisePriceBook(p, "update", opts.reason),
+  });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+}
+
+/* ---------------------------------------------------- change history == */
+
+export interface PriceBookFieldChange {
+  field: string;
+  from: string | number | boolean | null;
+  to: string | number | boolean | null;
+}
+
+export interface PriceBookPriceChange {
+  productId: string;
+  /** Minor units before the change; null when the product was added. */
+  fromMinor: string | null;
+  /** Minor units after the change; null when the product was removed. */
+  toMinor: string | null;
+}
+
+export interface PriceBookHistoryEntry {
+  id: string;
+  version: number;
+  action: "create" | "update" | "item";
+  /** Display name of the editor; absent when the API could not resolve it (never the user id). */
+  changedByName?: string;
+  changedAt: string;
+  reason?: string;
+  fields: PriceBookFieldChange[];
+  prices: PriceBookPriceChange[];
+  /** Exact number of price moves (the list above may be capped server-side). */
+  priceChangeCount: number;
+}
+
+function scalarOrNull(v: unknown): string | number | boolean | null {
+  return typeof v === "string" || typeof v === "number" || typeof v === "boolean" ? v : null;
+}
+
+export function normalisePriceBookHistory(raw: unknown): PriceBookHistoryEntry[] {
+  return toArray(raw, "history")
+    .map((item): PriceBookHistoryEntry | null => {
+      if (!item || typeof item !== "object") return null;
+      const r = item as Record<string, unknown>;
+      const id = str(r.id);
+      if (!id) return null;
+      const action = r.action === "create" || r.action === "item" ? r.action : "update";
+      const changes = r.changes && typeof r.changes === "object" ? (r.changes as Record<string, unknown>) : {};
+      const fields = Array.isArray(changes.fields)
+        ? changes.fields
+            .filter((f): f is Record<string, unknown> => !!f && typeof f === "object")
+            .map((f) => ({ field: str(f.field), from: scalarOrNull(f.from), to: scalarOrNull(f.to) }))
+            .filter((f) => f.field !== "")
+        : [];
+      const prices = Array.isArray(changes.prices)
+        ? changes.prices
+            .filter((p): p is Record<string, unknown> => !!p && typeof p === "object" && !!str((p as Record<string, unknown>).productId))
+            .map((p) => ({
+              productId: str(p.productId),
+              fromMinor: p.fromMinor === null || p.fromMinor === undefined ? null : minorStr(p.fromMinor),
+              toMinor: p.toMinor === null || p.toMinor === undefined ? null : minorStr(p.toMinor),
+            }))
+        : [];
+      return {
+        id,
+        version: num(r.version),
+        action,
+        ...(str(r.changedByName) ? { changedByName: str(r.changedByName) } : {}),
+        changedAt: str(r.changedAt),
+        ...(str(r.reason) ? { reason: str(r.reason) } : {}),
+        fields,
+        prices,
+        priceChangeCount: typeof changes.priceChangeCount === "number" ? changes.priceChangeCount : prices.length,
+      };
+    })
+    .filter((e): e is PriceBookHistoryEntry => e !== null);
+}
+
+/** Newest first. Admin-only on the server (it carries reasons and before/after prices). */
+export async function getPriceBookHistory(id: string): Promise<LoaderResult<PriceBookHistoryEntry[]>> {
+  try {
+    const res = await browserFetch(`v1/crm/price-books/${encodeURIComponent(id)}/history`);
+    if (!res.ok) return { data: [], source: "error" };
+    return { data: normalisePriceBookHistory(await res.json()), source: "api" };
+  } catch {
+    return { data: [], source: "error" };
+  }
 }
 
 export async function deletePriceBook(id: string): Promise<void> {
@@ -413,6 +590,42 @@ export function normaliseQuotations(raw: unknown): Quotation[] {
   return toArray(raw, "quotations")
     .map(normaliseQuotation)
     .filter((q): q is Quotation => q !== null);
+}
+
+/**
+ * GAP-CRM-QUOTATIONS-05: how far a quoted unit price sits below its catalogue list price,
+ * in basis points (1000 = 10%), floored. 0 at or above list; null when there is no usable
+ * list price (free-text line, price 0). The reference is the product CATALOGUE price --
+ * the same one crm-service's send gate (effectiveDiscountBps) derives the discount from --
+ * so what the builder shows is what the server will judge. Integer BigInt maths only.
+ */
+export function discountBps(listUnitMinor: string | null | undefined, unitPriceMinor: string): number | null {
+  if (listUnitMinor === null || listUnitMinor === undefined || !/^\d+$/.test(listUnitMinor) || !/^\d+$/.test(unitPriceMinor)) return null;
+  const list = BigInt(listUnitMinor);
+  if (list <= 0n) return null;
+  const unit = BigInt(unitPriceMinor);
+  if (unit >= list) return 0;
+  return Number(((list - unit) * 10000n) / list);
+}
+
+/**
+ * Quotation-level effective discount (bps) over the lines that carry a list price, mirroring
+ * crm-service quotation-approval-domain effectiveDiscountBps: sum(list*qty) vs sum(quoted*qty),
+ * lines without a list price ignored, 0 when there is no discount.
+ */
+export function quotationDiscountBps(
+  lines: ReadonlyArray<{ listUnitMinor: string | null | undefined; unitPriceMinor: string; quantity: number }>,
+): number {
+  let refTotal = 0n;
+  let quotedTotal = 0n;
+  for (const l of lines) {
+    if (l.listUnitMinor === null || l.listUnitMinor === undefined || !/^\d+$/.test(l.listUnitMinor) || !/^\d+$/.test(l.unitPriceMinor)) continue;
+    const qty = BigInt(Math.max(0, Math.trunc(l.quantity)));
+    refTotal += BigInt(l.listUnitMinor) * qty;
+    quotedTotal += BigInt(l.unitPriceMinor) * qty;
+  }
+  if (refTotal <= 0n || quotedTotal >= refTotal) return 0;
+  return Number(((refTotal - quotedTotal) * 10000n) / refTotal);
 }
 
 /** Per-line net (qty * unit) in paise as a BigInt-safe string. */

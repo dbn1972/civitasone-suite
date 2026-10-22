@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildScoreFn,
   toScoringRules,
+  overlayRules,
   DEFAULT_SCORE_RULE_CONFIGS,
   type StoredScoreRule,
 } from "../src/modules/leads/score-rules-domain.js";
@@ -92,5 +93,31 @@ describe("DEFAULT_SCORE_RULE_CONFIGS reproduce the historical defaults", () => {
     const weak = computeLeadScore({ leadSource: "unknown", company: null, email: null, lastActivityAt: null }, rules);
     expect(strong).toBeGreaterThan(weak);
     expect(strong).toBeGreaterThan(70);
+  });
+});
+
+describe("overlayRules -- what an additive PUT leaves behind (GAP-CRM-LEAD-SCORING-04)", () => {
+  const rule = (attribute: string, weight: number, enabled = true): StoredScoreRule => ({
+    attribute, weight, scoreFnType: "presence", params: {}, enabled,
+  });
+
+  it("keeps a stored rule the proposal omits, unchanged", () => {
+    const out = overlayRules([rule("company", 40), rule("email", 60)], [rule("company", 10)]);
+    expect(out.map((r) => [r.attribute, r.weight])).toEqual([["company", 10], ["email", 60]]);
+  });
+
+  it("a proposed rule replaces the stored rule for the same attribute and adds new attributes", () => {
+    const out = overlayRules([rule("company", 40)], [rule("company", 25, false), rule("city", 5)]);
+    expect(out).toEqual([rule("company", 25, false), rule("city", 5)]);
+  });
+
+  it("a later proposed entry wins over an earlier one for the same attribute (sequential upserts)", () => {
+    const out = overlayRules([], [rule("company", 1), rule("company", 2)]);
+    expect(out).toEqual([rule("company", 2)]);
+  });
+
+  it("an empty proposal leaves the stored rules as they are; nothing stored yields exactly the proposal", () => {
+    expect(overlayRules([rule("email", 9)], [])).toEqual([rule("email", 9)]);
+    expect(overlayRules([], [rule("email", 9)])).toEqual([rule("email", 9)]);
   });
 });

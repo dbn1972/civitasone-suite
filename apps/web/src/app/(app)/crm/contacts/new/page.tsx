@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DuplicateCheckPanel } from "../../../../_components/crm/DuplicateCheckPanel";
 import { ConsentField, type ConsentValue } from "../../../../_components/crm/ConsentField";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -10,8 +10,10 @@ import { Button, PageHeader, EntityPicker, type EntityOption } from "@/app/_comp
 import { browserFetch } from "@/lib/api/browserClient";
 import {
   duplicateCheck,
-  parseFieldError,
+  parseFieldErrors,
+  parseMissingMandatoryFields,
   type DuplicateCandidate,
+  type LeadFieldName,
   type ValidatedField,
 } from "@/lib/crm/dataQuality";
 import { LEAD_STATUS_LABELS } from "@/lib/crm/leadQualification";
@@ -85,9 +87,21 @@ export default function NewContactPage() {
   // when empty the free-text Organisation input below is the fallback.
   const [accountId, setAccountId] = useState<string | null>(null);
   const [accountLabel, setAccountLabel] = useState<string>("");
+  // The picker's onChange hands back only an id, and resolve() runs only for ids the picker has not
+  // already seen, so a pick from the search results never named the account: the "Linked to" line was
+  // blank and `company` went out empty. Remember the label of every account the search offered.
+  const seenAccountLabels = useRef(new Map<string, string>());
+  const searchAccountsSeen = useCallback(async (query: string, signal: AbortSignal) => {
+    const opts = await searchAccounts(query, signal);
+    for (const o of opts) seenAccountLabels.current.set(o.id, o.label);
+    return opts;
+  }, []);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  // GAP-CRM-CONTACTS-NEW-01: mandatory fields the server rejected the create for
+  // (422 MANDATORY_FIELDS_MISSING), flagged on their inputs until they are filled.
+  const [missingFields, setMissingFields] = useState<LeadFieldName[]>([]);
   const [candidates, setCandidates] = useState<DuplicateCandidate[]>([]);
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState(false);
@@ -128,11 +142,38 @@ export default function NewContactPage() {
     return required.has(field) ? `${text} *` : text;
   }
 
+  /** The current value of a field the server can call mandatory (an account link counts for `company`). */
+  function valueOf(field: LeadFieldName): string {
+    if (field === "company") return accountId ? accountLabel : form.company;
+    return form[field];
+  }
+
+  /** Flagged only while still empty, so typing a value clears the flag with no extra state. */
+  function isMissing(field: string): boolean {
+    return missingFields.some((f) => f === field && valueOf(f).trim() === "");
+  }
+  const missingId = (field: string) => `new-${field}-missing`;
+
   /** `required` + `aria-required` together: native validation plus an explicit
-   *  programmatic signal, since some screen readers do not surface `required`. */
-  function requiredProps(field: string): { required: boolean; "aria-required": "true" | "false" } {
+   *  programmatic signal, since some screen readers do not surface `required`.
+   *  A field the server rejected as missing also gets aria-invalid + a link to its message. */
+  function requiredProps(field: string) {
     const isRequired = required.has(field);
-    return { required: isRequired, "aria-required": isRequired ? "true" : "false" };
+    return {
+      required: isRequired,
+      "aria-required": (isRequired ? "true" : "false") as "true" | "false",
+      ...(isMissing(field) ? { "aria-invalid": true as const, "aria-describedby": missingId(field) } : {}),
+    };
+  }
+
+  /** The inline message under a field the server said was missing. */
+  function missingNote(field: LeadFieldName) {
+    if (!isMissing(field)) return null;
+    return (
+      <p id={missingId(field)} role="alert" style={errStyle}>
+        {t("fieldRequired", { field: t(`fieldLabel.${field}`) })}
+      </p>
+    );
   }
 
   /**
@@ -196,6 +237,7 @@ export default function NewContactPage() {
     setMessage("");
     setError("");
     setFieldErrors({});
+    setMissingFields([]);
     try {
       const res = await fetch("/api/proxy/v1/crm/contacts", {
         method: "POST",
@@ -225,18 +267,27 @@ export default function NewContactPage() {
       // raw server text (UX-020 / RouteError policy) — via humanErrorFromFailure.
       const body = (await res.json().catch(() => null)) as { id?: string; code?: string; message?: string } | null;
       if (!res.ok) {
-        const fe = parseFieldError({ code: body?.code, message: body?.message });
-        if (fe) {
-          setFieldErrors({ [fe.field]: fe.message });
-        } else {
-          // GAP-CRM-CONTACTS-NEW-01: previously a fixed "Could not create the
-          // contact." for every non-field failure, so a 422 "missing mandatory
-          // field(s)" told the user nothing. Derive the safe message from the
-          // HTTP status + any domain code (a 400/422 says "check the highlighted
-          // fields"; a 5xx/network says "try again"), without leaking body.message.
-          const human = humanErrorFromFailure({ status: res.status, code: body?.code, kind: "save", area: t("contactArea") });
-          setError(`${human.what} ${human.next}`);
+        // The real 400 carries the format code in fieldErrors[].message under
+        // VALIDATION_FAILED; parseFieldErrors reads that and the legacy top-level code.
+        const fes = parseFieldErrors(body);
+        if (Object.keys(fes).length > 0) {
+          setFieldErrors(fes);
+          return;
         }
+        // GAP-CRM-CONTACTS-NEW-01: a 422 MANDATORY_FIELDS_MISSING names the fields
+        // only inside its message. Take just the KNOWN field names out of it (never
+        // the raw server text, per the RouteError policy), flag those inputs and
+        // name them in the banner using this screen's own labels.
+        const missing = parseMissingMandatoryFields(body);
+        if (missing.length > 0) {
+          setMissingFields(missing);
+          setError(t("missingMandatory", { fields: missing.map((f) => t(`fieldLabel.${f}`)).join(", ") }));
+          return;
+        }
+        // Anything else: the safe message from the HTTP status + any domain code
+        // (a 400/422 says "check what you entered"; a 5xx says "try again").
+        const human = humanErrorFromFailure({ status: res.status, code: body?.code, kind: "save", area: t("contactArea") });
+        setError(`${human.what} ${human.next}`);
         return;
       }
       // GAP-CRM-CONTACTS-NEW-04: a success WITHOUT an id used to leave the filled
@@ -287,10 +338,12 @@ export default function NewContactPage() {
             <div>
               <label htmlFor="new-name" style={labelStyle}>{labelFor("name", "Full name")}</label>
               <input id="new-name" {...requiredProps("name")} value={form.name} onChange={(e) => setDedupField({ name: e.target.value })} placeholder="e.g. full name" style={inputStyle} />
+              {missingNote("name")}
             </div>
             <div>
               <label htmlFor="new-email" style={labelStyle}>{labelFor("email", "Email")}</label>
               <input id="new-email" type="email" {...requiredProps("email")} value={form.email} onChange={(e) => setDedupField({ email: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder="name@example.com" style={inputStyle} />
+              {missingNote("email")}
             </div>
             <div>
               <label htmlFor="new-phone" style={labelStyle}>{labelFor("phone", "Phone (mobile)")}</label>
@@ -302,10 +355,11 @@ export default function NewContactPage() {
                 onBlur={() => void runDuplicateCheck()}
                 placeholder="98765 43210"
                 style={inputStyle}
-                aria-invalid={fieldErrors.phone ? true : undefined}
-                aria-describedby={describedBy("phone")}
+                aria-invalid={fieldErrors.phone || isMissing("phone") ? true : undefined}
+                aria-describedby={[describedBy("phone"), isMissing("phone") ? missingId("phone") : null].filter(Boolean).join(" ") || undefined}
               />
               {fieldErrors.phone ? <p id={phoneErrId} role="alert" style={errStyle}>{fieldErrors.phone}</p> : null}
+              {missingNote("phone")}
             </div>
             <div>
               <label htmlFor="new-company" style={labelStyle}>{labelFor("company", "Organisation")}</label>
@@ -319,8 +373,12 @@ export default function NewContactPage() {
                   const id = typeof v === "string" ? v : null;
                   setAccountId(id);
                   if (!id) setAccountLabel("");
+                  else {
+                    const picked = seenAccountLabels.current.get(id);
+                    if (picked) setAccountLabel(picked);
+                  }
                 }}
-                search={searchAccounts}
+                search={searchAccountsSeen}
                 resolve={async (ids) => {
                   const opts = await resolveAccounts(ids);
                   if (opts[0]) setAccountLabel(opts[0].label);
@@ -335,6 +393,7 @@ export default function NewContactPage() {
               ) : (
                 <input id="new-company" {...requiredProps("company")} value={form.company} onChange={(e) => setDedupField({ company: e.target.value })} onBlur={() => void runDuplicateCheck()} placeholder={t("typeNewOrg")} style={{ ...inputStyle, marginTop: 6 }} />
               )}
+              {missingNote("company")}
             </div>
             <div>
               <label htmlFor="new-gstin" style={labelStyle}>GSTIN</label>
@@ -374,6 +433,7 @@ export default function NewContactPage() {
             <div>
               <label htmlFor="new-city" style={labelStyle}>{labelFor("city", "City")}</label>
               <input id="new-city" {...requiredProps("city")} value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} placeholder="Bhubaneswar" style={inputStyle} />
+              {missingNote("city")}
             </div>
             <div>
               <label htmlFor="new-pincode" style={labelStyle}>PIN code</label>
@@ -392,6 +452,7 @@ export default function NewContactPage() {
             <div>
               <label htmlFor="new-designation" style={labelStyle}>{labelFor("designation", "Designation")}</label>
               <input id="new-designation" {...requiredProps("designation")} value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} placeholder="Director" style={inputStyle} />
+              {missingNote("designation")}
             </div>
             <div>
               <label htmlFor="new-leadStatus" style={labelStyle}>Lead status</label>
@@ -415,6 +476,7 @@ export default function NewContactPage() {
             <div>
               <label htmlFor="new-leadSource" style={labelStyle}>{labelFor("leadSource", "Lead source")}</label>
               <input id="new-leadSource" {...requiredProps("leadSource")} value={form.leadSource} onChange={(e) => setForm({ ...form, leadSource: e.target.value })} placeholder="Website, referral…" style={inputStyle} />
+              {missingNote("leadSource")}
             </div>
           </div>
 

@@ -40,6 +40,9 @@ const upsertBody = z.object({
   currency: z.string().length(3).default("INR"),
   periodStart: isoDate,
   periodEnd: isoDate.optional(),
+  // GAP-CRM-CAMPAIGNS-01: optional display name carried on the performance feed, so the
+  // ROI list / detail can show a campaign by name. Omitted = leave any stored name as is.
+  campaignName: z.string().trim().min(1).max(200).optional(),
 }).refine(
   (b) => b.periodEnd === undefined || b.periodEnd >= b.periodStart,
   { message: "periodEnd must not precede periodStart" },
@@ -49,6 +52,7 @@ const summaryQuery = listQuery;
 
 interface PerfRow {
   campaignId: string;
+  campaignName: string | null;
   responses: number;
   costMinor: string;
   revenueMinor: string;
@@ -87,7 +91,10 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
                sum(cost_minor)::text  AS "costMinor",
                sum(revenue_minor)::text AS "revenueMinor",
                min(currency)          AS currency,
-               count(*)::int          AS periods
+               count(*)::int          AS periods,
+               -- the most recent non-null name sent on the feed for this campaign
+               (array_agg(campaign_name ORDER BY period_start DESC NULLS LAST)
+                  FILTER (WHERE campaign_name IS NOT NULL))[1] AS name
         FROM crm.campaign_performance
         WHERE tenant_id = ${ctx.tenantId}
         GROUP BY campaign_id
@@ -100,6 +107,7 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
         revenueMinor: string;
         currency: string;
         periods: number;
+        name: string | null;
       }>;
       const counted = await tx.execute(sql`
         SELECT count(DISTINCT campaign_id)::int AS total
@@ -111,6 +119,9 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
 
     const data = rows.map((r) => ({
       campaignId: r.campaignId,
+      // Omitted (not null) when no feed row ever carried a name: the web contract is
+      // `name?: string` and shows a neutral label for a campaign without one.
+      ...(r.name ? { name: r.name } : {}),
       currency: r.currency,
       periods: r.periods,
       ...roiView(BigInt(r.costMinor), BigInt(r.revenueMinor), r.responses),
@@ -128,6 +139,7 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
     const rows = await scopedRead(async (tx) => {
       return tx.execute(sql`
         SELECT campaign_id           AS "campaignId",
+               campaign_name         AS "campaignName",
                responses,
                cost_minor::text      AS "costMinor",
                revenue_minor::text   AS "revenueMinor",
@@ -153,9 +165,13 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
       responsesTotal += r.responses;
     }
 
+    // Rows are ordered oldest-first; the latest non-null name wins.
+    const name = [...rows].reverse().find((r) => r.campaignName)?.campaignName ?? null;
+
     return reply.send({
       data: {
         campaignId: id,
+        ...(name ? { name } : {}),
         currency: rows[0]?.currency ?? "INR",
         ...roiView(costTotal, revenueTotal, responsesTotal),
         periods: rows.map((r) => ({
@@ -191,6 +207,7 @@ export async function campaignRoiRoutes(app: FastifyInstance): Promise<void> {
         currency: body.currency.toUpperCase(),
         periodStart: body.periodStart,
         periodEnd: body.periodEnd ?? null,
+        ...(body.campaignName ? { campaignName: body.campaignName } : {}),
       }),
     );
   });

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_STRICT_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * Agent Workload is a platform-wide routing control: it sets each agent's lead
@@ -18,9 +18,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
  * roles got a fully-wired editor that could neither load nor save. Use the
  * route-accurate admin set instead so the gate and the server agree (parity).
  */
-const AGENT_WORKLOAD_ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-
 export default function AgentWorkloadLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(AGENT_WORKLOAD_ADMIN_ROLES, "/crm");
+  requireAnyRole(CRM_STRICT_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

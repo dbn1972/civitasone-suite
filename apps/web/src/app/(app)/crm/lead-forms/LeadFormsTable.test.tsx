@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/crm/leadForms", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/leadForms")>();
-  return { ...actual, createLeadForm: vi.fn(), updateLeadForm: vi.fn(), setLeadFormEnabled: vi.fn(), setLeadFormConsent: vi.fn() };
+  return { ...actual, createLeadForm: vi.fn(), updateLeadForm: vi.fn(), setLeadFormEnabled: vi.fn(), setLeadFormConsent: vi.fn(), rotateLeadFormKey: vi.fn() };
 });
 
 function form(partial: Partial<CRMLeadCaptureForm> = {}): CRMLeadCaptureForm {
@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.mocked(client.updateLeadForm).mockReset();
   vi.mocked(client.setLeadFormEnabled).mockReset();
   vi.mocked(client.setLeadFormConsent).mockReset();
+  vi.mocked(client.rotateLeadFormKey).mockReset();
 });
 
 describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
@@ -86,11 +87,36 @@ describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
   });
 
   // GAP-CRM-LEAD-FORMS-03: the consent-gap status shows the human label
-  // "Consent not required", never the raw "unlawful" enum.
-  it("labels a consent-gap form 'Consent not required', never 'unlawful'", () => {
+  // "Consent gap" (the same words as the page tile), never the raw "unlawful" enum.
+  it("labels a consent-gap form 'Consent gap', never 'unlawful'", () => {
     render(<LeadFormsTable rows={[form({ enabled: true, requireConsent: false })]} />);
-    expect(screen.getByText("Consent not required")).toBeInTheDocument();
+    expect(screen.getByText("Consent gap")).toBeInTheDocument();
     expect(screen.queryByText("unlawful")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-LEAD-FORMS-03: one name for one condition. The per-row pill and the
+  // page tile must read identically, in every shipped locale, so the two can
+  // never drift back into "Consent not required" vs "Consent gaps".
+  it("uses the same words for the status pill and the page tile in en and hi", async () => {
+    const hi = (await import("@/messages/hi.json")).default as unknown as {
+      crmLeadFormsTable: { health_unlawful: string };
+      crmLeadFormsPage: { statConsentGaps: string };
+    };
+    expect(enMessages.crmLeadFormsTable.health_unlawful).toBe(enMessages.crmLeadFormsPage.statConsentGaps);
+    expect(hi.crmLeadFormsTable.health_unlawful).toBe(hi.crmLeadFormsPage.statConsentGaps);
+  });
+
+  // GAP-CRM-LEAD-FORMS-03: the UI must not assert a legal conclusion. Neither the
+  // Fix-consent confirm dialog nor the success toast calls the form (un)lawful.
+  it("does not assert a legal conclusion in the confirm dialog or the success toast", async () => {
+    vi.mocked(client.setLeadFormConsent).mockResolvedValue(undefined);
+    render(<LeadFormsTable rows={[form({ requireConsent: false })]} />);
+    fireEvent.click(screen.getByRole("button", { name: /fix consent/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent ?? "").not.toMatch(/unlawful|lawful|illegal/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: /require consent/i }));
+    const toast = await screen.findByText(/consent is now required/i);
+    expect(toast.textContent ?? "").not.toMatch(/unlawful|lawful|illegal/i);
   });
 
   it("labels an enabled, consenting form 'Live' and a disabled one 'Paused'", () => {
@@ -107,6 +133,50 @@ describe("LeadFormsTable (GAP-CRM-LEAD-FORMS-01)", () => {
     expect(await screen.findByText(/Export the lead-form registry\?/i)).toBeInTheDocument();
     expect(screen.getByText(/public form KEY is deliberately omitted/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Purpose/i)).toBeInTheDocument();
+  });
+});
+
+describe("LeadFormsTable rotate key (GAP-CRM-LEAD-FORMS-01)", () => {
+  function renderTable(rows = [form()]) {
+    return render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadFormsTable rows={rows} /></NextIntlClientProvider>);
+  }
+
+  it("asks for confirmation first and does not rotate until confirmed", async () => {
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^rotate key$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/stops working immediately/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/recorded in the audit log/i)).toBeInTheDocument();
+    expect(client.rotateLeadFormKey).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    expect(client.rotateLeadFormKey).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("rotates the chosen form after confirm and shows the new submit URL once", async () => {
+    vi.mocked(client.rotateLeadFormKey).mockResolvedValue({ formKey: "c".repeat(64) });
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^rotate key$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^rotate key$/i }));
+
+    await waitFor(() => expect(client.rotateLeadFormKey).toHaveBeenCalledWith("f1"));
+    const status = await screen.findByText(/key rotated/i);
+    expect(status.parentElement?.textContent).toContain("/api/v1/crm/public/leads/" + "c".repeat(64));
+    expect(status.parentElement?.textContent).toMatch(/old URL no longer works/i);
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("shows a clerk-safe error and no new key when the rotation fails", async () => {
+    vi.mocked(client.rotateLeadFormKey).mockRejectedValue(new Error("HTTP 500 boom"));
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^rotate key$/i }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: /^rotate key$/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent ?? "").not.toMatch(/boom|HTTP 500/);
+    expect(screen.queryByText(/key rotated/i)).not.toBeInTheDocument();
   });
 });
 

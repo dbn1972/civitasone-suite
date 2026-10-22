@@ -53,3 +53,21 @@ describe("normalizeDealStage round-trip (GAP-CRM-DEALS-NEW-02)", () => {
     });
   }
 });
+
+describe("mapDealSummaries probability (GAP-CRM-OPPORTUNITIES-NEW-06)", () => {
+  it("keeps a missing probability missing (shown as a dash), never a fabricated 0", () => {
+    const out = mapDealSummaries([{ id: "1", dealName: "A", stage: "Proposal", valueMinor: "1", status: "open" }]);
+    expect(out![0]).not.toHaveProperty("probability");
+  });
+
+  it("keeps a real 0 and any other number as-is", () => {
+    const out = mapDealSummaries([
+      { id: "1", dealName: "A", stage: "Proposal", valueMinor: "1", status: "open", probability: 0 },
+      { id: "2", dealName: "B", stage: "Proposal", valueMinor: "1", status: "open", probability: 55 },
+      { id: "3", dealName: "C", stage: "Proposal", valueMinor: "1", status: "open", probability: "nope" },
+    ]);
+    expect(out![0].probability).toBe(0);
+    expect(out![1].probability).toBe(55);
+    expect(out![2]).not.toHaveProperty("probability");
+  });
+});

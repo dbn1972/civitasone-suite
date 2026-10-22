@@ -513,17 +513,17 @@ export function registerResidualF3Consumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; campaignId: string; responses: number;
       costMinor: string; revenueMinor: string; currency: string;
-      periodStart: string; periodEnd?: string | null;
+      periodStart: string; periodEnd?: string | null; campaignName?: string | null;
     };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const rows = await tx.execute(sql`
           INSERT INTO crm.campaign_performance
-            (id, tenant_id, campaign_id, responses, cost_minor, revenue_minor, currency,
+            (id, tenant_id, campaign_id, campaign_name, responses, cost_minor, revenue_minor, currency,
              period_start, period_end, created_by, updated_by)
           VALUES (
-            ${p.id}, ${p.tenantId}, ${p.campaignId}, ${p.responses},
+            ${p.id}, ${p.tenantId}, ${p.campaignId}, ${p.campaignName ?? null}, ${p.responses},
             ${p.costMinor}::bigint, ${p.revenueMinor}::bigint, ${p.currency},
             ${p.periodStart}::date, ${p.periodEnd ?? null}::date,
             ${msg.actorId}, ${msg.actorId}
@@ -533,6 +533,8 @@ export function registerResidualF3Consumers(queue: Queue): void {
               cost_minor = EXCLUDED.cost_minor,
               revenue_minor = EXCLUDED.revenue_minor,
               currency = EXCLUDED.currency,
+              -- a replayed feed row that carries no name must not erase a stored one
+              campaign_name = COALESCE(EXCLUDED.campaign_name, crm.campaign_performance.campaign_name),
               period_end = EXCLUDED.period_end,
               updated_at = now(),
               updated_by = ${msg.actorId},

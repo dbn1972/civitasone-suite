@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
@@ -257,7 +258,7 @@ export function DocumentsPanel({ subjectType, subjectId, canVerify = false }: Pr
         {/* ------------------------------------------------------ list -- */}
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
           {source === "loading" ? (
-            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Loading documents…</p>
+            <PanelSkeleton />
           ) : source === "error" ? (
             <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               — Documents unavailable right now. <DataSourceBadge source="error" />

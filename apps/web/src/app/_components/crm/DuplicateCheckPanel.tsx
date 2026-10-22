@@ -8,6 +8,9 @@ import type { DuplicateCandidate } from "@/lib/crm/dataQuality";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { Button } from "../ds";
 
+/** What a match is called when the server sent no name. A record id is never shown to a person. */
+export const EXISTING_CONTACT_LABEL = "Existing contact";
+
 export function DuplicateCheckPanel({
   candidates,
   checking,
@@ -84,16 +87,20 @@ export function DuplicateCheckPanel({
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, fontSize: 13 }}>
                 {mergeHrefBase ? (
-                  <a href={`${mergeHrefBase}${c.id}`}>{c.name ?? c.email ?? c.phone ?? c.id}</a>
+                  <a href={`${mergeHrefBase}${encodeURIComponent(c.id)}`}>{c.name ?? EXISTING_CONTACT_LABEL}</a>
                 ) : (
-                  c.name ?? c.email ?? c.phone ?? c.id
+                  (c.name ?? EXISTING_CONTACT_LABEL)
                 )}
               </div>
-              <div style={{ fontSize: 12, color: "var(--muted)" }}>
-                {[c.email, c.phone, c.company].filter(Boolean).join(" · ") || "—"}
-              </div>
+              {/* crm-service sends a name and nothing else about the contact; a caller that has more shows it. */}
+              {[c.email, c.phone, c.company].some(Boolean) ? (
+                <div style={{ fontSize: 12, color: "var(--muted)" }}>
+                  {[c.email, c.phone, c.company].filter(Boolean).join(" · ")}
+                </div>
+              ) : null}
               <div style={{ fontSize: 12, color: "#92400e", marginTop: 2 }}>
-                Match {Math.round(c.score * 100)}%
+                {/* `score` is already a whole percent 0-100 (normaliseCandidates). */}
+                Match {Math.round(c.score)}%
                 {c.matchedFields.length > 0 ? ` on ${c.matchedFields.join(", ")}` : ""}
               </div>
             </div>

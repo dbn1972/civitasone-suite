@@ -1096,9 +1096,14 @@ describe("Validator edge cases", () => {
     const { createDealBody } = await import("../src/modules/deals/validators.js");
     const result = createDealBody.parse({ name: "Test" });
     expect(result.stage).toBeUndefined();
-    expect(result.valueMinor).toBe(0);
+    // GAP-CRM-DEALS-NEW-03: money is carried as an exact paise digit string, so the
+    // omitted-value default is the canonical string "0", not the number 0.
+    expect(result.valueMinor).toBe("0");
     expect(result.currency).toBe("INR");
-    expect(result.probability).toBe(0);
+    // GAP-CRM-OPPORTUNITIES-NEW-06: probability is no longer defaulted to 0 in the schema --
+    // routes.ts resolves an omitted probability to the chosen stage's own probability (and
+    // only a pipeline-less deal falls back to 0), see w2-crm07-deals-account-link.test.ts.
+    expect(result.probability).toBeUndefined();
   });
 
   it("updateDealBody rejects empty object", async () => {

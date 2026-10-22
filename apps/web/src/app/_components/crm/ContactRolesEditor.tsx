@@ -9,6 +9,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import { formatIndianDate } from "@/lib/formatters";
 import {
@@ -128,7 +129,7 @@ export function ContactRolesEditor({ contactId }: { contactId: string }) {
 
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           {source === "loading" ? (
-            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Loading roles…</p>
+            <PanelSkeleton />
           ) : source === "error" ? (
             <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               — Roles unavailable right now. <DataSourceBadge source="error" />

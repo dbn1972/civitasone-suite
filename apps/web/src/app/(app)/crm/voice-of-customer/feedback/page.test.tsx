@@ -5,6 +5,7 @@ import { render, screen, fireEvent, within, waitFor } from "@testing-library/rea
 import CitizenFeedbackPage from "./page";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
 function withIntl(ui: React.ReactElement) {
   return (
@@ -87,6 +88,57 @@ describe("CitizenFeedbackPage (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05 — wired)"
     const notices = screen.getAllByRole("note", { name: /data protection notice/i });
     expect(notices.length).toBeGreaterThan(0);
     expect(screen.getByText(/visible only to authorised administrators/i)).toBeInTheDocument();
+  });
+
+  // ── GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-03 (interim: no identifier is collected yet) ──
+  it("says plainly that a Registered Citizen response is recorded without name, phone or ID", () => {
+    render(withIntl(<CitizenFeedbackPage />));
+    // Anonymous is the default: nothing to explain.
+    expect(screen.queryByText(/does not collect the citizen.s name, phone number or ID/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Registered Citizen" }));
+    const note = screen.getByText(/does not collect the citizen.s name, phone number or ID/i);
+    expect(note).toBeInTheDocument();
+    expect(note).toHaveAttribute("role", "note");
+    // ...and it points at the one real link to a record: the "Regarding" service request.
+    expect(note).toHaveTextContent(/Regarding/);
+    // No identifier input appears - none is accepted, so none is faked.
+    expect(screen.queryByLabelText(/citizen id|mobile|phone/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Anonymous" }));
+    expect(screen.queryByText(/does not collect the citizen.s name, phone number or ID/i)).not.toBeInTheDocument();
+  });
+
+  it("submits a Registered Citizen response as such, with no invented identifier", async () => {
+    render(withIntl(<CitizenFeedbackPage />));
+    fireEvent.click(screen.getByRole("radio", { name: "4 stars" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Registered Citizen" }));
+    fireEvent.submit(document.querySelector("form") as HTMLFormElement);
+    await waitFor(() => expect(feedback.submitCitizenFeedback).toHaveBeenCalledTimes(1));
+    const sent = vi.mocked(feedback.submitCitizenFeedback).mock.calls[0]![0] as unknown as Record<string, unknown>;
+    expect(sent.submissionType).toBe("registered");
+    expect(Object.keys(sent).sort()).toEqual(["comment", "rating", "submissionType"]);
+  });
+
+  // The DPDP notice and the labels render in the reader's language, not just English.
+  it("renders the notice, labels and actions in Hindi when the locale is hi", () => {
+    render(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <CitizenFeedbackPage />
+      </NextIntlClientProvider>,
+    );
+    const notice = screen.getByRole("note", { name: hiMessages.crmCitizenFeedback.noticeAria });
+    expect(notice).toHaveTextContent("डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023");
+    expect(screen.getByRole("heading", { name: "नागरिक प्रतिक्रिया" })).toBeInTheDocument();
+    expect(screen.getByText("टिप्पणियाँ / सुझाव")).toBeInTheDocument();
+    expect(screen.getByText("प्रस्तुति का प्रकार")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "गुमनाम" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "पंजीकृत नागरिक" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: hiMessages.crmCitizenFeedback.submitFeedback })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("इस सेवा के साथ अपने अनुभव के बारे में बताएँ...")).toBeInTheDocument();
+    // Nothing the reader has to read is left in English.
+    expect(screen.queryByText("Comments / Suggestions")).not.toBeInTheDocument();
+    expect(screen.queryByText("Submission Type")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "पंजीकृत नागरिक" }));
+    expect(screen.getByText(/यह प्रपत्र नागरिक का नाम, फ़ोन नंबर या आईडी एकत्र नहीं करता/)).toBeInTheDocument();
   });
 
   // ── Preserved a11y behaviour (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-04) ──

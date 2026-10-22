@@ -11,9 +11,11 @@ import { useTranslations } from "next-intl";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button, ErrorState } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import { toHumanError } from "@/lib/messages";
 import {
   getEscalationRules,
+  getEscalationRecipients,
   createEscalationRule,
   updateEscalationRule,
   deleteEscalationRule,
@@ -21,14 +23,10 @@ import {
   ESCALATION_TRIGGER_LABELS,
   type EscalationRule,
   type EscalationTrigger,
+  EscalationRecipientError,
+  type EscalationRecipientDirectory,
   type AsSource,
 } from "@/lib/crm/assignment";
-import {
-  getEscalationRoles,
-  getEscalationUsers,
-  type EscalationRole,
-  type EscalationUser,
-} from "@/lib/crm/activityAccount";
 
 interface Row extends EscalationRule {
   key: string;
@@ -64,24 +62,41 @@ const THRESHOLD_UNITS: ReadonlyArray<{ key: "minutes" | "hours" | "days"; label:
   { key: "days", label: "days", factor: 1440 },
 ];
 
-/**
- * A rule needs a positive threshold and a recipient (role OR user). When the
- * tenant directory is loaded, the chosen role/user must come from it — a
- * mistyped/stale target can no longer save and escalate to nobody
- * (GAP-CRM-ESCALATION-RULES-01). When the directory is unavailable we fall back
- * to "non-empty" so the editor still works.
- */
 /** Mirrors the crm-service cap on thresholdMinutes (assignment/validators.ts). */
 const MAX_THRESHOLD_MINUTES = 100_000;
 
-function rowValid(row: Row, roles: EscalationRole[], users: EscalationUser[]): boolean {
-  if (!Number.isInteger(row.thresholdMinutes) || row.thresholdMinutes <= 0 || row.thresholdMinutes > MAX_THRESHOLD_MINUTES) return false;
+/** Nothing known: used until the first directory response, and when it cannot be read. */
+const NO_DIRECTORY: EscalationRecipientDirectory = {
+  roles: [], users: [], rolesAvailable: false, usersAvailable: false, usersTruncated: false,
+};
+
+type RowProblem = "threshold" | "recipient" | "directory" | "notInDirectory";
+
+/**
+ * What (if anything) stops a row from saving. A rule needs a positive threshold
+ * and a recipient (role OR user), and the recipient MUST be one the tenant
+ * directory lists -- a mistyped/stale target must not save, because the
+ * escalation would then notify nobody and a lead-SLA breach goes unescalated
+ * (GAP-CRM-ESCALATION-RULES-01). There is deliberately NO "directory unavailable
+ * -> accept anything" fallback: an unverifiable recipient is refused ("directory")
+ * until the directory loads. The one exception is a user directory that was
+ * truncated at its cap, where absence from the list proves nothing; there the
+ * server's own check (422 INVALID_RECIPIENT) is authoritative.
+ */
+function rowProblem(row: Row, directory: EscalationRecipientDirectory): RowProblem | null {
+  if (!Number.isInteger(row.thresholdMinutes) || row.thresholdMinutes <= 0 || row.thresholdMinutes > MAX_THRESHOLD_MINUTES) return "threshold";
   const role = row.recipientRole.trim();
   const uid = row.recipientId.trim();
-  if (!role && !uid) return false;
-  if (role && roles.length > 0 && !roles.some((r) => r.key === role)) return false;
-  if (uid && users.length > 0 && !users.some((u) => u.id === uid)) return false;
-  return true;
+  if (!role && !uid) return "recipient";
+  if (role) {
+    if (!directory.rolesAvailable) return "directory";
+    if (!directory.roles.some((r) => r.key === role)) return "notInDirectory";
+  }
+  if (uid) {
+    if (!directory.usersAvailable) return "directory";
+    if (!directory.usersTruncated && !directory.users.some((u) => u.id === uid)) return "notInDirectory";
+  }
+  return null;
 }
 
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
@@ -94,8 +109,8 @@ export function EscalationRulesEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
-  const [roles, setRoles] = useState<EscalationRole[]>([]);
-  const [users, setUsers] = useState<EscalationUser[]>([]);
+  const [directory, setDirectory] = useState<EscalationRecipientDirectory>(NO_DIRECTORY);
+  const [directoryLoading, setDirectoryLoading] = useState(true);
   // GAP-CRM-ESCALATION-RULES-04: per-row display unit for the threshold input.
   // The stored value is always minutes; this only changes how the admin types
   // and reads it. Keyed by row.key; defaults to minutes when absent.
@@ -142,16 +157,21 @@ export function EscalationRulesEditor() {
     setSource(s);
   }
 
+  // GAP-CRM-ESCALATION-RULES-01: the recipient pickers' directory. A failed or
+  // partial load leaves the pickers without options and blocks saving a recipient
+  // (see rowProblem) -- it never degrades to free text.
+  async function loadDirectory(isLive: () => boolean = () => true) {
+    setDirectoryLoading(true);
+    const { data } = await getEscalationRecipients();
+    if (!isLive()) return;
+    setDirectory(data);
+    setDirectoryLoading(false);
+  }
+
   useEffect(() => {
     let live = true;
     void load(() => live);
-    // Tenant role + user directory for the recipient pickers (non-fatal if it
-    // fails — rowValid then falls back to a non-empty check).
-    void Promise.all([getEscalationRoles(), getEscalationUsers()]).then(([r, u]) => {
-      if (!live) return;
-      setRoles(r.data);
-      setUsers(u.data);
-    });
+    void loadDirectory(() => live);
     return () => { live = false; };
   }, []);
 
@@ -169,8 +189,13 @@ export function EscalationRulesEditor() {
   async function saveRow(row: Row) {
     setMessage("");
     setError("");
-    if (!rowValid(row, roles, users)) {
-      setError(t("ruleNeedsThresholdRecipient"));
+    const problem = rowProblem(row, directory);
+    if (problem) {
+      setError(
+        problem === "directory" ? t("recipientDirectoryUnavailable")
+        : problem === "notInDirectory" ? t("recipientNotInDirectory")
+        : t("ruleNeedsThresholdRecipient"),
+      );
       return;
     }
     // GAP-CRM-ESCALATION-RULES-05: block a duplicate rule (same trigger +
@@ -190,8 +215,20 @@ export function EscalationRulesEditor() {
       setError("A rule with the same trigger, threshold and recipient already exists. Edit the existing rule instead.");
       return;
     }
+    // crm-service requires a name and the editor has no name field, so it is DERIVED
+    // from what the rule does, and re-derived on every save so it never goes stale
+    // when the trigger, threshold or recipient changes.
+    const recipientLabel =
+      directory.users.find((u) => u.id === row.recipientId.trim())?.name ||
+      directory.roles.find((r) => r.key === row.recipientRole.trim())?.label ||
+      row.recipientRole.trim();
     const rule: EscalationRule = {
       ...(row.id ? { id: row.id } : {}),
+      name: t("ruleName", {
+        trigger: ESCALATION_TRIGGER_LABELS[row.trigger],
+        threshold: humanizeMinutes(row.thresholdMinutes),
+        recipient: recipientLabel,
+      }),
       trigger: row.trigger,
       thresholdMinutes: row.thresholdMinutes,
       recipientRole: row.recipientRole.trim(),
@@ -211,7 +248,11 @@ export function EscalationRulesEditor() {
       setMessage("Escalation rule saved.");
       await load(() => true, { merge: true });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the escalation rule.");
+      setError(
+        e instanceof EscalationRecipientError
+          ? t(e.kind === "unavailable" ? "recipientDirectoryUnavailable" : "recipientNotInDirectory")
+          : e instanceof Error ? e.message : "Could not save the escalation rule.",
+      );
     } finally {
       setBusyKey(null);
     }
@@ -270,6 +311,21 @@ export function EscalationRulesEditor() {
       </div>
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
       {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
+      {/* GAP-CRM-ESCALATION-RULES-01: a recipient can only be picked from the tenant
+          directory, so say so when it could not be read (and offer a retry) instead
+          of silently leaving empty pickers. */}
+      {!isError && !directoryLoading && (!directory.rolesAvailable || !directory.usersAvailable) ? (
+        <div role="alert" style={{ fontSize: 13, color: "var(--bad)", padding: "0 12px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span>
+            {!directory.rolesAvailable && !directory.usersAvailable
+              ? t("directoryUnavailable")
+              : !directory.rolesAvailable
+                ? t("rolesUnavailable")
+                : t("usersUnavailable")}
+          </span>
+          <Button type="button" size="sm" variant="ghost" onClick={() => void loadDirectory()}>{t("directoryRetry")}</Button>
+        </div>
+      ) : null}
 
       {isError ? (
         // GAP-CRM-ESCALATION-RULES-02: never present a failed load as an empty
@@ -371,45 +427,41 @@ export function EscalationRulesEditor() {
                     })()}
                   </td>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-role-${row.key}`}>Recipient role for rule {n}</label>
-                    {/* GAP-CRM-ESCALATION-RULES-01: a SELECT fed by the tenant's
-                        roles — a mistyped role can no longer save. Falls back to
-                        a free-text input only when the directory is unavailable. */}
-                    {roles.length > 0 ? (
-                      <select
-                        id={`${headingId}-role-${row.key}`}
-                        value={row.recipientRole}
-                        onChange={(e) => update(row.key, { recipientRole: e.target.value })}
-                        style={inputStyle}
-                      >
-                        <option value="">{t("noRole")}</option>
-                        {row.recipientRole && !roles.some((r) => r.key === row.recipientRole) && (
-                          <option value={row.recipientRole}>{t("unknownRole", { role: row.recipientRole })}</option>
-                        )}
-                        {roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
-                      </select>
-                    ) : (
-                      <input id={`${headingId}-role-${row.key}`} value={row.recipientRole} onChange={(e) => update(row.key, { recipientRole: e.target.value })} placeholder={t("rolePlaceholder")} style={inputStyle} />
-                    )}
+                    <label className="sr-only" htmlFor={`${headingId}-role-${row.key}`}>{t("recipientRoleLabel", { n })}</label>
+                    {/* GAP-CRM-ESCALATION-RULES-01: always a SELECT fed by the tenant's
+                        roles — a mistyped role can never be entered or saved. There is
+                        no free-text fallback: if the directory could not be loaded the
+                        list is empty, an alert above says so, and saving is refused. */}
+                    <select
+                      id={`${headingId}-role-${row.key}`}
+                      value={row.recipientRole}
+                      onChange={(e) => update(row.key, { recipientRole: e.target.value })}
+                      style={inputStyle}
+                    >
+                      <option value="">{t("noRole")}</option>
+                      {row.recipientRole && !directory.roles.some((r) => r.key === row.recipientRole) && (
+                        <option value={row.recipientRole}>
+                          {directory.rolesAvailable ? t("unknownRole", { role: row.recipientRole }) : t("unverifiedRecipient")}
+                        </option>
+                      )}
+                      {directory.roles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
+                    </select>
                   </td>
                   <td>
-                    <label className="sr-only" htmlFor={`${headingId}-uid-${row.key}`}>Recipient user for rule {n}</label>
-                    {users.length > 0 ? (
-                      <select
-                        id={`${headingId}-uid-${row.key}`}
-                        value={row.recipientId}
-                        onChange={(e) => update(row.key, { recipientId: e.target.value })}
-                        style={inputStyle}
-                      >
-                        <option value="">{t("noSpecificUser")}</option>
-                        {row.recipientId && !users.some((u) => u.id === row.recipientId) && (
-                          <option value={row.recipientId}>{t("unknownUser")}</option>
-                        )}
-                        {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
-                    ) : (
-                      <input id={`${headingId}-uid-${row.key}`} value={row.recipientId} onChange={(e) => update(row.key, { recipientId: e.target.value })} placeholder={t("userIdPlaceholder")} style={inputStyle} />
-                    )}
+                    <label className="sr-only" htmlFor={`${headingId}-uid-${row.key}`}>{t("recipientUserLabel", { n })}</label>
+                    {/* A truncated user directory adds a server-side name search, so nobody is unreachable. */}
+                    <DirectoryUserSelect
+                      id={`${headingId}-uid-${row.key}`}
+                      searchLabel={t("recipientSearchLabel", { n })}
+                      value={row.recipientId}
+                      onChange={(recipientId) => update(row.key, { recipientId })}
+                      users={directory.users}
+                      truncated={directory.usersTruncated}
+                      leading={<option value="">{t("noSpecificUser")}</option>}
+                      unlistedLabel={!directory.usersAvailable ? t("unverifiedRecipient") : t("unknownUser")}
+                      unlistedTruncatedLabel={!directory.usersAvailable ? t("unverifiedRecipient") : t("userNotListed")}
+                      style={inputStyle}
+                    />
                   </td>
                   <td>
                     <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
