@@ -13,6 +13,15 @@ import { auditObservations, auditObservationReplies } from "../src/modules/obser
 import { auditPlans } from "../src/modules/plan/schema.js";
 import { auditParas } from "../src/modules/para/schema.js";
 import { mapSeverity } from "../src/modules/observation/queries.js";
+import { queue } from "../src/shared/infra.js";
+import type { MemoryQueue } from "@civitasone/queue";
+import { registerObservationConsumers } from "../src/modules/observation/consumer.js";
+
+// The POST routes publish onto the shared queue singleton; only worker.ts wires
+// consumers in production, so this file subscribes them once (module scope:
+// MemoryQueue accumulates handlers) and drains after each command.
+registerObservationConsumers(queue);
+const drain = () => (queue as unknown as MemoryQueue).drain();
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const jwt = (tenantId: string, actorId: string) =>
@@ -110,5 +119,50 @@ describe("GET /v1/audit/observations/:id (detail)", () => {
   it("does not leak replies across tenants (404 for another tenant)", async () => {
     const res = await get(`/v1/audit/observations/${RICH_ID}`, OTHER_TENANT);
     expect(res.statusCode).toBe(404);
+  });
+});
+
+describe("command path: create -> reply -> reject -> reply -> accept (real routes + consumers)", () => {
+  const tok = (roles: string[]) => signToken({ sub: ACTOR, tid: TENANT, roles, sid: "sess-chain" }, SECRET, 3600);
+  const post = (url: string, roles: string[], payload: Record<string, unknown>) =>
+    app.inject({ method: "POST", url, headers: { authorization: `Bearer ${tok(roles)}` }, payload });
+
+  it("persists dueDate/critical and stamps accept/reject on the latest reply", async () => {
+    const created = await post("/v1/audit/observations", ["audit_officer"], {
+      obsNo: `OBS-CHAIN-${Date.now()}`, auditeeRef: "dept:chain", finding: "chain finding",
+      riskLevel: "critical", amountInvolvedMinor: "5000", dueDate: "2027-01-15",
+    });
+    expect(created.statusCode).toBe(202);
+    const id = created.json().id as string;
+    await drain();
+
+    let res = await post(`/v1/audit/observations/${id}/reply`, ["dept_head"], { replyText: "first reply", respondedByRef: "dept_head:1" });
+    expect(res.statusCode).toBe(202);
+    await drain();
+    res = await post(`/v1/audit/observations/${id}/review`, ["audit_admin"], { decision: "rejected", remarks: "insufficient" });
+    expect(res.statusCode).toBe(202);
+    await drain();
+    res = await post(`/v1/audit/observations/${id}/reply`, ["dept_head"], { replyText: "second reply", respondedByRef: "dept_head:1" });
+    expect(res.statusCode).toBe(202);
+    await drain();
+    res = await post(`/v1/audit/observations/${id}/review`, ["audit_admin"], { decision: "accepted" });
+    expect(res.statusCode).toBe(202);
+    await drain();
+
+    const detail = await get(`/v1/audit/observations/${id}`);
+    expect(detail.statusCode).toBe(200);
+    const d = detail.json().data ?? detail.json();
+    expect(d.severity).toBe("critical");
+    expect(d.dueDate).toBe("2027-01-15");
+    expect(d.amount).toBe(5000);
+    expect(d.replies).toHaveLength(2);
+    expect(d.replies[0]).toMatchObject({ content: "first reply", acceptedByAuditor: false });
+    expect(d.replies[1]).toMatchObject({ content: "second reply", acceptedByAuditor: true });
+
+    const list = await get("/v1/audit/observations?limit=50");
+    const rows = (list.json().data ?? list.json()) as Array<Record<string, unknown>>;
+    const row = rows.find((r) => r.id === id)!;
+    expect(row.severity).toBe("critical");
+    expect(row.dueDate).toBe("2027-01-15");
   });
 });
