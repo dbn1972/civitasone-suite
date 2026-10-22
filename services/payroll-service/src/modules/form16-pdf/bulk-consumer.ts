@@ -24,6 +24,7 @@ import { putObject } from "@civitasone/storage";
 import { payrollSlips } from "../payroll/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { form16BulkJobs } from "./schema.js";
+import { FORM16_RUN_LEVEL_EMPLOYEE_NO, type Form16FailureCode, type Form16FailureRecord } from "./failure-reasons.js";
 import { pino } from "pino";
 
 const log = pino({ name: "form16-bulk-consumer" });
@@ -155,7 +156,7 @@ export function registerForm16BulkConsumers(queue: Queue): void {
     if (!initialized) return;
 
     const storagePrefix = `form16/${tenantId}/${fy}`;
-    const errorDetails: Array<{ employeeId: string; employeeNo: string; error: string }> = [];
+    const errorDetails: Form16FailureRecord[] = [];
 
     try {
       // 1. Resolve employee list
@@ -197,12 +198,18 @@ export function registerForm16BulkConsumers(queue: Queue): void {
       let failed = 0;
 
       for (const emp of employees) {
+        // The stage in flight when something throws is the failure reason. It is
+        // a closed code (see failure-reasons.ts), so what operators see in the UI
+        // never depends on, or echoes, the exception text.
+        let reasonCode: Form16FailureCode = "DATA_UNAVAILABLE";
         try {
           // a. Build Form 16 data
           const form16Data = await buildForm16(tenantId, emp.employeeId, fy);
+          reasonCode = "UNKNOWN";
           const html = renderForm16Html(form16Data);
 
           // b. Render HTML → PDF
+          reasonCode = "RENDERER_UNAVAILABLE";
           const pdfResult = await renderPdf({ html, format: "A4" });
           if (pdfResult.mode === "html-only") {
             throw new Error("PDF renderer unavailable (Chromium not found)");
@@ -212,6 +219,7 @@ export function registerForm16BulkConsumers(queue: Queue): void {
 
           // c. Sign PDF if DSC available
           if (dscMaterial) {
+            reasonCode = "SIGNING_FAILED";
             const signResult = await signPdfWithDsc(pdfBuffer, {
               p12Buffer: dscMaterial.p12Buffer,
               passphrase: dscMaterial.passphrase,
@@ -220,15 +228,17 @@ export function registerForm16BulkConsumers(queue: Queue): void {
           }
 
           // d. Upload to S3
+          reasonCode = "STORAGE_ERROR";
           const s3Key = `${storagePrefix}/${emp.employeeNo}.pdf`;
           await putObject(s3Key, pdfBuffer, "application/pdf");
 
           generated++;
         } catch (err) {
           failed++;
+          // `error` is operator-only (job row + log); bulk-status never returns it.
           const errMsg = err instanceof Error ? err.message : String(err);
-          errorDetails.push({ employeeId: emp.employeeId, employeeNo: emp.employeeNo, error: errMsg });
-          log.warn({ employeeId: emp.employeeId, jobId, error: errMsg }, "form16 bulk: employee PDF failed");
+          errorDetails.push({ employeeId: emp.employeeId, employeeNo: emp.employeeNo, error: errMsg, reasonCode });
+          log.warn({ employeeId: emp.employeeId, jobId, reasonCode, error: errMsg }, "form16 bulk: employee PDF failed");
         }
 
         // Update progress after each employee
@@ -291,7 +301,7 @@ export function registerForm16BulkConsumers(queue: Queue): void {
             .update(form16BulkJobs)
             .set({
               status: "failed",
-              errorDetails: [{ employeeId: "system", employeeNo: "N/A", error: errMsg }],
+              errorDetails: [{ employeeId: "system", employeeNo: FORM16_RUN_LEVEL_EMPLOYEE_NO, error: errMsg, reasonCode: "UNKNOWN" }],
               completedAt: new Date(),
             })
             .where(eq(form16BulkJobs.id, jobId));

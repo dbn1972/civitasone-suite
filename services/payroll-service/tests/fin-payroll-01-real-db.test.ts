@@ -50,6 +50,7 @@ vi.mock("../src/shared/hrms-client.js", () => ({
     lopDays: {},
   })),
   fetchPendingPayrollRuns: vi.fn(async () => 0),
+  fetchPayrollReadiness: vi.fn(async () => new Map()),
   fetchEmployeeSummaries: vi.fn(async () => new Map([
     [EMP.id, { fullName: hrms.nameOverride ?? EMP.fullName, departmentName: hrms.nameOverride ? "<b>Dept</b>" : "Finance", employeeNo: EMP.employeeNo }],
     [EMP2.id, { fullName: EMP2.fullName, departmentName: "Works", employeeNo: EMP2.employeeNo }],
@@ -290,6 +291,23 @@ describe("GAP-PAYROLL-DISBURSEMENT-01 audited account reveal + -08 paise totals"
     expect(res.statusCode).toBe(200);
     const run = (res.json() as Array<Record<string, unknown>>).find((r) => r.id === runId)!;
     expect(run).toMatchObject({ grossMinor: "6000050", netMinor: "5000025", deductionsMinor: "1000025", netAmount: 50000.25 });
+  });
+
+  it("GAP-PAYROLL-RUNS-01: GET /v1/payroll/runs/:id carries run-level AND per-slip exact paise strings next to the rupee floats, and the web schema keeps them", async () => {
+    const { PayrollRunFullDetailSchema } = await import("@civitasone/schemas/web");
+    const res = await app.inject({ method: "GET", url: `/v1/payroll/runs/${runId}`, headers: auth() });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toMatchObject({ grossMinor: "6000050", netMinor: "5000025", deductionsMinor: "1000025", netAmount: 50000.25 });
+    expect(body.salarySlips).toHaveLength(1);
+    expect(body.salarySlips[0]).toMatchObject({ grossMinor: "6000050", deductionsMinor: "1000025", netMinor: "5000025", net: 50000.25 });
+    // the contract the web adapter relies on: every money *Minor is an integer string
+    for (const v of [body.grossMinor, body.netMinor, body.deductionsMinor, body.salarySlips[0].grossMinor, body.salarySlips[0].deductionsMinor, body.salarySlips[0].netMinor]) {
+      expect(v).toMatch(/^-?\d+$/);
+    }
+    const parsed = PayrollRunFullDetailSchema.parse(body);
+    expect(parsed.salarySlips[0]).toMatchObject({ grossMinor: "6000050", deductionsMinor: "1000025", netMinor: "5000025" });
+    expect(BigInt(parsed.salarySlips[0]!.grossMinor!) - BigInt(parsed.salarySlips[0]!.deductionsMinor!)).toBe(BigInt(parsed.salarySlips[0]!.netMinor!));
   });
 });
 

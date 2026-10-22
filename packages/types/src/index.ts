@@ -996,13 +996,28 @@ export type PayrollRunDetail = {
   runDate: string;
   payPeriod: string;
   employeeCount: number;
+  /** Legacy rupee float. Money screens use the *Minor fields below (GAP-PAYROLL-HOME-01). */
   grossAmount: number;
   netAmount: number;
   deductions: number;
+  /** GAP-PAYROLL-HOME-01: authoritative integer-paise totals (bigint strings); render with formatMoney. */
+  grossMinor?: string;
+  netMinor?: string;
+  deductionsMinor?: string;
+  /**
+   * GAP-PAYROLL-HOME-03: payroll_runs.run_type. Absent on a payload from an older
+   * payroll-service, which is treated as "regular". Supplementary, arrears and
+   * pensioner runs coexist with the regular run of a month, so a headcount over a
+   * list of runs must only count the regular ones.
+   */
+  runType?: "regular" | "supplementary" | "arrears" | "pensioner";
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {
+  /** GAP-PAYROLL-DETAIL-02: user ids of the run's maker and checker (approvedBy is null until approved). */
+  createdBy?: string | null;
+  approvedBy?: string | null;
   salarySlips: Array<{
     id: string;
     employeeId: string;
@@ -1010,6 +1025,10 @@ export type PayrollRunFullDetail = PayrollRunDetail & {
     gross: number;
     deductions: number;
     net: number;
+    /** GAP-PAYROLL-HOME-01: integer-paise strings; render with formatMoney. */
+    grossMinor?: string;
+    deductionsMinor?: string;
+    netMinor?: string;
     status: string;
   }>;
 };

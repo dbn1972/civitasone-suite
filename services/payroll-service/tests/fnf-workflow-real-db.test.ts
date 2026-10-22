@@ -400,6 +400,22 @@ describe("F&F workflow -- races and double-clicks", () => {
     expect((await audits(id)).filter((a) => (a.payload as Row).action === "fnf_disburse")).toHaveLength(1);
   });
 
+  it("disburse carries the typed reason to the audit event (>= 10 chars when given); a too-short reason is a 400 and changes nothing", async () => {
+    const id = await seed("finance_approved", { submittedBy: MAKER, financeApprovedBy: CHECKER, version: 3 });
+    const tooShort = await post(id, "disburse", PAYER, PAYROLL_ADMIN, { ...DISBURSE_BODY(3), reason: "paid" });
+    expect(tooShort.statusCode).toBe(400);
+    expect(await read(id)).toMatchObject({ status: "finance_approved", version: 3 });
+
+    expect((await post(id, "disburse", PAYER, PAYROLL_ADMIN, { ...DISBURSE_BODY(3), reason: "Paid by RTGS on 30 Sep, UTR checked" })).statusCode).toBe(202);
+    await until(() => read(id), (r) => r?.status === "disbursed");
+    const trail = (await audits(id)).filter((a) => (a.payload as Row).action === "fnf_disburse");
+    expect(trail).toHaveLength(1);
+    expect(trail[0]!.payload).toMatchObject({
+      reason: "Paid by RTGS on 30 Sep, UTR checked",
+      newValue: { status: "disbursed", paymentReference: "SBIN-UTR-2026100200001", netPayableMinor: "1000000" },
+    });
+  });
+
   it("the DB refuses a disbursed row without payment details", async () => {
     const id = await seed("finance_approved", { submittedBy: MAKER, financeApprovedBy: CHECKER });
     await expect(runWithTenant(TENANT, () => db.transaction((tx) => tx.execute(sql`

@@ -1026,7 +1026,9 @@
     "reconcileNoChallan": "No challan",
     "reconcilePendingFinalisation": "Run not finalised",
     "filingBlockedMismatchBody": "TDS deducted for {period} does not match the {formType} challans deposited. Resolve the difference before filing {formType}.",
-    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled."
+    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled.",
+    "colFormType": "Form",
+    "reconcileNotMatched": "Not matched"
   },
   "checkinLog": {
     "title": "Check-In Log",
@@ -1972,12 +1974,14 @@
     "newGrossRequiredError": "New gross must be a positive value in rupees.",
     "newBasicBelowOldError": "New basic is below old basic — use revision type \"Correction\" if this is intentional.",
     "newGrossBelowBasicError": "New gross cannot be less than new basic.",
+    "amountTooLargeError": "Amount is too large to record. Check the figure and try again.",
     "recordedMessage": "Salary revision to {amount} for employee {employeeId} submitted. It is saved in the background and will appear in the history below shortly.",
     "confirmTitle": "Record this salary revision?",
     "confirmLabel": "Record revision",
     "confirmDescription": "Record a {revisionType} revision to {amount} basic for employee <strong>{employeeId}</strong>, effective {effectiveDate}.",
     "networkError": "Network error. Please try again.",
-    "orderNoRequiredError": "Enter the order number that sanctions this revision."
+    "orderNoRequiredError": "Enter the order number that sanctions this revision.",
+    "reasonLabel": "Reason for this revision"
   },
   "crm": {
     "loading": {
@@ -2775,7 +2779,8 @@
     "employeePickerPlaceholder": "Type a name or employee code…",
     "financialYearLabel": "Financial Year",
     "submitBtn": "View Form 12BA",
-    "requiredError": "Select an employee to look up."
+    "requiredError": "Select an employee to look up.",
+    "fyInvalidError": "Choose a valid financial year, for example 2026-27."
   },
   "employeeImport": {
     "title": "Bulk Employee Import",
@@ -3713,8 +3718,16 @@
     "completedLabel": " · Completed {date}",
     "downloadLinkLabel": "Get download link",
     "failureDetailsSummary": "Failure details ({count})",
-    "failureRow": "{employeeId}: {message}",
-    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above."
+    "failureRow": "{employee}: {message}",
+    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above.",
+    "failureReasonUnknown": "Reason not available. Contact an administrator with the Job ID above.",
+    "failureReasonDataUnavailable": "Salary or tax data could not be read for this employee.",
+    "failureReasonRendererUnavailable": "The PDF renderer was unavailable.",
+    "failureReasonSigningFailed": "The PDF could not be digitally signed.",
+    "failureReasonStorageError": "The PDF could not be saved to storage.",
+    "failureRowsTruncated": "{count, plural, one {# more failure is not shown.} other {# more failures are not shown.}}",
+    "failureRunLevel": "Whole run",
+    "failureEmployeeUnknown": "An employee"
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
@@ -3793,10 +3806,10 @@
     "errorArea": "GPF statements",
     "title": "<term>GPF</term> Statements",
     "subtitle": "General Provident Fund contributions by employee and period.",
-    "statStatements": "Statements",
-    "statEmployees": "Employees",
-    "statTotalContributions": "Total Contributions",
-    "statPeriods": "Periods",
+    "statStatements": "Statements (listed below)",
+    "statEmployees": "Employees (listed below)",
+    "statTotalContributions": "Total Contributions (listed below)",
+    "statPeriods": "Periods Covered (listed below)",
     "lastPeriodLabel": "Last Period Contribution",
     "periodValue": "Period: {period}",
     "trendCardTitle": "Contribution Trend (last 6 periods)",
@@ -3819,7 +3832,8 @@
     "emptyMessageFiltered": "No General Provident Fund records match your filter.",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} no contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "GPF Statements"
+    "loadingHeading": "GPF Statements",
+    "ledgerLimitNote": "Only the first {limit} statements are loaded, so the counts and totals above cover those statements only, not the full history."
   },
   "gratuity": {
     "ceilingNote": "Payment of Gratuity Act ceiling: {amount}. Government (CCS Pension Rules) DCRG follows separate rules and ceilings, so this cap does not apply to every row.",
@@ -4102,8 +4116,8 @@
     "incomeTaxDesc": "Monthly TDS computation and history",
     "tdsReturns": "TDS Returns",
     "tdsReturnsDesc": "Form 24Q / 26Q quarterly e-TDS",
-    "taxConfig": "Tax Config",
-    "taxConfigDesc": "TDS slabs and deduction limits",
+    "taxConfig": "Tax Reference",
+    "taxConfigDesc": "Read-only TDS slabs and deduction limits",
     "salaryRevisions": "Salary Revisions",
     "salaryRevisionsDesc": "Increment and revision records",
     "salaryCorrections": "Salary Corrections",
@@ -4126,8 +4140,8 @@
     "payrollRegisterDesc": "Department-wise payroll summary",
     "comparison": "Comparison",
     "comparisonDesc": "Month-on-month payroll variance",
-    "payrollPeriod": "Payroll Period",
-    "payrollPeriodDesc": "Period closing and control",
+    "payrollPeriod": "Payroll Runs by Period",
+    "payrollPeriodDesc": "Monthly payroll run history and status",
     "disbursement": "Disbursement",
     "disbursementDesc": "Bank file and payment dispatch",
     "benefits": "Benefits",
@@ -4305,6 +4319,7 @@
     "statTotal": "Total",
     "statFinalized": "Finalized",
     "statPending": "Pending",
+    "statOther": "Other",
     "statDepartments": "Departments",
     "colEmployee": "Employee",
     "colDepartment": "Department",
@@ -4319,6 +4334,8 @@
       "submitted": "Submitted",
       "pending": "Pending",
       "draft": "Draft",
+      "verified": "Verified",
+      "approved": "Approved",
       "finalized": "Finalized",
       "completed": "Completed"
     },
@@ -4916,10 +4933,10 @@
     "frequencyYearly": "Yearly"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} already has an LWF configuration. Amounts or frequency you enter replace the stored values; blank fields keep the current value.",
+    "overwriteWarning": "{state} already has an LWF configuration. Saving replaces the stored values you changed; the others are kept.",
     "formTitle": "Add / Update LWF Configuration",
     "stateCodeLabel": "State Code",
-    "stateCodePlaceholder": "e.g. KA",
+    "stateCodePlaceholder": "Select a state / UT",
     "employeeContributionLabel": "Employee Contribution (₹)",
     "employerContributionLabel": "Employer Contribution (₹)",
     "submitBtn": "Save LWF Configuration",
@@ -4931,12 +4948,16 @@
     "savedMessage": "LWF configuration saved for {state}.",
     "frequencyLabel": "Frequency",
     "frequencyKeepCurrent": "Keep current frequency",
+    "frequencyUseDefault": "Default ({frequency})",
     "frequencyMonthly": "Monthly",
     "frequencyQuarterly": "Quarterly",
     "frequencyHalfYearly": "Half-yearly",
     "frequencyYearly": "Yearly",
-    "blankKeepsCurrentHint": "Leave a field blank to keep the value already saved for this state.",
-    "unchangedValue": "unchanged"
+    "unchangedValue": "unchanged",
+    "amountRequiredError": "Enter the amount in rupees. Type 0 if no contribution applies.",
+    "amountInvalidError": "Enter a valid amount in rupees (at most 2 decimal places).",
+    "noChangesError": "Nothing has changed from the saved configuration.",
+    "amountsRequiredHint": "Both amounts are required; type 0 if no contribution applies. For a state that is already configured, the saved values are filled in and only the values you change are updated."
   },
   "medicalClaims": {
     "title": "Medical Claims",
@@ -5172,7 +5193,9 @@
     "totalContributionsLabel": "Total Contributions",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} a missing contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "NPS Statements"
+    "loadingHeading": "NPS Statements",
+    "colContributionBase": "Contribution base",
+    "contributionBaseNote": "Contribution base: the Basic + DA that the employee and employer percentages were applied to (for a suspended employee, only the regular days' share). Statements from before the base was recorded show —."
   },
   "offCycle": {
     "loadingAriaLabel": "Loading…",
@@ -5313,8 +5336,13 @@
     "statTotalRuns": "Total Runs",
     "statEmployeesPaid": "Employees Paid",
     "statTotalGross": "Total Gross",
-    "statPending": "Pending",
-    "runsCardTitle": "Payroll Runs"
+    "runsCardTitle": "Payroll Runs",
+    "statPaid": "Paid",
+    "statInProgress": "In Progress",
+    "statAwaitingDisbursement": "Awaiting Disbursement",
+    "statFailed": "Failed",
+    "statEmployeesPaidPeriod": "Employees Paid, regular runs ({period})",
+    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})"
   },
   "payrollRunsTable": {
     "colPeriod": "Period",
@@ -5336,6 +5364,30 @@
       "disbursed": "Disbursed",
       "failed": "Failed"
     }
+  },
+  "payrollRouteError": {
+    "backToHr": "Back to HR",
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToMyPayslips": "Back to My Payslips",
+    "areaHr": "HR page",
+    "areaSalarySlip": "Salary Slip",
+    "areaPayrollComparison": "Payroll Comparison",
+    "areaCostAllocation": "Cost Allocation",
+    "areaCtcConfiguration": "CTC Configuration",
+    "areaDdoManagement": "DDO Management",
+    "areaFlexBenefits": "Flex Benefits",
+    "areaFullAndFinal": "Full & Final Settlement",
+    "areaPayGroups": "Pay Groups",
+    "areaPayrollRegister": "Payroll Register",
+    "areaReimbursements": "Reimbursements",
+    "areaPayStructures": "Pay Structures",
+    "areaTaxConfiguration": "Tax Configuration",
+    "areaIncomeTaxReference": "Income Tax Reference",
+    "areaTdsReturns": "TDS Returns"
+  },
+  "routeError": {
+    "backToDashboard": "Back to dashboard"
   },
   "payrollLoans": {
     "loadingAriaLabel": "Loading…",
@@ -5369,8 +5421,8 @@
     "recoveryColClosing": "Closing"
   },
   "payrollTaxConfig": {
-    "title": "Income Tax Configuration",
-    "subtitle": "The income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine actually applies, for the selected financial year.",
+    "title": "Income Tax Reference",
+    "subtitle": "A read-only view of the income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine applies for the selected financial year.",
     "backLabel": "Payroll",
     "fyCardTitle": "Financial Year",
     "fyLabel": "Financial year",
@@ -5395,8 +5447,13 @@
     "footerNote": "These figures are read live from the payroll engine's per-tenant, per-FY configuration — they are what a run for this financial year applies.",
     "footerLink": "View the income-tax rollup",
     "loadErrorMessage": "Couldn't load the tax configuration — showing nothing",
-    "loadingTitle": "Tax Configuration",
-    "loadingSubtitle": "Tax rules and slab setup."
+    "loadingTitle": "Tax Reference",
+    "loadingSubtitle": "Tax slabs and limits the payroll engine applies.",
+    "thNewRegime": "New regime",
+    "thOldRegime": "Old regime",
+    "surchargeCapNote": "New regime: the highest surcharge rate configured is {rate}%, so surcharge under the new regime never exceeds that rate.",
+    "marginalReliefNote": "Marginal relief applies at every surcharge threshold: tax plus surcharge never exceeds the tax at the threshold plus the income above it.",
+    "readOnlyNote": "This page is a read-only reference and does not change any rate or limit."
   },
   "pensioners": {
     "ppoMaskedNote": "PPO numbers are shown masked. Open a record to see its details; payroll officers can reveal the full number there (the reveal is audited).",
@@ -5458,7 +5515,7 @@
     "statFinancialYear": "Financial Year",
     "form12baCardTitle": "Form 12BA",
     "selectEmployeeFyTitle": "Select an employee and financial year",
-    "selectEmployeeFyMessage": "Enter an employee ID and financial year above to view their Form 12BA statement of perquisites.",
+    "selectEmployeeFyMessage": "Select an employee and financial year above to view their Form 12BA statement of perquisites.",
     "noForm12baTitle": "No Form 12BA data",
     "noForm12baMessage": "No perquisite data found for the given employee and FY {fy}.",
     "employerLabel": "Employer",
@@ -5483,7 +5540,10 @@
     "deleteDescription": "The {nature} component is removed from this employee's Form 12BA. The deletion is audited with the values removed.",
     "deleteConfirm": "Delete component",
     "deleteReasonLabel": "Reason for deleting",
-    "deleteFailed": "Could not delete the component. Please try again."
+    "deleteFailed": "Could not delete the component. Please try again.",
+    "subtitleFor": "Perquisites and Form 12BA for {name}, FY {fy}.",
+    "invalidFyMessage": "The financial year in the address is not valid. Choose a financial year below.",
+    "panMaskedAriaLabel": "PAN (masked)"
   },
   "perquisiteComponentForm": {
     "formTitle": "Add Perquisite Component",
@@ -5508,14 +5568,16 @@
     "submitBtn": "Save Component",
     "valueInvalidError": "Value by employer must be a valid rupee amount.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "Perquisite component \"{nature}\" saved for {employeeId}.",
+    "savedMessage": "Perquisite component \"{nature}\" saved for {employee}.",
     "confirmTitle": "Save this perquisite component?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}.",
-    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
+    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}.",
+    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
     "updateBtn": "Update component",
     "cancelEdit": "Cancel",
-    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts."
+    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts.",
+    "employeeUnnamed": "Selected employee",
+    "fyInvalidError": "The financial year is not valid. Look the employee up again with a valid financial year."
   },
   "pf": {
     "selectPeriodLabel": "Period",
@@ -7034,7 +7096,7 @@
     "historyCardTitle": "Salary Revision History",
     "filterPlaceholder": "Filter by employee or order no…",
     "emptyTitle": "No salary revisions yet",
-    "emptyMessage": "Revisions recorded upstream in HRMS pay-fixation will appear here.",
+    "emptyMessage": "Salary revisions will appear here once they are recorded.",
     "colEmployee": "Employee",
     "colEffectiveDate": "Effective Date",
     "colRevisionType": "Revision Type",
@@ -7615,7 +7677,8 @@
     "windowOpenUntil": "Declarations are open until {date}.",
     "windowClosed": "Declarations for {fy} closed on {date}. Contact payroll to change your declaration.",
     "windowNotOpen": "Declarations open on {date}.",
-    "lastUpdatedLabel": "Last updated {date}"
+    "lastUpdatedLabel": "Last updated {date}",
+    "lockedNotice": "This declaration has been verified or approved by payroll and is read-only. Contact payroll if it needs to change."
   },
   "verifyForm16Form": {
     "cardTitle": "Verify a Form-16",
@@ -8455,14 +8518,15 @@
     "rejectReasonLabel": "Reason for rejection"
   },
   "payrollPeriod": {
-    "title": "Payroll Periods",
+    "title": "Payroll Runs by Period",
     "subtitle": "Monthly payroll run history and processing status.",
     "loadErrorMessage": "Couldn't load payroll periods — showing nothing",
     "statTotal": "Total",
-    "statCompleted": "Completed",
-    "statProcessing": "Processing",
-    "statEmployees": "Total Employees",
-    "cardTitle": "Payroll Periods",
+    "statPaid": "Paid",
+    "statInProgress": "In progress",
+    "statFailed": "Failed",
+    "statEmployeesLatest": "Employees (latest run)",
+    "cardTitle": "Run history",
     "colMonth": "Month",
     "colRunDate": "Run Date",
     "colEmployees": "Employees",
@@ -8471,8 +8535,8 @@
     "colDeductions": "Deductions",
     "colStatus": "Status",
     "filterPlaceholder": "Filter by period or status…",
-    "emptyTitle": "No payroll periods yet",
-    "emptyMessage": "Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll page to generate a period record.",
+    "emptyTitle": "No payroll runs yet",
+    "emptyMessage": "Each payroll run appears here under its pay period. Create your first run from the Payroll page.",
     "loadingAriaLabel": "Loading…"
   },
   "payrollRuns": {
@@ -9442,7 +9506,8 @@
     "salarySlipsTitle": "Salary Slips ({count})",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "exceptionSalaryCalcFailed": "Salary calculation failed for this employee. Open their record to review the cause.",
-    "viewRegisterLink": "View department register"
+    "viewRegisterLink": "View department register",
+    "backLabel": "Payroll Runs"
   },
   "payrollRunActions": {
     "disburseChannelDefault": "the finance EFT / PFMS bridge",
@@ -9468,7 +9533,16 @@
     "revertConfirmTitle": "Revert this run to draft?",
     "revertReasonLabel": "Reason for revert",
     "revertConfirmLabel": "Revert to draft",
-    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed."
+    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed.",
+    "makerCheckerApproveHint": "You created this run, so a different approver must approve it (maker-checker).",
+    "makerCheckerDisburseHint": "You approved this run, so a different officer must disburse it (maker-checker).",
+    "makerCheckerDisburseError": "You approved this run, so you cannot disburse it. Another officer needs to disburse it."
+  },
+  "payrollCommon": {
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToHr": "Back to HR",
+    "backToPensioners": "Back to Pensioners"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# payroll exception requires attention} other {# payroll exceptions require attention}}",
@@ -9773,8 +9847,6 @@
     "confirmSubmitForApproval": "Submit this settlement for manager approval?",
     "actionFinanceApprove": "Finance Approve",
     "confirmFinanceApprove": "Mark this settlement as finance-approved?",
-    "actionMarkDisbursed": "Mark Disbursed",
-    "confirmMarkDisbursed": "Mark this settlement as disbursed?",
     "statusDraft": "Draft",
     "statusManagerApproved": "Manager Approved",
     "statusFinanceApproved": "Finance Approved",
@@ -10228,7 +10300,7 @@
   "fnfSettlementActions": {
     "submitBtn": "Submit for approval",
     "approveBtn": "Finance approve",
-    "disburseBtn": "Mark disbursed",
+    "disburseBtn": "Record payment",
     "rejectBtn": "Reject",
     "cancelBtn": "Cancel",
     "submitAriaLabel": "Submit the settlement for {name} for finance approval",
@@ -10259,7 +10331,9 @@
     "selfApprovalError": "You computed or submitted this settlement, so you cannot approve or reject it.",
     "selfDisbursalError": "You computed, submitted or approved this settlement, so you cannot record its payment or reject it.",
     "forbiddenError": "Your role does not allow this step.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "paymentReasonLabel": "Reason for recording this payment",
+    "paymentReasonShort": "Enter at least {min} characters."
   },
   "financeBillForm": {
     "pageTitle": "New Bill",

@@ -29,6 +29,7 @@ type DisplayRow = Row & { basicPensionDisplay: string };
 
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
     return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_READER_ROLES} />;
@@ -73,7 +74,7 @@ export default async function PensionersPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
         actions={
           canCreate ? (
             <Link href="/hr/payroll/pensioners/new" className="btn primary">{t("addPensionerLink")}</Link>

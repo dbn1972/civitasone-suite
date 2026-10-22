@@ -29,6 +29,9 @@ const sampleRuns = [
     employeeCount: 120,
     grossAmount: 4500000,
     netAmount: 4100000,
+    // GAP-PAYROLL-HOME-01: the integer-paise strings the table actually renders.
+    grossMinor: "450000000",
+    netMinor: "410000000",
     status: "paid",
   },
 ] as never;
@@ -120,5 +123,78 @@ describe("PayrollRunsTable — COMP-019 (rupee/paise unit-convention regression)
     renderTable({ runs: sampleRuns, source: "api" });
     expectRupeeGroundTruthDisplayed(screen, 450000000n); // sampleRuns[0].grossAmount = Rs 45,00,000
     expectRupeeGroundTruthDisplayed(screen, 410000000n); // sampleRuns[0].netAmount = Rs 41,00,000
+  });
+});
+
+// GAP-PAYROLL-HOME-01 (contract test): the table renders the API's integer-paise
+// strings with formatMoney, and never reads the legacy rupee floats.
+describe("PayrollRunsTable — GAP-PAYROLL-HOME-01 (integer paise contract)", () => {
+  function renderWith(run: Record<string, unknown>) {
+    const runs = [{ id: "run-9", payPeriod: "2026-09", employeeCount: 3, status: "paid", ...run }] as never;
+    mockedHook.mockReturnValue({ data: runs, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    renderTable({ runs, source: "api" });
+  }
+
+  it("grossMinor=9000000 renders ₹90,000.00 (and never the 100x-off ₹900.00)", () => {
+    renderWith({ grossMinor: "9000000", netMinor: "8100000" });
+    expect(screen.getByText("₹90,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹81,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹900.00")).not.toBeInTheDocument();
+  });
+
+  it("renders from the paise string even when the legacy rupee float disagrees (the float is not read)", () => {
+    renderWith({ grossMinor: "9000000", netMinor: "8100000", grossAmount: 1, netAmount: 2 });
+    expect(screen.getByText("₹90,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹1.00")).not.toBeInTheDocument();
+  });
+
+  it("never fabricates ₹0.00: a run with neither paise strings nor rupee floats shows an em dash", () => {
+    renderWith({});
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps exact paise: ₹1,23,456.78 from 12345678", () => {
+    renderWith({ grossMinor: "12345678", netMinor: "12345678" });
+    expect(screen.getAllByText("₹1,23,456.78").length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// GAP-PAYROLL-RUNS-01: the table renders the API's exact paise strings through
+// formatMoney (via lib/payroll/runMoney.ts), preferring them to the rupee floats.
+describe("PayrollRunsTable — GAP-PAYROLL-RUNS-01 (exact paise first, legacy rupees as fallback)", () => {
+  function withRuns(runs: unknown) {
+    mockedHook.mockReturnValue({
+      data: runs,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+  }
+
+  it("renders grossMinor/netMinor with formatMoney: net 1,23,456.78", () => {
+    const runs = [{ id: "run-m", payPeriod: "2026-08", employeeCount: 3, grossAmount: 1, netAmount: 1, grossMinor: "15000000", netMinor: "12345678", status: "paid" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+    // the (deliberately wrong) rupee floats on the same row must not be shown
+    expect(screen.queryByText("₹1.00")).not.toBeInTheDocument();
+  });
+
+  it("a legacy payload (rupee floats only) renders the identical string", () => {
+    const runs = [{ id: "run-l", payPeriod: "2026-08", employeeCount: 3, grossAmount: 150000, netAmount: 123456.78, status: "paid" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+  });
+
+  it("a run with no usable money fields shows dashes, not ₹0.00", () => {
+    const runs = [{ id: "run-x", payPeriod: "2026-08", employeeCount: 3, status: "draft" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
   });
 });

@@ -1025,7 +1025,9 @@
     "reconcileNoChallan": "कोई चालान नहीं",
     "reconcilePendingFinalisation": "रन अंतिम नहीं",
     "filingBlockedMismatchBody": "{period} के लिए काटा गया TDS जमा किए गए {formType} चालानों से मेल नहीं खाता। {formType} फाइल करने से पहले अंतर दूर करें।",
-    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।"
+    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।",
+    "colFormType": "फॉर्म",
+    "reconcileNotMatched": "मिलान नहीं हुआ"
   },
   "checkinLog": {
     "title": "चेक-इन लॉग",
@@ -1986,12 +1988,14 @@
     "newGrossRequiredError": "नया सकल वेतन रुपयों में एक धनात्मक मान होना चाहिए।",
     "newBasicBelowOldError": "नया मूल वेतन पुराने से कम है — यदि यह जानबूझकर है तो संशोधन प्रकार \"सुधार\" चुनें।",
     "newGrossBelowBasicError": "नया सकल वेतन नए मूल वेतन से कम नहीं हो सकता।",
+    "amountTooLargeError": "राशि इतनी बड़ी है कि दर्ज नहीं की जा सकती। राशि जाँचकर पुनः प्रयास करें।",
     "recordedMessage": "कर्मचारी {employeeId} के लिए {amount} का वेतन संशोधन जमा किया गया। यह पृष्ठभूमि में सहेजा जा रहा है और शीघ्र ही नीचे इतिहास में दिखाई देगा।",
     "confirmTitle": "क्या यह वेतन संशोधन दर्ज करें?",
     "confirmLabel": "संशोधन दर्ज करें",
     "confirmDescription": "कर्मचारी <strong>{employeeId}</strong> के लिए {amount} मूल वेतन तक {revisionType} संशोधन दर्ज करें, प्रभावी {effectiveDate}।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।"
+    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।",
+    "reasonLabel": "इस संशोधन का कारण"
   },
   "crm": {
     "loading": {
@@ -2790,7 +2794,8 @@
     "employeePickerPlaceholder": "नाम या कर्मचारी कोड टाइप करें…",
     "financialYearLabel": "वित्तीय वर्ष",
     "submitBtn": "फॉर्म 12BA देखें",
-    "requiredError": "देखने हेतु एक कर्मचारी चुनें।"
+    "requiredError": "देखने हेतु एक कर्मचारी चुनें।",
+    "fyInvalidError": "मान्य वित्तीय वर्ष चुनें, उदाहरण के लिए 2026-27।"
   },
   "employeeImport": {
     "title": "थोक कर्मचारी आयात",
@@ -3728,8 +3733,16 @@
     "completedLabel": " · पूर्ण {date}",
     "downloadLinkLabel": "डाउनलोड लिंक प्राप्त करें",
     "failureDetailsSummary": "विफलता विवरण ({count})",
-    "failureRow": "{employeeId}: {message}",
-    "failureDetailsUnavailable": "विफलता विवरण एक अपरिचित प्रारूप में हैं और यहां नहीं दिखाए जा सकते; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।"
+    "failureRow": "{employee}: {message}",
+    "failureDetailsUnavailable": "विफलता विवरण एक अपरिचित प्रारूप में हैं और यहां नहीं दिखाए जा सकते; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।",
+    "failureReasonUnknown": "कारण उपलब्ध नहीं; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।",
+    "failureReasonDataUnavailable": "इस कर्मचारी का वेतन या कर डेटा पढ़ा नहीं जा सका।",
+    "failureReasonRendererUnavailable": "PDF बनाने वाली सेवा उपलब्ध नहीं थी।",
+    "failureReasonSigningFailed": "PDF पर डिजिटल हस्ताक्षर नहीं किए जा सके।",
+    "failureReasonStorageError": "PDF को भंडारण में सहेजा नहीं जा सका।",
+    "failureRowsTruncated": "{count, plural, one {# और विफलता यहां नहीं दिखाई गई है।} other {# और विफलताएं यहां नहीं दिखाई गई हैं।}}",
+    "failureRunLevel": "पूरा रन",
+    "failureEmployeeUnknown": "एक कर्मचारी"
   },
   "form16Wizard": {
     "stepAriaLabel": "फॉर्म 16 विज़ार्ड चरण",
@@ -3808,10 +3821,10 @@
     "errorArea": "GPF विवरण",
     "title": "<term>GPF</term> विवरण",
     "subtitle": "कर्मचारी और अवधि के अनुसार सामान्य भविष्य निधि अंशदान।",
-    "statStatements": "विवरण",
-    "statEmployees": "कर्मचारी",
-    "statTotalContributions": "कुल अंशदान",
-    "statPeriods": "अवधियां",
+    "statStatements": "विवरण (नीचे सूचीबद्ध)",
+    "statEmployees": "कर्मचारी (नीचे सूचीबद्ध)",
+    "statTotalContributions": "कुल अंशदान (नीचे सूचीबद्ध)",
+    "statPeriods": "कवर की गई अवधियां (नीचे सूचीबद्ध)",
     "lastPeriodLabel": "अंतिम अवधि का अंशदान",
     "periodValue": "अवधि: {period}",
     "trendCardTitle": "अंशदान रुझान (पिछली 6 अवधियाँ)",
@@ -3834,7 +3847,8 @@
     "emptyMessageFiltered": "आपके फ़िल्टर से कोई सामान्य भविष्य निधि रिकॉर्ड मेल नहीं खाता।",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि नहीं है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "GPF विवरण"
+    "loadingHeading": "GPF विवरण",
+    "ledgerLimitNote": "केवल पहले {limit} विवरण लोड किए गए हैं, इसलिए ऊपर की गिनती और कुल योग केवल उन्हीं विवरणों को दर्शाते हैं, पूरे इतिहास को नहीं।"
   },
   "gratuity": {
     "ceilingNote": "भुगतान ग्रेच्युटी अधिनियम की सीमा: {amount}। सरकारी (सीसीएस पेंशन नियम) डीसीआरजी के नियम और सीमाएँ अलग हैं, इसलिए यह सीमा हर पंक्ति पर लागू नहीं होती।",
@@ -4118,8 +4132,8 @@
     "incomeTaxDesc": "मासिक TDS गणना और इतिहास",
     "tdsReturns": "TDS रिटर्न",
     "tdsReturnsDesc": "फ़ॉर्म 24Q / 26Q त्रैमासिक e-TDS",
-    "taxConfig": "कर कॉन्फ़िग",
-    "taxConfigDesc": "TDS स्लैब और कटौती सीमाएं",
+    "taxConfig": "कर संदर्भ",
+    "taxConfigDesc": "केवल-पढ़ने योग्य TDS स्लैब और कटौती सीमाएं",
     "salaryRevisions": "वेतन संशोधन",
     "salaryRevisionsDesc": "वेतनवृद्धि और संशोधन रिकॉर्ड",
     "salaryCorrections": "वेतन सुधार",
@@ -4142,8 +4156,8 @@
     "payrollRegisterDesc": "विभाग-वार वेतन सारांश",
     "comparison": "तुलना",
     "comparisonDesc": "माह-दर-माह वेतन विचलन",
-    "payrollPeriod": "वेतन अवधि",
-    "payrollPeriodDesc": "अवधि समापन और नियंत्रण",
+    "payrollPeriod": "अवधि अनुसार वेतन रन",
+    "payrollPeriodDesc": "मासिक वेतन रन इतिहास और स्थिति",
     "disbursement": "वितरण",
     "disbursementDesc": "बैंक फ़ाइल और भुगतान प्रेषण",
     "benefits": "लाभ",
@@ -4321,6 +4335,7 @@
     "statTotal": "कुल",
     "statFinalized": "अंतिम रूप से तैयार",
     "statPending": "लंबित",
+    "statOther": "अन्य",
     "statDepartments": "विभाग",
     "colEmployee": "कर्मचारी",
     "colDepartment": "विभाग",
@@ -4335,6 +4350,8 @@
       "submitted": "सबमिट किया गया",
       "pending": "लंबित",
       "draft": "ड्राफ़्ट",
+      "verified": "सत्यापित",
+      "approved": "स्वीकृत",
       "finalized": "अंतिम रूप से तैयार",
       "completed": "पूर्ण"
     },
@@ -4929,10 +4946,10 @@
     "frequencyYearly": "वार्षिक"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। आपके द्वारा दर्ज राशि या आवृत्ति संग्रहीत मानों को बदल देगी; खाली फ़ील्ड वर्तमान मान बनाए रखेंगे।",
+    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। सहेजने पर आपके बदले हुए संग्रहीत मान बदल जाएँगे; बाकी वैसे ही रहेंगे।",
     "formTitle": "LWF विन्यास जोड़ें / अद्यतन करें",
     "stateCodeLabel": "राज्य कोड",
-    "stateCodePlaceholder": "उदा. KA",
+    "stateCodePlaceholder": "राज्य / केंद्रशासित प्रदेश चुनें",
     "employeeContributionLabel": "कर्मचारी अंशदान (₹)",
     "employerContributionLabel": "नियोक्ता अंशदान (₹)",
     "submitBtn": "LWF विन्यास सहेजें",
@@ -4944,12 +4961,16 @@
     "savedMessage": "{state} के लिए LWF विन्यास सहेज दिया गया।",
     "frequencyLabel": "आवृत्ति",
     "frequencyKeepCurrent": "वर्तमान आवृत्ति रखें",
+    "frequencyUseDefault": "डिफ़ॉल्ट ({frequency})",
     "frequencyMonthly": "मासिक",
     "frequencyQuarterly": "त्रैमासिक",
     "frequencyHalfYearly": "अर्धवार्षिक",
     "frequencyYearly": "वार्षिक",
-    "blankKeepsCurrentHint": "इस राज्य के लिए पहले से सहेजा गया मान रखने के लिए फ़ील्ड खाली छोड़ें।",
-    "unchangedValue": "अपरिवर्तित"
+    "unchangedValue": "अपरिवर्तित",
+    "amountRequiredError": "राशि रुपये में दर्ज करें। यदि कोई अंशदान लागू नहीं है तो 0 लिखें।",
+    "amountInvalidError": "रुपये में मान्य राशि दर्ज करें (अधिकतम दो दशमलव अंक)।",
+    "noChangesError": "सहेजे गए विन्यास से कुछ भी नहीं बदला है।",
+    "amountsRequiredHint": "दोनों राशियाँ आवश्यक हैं; कोई अंशदान लागू न हो तो 0 लिखें। जिस राज्य का विन्यास पहले से है, उसके सहेजे गए मान भर दिए जाते हैं और केवल आपके बदले हुए मान अद्यतन होते हैं।"
   },
   "medicalClaims": {
     "title": "चिकित्सा दावे",
@@ -5184,7 +5205,9 @@
     "totalContributionsLabel": "कुल अंशदान",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि अनुपलब्ध है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "NPS विवरण"
+    "loadingHeading": "NPS विवरण",
+    "colContributionBase": "अंशदान आधार",
+    "contributionBaseNote": "अंशदान आधार: वह मूल वेतन + महंगाई भत्ता जिस पर कर्मचारी और नियोक्ता प्रतिशत लागू हुए (निलंबित कर्मचारी के लिए केवल सामान्य दिनों का हिस्सा)। आधार दर्ज होने से पहले के विवरणों में — दिखता है।"
   },
   "offCycle": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5325,8 +5348,13 @@
     "statTotalRuns": "कुल रन",
     "statEmployeesPaid": "भुगतान किए गए कर्मचारी",
     "statTotalGross": "कुल सकल वेतन",
-    "statPending": "लंबित",
-    "runsCardTitle": "वेतन रन"
+    "runsCardTitle": "वेतन रन",
+    "statPaid": "भुगतान किया गया",
+    "statInProgress": "प्रक्रियाधीन",
+    "statAwaitingDisbursement": "वितरण की प्रतीक्षा में",
+    "statFailed": "विफल",
+    "statEmployeesPaidPeriod": "भुगतान किए गए कर्मचारी, नियमित रन ({period})",
+    "statTotalGrossPeriod": "कुल सकल वेतन, सभी भुगतान किए गए रन ({period})"
   },
   "payrollLoans": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5360,14 +5388,15 @@
     "recoveryColClosing": "अंतिम"
   },
   "payrollPeriod": {
-    "title": "वेतन अवधि",
+    "title": "अवधि अनुसार वेतन रन",
     "subtitle": "मासिक वेतन रन इतिहास और प्रसंस्करण स्थिति।",
     "loadErrorMessage": "वेतन अवधि लोड नहीं हो सकी — कुछ नहीं दिखाया जा रहा",
     "statTotal": "कुल",
-    "statCompleted": "पूर्ण",
-    "statProcessing": "प्रसंस्करण में",
-    "statEmployees": "कुल कर्मचारी",
-    "cardTitle": "वेतन अवधि",
+    "statPaid": "भुगतान किया गया",
+    "statInProgress": "प्रक्रियाधीन",
+    "statFailed": "विफल",
+    "statEmployeesLatest": "कर्मचारी (नवीनतम रन)",
+    "cardTitle": "रन इतिहास",
     "colMonth": "माह",
     "colRunDate": "रन दिनांक",
     "colEmployees": "कर्मचारी",
@@ -5376,8 +5405,8 @@
     "colDeductions": "कटौती",
     "colStatus": "स्थिति",
     "filterPlaceholder": "अवधि या स्थिति के अनुसार फ़िल्टर करें…",
-    "emptyTitle": "अभी तक कोई वेतन अवधि नहीं",
-    "emptyMessage": "हर बार वेतन रन प्रोसेस होने पर वेतन अवधि स्वतः बन जाती है। अवधि रिकॉर्ड बनाने के लिए वेतन पृष्ठ से अपना पहला वेतन रन चलाएं।",
+    "emptyTitle": "अभी तक कोई वेतन रन नहीं",
+    "emptyMessage": "हर वेतन रन अपनी वेतन अवधि के अंतर्गत यहां दिखाई देता है। अपना पहला रन वेतन पृष्ठ से बनाएं।",
     "loadingAriaLabel": "लोड हो रहा है…"
   },
   "payrollRegister": {
@@ -5458,6 +5487,30 @@
       "failed": "विफल"
     }
   },
+  "payrollRouteError": {
+    "backToHr": "HR पर वापस जाएँ",
+    "backToPayroll": "पेरोल पर वापस जाएं",
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं",
+    "backToMyPayslips": "मेरी वेतन पर्चियों पर वापस जाएं",
+    "areaHr": "HR पृष्ठ",
+    "areaSalarySlip": "वेतन पर्ची",
+    "areaPayrollComparison": "पेरोल तुलना",
+    "areaCostAllocation": "लागत आवंटन",
+    "areaCtcConfiguration": "CTC विन्यास",
+    "areaDdoManagement": "DDO प्रबंधन",
+    "areaFlexBenefits": "फ्लेक्स लाभ",
+    "areaFullAndFinal": "पूर्ण एवं अंतिम निपटान",
+    "areaPayGroups": "वेतन समूह",
+    "areaPayrollRegister": "पेरोल रजिस्टर",
+    "areaReimbursements": "प्रतिपूर्ति",
+    "areaPayStructures": "वेतन संरचनाएं",
+    "areaTaxConfiguration": "कर विन्यास",
+    "areaIncomeTaxReference": "आयकर संदर्भ",
+    "areaTdsReturns": "TDS विवरणियां"
+  },
+  "routeError": {
+    "backToDashboard": "डैशबोर्ड पर वापस जाएं"
+  },
   "payrollDetail": {
     "exceptionMissingPan": "PAN उपलब्ध नहीं है। इसके बिना कर उच्च दर (धारा 206AA) पर काटा जाता है।",
     "exceptionInvalidPan": "PAN का प्रारूप मान्य नहीं है (5 अक्षर, 4 अंक, 1 अक्षर)।",
@@ -5483,7 +5536,8 @@
     "salarySlipsTitle": "वेतन पर्चियां ({count})",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "exceptionSalaryCalcFailed": "इस कर्मचारी की वेतन गणना विफल रही। कारण देखने के लिए उनका रिकॉर्ड खोलें।",
-    "viewRegisterLink": "विभागीय रजिस्टर देखें"
+    "viewRegisterLink": "विभागीय रजिस्टर देखें",
+    "backLabel": "वेतन रन"
   },
   "payrollRunActions": {
     "disburseChannelDefault": "वित्त EFT / PFMS ब्रिज",
@@ -5509,7 +5563,16 @@
     "revertConfirmTitle": "क्या यह रन ड्राफ्ट में वापस लाया जाए?",
     "revertReasonLabel": "वापस लाने का कारण",
     "revertConfirmLabel": "ड्राफ्ट में वापस लाएं",
-    "revertDescription": "<strong>{period}</strong> के लिए वेतन रन को ड्राफ्ट स्थिति में वापस लाया जाएगा ताकि इसे ठीक करके पुनः प्रोसेस किया जा सके। अभी तक कोई धनराशि वितरित नहीं की गई है।"
+    "revertDescription": "<strong>{period}</strong> के लिए वेतन रन को ड्राफ्ट स्थिति में वापस लाया जाएगा ताकि इसे ठीक करके पुनः प्रोसेस किया जा सके। अभी तक कोई धनराशि वितरित नहीं की गई है।",
+    "makerCheckerApproveHint": "आपने यह रन बनाया है, इसलिए इसे कोई अन्य स्वीकृतकर्ता ही स्वीकृत कर सकता है (मेकर-चेकर)।",
+    "makerCheckerDisburseHint": "आपने यह रन स्वीकृत किया है, इसलिए इसे कोई अन्य अधिकारी ही वितरित कर सकता है (मेकर-चेकर)।",
+    "makerCheckerDisburseError": "आपने यह रन स्वीकृत किया है, इसलिए आप इसे वितरित नहीं कर सकते। इसे किसी अन्य अधिकारी को वितरित करना होगा।"
+  },
+  "payrollCommon": {
+    "backToPayroll": "पेरोल पर वापस जाएं",
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं",
+    "backToHr": "एचआर पर वापस जाएं",
+    "backToPensioners": "पेंशनभोगी पर वापस जाएं"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# वेतन अपवाद पर ध्यान देने की आवश्यकता है} other {# वेतन अपवादों पर ध्यान देने की आवश्यकता है}}",
@@ -6062,8 +6125,6 @@
     "confirmSubmitForApproval": "क्या यह निपटान प्रबंधक स्वीकृति के लिए सबमिट किया जाए?",
     "actionFinanceApprove": "वित्त स्वीकृति",
     "confirmFinanceApprove": "क्या यह निपटान वित्त-स्वीकृत के रूप में चिह्नित किया जाए?",
-    "actionMarkDisbursed": "वितरित चिह्नित करें",
-    "confirmMarkDisbursed": "क्या यह निपटान वितरित के रूप में चिह्नित किया जाए?",
     "statusDraft": "ड्राफ्ट",
     "statusManagerApproved": "प्रबंधक द्वारा स्वीकृत",
     "statusFinanceApproved": "वित्त द्वारा स्वीकृत",
@@ -6464,8 +6525,8 @@
     "chartOtherLabel": "अन्य ({count})"
   },
   "payrollTaxConfig": {
-    "title": "आयकर कॉन्फ़िगरेशन",
-    "subtitle": "चयनित वित्तीय वर्ष के लिए, आपके संगठन का पेरोल इंजन वास्तव में जो आयकर स्लैब, कटौती सीमाएँ और अधिभार बैंड लागू करता है।",
+    "title": "आयकर संदर्भ",
+    "subtitle": "चयनित वित्तीय वर्ष के लिए आपके संगठन का पेरोल इंजन जो आयकर स्लैब, कटौती सीमाएँ और अधिभार बैंड लागू करता है, उनका केवल-पढ़ने योग्य दृश्य।",
     "backLabel": "पेरोल",
     "fyCardTitle": "वित्तीय वर्ष",
     "fyLabel": "वित्तीय वर्ष",
@@ -6490,8 +6551,13 @@
     "footerNote": "ये आँकड़े पेरोल इंजन के प्रति-टेनेंट, प्रति-FY कॉन्फ़िगरेशन से लाइव पढ़े जाते हैं — यह वही है जो इस वित्तीय वर्ष का रन लागू करता है।",
     "footerLink": "आयकर रोलअप देखें",
     "loadErrorMessage": "कर कॉन्फ़िगरेशन लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
-    "loadingTitle": "टैक्स कॉन्फ़िगरेशन",
-    "loadingSubtitle": "टैक्स नियम और स्लैब सेटअप।"
+    "loadingTitle": "टैक्स संदर्भ",
+    "loadingSubtitle": "पेरोल इंजन द्वारा लागू टैक्स स्लैब और सीमाएँ।",
+    "thNewRegime": "नई व्यवस्था",
+    "thOldRegime": "पुरानी व्यवस्था",
+    "surchargeCapNote": "नई व्यवस्था: कॉन्फ़िगर की गई उच्चतम अधिभार दर {rate}% है, इसलिए नई व्यवस्था में अधिभार इस दर से अधिक नहीं होता।",
+    "marginalReliefNote": "प्रत्येक अधिभार सीमा पर मार्जिनल रिलीफ़ लागू होता है: कर और अधिभार का योग, सीमा पर देय कर और सीमा से ऊपर की आय के योग से अधिक नहीं होता।",
+    "readOnlyNote": "यह पृष्ठ केवल-पढ़ने योग्य संदर्भ है और किसी दर या सीमा को नहीं बदलता।"
   },
   "pensioners": {
     "ppoMaskedNote": "PPO संख्या छिपाकर दिखाई गई हैं। विवरण देखने के लिए रिकॉर्ड खोलें; वेतन अधिकारी वहाँ पूरी संख्या प्रकट कर सकते हैं (प्रकटीकरण ऑडिट किया जाता है)।",
@@ -6553,7 +6619,7 @@
     "statFinancialYear": "वित्तीय वर्ष",
     "form12baCardTitle": "फॉर्म 12BA",
     "selectEmployeeFyTitle": "एक कर्मचारी और वित्तीय वर्ष चुनें",
-    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी आईडी और वित्तीय वर्ष दर्ज करें।",
+    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी और वित्तीय वर्ष चुनें।",
     "noForm12baTitle": "कोई फॉर्म 12BA डेटा नहीं",
     "noForm12baMessage": "दिए गए कर्मचारी और वित्त वर्ष {fy} के लिए कोई अनुलाभ डेटा नहीं मिला।",
     "employerLabel": "नियोक्ता",
@@ -6578,7 +6644,10 @@
     "deleteDescription": "{nature} घटक इस कर्मचारी के फ़ॉर्म 12BA से हटा दिया जाएगा। हटाए गए मान के साथ यह कार्रवाई ऑडिट में दर्ज होगी।",
     "deleteConfirm": "घटक हटाएँ",
     "deleteReasonLabel": "हटाने का कारण",
-    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।"
+    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।",
+    "subtitleFor": "{name} के अनुलाभ और फॉर्म 12BA, वित्त वर्ष {fy}।",
+    "invalidFyMessage": "पते में दिया गया वित्तीय वर्ष मान्य नहीं है। नीचे से वित्तीय वर्ष चुनें।",
+    "panMaskedAriaLabel": "PAN (मास्क किया हुआ)"
   },
   "perquisiteComponentForm": {
     "formTitle": "अनुलाभ घटक जोड़ें",
@@ -6603,14 +6672,16 @@
     "submitBtn": "घटक सहेजें",
     "valueInvalidError": "नियोक्ता द्वारा मूल्य एक मान्य रुपया राशि होनी चाहिए।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "savedMessage": "अनुलाभ घटक \"{nature}\" {employeeId} के लिए सहेजा गया।",
+    "savedMessage": "अनुलाभ घटक \"{nature}\" {employee} के लिए सहेजा गया।",
     "confirmTitle": "क्या यह अनुलाभ घटक सहेजें?",
     "confirmLabel": "पुष्टि करें और सहेजें",
-    "confirmDescriptionBase": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
-    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
+    "confirmDescriptionBase": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
+    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
     "updateBtn": "घटक अपडेट करें",
     "cancelEdit": "रद्द करें",
-    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।"
+    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।",
+    "employeeUnnamed": "चुना गया कर्मचारी",
+    "fyInvalidError": "वित्तीय वर्ष मान्य नहीं है। मान्य वित्तीय वर्ष के साथ कर्मचारी को फिर से खोजें।"
   },
   "pf": {
     "selectPeriodLabel": "अवधि",
@@ -8229,7 +8300,7 @@
     "historyCardTitle": "वेतन संशोधन इतिहास",
     "filterPlaceholder": "कर्मचारी या आदेश संख्या के अनुसार फ़िल्टर करें…",
     "emptyTitle": "अभी तक कोई वेतन संशोधन नहीं",
-    "emptyMessage": "HRMS वेतन-निर्धारण में अपस्ट्रीम दर्ज संशोधन यहां दिखाई देंगे।",
+    "emptyMessage": "वेतन संशोधन दर्ज होने के बाद यहां दिखाई देंगे।",
     "colEmployee": "कर्मचारी",
     "colEffectiveDate": "प्रभावी तिथि",
     "colRevisionType": "संशोधन प्रकार",
@@ -8846,7 +8917,8 @@
     "windowOpenUntil": "घोषणाएँ {date} तक खुली हैं।",
     "windowClosed": "{fy} की घोषणाएँ {date} को बंद हो गईं। अपनी घोषणा बदलने के लिए वेतन विभाग से संपर्क करें।",
     "windowNotOpen": "घोषणाएँ {date} को खुलेंगी।",
-    "lastUpdatedLabel": "अंतिम अद्यतन {date}"
+    "lastUpdatedLabel": "अंतिम अद्यतन {date}",
+    "lockedNotice": "इस घोषणा को पेरोल द्वारा सत्यापित या अनुमोदित किया जा चुका है और यह केवल-पढ़ने योग्य है। बदलाव की आवश्यकता हो तो पेरोल से संपर्क करें।"
   },
   "verifyForm16Form": {
     "cardTitle": "फॉर्म-16 सत्यापित करें",
@@ -9951,7 +10023,7 @@
   "fnfSettlementActions": {
     "submitBtn": "स्वीकृति हेतु सबमिट करें",
     "approveBtn": "वित्त स्वीकृति",
-    "disburseBtn": "वितरित चिह्नित करें",
+    "disburseBtn": "भुगतान दर्ज करें",
     "rejectBtn": "अस्वीकार करें",
     "cancelBtn": "रद्द करें",
     "submitAriaLabel": "{name} का निपटान वित्त स्वीकृति हेतु सबमिट करें",
@@ -9982,7 +10054,9 @@
     "selfApprovalError": "यह निपटान आपने परिकलित या सबमिट किया है, इसलिए आप इसे स्वीकृत या अस्वीकार नहीं कर सकते।",
     "selfDisbursalError": "यह निपटान आपने परिकलित, सबमिट या स्वीकृत किया है, इसलिए आप इसका भुगतान दर्ज या अस्वीकार नहीं कर सकते।",
     "forbiddenError": "आपकी भूमिका इस चरण की अनुमति नहीं देती।",
-    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।"
+    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
+    "paymentReasonLabel": "इस भुगतान को दर्ज करने का कारण",
+    "paymentReasonShort": "कम से कम {min} अक्षर दर्ज करें।"
   },
   "financeBillForm": {
     "pageTitle": "नया बिल",

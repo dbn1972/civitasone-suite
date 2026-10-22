@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -359,5 +359,155 @@ describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-05 window and last u
     renderForm();
     await waitFor(() => expect(screen.getByText(/Last updated/)).toBeInTheDocument());
     expect(screen.getByText(/Filed on/)).toBeInTheDocument();
+  });
+});
+
+// ── GAP-PAYROLL-TAX-DECLARATION-03: response shape (root vs { data }) and malformed bodies ──
+const STORED = {
+  regime: "old", section80c: 15000000, section80d: 2500000, otherDeductions: 100, rentPaidMinor: 0,
+  prevEmployerSalaryMinor: 0, otherSourcesIncomeMinor: 0, perquisitesMinor: 0,
+  status: "submitted", createdAt: "2026-04-15T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z",
+};
+const submitBtn = () => screen.getByRole("button", { name: /submit declaration/i });
+
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-03 response contract", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a declaration wrapped as { data } prefills exactly like the root shape (paise -> rupees, regime, status)", async () => {
+    for (const body of [STORED, { data: STORED }]) {
+      routeFetch({ declaration: body });
+      const { unmount } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}><TaxDeclarationForm /></NextIntlClientProvider>,
+      );
+      await waitFor(() => expect((screen.getByLabelText(/section 80c/i) as HTMLInputElement).value).toBe("150000.00"));
+      expect((screen.getByLabelText(/section 80d/i) as HTMLInputElement).value).toBe("25000.00");
+      expect((screen.getByLabelText(/other deductions/i) as HTMLInputElement).value).toBe("1.00");
+      expect(screen.getByLabelText(/old regime/i)).toBeChecked();
+      expect(screen.getByText(/Filed on/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /retry/i })).not.toBeInTheDocument();
+      expect(submitBtn()).toBeEnabled();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    ["an empty object", {}],
+    ["an error envelope served with a 200", { code: "INTERNAL", message: "internal error", retryable: true }],
+    ["a wrapped empty object", { data: {} }],
+    ["an array", []],
+    ["an unknown regime", { ...STORED, regime: "hybrid" }],
+    ["a missing core amount", { ...STORED, section80c: undefined }],
+    ["a non-integer amount (not paise)", { ...STORED, section80d: 10.5 }],
+  ])("a malformed 200 body (%s) shows the load-failed banner and disables submit -- no silent blanks", async (_label, body) => {
+    const { posts } = routeFetch({ declaration: body });
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Could not load your existing declaration/));
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(submitBtn()).toBeDisabled();
+    fireEvent.click(submitBtn());
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it("Retry recovers once the API answers with a valid declaration", async () => {
+    let calls = 0;
+    const spy = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === "POST") return Promise.resolve(jsonResponse({ id: "d1" }, 202));
+      if (String(url).includes("/tax-declarations/limits") || String(url).includes("/tax-declarations/window")) return Promise.resolve(new Response("", { status: 500 }));
+      calls += 1;
+      return Promise.resolve(jsonResponse(calls === 1 ? { oops: true } : { data: STORED }));
+    });
+    vi.stubGlobal("fetch", spy);
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument());
+    expect(submitBtn()).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(submitBtn()).toBeEnabled());
+    expect((screen.getByLabelText(/section 80c/i) as HTMLInputElement).value).toBe("150000.00");
+  });
+
+  it("no declaration yet (null or { data: null }) is NOT a failure: blank form, submit enabled", async () => {
+    for (const body of [null, { data: null }]) {
+      routeFetch({ declaration: body });
+      const { unmount } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}><TaxDeclarationForm /></NextIntlClientProvider>,
+      );
+      await waitFor(() => expect(submitBtn()).toBeEnabled());
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+      expect((screen.getByLabelText(/section 80c/i) as HTMLInputElement).value).toBe("");
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("the POST body uses the FIELD_MAP names, all in paise", async () => {
+    const { posts } = routeFetch({ declaration: null, limits: LIMITS });
+    await readyForm();
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    fireEvent.change(screen.getByLabelText(/section 80c/i), { target: { value: "1500.50" } });
+    fireEvent.change(screen.getByLabelText(/previous employer/i), { target: { value: "20" } });
+    fireEvent.click(submitBtn());
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toMatchObject({ fy: expect.any(String), regime: "old", section80c: 150050, section80d: 0, otherDeductions: 0, rentPaidMinor: 0, prevEmployerSalaryMinor: 2000 });
+    expect(posts[0]).not.toHaveProperty("otherSourcesIncomeMinor");
+    expect(posts[0]).not.toHaveProperty("perquisitesMinor");
+  });
+});
+
+// ── GAP-PAYROLL-TAX-DECLARATION-05: verified / approved => read-only; IST "Last updated" after a submit ──
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-05 read-only states", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const controls = () => [
+    ...screen.getAllByRole("radio"),
+    ...screen.getAllByRole("spinbutton"),
+    submitBtn(),
+  ] as HTMLElement[];
+
+  it.each(["verified", "approved"])("a %s declaration renders read-only: status pill, notice, every input and the submit disabled, no POST", async (status) => {
+    const { posts } = routeFetch({ declaration: { ...STORED, status } });
+    renderForm();
+    await waitFor(() => expect(screen.getByText(/verified or approved by payroll and is read-only/)).toBeInTheDocument());
+    expect(screen.getByText(new RegExp(`^${status}$`, "i"))).toBeInTheDocument(); // the status pill
+    for (const el of controls()) expect(el).toBeDisabled();
+    // the stored figures are still shown (read-only, not blanked)
+    expect((screen.getByLabelText(/section 80c/i) as HTMLInputElement).value).toBe("150000.00");
+    fireEvent.click(submitBtn());
+    fireEvent.submit(submitBtn().closest("form")!);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it("a submitted (not yet verified) declaration is still editable (control)", async () => {
+    routeFetch({ declaration: STORED });
+    renderForm();
+    await waitFor(() => expect(screen.getByText(/Filed on/)).toBeInTheDocument());
+    expect(screen.queryByText(/read-only/)).not.toBeInTheDocument();
+    for (const el of controls()) expect(el).toBeEnabled();
+  });
+
+  it("a closed window also locks the inputs, not just the submit button", async () => {
+    routeFetch({ declaration: STORED, window: { fy: "2025-26", configured: true, open: false, state: "closed", opensOn: null, closesOn: "2026-01-31" } });
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/closed on/i));
+    for (const el of controls()) expect(el).toBeDisabled();
+  });
+});
+
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-05 last updated after a submit is shown in IST", () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("20 Jun 2026 20:30 UTC is already 21 Jun in India: the date after saving is the IST date", async () => {
+    vi.setSystemTime(new Date("2026-06-20T20:30:00.000Z"));
+    const { posts } = routeFetch({ declaration: null, limits: LIMITS });
+    await readyForm();
+    fireEvent.change(screen.getByLabelText(/previous employer/i), { target: { value: "5" } });
+    fireEvent.click(submitBtn());
+    await waitFor(() => expect(posts).toHaveLength(1));
+    await waitFor(() => expect(screen.getByText(/Last updated/)).toBeInTheDocument());
+    expect(screen.getByText(/Last updated/)).toHaveTextContent("Last updated 21 Jun 2026");
+    expect(screen.getByText(/Last updated/)).not.toHaveTextContent("20 Jun 2026");
   });
 });

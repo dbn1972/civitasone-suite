@@ -19,7 +19,7 @@ import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantScope } from "@civitasone/db";
 import type { MemoryQueue } from "@civitasone/queue";
 
-const H = vi.hoisted(() => ({ employeeBasic: "1500000" }));
+const H = vi.hoisted(() => ({ employeeBasic: "1500000", pan: "ABCDE1234F" }));
 const EMPLOYEE = "71000000-4802-4000-8000-0000000000e1";
 vi.mock("../src/shared/hrms-client.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
@@ -28,7 +28,7 @@ vi.mock("../src/shared/hrms-client.js", async (io) => ({
   fetchEmployeeSummaries: vi.fn(async () => new Map()),
   fetchPayrollInput: vi.fn(async () => ({
     month: "2026-10",
-    employees: [{ id: EMPLOYEE, employeeNo: "E1", fullName: "Test Employee", basicMinor: H.employeeBasic, pan: "ABCDE1234F", cityClass: "X", taxRegime: "new" }],
+    employees: [{ id: EMPLOYEE, employeeNo: "E1", fullName: "Test Employee", basicMinor: H.employeeBasic, pan: H.pan, cityClass: "X", taxRegime: "new" }],
     lopDays: {}, overtimeHours: {},
   })),
 }));
@@ -429,6 +429,28 @@ describe("Form 12BA lookups and component delete (GAP-PAYROLL-STATUTORY-PERQUISI
     expect(own.statusCode).toBe(200);
     await drain();
     expect(audits.slice(before).filter((a) => a.payload.action === "view_form12ba")).toHaveLength(1);
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PERQUISITE-04: the PAN is masked server-side (staff and the employee's own read) -- the clear value is never in the body", async () => {
+    const url = `/v1/payroll/statutory/form12ba?employeeId=${EMPLOYEE}&fy=${FY}`;
+    const staff = await app.inject({ method: "GET", url, headers: auth(ADMIN, ADMIN_ROLES) });
+    expect(staff.statusCode).toBe(200);
+    expect(staff.json().employee).toMatchObject({ employeeId: EMPLOYEE, pan: "ABCDE****F", panFlag: "" });
+    expect(staff.body).not.toContain("ABCDE1234F");
+    const own = await app.inject({ method: "GET", url: `/v1/payroll/statutory/form12ba?fy=${FY}`, headers: auth(EMP_LOGIN, EMPLOYEE_ROLES) });
+    expect(own.statusCode).toBe(200);
+    expect(own.json().employee.pan).toBe("ABCDE****F");
+    expect(own.body).not.toContain("ABCDE1234F");
+
+    // No PAN on file: nothing to mask, the PANNOTAVBL flag is what the form prints.
+    H.pan = "";
+    try {
+      const none = await app.inject({ method: "GET", url, headers: auth(ADMIN, ADMIN_ROLES) });
+      expect(none.statusCode).toBe(200);
+      expect(none.json().employee).toMatchObject({ pan: "", panFlag: "PANNOTAVBL" });
+    } finally {
+      H.pan = "ABCDE1234F";
+    }
   });
 
   it("delete needs a reason and a payroll role, removes the line, and audits the values removed", async () => {

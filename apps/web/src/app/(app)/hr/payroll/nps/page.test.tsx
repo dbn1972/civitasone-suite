@@ -83,6 +83,42 @@ describe("NpsStatementsPage", () => {
   });
 });
 
+describe("NpsStatementsPage contribution base (GAP-PAYROLL-STATUTORY-NPS-05)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+  });
+
+  it("shows the contribution base (Basic + DA) next to the contributions it produced, labelled and in exact rupees", async () => {
+    mockNps({
+      data: [{ id: "n1", employeeId: UUID, employeeName: "Ravi Kumar", period: "2026-08", basicMinor: 1500000, pensionBaseMinor: 2325000, empContribMinor: 232500, erContribMinor: 325500 }],
+      source: "api",
+    });
+    render(await NpsStatementsPage());
+    expect(screen.getByRole("columnheader", { name: /Contribution base/ })).toBeInTheDocument();
+    const row = screen.getByText("Ravi Kumar").closest("tr")!;
+    // base ₹23,250.00 -> employee ₹2,325.00 / employer ₹3,255.00 (10% / 14% of the BASE, not of Basic ₹15,000.00)
+    expect(row).toHaveTextContent("₹23,250.00");
+    expect(row).toHaveTextContent("₹2,325.00");
+    expect(row).toHaveTextContent("₹3,255.00");
+    expect(row).not.toHaveTextContent("₹15,000.00");
+    expect(screen.getByText(/Contribution base: the Basic \+ DA that the employee and employer percentages were applied to/)).toBeInTheDocument();
+  });
+
+  it("a statement recorded before the base was captured shows — in the base column, not a guess", async () => {
+    mockNps({
+      data: [{ id: "n1", employeeId: UUID, employeeName: "Anita Rao", period: "2026-01", basicMinor: 1000000, empContribMinor: 100000, erContribMinor: 140000 }],
+      source: "api",
+    });
+    render(await NpsStatementsPage());
+    const cells = screen.getByText("Anita Rao").closest("tr")!.querySelectorAll("td");
+    const headers = Array.from(document.querySelectorAll("th")).map((h) => h.textContent ?? "");
+    const baseIdx = headers.findIndex((h) => /Contribution base/.test(h));
+    expect(baseIdx).toBeGreaterThanOrEqual(0);
+    expect(cells[baseIdx]).toHaveTextContent("—");
+  });
+});
+
 describe("NpsStatementsPage HRMS reconciliation (GAP-PAYROLL-STATUTORY-NPS-02)", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();

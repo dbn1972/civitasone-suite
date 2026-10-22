@@ -9,7 +9,8 @@ import { isValidFy } from "@/lib/validators/fy";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { UserFacingError } from "@/lib/userFacingError";
 
-type BulkStatus = { status: string } | null;
+/** The newest bulk job for the FY, as GET bulk-status reports it (see form16-pdf/routes.ts). */
+type BulkStatus = { status: string; storagePrefix: string | null } | null;
 
 function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ariaLabel: string }) {
   return (
@@ -95,6 +96,11 @@ function TdsReconciliationTable({ t }: { t: ReturnType<typeof useTranslations> }
 export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
   const t = useTranslations("form16Wizard");
   const router = useRouter();
+  // The polling effect must not restart when the router object changes identity
+  // (some test/dev routers return a fresh object per render, which re-ran the poll
+  // immediately on every render): read it through a ref instead of a dependency.
+  const routerRef = useRef(router);
+  routerRef.current = router;
   const [step, setStep] = useState(0);
   const [fy, setFy] = useState(defaultFy);
   const [fyError, setFyError] = useState(false);
@@ -145,13 +151,17 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       try {
         const res = await fetch(`/api/proxy/v1/payroll/tax/form16/bulk-status?fy=${encodeURIComponent(fy)}`);
         if (res.ok) {
-          const d = (await res.json()) as { data?: { status?: string } };
-          const status = d?.data?.status;
-          if (status) {
-            setBulkStatus({ status });
-            if (status === "completed" || status === "failed") {
+          const d = (await res.json()) as { data?: { jobId?: string; status?: string; storagePrefix?: string | null } };
+          const polled = d?.data;
+          // bulk-status answers per FY, not per job. Until the consumer has inserted
+          // THIS job's row, a re-run can still see an earlier job's row for the same
+          // FY (e.g. an old "completed" one): ignore any row that is not ours, so a
+          // stale result never unlocks the download link.
+          if (polled?.status && (!polled.jobId || polled.jobId === jobId)) {
+            setBulkStatus({ status: polled.status, storagePrefix: polled.storagePrefix ?? null });
+            if (polled.status === "completed" || polled.status === "failed") {
               if (pollRef.current) clearInterval(pollRef.current);
-              router.refresh();
+              routerRef.current.refresh();
               return;
             }
           }
@@ -166,7 +176,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [step, jobId, fy, router]);
+  }, [step, jobId, fy]);
 
   function handleNext() {
     if (!isValidFy(fy)) {
@@ -212,8 +222,10 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
         setConfirmOpen(false);
         return;
       }
-      const d = await res.json().catch(() => ({})) as { data?: { jobId?: string } };
-      setJobId(d?.data?.jobId ?? null);
+      // POST bulk-generate answers 202 with the flat envelope { id, status, correlationId }
+      // (sendAccepted); `id` IS the job id. A legacy { data: { jobId } } body is still read.
+      const d = await res.json().catch(() => ({})) as { id?: string; data?: { jobId?: string } };
+      setJobId(d?.id ?? d?.data?.jobId ?? null);
       setBulkStatus(null);
       setConfirmOpen(false);
       setStep(2);
@@ -225,7 +237,9 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
     }
   }
 
-  const canDownload = bulkStatus?.status === "completed";
+  // Same condition as the status card on page.tsx: completed AND the job has a storage prefix.
+  const canDownload = bulkStatus?.status === "completed" && !!bulkStatus.storagePrefix;
+  const generationDone = bulkStatus?.status === "completed";
   const generationFailed = bulkStatus?.status === "failed";
 
   return (
@@ -304,13 +318,13 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       {/* Step 2 — Download */}
       {step === 2 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[2] ?? ""} style={{ display: "grid", gap: 16 }}>
-          <div style={{ background: canDownload ? "var(--goodbg)" : "var(--panel)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
-            <p style={{ fontSize: 36, margin: "0 0 10px" }}>{canDownload ? "✅" : generationFailed ? "⚠️" : "⏳"}</p>
+          <div style={{ background: generationDone ? "var(--goodbg)" : "var(--panel)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
+            <p style={{ fontSize: 36, margin: "0 0 10px" }}>{generationDone ? "✅" : generationFailed ? "⚠️" : "⏳"}</p>
             <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
-              {canDownload ? t("generationCompleteTitle") : generationFailed ? t("generationFailedTitle") : t("generationStartedTitle")}
+              {generationDone ? t("generationCompleteTitle") : generationFailed ? t("generationFailedTitle") : t("generationStartedTitle")}
             </p>
             {jobId && <p style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink2)" }}>{t("jobIdLabel", { jobId })}</p>}
-            {!canDownload && !generationFailed && (
+            {!generationDone && !generationFailed && (
               <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 8 }} aria-live="polite">
                 {t("generationAsyncNote")}
               </p>
