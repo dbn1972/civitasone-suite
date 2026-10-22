@@ -8,8 +8,17 @@
  * count on a specific officer's desk, used by the charge-handover confirm
  * dialog's blast-radius preview.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
+
+// "My Desk" bridges the login id to the hrms employee id (GAP-ESTAB-INBOX-01). Stub that bridge so this
+// route-level test does not depend on a running hrms-service; the real-DB suite
+// (estab-cluster03-real-db.test.ts) covers the bridge's behaviour in depth.
+vi.mock("../src/shared/hrms-client.js", async (orig) => {
+  const real = await orig<typeof import("../src/shared/hrms-client.js")>();
+  return { ...real, resolveActorEmployeeId: vi.fn(async () => null) };
+});
+
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
@@ -81,6 +90,7 @@ describe("GET /v1/estab/files/held-count (HANDOVER-03)", () => {
     const body = res.json();
     expect(typeof body.count).toBe("number");
     expect(body.count).toBe(0); // unknown officer → 0 files
+    expect(body.movableCount).toBe(0); // and nothing a handover would move
   });
 
   it("returns 400 on invalid officerId (non-UUID)", async () => {
@@ -122,6 +132,8 @@ describe("GET /v1/estab/files/mine (INBOX-01)", () => {
     const body = res.json();
     expect(Array.isArray(body.data)).toBe(true);
     expect(typeof body.actorId).toBe("string");
+    // The response says whether the caller is an enrolled operator (a caller with no linked employee is not).
+    expect(body.operator.enrolled).toBe(false);
   });
 
   it("returns 401 without token", async () => {

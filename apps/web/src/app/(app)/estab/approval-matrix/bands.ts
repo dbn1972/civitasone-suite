@@ -105,6 +105,28 @@ function fmt(minor: number | null): string {
   return `₹${(minor / 100).toLocaleString("en-IN")}`;
 }
 
+/** Human label for an approver role code ("deputy_secretary" → "Deputy Secretary"). */
+export function labelForRole(code: string): string {
+  return code.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * The approver roles the deployment allows a rule to name (GAP-ESTAB-APPROVAL-MATRIX-03). It is
+ * served with the rule list by estab-service (`approverRoles`). `null` means no list is
+ * configured: the matrix then checks role codes for format only and the service stays the authority.
+ */
+export function readApproverCatalogue(body: unknown): string[] | null {
+  const raw = (body as { approverRoles?: { configured?: unknown; roles?: unknown } } | null)?.approverRoles;
+  if (!raw || raw.configured !== true || !Array.isArray(raw.roles)) return null;
+  const roles = raw.roles.filter((r): r is string => typeof r === "string" && ROLE_TOKEN_RE.test(r));
+  return roles.length > 0 ? [...new Set(roles)] : null;
+}
+
+/** Roles in `chain` that are not in `catalogue` (empty when every one is allowed). */
+export function rolesOutsideCatalogue(chain: string[], catalogue: string[]): string[] {
+  return chain.filter((r) => !catalogue.includes(r));
+}
+
 /** A role token the matrix accepts: lowercase identifier, used as a workflow role. */
 export const ROLE_TOKEN_RE = /^[a-z][a-z0-9_]{1,63}$/;
 

@@ -1852,13 +1852,24 @@ export const GrantUtilizationListSchema = z.array(GrantUtilizationSchema);
 
 // Establishment schemas
 export const EstabDashboardSchema = z.object({
-  filesPending: z.number().default(0),
+  // Neither count defaults here: a default would turn "this service did not send the field" into
+  // a numeric 0 before the web mapper runs, so its filesPending -> filesActive fallback could never
+  // fire (new web, estab-service not yet redeployed, would show 0 Active Files). The mapper
+  // (apps/web/src/app/_data/loaders.ts mapEstabDashboard) resolves filesActive ?? filesPending ?? 0.
+  filesActive: z.number().optional(),
+  /** Deprecated alias of filesActive (same value), kept so older clients keep working. */
+  filesPending: z.number().optional(),
   meetingsToday: z.number().default(0),
   vehiclesInUse: z.number().default(0),
   complianceItemsDue: z.number().default(0),
   slaBreached: z.number().default(0),
   dakPending: z.number().default(0),
   avgPendencyDays: z.number().default(0),
+  // GAP-ESTAB-DASHBOARD-05: the pendency snapshot's own figures (not repeats of a stat tile).
+  /** Files open at any stage: every status except closed, archived and disposed. */
+  openFiles: z.number().default(0),
+  /** Whole IST days since creation of the oldest open file; 0 when none is open. */
+  oldestPendencyDays: z.number().default(0),
 });
 
 export const EstabFileSummarySchema = z.object({
@@ -1870,25 +1881,67 @@ export const EstabFileSummarySchema = z.object({
   createdBy: z.string(),
   createdDate: z.string(),
   currentHolder: z.string().optional(),
-  status: z.enum(["active", "pending", "archived", "disposed"]),
+  status: z.enum(["draft", "active", "pending", "closed", "transferred", "archived", "disposed"]),
   tags: z.array(z.string()).default([]),
 });
 export const EstabFileSummaryListSchema = z.array(EstabFileSummarySchema);
 
-export const EstabFileDetailSchema = EstabFileSummarySchema.extend({
+/**
+ * GET /v1/estab/files/:id as estab-service actually sends it (FileDetailDto in
+ * services/estab-service/src/modules/files/queries.ts). This is the WIRE contract, not the
+ * mapped EstabFileDetail the pages read: it used to extend EstabFileSummarySchema, which
+ * describes the mapped shape (a required createdBy/createdDate that the service never sends,
+ * a classification enum without "public", a status enum without "closed"/"draft", a
+ * non-null officer name), so every real payload failed the gate and the page showed its load
+ * error. Fields the mapper reads (mapEstabFileDetail) must be declared here: zod strips the
+ * rest, which is how noteType, noteStatus, eSigned, signedAt, dakNo, dueBy and the movement
+ * trail were being dropped before they reached the page (GAP-ESTAB-FILES-DETAIL-05/06).
+ * Officer names are null when the service cannot resolve them (the web shows the localised
+ * "Unknown employee"), so they are nullable here. Status and classification stay open
+ * strings: the mapper normalises the vocabulary and a new server value must not blank the page.
+ */
+export const EstabFileDetailSchema = z.object({
+  id: z.string(),
+  fileNo: z.string(),
+  subject: z.string(),
+  classification: z.string().default("public"),
+  status: z.string().default("active"),
+  dept: z.string().nullish(),
+  department: z.string().nullish(),
+  createdAt: z.string().nullish(),
+  createdDate: z.string().nullish(),
+  createdByName: z.string().nullish(),
+  currentWith: z.string().nullish(),
+  currentHolder: z.string().nullish(),
+  dakNo: z.string().nullish(),
+  dueBy: z.string().nullish(),
+  dueDate: z.string().nullish(),
   noteSheets: z.array(z.object({
     id: z.string(),
-    author: z.string(),
+    author: z.string().nullish(),
     content: z.string(),
     timestamp: z.string(),
-    type: z.enum(["note", "order", "remark"]),
+    type: z.enum(["note", "order", "remark"]).default("note"),
+    noteType: z.string().nullish(),
+    noteStatus: z.string().nullish(),
+    eSigned: z.boolean().default(false),
+    signedAt: z.string().nullish(),
+  })).default([]),
+  movementHistory: z.array(z.object({
+    id: z.string(),
+    fromOfficerId: z.string().nullish(),
+    toOfficerId: z.string(),
+    action: z.string().nullish(),
+    remarks: z.string().nullish(),
+    status: z.string().nullish(),
+    movedAt: z.string(),
   })).default([]),
   dispatchHistory: z.array(z.object({
     id: z.string(),
     dispatchedTo: z.string(),
-    dispatchedBy: z.string(),
+    dispatchedBy: z.string().nullish(),
     timestamp: z.string(),
-    remarks: z.string().optional(),
+    remarks: z.string().nullish(),
   })).default([]),
   attachments: z.array(z.object({
     id: z.string(),

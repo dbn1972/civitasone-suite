@@ -141,16 +141,19 @@ describe("FileDetailActions — write controls hidden on terminal register state
     vi.restoreAllMocks();
   });
 
-  it("isFileReadOnly is true for archived/disposed and false for active/pending", () => {
+  it("isFileReadOnly is true for closed/archived/disposed and false for active/pending/draft", () => {
+    expect(isFileReadOnly("closed")).toBe(true);
     expect(isFileReadOnly("archived")).toBe(true);
     expect(isFileReadOnly("disposed")).toBe(true);
     expect(isFileReadOnly("active")).toBe(false);
     expect(isFileReadOnly("pending")).toBe(false);
-    // The dead "closed" value from the audit snapshot is NOT read-only here.
-    expect(isFileReadOnly("closed")).toBe(false);
+    expect(isFileReadOnly("draft")).toBe(false);
+    // "closed" is NOT a dead value: estab-service writes it when a file is closed (fileClose
+    // consumer, FILE_STATUSES), and the mapper now keeps it distinct instead of folding it into
+    // "active". An earlier test here asserted the opposite, on the premise that it never occurs.
   });
 
-  for (const status of ["archived", "disposed"]) {
+  for (const status of ["closed", "archived", "disposed"]) {
     it(`renders a read-only notice and no Submit/Sign/Refer buttons when status is ${status}`, () => {
       vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
       render(<FileDetailActions fileId="file-1" draftNotingId="note-1" status={status} />);
@@ -163,7 +166,7 @@ describe("FileDetailActions — write controls hidden on terminal register state
     });
   }
 
-  for (const status of ["active", "pending"]) {
+  for (const status of ["draft", "active", "pending"]) {
     it(`keeps Submit/Sign/Refer available when status is ${status}`, async () => {
       const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
       render(<FileDetailActions fileId="file-1" draftNotingId="note-1" status={status} />);
