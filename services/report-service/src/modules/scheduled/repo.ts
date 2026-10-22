@@ -46,12 +46,13 @@ export async function listByTenant(
   tenantId: string,
   limit: number,
   offset: number,
+  ownerId?: string,
 ): Promise<ScheduledReportView[]> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
       .select()
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true)))
+      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true), ...(ownerId ? [eq(scheduledReports.createdBy, ownerId)] : [])))
       .limit(limit)
       .offset(offset),
   );
@@ -69,12 +70,12 @@ export async function insert(tx: Writer, row: ScheduledReportInsert): Promise<vo
  * reports — the same predicate listByTenant uses — so meta.total matches the
  * rows actually listed rather than the capped page length.
  */
-export async function countByTenant(tenantId: string): Promise<number> {
+export async function countByTenant(tenantId: string, ownerId?: string): Promise<number> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
       .select({ value: count() })
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true))),
+      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true), ...(ownerId ? [eq(scheduledReports.createdBy, ownerId)] : []))),
   );
   return Number(rows[0]?.value ?? 0);
 }

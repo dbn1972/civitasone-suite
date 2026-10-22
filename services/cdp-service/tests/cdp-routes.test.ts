@@ -1213,3 +1213,111 @@ describe("POST /v1/cdp/steward/decide", () => {
     await app.close();
   });
 });
+
+// ── MAKER-CHECKER + PII MASKING (security) ───────────────────────────────────
+
+describe("POST /v1/cdp/steward/decide — maker-checker", () => {
+  it("409 — the steward who created the match cannot decide it", async () => {
+    H.stewardFindByIdMock.mockResolvedValue({
+      id: MERGE_REQ_ID, sourceProfileId: PROFILE_ID, targetProfileId: PROFILE_ID_2,
+      status: "pending", tenantId: TENANT, createdBy: USER,
+    });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/steward/decide",
+      headers: auth(USER, ["cdp_steward"]),
+      payload: { mergeRequestId: MERGE_REQ_ID, decision: "approve" },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("MAKER_CHECKER");
+    expect(H.publishMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("202 — a different steward can decide the same match", async () => {
+    H.stewardFindByIdMock.mockResolvedValue({
+      id: MERGE_REQ_ID, sourceProfileId: PROFILE_ID, targetProfileId: PROFILE_ID_2,
+      status: "pending", tenantId: TENANT, createdBy: "ffffffff-0000-4000-8000-0000000000aa",
+    });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/cdp/steward/decide",
+      headers: auth(USER, ["cdp_steward"]),
+      payload: { mergeRequestId: MERGE_REQ_ID, decision: "approve" },
+    });
+    expect(r.statusCode).toBe(202);
+    await app.close();
+  });
+});
+
+describe("service-side PII masking of profile attributes", () => {
+  const piiAttrs = {
+    name: "Rajesh Kumar", company: "Acme", emailAddress: "raj@example.com", mobileNumber: "9876543210",
+    panNumber: "ABCDE1234F", note: "call 9876543210", aadhaarNo: "1234 5678 9012",
+  };
+
+  it("cdp_user gets masked emailAddress / mobileNumber (non-PII keys untouched)", async () => {
+    H.cacheGetOrLoadMock.mockResolvedValue(makeProfile({ attributes: piiAttrs }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/cdp/profiles/${PROFILE_ID}`, headers: auth(USER, ["cdp_user"]) });
+    expect(r.statusCode).toBe(200);
+    const a = r.json().data.attributes;
+    expect(a.emailAddress).not.toContain("raj@example.com");
+    expect(a.mobileNumber).not.toBe("9876543210");
+    expect(a.panNumber).toBe("ABCDE****F");
+    expect(a.aadhaarNo).toBe("XXXX XXXX 9012");
+    expect(a.note).not.toContain("9876543210"); // value-shape detection on a benign key
+    expect(a.name).toBe("Rajesh Kumar");
+    expect(a.company).toBe("Acme");
+    await app.close();
+  });
+
+  it("cdp_admin still gets cleartext", async () => {
+    H.cacheGetOrLoadMock.mockResolvedValue(makeProfile({ attributes: piiAttrs }));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/cdp/profiles/${PROFILE_ID}`, headers: auth(USER, ["cdp_admin"]) });
+    expect(r.json().data.attributes.emailAddress).toBe("raj@example.com");
+    await app.close();
+  });
+
+  it("list endpoint masks for cdp_user", async () => {
+    H.profileListMock.mockResolvedValue({ rows: [makeProfile({ attributes: piiAttrs })], total: 1 });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/cdp/profiles", headers: auth(USER, ["cdp_user"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].attributes.emailAddress).not.toContain("raj@example.com");
+    await app.close();
+  });
+
+  it("search: non-admin callers are restricted to non-PII keys (no raw attribute probing)", async () => {
+    H.profileListMock.mockResolvedValue({ rows: [], total: 0 });
+    const app = await buildApp();
+    H.profileListMock.mockClear();
+    const ru = await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_user"]) });
+    expect(ru.statusCode).toBe(200);
+    expect(H.profileListMock.mock.calls[0]?.[3]).toMatchObject({ search: "raj", restrictPii: true });
+    // stewards cannot reach the search at all (role gate) — no probing path.
+    H.profileListMock.mockClear();
+    const rs = await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_steward"]) });
+    expect(rs.statusCode).toBe(403);
+    expect(H.profileListMock).not.toHaveBeenCalled();
+    H.profileListMock.mockClear();
+    await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_admin"]) });
+    expect(H.profileListMock.mock.calls[0]?.[3]).toMatchObject({ restrictPii: false });
+    await app.close();
+  });
+
+  it("cdp_steward can read profile summary (name for the confirm dialog) with PII masked", async () => {
+    H.cacheGetOrLoadMock.mockResolvedValue({
+      id: PROFILE_ID, profileType: "individual", attributes: { name: "Rajesh Kumar", email: "raj@example.com", phone: "9876543210" },
+      segmentCount: 0, deviceCount: 0, scoreCount: 0, updatedAt: new Date().toISOString(),
+    });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/cdp/profiles/${PROFILE_ID}/summary`, headers: auth(USER, ["cdp_steward"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.attributes.name).toBe("Rajesh Kumar");
+    expect(r.json().data.attributes.email).not.toContain("raj@example.com");
+    expect(r.json().data.attributes.phone).not.toBe("9876543210");
+    await app.close();
+  });
+});

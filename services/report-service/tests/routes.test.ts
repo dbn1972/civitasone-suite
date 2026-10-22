@@ -12,7 +12,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 
 function makeToken(roles: string[] = ["report_user"]) {
-  return signToken({ sub: "user-001", tid: TENANT, roles, sid: "sess-001" }, SECRET);
+  return signToken({ sub: "00000000-0000-4000-8000-000000000001", tid: TENANT, roles, sid: "sess-001" }, SECRET);
 }
 
 afterAll(async () => { await sqlClient.end(); });
@@ -59,7 +59,7 @@ describe("GET /v1/reports/report-jobs — shape", () => {
   it("tenant isolation: other tenant returns 200 empty", async () => {
     const app = await buildApp();
     const other = "bbbbbbbb-2222-4000-8000-000000000099";
-    const token = signToken({ sub: "u2", tid: other, roles: ["report_user"], sid: "s2" }, SECRET);
+    const token = signToken({ sub: "00000000-0000-4000-8000-000000000002", tid: other, roles: ["report_user"], sid: "s2" }, SECRET);
     const res = await app.inject({
       method: "GET",
       url: "/v1/reports/report-jobs",
@@ -100,7 +100,7 @@ describe("GET /v1/reports/kpis — shape", () => {
   it("tenant isolation: other tenant returns 200 empty", async () => {
     const app = await buildApp();
     const other = "bbbbbbbb-2222-4000-8000-000000000099";
-    const token = signToken({ sub: "u2", tid: other, roles: ["report_user"], sid: "s2" }, SECRET);
+    const token = signToken({ sub: "00000000-0000-4000-8000-000000000002", tid: other, roles: ["report_user"], sid: "s2" }, SECRET);
     const res = await app.inject({
       method: "GET",
       url: "/v1/reports/kpis",

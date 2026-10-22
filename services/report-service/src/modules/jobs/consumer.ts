@@ -29,6 +29,10 @@ export function registerJobConsumers(queue: Queue): void {
         name: p.name,
         reportType: p.reportType,
         status: p.status,
+        // SEC: requested_by is the ACTOR who created the job (from the
+        // authenticated envelope, never the client payload) so per-user
+        // scoping works. It was previously never persisted.
+        requestedBy: msg.actorId,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,

@@ -15,13 +15,9 @@
  *   3. Reject leaves BOTH profiles untouched (no merge), while still recording its own
  *      audit + event.
  *
- * Maker-checker note (recorded decision): merge candidates in cdp are produced by the
- * identity-resolution matching engine, not proposed by a human requester, so there is
- * no "requester == approver" case to forbid here — `createdBy` on a merge_queue row is
- * the engine/ingest actor, never the deciding steward. The authority that a *human*
- * must hold the steward role to decide at all is enforced at the route layer
- * (STEWARD_ROLES, cdp-routes.test.ts "403 — insufficient role"); this file covers the
- * consumer's data + audit guarantees.
+ * Maker-checker: the actor who created a merge_queue row may NOT decide it (the
+ * consumer refuses, leaving the row pending; the route also returns 409). A different
+ * steward can. The last test pins this against the real DB.
  */
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -52,7 +48,7 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
   };
 }
 
-async function seedPendingMerge(opts: { withIdentityEdges?: boolean } = {}): Promise<{
+async function seedPendingMerge(opts: { withIdentityEdges?: boolean; createdBy?: string } = {}): Promise<{
   mergeId: string;
   sourceId: string;
   targetId: string;
@@ -71,7 +67,7 @@ async function seedPendingMerge(opts: { withIdentityEdges?: boolean } = {}): Pro
       await tx.insert(mergeQueue).values({
         id: mergeId, tenantId: TENANT, sourceProfileId: sourceId, targetProfileId: targetId,
         confidence: "0.9000", status: "pending",
-        createdBy: ENGINE_ACTOR, updatedBy: ENGINE_ACTOR, // created by the engine, not the steward
+        createdBy: opts.createdBy ?? ENGINE_ACTOR, updatedBy: opts.createdBy ?? ENGINE_ACTOR, // engine by default
       });
       if (opts.withIdentityEdges) {
         edgeId = randomUUID();
@@ -209,5 +205,24 @@ describe("cdp steward decide consumer — merge semantics + audit (real DB, no m
     const events = await mergeDecidedEventsFor(mergeId);
     expect(events).toHaveLength(1);
     expect(events[0]!.decision).toBe("rejected");
+  });
+
+  it("maker-checker: the actor who created the match cannot decide it (row stays pending, no merge)", async () => {
+    const { mergeId, targetId } = await seedPendingMerge({ createdBy: STEWARD_ACTOR });
+
+    await runConsumer([makeMsg(COMMANDS.decideMerge, { mergeRequestId: mergeId, decision: "approve", tenantId: TENANT })]);
+
+    expect((await profileRow(targetId))?.profileType).not.toBe("merged");
+    expect(await mergeDecidedEventsFor(mergeId)).toHaveLength(0);
+    const audits = await auditRowsFor(mergeId);
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.payload.action).toBe("steward.decide_denied");
+    const status = await runWithTenant(TENANT, async () =>
+      db.transaction(async (tx) => {
+        const rows = await tx.select().from(mergeQueue).where(and(eq(mergeQueue.id, mergeId), eq(mergeQueue.tenantId, TENANT))).limit(1);
+        return rows[0]?.status;
+      }),
+    );
+    expect(status).toBe("pending");
   });
 });
