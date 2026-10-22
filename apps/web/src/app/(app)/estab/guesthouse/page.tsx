@@ -3,10 +3,15 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getGuesthouseBookings } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Button } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDateTime } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { countGuesthouseStats } from "@/lib/estab/guesthouseStats";
 import { getSessionRoles, ESTAB_DFA_DRAFTER_ROLES } from "@/lib/auth/roleGuard";
 import { BookingsTable, type BookingRow } from "./BookingsTable";
+
+// A booking instant carries a time of day; a bare calendar date (YYYY-MM-DD) does not, and is shown as
+// the date it is rather than being read as midnight UTC and rendered as a made-up 05:30 am (GAP-ESTAB-GUESTHOUSE-03).
+const BARE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const bookingWhen = (v: string) => (BARE_DATE.test(v) ? formatIndianDate(v) : formatIndianDateTime(v));
 
 export default async function GuesthousePage() {
   const { data: bookings, source } = await getGuesthouseBookings();
@@ -21,8 +26,8 @@ export default async function GuesthousePage() {
     guest: `${b.guestName}${b.designation ? ` · ${b.designation}` : ""}`,
     department: b.department ?? "—",
     room: b.roomNo ?? b.roomType ?? "—",
-    checkIn: formatIndianDateTime(b.checkInDate),
-    checkOut: formatIndianDateTime(b.checkOutDate),
+    checkIn: bookingWhen(b.checkInDate),
+    checkOut: bookingWhen(b.checkOutDate),
     status: b.status.replace(/_/g, " "),
     statusRaw: b.status,
   }));

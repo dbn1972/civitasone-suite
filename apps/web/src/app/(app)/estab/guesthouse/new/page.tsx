@@ -22,11 +22,13 @@ type FieldKey = "roomId" | "guestName" | "guestRef" | "checkIn" | "checkOut";
 
 export default function NewGuesthouseBookingPage() {
   const tFallback = useTranslations("employeeFallback");
+  const t = useTranslations("estabW2");
   const router = useRouter();
   const [roomId, setRoomId] = useState("");
   // GAP-ESTAB-GUESTHOUSE-NEW-01: rooms directory for picker (no more raw UUID).
   const [rooms, setRooms] = useState<Array<{ id: string; roomNo: string; type: string; capacity: number; status: string }>>([]);
-  const [roomsLoaded, setRoomsLoaded] = useState(false);
+  // "loading" until the directory answers; "error" on a non-OK/network failure (never read as "no rooms").
+  const [roomsSource, setRoomsSource] = useState<"loading" | "api" | "error">("loading");
   // GAP-ESTAB-GUESTHOUSE-NEW-02: staff directory for optional guest picker.
   const [staff, setStaff] = useState<Array<{ employeeId: string; employeeName?: string; division: string }>>([]);
   const [guestName, setGuestName] = useState("");
@@ -61,14 +63,13 @@ export default function NewGuesthouseBookingPage() {
     (async () => {
       try {
         const res = await fetch("/api/proxy/v1/estab/rooms?limit=500", { signal: controller.signal });
-        if (res.ok) {
-          const body = (await res.json()) as { data?: Array<{ id: string; roomNo: string; type: string; capacity: number; status: string }> };
-          setRooms(body.data ?? []);
-        }
+        if (!res.ok) { setRoomsSource("error"); return; }
+        const body = (await res.json()) as { data?: Array<{ id: string; roomNo: string; type: string; capacity: number; status: string }> };
+        setRooms(body.data ?? []);
+        setRoomsSource("api");
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-      } finally {
-        setRoomsLoaded(true);
+        setRoomsSource("error");
       }
     })();
     return () => controller.abort();
@@ -164,11 +165,19 @@ export default function NewGuesthouseBookingPage() {
     }
   };
 
+  const availableRooms = rooms.filter((r) => r.status === "available");
+  // A failed directory ("error") has its own message; only a successful, empty directory reads as "none".
+  const roomsNote =
+    roomsSource === "error" ? t("ghRoomsFailed")
+      : roomsSource === "api" && rooms.length === 0 ? t("ghRoomsNone")
+        : roomsSource === "api" && availableRooms.length === 0 ? t("ghRoomsNoneAvailable")
+          : "";
+
   return (
     <div className="page-main wrap">
       <PageHeader
         title="New Guest House Booking"
-        subtitle="Reserve a room for a guest. The booking enters the register pending approval."
+        subtitle={t("ghSubtitleNew")}
         back="/estab/guesthouse"
         help="estab"
       />
@@ -209,37 +218,30 @@ export default function NewGuesthouseBookingPage() {
               <label htmlFor="roomId" className="l">
                 Room <span style={{ color: "var(--bad)" }}>*</span>
               </label>
-              {rooms.length > 0 ? (
-                <select
-                  id="roomId"
-                  ref={setRef("roomId")}
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
-                  aria-invalid={fieldErrors.roomId ? true : undefined}
-                  aria-describedby={fieldErrors.roomId ? "roomId-error" : undefined}
-                  style={inputStyle}
-                >
-                  <option value="">Select a room…</option>
-                  {rooms.filter((r) => r.status === "available").map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.roomNo} · {r.type} ({r.capacity}-bed)
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id="roomId"
-                  type="text"
-                  ref={setRef("roomId")}
-                  value={roomId}
-                  onChange={(e) => setRoomId(e.target.value)}
-                  required
-                  placeholder={roomsLoaded ? "No rooms registered — enter Room ID" : "Loading rooms…"}
-                  aria-invalid={fieldErrors.roomId ? true : undefined}
-                  aria-describedby={fieldErrors.roomId ? "roomId-error" : undefined}
-                  style={inputStyle}
-                />
-              )}
+              {/* The room is always chosen by name from the directory: a clerk cannot know a room's UUID, so there is no typed fallback. */}
+              <select
+                id="roomId"
+                ref={setRef("roomId")}
+                value={roomId}
+                onChange={(e) => setRoomId(e.target.value)}
+                disabled={roomsSource !== "api" || roomsNote !== ""}
+                aria-required="true"
+                aria-invalid={fieldErrors.roomId ? true : undefined}
+                aria-describedby={fieldErrors.roomId ? "roomId-error" : roomsNote ? "roomId-note" : undefined}
+                style={inputStyle}
+              >
+                <option value="">{roomsSource === "loading" ? t("ghRoomsLoading") : t("ghRoomSelect")}</option>
+                {availableRooms.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {t("ghRoomOption", { roomNo: r.roomNo, type: r.type, capacity: r.capacity })}
+                  </option>
+                ))}
+              </select>
+              {roomsNote ? (
+                <span id="roomId-note" role={roomsSource === "error" ? "alert" : "note"} className="sub" style={{ fontSize: 12, color: roomsSource === "error" ? "var(--bad)" : undefined }}>
+                  {roomsNote}
+                </span>
+              ) : null}
               {fieldErrors.roomId && (
                 <span id="roomId-error" role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.roomId}</span>
               )}
