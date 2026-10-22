@@ -1865,6 +1865,11 @@ export const EstabDashboardSchema = z.object({
   slaBreached: z.number().default(0),
   dakPending: z.number().default(0),
   avgPendencyDays: z.number().default(0),
+  // GAP-ESTAB-DASHBOARD-05: the pendency snapshot's own figures (not repeats of a stat tile).
+  /** Files open at any stage: every status except closed, archived and disposed. */
+  openFiles: z.number().default(0),
+  /** Whole IST days since creation of the oldest open file; 0 when none is open. */
+  oldestPendencyDays: z.number().default(0),
 });
 
 export const EstabFileSummarySchema = z.object({
@@ -1881,20 +1886,62 @@ export const EstabFileSummarySchema = z.object({
 });
 export const EstabFileSummaryListSchema = z.array(EstabFileSummarySchema);
 
-export const EstabFileDetailSchema = EstabFileSummarySchema.extend({
+/**
+ * GET /v1/estab/files/:id as estab-service actually sends it (FileDetailDto in
+ * services/estab-service/src/modules/files/queries.ts). This is the WIRE contract, not the
+ * mapped EstabFileDetail the pages read: it used to extend EstabFileSummarySchema, which
+ * describes the mapped shape (a required createdBy/createdDate that the service never sends,
+ * a classification enum without "public", a status enum without "closed"/"draft", a
+ * non-null officer name), so every real payload failed the gate and the page showed its load
+ * error. Fields the mapper reads (mapEstabFileDetail) must be declared here: zod strips the
+ * rest, which is how noteType, noteStatus, eSigned, signedAt, dakNo, dueBy and the movement
+ * trail were being dropped before they reached the page (GAP-ESTAB-FILES-DETAIL-05/06).
+ * Officer names are null when the service cannot resolve them (the web shows the localised
+ * "Unknown employee"), so they are nullable here. Status and classification stay open
+ * strings: the mapper normalises the vocabulary and a new server value must not blank the page.
+ */
+export const EstabFileDetailSchema = z.object({
+  id: z.string(),
+  fileNo: z.string(),
+  subject: z.string(),
+  classification: z.string().default("public"),
+  status: z.string().default("active"),
+  dept: z.string().nullish(),
+  department: z.string().nullish(),
+  createdAt: z.string().nullish(),
+  createdDate: z.string().nullish(),
+  createdByName: z.string().nullish(),
+  currentWith: z.string().nullish(),
+  currentHolder: z.string().nullish(),
+  dakNo: z.string().nullish(),
+  dueBy: z.string().nullish(),
+  dueDate: z.string().nullish(),
   noteSheets: z.array(z.object({
     id: z.string(),
-    author: z.string(),
+    author: z.string().nullish(),
     content: z.string(),
     timestamp: z.string(),
-    type: z.enum(["note", "order", "remark"]),
+    type: z.enum(["note", "order", "remark"]).default("note"),
+    noteType: z.string().nullish(),
+    noteStatus: z.string().nullish(),
+    eSigned: z.boolean().default(false),
+    signedAt: z.string().nullish(),
+  })).default([]),
+  movementHistory: z.array(z.object({
+    id: z.string(),
+    fromOfficerId: z.string().nullish(),
+    toOfficerId: z.string(),
+    action: z.string().nullish(),
+    remarks: z.string().nullish(),
+    status: z.string().nullish(),
+    movedAt: z.string(),
   })).default([]),
   dispatchHistory: z.array(z.object({
     id: z.string(),
     dispatchedTo: z.string(),
-    dispatchedBy: z.string(),
+    dispatchedBy: z.string().nullish(),
     timestamp: z.string(),
-    remarks: z.string().optional(),
+    remarks: z.string().nullish(),
   })).default([]),
   attachments: z.array(z.object({
     id: z.string(),

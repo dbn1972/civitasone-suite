@@ -1,6 +1,6 @@
 import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { NOTE_SIGNED_LABEL } from "../../_shared/signatureCopy";
 import { FileDetailActions } from "./FileDetailActions";
@@ -68,7 +68,8 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
         idx: idx + 1,
         content: ns.content,
         author: ns.author,
-        when: ns.timestamp ? formatIndianDate(ns.timestamp) : "—",
+        // GAP-ESTAB-FILES-DETAIL-05: a legal record shows the time of day, not just the date.
+        when: ns.timestamp ? formatIndianDateTime(ns.timestamp) : "—",
         type: `${typeLabel}${ns.eSigned ? ` · ${NOTE_SIGNED_LABEL}` : ""}`,
         status: (ns.noteStatus ?? "—").replace(/_/g, " "),
         signedAt: ns.signedAt ?? null,

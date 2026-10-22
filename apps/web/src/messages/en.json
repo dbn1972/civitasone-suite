@@ -12830,9 +12830,11 @@
     "listAvgPendencyLoaded": "Avg Pendency (loaded)",
     "listOfficeFiguresRestricted": "Your role cannot open the Dashboard, so Active Files and Avg Pendency here count only the files loaded in the register below, not the whole office.",
     "listOfficeFiguresUnavailable": "The office-wide Active Files and Avg Pendency could not be loaded. Refresh the page to try again.",
-    "dashActiveFilesSnapshot": "Active files",
     "dashSlaHint": "Open files across the office whose due date has passed (IST calendar day). My Desk counts only the files with you.",
     "dashAvgPendencyHint": "Average days that open files have been open (IST calendar days).",
+    "dashSnapshotOpenFiles": "Open files (all stages)",
+    "dashSnapshotOldestOpen": "Oldest open file (days)",
+    "dashSnapshotVehicles": "Vehicles in use",
     "inboxOverdue": "Overdue on my desk",
     "inboxOverdueHint": "Files on your desk whose due date has passed. The dashboard's SLA Breached counts the whole office.",
     "parentSelected": "Selected",
@@ -16082,6 +16084,9 @@
     "allotNotApplied": "Not applied yet — the server may have rejected this action (for example, you cannot allot your own application). Check the current status and try again.",
     "dfaLinkFileLabel": "Link to an eOffice file (optional)",
     "dfaLinkFilePlaceholder": "Search by file number or subject…",
+    "dfaRefreshing": "Refreshing…",
+    "dfaStillProcessing": "Still processing — refresh the list in a moment.",
+    "fileReadOnlyNotice": "This file is {status, select, closed {closed} archived {archived} disposed {disposed} other {closed}}; no further noting, submission, signing or referral is possible.",
     "allotSelfApplicant": "You cannot allot a quarter you applied for (maker-checker policy). Another officer must allot it."
   },
   "auditW2": {

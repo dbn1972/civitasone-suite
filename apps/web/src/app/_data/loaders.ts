@@ -4901,6 +4901,8 @@ const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
   slaBreached: 0,
   dakPending: 0,
   avgPendencyDays: 0,
+  openFiles: 0,
+  oldestPendencyDays: 0,
 };
 
 function mapEstabDashboard(payload: unknown): EstabDashboard | null {
@@ -4916,6 +4918,8 @@ function mapEstabDashboard(payload: unknown): EstabDashboard | null {
     slaBreached: typeof payload.slaBreached === "number" ? payload.slaBreached : 0,
     dakPending: typeof payload.dakPending === "number" ? payload.dakPending : 0,
     avgPendencyDays: typeof payload.avgPendencyDays === "number" ? payload.avgPendencyDays : 0,
+    openFiles: typeof payload.openFiles === "number" ? payload.openFiles : 0,
+    oldestPendencyDays: typeof payload.oldestPendencyDays === "number" ? payload.oldestPendencyDays : 0,
   };
 }
 

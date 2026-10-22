@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
+import { isClosedStatus } from "@/lib/estab/sla";
 import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
 import { NOTE_SIGN_RECORDS_COPY } from "../../_shared/signatureCopy";
 
@@ -35,21 +36,23 @@ type Props = {
 };
 
 /**
- * A file in a terminal register state (archived or disposed) is read-only: no
- * further noting, submission, signing or referral is permitted. The register
- * vocabulary is the service's status (draft, active, pending, transferred,
- * closed, archived, disposed; mapEstabFileSummaries keeps it as is), and this
- * test covers archived and disposed only. A "closed" file is not yet treated as
- * read-only here: that was already so before the status was kept, and whether it
- * should be is a separate decision. This helper is the single source of truth
- * for that read-only test.
+ * A file in a terminal register state is read-only: no further noting, submission, signing or
+ * referral. The service writes `closed` when a file is closed (and `archived` when it is sent to
+ * the record room); the register vocabulary also carries `disposed`. An earlier version of this
+ * guard tested `closed` alone and a later one tested only archived/disposed, because the mapper
+ * folded `closed` into `active`: either way a closed file kept its write controls. The mapper now
+ * keeps `closed` distinct. The status set itself lives in one place, isClosedStatus in
+ * lib/estab/sla.ts (closed, archived, disposed), which the list, inbox and SLA maths also use; this
+ * helper only names that rule for the write controls (estab-service mirrors it as isFileReadOnly in
+ * modules/files/domain.ts and answers 409 FILE_READ_ONLY to a write on such a file).
  */
 export function isFileReadOnly(status: string): boolean {
-  return status === "archived" || status === "disposed";
+  return isClosedStatus(status);
 }
 
 export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   const unknownEmployee = useTranslations("employeeFallback")("unknownEmployee");
+  const tP2 = useTranslations("estabP2");
   const router = useRouter();
   const [noteBody, setNoteBody] = useState("");
   const [referRemarks, setReferRemarks] = useState("");
@@ -221,7 +224,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
         <div className="card-h"><h3>Noting &amp; approval (eOffice)</h3></div>
         <div className="pad">
           <p role="status" style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>
-            This file is {status}; no further noting, submission, signing or referral is possible.
+            {tP2("fileReadOnlyNotice", { status })}
           </p>
         </div>
       </div>

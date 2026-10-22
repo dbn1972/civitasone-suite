@@ -80,6 +80,21 @@ describe("EstabFilesListPage", () => {
     expect(labs.some((l) => l.textContent?.includes("MTD"))).toBe(false);
   });
 
+  it("GAP-ESTAB-FILES-DETAIL-01: a closed file counts under Closed, not Active (the service writes status 'closed' on close)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [
+        makeFile({ id: "f1", fileNo: "F/OPEN", status: "active" }),
+        makeFile({ id: "f2", fileNo: "F/SHUT", status: "closed" }),
+        makeFile({ id: "f3", fileNo: "F/ARCH", status: "archived" }),
+      ],
+      source: "api",
+    });
+    const { container } = render(await EstabFilesListPage());
+    const tile = (label: string) => Array.from(container.querySelectorAll(".lab")).find((l) => l.textContent === label)?.parentElement as HTMLElement;
+    expect(tile("Closed").textContent).toContain("2");
+    expect(tile("Active Files").textContent).toContain("1");
+  });
+
   it("GAP-ESTAB-LIST-03: banner does not promise SLA on pendency", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
     const ui = await EstabFilesListPage();

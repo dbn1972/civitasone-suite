@@ -183,8 +183,16 @@ export async function findNotingByIdTx(tx: Writer, id: string, tenantId: string)
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
+//
+// GAP-ESTAB-DASHBOARD-04: newest first, with the id as a stable tie-break. The register list
+// (and the dashboard's "Recent files", which takes the first few of it) is capped by `limit`;
+// without an ORDER BY the cap kept an arbitrary subset, so the newest file could be missing
+// once a tenant held more files than the limit.
 export async function listFilesByTenant(tenantId: string, limit: number): Promise<FileRow[]> {
-  return db.transaction((tx) => tx.select().from(estabFiles).where(eq(estabFiles.tenantId, tenantId)).limit(limit));
+  return db.transaction((tx) => tx.select().from(estabFiles)
+    .where(eq(estabFiles.tenantId, tenantId))
+    .orderBy(desc(estabFiles.createdAt), asc(estabFiles.id))
+    .limit(limit));
 }
 
 /**

@@ -54,10 +54,16 @@ export async function getDashboard(tenantId: string) {
 
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
+  // GAP-ESTAB-DASHBOARD-05: the same open-file population also yields the figures the "Pendency
+  // snapshot" panel shows beside the stat tiles (how many files are open at any stage, and how
+  // long the oldest one has been open), so the panel no longer repeats a tile's number.
   const [avgPendency] = await db.transaction((tx) => tx
     .select({
       // Whole IST calendar days since creation, averaged over open files, to one decimal.
       avg: sql<number>`coalesce(round(avg(${IST_DAY(sql`now()`)} - ${IST_DAY(sql`${estabFiles.createdAt}`)}), 1), 0)::float8`,
+      open: sql<number>`count(*)::int`,
+      // Whole IST calendar days since creation of the oldest open file; 0 when none is open.
+      oldest: sql<number>`coalesce(max(${IST_DAY(sql`now()`)} - ${IST_DAY(sql`${estabFiles.createdAt}`)}), 0)::int`,
     })
     .from(estabFiles)
     .where(and(eq(estabFiles.tenantId, tenantId), notInArray(estabFiles.status, [...CLOSED_FILE_STATUSES]))));
@@ -105,5 +111,7 @@ export async function getDashboard(tenantId: string) {
     slaBreached: slaBreached?.count ?? 0,
     dakPending: dakPending?.count ?? 0,
     avgPendencyDays: avgPendency?.avg ?? 0,
+    openFiles: avgPendency?.open ?? 0,
+    oldestPendencyDays: avgPendency?.oldest ?? 0,
   };
 }

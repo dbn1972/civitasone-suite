@@ -110,3 +110,31 @@ describe("FilesTable — overdue highlight and Closed chip use the shared SLA ru
     expect(isRed(dueCell("F/CLOSED", PAST.closed))).toBe(false);
   });
 });
+
+
+describe("FilesTable — closed files (GAP-ESTAB-FILES-DETAIL-01)", () => {
+  const withClosed: FileRow[] = [
+    ...ROWS,
+    {
+      id: "file-3", fileNo: "F/2026/003", subject: "Closed matter", classification: "General", department: "Estab",
+      createdBy: "meera", status: "closed", statusRaw: "closed", dueDate: "2020-01-01",
+    },
+  ];
+
+  it("the Closed segment includes a closed file, and the Active segment does not", () => {
+    render(<FilesTable rows={withClosed} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Closed" }));
+    expect(screen.getByText("Closed matter")).toBeInTheDocument();
+    expect(screen.queryByText("Sanction of leave")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Active" }));
+    expect(screen.queryByText("Closed matter")).not.toBeInTheDocument();
+    expect(screen.getByText("Sanction of leave")).toBeInTheDocument();
+  });
+
+  it("a closed file past its due date is not flagged overdue", () => {
+    render(<FilesTable rows={withClosed} />);
+    const row = screen.getByText("Closed matter").closest("tr") as HTMLElement;
+    const due = within(row).getByText(/2020/);
+    expect(due.getAttribute("style") ?? "").not.toContain("var(--bad)");
+  });
+});
