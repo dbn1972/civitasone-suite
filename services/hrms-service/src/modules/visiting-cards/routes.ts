@@ -5,6 +5,7 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { decryptPii } from "../../shared/pii-crypto.js";
 import { escapeHtml } from "../recruitment/application-pdf.js";
 
 /**
@@ -351,6 +352,15 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     )).catch((err) => req.log.warn({ err }, "visiting-card scan_count increment failed"));
 
     const name = String(e.display_name || e.full_name || "").trim();
+    // employee.hrms_employees.mobile is an encryptedText column and this raw-SQL read bypasses
+    // drizzle's decrypt: decrypt here, and omit the phone line (fail closed) if that fails, so an
+    // anonymous caller can never receive an `enc:v*:` envelope as TEL.
+    let mobile: string | undefined;
+    if (e.show_personal_phone && e.mobile) {
+      try { mobile = decryptPii(String(e.mobile)); } catch (err) {
+        req.log.warn({ err }, "visiting-card public: mobile decrypt failed; omitting TEL");
+      }
+    }
     // Minimal public projection: identity, role, org, work email, website,
     // tagline. NO address, alt email, photo, employee code or ids. Phone
     // numbers only when the owner opted in via show_personal_phone.
@@ -359,7 +369,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
       suffix: e.suffix,
       title: e.title_override || e.designation,
       org: e.department,
-      phone: e.show_personal_phone ? e.mobile : undefined,
+      ...(mobile ? { phone: mobile } : {}),
       altPhone: e.show_personal_phone ? e.alt_phone : undefined,
       email: e.email,
       website: e.website,
@@ -367,7 +377,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
     const asciiName = name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "contact";
     reply.header("Content-Type", "text/vcard; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${asciiName}.vcf"; filename*=UTF-8''${encodeURIComponent(name || "contact")}.vcf`);
+    reply.header("Content-Disposition", `attachment; filename="${asciiName}.vcf"; filename*=UTF-8''${encodeURIComponent(name || "contact").replace(/'/g, "%27")}.vcf`);
     reply.header("Cache-Control", "no-store");
     reply.header("X-Robots-Tag", "noindex, nofollow");
     reply.header("X-Content-Type-Options", "nosniff");

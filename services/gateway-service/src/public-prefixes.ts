@@ -37,6 +37,12 @@
  * tenant-service-side fix. An exact path, not the whole /api/v1/tenant prefix, to
  * avoid exposing any other tenant-service route (create/suspend/etc, all of which
  * still require a real role) to unauthenticated traffic at the gateway.
+ *
+ * `/api/v1/hrms/visiting-card/public` (#1776) — anonymous QR-scan vCard download keyed on an
+ * unguessable share token. hrms-service marks the route config:{public:true}, rate-limits it and
+ * resolves the single card through a token-scoped RLS policy; this entry only lets the request past
+ * the gateway bearer pre-check. Narrow to the `public` sub-tree, NOT /api/v1/hrms/visiting-card
+ * (the authenticated /me routes keep their edge check).
  */
 export const PUBLIC_PREFIXES = [
   "/api/identity",
@@ -45,4 +51,5 @@ export const PUBLIC_PREFIXES = [
   "/api/v1/crm/public",
   "/api/v1/court/public",
   "/api/v1/tenant/msme-onboard",
+  "/api/v1/hrms/visiting-card/public",
 ];

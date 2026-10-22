@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
+import { encryptPii } from "../src/shared/pii-crypto.js";
 import { sqlClient } from "../src/shared/db.js";
 
 const SECRET = process.env.JWT_SECRET as string; // injected by vitest.config.ts
@@ -41,7 +42,7 @@ async function seedEmployee(id: string, no: string, name: string, userRef: strin
                (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining,
                 mobile, email, user_ref, created_by, updated_by)
              VALUES (${id}, ${tenant}, ${no}, ${name}, ${DEPT}, ${DESG}, '2020-01-15',
-                     ${mobile}, ${no.toLowerCase() + "@example.gov.in"}, ${userRef}, ${ADMIN}, ${ADMIN})`;
+                     ${encryptPii(mobile)}, ${no.toLowerCase() + "@example.gov.in"}, ${userRef}, ${ADMIN}, ${ADMIN})`;
   }, tenant);
 }
 
@@ -135,7 +136,19 @@ describe("#1776 public visiting card -- share token", () => {
     const r = await getPublic(await myToken());
     expect(r.body).toContain("TEL;TYPE=WORK:9800000001");
     expect(r.body).toContain("TEL;TYPE=CELL:9700000002");
+    expect(r.body).not.toContain("enc:v");
     await app.inject({ method: "PATCH", url: "/v1/hrms/visiting-card/me", headers: auth(OWNER_USER), payload: { showPersonalPhone: false } });
+  });
+
+  it("a mobile that fails to decrypt is omitted, never leaked as ciphertext", async () => {
+    await asTenant((tx) => tx`UPDATE employee.hrms_employees SET mobile = 'enc:v2:nokey:AAAA' WHERE id = ${OWNER_EMP}`);
+    await app.inject({ method: "PATCH", url: "/v1/hrms/visiting-card/me", headers: auth(OWNER_USER), payload: { showPersonalPhone: true } });
+    const r = await getPublic(await myToken());
+    expect(r.statusCode).toBe(200);
+    expect(r.body).not.toContain("enc:v");
+    expect(r.body).not.toContain("TEL;TYPE=WORK");
+    await app.inject({ method: "PATCH", url: "/v1/hrms/visiting-card/me", headers: auth(OWNER_USER), payload: { showPersonalPhone: false } });
+    await asTenant((tx) => tx`UPDATE employee.hrms_employees SET mobile = ${encryptPii("9800000001")} WHERE id = ${OWNER_EMP}`);
   });
 
   it("the employee number (and any guessable / malformed / unknown value) never resolves -- uniform 404", async () => {
