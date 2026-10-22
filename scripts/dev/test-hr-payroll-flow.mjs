@@ -8,7 +8,7 @@
  * Usage: node scripts/dev/test-hr-payroll-flow.mjs
  */
 import { createHmac, randomUUID } from "node:crypto";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const GATEWAY = process.env.GATEWAY_URL ?? "http://localhost:8080";
 const TENANT = process.env.TEST_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
@@ -110,8 +110,10 @@ async function poll(fn, label, maxMs = 45000) {
 }
 
 function psql(db, sql) {
-  return execSync(
-    `docker exec -i civitasone-postgres psql -U civitas_admin -d ${db} -t -A -c "${sql.replace(/"/g, '\\"')}"`,
+  // argv form: no shell, so neither db nor sql is ever shell-interpreted
+  return execFileSync(
+    "docker",
+    ["exec", "-i", "civitasone-postgres", "psql", "-U", "civitas_admin", "-d", db, "-t", "-A", "-c", sql],
     { encoding: "utf8" },
   ).trim();
 }
