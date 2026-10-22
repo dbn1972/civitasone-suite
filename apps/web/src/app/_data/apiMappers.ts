@@ -861,6 +861,24 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
   return mapped;
 }
 
+/**
+ * GAP-ESTAB-INBOX-01: "My Desk" - the files on the signed-in officer's desk plus whether the officer can
+ * be handed files at all. `notEnrolled` is true only when the tenant has adopted the operator model AND
+ * the caller is not an active operator (estab-service /files/mine `operator` flags); a tenant that has
+ * not adopted operators, or a response without the flags, never claims it.
+ */
+export type EstabDesk = {
+  files: EstabFileSummary[];
+  notEnrolled: boolean;
+};
+
+export function mapEstabDesk(payload: unknown): EstabDesk | null {
+  const files = mapEstabFileSummaries(payload);
+  if (!files) return null;
+  const operator = isRecord(payload) && isRecord(payload.operator) ? payload.operator : null;
+  return { files, notEnrolled: operator?.adopted === true && operator?.enrolled === false };
+}
+
 export function mapEstabFileDetail(payload: unknown): import("@civitasone/types").EstabFileDetail | null {
   if (!isRecord(payload)) return null;
   const id = toText(payload.id);

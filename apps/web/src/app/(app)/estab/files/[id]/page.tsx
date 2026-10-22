@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
@@ -25,8 +26,19 @@ type DispatchRow = {
   mode: string;
 };
 
-export default async function EstabFileDetailPage({ params }: { params: { id: string } }) {
-  const { data: file, source } = await getEstabFileById(params.id);
+export default async function EstabFileDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { created?: string };
+}) {
+  const t = await getTranslations("estabW2");
+  // GAP-ESTAB-FILES-NEW-06: arriving from "Create File" / "Open file from DAK" (?created=1) the
+  // allocated file number is shown here, because the create call only acknowledges (202) and the
+  // gapless number is assigned when the command is processed.
+  const justCreated = searchParams?.created === "1";
+  const { data: file, source, status } = await getEstabFileById(params.id);
 
   // The loader collapses 404, 5xx and network errors all into source:"error",
   // so we cannot claim "not found" — that would tell an officer an existing
@@ -34,6 +46,20 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
   // as two flat sibling early-returns, rather than nesting the not-found
   // check inside a single `if (!file)`, so the `source === "error"` guard
   // is a direct, statically-visible gate on everything below it — UX-013.)
+  if (source === "error" && !file && justCreated && status === 404) {
+    // Straight after a create, a 404 means the command has not been processed yet (the file does not
+    // exist until it is): that is not an outage and not a lost file. Any other failure still shows the
+    // ordinary retryable error below.
+    return (
+      <>
+        <PageHeader title={t("fileCreatingTitle")} back="/estab/list" />
+        <div role="status" className="alert" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+          {t("fileCreatingMessage")}
+        </div>
+        <a className="btn" href={`/estab/files/${encodeURIComponent(params.id)}?created=1`}>{t("fileCreatingRefresh")}</a>
+      </>
+    );
+  }
   if (source === "error" && !file) {
     return (
       <>
@@ -101,6 +127,12 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
           </>
         }
       />
+
+      {justCreated ? (
+        <div role="status" className="alert good" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+          {t("fileCreatedBanner", { fileNo: file.fileNo })}
+        </div>
+      ) : null}
 
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

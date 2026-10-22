@@ -24,13 +24,16 @@ function file(partial: Record<string, unknown>) {
   };
 }
 
+// getEstabDeskFiles resolves to { files, notEnrolled } (GAP-ESTAB-INBOX-01).
+const desk = (files: unknown[], notEnrolled = false) => ({ files, notEnrolled });
+
 describe("EstabInboxPage", () => {
   beforeEach(() => {
     getEstabFilesMock.mockReset();
   });
 
   it("GAP-ESTAB-INBOX-02: a failed load shows an error state and '—' stats, not 'Nothing on your desk'", async () => {
-    getEstabFilesMock.mockResolvedValueOnce({ data: [], source: "error" });
+    getEstabFilesMock.mockResolvedValueOnce({ data: desk([]), source: "error" });
 
     const ui = await EstabInboxPage();
     render(ui);
@@ -43,11 +46,11 @@ describe("EstabInboxPage", () => {
 
   it("GAP-ESTAB-INBOX-05: counts in-transit 'pending' files under 'Awaiting receipt'", async () => {
     getEstabFilesMock.mockResolvedValueOnce({
-      data: [
+      data: desk([
         file({ id: "a", status: "active" }),
         file({ id: "p", status: "pending" }),
         file({ id: "x", status: "archived" }),
-      ],
+      ]),
       source: "api",
     });
 
@@ -63,7 +66,7 @@ describe("EstabInboxPage", () => {
     // never the whole-register getEstabFiles. The mock stands in for the desk
     // loader; verify it is actually invoked and its rows are shown.
     getEstabFilesMock.mockResolvedValueOnce({
-      data: [file({ id: "mine-1", fileNo: "ADMIN/2026/0007", subject: "My pending file", status: "active" })],
+      data: desk([file({ id: "mine-1", fileNo: "ADMIN/2026/0007", subject: "My pending file", status: "active" })]),
       source: "api",
     });
 
@@ -76,18 +79,63 @@ describe("EstabInboxPage", () => {
 
   it("GAP-ESTAB-DASHBOARD-01: the overdue tile is labelled 'on my desk' and counts open files past due, never closed ones", async () => {
     getEstabFilesMock.mockResolvedValueOnce({
-      data: [
+      data: desk([
         file({ id: "o1", status: "active", dueDate: "2020-01-01" }),
         file({ id: "o2", status: "draft", dueDate: "2020-01-01" }),
         file({ id: "c1", status: "closed", dueDate: "2020-01-01" }),
         file({ id: "a1", status: "archived", dueDate: "2020-01-01" }),
         file({ id: "f1", status: "active", dueDate: "2999-01-01" }),
-      ],
+      ]),
       source: "api",
     });
     render(await EstabInboxPage());
     const tile = screen.getByText("Overdue on my desk").closest("div") as HTMLElement;
     expect(tile.parentElement?.textContent).toContain("2");
     expect(screen.queryByText(/^Overdue$/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-INBOX-01: stats and rows come only from the desk subset the service returned", async () => {
+    // The service has already excluded files held by others; the page counts exactly what it is given.
+    getEstabFilesMock.mockResolvedValueOnce({
+      data: desk([
+        file({ id: "m1", fileNo: "ADMIN/2026/0001", subject: "Mine A", status: "active" }),
+        file({ id: "m2", fileNo: "ADMIN/2026/0002", subject: "Mine B", status: "active" }),
+        file({ id: "m3", fileNo: "ADMIN/2026/0003", subject: "Mine C", status: "pending" }),
+      ]),
+      source: "api",
+    });
+    render(await EstabInboxPage());
+    expect(screen.getByText("Mine A")).toBeInTheDocument();
+    expect(screen.getByText("Mine B")).toBeInTheDocument();
+    expect(screen.queryByText("Someone else's file")).toBeNull();
+    const activeTile = screen.getByText("Active on desk").closest("div") as HTMLElement;
+    expect(activeTile.parentElement?.textContent).toContain("2");
+    const awaitingTile = screen.getByText("Awaiting receipt").closest("div") as HTMLElement;
+    expect(awaitingTile.parentElement?.textContent).toContain("1");
+  });
+
+  it("GAP-ESTAB-INBOX-01: a user who is not an enrolled operator gets an explanation, not 'Nothing on your desk'", async () => {
+    getEstabFilesMock.mockResolvedValueOnce({ data: desk([], true), source: "api" });
+    render(await EstabInboxPage());
+    expect(screen.getByText("You are not enrolled as an eOffice operator")).toBeInTheDocument();
+    expect(screen.getByText(/Ask your division administrator to enrol you/)).toBeInTheDocument();
+    expect(screen.queryByText("Nothing on your desk")).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-INBOX-01: an enrolled operator with an empty desk still sees 'Nothing on your desk'", async () => {
+    getEstabFilesMock.mockResolvedValueOnce({ data: desk([], false), source: "api" });
+    render(await EstabInboxPage());
+    expect(screen.getByText("Nothing on your desk")).toBeInTheDocument();
+    expect(screen.queryByText("You are not enrolled as an eOffice operator")).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-INBOX-01: a not-enrolled user who still holds files (opened before enrolment) sees them, not the empty explanation", async () => {
+    getEstabFilesMock.mockResolvedValueOnce({
+      data: desk([file({ id: "old", subject: "Opened earlier" })], true),
+      source: "api",
+    });
+    render(await EstabInboxPage());
+    expect(screen.getByText("Opened earlier")).toBeInTheDocument();
+    expect(screen.queryByText("You are not enrolled as an eOffice operator")).not.toBeInTheDocument();
   });
 });
