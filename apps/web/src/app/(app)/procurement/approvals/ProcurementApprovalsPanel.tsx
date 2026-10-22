@@ -39,20 +39,26 @@ const REF_TYPES = new Set(["procurement_indent", "procurement_po", "procurement_
 // /v1/workflow/tasks?status=pending&limit=50 across ALL modules and filter to
 // procurement refTypes client-side. With >50 pending tasks tenant-wide, any
 // procurement task past the cut-off never rendered and "No pending tasks" read
-// as all-clear. We now (a) ask the workflow service to filter by the four
-// procurement refTypes server-side via repeated refType params (additive — a
-// service that ignores the param still returns the superset, which the
-// client-side filter below handles), (b) raise the page size, and (c) surface
-// an explicit "may be incomplete" notice when the raw response length hits the
-// limit so a silently-truncated list is never mistaken for the whole queue.
-// workflow-service is absent from this worktree, so true cursor pagination
-// cannot be built here; the notice is the honest fallback.
+// as all-clear. Now (a) workflow-service filters by the four procurement
+// refTypes in SQL (repeated refType params, applied BEFORE limit/offset), (b)
+// the queue pages through the result with "Load more" until the server reports
+// no further page (pagination.hasMore), and (c) whenever more pages exist the
+// panel says so -- including when none of the rows loaded so far is a
+// procurement task, so a truncated list is never mistaken for an empty queue.
+// The client-side refType filter stays as a defence for a service that ignores
+// the param (it then returns a superset, and paging still reaches the rest).
 const TASKS_LIMIT = 200;
 const TASKS_PATH = `/v1/workflow/tasks?status=pending&limit=${TASKS_LIMIT}${[...REF_TYPES]
   .map((t) => `&refType=${encodeURIComponent(t)}`)
   .join("")}`;
 
-type TasksResult = { tasks: WorkflowTask[]; maybeIncomplete: boolean };
+/**
+ * `rawCount` is the number of rows the server returned BEFORE the client-side
+ * refType filter -- it is the next page's `offset`. `maybeIncomplete` is true
+ * when further pages exist (the server's own `pagination.hasMore`; a bare-array
+ * response falls back to "the page was full").
+ */
+type TasksResult = { tasks: WorkflowTask[]; maybeIncomplete: boolean; rawCount: number };
 
 // GAP-PROCUREMENT-APPROVALS-05/07: what procurement-service knows about the
 // document a task is about (value, requester, parent PO for an amendment).
@@ -67,12 +73,18 @@ function rawTaskRows(payload: unknown): WorkflowTask[] {
     : ((payload as { data?: WorkflowTask[] })?.data ?? []);
 }
 
+function hasMorePages(payload: unknown, rows: WorkflowTask[]): boolean {
+  const pagination = (payload as { pagination?: { hasMore?: unknown } } | null | undefined)?.pagination;
+  if (pagination && typeof pagination.hasMore === "boolean") return pagination.hasMore;
+  // No pagination envelope: if the raw (pre-filter) response filled the page,
+  // more pending tasks may exist beyond it that we never saw.
+  return rows.length >= TASKS_LIMIT;
+}
+
 function toTasks(payload: unknown): TasksResult {
   const rows = rawTaskRows(payload);
   const tasks = rows.filter((t) => t.refType && REF_TYPES.has(t.refType) && t.status === "pending");
-  // If the raw (pre-filter) response filled the page, more pending tasks may
-  // exist beyond it that we never saw.
-  return { tasks, maybeIncomplete: rows.length >= TASKS_LIMIT };
+  return { tasks, maybeIncomplete: hasMorePages(payload, rows), rawCount: rows.length };
 }
 
 type Pending = { task: WorkflowTask; decision: "approve" | "reject" };
@@ -105,13 +117,60 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
   // elsewhere in this cluster, here hiding real outstanding approvals from an
   // officer behind what looks like a clean inbox.
   const { data: result, loading, offline, source, cachedAt, error, refresh } = useOfflineResource<unknown, TasksResult>(
-    "procurement.approvals.tasks",
+    // v2: the cached shape gained `rawCount` (the next page's offset); an entry
+    // saved by the previous shape must not be read back as this one.
+    "procurement.approvals.tasks.v2",
     TASKS_PATH,
-    { map: toTasks, initialData: { tasks: [], maybeIncomplete: false } },
+    { map: toTasks, initialData: { tasks: [], maybeIncomplete: false, rawCount: 0 } },
   );
-  const tasks = result.tasks;
-  const maybeIncomplete = result.maybeIncomplete;
   const tw = useTranslations("procurement.w2b.approvals");
+
+  // Pages after the first ("Load more"). The first page comes from the offline
+  // resource above; later pages are fetched on demand and appended. Reset
+  // whenever the first page's content changes (a refresh after a decision, or a
+  // reconnect revalidation) because the offsets would no longer line up.
+  const [extra, setExtra] = useState<{ tasks: WorkflowTask[]; rawCount: number; hasMore: boolean } | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  // rawCount is in the key too: a first page that holds no procurement task still
+  // changes (and shifts every later offset) when other modules' tasks come and go.
+  const firstPageKey = `${result.rawCount}:${result.tasks.map((t) => t.id).join(",")}`;
+  useEffect(() => {
+    setExtra(null);
+    setLoadMoreFailed(false);
+  }, [firstPageKey]);
+
+  const tasks = useMemo(() => {
+    if (!extra) return result.tasks;
+    const seen = new Set(result.tasks.map((t) => t.id));
+    return [...result.tasks, ...extra.tasks.filter((t) => !seen.has(t.id))];
+  }, [result.tasks, extra]);
+  const maybeIncomplete = extra ? extra.hasMore : result.maybeIncomplete;
+  const loadedCount = result.rawCount + (extra?.rawCount ?? 0);
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    setLoadMoreFailed(false);
+    try {
+      const res = await fetch(`/api/proxy${TASKS_PATH}&offset=${loadedCount}`, {
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error("load more failed");
+      const next = toTasks(await res.json());
+      setExtra((prev) => ({
+        tasks: [...(prev?.tasks ?? []), ...next.tasks],
+        rawCount: (prev?.rawCount ?? 0) + next.rawCount,
+        // An empty page ends the walk even if the server still claims more, so a
+        // misbehaving service cannot trap the button in an endless no-op loop.
+        hasMore: next.maybeIncomplete && next.rawCount > 0,
+      }));
+    } catch {
+      setLoadMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadedCount]);
 
   // Value / requester / parent PO for the visible tasks, in batches of 50. A
   // failed lookup is reported (the columns show "-" and a note), never shown as
@@ -187,6 +246,9 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
         }
         setPending(null);
         setMessage(decision === "approve" ? "Approved via workflow." : "Rejected via workflow.");
+        // Later pages were fetched at offsets that this decision just shifted:
+        // drop them, the refreshed first page restarts the walk.
+        setExtra(null);
         refresh();
         router.refresh();
       } catch (err) {
@@ -329,29 +391,43 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
         <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading workflow tasks…</p>
       ) : error && tasks.length === 0 ? (
         <ErrorState error={toHumanError("load", { area: "workflow approval queue" })} onRetry={refresh} />
-      ) : tasks.length === 0 ? (
+      ) : tasks.length === 0 && !maybeIncomplete ? (
         <EmptyState icon="✅" title="No pending tasks" message="No pending procurement workflow tasks at this time." />
       ) : (
         <>
+          {/* A "No pending tasks" all-clear is only shown once the server has said
+              there are no further pages. While pages remain -- even if none of the
+              rows loaded so far is a procurement task -- say so and offer the next
+              page, so a truncated list is never mistaken for an empty queue. */}
           {maybeIncomplete ? (
-            <p
-              className="pad"
-              role="status"
-              style={{ color: "var(--warn)", fontSize: "0.8125rem", paddingBottom: 0 }}
-            >
-              Showing the first {TASKS_LIMIT} pending tasks — more may exist and are not loaded here.
-            </p>
+            <div className="pad" style={{ paddingBottom: 0 }}>
+              <p role="status" style={{ color: "var(--warn)", fontSize: "0.8125rem", margin: "0 0 8px" }}>
+                {tasks.length === 0
+                  ? tw("noneLoadedMoreExist", { count: loadedCount })
+                  : tw("moreMayExist", { count: loadedCount })}
+              </p>
+              {loadMoreFailed ? (
+                <p role="alert" style={{ color: "var(--bad)", fontSize: "0.8125rem", margin: "0 0 8px" }}>
+                  {tw("loadMoreFailed")}
+                </p>
+              ) : null}
+              <Button type="button" variant="ghost" size="sm" disabled={loadingMore} onClick={() => { void loadMore(); }}>
+                {loadingMore ? tw("loadingMore") : tw("loadMore")}
+              </Button>
+            </div>
           ) : null}
           {summaryState === "error" ? (
             <p className="pad" role="alert" style={{ color: "var(--bad)", fontSize: "0.8125rem", paddingBottom: 0 }}>
               {tw("summaryFailed")}
             </p>
           ) : null}
-          <DataTable<TaskRow>
-            columns={columns}
-            rows={tableRows}
-            pageSize={25}
-          />
+          {tasks.length > 0 ? (
+            <DataTable<TaskRow>
+              columns={columns}
+              rows={tableRows}
+              pageSize={25}
+            />
+          ) : null}
         </>
       )}
 
