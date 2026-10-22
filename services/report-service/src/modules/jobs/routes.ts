@@ -22,7 +22,22 @@ import * as misQueries from "../mis/queries.js";
 // WRITE_ROLES the POST surfaces (create/share a job). Previously this file
 // used a bare ["report_user","report_admin","super_admin"] that disagreed
 // with the scheduled routes' ["report_viewer", ...].
-import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES } from "../../shared/roles.js";
+import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES, isReportAdmin, ownerScope } from "../../shared/roles.js";
+import type { RequestContext } from "@civitasone/types";
+import type { JobView } from "./schema.js";
+
+/**
+ * Per-user scoping: a non-admin may only touch jobs they requested. Admin roles
+ * keep tenant-wide access; legacy rows with a null requested_by are admin-only.
+ * Returns 404 (not 403) so a job id belonging to someone else is not confirmed.
+ */
+function assertJobAccess(ctx: RequestContext, job: JobView | null): JobView {
+  if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+  if (!isReportAdmin(ctx) && job.requestedBy !== ctx.actorId) {
+    throw new HttpError(404, "NOT_FOUND", "report job not found");
+  }
+  return job;
+}
 
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/reports/jobs", async (req, reply) => {
@@ -37,8 +52,8 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     const [result, total] = await Promise.all([
-      queries.listJobs(ctx.tenantId, q.limit, q.offset),
-      queries.countJobs(ctx.tenantId),
+      queries.listJobs(ctx.tenantId, q.limit, q.offset, ownerScope(ctx)),
+      queries.countJobs(ctx.tenantId, ownerScope(ctx)),
     ]);
     return reply.send({
       data: result.data,
@@ -54,19 +69,19 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, jobsListSchema, await queries.listJobs(ctx.tenantId, q.limit, q.offset));
+    sendValidated(reply, jobsListSchema, await queries.listJobs(ctx.tenantId, q.limit, q.offset, ownerScope(ctx)));
   });
 
   app.get("/v1/reports/report-jobs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset);
+    const result = await queries.listJobs(ctx.tenantId, q.limit, q.offset, ownerScope(ctx));
     sendValidated(reply, ReportJobSummaryListSchema, result.data.map((job) => ({
       id: job.id,
       reportName: job.name,
       module: job.reportType ?? "general",
-      requestedBy: job.requestedBy ?? job.tenantId,
+      requestedBy: job.requestedBy ?? "unknown",
       // GAP2-REPORTS-JOBS-01: Requested is the job's real creation time
       // (reports.jobs.created_at), never the current request time. A still-
       // queued/running job must not appear "requested just now" on every load.
@@ -83,13 +98,12 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
-    const job = await queries.getJob(ctx.tenantId, id);
-    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    const job = assertJobAccess(ctx, await queries.getJob(ctx.tenantId, id));
     sendValidated(reply, ReportJobDetailSchema, {
       id: job.id,
       reportName: job.name,
       module: job.reportType ?? "general",
-      requestedBy: job.requestedBy ?? job.tenantId,
+      requestedBy: job.requestedBy ?? "unknown",
       // GAP2-REPORTS-JOBS-01: Requested is the job's real creation time
       // (reports.jobs.created_at), never the current request time. A still-
       // queued/running job must not appear "requested just now" on every load.
@@ -110,8 +124,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
-    const job = await queries.getJob(ctx.tenantId, id);
-    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    const job = assertJobAccess(ctx, await queries.getJob(ctx.tenantId, id));
     return reply.send({ data: job });
   });
 
@@ -120,8 +133,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const { recipients, message } = shareJobBody.parse(req.body);
-    const job = await queries.getJob(ctx.tenantId, id);
-    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    const job = assertJobAccess(ctx, await queries.getJob(ctx.tenantId, id));
     if (job.status !== "completed" || !job.downloadUrl) {
       throw new HttpError(409, "NOT_READY", "report not yet completed");
     }
@@ -136,8 +148,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const { watermarkText } = downloadQuerySchema.parse(req.query);
-    const job = await queries.getJob(ctx.tenantId, id);
-    if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
+    const job = assertJobAccess(ctx, await queries.getJob(ctx.tenantId, id));
     if (job.status !== "completed" || !job.downloadUrl) {
       throw new HttpError(409, "NOT_READY", "report is not yet completed or has no download URL");
     }

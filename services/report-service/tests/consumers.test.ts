@@ -209,6 +209,9 @@ describe("registerJobConsumers", () => {
 
     // Should have inserted the job
     expect(mockState.inserted.length).toBeGreaterThan(0);
+    // SEC: requested_by is persisted as the ACTOR (it was previously never
+    // written, so per-user scoping and the "requested by" column were broken).
+    expect(mockState.inserted[0]!.requestedBy).toBe(ACTOR_ID);
     // TX-009: job.created + audit + the renderJob trigger now all go through
     // the transactional outbox (enqueue), not a direct post-commit publish.
     expect(mockState.enqueueCalls.length).toBe(3);

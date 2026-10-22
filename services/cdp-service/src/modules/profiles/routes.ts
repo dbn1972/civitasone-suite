@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { maskProfileView } from "../../shared/pii.js";
 import * as repo from "./repo.js";
 import * as eventsRepo from "../events/repo.js";
 import { validateMerge } from "./domain.js";
@@ -67,7 +68,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
 
     const page = Math.floor(q.offset / q.limit) + 1;
     return reply.send({
-      data: rows.map(repo.toView),
+      data: rows.map((r) => maskProfileView(ctx, repo.toView(r))),
       meta: { page, pageSize: q.limit, total },
     });
   });
@@ -84,7 +85,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "profile not found");
     }
 
-    return reply.send({ data: repo.toView(profile) });
+    return reply.send({ data: maskProfileView(ctx, repo.toView(profile)) });
   });
 
   app.post("/v1/cdp/profiles", async (req, reply) => {

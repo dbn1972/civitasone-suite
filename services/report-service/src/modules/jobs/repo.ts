@@ -30,9 +30,10 @@ export async function findById(id: string, tenantId: string): Promise<JobView | 
   return toView(row);
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<JobView[]> {
+/** ownerId set => only that requester's jobs (non-admin); undefined => tenant-wide. */
+export async function listByTenant(tenantId: string, limit: number, offset: number, ownerId?: string): Promise<JobView[]> {
   const rows = await readScoped(tenantId, (tx) => tx.select().from(jobs)
-    .where(eq(jobs.tenantId, tenantId))
+    .where(ownerId ? and(eq(jobs.tenantId, tenantId), eq(jobs.requestedBy, ownerId)) : eq(jobs.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
   return rows.map(toView);
@@ -42,9 +43,10 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
  * GAP2-REPORTS-PAGINATION-01: tenant-scoped total row count, so meta.total
  * reflects the TRUE number of jobs rather than the length of the capped page.
  */
-export async function countByTenant(tenantId: string): Promise<number> {
+export async function countByTenant(tenantId: string, ownerId?: string): Promise<number> {
   const rows = await readScoped(tenantId, (tx) =>
-    tx.select({ value: count() }).from(jobs).where(eq(jobs.tenantId, tenantId)));
+    tx.select({ value: count() }).from(jobs)
+      .where(ownerId ? and(eq(jobs.tenantId, tenantId), eq(jobs.requestedBy, ownerId)) : eq(jobs.tenantId, tenantId)));
   return Number(rows[0]?.value ?? 0);
 }
 

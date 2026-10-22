@@ -39,6 +39,11 @@ export async function stewardRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "ALREADY_DECIDED", `merge request is already ${mergeRequest.status}`);
     }
 
+    // Maker-checker: the actor who created the match row cannot decide it.
+    if (mergeRequest.createdBy === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER", "you created this match and cannot decide it; another steward must");
+    }
+
     return reply.code(202).send(await commands.decideMerge(ctx, {
       mergeRequestId: body.mergeRequestId,
       decision: body.decision,

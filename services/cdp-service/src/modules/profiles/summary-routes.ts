@@ -5,12 +5,15 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
+import { canSeeCleartextPii, maskAttributes } from "../../shared/pii.js";
 import * as profilesRepo from "./repo.js";
 import * as scoresRepo from "./scores-repo.js";
 import * as deviceRepo from "../identity/device-repo.js";
 import * as membershipRepo from "../segments/membership-repo.js";
 
-const CDP_ROLES = ["cdp_user", "cdp_admin", "super_admin", "tenant_admin"];
+// cdp_steward is included: the steward confirm dialog needs the profile name
+// (PII fields are masked for it by shared/pii.ts; name is not PII-classified).
+const CDP_ROLES = ["cdp_user", "cdp_steward", "cdp_admin", "super_admin", "tenant_admin"];
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -96,6 +99,9 @@ export async function profileSummaryRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(404, "NOT_FOUND", "profile not found");
     }
 
-    return reply.send({ data: summary });
+    // The cached projection is role-neutral (cleartext); mask per caller AFTER
+    // the cache so a masked read can never poison an admin read or vice versa.
+    const data = canSeeCleartextPii(ctx) ? summary : { ...summary, attributes: maskAttributes(summary.attributes) };
+    return reply.send({ data });
   });
 }

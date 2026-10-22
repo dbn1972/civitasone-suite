@@ -19,7 +19,21 @@ import * as queries from "./queries.js";
 // — both of which include `report_user` AND `report_viewer`, so a report_user
 // (who can build jobs) is no longer 403'd here while a report_viewer is no
 // longer 403'd on jobs.
-import { REPORT_READ_ROLES, REPORT_WRITE_ROLES } from "../../shared/roles.js";
+import { REPORT_READ_ROLES, REPORT_WRITE_ROLES, isReportAdmin, ownerScope } from "../../shared/roles.js";
+import type { RequestContext } from "@civitasone/types";
+
+/**
+ * Per-user scoping: a non-admin may only see / change / run scheduled reports
+ * they created. Admin roles keep tenant-wide access. 404 (not 403) so another
+ * user's id is not confirmed to exist.
+ */
+async function loadAccessible(ctx: RequestContext, id: string) {
+  const row = await queries.getScheduledReport(ctx.tenantId, id);
+  if (!row || (!isReportAdmin(ctx) && row.createdBy !== ctx.actorId)) {
+    throw new HttpError(404, "NOT_FOUND", "scheduled report not found");
+  }
+  return row;
+}
 
 export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/reports/scheduled", async (req, reply) => {
@@ -35,8 +49,8 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REPORT_READ_ROLES);
     const q = listQuerySchema.parse(req.query);
     const [result, total] = await Promise.all([
-      queries.listScheduledReports(ctx.tenantId, q.limit, q.offset),
-      queries.countScheduledReports(ctx.tenantId),
+      queries.listScheduledReports(ctx.tenantId, q.limit, q.offset, ownerScope(ctx)),
+      queries.countScheduledReports(ctx.tenantId, ownerScope(ctx)),
     ]);
     return reply.send({
       data: result.data,
@@ -51,8 +65,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REPORT_READ_ROLES);
     const { id } = idParam.parse(req.params);
-    const row = await queries.getScheduledReport(ctx.tenantId, id);
-    if (!row) throw new HttpError(404, "NOT_FOUND", "scheduled report not found");
+    const row = await loadAccessible(ctx, id);
     return reply.send({ data: row });
   });
 
@@ -61,6 +74,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateScheduledReportBody.parse(req.body);
+    await loadAccessible(ctx, id);
     const result = await commands.updateScheduledReport(ctx, id, body);
     return reply.code(202).send({ data: result });
   });
@@ -69,6 +83,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    await loadAccessible(ctx, id);
     const result = await commands.disableScheduledReport(ctx, id);
     return reply.code(202).send({ data: result });
   });
@@ -77,6 +92,7 @@ export async function scheduledRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REPORT_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
+    await loadAccessible(ctx, id);
     const result = await commands.runScheduledReport(ctx, id);
     return reply.code(202).send({ data: result });
   });
