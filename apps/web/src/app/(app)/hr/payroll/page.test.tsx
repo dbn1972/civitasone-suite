@@ -131,8 +131,8 @@ describe("PayrollPage", () => {
     expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("₹90,000.00");
   });
 
-  it("HOME-01: a paid run without its paise total shows a dash, not a fabricated ₹0.00", async () => {
-    mockFetchJson({ data: [{ id: "p1", payPeriod: "2026-08", status: "paid", employeeCount: 5, grossAmount: 90000, netAmount: 0 }], source: "api" });
+  it("HOME-01: a paid run with neither the paise total nor a rupee float shows a dash, not a fabricated ₹0.00", async () => {
+    mockFetchJson({ data: [{ id: "p1", payPeriod: "2026-08", status: "paid", employeeCount: 5 }], source: "api" });
     renderPage(await PayrollPage());
     expect(tileValue("statTotalGrossPeriod|period=August 2026")).toBe("—");
   });
@@ -164,11 +164,11 @@ describe("PayrollPage", () => {
     expect(tileValue("statTotalGrossPeriod|period=September 2026")).toBe("₹5,00,000.03");
   });
 
-  it("HOME-03: if one of the period's paid runs has no paise total, the gross tile is a dash, not a partial sum", async () => {
+  it("HOME-03: if one of the period's paid runs has no money figure at all, the gross tile is a dash, not a partial sum", async () => {
     mockFetchJson({
       data: [
         run("g1", "2026-09", "paid", 60, "30000000"),
-        { id: "g2", payPeriod: "2026-09", status: "paid", employeeCount: 40, grossAmount: 200000, netAmount: 0 },
+        { id: "g2", payPeriod: "2026-09", status: "paid", employeeCount: 40 },
       ],
       source: "api",
     });
@@ -273,7 +273,7 @@ describe("PayrollPage — Total Gross tile uses exact paise", () => {
   beforeEach(() => fetchJsonMock.mockReset());
 
   function totalGrossTile(): string {
-    return screen.getByText("statTotalGross").nextElementSibling?.textContent ?? "";
+    return screen.getByText(/^statTotalGross(Period\|.*)?$/).nextElementSibling?.textContent ?? "";
   }
 
   it("shows the latest paid run's grossMinor, not a draft run's and not the rupee float", async () => {

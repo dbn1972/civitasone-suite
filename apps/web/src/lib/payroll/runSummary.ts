@@ -108,7 +108,7 @@ export type PaidPeriodTotals = {
  * it can never inflate the headcount. Gross is summed in bigint paise.
  */
 export function latestPaidPeriodTotals<
-  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor" | "grossAmount" | "runType">,
+  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor" | "runType"> & { grossAmount?: number },
 >(runs: readonly T[]): PaidPeriodTotals | null {
   const isPaid = (r: Pick<PayrollRunDetail, "status">) => isPaidPayrollRunStatus(r.status);
   const isRegular = (r: Pick<PayrollRunDetail, "runType">) => (r.runType ?? "regular") === "regular";

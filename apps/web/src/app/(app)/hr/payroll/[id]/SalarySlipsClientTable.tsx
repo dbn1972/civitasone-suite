@@ -16,9 +16,9 @@ type SlipRow = {
   employeeId: string;
   employeeName: string;
   /** Rupee floats (legacy wire format); the *Minor strings below are the exact paise twins. */
-  gross: number;
-  deductions: number;
-  net: number;
+  gross?: number;
+  deductions?: number;
+  net?: number;
   /** GAP-PAYROLL-RUNS-01: exact integer paise (digit strings); preferred over the rupee floats. */
   grossMinor?: string;
   deductionsMinor?: string;

@@ -6,7 +6,7 @@ import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 import { slipBackTarget } from "./_backTarget";
 
 // GAP-PAYROLL-SLIPS-DETAIL-06: this used to send every role to /hr/payroll
-// ("Back to Payroll") -- a page an employee cannot open and that differs from the
+// (the Payroll back label) -- a page an employee cannot open and that differs from the
 // header back link an admin sees. The target now comes from the same
 // slipBackTarget() the page uses, with the viewer's roles from the session
 // (display only: the services re-check every role). Until the session answers,

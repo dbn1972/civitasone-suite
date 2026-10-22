@@ -18,6 +18,7 @@ vi.mock("@/lib/sync/resource", () => ({
 }));
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => ["payroll_admin"],
+  getSessionUserId: () => null,
   PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
   PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
   PAYROLL_REPORT_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"],
