@@ -47,6 +47,26 @@ export function parseIndentStatusFilter(raw: string | undefined): string[] {
 }
 
 /**
+ * The raw procurement-service indent status behind a list-page status. The list
+ * shows the service's `pending` as `pending_approval` (apiMappers); every other
+ * list status is the service status itself.
+ */
+export function indentServiceStatus(listStatus: string): string {
+  return listStatus === "pending_approval" ? "pending" : listStatus;
+}
+
+/**
+ * The `status` query value to send to the indents list API for a parsed
+ * `?status=` filter: raw service statuses, comma-separated, so the server
+ * filters BEFORE paging (a status filter applied to one fetched page would hide
+ * matching indents that sit on later pages). Undefined when there is no filter.
+ */
+export function indentServiceStatusQuery(listStatuses: readonly string[]): string | undefined {
+  if (listStatuses.length === 0) return undefined;
+  return listStatuses.map(indentServiceStatus).join(",");
+}
+
+/**
  * Parse an orders `?status=` value into a known PO status key, or undefined
  * (show all). `active` is what the first version of the dashboard link carried;
  * it means `approved`.

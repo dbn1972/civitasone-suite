@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { parseIndentStatusFilter, parsePoStatusParam, PENDING_INDENT_STATUSES, PENDING_INDENTS_HREF } from "./drillThrough";
+import {
+  indentServiceStatus,
+  indentServiceStatusQuery,
+  parseIndentStatusFilter,
+  parsePoStatusParam,
+  PENDING_INDENT_STATUSES,
+  PENDING_INDENTS_HREF,
+} from "./drillThrough";
 
 describe("parseIndentStatusFilter (GAP-PROCUREMENT-DASHBOARD-02)", () => {
   it("parses one status, a comma-separated set, and trims/dedupes", () => {
@@ -42,5 +49,20 @@ describe("parsePoStatusParam (GAP-PROCUREMENT-DASHBOARD-02)", () => {
     for (const bad of [undefined, "", "  ", "nope", "toString", "__proto__", "constructor"]) {
       expect(parsePoStatusParam(bad)).toBeUndefined();
     }
+  });
+});
+
+describe("indentServiceStatusQuery (GAP-PROCUREMENT-DASHBOARD-02)", () => {
+  it("maps the list's pending_approval back to the service's pending and leaves the rest alone", () => {
+    expect(indentServiceStatus("pending_approval")).toBe("pending");
+    for (const same of ["draft", "approved", "rejected", "tender_required", "converted_to_po", "closed", "bogus"]) {
+      expect(indentServiceStatus(same)).toBe(same);
+    }
+  });
+
+  it("builds the comma-separated service status the list API filters on before paging", () => {
+    expect(indentServiceStatusQuery([])).toBeUndefined();
+    expect(indentServiceStatusQuery(["approved"])).toBe("approved");
+    expect(indentServiceStatusQuery([...PENDING_INDENT_STATUSES])).toBe("draft,pending");
   });
 });
