@@ -387,19 +387,6 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
-  // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: finance-service POST /v1/finance/journals answers 409
-  // DUPLICATE_VOUCHER_NO (with a voucherNo field error) when a typed voucher number is already used.
-  DUPLICATE_VOUCHER_NO: {
-    en: {
-      what: "This voucher number is already in use.",
-      next: "Enter a different number, or leave it blank to number it automatically.",
-    },
-    hi: {
-      what: "यह वाउचर नंबर पहले से इस्तेमाल में है।",
-      next: "कोई दूसरा नंबर डालें, या खाली छोड़ें ताकि अपने आप नंबर बन जाए।",
-    },
-    actions: ["retry", "help"],
-  },
   // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: the same endpoint (and journal approval) answers 422 when the posting
   // date falls in an accounting period that cannot take the entry. Nothing was posted.
   PERIOD_CLOSED: {

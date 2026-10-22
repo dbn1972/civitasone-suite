@@ -26,6 +26,15 @@ type Bill = {
 /** A bill with its PO cell resolved once, so the column, the text filter, the sort and the CSV all see the same text. */
 type BillRow = Bill & { poLabel: string; poHref: string | null };
 
+/**
+ * The human PO number, linked to the purchase order when the ref names a page; plain text (never a dead link) otherwise,
+ * and "—" when the bill has no PO. stopPropagation: the row itself is a link to the bill.
+ */
+function renderPoRef(b: BillRow) {
+  if (!b.poHref) return b.poLabel;
+  return <Link href={b.poHref} onClick={(e) => e.stopPropagation()}>{b.poLabel}</Link>;
+}
+
 export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: "api" | "error" }) {
   const t = useTranslations("expenditureBillsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Bill[]>(
@@ -56,9 +65,7 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
             label: t("colPoRef"),
             // The human PO number, linked to the purchase order when the ref names a page; plain text (never a dead
             // link) otherwise, and "—" when the bill has no PO. stopPropagation: the row itself is a link to the bill.
-            render: (b) => (b.poHref
-              ? <Link href={b.poHref} onClick={(e) => e.stopPropagation()}>{b.poLabel}</Link>
-              : b.poLabel),
+            render: (b) => renderPoRef(b),
           },
           { key: "amount", label: t("colAmount"), align: "right", cellType: "amount" },
           { key: "submittedDate", label: t("colSubmitted"), render: (b) => formatIndianDate(b.submittedDate) },

@@ -61,7 +61,7 @@ describe("BillPassPayActions", () => {
     expect(screen.getByRole("link", { name: "Release payment" })).toHaveAttribute("href", "/finance/payments/new?billId=b1");
   });
   it("hides the release link when canRelease is false (the officer created or passed the bill)", () => {
-    render(<ToastProvider><BillPassPayActions id="b1" status="passed" threeWayMatch="matched" canRelease={false} /></ToastProvider>);
+    renderActions("passed", "matched", { canRelease: false });
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
   });
   it("offers no release link while the bill is not yet passed", () => {

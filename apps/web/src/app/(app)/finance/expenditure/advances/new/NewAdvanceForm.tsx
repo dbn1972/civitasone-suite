@@ -37,7 +37,7 @@ export function NewAdvanceForm({ canPickEmployees }: { canPickEmployees: boolean
   // An officer advance picks the employee only when the viewer's role may search the employee lookup; otherwise (e.g.
   // finance_admin) the officer's name is typed, exactly as before, and no employee id is stored.
   const picksPayee = form.type === "vendor" || (form.type === "employee" && canPickEmployees);
-  // id -> name of every vendor the picker has shown, so choosing one can set the display name sent with the advance.
+  // Name of every vendor the picker has shown, by id, so choosing one can set the display name sent with the advance.
   const vendorLabels = useRef(new Map<string, string>());
   const searchVendors = useCallback(
     (q: string, signal: AbortSignal) =>

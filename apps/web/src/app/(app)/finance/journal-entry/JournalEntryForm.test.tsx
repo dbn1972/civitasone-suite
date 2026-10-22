@@ -402,7 +402,7 @@ describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () =>
 
   it("a duplicate voucher number from the server shows under the input, keeps the form, focuses the field and does not redirect", async () => {
     await submitAndConfirm(
-      json(409, { code: "DUPLICATE_VOUCHER_NO", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." }] }),
+      json(409, { code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." }] }),
       { redirectTo: "/finance/accounting/general-ledger" },
     );
     const input = screen.getByLabelText("Voucher Number", { selector: "input" });

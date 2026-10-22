@@ -88,7 +88,7 @@ const approve = (id: string, sub: string) => withApp((app) => app.inject({
 const pay = (id: string, sub: string) => withApp((app) => app.inject({
   method: "POST", url: "/v1/finance/payments/eft",
   headers: { authorization: `Bearer ${token(sub, ["finance_officer"])}`, "content-type": "application/json" },
-  payload: { billId: id, ddoCode: "DDO123", mode: "NEFT", amountMinor: "500000" },
+  payload: { billId: id, ddoCode: "DDO123", mode: "NEFT", amountMinor: "500000", reason: "Release payment for the passed bill" },
 }));
 
 describe("PATCH /v1/finance/bills/:id/approve -- the maker cannot pass their own bill", () => {
