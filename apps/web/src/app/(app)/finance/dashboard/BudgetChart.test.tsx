@@ -148,7 +148,7 @@ describe("BudgetChart category breakdown (supplied by the service)", () => {
     // total spend Rs 10,000 (1000000 paise): the old fabricated shares would have shown 3,500 / 2,500 / 2,000 / 1,200 / 800
     render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={BREAKDOWN} />);
     for (const fabricated of ["₹3,500.00", "₹2,500.00", "₹2,000.00", "₹1,200.00", "₹800.00"]) {
-      expect(screen.queryByText(new RegExp(fabricated.replace(/[.₹]/g, "\\$&")))).not.toBeInTheDocument();
+      expect(screen.queryByText(fabricated, { exact: false })).not.toBeInTheDocument();
     }
     for (const invented of ["Infra", "Programs", "Other"]) expect(screen.queryByText(invented)).not.toBeInTheDocument();
   });
