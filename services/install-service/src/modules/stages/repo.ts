@@ -61,7 +61,10 @@ export async function findRowTx(tx: Writer, id: string, tenantId: string): Promi
     .select()
     .from(stages)
     .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId)))
-    .limit(1);
+    .limit(1)
+    // Row lock: serialises concurrent transitions (Run vs Skip) so the status we validate is the
+    // status we write over. The loser blocks until the winner commits, then re-reads the new status.
+    .for("update");
   return rows[0] ?? null;
 }
 
@@ -76,7 +79,8 @@ export async function updateLifecycle(
   await tx
     .update(stages)
     .set({ ...patch, updatedAt: new Date(), updatedBy: actorId, version: version + 1 })
-    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId)));
+    // Optimistic guard on top of the row lock: never overwrite a row whose version moved.
+    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId), eq(stages.version, version)));
 }
 
 export { toView };

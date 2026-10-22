@@ -40,33 +40,41 @@ export function registerStageConsumers(rawQueue: Queue): void {
 
   // install.stage.transition — run / skip / retry on a stage (PATCH /v1/install/steps/:id/:verb).
   queue.subscribe<StageTransitionPayload>(COMMANDS.transitionStage, async (msg) => {
-    const { id, verb } = msg.payload;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      const row = await repo.findRowTx(tx, id, msg.tenantId);
-      if (!row) return;
-      // Re-validate inside the transaction: the route's check can be stale by the time we run.
-      const next = nextStageStatus(verb, row.status);
-      if (!next) return;
-      const now = new Date();
-      await repo.updateLifecycle(tx, id, msg.tenantId, msg.actorId, row.version, {
-        status: next,
-        // run/retry (re)start the step and clear any previous failure; skip closes it.
-        startedAt: next === "in_progress" ? now : row.startedAt,
-        completedAt: next === "skipped" ? now : null,
-        errorMessage: null,
-      });
-      await enqueue(tx as Parameters<typeof enqueue>[0], {
-        topic: AUDIT_TOPIC,
-        eventType: AUDIT_TOPIC,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: { service: "install", action: `step_${verb}`, resourceType: "stage", resourceId: id, outcome: "success" },
-      });
-    });
+    const { id } = msg.payload;
+    await db.transaction((tx) => applyStageTransition(tx, msg));
     await cache.invalidate(keyFor(msg.tenantId, id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+}
+
+/**
+ * Apply one run/skip/retry command inside the caller's transaction. The row is read FOR UPDATE, so a
+ * concurrent transition on the same step waits and then validates against the committed status.
+ */
+export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<StageTransitionPayload>): Promise<void> {
+  const { id, verb } = msg.payload;
+  const t = tx as Parameters<typeof repo.findRowTx>[0];
+  if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
+  const row = await repo.findRowTx(t, id, msg.tenantId);
+  if (!row) return;
+  // Re-validate inside the transaction (on the locked row): the route's check can be stale by now.
+  const next = nextStageStatus(verb, row.status);
+  if (!next) return;
+  const now = new Date();
+  await repo.updateLifecycle(t, id, msg.tenantId, msg.actorId, row.version, {
+    status: next,
+    // run/retry (re)start the step and clear any previous failure; skip closes it.
+    startedAt: next === "in_progress" ? now : row.startedAt,
+    completedAt: next === "skipped" ? now : null,
+    errorMessage: null,
+  });
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC,
+    eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId,
+    actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: { service: "install", action: `step_${verb}`, resourceType: "stage", resourceId: id, outcome: "success" },
   });
 }
 
