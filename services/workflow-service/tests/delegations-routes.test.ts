@@ -48,6 +48,7 @@ describe("POST /v1/workflow/delegations", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: {
         delegateId,
+        roles: ["workflow_user"],
         fromDate: "2025-01-01",
         toDate: "2025-12-31",
         reason: "on leave",
@@ -80,6 +81,7 @@ describe("POST /v1/workflow/delegations", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: {
         delegateId,
+        roles: ["workflow_user"],
         fromDate: "2025-06-01",
       },
     });
@@ -105,6 +107,7 @@ describe("POST /v1/workflow/delegations", () => {
       headers: { authorization: `Bearer ${makeToken()}` },
       payload: {
         delegateId: randomUUID(),
+        roles: ["workflow_user"],
         fromDate: "not-a-date",
       },
     });
@@ -120,6 +123,7 @@ describe("POST /v1/workflow/delegations", () => {
       headers: { authorization: `Bearer ${makeToken(["citizen"])}` },
       payload: {
         delegateId: randomUUID(),
+        roles: ["workflow_user"],
         fromDate: "2025-01-01",
       },
     });
@@ -153,7 +157,7 @@ describe("GET /v1/workflow/delegations", () => {
         method: "POST",
         url: "/v1/workflow/delegations",
         headers: { authorization: `Bearer ${makeToken()}` },
-        payload: { delegateId, fromDate: "2025-01-01" },
+        payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01" },
       });
       expect(created.statusCode).toBe(202);
     }
@@ -181,7 +185,7 @@ describe("DELETE /v1/workflow/delegations/:id", () => {
       method: "POST",
       url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { delegateId, fromDate: "2025-01-01" },
+      payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01" },
     });
     expect(createRes.statusCode).toBe(202);
     const created = await waitFor(async () => {

@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { READ_ROLES } from "../../shared/roles.js";
+import { READ_ROLES, canAccessOwned } from "../../shared/roles.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as guardrailsRepo from "../guardrails/repo.js";
@@ -55,7 +55,7 @@ export async function chatSessionRoutes(app: FastifyInstance): Promise<void> {
     if (roleError) throw new HttpError(422, "ROLE_INVALID", roleError);
 
     const session = await repo.findById(id, ctx.tenantId);
-    if (!session) throw new HttpError(404, "NOT_FOUND", "chat session not found");
+    if (!session || !canAccessOwned(ctx, session.createdBy)) throw new HttpError(404, "NOT_FOUND", "chat session not found");
     if (session.status !== "active") throw new HttpError(422, "SESSION_ENDED", "chat session is not active");
 
     const injection = detectInjection(body.message);
@@ -119,7 +119,7 @@ export async function chatSessionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const q = transcriptQuery.parse(req.query);
     const session = await repo.findById(id, ctx.tenantId);
-    if (!session) throw new HttpError(404, "NOT_FOUND", "chat session not found");
+    if (!session || !canAccessOwned(ctx, session.createdBy)) throw new HttpError(404, "NOT_FOUND", "chat session not found");
     const { rows, total } = await repo.listMessages(id, ctx.tenantId, q.limit, q.offset);
     const page = Math.floor(q.offset / q.limit) + 1;
     return reply.send({

@@ -52,6 +52,13 @@ export async function completeTask(
   // a SoD conflict and is blocked).
   const activeDelegations = await delegationRepo.activeForDelegate(ctx.tenantId, ctx.actorId, today());
   const delegatorIds = new Set(activeDelegations.map((d) => d.delegatorId));
+  // Only delegations that explicitly convey THIS task's roleRef may stand in for
+  // the role (the creator was verified to hold it when the delegation was made).
+  // A task with no roleRef is unrestricted, so every active delegation counts.
+  const roleDelegations = existing.roleRef
+    ? delegationRepo.delegationsCoverRole(activeDelegations, existing.roleRef)
+    : activeDelegations;
+  const roleDelegatorIds = new Set(roleDelegations.map((d) => d.delegatorId));
 
   // C1 — role-on-task authorization. The broad requireRole() gate at the route
   // only proves the actor holds *some* workflow role; it never checks the
@@ -60,10 +67,11 @@ export async function completeTask(
   // (the route's permission if-chain leaves estab_file/asset_disposal/etc with
   // no gate at all). Rule: unless super_admin (break-glass), the actor must
   // hold the task's roleRef. A task with no roleRef is unrestricted.
-  // A delegate holding an active delegation may act on behalf of the
-  // delegator's role, so the presence of any active delegation satisfies the
-  // role gate (the delegator is presumed to hold the task's role).
-  const hasActiveDelegation = activeDelegations.length > 0;
+  // A delegate may pass the gate ONLY via an active delegation naming them that
+  // explicitly conveys this roleRef (the delegator was verified to hold it when
+  // the delegation was created). A delegation for some other role, or a legacy
+  // delegation with no role scope, never satisfies it.
+  const hasActiveDelegation = roleDelegations.length > 0;
   if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef) && !hasActiveDelegation) {
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
   }
@@ -79,7 +87,7 @@ export async function completeTask(
     !isAdminOverride &&
     existing.assigneeId &&
     existing.assigneeId !== ctx.actorId &&
-    !delegatorIds.has(existing.assigneeId)
+    !roleDelegatorIds.has(existing.assigneeId)
   ) {
     throw new HttpError(403, "NOT_ASSIGNEE", "this task is assigned to another user");
   }
@@ -191,7 +199,10 @@ export async function claimTask(ctx: RequestContext, taskId: string): Promise<Ta
 
   const isSuperAdmin = ctx.roles.includes("super_admin");
   const activeDelegations = await delegationRepo.activeForDelegate(ctx.tenantId, ctx.actorId, today());
-  const hasActiveDelegation = activeDelegations.length > 0;
+  // Same scoped rule as completeTask: the delegation must convey this roleRef.
+  const hasActiveDelegation = existing.roleRef
+    ? delegationRepo.delegationsCoverRole(activeDelegations, existing.roleRef).length > 0
+    : activeDelegations.length > 0;
   if (!isSuperAdmin && existing.roleRef && !ctx.roles.includes(existing.roleRef) && !hasActiveDelegation) {
     throw new HttpError(403, "ROLE_NOT_AUTHORIZED", `this task requires role '${existing.roleRef}'`);
   }

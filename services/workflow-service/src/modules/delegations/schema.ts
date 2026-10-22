@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, date, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, date, boolean, timestamp, text } from "drizzle-orm/pg-core";
 
 export const domainSchema = pgSchema("workflow");
 
@@ -15,6 +15,12 @@ export const delegations = domainSchema.table("workflow_delegations", {
   fromDate: date("from_date").notNull(),
   toDate: date("to_date"),
   reason: varchar("reason", { length: 256 }),
+  /**
+   * Roles this delegation conveys. A delegation satisfies a task's roleRef gate
+   * only if roleRef is listed here; the creator held every listed role at
+   * creation time (checked against their token roles). Empty = conveys nothing.
+   */
+  roles: text("roles").array().notNull().default([]),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -30,6 +36,7 @@ export type DelegationView = {
   fromDate: string;
   toDate: string | null;
   reason: string | null;
+  roles: string[];
   isActive: boolean;
   createdAt: string;
 };

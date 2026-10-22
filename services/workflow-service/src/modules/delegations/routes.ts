@@ -14,13 +14,27 @@ export async function delegationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const body = z.object({
       delegateId: z.string().uuid(),
+      // Roles conveyed to the delegate. Required: a delegation with no role scope
+      // would satisfy nothing, and the delegator must hold every role listed.
+      roles: z.array(z.string().min(1).max(64)).min(1).max(20),
       fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       reason: z.string().max(256).optional(),
     }).parse(req.body);
 
+    // Privilege-escalation guard: you cannot delegate a role you do not hold.
+    // Checked against the creator's token roles; without it two plain users
+    // could mint a delegation that lets one complete the other's role-gated task.
+    const roles = [...new Set(body.roles)];
+    const unheld = roles.filter((r) => !ctx.roles.includes(r));
+    if (unheld.length > 0) {
+      throw new HttpError(403, "DELEGATION_ROLE_NOT_HELD",
+        `you cannot delegate role(s) you do not hold: ${unheld.join(", ")}`);
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDelegation(ctx, {
       delegateId: body.delegateId,
+      roles,
       fromDate: body.fromDate,
       ...(body.toDate !== undefined ? { toDate: body.toDate } : {}),
       ...(body.reason !== undefined ? { reason: body.reason } : {}),

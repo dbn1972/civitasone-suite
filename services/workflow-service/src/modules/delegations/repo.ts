@@ -17,6 +17,7 @@ export function toView(r: DelegationRow): DelegationView {
     fromDate: r.fromDate,
     toDate: r.toDate ?? null,
     reason: r.reason ?? null,
+    roles: r.roles ?? [],
     isActive: r.isActive,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
@@ -29,6 +30,7 @@ export async function create(input: {
   fromDate: string;
   toDate: string | null;
   reason: string | null;
+  roles: string[];
   id?: string;
 }, outer?: Tx): Promise<DelegationView> {
   const rows = await withTx(outer, async (tx) => {
@@ -40,6 +42,7 @@ export async function create(input: {
       fromDate: input.fromDate,
       toDate: input.toDate,
       reason: input.reason,
+      roles: input.roles,
       isActive: true,
     }).returning();
   });
@@ -94,4 +97,13 @@ export async function activeForDelegate(
       sql`(${delegations.toDate} IS NULL OR ${delegations.toDate} >= ${onDate})`,
     )));
   return rows.map(toView);
+}
+
+/**
+ * True when at least one of the (already active, delegate-matched) delegations
+ * explicitly conveys `roleRef`. The delegator's possession of that role was
+ * validated when the delegation was created.
+ */
+export function delegationsCoverRole(delegations: readonly DelegationView[], roleRef: string): DelegationView[] {
+  return delegations.filter((d) => d.roles.includes(roleRef));
 }

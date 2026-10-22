@@ -12,12 +12,12 @@ export function registerDelegationConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.createDelegation, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; delegatorId: string; delegateId: string;
-      fromDate: string; toDate: string | null; reason: string | null;
+      fromDate: string; toDate: string | null; reason: string | null; roles?: string[];
     };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.create({ ...p, id: p.id }, tx);
+        await repo.create({ ...p, roles: p.roles ?? [], id: p.id }, tx);
         await enqueue(tx, { topic: EVENTS.delegationCreated, eventType: EVENTS.delegationCreated,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { id: p.id } });
         await enqueue(tx, { topic: AUDIT, eventType: AUDIT, tenantId: msg.tenantId, actorId: msg.actorId,
