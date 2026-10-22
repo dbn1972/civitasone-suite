@@ -1117,3 +1117,21 @@ export const ESTAB_DFA_DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_a
  * can READ acknowledgements but is NOT an approver there.
  */
 export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"];
+
+/**
+ * Roles admitted somewhere in inspection-service. Derived from the union of the
+ * `*_ROLES` constants in services/inspection-service/src/modules/**\/routes.ts
+ * (re-derive with `grep -rn "_ROLES = \[" ...` if the service changes). The
+ * service stays the authority; this gate only stops a role with no inspection
+ * permission from landing on a hub whose every call 403s.
+ */
+export const INSPECTION_ROLES = [
+  "inspector",
+  "reviewing_officer",
+  "supervising_officer",
+  "planning_officer",
+  "audit_officer",
+  "inspection_admin",
+  "tenant_admin",
+  "super_admin",
+];

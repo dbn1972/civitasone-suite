@@ -56,8 +56,11 @@ export async function listByTenant(
   tenantId: string,
   limit: number,
   offset: number,
+  assigneeId?: string,
 ): Promise<{ rows: RoutePlanRow[]; total: number }> {
-  const where = eq(routePlans.tenantId, tenantId);
+  const where = assigneeId
+    ? and(eq(routePlans.tenantId, tenantId), eq(routePlans.assigneeId, assigneeId))
+    : eq(routePlans.tenantId, tenantId);
 
   const rows = await scopedRead((tx) =>
     tx.select().from(routePlans).where(where).orderBy(desc(routePlans.routeDate)).limit(limit).offset(offset),

@@ -16695,5 +16695,15 @@
     "searching": "Searching…",
     "searchError": "Couldn’t load accounts. Please try again.",
     "unnamedAccount": "Unnamed account"
+  },
+  "inspectionReview": {
+    "submitLabel": "Submit review",
+    "confirmTitle": "Submit this inspection for review?",
+    "confirmDescription": "Choose the reviewing officer. The reviewer must not be an inspector who conducted this inspection.",
+    "reviewerLabel": "Reviewing officer",
+    "reviewerPlaceholder": "Search by name",
+    "reviewerNoResults": "No matching people",
+    "reviewerSearching": "Searching…",
+    "reviewerSearchError": "Could not search people. Please try again."
   }
 }

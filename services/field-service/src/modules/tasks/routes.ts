@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, isFieldSupervisor, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import { validateTransition, validateAssignment, type TaskStatus } from "./domain.js";
@@ -87,7 +87,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
 
     const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, {
       status: q.status,
-      assigneeId: q.assigneeId,
+      // Agents only ever see their own tasks; a client-supplied assigneeId is ignored for them.
+      assigneeId: isFieldSupervisor(ctx) ? q.assigneeId : ctx.actorId,
       dueBefore: q.dueBefore,
       dueAfter: q.dueAfter,
     });
@@ -132,7 +133,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       return row ? repo.toView(row) : null;
     });
 
-    if (!task) {
+    // Non-supervisors may only read tasks assigned to them (404, not 403: no existence oracle).
+    if (!task || (!isFieldSupervisor(ctx) && task.assigneeId !== ctx.actorId)) {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
 
