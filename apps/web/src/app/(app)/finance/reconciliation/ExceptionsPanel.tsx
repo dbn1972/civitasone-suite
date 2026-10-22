@@ -6,11 +6,11 @@ import { Button, DataTable, StatusPill, ConfirmDialog } from "@/app/_components/
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { actorLabel } from "@/lib/finance/workflowTypes";
 import {
   MAX_NOTE_LENGTH,
   MIN_NOTE_LENGTH,
   exceptionStatusVariant,
-  readableActor,
 } from "./reconHelpers";
 
 export type ExceptionStatus = "open" | "investigating" | "resolved" | "written_off";
@@ -79,8 +79,14 @@ const NOTE_REQUIRED: ReadonlySet<ExceptionAction> = new Set(["resolve", "write_o
 export function ExceptionsPanel({
   exceptions,
   canAct = true,
+  actorNames = {},
 }: {
   exceptions: ExceptionRow[];
+  /**
+   * Actor id -> display name (getFinanceActorNames), so a closed row says WHO resolved or wrote it off
+   * (GAP-FINANCE-RECONCILIATION-01). An id with no resolved name reads "User 1a2b3c4d", never a raw uuid.
+   */
+  actorNames?: Record<string, string>;
   /**
    * Whether the session may act on exceptions (GAP-FINANCE-RECONCILIATION-03).
    * False renders the table read-only with no action buttons. Defaults to true
@@ -201,7 +207,7 @@ export function ExceptionsPanel({
       label: "Status",
       render: (row: ExceptionRow) => {
         const closed = row.status === "resolved" || row.status === "written_off";
-        const by = readableActor(row.resolvedBy);
+        const by = row.resolvedBy ? actorLabel(row.resolvedBy, actorNames) : null;
         return (
           <div>
             <StatusPill status={row.status} variant={exceptionStatusVariant(row.status)} />

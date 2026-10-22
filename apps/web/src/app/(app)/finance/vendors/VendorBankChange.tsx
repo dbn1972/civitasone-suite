@@ -107,7 +107,11 @@ export function VendorBankChange({
                   confirmTitle={t("approveTitle", { name: vendorName })}
                   confirmDescription={t("approveDescription")}
                   confirmLabel={t("approveConfirm")}
-                  onConfirm={() => call(`v1/finance/vendors/${vendorId}/bank-change/${pending.id}/approve`, {})}
+                  requireReason
+                  reasonLabel={t("approveReasonLabel")}
+                  minReasonLength={5}
+                  maxReasonLength={500}
+                  onConfirm={(reason) => call(`v1/finance/vendors/${vendorId}/bank-change/${pending.id}/approve`, { reason })}
                   onSuccess={() => { setNote(t("approved")); settle(); }}
                 />
                 <ActionButton

@@ -12,6 +12,13 @@ function render(ui: React.ReactElement) {
   return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 
+/** The approve dialog needs a reason (GAP-FINANCE-VENDORS-DETAIL-04) before Confirm enables. */
+async function confirmApprove(reason = "PAN and GSTIN verified") {
+  const confirm = await screen.findByRole("button", { name: "Approve" });
+  fireEvent.change(screen.getByLabelText("Reason for approving (what you checked)"), { target: { value: reason } });
+  fireEvent.click(confirm);
+}
+
 describe("VendorApprovalActions (GAP-FINANCE-VENDORS-01)", () => {
   beforeEach(() => { vi.restoreAllMocks(); refreshMock.mockReset(); });
 
@@ -20,14 +27,18 @@ describe("VendorApprovalActions (GAP-FINANCE-VENDORS-01)", () => {
     render(<VendorApprovalActions id="v1" name="Acme" createdByMe={false} version={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve vendor" }));
     expect(fetchMock).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    // GAP-FINANCE-VENDORS-DETAIL-04: approving states a reason; Confirm stays disabled without one.
+    const confirm = await screen.findByRole("button", { name: "Approve" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason for approving (what you checked)"), { target: { value: "PAN and GSTIN verified" } });
+    fireEvent.click(confirm);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("/api/proxy/v1/finance/vendors/v1/approve");
     expect(init.method).toBe("POST");
     expect((init.headers as Record<string, string>)["x-idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
     // bound to the vendor version the checker reviewed
-    expect(JSON.parse(init.body as string)).toEqual({ version: 3 });
+    expect(JSON.parse(init.body as string)).toEqual({ version: 3, reason: "PAN and GSTIN verified" });
     // a 202 only means "queued": the note says submitted, never that the vendor IS approved
     const note = await screen.findByRole("status");
     expect(note).toHaveTextContent(/submitted/i);
@@ -60,7 +71,7 @@ describe("VendorApprovalActions (GAP-FINANCE-VENDORS-01)", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER_VIOLATION", message: "x" }), { status: 409 }));
     render(<VendorApprovalActions id="v1" name="Acme" createdByMe={false} version={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve vendor" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await confirmApprove();
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/cannot also approve/i);
     expect(alert.textContent).not.toMatch(/MAKER_CHECKER|409/);
@@ -71,7 +82,7 @@ describe("VendorApprovalActions (GAP-FINANCE-VENDORS-01)", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "VERSION_CONFLICT", message: "x" }), { status: 409 }));
     render(<VendorApprovalActions id="v1" name="Acme" createdByMe={false} version={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve vendor" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await confirmApprove();
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/someone else changed this record/i);
     expect(refreshMock).not.toHaveBeenCalled();
@@ -81,7 +92,7 @@ describe("VendorApprovalActions (GAP-FINANCE-VENDORS-01)", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { status: "accepted" } }), { status: 202 }));
     render(<VendorApprovalActions id="v1" name="Acme" createdByMe={false} version={3} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve vendor" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    await confirmApprove();
     // immediately, then again after the first settle delay (the queued decision lands in between)
     await waitFor(() => expect(refreshMock.mock.calls.length).toBeGreaterThanOrEqual(2), { timeout: 3000 });
   });

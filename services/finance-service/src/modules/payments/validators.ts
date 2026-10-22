@@ -49,6 +49,13 @@ export const approveBillBody = z.object({
 });
 export type ApproveBillBody = z.infer<typeof approveBillBody>;
 
+/** GET /v1/finance/actors?ids=<uuid,uuid,...>: non-UUID entries are dropped, at most 50 are looked up. */
+export const actorsQuery = z.object({
+  ids: z.string().max(5000).optional().transform((raw) =>
+    [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter((s) => z.string().uuid().safeParse(s).success))].slice(0, 50),
+  ),
+});
+
 export const initiateEftBody = z.object({
   billId:      z.string().uuid(),
   ddoCode:     ddoCodeField,
@@ -66,6 +73,10 @@ export const initiateEftBody = z.object({
   currency:    z.string().length(3).default("INR"),
   eftRef:      z.string().optional(),
   bankAccountId: z.string().uuid().optional(),
+  // GAP-FINANCE-PAYMENTS-01: releasing public money is an authorising act, so the
+  // officer states why. It is carried into the payment's audit event (with the
+  // amount) so the trail answers "who paid how much, and on what authority".
+  reason:      z.string().trim().min(10, "Give the reason for this payment (at least 10 characters)").max(500),
 });
 export type InitiateEftBody = z.infer<typeof initiateEftBody>;
 
@@ -82,6 +93,10 @@ export const createAdvanceBody = z.object({
   // Required: the beneficiary column is NOT NULL and must never be back-filled
   // from the free-text purpose (which can name a person; DPDP masking).
   payee:       z.string().trim().min(1).max(200),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: id of the payee picked from a master list (employee id, or a finance vendor
+  // id). Optional so existing callers keep working; not allowed for type "other" (no master record), and for a vendor
+  // it must be an active vendor of this tenant -- see POST /v1/finance/advances.
+  payeeId:     z.string().uuid().optional(),
   type:        z.enum(["employee", "vendor", "other"]).default("employee"),
   amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),
@@ -97,6 +112,10 @@ export const createUCBody = z.object({
   ucNo:        z.string().min(1).max(64),
   purpose:     z.string().min(1).max(500),
   scheme:      z.string().max(200).optional(),
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: the Scheme Tracking code the certificate is raised against
+  // (unique per tenant). Validated against the tenant's schemes by the route and again by the consumer. `scheme` above is
+  // the older free-text field, still accepted from existing clients.
+  schemeCode:  z.string().trim().min(1).max(64).optional(),
   // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02: the body that utilised the grant.
   grantee:     z.string().trim().min(2, "Name the grantee").max(200),
   grantRef:    z.string().max(200).optional(),

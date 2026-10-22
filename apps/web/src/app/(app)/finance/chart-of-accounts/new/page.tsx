@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Alert, Button, PageHeader, Card, ConfirmDialog, Term } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -25,7 +26,52 @@ type AccountRow = {
   hoaCode?: string | null;
   /** 0 = major, 1 = minor, 2 = sub-minor */
   level?: number;
+  /** The head one level up that this head sits under (null/absent for a major head). */
+  parentId?: string | null;
 };
+
+/**
+ * Debounced server-side head search (GET /v1/finance/accounts?q=, bounded to 50). `results` is null while the query is
+ * blank (callers fall back to the loaded list) AND when the search itself failed; `failed` is true only for a failed
+ * search (non-2xx or a network error), so callers can say "could not search" instead of the "no match" they say for a
+ * genuine empty result. A failed search never yields [] -- an empty list always means the server found nothing.
+ */
+function useHeadSearch(query: string): { results: AccountRow[] | null; searching: boolean; failed: boolean } {
+  const [results, setResults] = useState<AccountRow[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    const q = query.trim();
+    setFailed(false);
+    if (q === "") { setResults(null); setSearching(false); return; }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/finance/accounts?q=${encodeURIComponent(q)}&limit=50`, { headers: { accept: "application/json" }, signal: controller.signal });
+        if (!res.ok) { if (!controller.signal.aborted) { setResults(null); setFailed(true); } return; }
+        const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
+        if (controller.signal.aborted) return; // a newer query owns the state now
+        setResults(Array.isArray(json) ? json : json.data ?? []);
+      } catch (err) {
+        if (controller.signal.aborted || (err instanceof Error && err.name === "AbortError")) return;
+        setResults(null);
+        setFailed(true);
+      } finally {
+        if (!controller.signal.aborted) setSearching(false);
+      }
+    }, 300);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [query]);
+  return { results, searching, failed };
+}
+
+/** Shown under a head search box when the search request itself failed: announced, and distinct from "no match". */
+function SearchFailed({ text }: { text: string }) {
+  return <span role="alert" style={{ color: "var(--bad)" }}>{text}</span>;
+}
+
+const LEVEL_KEYS = ["levelMajor", "levelMinor", "levelSub"] as const;
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -60,6 +106,8 @@ const LEVEL_OPTIONS = [
 const CLASSIFICATION_OPTIONS = ["", "asset", "liability", "equity", "income", "expense"] as const;
 
 export default function MapHeadOfAccountPage() {
+  const t = useTranslations("financeChartOfAccountsNew");
+  const tLevel = useTranslations("financeChartOfAccounts");
   const router = useRouter();
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loadError, setLoadError] = useState("");
@@ -67,8 +115,7 @@ export default function MapHeadOfAccountPage() {
   // "Find a head" box queries the server so a head beyond the cap is reachable.
   const [truncated, setTruncated] = useState(false);
   const [headSearch, setHeadSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<AccountRow[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  const { results: searchResults, searching, failed: searchFailed } = useHeadSearch(headSearch);
   const loadFormError = useFormError("accounts");
 
   const loadAccounts = useCallback(async (signal?: AbortSignal) => {
@@ -110,11 +157,36 @@ export default function MapHeadOfAccountPage() {
   // parent (a head exactly one level above it).
   const [parentId, setParentId] = useState("");
   const levelNum = Number(level);
-  const parentOptions = accounts.filter((a) => a.level === levelNum - 1);
+  // The parent list is the loaded heads, or the server's search results when the officer searches (so a chart larger
+  // than HEAD_LIST_LIMIT still has every possible parent reachable). Only heads exactly one level up qualify, and the
+  // parent already chosen stays selectable even if a later search no longer returns it.
+  const [parentSearch, setParentSearch] = useState("");
+  const parentSearchState = useHeadSearch(parentSearch);
+  const allKnownHeads = new Map<string, AccountRow>();
+  for (const a of [...accounts, ...(parentSearchState.results ?? []), ...(searchResults ?? [])]) allKnownHeads.set(a.id, a);
+  const parentPool = (parentSearchState.results ?? accounts).filter((a) => a.level === levelNum - 1);
+  const chosenParent = parentId ? allKnownHeads.get(parentId) : undefined;
+  const parentOptions = chosenParent && !parentPool.some((a) => a.id === chosenParent.id) ? [chosenParent, ...parentPool] : parentPool;
   const [createBusy, setCreateBusy] = useState(false);
   const [createMessage, setCreateMessage] = useState("");
   const [createIsError, setCreateIsError] = useState(false);
   const createFormError = useFormError("head of account");
+
+  /** "Major head 2110 (Creditors) › Minor head 2110-01 (Trade) › Sub-minor head 2110-01-01 (New)"; an ancestor that is not loaded is shown as "…". */
+  function createdPath(newCode: string, newName: string, newLevel: number, directParentId: string): string {
+    const segment = (lvl: number, c: string, n?: string) => `${tLevel(LEVEL_KEYS[lvl] ?? "levelSub")} ${c}${n ? ` (${n})` : ""}`;
+    const chain: string[] = [segment(newLevel, newCode, newName)];
+    const seen = new Set<string>();
+    let cursor: string | null | undefined = directParentId;
+    for (let lvl = newLevel - 1; lvl >= 0; lvl -= 1) {
+      const head: AccountRow | undefined = cursor && !seen.has(cursor) ? allKnownHeads.get(cursor) : undefined;
+      if (!head) { chain.unshift("…"); break; }
+      seen.add(head.id);
+      chain.unshift(segment(lvl, head.code ?? head.id, head.name));
+      cursor = head.parentId;
+    }
+    return chain.join(" › ");
+  }
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -145,13 +217,15 @@ export default function MapHeadOfAccountPage() {
         setCreateMessage((await createFormError.fromResponse(res, "save")).message);
         return;
       }
-      const parentHead = accounts.find((a) => a.id === parentId);
+      // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: say where the new head sits, the whole way up
+      // (Major head 2110 (Creditors) › Minor head 2110-01 (Trade) › Sub-minor head ...), from the heads on screen.
       setCreateMessage(
-        parentHead
-          ? `Head of account "${code}" created under ${parentHead.code ?? parentHead.id} (${parentHead.name ?? ""}).`
-          : `Head of account "${code}" created.`,
+        levelNum === 0
+          ? t("createdMajor", { code })
+          : t("createdPath", { code, path: createdPath(code, name, levelNum, parentId) }),
       );
       setParentId("");
+      setParentSearch("");
       setCode("");
       setName("");
       setLevel("0");
@@ -183,27 +257,7 @@ export default function MapHeadOfAccountPage() {
   const mapOptions = selectedHead && !baseOptions.some((a) => a.id === selectedHead.id) ? [selectedHead, ...baseOptions] : baseOptions;
   const currentHoa = selectedHead?.hoaCode ? selectedHead.hoaCode : null;
 
-  // NEW-04: debounced server-side head search for the map card.
-  useEffect(() => {
-    const q = headSearch.trim();
-    if (q === "") { setSearchResults(null); setSearching(false); return; }
-    const controller = new AbortController();
-    setSearching(true);
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/proxy/v1/finance/accounts?q=${encodeURIComponent(q)}&limit=50`, { headers: { accept: "application/json" }, signal: controller.signal });
-        if (!res.ok) { setSearchResults([]); return; }
-        const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
-        setSearchResults(Array.isArray(json) ? json : json.data ?? []);
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setSearchResults([]);
-      } finally {
-        if (!controller.signal.aborted) setSearching(false);
-      }
-    }, 300);
-    return () => { clearTimeout(t); controller.abort(); };
-  }, [headSearch]);
+  // NEW-04: the map card's debounced server-side head search is useHeadSearch(headSearch) above.
 
   // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: submitting only opens the confirm
   // dialog (old -> new code + mandatory reason); the PATCH happens on confirm.
@@ -293,6 +347,28 @@ export default function MapHeadOfAccountPage() {
             </div>
             {levelNum > 0 ? (
               <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                <label className="l" htmlFor="new-parent-search">{t("parentSearchLabel")}</label>
+                <input
+                  id="new-parent-search"
+                  type="search"
+                  value={parentSearch}
+                  disabled={!!loadError}
+                  onChange={(e) => setParentSearch(e.target.value)}
+                  style={inputStyle}
+                  placeholder={t("parentSearchPlaceholder")}
+                  aria-describedby="new-parent-search-help"
+                />
+                <span id="new-parent-search-help" className="sub" style={{ fontSize: 12 }}>
+                  {parentSearchState.searching
+                    ? t("searching")
+                    : parentSearchState.failed
+                      ? <SearchFailed text={t("searchFailed")} />
+                      : parentSearch.trim() !== "" && parentPool.length === 0 // ux-001-ok: only a SUCCESSFUL search that matched nothing; a failed search is searchFailed above, a failed load is the loadError banner
+                        ? t("parentNoMatch")
+                        : truncated && parentSearch.trim() === ""
+                          ? t("parentTruncated", { limit: HEAD_LIST_LIMIT })
+                          : " "}
+                </span>
                 <label className="l" htmlFor="new-parent">Parent head</label>
                 <select id="new-parent" required value={parentId} onChange={(e) => setParentId(e.target.value)} style={inputStyle}>
                   <option value="" disabled>Select a parent head…</option>
@@ -360,11 +436,13 @@ export default function MapHeadOfAccountPage() {
                   ? "Heads could not be loaded. Use Retry above."
                   : searching
                     ? "Searching…"
-                    : truncated && headSearch.trim() === ""
-                      ? `Showing the first ${HEAD_LIST_LIMIT} heads. Search by code or name to find any other head.`
-                      : headSearch.trim() !== "" && searchResults?.length === 0 // ux-001-ok: a search that returns no match is a genuine "no match"; load failures are reported by the loadError banner
-                        ? "No head matches that search."
-                        : " "}
+                    : searchFailed
+                      ? <SearchFailed text={t("searchFailed")} />
+                      : truncated && headSearch.trim() === ""
+                        ? `Showing the first ${HEAD_LIST_LIMIT} heads. Search by code or name to find any other head.`
+                        : headSearch.trim() !== "" && searchResults?.length === 0 // ux-001-ok: only a SUCCESSFUL search that matched nothing; a failed search is searchFailed above, load failures are reported by the loadError banner
+                          ? "No head matches that search."
+                          : " "}
               </span>
               <label className="l" htmlFor="hoa-account">Head of account</label>
               <select id="hoa-account" required disabled={!!loadError} value={accountId} onChange={(e) => setAccountId(e.target.value)} style={inputStyle}>

@@ -98,6 +98,23 @@ export interface InitiatePaymentRequest {
   currency: "INR";
 }
 
+/** finance-service's initiateEftBody requires a 10..500 character reason (it is written to the payment's audit event). */
+export const PAYMENT_REASON_MIN = 10;
+export const PAYMENT_REASON_MAX = 500;
+
+/**
+ * GAP-FINANCE-PAYMENTS-01: add the officer's stated reason (typed in the confirm
+ * dialog) to an already-validated initiate body. Rejects what the server would 400.
+ */
+export function attachPaymentReason(
+  body: InitiatePaymentRequest,
+  reason: string | undefined,
+): { ok: true; body: InitiatePaymentRequest & { reason: string } } | { ok: false; error: "reasonRequired" } {
+  const trimmed = (reason ?? "").trim();
+  if (trimmed.length < PAYMENT_REASON_MIN || trimmed.length > PAYMENT_REASON_MAX) return { ok: false, error: "reasonRequired" };
+  return { ok: true, body: { ...body, reason: trimmed } };
+}
+
 export function buildInitiatePaymentRequest(
   input: PaymentFormInput,
 ): { ok: true; body: InitiatePaymentRequest } | { ok: false; errors: FieldErrors<keyof PaymentFormInput> } {

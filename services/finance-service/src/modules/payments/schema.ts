@@ -18,6 +18,9 @@ export const financeBills = paymentsSchema.table("finance_bills", {
   deductions:  jsonb("deductions").$type<Deduction[]>().notNull().default([]),
   netMinor:    bigint("net_minor", { mode: "bigint" }).notNull().default(0n),
   poRef:       text("po_ref"),
+  // GAP-FINANCE-EXPENDITURE-BILLS-06 (migration 0153): the human PO number procurement sent on grn.accepted, snapshotted
+  // for display only (po_ref stays the authoritative link). NULL for hand-lodged and older bills.
+  poNumber:    text("po_number"),
   grnRef:      text("grn_ref"),
   poAmountMinor:  bigint("po_amount_minor", { mode: "bigint" }),   // R5: authoritative PO value snapshot (paise)
   grnAmountMinor: bigint("grn_amount_minor", { mode: "bigint" }),  // R5: authoritative GRN accepted value snapshot (paise)
@@ -142,6 +145,11 @@ export const financeAdvances = paymentsSchema.table("finance_advances", {
   tenantId:       uuid("tenant_id").notNull(),
   advanceNo:      text("advance_no").notNull(),
   beneficiary:    text("beneficiary").notNull(),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03 (migration 0150): opaque id of the payee picked from a master list
+  // (employee id / finance_vendors.id); NULL when typed. No FK (cross-service for employees). Never returned by the list.
+  // For type=employee it is UNVERIFIED (any uuid the route accepted, not checked against the employee master or the
+  // tenant): a consumer that acts on it (e.g. payroll recovery) must resolve it and tenant-check it first.
+  payeeId:        uuid("payee_id"),
   type:           varchar("type", { length: 16 }).notNull().default("employee"),
   amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),
@@ -165,6 +173,9 @@ export const financeUC = paymentsSchema.table("finance_uc", {
   tenantId:      uuid("tenant_id").notNull(),
   ucNo:          text("uc_no").notNull(),
   grantRef:      text("grant_ref"),
+  // Migration 0154: the Scheme Tracking code (budget.finance_schemes.code) this certificate was raised against.
+  // NULL for older certificates and for tenants with no schemes.
+  schemeCode:    text("scheme_code"),
   grantee:       text("grantee").notNull(),
   amountMinor:   bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:      char("currency", { length: 3 }).notNull().default("INR"),

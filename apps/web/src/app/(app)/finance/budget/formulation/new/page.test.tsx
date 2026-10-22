@@ -368,3 +368,41 @@ describe("NewBudgetEstimatePage -- confirm, idempotency, FY, heads list (NEW-03/
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load/i);
   });
 });
+
+// GAP-FINANCE-BUDGET-FORMULATION-05: after creating an estimate the list opens on the row's tab and announces it.
+describe("NewBudgetEstimatePage -- link to the new estimate in the list (FORMULATION-05)", () => {
+  beforeEach(() => {
+    refreshMock.mockReset();
+    pushMock.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  async function createAndGetLink(createdBody: unknown) {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/finance/accounts")) return new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 });
+      return new Response(JSON.stringify(createdBody), { status: 202 });
+    });
+    render(<NewBudgetEstimatePage />);
+    await pickHead();
+    fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText(/Financial year/i), { target: { value: "2026-27" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit estimate/i }));
+    confirmDialog();
+    const link = await screen.findByRole("link", { name: "View in Budget Formulation" });
+    return link.getAttribute("href");
+  }
+
+  const ID = "0d9a8f2e-3c1b-4a55-9e7d-6f1c2b3a4d5e";
+
+  it("links to the list for the FY with ?highlight=<the new row's id> when the 202 carries it", async () => {
+    expect(await createAndGetLink({ id: ID, status: "accepted" })).toBe(`/finance/budget/formulation?fy=2026-27&highlight=${ID}`);
+  });
+
+  it("falls back to the plain FY list when the response has no id, or an id that is not a UUID", async () => {
+    expect(await createAndGetLink({})).toBe("/finance/budget/formulation?fy=2026-27");
+  });
+
+  it("never lets a hostile id reshape the link", async () => {
+    expect(await createAndGetLink({ id: `${ID}&next=https://evil.example` })).toBe("/finance/budget/formulation?fy=2026-27");
+  });
+});

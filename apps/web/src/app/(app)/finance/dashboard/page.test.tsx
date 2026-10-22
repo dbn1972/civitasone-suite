@@ -9,7 +9,7 @@ vi.mock("@/app/_data/apiClient", async () => {
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key,
 }));
-vi.mock("./BudgetChart", () => ({ BudgetChart: () => <div>budget-chart</div> }));
+vi.mock("./BudgetChart", () => ({ BudgetChart: (p: { categoryBreakdown?: unknown }) => <div>budget-chart {p.categoryBreakdown ? `categories=${JSON.stringify(p.categoryBreakdown)}` : "no-categories"}</div> }));
 vi.mock("../_components/PrintExportButton", () => ({ PrintExportButton: ({ label }: { label?: string }) => <button>{label ?? "export"}</button> }));
 vi.mock("../_components/FyFilter", () => ({ FyFilter: () => <div>fy-filter</div> }));
 
@@ -100,7 +100,19 @@ describe("FinanceDashboardPage", () => {
   it("a healthy load still renders the chart", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
     render(await FinanceDashboardPage({}));
-    expect(screen.getByText("budget-chart")).toBeInTheDocument();
+    expect(screen.getByText(/^budget-chart/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-DASHBOARD-01: the service's category split reaches the chart; none means none.
+  it("hands the service's categoryBreakdown to the chart, and nothing when there is none", async () => {
+    const breakdown = [{ label: "Works", amountMinor: "123456" }];
+    mockFinanceLoader({ data: { ...MOCK_DASHBOARD, categoryBreakdown: breakdown }, source: "api" });
+    const { unmount } = render(await FinanceDashboardPage({}));
+    expect(screen.getByText(`budget-chart categories=${JSON.stringify(breakdown)}`)).toBeInTheDocument();
+    unmount();
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await FinanceDashboardPage({}));
+    expect(screen.getByText("budget-chart no-categories")).toBeInTheDocument();
   });
 
   // GAP-FINANCE-DASHBOARD-06

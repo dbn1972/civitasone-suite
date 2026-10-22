@@ -4,8 +4,8 @@ import { NewUCForm, type SchemeOption } from "./NewUCForm";
 /**
  * GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: the UC is linked
  * to a scheme chosen from Scheme Tracking, not typed free-hand. The endpoint
- * takes the scheme as a string (it becomes the UC's grantee), so the option
- * value is the scheme name.
+ * takes the scheme's code (`schemeCode`, unique per office) and stores it with
+ * the certificate, so the option value is the scheme code.
  */
 export default async function NewUCPage() {
   const result = await getFinanceSchemes();

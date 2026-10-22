@@ -33,9 +33,13 @@ type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeAccountNoConfi
 /** Bill statuses a payment advice can be raised against (passed for payment; "approved" is the legacy spelling). */
 const PAYABLE_BILL_STATUSES = new Set(["passed", "approved"]);
 
-/** The bills API falls back to a placeholder "Vendor (1234)" when it has no real name; never show or use that as a name. */
+/**
+ * The bills API has no real name for a vendor it cannot resolve: it sends "Unknown vendor" (current
+ * finance-service) or, from older servers, a placeholder like "Vendor (1234)". Never show or use either
+ * as a name, least of all as a payee.
+ */
 function realVendor(vendor: string): string {
-  return /^Vendor \(.{1,8}\)$/.test(vendor) || !vendor ? "" : vendor;
+  return !vendor || /^Vendor \(.{1,8}\)$/.test(vendor) || vendor.trim().toLowerCase() === "unknown vendor" ? "" : vendor;
 }
 
 interface PaymentAdviceFormProps {
@@ -61,6 +65,9 @@ export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceF
   const t = useTranslations("pfmsPaymentAdviceForm");
   const [billId, setBillId] = useState("");
   const [payeeName, setPayeeName] = useState("");
+  // The vendor name last copied from the selected bill into the payee field ("" = nothing copied). It lets a
+  // later bill choice replace a name the form itself filled in, without ever overwriting one the clerk typed.
+  const [autoPayee, setAutoPayee] = useState("");
   const [payeeAccountNo, setPayeeAccountNo] = useState("");
   const [payeeAccountNoConfirm, setPayeeAccountNoConfirm] = useState("");
   const [payeeIfsc, setPayeeIfsc] = useState("");
@@ -103,11 +110,18 @@ export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceF
   function selectBill(id: string) {
     setBillId(id);
     const bill = payableBills.find((b) => b.id === id);
+    const vendor = bill ? realVendor(bill.vendor) : "";
+    // The payee name comes from the bill's vendor (the master-data name), but only into an empty field or one
+    // this form filled itself: a name the clerk typed is never overwritten. It stays editable, and a vendor the
+    // API could not name ("Unknown vendor") fills nothing. Bank details are NOT on the bill, so the account
+    // number and IFSC are still typed (and the account re-entered) by the clerk.
+    if (payeeName.trim() === "" || payeeName === autoPayee) {
+      setPayeeName(vendor);
+      setAutoPayee(vendor);
+    }
     if (!bill) return;
-    // Only the amount is prefilled (the server requires it to equal the bill's
-    // net). The payee is NOT: the bills API returns a placeholder "Vendor (xxxx)"
-    // when it has no real name, and the payee name/account must be typed and
-    // verified by the clerk. The amount stays editable; the server re-checks it.
+    // The amount is prefilled too (the server requires it to equal the bill's net). It stays editable; the
+    // server re-checks it.
     if (/^\d+$/.test(bill.amountMinor)) setAmountMinor(bill.amountMinor);
   }
 
@@ -178,6 +192,7 @@ export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceF
       setMessage(t("successMessage", { pfmsRef: res.data.pfmsRef, status: res.data.status }));
       setBillId("");
       setPayeeName("");
+      setAutoPayee("");
       setPayeeAccountNo("");
       setPayeeAccountNoConfirm("");
       setPayeeIfsc("");
@@ -265,9 +280,12 @@ export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceF
                   maxLength={256}
                   aria-required="true"
                   aria-invalid={!!errors.payeeName || undefined}
-                  aria-describedby={errors.payeeName ? `${nameId}-error` : undefined}
+                  aria-describedby={[errors.payeeName ? `${nameId}-error` : "", autoPayee && payeeName === autoPayee ? `${nameId}-hint` : ""].filter(Boolean).join(" ") || undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
+                {autoPayee && payeeName === autoPayee && (
+                  <p id={`${nameId}-hint`} style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("payeeFromBill")}</p>
+                )}
                 {errors.payeeName && (
                   <p id={`${nameId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                     {errors.payeeName}

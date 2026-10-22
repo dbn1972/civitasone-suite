@@ -103,6 +103,42 @@ describe("EntityPicker", () => {
     expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  // GAP-FINANCE-PAYMENTS-DETAIL-02: retry without having to edit the query.
+  it("offers a retry button on a failed search (when retryText is given) that re-runs the same query", async () => {
+    const search = vi
+      .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(OPTIONS);
+    render(<Harness search={search} retryText="Try again" />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+    await screen.findByRole("alert");
+    expect(search).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls[1]?.[0]).toBe("Asha");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the retry button while the retry fails again, and shows none when retryText is omitted", async () => {
+    const search = vi.fn(async () => { throw new Error("still down"); });
+    const { unmount } = render(<Harness search={search} retryText="Try again" />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(2));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    unmount();
+
+    render(<Harness search={search} />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("clears the error and lists results once a later search succeeds", async () => {
     const search = vi
       .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
