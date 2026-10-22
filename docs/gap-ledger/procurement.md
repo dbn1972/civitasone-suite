@@ -85,7 +85,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9) (W2 procurement rescan: completed by #PRNUM)
 - **First-pass claim:** Approvals can be missed: the queue fetches /v1/workflow/tasks?status=pending&limit=50 across all modules, then filters client-side to four procurement refTypes (Panel:60, toTasks:36-41). With >50 pending tasks tenant-wide, procurement tasks past the cut-off never render and "No pending tasks" reads as all clear.
 - **Verified evidence:** ProcurementApprovalsPanel.tsx:58-61 fetches /v1/workflow/tasks?status=pending&limit=50 with no refType filter; toTasks (l.36-41) filters client-side to four refTypes. Any procurement tasks beyond the first 50 tenant-wide pending tasks are never shown, and the empty state (l.197-198) says 'No pending procurement workflow tasks'. Server-side refType filter/cursor support is unverifiable (workflow-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`
@@ -101,7 +101,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-02  ·  HIGH  ·  confirmed  ·  theme DATA-CONSISTENCY (was OTHER)
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — mapApprovals fix (return [] for empty array) done in #2037; reconciling the two approval sources (register vs workflow queue) into a single source of truth requires product decision on workflow-inbox-only vs hybrid; stats now derived from whichever source is active per W2 PQ-A note)
+- [~] **Status** (W2 procurement rescan: OWNER DECISION still open. Code side is done and tested: mapApprovals returns [] for a valid empty list, the duplicate Action Required card is replaced by distinct metrics, and the page labels the register and the workflow queue as separate sources. NOT done, on purpose: a single source of truth. OWNER QUESTION: should the stat cards and the table be derived from the workflow task queue, or should the register stay as a separate view of pending indents and draft POs? Until then the register total and the queue row count can differ, so the manual check stats total equals queue row count cannot pass.)
 - **W2 PQ-A note (#2037): workflow queue now shows Approve/Reject only for tasks the viewer role may complete (workflow-service roleRef check) and the register vs queue sources are labelled. Needs owner decision: single source of truth for stats and queue.
 - **W0 note:** partly fixed by #1866 — mapApprovals returns [] when empty (loaders.ts); Action Required card replaced by distinct metrics; two sources (approvals table vs workflow panel) still unreconciled
 - **First-pass claim:** Two unreconciled approval sources on one page: the stat cards and top table count /procurement/approvals (page.tsx:41-44) while the actionable queue reads workflow tasks; an approver can see "Pending Approvals 0" above a non-empty queue, or vice-versa. "Action Required" repeats the same number as "Pending Approvals" (page.tsx:41,44).
@@ -305,7 +305,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-BID-EVALUATION-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-ACTION (was DEADROUTE)
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — scores/L1/tie badges already correct; award/recommend action needs SoD+audit design and a backend endpoint before any UI is added; no safe interim exists beyond showing status as read-only, which is already the case)
+- [~] **Status** (W2 procurement rescan: scores 2dp right-aligned, L1 and tie badges present; tie detection now counts ranks per tender (it counted across all tenders, so every tender rank-1 bid read as tied) and an unranked bid shows a dash, tested in BidEvaluationTable.test.tsx. OWNER DECISIONS still open: (1) technical qualifying threshold and weightage marking needs the API to return them and a decision on who defines them; (2) recommend/award action needs SoD and audit design and a backend endpoint, no UI is added without one.)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified on main: scores 2dp right-aligned, L1 and tie badges present (BidEvaluationTable.tsx). Still open: technical threshold / weightage marking needs the API to return them, and the award / recommend action needs an owner decision (SoD + audit). No UI added without an API.
 - **W0 note:** partly fixed by #1866 — scores formatted 2dp right-aligned, L1 and tie badges; no threshold/weightage marking and no recommend/award action (needs API)
 - **First-pass claim:** Scores print as String(number) with no decimals, weightage or pass/fail threshold (Table:34-36); rank is a bare number with no tie or L1 cue; there is no action to recommend or award — status is read-only (Table:67-75).
@@ -3094,7 +3094,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — page says "Reference only" (#2056); loading thresholds from workflow-service depends on the single-approvals-source decision; no safe code change possible without the workflow routing config)
+- [~] **Status** (W2 procurement rescan: OWNER DECISION still open. The bands in escalationBands.ts are developer-maintained reference text (the page says Reference only). workflow-service holds per-tenant effective-dated limits (authority module) but the procurement approval chain it provisions is role nodes with no amount bands, so there is nothing to compare the rows against or to load. OWNER QUESTION: which workflow-service config is the source of truth for procurement approval bands and escalation days, and should the page show each tenant their own?)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** No source of the real thresholds exists to compare against: the bands are developer-maintained and nothing reads the workflow routing config. #2056 makes the page say 'Reference only' (not live routing). Loading them from workflow-service depends on the single-approvals-source decision. Left open.**
 - **First-pass claim:** Thresholds are hard-coded in the page (ESCALATION_ROWS, page.tsx:13-17) while real routing lives in the workflow service (page.tsx:25-28): the reference can silently drift from actual behaviour, and per-tenant delegation of powers cannot differ. Workflow service is not in the snapshot — the true thresholds are undeterminable.
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['(none; ESCALATION_ROWS hard-coded in page)', 'approval routing config']`
@@ -3106,7 +3106,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-BID-EVALUATION-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 procurement rescan: sealed-bid withholding of financialScore was already in place and tested; every read of GET /v1/procurement/bid-evaluations is now audited (audit.event.record, fail-closed, no bid content in the event) in bid-evaluation-read-audit.test.ts. OWNER DECISION still open: the read role set is procurement_officer, procurement_admin, finance_officer and super_admin and no evaluation-committee role exists. OWNER QUESTION: which role or committee membership may see bid scores, and may finance_officer?)
 - **First-pass claim:** GET /procurement/bid-evaluations is not in the snapshot (services/procurement-service absent): scoring rules, who may see financial scores before technical opening (GFR sealed-bid discipline), and audit are undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/bid-evaluations']`
 - **Question:** Financial scores must be withheld until technical evaluation is complete and opened (sealed-bid), and reads audited; role-limited to evaluation committee.
@@ -3117,7 +3117,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 procurement: closed by #2041)
+- [x] **Status** (W2 procurement: closed by #2041) (W2 procurement rescan: completed by #PRNUM)
 - **W0 note:** partly fixed by main — contract-service list is tenant-scoped, role-limited and returns poRef (full row). Remaining: web contracts page has no PO column/link.
 - **First-pass claim:** Data comes from /api/v1/contract/contracts (contract service), not /procurement — contract-to-PO linkage (poRef) and audit are undeterminable; contract service is not in the snapshot.
 - **Service:** `contract-service`  ·  **Endpoint(s):** `['GET /api/v1/contract/contracts']`
@@ -3129,7 +3129,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — duplicate-number 409 and audit done in #1928; poRef validation against procurement-service needs an internal-client pattern decision; blocked on architecture decision)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — duplicate-number 409 and audit done in #1928; poRef validation against procurement-service needs an internal-client pattern decision; blocked on architecture decision; W2 procurement rescan: unchanged, still open. OWNER QUESTION: should contract-service validate poRef by calling procurement-service (which internal service-to-service client pattern), or stay free text with the PO column showing it as typed?)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** poRef validation against procurement-service needs a cross-service client in contract-service (none exists); duplicate-number 409 + audit are already done (#1928). Needs a decision on the internal-client pattern before building.
 - **W0 note:** partly fixed by #1928 — Audit event and duplicate contractNo 409 (DUPLICATE_NUMBER) done. Remaining: poRef is optional free text, not validated against an existing PO.
 - **First-pass claim:** Mutation goes to the contract service (/v1/contract/contracts, Form:65) while vendors come from procurement; audit trail, uniqueness and PO linkage (poRef) cannot be determined — services absent from snapshot.
@@ -3142,7 +3142,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-02  ·  MEDIUM  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: dashboard/page.test.tsx: counters are actionable (renewals card still deep-links ?status=renewal_due, now honoured by the contracts page))
+- [x] **Status** (closed by #1866; W2 procurement rescan: the drill-throughs now select exactly what each counter counts. Pending Indents opens ?status=draft,pending_approval (the service counts draft and pending, the list matches on the mapped status), Active POs opens ?status=approved and the orders page now reads it, Contract Renewals Due opens /contracts/list because /procurement/contracts only redirects and drops the query. The earlier note that the contracts page honoured ?status=renewal_due was wrong. The renewals counter value stays with DASHBOARD-05.) (W2 procurement rescan: completed by #PRNUM)
 - **First-pass claim:** Counters are not actionable: "Pending Indents" and "Contract Renewals Due" are not links, and the dashboard has no value or aging figures — a "snapshot of pending actions" that cannot be acted on (page.tsx:42-45).
 - **Service:** ``  ·  **Endpoint(s):** `['GET /api/v1/procurement/dashboard']`
 - **Question:** Web-only: counters are plain StatCards and the API returns no value/aging.
@@ -3154,7 +3154,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 procurement: closed by #2041)
+- [~] **Status** (W2 procurement rescan: grnsThisMonth is accepted GRNs in the IST calendar month and labelled, tested in dashboard-grns-this-month.test.ts; the card shows a dash with an honest note while contractRenewalsDue is null. OWNER DECISION still open: the renewals window (for example 90 days) and a cross-service read of contract-service to produce the real count. OWNER QUESTION: what is the renewal window and which service-to-service read should supply the count?)
 - **W0 note:** partly fixed by #1866 — grnsThisMonth defined as ACCEPTED GRNs in IST calendar month. Remaining: contractRenewalsDue is hard-coded 0 (dashboard/queries.ts:66, contract data lives in another service) so the card shows a false zero; no window defined or labelled.
 - **First-pass claim:** GET /procurement/dashboard is not in the snapshot; the definition of "GRNs (MTD)" and "renewals due" window is undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/dashboard']`
