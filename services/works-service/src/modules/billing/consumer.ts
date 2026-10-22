@@ -9,6 +9,7 @@ import {
   calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, canRecordMeasurement, billAmountExceedsAward, billNumberLockKey,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
   computeMeasuredValueMinor, boqItemBelongsToMbWork, isSelfFinalization,
+  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
@@ -83,17 +84,26 @@ export function registerBillingConsumers(q: Queue): void {
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
       // GAP-WORKS-BILLING-WORKID-03: maker-checker re-enforced in the consumer
       // (the route pre-check can race / be bypassed by a replayed command).
+      // GAP-WORKS-BILLING-WORKID-07: the row is locked for the rest of this transaction, so two finalize commands for
+      // the same MB (a double click publishes two, each with its own messageId) are serialised and the second one
+      // sees the first one's result instead of both applying and both emitting events.
       const mbRows = await tx.select().from(measurementBooks)
         .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, id)))
+        .for("update")
         .limit(1);
       const mbRow = mbRows[0];
       if (!mbRow) throw new NonRetryableError("MB_NOT_FOUND: measurement book not found for finalization");
       if (isSelfFinalization(msg.actorId, { createdBy: mbRow.createdBy, issuedBy: mbRow.issuedBy })) {
         throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The issuer of a measurement book cannot finalize it (maker-checker rule)");
       }
+      // Already at the requested step: an idempotent replay. Applied once, so no second status write, event or audit row.
+      if (mbRow.status === nextStatus) return;
+      if (!isValidNextStep(mbRow.status, nextStatus, eMbFinalizationSequence())) {
+        throw new NonRetryableError(`INVALID_STEP: Cannot transition from '${mbRow.status}' to '${nextStatus}'`);
+      }
       await tx.update(measurementBooks)
         .set({ status: nextStatus })
-        .where(eq(measurementBooks.id, id));
+        .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.mbFinalized,
@@ -271,18 +281,26 @@ export function registerBillingConsumers(q: Queue): void {
 
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
 
+      // GAP-WORKS-BILLING-WORKID-07: lock the bill row, then re-check its CURRENT step. Two finalize commands for the
+      // same step (each carries its own messageId, so markProcessed cannot dedupe them) are serialised; the second is
+      // a no-op replay, so a double DO-finalize cannot raise a second finance hand-off with a fresh financeBillId.
       const billRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)))
+        .for("update")
         .limit(1);
       const bill = billRows[0];
       if (!bill) throw new NonRetryableError("BILL_NOT_FOUND: bill record not found for finalization");
       if (isSelfFinalization(msg.actorId, { createdBy: bill.createdBy })) {
         throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The creator of a bill cannot finalize it (maker-checker rule)");
       }
+      if (bill.status === nextStatus) return;
+      if (!isValidNextStep(bill.status, nextStatus, billFinalizationSequence())) {
+        throw new NonRetryableError(`INVALID_STEP: Cannot transition from '${bill.status}' to '${nextStatus}'`);
+      }
 
       await tx.update(bills)
         .set({ status: nextStatus })
-        .where(eq(bills.id, id));
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.billFinalized,

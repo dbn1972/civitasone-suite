@@ -13,7 +13,7 @@ vi.mock("@civitasone/db", () => ({
     sqlClient: { end: vi.fn() },
     db: {
       transaction: vi.fn((fn: Function) => fn({
-        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), groupBy: () => Promise.resolve([]), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
+        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), orderBy: () => ({ limit: () => Promise.resolve([]) }), groupBy: () => Promise.resolve([]), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
         insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ messageId: "x" }]) }) }) }),
         update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
       })),
@@ -78,6 +78,14 @@ vi.mock("../src/modules/contractor/repo.js", async (importOriginal) => {
     findContractorById: vi.fn(async (_t: string, id: string) => ({ id, name: "Test Contractor", active: true })),
     findContractorByName: vi.fn(async (_t: string, name: string) => ({ id: "00000000-cccc-4000-8000-000000000001", name, active: true })),
   };
+});
+
+// GAP-WORKS-BOQ-WORKID-05: a recapitulation is computed on the work's stored BoQ lines, so POST .../recapitulate
+// refuses a work with none. The "valid body" test below therefore runs against a work that has lines; the
+// empty-BoQ rejection has its own test (boq-cluster02-routes.test.ts).
+vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
+  return { ...orig, boqWorkTotals: vi.fn(async () => ({ lines: 3, totalMinor: 1250000n })) };
 });
 
 // BR-013 gate (boq/routes.ts POST /v1/works/boq): permissive default so the

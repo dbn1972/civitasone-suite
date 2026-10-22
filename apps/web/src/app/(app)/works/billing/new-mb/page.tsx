@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { errorCodeFromResponse } from "@/lib/api/browserClient";
 import { WorkField, safeWorkId } from "../WorkField";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -111,8 +112,10 @@ function NewMbForm() {
       });
       if (!res.ok) {
         // NEW-MB-03: 409 = duplicate MB number → field-level message, form kept.
+        // works-service answers with the repo-standard FLAT envelope ({ code, message, ... }), so the machine code
+        // is read from the top level, not from a nested `error.code`.
         if (res.status === 409) {
-          const code = ((await res.clone().json().catch(() => ({}))) as { error?: { code?: string } }).error?.code;
+          const code = await errorCodeFromResponse(res);
           if (code === "DUPLICATE_MB_NUMBER") {
             setMbNumberError("This MB number is already used for this work. Choose a different number.");
             return;

@@ -38,11 +38,18 @@ export async function updateContractor(
   });
 }
 
-export async function rateContractor(ctx: RequestContext, contractorId: string, rating: number, comment?: string): Promise<Accepted> {
+export async function rateContractor(
+  ctx: RequestContext,
+  contractorId: string,
+  rating: number,
+  comment?: string,
+  workId?: string,
+): Promise<Accepted> {
   const messageId = randomUUID();
   return publish(COMMANDS.contractorRate, ctx, messageId, {
     id: contractorId, tenantId: ctx.tenantId, rating,
     ...(comment ? { comment } : {}),
+    ...(workId ? { workId } : {}),
   });
 }
 

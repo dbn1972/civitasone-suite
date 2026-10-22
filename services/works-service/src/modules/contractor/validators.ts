@@ -30,6 +30,8 @@ export const rateContractorSchema = z.object({
   // recorded in the rating history. Kept optional for backward compatibility
   // with older clients that send only { rating }.
   comment: z.string().trim().min(1).max(1000).optional(),
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: optional link to the work the rating is about.
+  workId:  z.string().uuid().optional(),
 });
 
 export const idParamSchema = z.object({ id: z.string().uuid() });
@@ -37,6 +39,26 @@ export const listQuerySchema = z.object({
   limit:  z.coerce.number().int().positive().max(200).default(50),
   offset: z.coerce.number().int().nonnegative().default(0),
 });
+
+/**
+ * GAP-WORKS-CONTRACTORS-03 / -06: the register list accepts BOTH conventions in use in this service family: the
+ * limit/offset pair (default 50) and the page/pageSize pair the web register and the contractor picker send
+ * (?pageSize=100 / ?pageSize=200). page/pageSize win over offset/limit when given; a page is 1-based. `page` on its
+ * own pages by the default limit ((page - 1) * limit); `pageSize` on its own is page 1. The resolved window is what
+ * the route queries and echoes back in meta, together with the true total.
+ */
+export const contractorListQuerySchema = z
+  .object({
+    limit:    z.coerce.number().int().positive().max(200).default(50),
+    offset:   z.coerce.number().int().nonnegative().default(0),
+    page:     z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).max(200).optional(),
+  })
+  .transform((q) => {
+    const limit = q.pageSize ?? q.limit;
+    const offset = q.pageSize !== undefined || q.page !== undefined ? ((q.page ?? 1) - 1) * limit : q.offset;
+    return { limit, offset, page: Math.floor(offset / limit) + 1, pageSize: limit };
+  });
 
 export type CreateContractorBody  = z.infer<typeof createContractorSchema>;
 export type RateContractorBody    = z.infer<typeof rateContractorSchema>;
