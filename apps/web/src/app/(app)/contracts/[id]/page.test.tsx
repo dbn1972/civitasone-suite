@@ -63,6 +63,12 @@ describe("deriveContractDisplayFields (regression: real contract-service field n
     expect(typeof fields.amountMinor).toBe("string");
   });
 
+  it("GAP-PROCUREMENT-CONTRACTS-05: poRef is '—' when no PO is linked, and the stored reference when one is", () => {
+    expect(fields.poRef).toBe("—"); // REAL_CONTRACT.poRef is null
+    const linked = deriveContractDisplayFields({ ...REAL_CONTRACT, poRef: "procurement_po:3f2504e0-4f89-41d3-9a0c-0305e82c3301" });
+    expect(linked.poRef).toBe("procurement_po:3f2504e0-4f89-41d3-9a0c-0305e82c3301");
+  });
+
   it("still has no source data for contractType/description (contract-service has no such columns)", () => {
     expect(fields.contractType).toBe("—");
     expect(fields.description).toBe("—");
@@ -73,7 +79,8 @@ describe("deriveContractDisplayFields (regression: real contract-service field n
   });
 
   it("leaves amountMinor undefined when there is no usable value at all", () => {
-    const { valueMinor: _valueMinor, ...withoutValue } = REAL_CONTRACT;
+    const withoutValue: Record<string, unknown> = { ...REAL_CONTRACT };
+    delete withoutValue.valueMinor;
     const noValue = deriveContractDisplayFields(withoutValue);
     expect(noValue.amountMinor).toBeUndefined();
     expect(noValue.valueDisplay).toBe("—");

@@ -53,7 +53,9 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
     // create form) can ask for only 'approved' indents — an RFQ must be raised
     // against an approved indent, never a draft/rejected one. Validated against
     // the known indent statuses; an unknown value yields an empty list rather
-    // than silently returning everything.
+    // than silently returning everything. GAP-PROCUREMENT-DASHBOARD-02: the
+    // value may also be a comma-separated set (`draft,pending`), matched with an
+    // SQL IN so limit/offset page over exactly those rows.
     const statusRaw = typeof (req.query as Record<string, unknown>).status === "string"
       ? ((req.query as Record<string, string>).status)
       : undefined;

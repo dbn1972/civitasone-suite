@@ -42,7 +42,16 @@ const IN_FULFILMENT_STATUSES = new Set(["approved", "partial_grn", "dispatched",
 
 const ALL_FILTER = "All";
 
-export function OrdersTable({ orders, source = "api" }: { orders: Order[]; source?: "api" | "error" }) {
+export function OrdersTable({
+  orders,
+  source = "api",
+  initialStatus,
+}: {
+  orders: Order[];
+  source?: "api" | "error";
+  /** A PO status key to open the list narrowed to (e.g. from a dashboard drill-through). */
+  initialStatus?: string;
+}) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Order[]>(
     "procurement.orders",
     orders,
@@ -50,7 +59,9 @@ export function OrdersTable({ orders, source = "api" }: { orders: Order[]; sourc
     (d) => d.length === 0,
   );
 
-  const [statusFilter, setStatusFilter] = useState<string>(ALL_FILTER);
+  const [statusFilter, setStatusFilter] = useState<string>(
+    initialStatus && initialStatus in PO_STATUS_LABELS ? initialStatus : ALL_FILTER,
+  );
 
   const erroredNoData = provenance === "error-no-data";
 
@@ -76,12 +87,14 @@ export function OrdersTable({ orders, source = "api" }: { orders: Order[]; sourc
   }, [rows]);
 
   const chipOptions = useMemo(() => {
-    const present = Object.keys(PO_STATUS_LABELS).filter((k) => (statusCounts[k] ?? 0) > 0);
+    // The active filter's chip is always offered (even at a count of 0, e.g. a
+    // drill-through into a status nothing is in) so it can be seen and cleared.
+    const present = Object.keys(PO_STATUS_LABELS).filter((k) => (statusCounts[k] ?? 0) > 0 || k === statusFilter);
     return [
       `${ALL_FILTER} (${rows.length})`,
-      ...present.map((k) => `${PO_STATUS_LABELS[k]} (${statusCounts[k]})`),
+      ...present.map((k) => `${PO_STATUS_LABELS[k]} (${statusCounts[k] ?? 0})`),
     ];
-  }, [statusCounts, rows.length]);
+  }, [statusCounts, rows.length, statusFilter]);
 
   // Map a chip label back to the status key it filters on (or ALL).
   const labelToStatus = useMemo(() => {

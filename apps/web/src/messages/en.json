@@ -5922,7 +5922,8 @@
     "contractsPage": {
       "viewPo": "View PO",
       "filteredBy": "Showing {status} contracts only.",
-      "clearFilter": "Show all contracts"
+      "clearFilter": "Show all contracts",
+      "poColumn": "Linked PO"
     },
     "emdBg": {
       "filterExpiring": "Expiring within 30 days",
@@ -5989,7 +5990,12 @@
         "value": "Value",
         "requestedBy": "Requested by",
         "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
-        "dialogValue": "Value: {value}."
+        "dialogValue": "Value: {value}.",
+        "moreMayExist": "Showing the first {count} pending tasks — more may exist and are not loaded here.",
+        "noneLoadedMoreExist": "None of the first {count} pending tasks loaded are procurement approvals, but more pending tasks exist that are not loaded yet.",
+        "loadMore": "Load more",
+        "loadingMore": "Loading…",
+        "loadMoreFailed": "Couldn’t load more tasks. Try again."
       },
       "escalation": {
         "referenceOnlyTitle": "Reference only.",

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { poHrefFromRef } from "@/lib/procurement-po-ref";
 
 export type ContractRow = {
   id: string;
@@ -15,6 +17,8 @@ export type ContractRow = {
   expiry?: string;
   /** Contract value in paise, as a numeric string (GAP-CONTRACTS-LIST-04). */
   valueMinor?: string;
+  /** Linked purchase-order reference as stored (GAP-PROCUREMENT-CONTRACTS-05). */
+  poRef?: string;
   /** Resolved vendor display name, injected by the table (not from the row). */
   vendorName?: string;
   /** Sortable numeric mirror of expiry (ms); -Infinity when absent so it sorts last. */
@@ -44,6 +48,7 @@ export function ContractsTable({
   /** When the vendor master could not be loaded, show "—" rather than a UUID. */
   vendorNamesUnavailable?: boolean;
 }) {
+  const t = useTranslations("procurement.contractsPage");
   // GAP-CONTRACTS-LIST-01: resolve the raw vendorId to a human name. Never
   // print the 36-char UUID in the cell — fall back to "Unknown vendor" (or
   // "—" when the whole vendor master failed to load).
@@ -102,6 +107,19 @@ export function ContractsTable({
               {r.valueMinor != null && /^[+-]?\d+$/.test(r.valueMinor) ? formatMoney(r.valueMinor) : "—"}
             </span>
           ),
+        },
+        // GAP-PROCUREMENT-CONTRACTS-05: the contract-to-PO linkage. A PO uuid opens
+        // the order; free text (poRef is not validated against procurement) is
+        // shown as typed, never turned into a link; none is a dash.
+        {
+          key: "poRef",
+          label: t("poColumn"),
+          sortable: false,
+          render: (r) => {
+            const href = poHrefFromRef(r.poRef);
+            if (href) return <Link href={href} className="lnk">{t("viewPo")}</Link>;
+            return r.poRef ? <span>{r.poRef}</span> : "—";
+          },
         },
         {
           key: "status",
