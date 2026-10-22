@@ -2,6 +2,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 import { getPluginRegistryCatalog } from "../_data";
+import { getPlugins } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PluginsTable } from "../PluginsTable";
 import { lifecycleOf } from "../pluginLifecycle";
@@ -18,14 +19,25 @@ type PluginRow = {
 export default async function Page() {
 	// GAP: Installed must list the SAME resource its Enable/Disable act on. Those verbs target
 	// registry rows (/v1/plugins/:id/enable|disable), and marketplace install creates registry
-	// rows, so read the registry (GET /v1/plugins), not the unrelated /v1/plugins/items.
-	const { data, source } = await getPluginRegistryCatalog();
-	const t = await getTranslations("pluginInstalled");
-	// "Installed" = provisioned and not removed: drop never-installed (uploaded) and uninstalled rows.
-	const plugins = data
-		.filter((p) => INSTALLED_STATES.has((p.status ?? "").trim().toLowerCase()))
-		.map((p): PluginRow => ({ ...p, status: p.status ?? "" }));
+	// rows, so managers read the registry (GET /v1/plugins). That route is plugin_admin/super_admin
+	// only; plugin_user (admitted by the layout) keeps the read-only /v1/plugins/items listing,
+	// which they may call, so they never land on a permanent error state.
 	const canManage = hasAnyRole(getSessionRoles(), PLUGIN_MANAGE_ROLES);
+	const t = await getTranslations("pluginInstalled");
+	let source: string;
+	let plugins: PluginRow[];
+	if (canManage) {
+		const res = await getPluginRegistryCatalog();
+		source = res.source;
+		// "Installed" = provisioned and not removed: drop never-installed (uploaded) and uninstalled rows.
+		plugins = res.data
+			.filter((p) => INSTALLED_STATES.has((p.status ?? "").trim().toLowerCase()))
+			.map((p): PluginRow => ({ ...p, status: p.status ?? "" }));
+	} else {
+		const res = await getPlugins();
+		source = res.source;
+		plugins = res.data as PluginRow[];
+	}
 
 	const errored = source === "error";
 	const total = errored ? null : plugins.length;

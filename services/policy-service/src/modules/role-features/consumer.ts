@@ -36,7 +36,7 @@ export function registerRoleFeatureConsumers(queue: Queue): void {
         reason: p.reason ?? null,
         version: 1,
       });
-      await emit(tx, msg, "policy.role_feature.granted", p, "grant", p.id, "success", p.reason ?? null);
+      await emit(tx, msg, "policy.role_feature.granted", p, "grant", p.id, p.reason ?? null);
     });
     await cache.invalidate(listKey(msg.payload.tenantId));
   });
@@ -55,7 +55,7 @@ export function registerRoleFeatureConsumers(queue: Queue): void {
         await audit(tx, msg, "revoke", p.grantId, "failure", p.reason ?? null, "UNKNOWN_OR_ALREADY_REVOKED_GRANT");
         return;
       }
-      await emit(tx, msg, "policy.role_feature.revoked", p, "revoke", p.grantId, "success", p.reason ?? null);
+      await emit(tx, msg, "policy.role_feature.revoked", p, "revoke", p.grantId, p.reason ?? null);
     });
     await cache.invalidate(listKey(msg.payload.tenantId));
   });
@@ -84,12 +84,11 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
-  outcome: "success",
   reason: string | null,
 ): Promise<void> {
   await enqueue(tx as Parameters<typeof enqueue>[0], {
     topic: eventType, eventType, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId, payload,
   });
-  await audit(tx, msg, action, resourceId, outcome, reason);
+  await audit(tx, msg, action, resourceId, "success", reason);
 }

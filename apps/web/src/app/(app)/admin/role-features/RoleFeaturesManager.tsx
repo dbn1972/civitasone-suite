@@ -327,9 +327,8 @@ export function RoleFeaturesManager({
       </div>
 
       {/* GAP-ADMIN-ROLE-FEATURES-03/-04: every grant/revoke and every preset is confirmed first.
-          policy-service's grant/revoke commands take no reason (the audit trail records the
-          actor and the grant), so none is collected here -- a reason that goes nowhere would
-          only look like a record. */}
+          policy-service accepts an optional reason on grant/revoke and stores it, but this UI does
+          not collect one yet; the audit trail records the actor and the grant. */}
       <ConfirmDialog
         open={pending !== null}
         title={
