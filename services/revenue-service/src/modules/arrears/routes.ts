@@ -91,6 +91,15 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = writeOffDecideBody.parse(req.body);
+    // Synchronous pre-check (409) — see collection/routes.ts refund decide.
+    const writeOff = await repo.findWriteOffById(ctx.tenantId, id);
+    if (!writeOff) throw new HttpError(404, "NOT_FOUND", "write-off not found");
+    if (writeOff.status !== "pending") {
+      throw new HttpError(409, "WRITE_OFF_NOT_PENDING", `write-off is already ${writeOff.status}`);
+    }
+    if (writeOff.makerUserId === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the maker of a write-off cannot decide it (separation of duties)");
+    }
     const result = await commands.decideWriteOff(ctx, id, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
@@ -188,6 +197,14 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = waiverDecideBody.parse(req.body);
+    const waiver = await repo.findWaiverById(ctx.tenantId, id);
+    if (!waiver) throw new HttpError(404, "NOT_FOUND", "waiver not found");
+    if (waiver.status !== "pending") {
+      throw new HttpError(409, "WAIVER_NOT_PENDING", `waiver is already ${waiver.status}`);
+    }
+    if (waiver.requestedBy === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the requester of a waiver cannot decide it (separation of duties)");
+    }
     return reply.code(202).send({ data: await commands.decideWaiver(ctx, id, body as unknown as Record<string, unknown>) });
   };
 

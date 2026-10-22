@@ -166,3 +166,22 @@ export async function getDemandBalance(tenantId: string, demandId: string) {
 
   return balance;
 }
+
+/** The pending remission (if any) for an assessment, tenant-scoped. */
+export async function findPendingRemission(tenantId: string, assessmentId: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(remissions)
+      .where(
+        and(
+          eq(remissions.tenantId, tenantId),
+          eq(remissions.assessmentId, assessmentId),
+          eq(remissions.status, "pending"),
+        ),
+      )
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}

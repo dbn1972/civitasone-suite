@@ -97,6 +97,8 @@ let app: FastifyInstance;
 beforeAll(async () => {
   // Enable BBPS for these tests
   process.env.BBPS_ENABLED = "true";
+  // pay-bill books an unverified manual collection: explicit non-prod opt-in.
+  process.env.BBPS_MANUAL_PAYBILL_ENABLED = "true";
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
   await app.ready();
@@ -104,6 +106,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   delete process.env.BBPS_ENABLED;
+  delete process.env.BBPS_MANUAL_PAYBILL_ENABLED;
   await app.close();
 });
 

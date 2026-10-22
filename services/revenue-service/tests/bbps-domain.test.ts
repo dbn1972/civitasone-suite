@@ -10,6 +10,7 @@ import {
   buildFetchBillResponse,
   validateBbpsPayment,
   isBbpsEnabled,
+  isBbpsManualPayBillEnabled,
   DomainError,
   type DcbOutstanding,
 } from "../src/modules/bbps/domain.js";
@@ -97,4 +98,21 @@ describe("BBPS Biller Domain — M7 SVC-134", () => {
   // pay-bill route. A real future gateway-webhook route should follow
   // billing-service's Razorpay webhook pattern (and fix that pattern's
   // not-actually-raw-body bug) rather than reintroducing this function as-is.
+});
+
+describe("isBbpsManualPayBillEnabled (manual pay-bill gate)", () => {
+  it("is off by default", () => {
+    expect(isBbpsManualPayBillEnabled({})).toBe(false);
+  });
+  it("is off unless the flag is exactly 'true'", () => {
+    expect(isBbpsManualPayBillEnabled({ BBPS_MANUAL_PAYBILL_ENABLED: "1" } as NodeJS.ProcessEnv)).toBe(false);
+    expect(isBbpsManualPayBillEnabled({ BBPS_MANUAL_PAYBILL_ENABLED: "false" } as NodeJS.ProcessEnv)).toBe(false);
+  });
+  it("is on when opted in outside production", () => {
+    expect(isBbpsManualPayBillEnabled({ BBPS_MANUAL_PAYBILL_ENABLED: "true" } as NodeJS.ProcessEnv)).toBe(true);
+    expect(isBbpsManualPayBillEnabled({ BBPS_MANUAL_PAYBILL_ENABLED: "true", NODE_ENV: "test" } as NodeJS.ProcessEnv)).toBe(true);
+  });
+  it("is never on in production, even when opted in", () => {
+    expect(isBbpsManualPayBillEnabled({ BBPS_MANUAL_PAYBILL_ENABLED: "true", NODE_ENV: "production" } as NodeJS.ProcessEnv)).toBe(false);
+  });
 });

@@ -147,11 +147,25 @@ export function registerArrearsConsumers(queue: Queue): void {
       const writeOff = writeOffRows[0];
       if (!writeOff) return;
 
+      // Only a PENDING write-off can be decided: a second decide, or a reject
+      // followed by an approve, used to re-apply the DCB reduction.
+      if (writeOff.status !== "pending") return;
+
       // Maker-checker enforcement
       assertMakerChecker(writeOff.makerUserId, msg.actorId);
 
+      if (approve) {
+        // Serialise approvals per assessee and RE-CHECK the outstanding balance
+        // inside this transaction: several pending write-offs were each valid
+        // against the balance at request time, but together they may exceed it.
+        // A throw rolls the whole transaction back, leaving the write-off pending.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`writeoff:${msg.tenantId}:${writeOff.assesseeId}`}, 0))`);
+        const outstandingNow = await getAssesseeOutstanding(tx, msg.tenantId, writeOff.assesseeId);
+        validateWriteOff(writeOff.amountMinor, outstandingNow);
+      }
+
       const newStatus = approve ? "approved" : "rejected";
-      await tx
+      const claimed = await tx
         .update(writeOffs)
         .set({
           status: newStatus,
@@ -159,7 +173,9 @@ export function registerArrearsConsumers(queue: Queue): void {
           decidedAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(writeOffs.id, writeOffId));
+        .where(and(eq(writeOffs.id, writeOffId), eq(writeOffs.tenantId, msg.tenantId), eq(writeOffs.status, "pending")))
+        .returning({ id: writeOffs.id });
+      if (claimed.length === 0) return;
 
       if (approve) {
         // Insert DCB entry (type: write_off) — reduces balance. dcb balances are

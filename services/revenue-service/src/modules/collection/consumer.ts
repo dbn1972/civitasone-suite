@@ -5,7 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
-import { validateReceipt, validateRefund, validateAdjustment, assertMakerChecker } from "./domain.js";
+import { validateReceipt, validateRefund, validateAdjustment, assertMakerChecker, DomainError } from "./domain.js";
 import { getDemandBalanceTx } from "./repo.js";
 import { eq, and } from "drizzle-orm";
 
@@ -186,23 +186,45 @@ export function registerCollectionConsumers(queue: Queue): void {
       const refund = refundRows[0];
       if (!refund) return;
 
+      // Only a PENDING refund can be decided. Without this a second decide, or
+      // a reject followed by an approve, re-applied the DCB entry (double
+      // refund). A decided refund is a no-op here (defence in depth; the route
+      // also answers 409 synchronously).
+      if (refund.status !== "pending") return;
+
       // Maker-checker enforcement
       assertMakerChecker(refund.makerUserId, msg.actorId);
 
       const newStatus = approve ? "approved" : "rejected";
-      await tx
+      // Conditional on status = 'pending' so two concurrent decides cannot both
+      // win: the loser updates zero rows and applies nothing.
+      const claimed = await tx
         .update(refunds)
         .set({ status: newStatus, checkerUserId: msg.actorId, decidedAt: new Date() })
-        .where(eq(refunds.id, refundId));
+        .where(and(eq(refunds.id, refundId), eq(refunds.tenantId, msg.tenantId), eq(refunds.status, "pending")))
+        .returning({ id: refunds.id });
+      if (claimed.length === 0) return;
 
       if (approve) {
-        // Insert DCB entry (type: refund) — balance increases by refund amount
-        const balance = await getDemandBalanceTx(tx, msg.tenantId, refund.assesseeId);
+        // Insert DCB entry (type: refund) — balance increases by refund amount.
+        // The entry chains onto the REFUNDED RECEIPT's demand ledger (the refund
+        // row carries receiptId, not demandId); it used to be posted against
+        // assesseeId, an unrelated pseudo-ledger.
+        const receiptRows = await tx
+          .select({ demandId: receipts.demandId })
+          .from(receipts)
+          .where(and(eq(receipts.tenantId, msg.tenantId), eq(receipts.id, refund.receiptId)))
+          .limit(1);
+        const refundDemandId = receiptRows[0]?.demandId;
+        if (!refundDemandId) {
+          throw new DomainError("RECEIPT_NOT_FOUND", `Receipt ${refund.receiptId} for refund ${refundId} not found`);
+        }
+        const balance = await getDemandBalanceTx(tx, msg.tenantId, refundDemandId);
         const newBalance = balance + refund.amountMinor;
         await tx.insert(dcbEntries).values({
           tenantId: msg.tenantId,
           assesseeId: refund.assesseeId,
-          demandId: refund.assesseeId, // linked through receipt's demand
+          demandId: refundDemandId,
           entryType: "refund",
           amountMinor: refund.amountMinor,
           balanceMinor: newBalance,

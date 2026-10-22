@@ -6,9 +6,10 @@
  * GET /assessments paginated, GET /assessees/:id/demands, GET /assessees/:id/dcb,
  * 400/401/403 error paths.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { signToken } from "@civitasone/auth";
+import * as assessmentRepo from "../src/modules/assessment/repo.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "t1111111-1111-1111-1111-111111111111";
@@ -193,6 +194,11 @@ describe("POST /v1/revenue/assessments/:id/remit", () => {
 
 describe("PATCH /v1/revenue/assessments/:id/remit-decide", () => {
   const VALID_BODY = { approve: true, reason: "Verified by finance" };
+
+  beforeEach(() => {
+    // the route pre-checks for a pending remission by a DIFFERENT maker (409 otherwise)
+    vi.spyOn(assessmentRepo, "findPendingRemission").mockResolvedValue({ id: "rem-1", makerUserId: "someone-else" } as never);
+  });
 
   it("returns 202 with valid body", async () => {
     const res = await app.inject({ method: "PATCH", url: `/v1/revenue/assessments/${ASSESSMENT_ID}/remit-decide`, headers: AUTH, payload: VALID_BODY });
