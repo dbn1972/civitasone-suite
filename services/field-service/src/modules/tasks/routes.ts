@@ -289,7 +289,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   // GET /v1/field/agents — field agent roster (distinct task assignees, P1-6)
   app.get("/v1/field/agents", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FIELD_ROLES);
+    // Tenant-wide roster of every agent and their workload: supervisors only.
+    requireRole(ctx, ADMIN_ROLES);
     const agents = await repo.listAgents(ctx.tenantId);
     return reply.send({ data: agents });
   });
@@ -298,7 +299,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/field/dashboard/kpis", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FIELD_ROLES);
-    const kpis = await repo.getKpis(ctx.tenantId);
+    const kpis = await repo.getKpis(ctx.tenantId, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
     const byStatus = Object.fromEntries(kpis.map((k) => [k.status, k.count]));
     const total = kpis.reduce((s, k) => s + k.count, 0);
     return reply.send({ data: { byStatus, total } });

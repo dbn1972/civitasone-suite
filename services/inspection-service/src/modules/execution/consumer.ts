@@ -73,7 +73,7 @@ export function registerExecutionConsumers(queue: Queue): void {
         // be a side door around them.
         if (targetState === "under_review" || targetState === "finalized") {
           throw new NonRetryableError(
-            `Cannot transition to  via generic transition; use ${targetState === "under_review" ? "submit-review" : "finalize"}`,
+            `Cannot transition to ${targetState} via generic transition; use ${targetState === "under_review" ? "submit-review" : "finalize"}`,
           );
         }
 

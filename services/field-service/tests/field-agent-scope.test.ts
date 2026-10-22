@@ -52,6 +52,7 @@ vi.mock("../src/modules/sync/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
+import * as taskRepo from "../src/modules/tasks/repo.js";
 
 const auth = (sub: string, roles: string[]) => ({
   authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "s" }, SECRET)}`,
@@ -115,6 +116,22 @@ describe("field_agent scoping", () => {
     await app.close();
   });
 
+  it("GET /agents (tenant-wide roster) is 403 for a field_agent and never queried", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/field/agents", headers: auth(AGENT, ["field_agent"]) });
+    expect(r.statusCode).toBe(403);
+    expect(taskRepo.listAgents).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("GET /dashboard/kpis is scoped to the caller for a field_agent", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/field/dashboard/kpis", headers: auth(AGENT, ["field_agent"]) });
+    expect(r.statusCode).toBe(200);
+    expect(vi.mocked(taskRepo.getKpis).mock.calls[0]).toEqual([TENANT, AGENT]);
+    await app.close();
+  });
+
   it("own records are still readable", async () => {
     H.visitFind.mockResolvedValue({ id: ID, tenantId: TENANT, agentId: AGENT });
     const app = await buildApp();
@@ -135,6 +152,10 @@ describe("supervisor keeps tenant-wide reads", () => {
     expect(H.routeList.mock.calls[0]![3]).toBeUndefined();
     const v = await app.inject({ method: "GET", url: `/v1/field/visits/by-agent/${OTHER}`, headers: auth(AGENT, [role]) });
     expect(v.statusCode).toBe(200);
+    const a = await app.inject({ method: "GET", url: "/v1/field/agents", headers: auth(AGENT, [role]) });
+    expect(a.statusCode).toBe(200);
+    await app.inject({ method: "GET", url: "/v1/field/dashboard/kpis", headers: auth(AGENT, [role]) });
+    expect(vi.mocked(taskRepo.getKpis).mock.calls[0]).toEqual([TENANT, undefined]);
     await app.close();
   });
 });
