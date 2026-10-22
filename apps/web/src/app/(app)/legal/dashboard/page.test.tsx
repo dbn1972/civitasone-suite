@@ -13,7 +13,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import LegalDashboardPage from "./page";
 
-const okDash = (over: Record<string, number> = {}) => ({
+const okDash = (over: Record<string, number | null> = {}) => ({
   data: { activeCases: 3, hearingsThisWeek: 2, ordersPending: 1, opinionsDue: 4, disposedCases: 30, totalCases: 120, ...over },
   source: "api" as const,
 });
@@ -68,5 +68,22 @@ describe("Legal dashboard upcoming hearings (GAP-LEGAL-DASHBOARD-02)", () => {
     });
     render(await LegalDashboardPage());
     expect(screen.getByText("WP/9/2026")).toBeInTheDocument();
+  });
+
+});
+
+describe("Legal dashboard unknown figures", () => {
+  beforeEach(() => {
+    getLegalDashboard.mockReset();
+    getLegalHearings.mockReset();
+    getLegalHearings.mockResolvedValue({ data: [], source: "api" });
+  });
+
+  it("shows a dash (not a fabricated 0) for Opinions Due when the service cannot compute it", async () => {
+    getLegalDashboard.mockResolvedValue(okDash({ opinionsDue: null }));
+    render(await LegalDashboardPage());
+    const stat = screen.getByText("Opinions Due").parentElement as HTMLElement;
+    expect(stat).toHaveTextContent("—");
+    expect(stat).not.toHaveTextContent(/\b0\b/);
   });
 });

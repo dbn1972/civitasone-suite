@@ -41,6 +41,7 @@ describe("SeekOpinionForm (GAP-LEGAL-OPINIONS-NEW-01 / NEW-02)", () => {
     expect(body.question).toBe("Can we cancel the tender?");
     // NEW-02: no client-generated reference sent when the field is blank
     expect(body).not.toHaveProperty("opinionNo");
+    expect(body).not.toHaveProperty("soughtBy");
     expect(body).not.toHaveProperty("noticeNo");
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/legal/opinions/new-op-7"));
@@ -57,6 +58,19 @@ describe("SeekOpinionForm (GAP-LEGAL-OPINIONS-NEW-01 / NEW-02)", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.opinionNo).toBe("OPN/2026/0009");
+  });
+
+  it("sends soughtBy when typed and omits it when blank", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: "x" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SeekOpinionForm />);
+    fireEvent.change(screen.getByLabelText(/Sought by/i), { target: { value: "  Legal Cell, Dept of X " } });
+    fillAndSubmit();
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Submit request/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.soughtBy).toBe("Legal Cell, Dept of X");
   });
 
   it("blocks submit without a subject and question", () => {

@@ -26,6 +26,7 @@ import { useFormError } from "@/lib/useFormError";
 export function SeekOpinionForm() {
   const router = useRouter();
   const [reference, setReference] = useState("");
+  const [soughtBy, setSoughtBy] = useState("");
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
@@ -38,6 +39,9 @@ export function SeekOpinionForm() {
         // GAP-LEGAL-OPINIONS-NEW-02: send a reference ONLY if the user typed
         // one; otherwise the server allocates the next in the series.
         ...(reference.trim() ? { opinionNo: reference.trim() } : {}),
+        // The service persists `soughtBy` (the requesting officer/department)
+        // and the opinions list/detail show it — send it when provided.
+        ...(soughtBy.trim() ? { soughtBy: soughtBy.trim() } : {}),
         subject: subject.trim(),
         question: question.trim(),
       };
@@ -77,6 +81,10 @@ export function SeekOpinionForm() {
         <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="reference">Reference no</label>
           <input id="reference" className="inp" value={reference} onChange={(e) => setReference(e.target.value)} style={{ minHeight: 44 }} placeholder="Assigned on submit" />
+        </div>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
+          <label className="label" htmlFor="soughtBy">Sought by</label>
+          <input id="soughtBy" className="inp" value={soughtBy} onChange={(e) => setSoughtBy(e.target.value)} maxLength={256} style={{ minHeight: 44 }} placeholder="Requesting officer / department" />
         </div>
         <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="subject">Subject *</label>
