@@ -37,6 +37,10 @@ function NewBillForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  // Server said this bill number is already used on the work (409 DUPLICATE_BILL_NUMBER): shown under the field.
+  const [billNumberError, setBillNumberError] = useState("");
+  // Set once the clerk edits or fills the gross themselves; until then an e-MB bill starts from the MB's billable value.
+  const [grossTouched, setGrossTouched] = useState(false);
   const formError = useFormError("bill");
 
   // GAP-WORKS-BILLING-BILLS-NEW-01: when the work is known (the normal entry
@@ -118,6 +122,15 @@ function NewBillForm() {
     };
   }, [form.mbId]);
 
+  // GAP-WORKS-BILLING-BILLS-NEW-02: in e-MB (measurement-based) mode the gross starts at the value still billable against
+  // the chosen MB, so the figure on screen comes from the measurements rather than a free-typed number. It stays an
+  // editable starting point (the clerk may bill part of it, the server still enforces the ceiling); whether a bill below
+  // that value must carry a reason is a policy decision that is NOT built here. Never overwrites what the clerk typed.
+  useEffect(() => {
+    if (form.billMode !== "e_mb" || grossTouched || !position || position.available === "0") return;
+    setForm((prev) => ({ ...prev, grossAmount: minorToRupeesInput(position.available) }));
+  }, [form.billMode, grossTouched, position]);
+
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -132,11 +145,15 @@ function NewBillForm() {
     grossMinor !== null && dedMinor !== null
       ? formatMoney((BigInt(grossMinor) - BigInt(dedMinor)).toString())
       : null;
+  // e-MB bill whose gross is below what the MB still allows: a neutral note, not an error (partial billing is allowed).
+  const belowAvailable =
+    form.billMode === "e_mb" && position && grossMinor !== null && BigInt(grossMinor) < BigInt(position.available);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setMessage("");
+    setBillNumberError("");
 
     if (!safeWorkId(form.workId)) {
       setError("Select the work this bill is for.");
@@ -182,6 +199,15 @@ function NewBillForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
+        // 409 DUPLICATE_BILL_NUMBER -> a field-level message under Bill Number, form kept. The code is top-level in the
+        // standard envelope; a nested error.code is tolerated too.
+        if (res.status === 409) {
+          const parsed = (await res.clone().json().catch(() => ({}))) as { code?: string; error?: { code?: string } };
+          if ((parsed.code ?? parsed.error?.code) === "DUPLICATE_BILL_NUMBER") {
+            setBillNumberError(t("duplicateBillNumber"));
+            return;
+          }
+        }
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
@@ -290,7 +316,26 @@ function NewBillForm() {
             </div>
             <div>
               <label style={labelStyle} htmlFor="billNumber">Bill Number *</label>
-              <input id="billNumber" style={inputStyle} type="text" required maxLength={64} value={form.billNumber} onChange={set("billNumber")} placeholder="e.g. RA/2024-25/001" />
+              <input
+                id="billNumber"
+                style={inputStyle}
+                type="text"
+                required
+                maxLength={64}
+                value={form.billNumber}
+                onChange={(e) => {
+                  setBillNumberError("");
+                  set("billNumber")(e);
+                }}
+                placeholder="e.g. RA/2024-25/001"
+                aria-invalid={billNumberError ? true : undefined}
+                aria-describedby={billNumberError ? "billNumber-error" : undefined}
+              />
+              {billNumberError ? (
+                <p id="billNumber-error" role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
+                  {billNumberError}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -303,7 +348,20 @@ function NewBillForm() {
           >
             <div>
               <label style={labelStyle} htmlFor="grossAmount">Gross Amount (₹) *</label>
-              <input id="grossAmount" style={inputStyle} type="number" required step="0.01" min="0" value={form.grossAmount} onChange={set("grossAmount")} placeholder="0.00" />
+              <input
+                id="grossAmount"
+                style={inputStyle}
+                type="number"
+                required
+                step="0.01"
+                min="0"
+                value={form.grossAmount}
+                onChange={(e) => {
+                  setGrossTouched(true);
+                  set("grossAmount")(e);
+                }}
+                placeholder="0.00"
+              />
               {position ? (
                 <p data-testid="mb-position" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
                   {t("position", {
@@ -315,11 +373,19 @@ function NewBillForm() {
                     <button
                       type="button"
                       className="btn ghost sm"
-                      onClick={() => setForm((prev) => ({ ...prev, grossAmount: minorToRupeesInput(position.available) }))}
+                      onClick={() => {
+                        setGrossTouched(true);
+                        setForm((prev) => ({ ...prev, grossAmount: minorToRupeesInput(position.available) }));
+                      }}
                     >
                       {t("useAvailable")}
                     </button>
                   ) : null}
+                </p>
+              ) : null}
+              {belowAvailable && position ? (
+                <p data-testid="mb-below-available" role="note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                  {t("belowAvailable", { available: formatMoney(position.available) })}
                 </p>
               ) : null}
             </div>

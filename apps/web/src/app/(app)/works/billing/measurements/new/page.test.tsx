@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 let searchParamsMock = new URLSearchParams();
 const pushMock = vi.fn();
@@ -184,5 +184,74 @@ describe("RecordMeasurementPage — negative dimension (MEASUREMENTS-NEW-04)", (
     fireEvent.submit(screen.getByRole("button", { name: "Record Measurement" }).closest("form")!);
     await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Length must be a non-negative number/i));
     expect(spy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+});
+
+// GAP-WORKS-BILLING-MEASUREMENTS-NEW-05: works-service now refuses a measurement against an MB that is no longer a draft
+// (409 MB_NOT_OPEN), so the form offers only draft books and explains the rest.
+describe("RecordMeasurementPage — only draft measurement books accept measurements (MEASUREMENTS-NEW-05)", () => {
+  const WORK_ID = "11111111-1111-1111-1111-111111111111";
+  const MB_DRAFT = "323e4567-e89b-12d3-a456-426614174001";
+  const MB_FINAL = "423e4567-e89b-12d3-a456-426614174002";
+  const MB_SO = "523e4567-e89b-12d3-a456-426614174003";
+
+  function stub(mbRows: unknown[], postResponse?: Response) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      if (method === "GET" && url.endsWith(`/billing/${WORK_ID}/mbs`)) {
+        return Promise.resolve(new Response(JSON.stringify({ data: mbRows }), { status: 200 }));
+      }
+      if (method === "GET" && url.endsWith(`/boq/${WORK_ID}`)) {
+        return Promise.resolve(new Response(JSON.stringify({ data: [{ id: BOQ, itemCode: "2.1", itemDescription: "Earthwork", unit: "cum" }] }), { status: 200 }));
+      }
+      return Promise.resolve(postResponse ?? new Response(JSON.stringify({ data: {} }), { status: 202 }));
+    }) as typeof fetch);
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams(`workId=${WORK_ID}`);
+  });
+
+  it("lists only draft books and says how many are not listed, and why", async () => {
+    stub([
+      { id: MB_DRAFT, mbNumber: "MB/DRAFT", status: "draft" },
+      { id: MB_SO, mbNumber: "MB/SO", status: "so_finalized" },
+      { id: MB_FINAL, mbNumber: "MB/FINAL", status: "do_finalized" },
+    ]);
+    render(<RecordMeasurementPage />);
+    await waitFor(() => expect((screen.getByLabelText(/Measurement Book/i) as HTMLElement).tagName).toBe("SELECT"));
+    const options = Array.from((screen.getByLabelText(/Measurement Book/i) as HTMLSelectElement).options).map((o) => o.textContent);
+    expect(options).toContain("MB/DRAFT");
+    expect(options).not.toContain("MB/SO");
+    expect(options).not.toContain("MB/FINAL");
+    expect(screen.getByRole("note")).toHaveTextContent("2 measurement books are not listed because they are no longer drafts.");
+  });
+
+  it("keeps a book that carries no status (the server decides) and shows no note when none is hidden", async () => {
+    stub([{ id: MB_DRAFT, mbNumber: "MB/NOSTATUS" }]);
+    render(<RecordMeasurementPage />);
+    await waitFor(() => expect((screen.getByLabelText(/Measurement Book/i) as HTMLElement).tagName).toBe("SELECT"));
+    expect(screen.getByRole("option", { name: "MB/NOSTATUS" })).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("a 409 MB_NOT_OPEN from the server reads as a specific message, never the raw code or status", async () => {
+    stub(
+      [{ id: MB_DRAFT, mbNumber: "MB/DRAFT", status: "draft" }],
+      new Response(JSON.stringify({ code: "MB_NOT_OPEN", message: "Cannot record a measurement: measurement book status is 'so_finalized'" }), { status: 409 }),
+    );
+    render(<RecordMeasurementPage />);
+    await waitFor(() => expect((screen.getByLabelText(/Measurement Book/i) as HTMLElement).tagName).toBe("SELECT"));
+    await waitFor(() => expect((screen.getByLabelText(/^BoQ Item/i) as HTMLElement).tagName).toBe("SELECT"));
+    fireEvent.change(screen.getByLabelText(/Measurement Book/i), { target: { value: MB_DRAFT } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
+    fireEvent.change(await screen.findByLabelText(/^Quantity/i), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Measurement" }));
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/no longer open for new measurements/i));
+    expect(alert.textContent).not.toMatch(/MB_NOT_OPEN|\b409\b/);
   });
 });

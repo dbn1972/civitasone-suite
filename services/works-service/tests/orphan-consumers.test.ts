@@ -33,7 +33,10 @@ function chainRows(rows: unknown[]) {
   w.for = () => w;
   return w;
 }
+const mockExecuted: unknown[] = [];
 const mockTx: any = {
+  // billCreate takes a per-work advisory lock (tx.execute) before its duplicate-number check.
+  execute: (q: unknown) => { mockExecuted.push(q); return Promise.resolve([]); },
   insert: (t: unknown) => { mockInserted.push(t); return { values: () => Promise.resolve() }; },
   update: (t: unknown) => { mockUpdated.push(t); return { set: () => ({ where: () => Promise.resolve() }) }; },
   delete: (t: unknown) => { mockDeleted.push(t); return { where: () => Promise.resolve() }; },
@@ -79,6 +82,7 @@ async function handlers(registerName: string, mod: string): Promise<Record<strin
 beforeEach(() => {
   mockInserted.length = 0; mockUpdated.length = 0; mockDeleted.length = 0; mockEnqueued.length = 0;
   mockSelectMap.clear();
+  mockExecuted.length = 0;
   mockMarkResult = true;
 });
 
@@ -424,7 +428,7 @@ describe("Billing orphan consumers", () => {
   const load = () => handlers("registerBillingConsumers", "../src/modules/billing/consumer.js");
 
   it("measurementRecord within BoQ qty persists + emits measurement.recorded", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
     mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
     const h = await load();
     await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-1", mbId: "mb-1", boqItemId: "b-1", quantity: 5 } });
@@ -432,7 +436,7 @@ describe("Billing orphan consumers", () => {
     expect(emitted(EVENTS.measurementRecorded)).toBe(true);
   });
   it("measurementRecord exceeding BoQ qty is rejected (no insert)", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
     mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
     const h = await load();
     await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-2", mbId: "mb-1", boqItemId: "b-1", quantity: 20 } }))
@@ -440,7 +444,7 @@ describe("Billing orphan consumers", () => {
     expect(mockInserted).toHaveLength(0);
   });
   it("measurementRecord rejects the second when cumulative quantity exceeds BoQ qty", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
     mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "100" }]);
     const h = await load();
     // first 80-unit measurement: no priors → cumulative 80 <= 100 → persists
@@ -454,7 +458,7 @@ describe("Billing orphan consumers", () => {
     expect(mockInserted).toHaveLength(1); // still 1 — cumulative guard rejected the second
   });
   it("measurementRecord against a missing BoQ item is rejected (no insert)", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
     mockSelectMap.set(boqItems, []);
     const h = await load();
     await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-3", mbId: "mb-1", boqItemId: "nope", quantity: 1 } }))
@@ -478,7 +482,7 @@ describe("Billing orphan consumers", () => {
   // this work is later checked against. No race condition needed; a plain
   // two-call sequential exploit.
   it("measurementRecord is rejected when the cited BoQ item belongs to a different work than the MB (bug #1)", async () => {
-    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1" }]);
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
     mockSelectMap.set(boqItems, [{ id: "b-borrowed", workId: "some-other-work", quantity: "10", rate: 1000000000n }]);
     const h = await load();
     await expect(h[COMMANDS.measurementRecord]({
@@ -684,5 +688,79 @@ describe("Billing orphan consumers", () => {
     });
     expect(mockInserted).toHaveLength(2); // bills + bill_items
     expect(emitted(EVENTS.billCreated)).toBe(true);
+  });
+});
+
+// ── W2 works rescan, cluster 01: measurement MB status guard, bill number uniqueness, amount sanity ──────────────
+describe("Billing consumers — measurement status guard, bill-number uniqueness, amount sanity (W2 works rescan cluster 01)", () => {
+  const load = () => handlers("registerBillingConsumers", "../src/modules/billing/consumer.js");
+
+  for (const status of ["so_finalized", "sdo_finalized", "estimator_finalized", "do_finalized"]) {
+    it(`measurementRecord is rejected, no insert, when the MB is '${status}' (the measured-value ceiling must not change after finalization starts)`, async () => {
+      mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status }]);
+      mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
+      const h = await load();
+      await expect(h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-nd", mbId: "mb-1", boqItemId: "b-1", quantity: 1 } }))
+        .rejects.toThrow(/MB_NOT_OPEN/);
+      expect(mockInserted).toHaveLength(0);
+      expect(emitted(EVENTS.measurementRecorded)).toBe(false);
+    });
+  }
+
+  it("measurementRecord still persists against a draft MB", async () => {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", workId: "w-1", status: "draft" }]);
+    mockSelectMap.set(boqItems, [{ id: "b-1", workId: "w-1", quantity: "10" }]);
+    const h = await load();
+    await h[COMMANDS.measurementRecord]({ ...base, payload: { id: "m-ok", mbId: "mb-1", boqItemId: "b-1", quantity: 1 } });
+    expect(mockInserted).toHaveLength(1);
+  });
+
+  function seedBillableMb(existingBills: unknown[]) {
+    mockSelectMap.set(measurementBooks, [{ id: "mb-1", status: "do_finalized", workId: "w-1", awardId: "award-1" }]);
+    mockSelectMap.set(awards, [{ id: "award-1", workId: "w-1", acceptedAmountMinor: 999999999999n }]);
+    mockSelectMap.set(measurements, [{ boqItemId: "boq-1", quantity: "10000" }]); // 10000 x 100 = 1,000,000 paise measured
+    mockSelectMap.set(boqItems, [{ id: "boq-1", rate: 100n }]);
+    mockSelectMap.set(bills, existingBills);
+  }
+  const billPayload = (billNumber: string, extra: Record<string, unknown> = {}) => ({
+    ...base,
+    payload: { id: "bill-n", workId: "w-1", awardId: "award-1", mbId: "mb-1", billMode: "e_mb", billNumber, grossAmountMinor: "1000", ...extra },
+  });
+
+  it("billCreate rejects a bill number already used on the same work, ignoring case and surrounding spaces; nothing is inserted", async () => {
+    seedBillableMb([{ id: "bill-A", mbId: "mb-0", billNumber: "RA-1", grossAmountMinor: 500n }]);
+    const h = await load();
+    await expect(h[COMMANDS.billCreate](billPayload("  ra-1 "))).rejects.toThrow(/DUPLICATE_BILL_NUMBER/);
+    expect(mockInserted).toHaveLength(0);
+    expect(emitted(EVENTS.billCreated)).toBe(false);
+  });
+
+  it("billCreate persists a different number on the same work, after taking the per-work advisory lock", async () => {
+    seedBillableMb([{ id: "bill-A", mbId: "mb-0", billNumber: "RA-1", grossAmountMinor: 500n }]);
+    const h = await load();
+    await h[COMMANDS.billCreate](billPayload("RA-2"));
+    expect(mockInserted).toContain(bills);
+    expect(mockExecuted).toHaveLength(1);
+    expect(JSON.stringify(mockExecuted[0])).toContain("pg_advisory_xact_lock");
+  });
+
+  for (const [label, extra, pattern] of [
+    ["a zero gross", { grossAmountMinor: "0" }, /INVALID_AMOUNT.*greater than zero/],
+    ["a negative gross", { grossAmountMinor: "-1000" }, /INVALID_AMOUNT.*greater than zero/],
+    ["a negative deduction", { deductionsMinor: "-1" }, /INVALID_AMOUNT.*negative/],
+  ] as const) {
+    it(`billCreate rejects ${label} even when the command bypassed the route (no insert)`, async () => {
+      seedBillableMb([]);
+      const h = await load();
+      await expect(h[COMMANDS.billCreate](billPayload("RA-9", extra))).rejects.toThrow(pattern);
+      expect(mockInserted).toHaveLength(0);
+    });
+  }
+
+  it("billCreate accepts zero deductions and stores net = gross", async () => {
+    seedBillableMb([]);
+    const h = await load();
+    await h[COMMANDS.billCreate](billPayload("RA-0", { deductionsMinor: "0" }));
+    expect(mockInserted).toContain(bills);
   });
 });

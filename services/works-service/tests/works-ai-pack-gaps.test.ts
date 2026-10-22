@@ -43,6 +43,8 @@ function chainRows(rows: unknown[]) {
 }
 
 const mockTx: any = {
+  // billCreate takes a per-work advisory lock (tx.execute) before its duplicate-number check.
+  execute: () => Promise.resolve([]),
   insert: (t: unknown) => { mockInserted.push(t); return { values: () => Promise.resolve() }; },
   update: (t: unknown) => {
     mockUpdated.push(t);

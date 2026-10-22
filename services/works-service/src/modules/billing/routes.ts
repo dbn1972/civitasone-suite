@@ -5,7 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import {
-  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill,
+  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, canRecordMeasurement,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
   finalizeStepRoles, isSelfFinalization,
@@ -217,6 +217,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const priorBills = await listBillsForWork(ctx.tenantId, body.workId);
+    // A bill number is unique within a work (case-insensitive, like the MB number above). The consumer re-checks
+    // inside its transaction, under a per-work lock, because this pre-check can race.
+    const wantedNumber = body.billNumber.toLowerCase();
+    if (priorBills.some((row) => (row.billNumber ?? "").trim().toLowerCase() === wantedNumber)) {
+      throw new HttpError(409, "DUPLICATE_BILL_NUMBER", "Bill number already used for this work");
+    }
     const priorBilledGross = priorBills.reduce(
       (sum, row) => sum + (row.grossAmountMinor ?? 0n),
       0n,
@@ -273,6 +279,13 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
 
     const mb = await getMb(ctx.tenantId, body.mbId);
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
+    if (!canRecordMeasurement(mb.status)) {
+      throw new HttpError(
+        409,
+        "MB_NOT_OPEN",
+        `Cannot record a measurement: measurement book status is '${mb.status}'; measurements can only be recorded while it is 'draft'`,
+      );
+    }
 
     // FR-BIL-011 gate (bug #3): the cumulative-vs-BoQ-approved-quantity
     // ceiling was previously enforced only inside the async consumer, so

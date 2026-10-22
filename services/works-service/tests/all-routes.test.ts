@@ -258,16 +258,24 @@ vi.mock("../src/modules/billing/repo.js", () => ({
   getMbByNumber: vi.fn(async () => null), // NEW-MB-03 duplicate pre-check: no duplicate by default
   getBill: vi.fn(async (_tenantId: string, id: string) => billById[id] ?? null),
   listBillsForWork: vi.fn(async () => []),
-  // No measurements seeded by default — routes' measured-value gate then
-  // requires grossAmountMinor "0" in tests that don't care about that
-  // specific check (covered separately in orphan-consumers.test.ts).
-  listMeasurementsByMb: vi.fn(async () => []),
+  // 10 units at 100 paise (see the boq/repo.js mock below) = 1000 paise of measured work on every MB, so the
+  // strictly positive gross the create-bill schema now requires fits under the measured-value ceiling. The ceiling
+  // itself is covered in orphan-consumers.test.ts.
+  listMeasurementsByMb: vi.fn(async () => [{ boqItemId: "00000000-4444-4000-8000-0000000000b1", quantity: "10" }]),
   listMeasurementsByBoqItem: vi.fn(async () => []),
   // Code-review fix (double-billing gap): no prior bills against any MB by
   // default — the specific double-billing repro is covered in
   // orphan-consumers.test.ts, where the mock can express "MB already billed".
   listBillsByMb: vi.fn(async () => []),
 }));
+
+vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
+  return {
+    ...orig,
+    listBoqItemsByIds: vi.fn(async () => [{ id: "00000000-4444-4000-8000-0000000000b1", rate: 100n }]),
+  };
+});
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -1016,7 +1024,7 @@ describe("Billing routes", () => {
         mbId,
         billMode: "e_mb",
         billNumber: "BILL/2024/001",
-        grossAmountMinor: "0",
+        grossAmountMinor: "100",
         deductionsMinor: "0",
       },
     });
@@ -1097,7 +1105,7 @@ describe("Billing routes", () => {
         mbId,
         billMode: "e_mb",
         billNumber: "BILL/2024/AWM",
-        grossAmountMinor: "0",
+        grossAmountMinor: "100",
       },
     });
     expect(res.statusCode).toBe(422);
@@ -1134,10 +1142,7 @@ describe("Billing routes", () => {
         mbId,
         billMode: "e_mb",
         billNumber: "BILL/2024/202-mb",
-        // No measurements seeded on the shared mock, so gross is 0 — the
-        // non-zero measured-value path is covered in
-        // orphan-consumers.test.ts / works-ai-pack-gaps.test.ts.
-        grossAmountMinor: "0",
+        grossAmountMinor: "100",
       },
     });
     expect(res.statusCode).toBe(202);

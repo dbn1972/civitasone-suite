@@ -35,10 +35,13 @@ export async function listProposals(tenantId: string, page: number, pageSize: nu
  * GAP-WORKS-BOQ-NEW-03: typeahead over work proposals (by work number or
  * description) for the shared EntityPicker on the BoQ Add-item form, so a
  * clerk searches for a work by its human number instead of pasting a UUID.
- * Returns the compact {id, workNumber, description} shape the picker adapter
- * maps to {id,label,sublabel}. Empty query lists the newest works.
+ * Returns the compact {id, workNumber, description, status} shape the picker adapter
+ * maps to {id,label,sublabel}. Empty query lists the newest works. `status` lets a form show a work that is not
+ * eligible for the step (for example a technical sanction needs a DAO-finalized work) as a disabled option with a
+ * reason instead of hiding it. `preferStatuses` sorts works in those statuses first, then newest first, so the
+ * eligible matches are never crowded out of the capped result by newer ineligible ones.
  */
-export async function searchProposals(tenantId: string, query: string, limit = 20) {
+export async function searchProposals(tenantId: string, query: string, limit = 20, preferStatuses: string[] = []) {
   const q = query.trim();
   const safeLimit = Math.min(Math.max(limit, 1), 50);
   return scopedRead(async (tx) => {
@@ -53,20 +56,29 @@ export async function searchProposals(tenantId: string, query: string, limit = 2
         id: workProposals.id,
         workNumber: workProposals.workNumber,
         description: workProposals.description,
+        status: workProposals.status,
       })
       .from(workProposals)
       .where(and(...conditions))
-      .orderBy(desc(workProposals.createdAt))
+      .orderBy(
+        ...(preferStatuses.length > 0 ? [desc(inArray(workProposals.status, preferStatuses))] : []),
+        desc(workProposals.createdAt),
+      )
       .limit(safeLimit);
   });
 }
 
-/** Resolve a set of work ids to {id, workNumber, description} — EntityPicker seeding. */
+/** Resolve a set of work ids to {id, workNumber, description, status} — EntityPicker seeding. */
 export async function resolveProposals(tenantId: string, ids: string[]) {
   if (ids.length === 0) return [];
   return scopedRead(async (tx) => {
     return tx
-      .select({ id: workProposals.id, workNumber: workProposals.workNumber, description: workProposals.description })
+      .select({
+        id: workProposals.id,
+        workNumber: workProposals.workNumber,
+        description: workProposals.description,
+        status: workProposals.status,
+      })
       .from(workProposals)
       .where(and(eq(workProposals.tenantId, tenantId), inArray(workProposals.id, ids)));
   });

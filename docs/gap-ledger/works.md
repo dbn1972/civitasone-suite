@@ -86,7 +86,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; work number + officer name resolved web-side (loaders.ts getWorkNumberMap/getOfficerNameMap; approvals.loader.test.ts); columns relabelled Work Number / Authority)
+- [x] **Status** (W2 works: closed by #2047; work number + officer name resolved web-side (loaders.ts getWorkNumberMap/getOfficerNameMap; approvals.loader.test.ts); columns relabelled Work Number / Authority) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** register rows now carry `workNumber` from works-service (approval routes stitch it from the proposal module with one batched, tenant-scoped getWorkHeaders read, no cross-module SQL join); the officer NAME comes from the tenant user directory (loaders.ts getOfficerNameMap -> lib/directory/resolveUsers, batched by id, so no 200-user cap). The old loader called GET /api/v1/identity/users which the gateway forwards to identity-service /v1/identity/users, a route that does not exist (the real list is /identity/users, ADMIN-gated); identity-service now also serves GET /v1/identity/users/directory (tenant-scoped, {id, displayName} only), the path every shared directory helper already used. Work Number links to /works/proposals/<id>; a row that could not be resolved reads "ID 3f9a1c20…" / "Unknown officer (aaaa1111…)" with the full id as a tooltip and exports the FULL id to the CSV; the approval number is now the first column (the row link to the detail page) so the work link is not nested in another link. Tests: approvals.loader.test.ts, ApprovalsTable.test.tsx, cluster01-route-validation.test.ts, users-directory.db.test.ts.
 - **W0 note:** partly fixed by #1867 — No backend join for workNumber/authorityName (works-service approval list returns only ids); mapAaRow/mapTsRow prefer str(r.workNumber)/authorityName, fall back to shortId, columns relabelled "Work (ID)"/"Authority (ID)"; Work Number is not linked to the work.
 - **First-pass claim:** Work Number and Authority columns show 8-char UUID prefixes ("3f9a1c20…") not the work number or officer name (_data/loaders.ts:168,171; ApprovalsTable.tsx:10,12) — register is unreadable for officers.
 - **Verified evidence:** works/_data/loaders.ts:146-168 (mapAaRow) and mapTsRow set workNumber: shortId(workId) and authority: shortId(approvingAuthorityId|tsAuthorityId) -> '3f9a1c20…' (format.ts shortId). ApprovalsTable.tsx:7-8 columns 'Work Number'/'Authority' display those directly. The tenders loader shows the list API can supply r.workNumber (loaders.ts mapTenderRow uses str(r.workNumber)), but AA/TS mappers never read workNumber or any authority name, so whether the approvals API returns them is unverifiable (works-service absent).
@@ -330,7 +331,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; ts-new picker lists only dao_finalized works (workProposal.ts DAO_FINALIZED) and prefills ?workId= (ts-new/page.tsx + NewTsForm.tsx); NewTsForm.test.tsx)
+- [x] **Status** (W2 works: closed by #2047; ts-new picker lists only dao_finalized works (workProposal.ts DAO_FINALIZED) and prefills ?workId= (ts-new/page.tsx + NewTsForm.tsx); NewTsForm.test.tsx) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** a work that is not DAO-finalized is now LISTED as a disabled option with the reason (EntityOption.disabledReason: aria-disabled, reason text, skipped by ArrowUp/ArrowDown, ignored on click/Enter); Create is disabled until a work and a TS authority are chosen (and while the chosen work is not eligible), with an explanation and a submit() guard; the info banner follows the selected work (neutral / eligible / blocked, including a ?workId= prefill); the work search is server-side (GET /v1/works/proposals?q=&limit=&prefer=, returns status, eligible statuses ranked first) instead of the first 200 proposals filtered in the browser; the TS authority picker uses the tenant user directory (the admin-gated users list was unreachable for a works clerk). Eligibility mirrors the server allow-list canEnterTS (dao_finalized, ts_eligible). Tests: EntityPicker.test.tsx (combobox roles, ArrowUp/ArrowDown, disabled options), NewTsForm.test.tsx, cluster01-route-validation.test.ts, cluster01-billing.db.test.ts.
 - **W0 note:** partly fixed by #1867 — EntityPicker (work + TS authority) added, but picker does not disable non-DAO-finalized works (only shows Status sublabel), info banner is static, no ?workId= prefill on ts-new.
 - **First-pass claim:** The DAO-finalized precondition is only prose (page.tsx:82-84); the work is a pasted UUID (page.tsx:104-114), so users learn about a non-finalized proposal only from a server error.
 - **Verified evidence:** ts-new/page.tsx:82-84 infoBanner prose only; Work ID is a plain text input (:110-121) with UUID placeholder, TS authority likewise (:149-160). No lookup or precondition check; failure only surfaces via formError after POST (:60-63). Whether the server returns a specific error for non-finalized proposals is not verifiable (works-service absent). No EntityPicker component exists anywhere in apps/ or packages/, so it must be created.
@@ -440,7 +442,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 works: closed by #2047; ts/[id]/page.tsx shows the work number linked to the proposal and the officer name; ts/[id]/page.test.tsx)
+- [x] **Status** (W2 works: closed by #2047; ts/[id]/page.tsx shows the work number linked to the proposal and the officer name; ts/[id]/page.test.tsx) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** when the officer lookup fails the TS authority reads "Unknown officer (3f9a1c20…)" (works.approvalNames.unknownOfficer, en + hi) with the full id as a tooltip, and the work falls back to "ID 3f9a1c20…"; the page now skips the work-number / officer lookups when works-service already returned them, and looks the officer up in the tenant user directory by id. Same treatment on the AA detail page so register and detail agree. Tests: ts/[id]/page.test.tsx, aa/[id]/page.test.tsx.
 - **W0 note:** partly fixed by #1867 — Work linked to /works/billing/<workId> but label is still truncated UUID; TS authority still shortId with "(ID)" label; no workNumber/officer name resolution.
 - **First-pass claim:** Work ID and TS Authority are shown as truncated UUIDs (page.tsx:112-113) with no link to the work or officer.
 - **Verified evidence:** ts/[id]/page.tsx:110-111 render Work ID and TS Authority as `id.slice(0,8)+'…'` in plain text (rows at :110 and :111, not 112-113; :112-113 are Date/Created). No link to /works/billing/[workId] or proposal, no officer name. Title fallback at :120 also shows a UUID prefix. Response has only workId and tsAuthorityId (TsRaw :13-24); no name fields are read, so names need a lookup endpoint that is not visible here (works-service/master absent).
@@ -770,7 +773,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-02  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W2 works: closed by #2047; GET /v1/works/billing/mb/:mbId/measured-value (billing/routes.ts) + bills/new shows measured/billed/still-billable, prefills the gross and blocks a gross above it; billing-finalize-authority.test.ts + bills/new/page.test.tsx. Not built: an e-MB lock/override-reason (product rule))
+- [~] **Status** (W2 works rescan: PARTIAL. Built: an e-MB bill now starts from the MB's still-billable value (gross prefilled once the MB position loads, never overwriting what the clerk typed), with a neutral note when the gross is below it; the over-ceiling case stays a hard reject in web and server (MEASURED_VALUE_EXCEEDED). NEEDS OWNER DECISION for the rest, see below)
+- **W2 works rescan note (cluster 01):** OWNER QUESTION (GAP-WORKS-BILLING-BILLS-NEW-02): should an e-MB bill's gross be LOCKED to the MB's still-billable value with an "override with reason" path? If yes: (a) is billing LESS than the billable value (a running/partial bill) allowed without a reason, and who may override at all; (b) where must the reason live (a column or table on works.bills: a schema change, plus an audit field); (c) is an override ABOVE the measured value ever allowed (today web and server reject it). Not built because each answer is a payment-control policy. The measured-value hint is deliberately shown in abstract mode too, because the server enforces the same ceiling in both modes.
 - **W2 works note (#2039):** gross cannot be derived from the MB total (no MB-total endpoint); float math already replaced by BigInt.
 - **W0 note:** partly fixed by #1867 — Float math replaced by rupeesToMinorString/BigInt net preview; gross still free-typed (not derived from or validated against MB total; e_mb lock/override-reason and backend check not done).
 - **First-pass claim:** Gross and deductions are free-typed rupees converted with float Math.round(x*100) (page.tsx:17-20,48-50), not derived from the finalized MB measurements — bill value can silently diverge from measured work.
@@ -789,7 +793,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (NEEDS OWNER DECISION: statutory recovery heads SD/TDS/labour cess breakdown needs product confirmation and schema change; GAP-WORKS-BILLING-BILLS-NEW-03)
+- [~] **Status** (NEEDS OWNER DECISION: statutory recovery heads SD/TDS/labour cess breakdown needs product confirmation and a data-model decision; GAP-WORKS-BILLING-BILLS-NEW-03; re-checked in the W2 works rescan, nothing built)
+- **W2 works rescan note (cluster 01):** OWNER QUESTION (GAP-WORKS-BILLING-BILLS-NEW-03): which statutory recovery heads apply (security deposit, income tax/TDS, labour cess, GST TDS: codes and labels), are they fixed or tenant-configured, and is each head an entered amount or computed from a rate (percent of gross, of net, or of measured value)? Note for the schema decision: works.bill_recoveries (recovery_type, amount_minor, remarks, RLS, audit columns) already exists but nothing reads or writes it; the bill create command, consumer and read model would need per-head lines whose sum equals deductionsMinor. Nothing was built: heads and rates are policy values that are not in the repository or tenant configuration.
 - **W2 works part 2 note (#2047):** statutory recovery heads (security deposit, TDS, labour cess) need a product decision and a schema change. INTERIM, owner decision.
 - **W2 works note (#2039):** statutory recovery heads need a product decision and a schema change.
 - **First-pass claim:** Single "Deductions" number: no breakdown of statutory recoveries (security deposit, TDS, labour cess), so the net payable cannot be audited from the form.
@@ -2994,7 +2999,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** POST /v1/works/approvals/aa now validates aaDate as a real calendar date (YYYY-MM-DD or ISO date-time; was an unvalidated string accepted with 202 then thrown in the consumer), requires a strictly positive amount (zero and negative were accepted) no larger than the int8 column, and 404s a work that does not exist (TS create already did); the consumer re-checks date and amount for commands that bypass the route. Tests: cluster01-route-validation.test.ts, approval-consumer-events.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/approvals/aa']`
 - **Question:** Do POST /v1/works/approvals/aa enforce AA creator role checks, input validation, canonical status enums and the documented response shape?
@@ -3005,7 +3011,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** POST /v1/works/approvals/ts validates tsDate as a real calendar date and requires a strictly positive amount; 403 for a role that cannot create a TS is now covered by a route test (works_viewer, citizen, estimator), together with 400 (bad date, zero/negative/overflow amount), 404, 422 DAO_GATE_BLOCKED and 202; the consumer re-checks both. The status column remains a varchar without a DB CHECK (not changed: the route and consumer enforce the draft/finalized values). Tests: cluster01-route-validation.test.ts, approval-consumer-events.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/approvals/ts']`
 - **Question:** Do POST /v1/works/approvals/ts enforce TS creator role checks, input validation, canonical status enums and the documented response shape?
@@ -3061,7 +3068,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** POST /v1/works/billing/bills now requires a strictly positive gross and a non-negative deduction (a negative gross used to pass both cumulative ceilings; zero deductions stay valid and net payable stays gross - deductions); the bill number is trimmed and unique per work, case-insensitively (409 DUPLICATE_BILL_NUMBER from the route, re-checked in the consumer transaction under a per-work advisory lock so two concurrent creates against different MBs cannot both win; the web form shows it under the Bill Number field); 403 wrong role is route-tested. No DB UNIQUE index was added: existing rows may already hold duplicates, so adding one needs a data check first. Tests: cluster01-route-validation.test.ts, orphan-consumers.test.ts, cluster01-billing.db.test.ts (exact paise, concurrency), bills/new/page.test.tsx.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/billing/bills']`
 - **Question:** Do POST /v1/works/billing/bills enforce billing creator role checks, input validation, canonical status enums and the documented response shape?
@@ -3072,7 +3080,8 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-MEASUREMENTS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by main, verified on main 9c5e9e9e9) (W2 works rescan: completed by #PRNUM)
+- **W2 works rescan note (cluster 01):** a measurement can only be recorded against a DRAFT measurement book (409 MB_NOT_OPEN from the route; the consumer re-checks under FOR UPDATE on the MB row), so the measured-value ceiling a bill is checked against cannot change once the finalization chain starts or after do_finalized; quantity is bounded to numeric(18,4) and the optional dimensions to numeric(12,4); route tests cover 401/403/400/404/409/202 and the web form offers only draft books and explains the rest. Tests: cluster01-route-validation.test.ts, orphan-consumers.test.ts, cluster01-billing.db.test.ts, measurements/new/page.test.tsx, errorCatalogue.change.test.ts.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/billing/measurements']`
 - **Question:** Do POST /v1/works/billing/measurements enforce measurement recorder role checks, input validation, canonical status enums and the documented response shape?

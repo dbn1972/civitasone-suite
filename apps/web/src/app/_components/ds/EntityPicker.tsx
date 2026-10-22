@@ -7,6 +7,13 @@ export interface EntityOption {
   id: string;
   label: string;
   sublabel?: string;
+  /**
+   * When set, the option is listed but cannot be chosen: it renders with aria-disabled, the reason is shown under the
+   * label, mouse selection is ignored and arrow-key navigation skips it. Use it for a record that exists but does not
+   * meet a precondition (for example a work that is not yet DAO-finalized), so the user sees WHY it is unavailable
+   * instead of wondering where it went.
+   */
+  disabledReason?: string;
 }
 
 export interface EntityPickerProps {
@@ -94,6 +101,14 @@ export interface EntityPickerProps {
 function idsOf(value: string | string[] | null): string[] {
   if (value == null) return [];
   return Array.isArray(value) ? value : [value];
+}
+
+const isEnabled = (opt: EntityOption | undefined): boolean => !!opt && !opt.disabledReason;
+
+/** Index of the first selectable option at or after `from` (stepping by `step`), or -1 when there is none. */
+function nextEnabledIndex(opts: EntityOption[], from: number, step: 1 | -1): number {
+  for (let i = from; i >= 0 && i < opts.length; i += step) if (isEnabled(opts[i])) return i;
+  return -1;
 }
 
 /**
@@ -255,7 +270,7 @@ export function EntityPicker({
           if (controller.signal.aborted) return;
           setResults(opts);
           setLoading(false);
-          setActiveIndex(opts.length > 0 ? 0 : -1);
+          setActiveIndex(nextEnabledIndex(opts, 0, 1));
           setKnown((prev) => {
             const next = new Map(prev);
             for (const opt of opts) next.set(opt.id, opt);
@@ -284,6 +299,7 @@ export function EntityPicker({
   }
 
   function selectOption(opt: EntityOption) {
+    if (!isEnabled(opt)) return;
     setKnown((prev) => new Map(prev).set(opt.id, opt));
     if (multiple) {
       if (!selectedIds.includes(opt.id)) onChange([...selectedIds, opt.id]);
@@ -318,11 +334,18 @@ export function EntityPicker({
     switch (e.key) {
       case "ArrowDown":
         e.preventDefault();
-        setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+        // Skip options that cannot be chosen; stay put at the last selectable one.
+        setActiveIndex((i) => {
+          const next = nextEnabledIndex(results, i + 1, 1);
+          return next === -1 ? i : next;
+        });
         break;
       case "ArrowUp":
         e.preventDefault();
-        setActiveIndex((i) => Math.max(i - 1, 0));
+        setActiveIndex((i) => {
+          const prev = nextEnabledIndex(results, i - 1, -1);
+          return prev === -1 ? i : prev;
+        });
         break;
       case "Enter":
         e.preventDefault();
@@ -491,31 +514,38 @@ export function EntityPicker({
             boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           }}
         >
-          {results.map((opt, idx) => (
-            <li
-              key={opt.id}
-              id={`${auxId}-option-${opt.id}`}
-              role="option"
-              aria-selected={idx === activeIndex}
-              // mousedown (not click) fires and completes selection before
-              // the input's blur/outside-click handler would otherwise
-              // close the dropdown out from under the click.
-              onMouseDown={(e) => {
-                e.preventDefault();
-                selectOption(opt);
-              }}
-              style={{
-                padding: "8px 10px",
-                borderRadius: 8,
-                cursor: "pointer",
-                fontSize: 14,
-                background: idx === activeIndex ? "var(--panel-2, #eff6ff)" : "transparent",
-              }}
-            >
-              <div>{opt.label}</div>
-              {opt.sublabel && <div style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>{opt.sublabel}</div>}
-            </li>
-          ))}
+          {results.map((opt, idx) => {
+            const enabled = isEnabled(opt);
+            return (
+              <li
+                key={opt.id}
+                id={`${auxId}-option-${opt.id}`}
+                role="option"
+                aria-selected={idx === activeIndex}
+                aria-disabled={enabled ? undefined : true}
+                // mousedown (not click) fires and completes selection before
+                // the input's blur/outside-click handler would otherwise
+                // close the dropdown out from under the click. A disabled
+                // option swallows the event (keeps the list open) and selects nothing.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  selectOption(opt);
+                }}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 8,
+                  cursor: enabled ? "pointer" : "not-allowed",
+                  fontSize: 14,
+                  opacity: enabled ? 1 : 0.65,
+                  background: idx === activeIndex ? "var(--panel-2, #eff6ff)" : "transparent",
+                }}
+              >
+                <div>{opt.label}</div>
+                {opt.sublabel && <div style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>{opt.sublabel}</div>}
+                {opt.disabledReason && <div style={{ fontSize: 12, color: "var(--warn)" }}>{opt.disabledReason}</div>}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
