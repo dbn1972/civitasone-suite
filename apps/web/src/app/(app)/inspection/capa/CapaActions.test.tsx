@@ -86,30 +86,32 @@ describe("CapaRowAction", () => {
     expect(screen.queryByText(/boom raw error/i)).not.toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-CAPA-04: after a 202, if the row state has not changed
-  // after the follow-up refresh, show an honest "still processing" warning.
-  it("shows a stale warning when status is unchanged 5s after a 202", async () => {
-    vi.useFakeTimers();
+  // GAP-INSPECTION-CAPA-04 + SF-15: after a 202 the row says "received" and offers
+  // a manual Refresh (no timer-based refresh guessing the write landed). A
+  // refresh that leaves the status unchanged shows the honest "still being
+  // applied" hint; a status change drops the notice.
+  it("shows an accepted notice with a manual Refresh after a 202, and no timer refresh", async () => {
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
-    render(<CapaRowAction id="capa-stale" status="open" />);
+    const { rerender } = render(<CapaRowAction id="capa-stale" status="open" />);
 
-    // Click and flush the fetch + state updates without advancing fake timers.
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: /start/i }));
     });
 
-    expect(screen.getByRole("status")).toHaveTextContent(/status will update shortly/i);
+    expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalledTimes(1); // the immediate refresh only
+    expect(setTimeoutSpy.mock.calls.some(([, d]) => d === 5000)).toBe(false);
 
-    // Advance past the 5-second follow-up timer; act() flushes the React state
-    // updates (setPollDue) that the timer callback triggers.
-    await act(async () => {
-      vi.advanceTimersByTime(6000);
-    });
+    // Manual Refresh re-reads; the status prop is unchanged -> honest hint.
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/still being applied/i)).toBeInTheDocument();
 
-    // router.refresh() was called a second time but status prop is still "open".
-    expect(screen.getByRole("status")).toHaveTextContent(/unchanged.*may still be processing/i);
-    vi.useRealTimers();
+    // Server caught up: the status prop changes and the notice goes away.
+    rerender(<CapaRowAction id="capa-stale" status="in_progress" />);
+    expect(screen.queryByText(/status will update shortly/i)).not.toBeInTheDocument();
   });
 });

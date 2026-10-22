@@ -2,8 +2,9 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { ActionButton, EntityPicker } from "../../../_components/ds";
+import { useEffect, useState } from "react";
+import { AcceptedNotice, ActionButton, EntityPicker } from "../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -18,7 +19,6 @@ export type ContractObligation = {
 };
 
 // GAP-CONTRACTS-DETAIL-06: intervals for post-202 polling.
-const POLL_DELAYS = [5_000, 10_000];
 
 type Props = { contractId: string; obligations: ContractObligation[] };
 
@@ -34,9 +34,9 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  const accepted = useAcceptedWrite();
   // GAP-CONTRACTS-DETAIL-06: pending obligation writes (id -> prevStatus).
   const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
-  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -56,15 +56,17 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       return changed ? next : prev;
     });
   }, [obligations]);
+
+  // The "received" notice is moot once every pending change has landed in props.
   useEffect(() => {
-    const timers = pollTimers.current;
-    return () => { for (const t of timers) clearTimeout(t); };
-  }, []);
+    if (pendingMap.size === 0 && accepted.phase === "accepted") accepted.reset();
+  }, [pendingMap, accepted]);
 
   async function createObligation() {
     setCreating(true);
     setError(undefined);
     setMessage("");
+    accepted.reset();
     try {
       if (!title.trim()) throw new Error("Title is required");
       if (!dueDate) throw new Error("Due date is required");
@@ -106,6 +108,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
     setBusyId(obligationId);
     setError(undefined);
     setMessage("");
+    accepted.reset();
     try {
       const res = await fetch(`/api/proxy/v1/contract/obligations/${obligationId}`, {
         method: "PATCH",
@@ -120,9 +123,8 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       setPendingMap((prev) => new Map(prev).set(obligationId, prevStatus));
       setMessage(`Status change to "${STATUS_LABEL[nextStatus] ?? nextStatus}" received — it will update shortly.`);
       router.refresh();
-      for (const delay of POLL_DELAYS) {
-        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
-      }
+      // SF-15: no timer-based refresh. 202 = received; the Refresh button (AcceptedNotice) re-reads on demand.
+      accepted.accept();
     } finally {
       setBusyId(null);
     }
@@ -218,7 +220,9 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
         </button>
       </div>
 
-      {message ? (
+      {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
         </p>
