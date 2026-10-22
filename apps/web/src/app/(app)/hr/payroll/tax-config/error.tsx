@@ -11,7 +11,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
       reset={reset}
       backHref="/hr/payroll"
       backLabel={t("backToPayroll")}
-      area={t("areaTaxConfiguration")}
+      area={t("areaIncomeTaxReference")}
     />
   );
 }

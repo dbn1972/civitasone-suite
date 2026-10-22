@@ -176,6 +176,23 @@ describe("GAP-PAYROLL-STATUTORY-PT-04 / LWF-02: state rules", () => {
     const bad = await post("/v1/payroll/statutory/state-rules", MAKER, { stateCode: "MH", lwfFrequency: "weekly" });
     expect(bad.statusCode).toBe(400);
   });
+
+  it("GAP-PAYROLL-STATUTORY-LWF-05: a body with a state but no LWF field is refused (400), nothing is queued", async () => {
+    const r = await post("/v1/payroll/statutory/state-rules", MAKER, { stateCode: "MH" });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("VALIDATION_FAILED");
+    expect(r.json().fieldErrors).toEqual([expect.objectContaining({ field: "lwfEmployee" })]);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-LWF-05: an explicit 0 is a real value (accepted), a single field is enough", async () => {
+    const zero = await post("/v1/payroll/statutory/state-rules", MAKER, { stateCode: "MH", lwfEmployee: 0, lwfEmployer: 0 });
+    expect(zero.statusCode).toBe(202);
+    expect((mockPublish.mock.calls[0]![1] as { payload: { lwfEmployee: number; lwfEmployer: number } }).payload).toMatchObject({ lwfEmployee: 0, lwfEmployer: 0 });
+    mockPublish.mockClear();
+    const freqOnly = await post("/v1/payroll/statutory/state-rules", MAKER, { stateCode: "MH", lwfFrequency: "yearly" });
+    expect(freqOnly.statusCode).toBe(202);
+  });
 });
 
 describe("GAP-PAYROLL-STATUTORY-LWF-01: who may change a statutory state rule", () => {

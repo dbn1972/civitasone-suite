@@ -18,6 +18,7 @@ import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import * as taxCommands from "../tax/commands.js";
+import { maskPan } from "../../shared/pii-mask.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -544,7 +545,11 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       employer: employerIdentity(),
-      employee: { employeeId, pan, name, panFlag: pan ? "" : "PANNOTAVBL" },
+      // GAP-PAYROLL-STATUTORY-PERQUISITE-04: the PAN is DPDP-sensitive -- masked
+      // server-side (ABCDE****F), never sent in the clear to the browser. A staff
+      // member who needs the full value uses the audited reveal on the HRMS
+      // employee master (POST /v1/hrms/pii/reveal, reason required, audit first).
+      employee: { employeeId, pan: maskPan(pan), name, panFlag: pan ? "" : "PANNOTAVBL" },
       perquisites,
       totalPerquisitesMinor: totalPerqMinor,
       totalPerquisites: Math.round(totalPerqMinor / 100),

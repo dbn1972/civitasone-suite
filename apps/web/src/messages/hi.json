@@ -2794,7 +2794,8 @@
     "employeePickerPlaceholder": "नाम या कर्मचारी कोड टाइप करें…",
     "financialYearLabel": "वित्तीय वर्ष",
     "submitBtn": "फॉर्म 12BA देखें",
-    "requiredError": "देखने हेतु एक कर्मचारी चुनें।"
+    "requiredError": "देखने हेतु एक कर्मचारी चुनें।",
+    "fyInvalidError": "मान्य वित्तीय वर्ष चुनें, उदाहरण के लिए 2026-27।"
   },
   "employeeImport": {
     "title": "थोक कर्मचारी आयात",
@@ -4117,8 +4118,8 @@
     "incomeTaxDesc": "मासिक TDS गणना और इतिहास",
     "tdsReturns": "TDS रिटर्न",
     "tdsReturnsDesc": "फ़ॉर्म 24Q / 26Q त्रैमासिक e-TDS",
-    "taxConfig": "कर कॉन्फ़िग",
-    "taxConfigDesc": "TDS स्लैब और कटौती सीमाएं",
+    "taxConfig": "कर संदर्भ",
+    "taxConfigDesc": "केवल-पढ़ने योग्य TDS स्लैब और कटौती सीमाएं",
     "salaryRevisions": "वेतन संशोधन",
     "salaryRevisionsDesc": "वेतनवृद्धि और संशोधन रिकॉर्ड",
     "salaryCorrections": "वेतन सुधार",
@@ -4931,10 +4932,10 @@
     "frequencyYearly": "वार्षिक"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। आपके द्वारा दर्ज राशि या आवृत्ति संग्रहीत मानों को बदल देगी; खाली फ़ील्ड वर्तमान मान बनाए रखेंगे।",
+    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। सहेजने पर आपके बदले हुए संग्रहीत मान बदल जाएँगे; बाकी वैसे ही रहेंगे।",
     "formTitle": "LWF विन्यास जोड़ें / अद्यतन करें",
     "stateCodeLabel": "राज्य कोड",
-    "stateCodePlaceholder": "उदा. KA",
+    "stateCodePlaceholder": "राज्य / केंद्रशासित प्रदेश चुनें",
     "employeeContributionLabel": "कर्मचारी अंशदान (₹)",
     "employerContributionLabel": "नियोक्ता अंशदान (₹)",
     "submitBtn": "LWF विन्यास सहेजें",
@@ -4946,12 +4947,16 @@
     "savedMessage": "{state} के लिए LWF विन्यास सहेज दिया गया।",
     "frequencyLabel": "आवृत्ति",
     "frequencyKeepCurrent": "वर्तमान आवृत्ति रखें",
+    "frequencyUseDefault": "डिफ़ॉल्ट ({frequency})",
     "frequencyMonthly": "मासिक",
     "frequencyQuarterly": "त्रैमासिक",
     "frequencyHalfYearly": "अर्धवार्षिक",
     "frequencyYearly": "वार्षिक",
-    "blankKeepsCurrentHint": "इस राज्य के लिए पहले से सहेजा गया मान रखने के लिए फ़ील्ड खाली छोड़ें।",
-    "unchangedValue": "अपरिवर्तित"
+    "unchangedValue": "अपरिवर्तित",
+    "amountRequiredError": "राशि रुपये में दर्ज करें। यदि कोई अंशदान लागू नहीं है तो 0 लिखें।",
+    "amountInvalidError": "रुपये में मान्य राशि दर्ज करें (अधिकतम दो दशमलव अंक)।",
+    "noChangesError": "सहेजे गए विन्यास से कुछ भी नहीं बदला है।",
+    "amountsRequiredHint": "दोनों राशियाँ आवश्यक हैं; कोई अंशदान लागू न हो तो 0 लिखें। जिस राज्य का विन्यास पहले से है, उसके सहेजे गए मान भर दिए जाते हैं और केवल आपके बदले हुए मान अद्यतन होते हैं।"
   },
   "medicalClaims": {
     "title": "चिकित्सा दावे",
@@ -5186,7 +5191,9 @@
     "totalContributionsLabel": "कुल अंशदान",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि अनुपलब्ध है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "NPS विवरण"
+    "loadingHeading": "NPS विवरण",
+    "colContributionBase": "अंशदान आधार",
+    "contributionBaseNote": "अंशदान आधार: वह मूल वेतन + महंगाई भत्ता जिस पर कर्मचारी और नियोक्ता प्रतिशत लागू हुए (निलंबित कर्मचारी के लिए केवल सामान्य दिनों का हिस्सा)। आधार दर्ज होने से पहले के विवरणों में — दिखता है।"
   },
   "offCycle": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5484,6 +5491,7 @@
     "areaReimbursements": "प्रतिपूर्ति",
     "areaPayStructures": "वेतन संरचनाएं",
     "areaTaxConfiguration": "कर विन्यास",
+    "areaIncomeTaxReference": "आयकर संदर्भ",
     "areaTdsReturns": "TDS विवरणियां"
   },
   "routeError": {
@@ -6503,8 +6511,8 @@
     "chartOtherLabel": "अन्य ({count})"
   },
   "payrollTaxConfig": {
-    "title": "आयकर कॉन्फ़िगरेशन",
-    "subtitle": "चयनित वित्तीय वर्ष के लिए, आपके संगठन का पेरोल इंजन वास्तव में जो आयकर स्लैब, कटौती सीमाएँ और अधिभार बैंड लागू करता है।",
+    "title": "आयकर संदर्भ",
+    "subtitle": "चयनित वित्तीय वर्ष के लिए आपके संगठन का पेरोल इंजन जो आयकर स्लैब, कटौती सीमाएँ और अधिभार बैंड लागू करता है, उनका केवल-पढ़ने योग्य दृश्य।",
     "backLabel": "पेरोल",
     "fyCardTitle": "वित्तीय वर्ष",
     "fyLabel": "वित्तीय वर्ष",
@@ -6529,8 +6537,13 @@
     "footerNote": "ये आँकड़े पेरोल इंजन के प्रति-टेनेंट, प्रति-FY कॉन्फ़िगरेशन से लाइव पढ़े जाते हैं — यह वही है जो इस वित्तीय वर्ष का रन लागू करता है।",
     "footerLink": "आयकर रोलअप देखें",
     "loadErrorMessage": "कर कॉन्फ़िगरेशन लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
-    "loadingTitle": "टैक्स कॉन्फ़िगरेशन",
-    "loadingSubtitle": "टैक्स नियम और स्लैब सेटअप।"
+    "loadingTitle": "टैक्स संदर्भ",
+    "loadingSubtitle": "पेरोल इंजन द्वारा लागू टैक्स स्लैब और सीमाएँ।",
+    "thNewRegime": "नई व्यवस्था",
+    "thOldRegime": "पुरानी व्यवस्था",
+    "surchargeCapNote": "नई व्यवस्था: कॉन्फ़िगर की गई उच्चतम अधिभार दर {rate}% है, इसलिए नई व्यवस्था में अधिभार इस दर से अधिक नहीं होता।",
+    "marginalReliefNote": "प्रत्येक अधिभार सीमा पर मार्जिनल रिलीफ़ लागू होता है: कर और अधिभार का योग, सीमा पर देय कर और सीमा से ऊपर की आय के योग से अधिक नहीं होता।",
+    "readOnlyNote": "यह पृष्ठ केवल-पढ़ने योग्य संदर्भ है और किसी दर या सीमा को नहीं बदलता।"
   },
   "pensioners": {
     "ppoMaskedNote": "PPO संख्या छिपाकर दिखाई गई हैं। विवरण देखने के लिए रिकॉर्ड खोलें; वेतन अधिकारी वहाँ पूरी संख्या प्रकट कर सकते हैं (प्रकटीकरण ऑडिट किया जाता है)।",
@@ -6592,7 +6605,7 @@
     "statFinancialYear": "वित्तीय वर्ष",
     "form12baCardTitle": "फॉर्म 12BA",
     "selectEmployeeFyTitle": "एक कर्मचारी और वित्तीय वर्ष चुनें",
-    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी आईडी और वित्तीय वर्ष दर्ज करें।",
+    "selectEmployeeFyMessage": "अनुलाभ का फॉर्म 12BA विवरण देखने के लिए ऊपर कर्मचारी और वित्तीय वर्ष चुनें।",
     "noForm12baTitle": "कोई फॉर्म 12BA डेटा नहीं",
     "noForm12baMessage": "दिए गए कर्मचारी और वित्त वर्ष {fy} के लिए कोई अनुलाभ डेटा नहीं मिला।",
     "employerLabel": "नियोक्ता",
@@ -6617,7 +6630,10 @@
     "deleteDescription": "{nature} घटक इस कर्मचारी के फ़ॉर्म 12BA से हटा दिया जाएगा। हटाए गए मान के साथ यह कार्रवाई ऑडिट में दर्ज होगी।",
     "deleteConfirm": "घटक हटाएँ",
     "deleteReasonLabel": "हटाने का कारण",
-    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।"
+    "deleteFailed": "घटक हटाया नहीं जा सका। कृपया पुनः प्रयास करें।",
+    "subtitleFor": "{name} के अनुलाभ और फॉर्म 12BA, वित्त वर्ष {fy}।",
+    "invalidFyMessage": "पते में दिया गया वित्तीय वर्ष मान्य नहीं है। नीचे से वित्तीय वर्ष चुनें।",
+    "panMaskedAriaLabel": "PAN (मास्क किया हुआ)"
   },
   "perquisiteComponentForm": {
     "formTitle": "अनुलाभ घटक जोड़ें",
@@ -6642,14 +6658,16 @@
     "submitBtn": "घटक सहेजें",
     "valueInvalidError": "नियोक्ता द्वारा मूल्य एक मान्य रुपया राशि होनी चाहिए।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "savedMessage": "अनुलाभ घटक \"{nature}\" {employeeId} के लिए सहेजा गया।",
+    "savedMessage": "अनुलाभ घटक \"{nature}\" {employee} के लिए सहेजा गया।",
     "confirmTitle": "क्या यह अनुलाभ घटक सहेजें?",
     "confirmLabel": "पुष्टि करें और सहेजें",
-    "confirmDescriptionBase": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
-    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
+    "confirmDescriptionBase": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}।",
+    "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employee}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।",
     "updateBtn": "घटक अपडेट करें",
     "cancelEdit": "रद्द करें",
-    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।"
+    "editingNotice": "मौजूदा घटक में सुधार किया जा रहा है। प्रकृति नहीं बदली जा सकती; सहेजने पर राशि बदल जाएगी।",
+    "employeeUnnamed": "चुना गया कर्मचारी",
+    "fyInvalidError": "वित्तीय वर्ष मान्य नहीं है। मान्य वित्तीय वर्ष के साथ कर्मचारी को फिर से खोजें।"
   },
   "pf": {
     "selectPeriodLabel": "अवधि",
@@ -8878,7 +8896,8 @@
     "windowOpenUntil": "घोषणाएँ {date} तक खुली हैं।",
     "windowClosed": "{fy} की घोषणाएँ {date} को बंद हो गईं। अपनी घोषणा बदलने के लिए वेतन विभाग से संपर्क करें।",
     "windowNotOpen": "घोषणाएँ {date} को खुलेंगी।",
-    "lastUpdatedLabel": "अंतिम अद्यतन {date}"
+    "lastUpdatedLabel": "अंतिम अद्यतन {date}",
+    "lockedNotice": "इस घोषणा को पेरोल द्वारा सत्यापित या अनुमोदित किया जा चुका है और यह केवल-पढ़ने योग्य है। बदलाव की आवश्यकता हो तो पेरोल से संपर्क करें।"
   },
   "verifyForm16Form": {
     "cardTitle": "फॉर्म-16 सत्यापित करें",

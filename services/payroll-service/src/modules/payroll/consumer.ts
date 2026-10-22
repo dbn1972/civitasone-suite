@@ -2389,9 +2389,10 @@ export async function computeAndInsertSlip(
   // PAY-PROFILES: the EPF wage this slip's PF was computed on (pre-ceiling):
   // Basic + DA (consolidated pay has DA 0n). Only meaningful when PF applied.
   const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
-  const pfWageMinor = pfApplied
-    ? (params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor)
-    : null;
+  // The pension base computeSlip applied the GPF / NPS / EPF percentages to
+  // (domain.ts `pensionBase`): Basic + DA, or the FR 53 suspension-adjusted base.
+  const pensionBaseMinor = params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor;
+  const pfWageMinor = pfApplied ? pensionBaseMinor : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
     id: slipId, tenantId: params.tenantId, runId: params.runId,
@@ -2420,6 +2421,9 @@ export async function computeAndInsertSlip(
     await statutoryRepo.insertNps(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
       runId: params.runId, basicMinor: params.basicMinor,
+      // GAP-PAYROLL-STATUTORY-NPS-05: the base the 10% / 14% were applied to
+      // (basicMinor above is Basic only), so a ledger row can be checked by eye.
+      pensionBaseMinor,
       empContribPct: "10", erContribPct: "14",
       empContribMinor: result.npsEmployeeMinor, erContribMinor: result.npsEmployerMinor,
       currency: "INR", period: params.month,

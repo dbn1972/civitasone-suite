@@ -2779,7 +2779,8 @@
     "employeePickerPlaceholder": "Type a name or employee code…",
     "financialYearLabel": "Financial Year",
     "submitBtn": "View Form 12BA",
-    "requiredError": "Select an employee to look up."
+    "requiredError": "Select an employee to look up.",
+    "fyInvalidError": "Choose a valid financial year, for example 2026-27."
   },
   "employeeImport": {
     "title": "Bulk Employee Import",
@@ -4101,8 +4102,8 @@
     "incomeTaxDesc": "Monthly TDS computation and history",
     "tdsReturns": "TDS Returns",
     "tdsReturnsDesc": "Form 24Q / 26Q quarterly e-TDS",
-    "taxConfig": "Tax Config",
-    "taxConfigDesc": "TDS slabs and deduction limits",
+    "taxConfig": "Tax Reference",
+    "taxConfigDesc": "Read-only TDS slabs and deduction limits",
     "salaryRevisions": "Salary Revisions",
     "salaryRevisionsDesc": "Increment and revision records",
     "salaryCorrections": "Salary Corrections",
@@ -4918,10 +4919,10 @@
     "frequencyYearly": "Yearly"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} already has an LWF configuration. Amounts or frequency you enter replace the stored values; blank fields keep the current value.",
+    "overwriteWarning": "{state} already has an LWF configuration. Saving replaces the stored values you changed; the others are kept.",
     "formTitle": "Add / Update LWF Configuration",
     "stateCodeLabel": "State Code",
-    "stateCodePlaceholder": "e.g. KA",
+    "stateCodePlaceholder": "Select a state / UT",
     "employeeContributionLabel": "Employee Contribution (₹)",
     "employerContributionLabel": "Employer Contribution (₹)",
     "submitBtn": "Save LWF Configuration",
@@ -4933,12 +4934,16 @@
     "savedMessage": "LWF configuration saved for {state}.",
     "frequencyLabel": "Frequency",
     "frequencyKeepCurrent": "Keep current frequency",
+    "frequencyUseDefault": "Default ({frequency})",
     "frequencyMonthly": "Monthly",
     "frequencyQuarterly": "Quarterly",
     "frequencyHalfYearly": "Half-yearly",
     "frequencyYearly": "Yearly",
-    "blankKeepsCurrentHint": "Leave a field blank to keep the value already saved for this state.",
-    "unchangedValue": "unchanged"
+    "unchangedValue": "unchanged",
+    "amountRequiredError": "Enter the amount in rupees. Type 0 if no contribution applies.",
+    "amountInvalidError": "Enter a valid amount in rupees (at most 2 decimal places).",
+    "noChangesError": "Nothing has changed from the saved configuration.",
+    "amountsRequiredHint": "Both amounts are required; type 0 if no contribution applies. For a state that is already configured, the saved values are filled in and only the values you change are updated."
   },
   "medicalClaims": {
     "title": "Medical Claims",
@@ -5174,7 +5179,9 @@
     "totalContributionsLabel": "Total Contributions",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} a missing contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "NPS Statements"
+    "loadingHeading": "NPS Statements",
+    "colContributionBase": "Contribution base",
+    "contributionBaseNote": "Contribution base: the Basic + DA that the employee and employer percentages were applied to (for a suspended employee, only the regular days' share). Statements from before the base was recorded show —."
   },
   "offCycle": {
     "loadingAriaLabel": "Loading…",
@@ -5362,6 +5369,7 @@
     "areaReimbursements": "Reimbursements",
     "areaPayStructures": "Pay Structures",
     "areaTaxConfiguration": "Tax Configuration",
+    "areaIncomeTaxReference": "Income Tax Reference",
     "areaTdsReturns": "TDS Returns"
   },
   "routeError": {
@@ -5399,8 +5407,8 @@
     "recoveryColClosing": "Closing"
   },
   "payrollTaxConfig": {
-    "title": "Income Tax Configuration",
-    "subtitle": "The income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine actually applies, for the selected financial year.",
+    "title": "Income Tax Reference",
+    "subtitle": "A read-only view of the income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine applies for the selected financial year.",
     "backLabel": "Payroll",
     "fyCardTitle": "Financial Year",
     "fyLabel": "Financial year",
@@ -5425,8 +5433,13 @@
     "footerNote": "These figures are read live from the payroll engine's per-tenant, per-FY configuration — they are what a run for this financial year applies.",
     "footerLink": "View the income-tax rollup",
     "loadErrorMessage": "Couldn't load the tax configuration — showing nothing",
-    "loadingTitle": "Tax Configuration",
-    "loadingSubtitle": "Tax rules and slab setup."
+    "loadingTitle": "Tax Reference",
+    "loadingSubtitle": "Tax slabs and limits the payroll engine applies.",
+    "thNewRegime": "New regime",
+    "thOldRegime": "Old regime",
+    "surchargeCapNote": "New regime: the highest surcharge rate configured is {rate}%, so surcharge under the new regime never exceeds that rate.",
+    "marginalReliefNote": "Marginal relief applies at every surcharge threshold: tax plus surcharge never exceeds the tax at the threshold plus the income above it.",
+    "readOnlyNote": "This page is a read-only reference and does not change any rate or limit."
   },
   "pensioners": {
     "ppoMaskedNote": "PPO numbers are shown masked. Open a record to see its details; payroll officers can reveal the full number there (the reveal is audited).",
@@ -5488,7 +5501,7 @@
     "statFinancialYear": "Financial Year",
     "form12baCardTitle": "Form 12BA",
     "selectEmployeeFyTitle": "Select an employee and financial year",
-    "selectEmployeeFyMessage": "Enter an employee ID and financial year above to view their Form 12BA statement of perquisites.",
+    "selectEmployeeFyMessage": "Select an employee and financial year above to view their Form 12BA statement of perquisites.",
     "noForm12baTitle": "No Form 12BA data",
     "noForm12baMessage": "No perquisite data found for the given employee and FY {fy}.",
     "employerLabel": "Employer",
@@ -5513,7 +5526,10 @@
     "deleteDescription": "The {nature} component is removed from this employee's Form 12BA. The deletion is audited with the values removed.",
     "deleteConfirm": "Delete component",
     "deleteReasonLabel": "Reason for deleting",
-    "deleteFailed": "Could not delete the component. Please try again."
+    "deleteFailed": "Could not delete the component. Please try again.",
+    "subtitleFor": "Perquisites and Form 12BA for {name}, FY {fy}.",
+    "invalidFyMessage": "The financial year in the address is not valid. Choose a financial year below.",
+    "panMaskedAriaLabel": "PAN (masked)"
   },
   "perquisiteComponentForm": {
     "formTitle": "Add Perquisite Component",
@@ -5538,14 +5554,16 @@
     "submitBtn": "Save Component",
     "valueInvalidError": "Value by employer must be a valid rupee amount.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "Perquisite component \"{nature}\" saved for {employeeId}.",
+    "savedMessage": "Perquisite component \"{nature}\" saved for {employee}.",
     "confirmTitle": "Save this perquisite component?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}.",
-    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
+    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}.",
+    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
     "updateBtn": "Update component",
     "cancelEdit": "Cancel",
-    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts."
+    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts.",
+    "employeeUnnamed": "Selected employee",
+    "fyInvalidError": "The financial year is not valid. Look the employee up again with a valid financial year."
   },
   "pf": {
     "selectPeriodLabel": "Period",
@@ -7638,7 +7656,8 @@
     "windowOpenUntil": "Declarations are open until {date}.",
     "windowClosed": "Declarations for {fy} closed on {date}. Contact payroll to change your declaration.",
     "windowNotOpen": "Declarations open on {date}.",
-    "lastUpdatedLabel": "Last updated {date}"
+    "lastUpdatedLabel": "Last updated {date}",
+    "lockedNotice": "This declaration has been verified or approved by payroll and is read-only. Contact payroll if it needs to change."
   },
   "verifyForm16Form": {
     "cardTitle": "Verify a Form-16",
