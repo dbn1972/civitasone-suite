@@ -55,16 +55,16 @@ const payloadOf = (seeds: Seed[]) => ({
 describe("web counts agree with the dashboard definition on the same files (GAP-ESTAB-DASHBOARD-01)", () => {
   const files = mapEstabFileSummaries(payloadOf(SEEDS)) ?? [];
 
-  it("keeps the service status, so closed and draft are not folded into active", () => {
-    expect(files.map((f) => f.status)).toEqual(["active", "draft", "active", "closed", "archived", "active"]);
+  it("keeps closed distinct and presents a draft as active (a file in work), so neither closed nor archived is folded into active", () => {
+    expect(files.map((f) => f.status)).toEqual(["active", "active", "active", "closed", "archived", "active"]);
   });
 
   it("My Desk: overdue = open files past due = 2 (closed and archived never, due-today not, a draft yes)", () => {
     expect(files.filter((f) => isOverdue(f)).length).toBe(2);
   });
 
-  it("register: Active Files = status active = 3, and finished files = closed + archived = 2", () => {
-    expect(files.filter((f) => f.status === "active").length).toBe(3);
+  it("register: Active Files = status active = 4 (3 service-active + 1 draft shown as active), and finished files = closed + archived = 2", () => {
+    expect(files.filter((f) => f.status === "active").length).toBe(4);
     expect(files.filter((f) => isClosedStatus(f.status)).length).toBe(2);
   });
 
