@@ -5,6 +5,9 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { workProposals } from "../proposal/schema.js";
+import { ratingCooldownDays, isWithinRatingCooldown } from "./rating-policy.js";
+import { eq, and } from "drizzle-orm";
 
 const log = pino({ name: "works-contractor-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -90,9 +93,25 @@ export function registerContractorConsumers(rawQueue: Queue): void {
   // works.contractor.rate → incremental average update + rating history
   queue.subscribe(COMMANDS.contractorRate, async (msg) => {
     try {
-      const p = msg.payload as { id: string; tenantId: string; rating: number; comment?: string };
+      const p = msg.payload as { id: string; tenantId: string; rating: number; comment?: string; workId?: string };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // GAP-WORKS-CONTRACTORS-DETAIL-04: the cooling-off period is re-asserted in the writing transaction (two quick
+        // submits can both pass the route check). Skipped entirely while no cooldown is configured.
+        const cooldownDays = ratingCooldownDays();
+        if (cooldownDays > 0) {
+          const last = await repo.latestRatingByActorTx(tx, msg.tenantId, p.id, msg.actorId);
+          if (last && isWithinRatingCooldown(last.ratedAt, new Date(), cooldownDays)) {
+            throw new NonRetryableError("RATING_COOLDOWN: this officer already rated the contractor within the cooling-off period");
+          }
+        }
+        // The work a rating is linked to must exist in this tenant (the route checks too; this is the authoritative one).
+        if (p.workId) {
+          const work = await tx.select({ id: workProposals.id }).from(workProposals)
+            .where(and(eq(workProposals.tenantId, msg.tenantId), eq(workProposals.id, p.workId)))
+            .limit(1);
+          if (work.length === 0) throw new NonRetryableError("WORK_NOT_FOUND: the work cited for this rating does not exist");
+        }
         await repo.updateContractorRating(tx, p.id, msg.tenantId, p.rating);
         await repo.insertRatingHistory(tx, {
           tenantId: msg.tenantId,
@@ -100,15 +119,20 @@ export function registerContractorConsumers(rawQueue: Queue): void {
           rating: p.rating,
           ratedBy: msg.actorId,
           note: p.comment ?? null,
+          workId: p.workId ?? null,
         });
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { service: "works", action: "rate", resourceType: "contractor", resourceId: p.id, outcome: "success" },
+          // The stated basis for the rating is part of the audit trail (a rating affects tender eligibility). It is a
+          // free-text performance note, not PII, and travels the same way the PAN-reveal reason does.
+          payload: { service: "works", action: "rate", resourceType: "contractor", resourceId: p.id, outcome: "success", rating: p.rating, reason: p.comment ?? null, workId: p.workId ?? null },
         });
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "contractorRate processing failed");
+      // A refused (cooldown) rating is dead-lettered, observable, not swallowed like a transient failure.
+      if (err instanceof NonRetryableError) throw err;
     }
   });
 }

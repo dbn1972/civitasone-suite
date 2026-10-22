@@ -15300,6 +15300,20 @@
     "tsNew": {
       "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker."
     },
+    "boqNew": {
+      "duplicateByCode": "This item code is already on the BoQ for this work. Use a different code, or edit the existing line.",
+      "duplicateByDescription": "A line with this description is already on the BoQ for this work. Change the description, or edit the existing line."
+    },
+    "contractors": {
+      "partialHint": "Counted over the {shown} contractors shown.",
+      "showingFirst": "Showing the first {shown} contractors. Refine the filter to find more.",
+      "showingFirstOfTotal": "Showing the first {shown} of {total} contractors. Refine the filter to find the others."
+    },
+    "contractorRating": {
+      "workLabel": "Work this rating is about (optional)",
+      "workPlaceholder": "Search by work number…",
+      "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
+    },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",

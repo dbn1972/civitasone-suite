@@ -397,6 +397,31 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["back", "help"],
   },
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: works-service answers 409 RATING_COOLDOWN when the same officer rates the same
+  // contractor again inside the configured waiting period.
+  RATING_COOLDOWN: {
+    en: {
+      what: "You rated this contractor recently.",
+      next: "You can rate it again once the waiting period after your last rating has ended.",
+    },
+    hi: {
+      what: "आपने हाल ही में इस ठेकेदार को रेटिंग दी है।",
+      next: "आपकी पिछली रेटिंग के बाद की प्रतीक्षा अवधि समाप्त होने पर आप दोबारा रेटिंग दे सकते हैं।",
+    },
+    actions: ["back", "help"],
+  },
+  // BR-015 (works-service): once tender details exist for a work its BoQ is frozen against add, edit and delete.
+  BOQ_FROZEN: {
+    en: {
+      what: "The bill of quantities for this work can't be changed any more.",
+      next: "Tender details already exist for it. Ask your administrator if a correction is needed.",
+    },
+    hi: {
+      what: "इस कार्य की मात्रा-सूची (BoQ) अब बदली नहीं जा सकती।",
+      next: "इसके लिए निविदा विवरण पहले से मौजूद हैं। सुधार की ज़रूरत हो तो अपने प्रशासक से पूछें।",
+    },
+    actions: ["back", "help"],
+  },
 };
 
 /**
