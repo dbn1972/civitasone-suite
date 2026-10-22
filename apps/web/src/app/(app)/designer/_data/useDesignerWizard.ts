@@ -9,6 +9,7 @@ import { fetchLatestSandboxTest } from "./sandboxTestApi";
 import { submitForApproval } from "./designerReviewApi";
 import { adjacentBlocks } from "./designerNavigation";
 import { toHumanError } from "@/lib/messages";
+import { isNetworkFailure } from "@/lib/userFacingError";
 
 function blockStatusForDef(def: ServiceDefinitionDto, blockId: string, hidden: Set<string>): DesignerBlock["status"] {
   if (hidden.has(blockId)) return "empty";
@@ -62,7 +63,14 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
         await reload();
         if (!cancelled) setError(null);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load draft.");
+        if (!cancelled) {
+          if (isNetworkFailure(e)) {
+            const human = toHumanError("load", { area: "draft" });
+            setError(`${human.what} ${human.next}`);
+          } else {
+            setError(e instanceof Error ? e.message : "Could not load draft.");
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,7 +116,10 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
       await reload();
       router.push(`/designer/${definitionId}/review`);
     } catch (e) {
-      if (e instanceof Error) {
+      if (isNetworkFailure(e)) {
+        const human = toHumanError("save", { area: "submission" });
+        setError(`${human.what} ${human.next}`);
+      } else if (e instanceof Error) {
         setError(e.message);
       } else {
         const human = toHumanError("save", { area: "submission" });
