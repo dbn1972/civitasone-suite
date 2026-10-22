@@ -49,10 +49,30 @@ export async function insertCaseType(tx: Writer, row: CaseTypeInsert): Promise<v
   });
 }
 
-export async function findCaseById(id: string): Promise<CaseRow | null> {
+/**
+ * Tenant-scoped lookup. The app-layer tenant predicate is a defence-in-depth
+ * re-check on top of RLS (same pattern as opinions): a missing/foreign case is
+ * indistinguishable from a non-existent one.
+ */
+export async function findCaseById(id: string, tenantId: string): Promise<CaseRow | null> {
   const rows = await db.transaction(async (tx) =>
-    tx.select().from(legalCases).where(eq(legalCases.id, id)).limit(1));
+    tx.select().from(legalCases)
+      .where(and(eq(legalCases.id, id), eq(legalCases.tenantId, tenantId)))
+      .limit(1));
   return rows[0] ?? null;
+}
+
+/** Respondent party names for a case (tenant-scoped), oldest first. */
+export async function listRespondentNames(tenantId: string, caseId: string): Promise<string[]> {
+  const rows = await db.transaction((tx) =>
+    tx.select({ name: legalParties.name }).from(legalParties)
+      .where(and(
+        eq(legalParties.tenantId, tenantId),
+        eq(legalParties.caseId, caseId),
+        eq(legalParties.role, "respondent"),
+      ))
+      .orderBy(legalParties.createdAt));
+  return rows.map((r) => r.name);
 }
 
 /**

@@ -13,7 +13,9 @@ export async function seekOpinion(ctx: RequestContext, body: SeekOpinionBody): P
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
-  await cache.put(cache.makeKey(ctx.tenantId, "opinion", id), { id, ...body, status: "sought" });
+  await cache.put(cache.makeKey(ctx.tenantId, "opinion", id), {
+    id, tenantId: ctx.tenantId, ...body, status: "sought",
+  });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

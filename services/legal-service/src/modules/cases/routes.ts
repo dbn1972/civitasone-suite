@@ -77,7 +77,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const legalCase = await queries.getCase(id, ctx.tenantId);
+    const legalCase = await queries.getCaseDetail(id, ctx.tenantId);
     if (!legalCase) throw new HttpError(404, "NOT_FOUND", "case not found");
     return reply.send(legalCase);
   });

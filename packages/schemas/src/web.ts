@@ -2331,10 +2331,15 @@ export const LegalDashboardSchema = z.object({
   activeCases: z.number().default(0),
   hearingsThisWeek: z.number().default(0),
   ordersPending: z.number().default(0),
-  opinionsDue: z.number().default(0),
+  // null = "cannot be computed from recorded data" (the web renders a dash).
+  opinionsDue: z.number().nullable().default(null),
   disposedCases: z.number().default(0),
   totalCases: z.number().default(0),
 });
+
+// The service omits unset fields, but a null from any producer must not fail the
+// whole payload: normalise null -> undefined so consumers see the typed shape.
+const optText = z.string().nullish().transform((v) => v ?? undefined);
 
 export const LegalCaseSummarySchema = z.object({
   id: z.string(),
@@ -2344,37 +2349,39 @@ export const LegalCaseSummarySchema = z.object({
   type: z.enum(["civil", "criminal", "arbitration", "tribunal", "writ", "appeal", "other"]),
   // GAP-LEGAL-CASES-NEW-01: free-text dispute description; optional so legacy rows
   // without a subject still parse cleanly.
-  subject: z.string().optional(),
+  subject: optText,
   filedDate: z.string(),
-  department: z.string().optional(),
-  petitioner: z.string().optional(),
-  respondent: z.string().optional(),
-  advocateName: z.string().optional(),
-  nextHearingDate: z.string().optional(),
-  status: z.enum(["active", "disposed", "stayed", "transferred", "dismissed", "settled"]),
+  department: optText,
+  petitioner: optText,
+  respondent: optText,
+  advocateName: optText,
+  nextHearingDate: optText,
+  // The service persists pending | disposed | appealed | stayed | settled; the
+  // remaining values are kept for older producers.
+  status: z.enum(["pending", "active", "disposed", "stayed", "transferred", "dismissed", "settled", "appealed"]),
 });
 export const LegalCaseSummaryListSchema = z.array(LegalCaseSummarySchema);
 
 export const LegalCaseDetailSchema = LegalCaseSummarySchema.extend({
-  description: z.string().optional(),
+  description: optText,
   hearings: z.array(z.object({
     id: z.string(),
     date: z.string(),
     court: z.string(),
-    purpose: z.string().optional(),
-    outcome: z.string().optional(),
-    nextDate: z.string().optional(),
+    purpose: optText,
+    outcome: optText,
+    nextDate: optText,
   })).default([]),
   orders: z.array(z.object({
     id: z.string(),
     date: z.string(),
-    orderNo: z.string().optional(),
+    orderNo: optText,
     // GAP-LEGAL-CASES-DETAIL-01: pass orderType through so the detail page can
     // separate affidavit filings from court orders.
-    orderType: z.string().optional(),
+    orderType: optText,
     summary: z.string(),
     complianceRequired: z.boolean().default(false),
-    complianceDeadline: z.string().optional(),
+    complianceDeadline: optText,
     status: z.enum(["pending", "complied", "appealed"]),
   })).default([]),
 });
