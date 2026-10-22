@@ -5,7 +5,7 @@ import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
-import { formatMoney } from "@/lib/formatters";
+import { formatMinorString } from "@/lib/payroll/runMoney";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = {
@@ -13,9 +13,13 @@ type Props = {
   status: string;
   /** Context for the irreversible-action summaries. */
   employeeCount: number;
-  /** GAP-PAYROLL-HOME-01: integer-paise strings (the API's grossMinor / netMinor), rendered with formatMoney. */
-  grossMinor?: string;
-  netMinor?: string;
+  /**
+   * GAP-PAYROLL-RUNS-01: the run's exact gross / net in integer PAISE (digit
+   * strings, from the API's grossMinor / netMinor). Rendered with formatMoney
+   * in the Approve / Disburse confirmations; null = unknown -> "—".
+   */
+  grossMinor: string | null;
+  netMinor: string | null;
   payPeriod: string;
   canAdminister?: boolean;
   /**
@@ -114,14 +118,14 @@ export function PayrollRunActions({
         action === "approve"
           ? t("approvedMessage", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedMessage", { amount: formatMoney(netMinor), count: employeeCount })
+            ? t("disbursementInitiatedMessage", { amount: formatMinorString(netMinor), count: employeeCount })
             : t("revertedMessage", { period: payPeriod }),
       );
       toast.success(
         action === "approve"
           ? t("approvedToast", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedToast", { amount: formatMoney(netMinor) })
+            ? t("disbursementInitiatedToast", { amount: formatMinorString(netMinor) })
             : t("revertedToast"),
       );
       setPending(null);
@@ -239,7 +243,7 @@ export function PayrollRunActions({
             {t.rich("approveDescription", {
               period: payPeriod,
               count: employeeCount,
-              amount: formatMoney(grossMinor),
+              amount: formatMinorString(grossMinor),
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
             {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
@@ -263,7 +267,7 @@ export function PayrollRunActions({
         description={(
           <>
             {t.rich("disburseDescription", {
-              amount: formatMoney(netMinor),
+              amount: formatMinorString(netMinor),
               count: employeeCount,
               period: payPeriod,
               // GAP-PAYROLL-DETAIL-06: the channel is a translated, replaceable

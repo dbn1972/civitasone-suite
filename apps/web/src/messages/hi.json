@@ -1025,7 +1025,9 @@
     "reconcileNoChallan": "कोई चालान नहीं",
     "reconcilePendingFinalisation": "रन अंतिम नहीं",
     "filingBlockedMismatchBody": "{period} के लिए काटा गया TDS जमा किए गए {formType} चालानों से मेल नहीं खाता। {formType} फाइल करने से पहले अंतर दूर करें।",
-    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।"
+    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।",
+    "colFormType": "फॉर्म",
+    "reconcileNotMatched": "मिलान नहीं हुआ"
   },
   "checkinLog": {
     "title": "चेक-इन लॉग",
@@ -1986,12 +1988,14 @@
     "newGrossRequiredError": "नया सकल वेतन रुपयों में एक धनात्मक मान होना चाहिए।",
     "newBasicBelowOldError": "नया मूल वेतन पुराने से कम है — यदि यह जानबूझकर है तो संशोधन प्रकार \"सुधार\" चुनें।",
     "newGrossBelowBasicError": "नया सकल वेतन नए मूल वेतन से कम नहीं हो सकता।",
+    "amountTooLargeError": "राशि इतनी बड़ी है कि दर्ज नहीं की जा सकती। राशि जाँचकर पुनः प्रयास करें।",
     "recordedMessage": "कर्मचारी {employeeId} के लिए {amount} का वेतन संशोधन जमा किया गया। यह पृष्ठभूमि में सहेजा जा रहा है और शीघ्र ही नीचे इतिहास में दिखाई देगा।",
     "confirmTitle": "क्या यह वेतन संशोधन दर्ज करें?",
     "confirmLabel": "संशोधन दर्ज करें",
     "confirmDescription": "कर्मचारी <strong>{employeeId}</strong> के लिए {amount} मूल वेतन तक {revisionType} संशोधन दर्ज करें, प्रभावी {effectiveDate}।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।"
+    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।",
+    "reasonLabel": "इस संशोधन का कारण"
   },
   "crm": {
     "loading": {
@@ -3802,10 +3806,10 @@
     "errorArea": "GPF विवरण",
     "title": "<term>GPF</term> विवरण",
     "subtitle": "कर्मचारी और अवधि के अनुसार सामान्य भविष्य निधि अंशदान।",
-    "statStatements": "विवरण",
-    "statEmployees": "कर्मचारी",
-    "statTotalContributions": "कुल अंशदान",
-    "statPeriods": "अवधियां",
+    "statStatements": "विवरण (नीचे सूचीबद्ध)",
+    "statEmployees": "कर्मचारी (नीचे सूचीबद्ध)",
+    "statTotalContributions": "कुल अंशदान (नीचे सूचीबद्ध)",
+    "statPeriods": "कवर की गई अवधियां (नीचे सूचीबद्ध)",
     "lastPeriodLabel": "अंतिम अवधि का अंशदान",
     "periodValue": "अवधि: {period}",
     "trendCardTitle": "अंशदान रुझान (पिछली 6 अवधियाँ)",
@@ -3828,7 +3832,8 @@
     "emptyMessageFiltered": "आपके फ़िल्टर से कोई सामान्य भविष्य निधि रिकॉर्ड मेल नहीं खाता।",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि नहीं है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "GPF विवरण"
+    "loadingHeading": "GPF विवरण",
+    "ledgerLimitNote": "केवल पहले {limit} विवरण लोड किए गए हैं, इसलिए ऊपर की गिनती और कुल योग केवल उन्हीं विवरणों को दर्शाते हैं, पूरे इतिहास को नहीं।"
   },
   "gratuity": {
     "ceilingNote": "भुगतान ग्रेच्युटी अधिनियम की सीमा: {amount}। सरकारी (सीसीएस पेंशन नियम) डीसीआरजी के नियम और सीमाएँ अलग हैं, इसलिए यह सीमा हर पंक्ति पर लागू नहीं होती।",
@@ -5460,6 +5465,29 @@
       "disbursed": "वितरित",
       "failed": "विफल"
     }
+  },
+  "payrollRouteError": {
+    "backToHr": "HR पर वापस जाएँ",
+    "backToPayroll": "पेरोल पर वापस जाएं",
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं",
+    "backToMyPayslips": "मेरी वेतन पर्चियों पर वापस जाएं",
+    "areaHr": "HR पृष्ठ",
+    "areaSalarySlip": "वेतन पर्ची",
+    "areaPayrollComparison": "पेरोल तुलना",
+    "areaCostAllocation": "लागत आवंटन",
+    "areaCtcConfiguration": "CTC विन्यास",
+    "areaDdoManagement": "DDO प्रबंधन",
+    "areaFlexBenefits": "फ्लेक्स लाभ",
+    "areaFullAndFinal": "पूर्ण एवं अंतिम निपटान",
+    "areaPayGroups": "वेतन समूह",
+    "areaPayrollRegister": "पेरोल रजिस्टर",
+    "areaReimbursements": "प्रतिपूर्ति",
+    "areaPayStructures": "वेतन संरचनाएं",
+    "areaTaxConfiguration": "कर विन्यास",
+    "areaTdsReturns": "TDS विवरणियां"
+  },
+  "routeError": {
+    "backToDashboard": "डैशबोर्ड पर वापस जाएं"
   },
   "payrollDetail": {
     "exceptionMissingPan": "PAN उपलब्ध नहीं है। इसके बिना कर उच्च दर (धारा 206AA) पर काटा जाता है।",
@@ -8233,7 +8261,7 @@
     "historyCardTitle": "वेतन संशोधन इतिहास",
     "filterPlaceholder": "कर्मचारी या आदेश संख्या के अनुसार फ़िल्टर करें…",
     "emptyTitle": "अभी तक कोई वेतन संशोधन नहीं",
-    "emptyMessage": "HRMS वेतन-निर्धारण में अपस्ट्रीम दर्ज संशोधन यहां दिखाई देंगे।",
+    "emptyMessage": "वेतन संशोधन दर्ज होने के बाद यहां दिखाई देंगे।",
     "colEmployee": "कर्मचारी",
     "colEffectiveDate": "प्रभावी तिथि",
     "colRevisionType": "संशोधन प्रकार",

@@ -6,7 +6,7 @@ import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatMoney } from "@/lib/formatters";
+import { formatRunMoney } from "@/lib/payroll/runMoney";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 
 type PayrollRunsTableProps = { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean };
@@ -39,14 +39,16 @@ function PayrollRunsTableBody({ runs, source = "api", canAdminister = false }: P
     (d) => d.length === 0,
   );
 
-  // GAP-PAYROLL-HOME-01: money comes from the API's integer-paise strings
-  // (grossMinor / netMinor), rendered with formatMoney at the display edge.
-  // The legacy rupee floats (grossAmount / netAmount) are no longer read here.
+  // GAP-PAYROLL-RUNS-01: gross/net render through the shared run-money adapter
+  // (lib/payroll/runMoney.ts), which prefers the API's exact integer-paise
+  // grossMinor/netMinor strings and only falls back to the legacy rupee floats
+  // (grossAmount/netAmount) for an older payroll-service. They use `render`, not
+  // cellType:"amount", because the sort key stays the numeric rupee field.
   const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
     { key: "payPeriod", label: t("colPeriod") },
     { key: "employeeCount", label: t("colEmployees"), align: "right" },
-    { key: "grossMinor", label: t("colGross"), align: "right", render: (r) => formatMoney(r.grossMinor) },
-    { key: "netMinor", label: t("colNet"), align: "right", render: (r) => formatMoney(r.netMinor) },
+    { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRunMoney(r, "gross") },
+    { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRunMoney(r, "net") },
     // Hindi-locale finding: cellType:"status" rendered the raw backend enum
     // (draft/processing/completed/paid/disbursed/failed) verbatim -- no
     // i18n. `render` (checked before cellType by DataTable's cellValue())

@@ -1400,6 +1400,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      let lwfChange: { oldValue: Record<string, string> | null; newValue: Record<string, string> | null } | undefined;
       // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated versions written by
       // pt-versions-consumer.ts. A command still in flight from before versioning that
       // carries ptSlabs is NOT applied here -- slabs are no longer overwritten in place.
@@ -1412,26 +1413,46 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         const emp = p.lwfEmployee != null ? p.lwfEmployee.toString() : null;
         const er = p.lwfEmployer != null ? p.lwfEmployer.toString() : null;
         const freq = p.lwfFrequency ?? null;
-        await tx.execute(sql`
-          INSERT INTO payroll.payroll_lwf
-            (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor, frequency)
-          VALUES (${p.tenantId}::uuid, ${p.stateCode},
-            COALESCE(${emp}::bigint, 0),
-            COALESCE(${er}::bigint, 0),
-            COALESCE(${freq}::varchar, 'half_yearly'))
-          ON CONFLICT (tenant_id, state_code)
-          DO UPDATE SET
-            employee_contrib_minor = COALESCE(${emp}::bigint, payroll.payroll_lwf.employee_contrib_minor),
-            employer_contrib_minor = COALESCE(${er}::bigint, payroll.payroll_lwf.employer_contrib_minor),
-            frequency = COALESCE(${freq}::varchar, payroll.payroll_lwf.frequency)
-        `);
+        // GAP-PAYROLL-STATUTORY-LWF-01: a statutory-rate change is audited with what it
+        // changed FROM and TO. One statement, one snapshot: `prev` reads (and locks) the
+        // stored row, `up` is the unchanged upsert and RETURNs the stored result, so the
+        // before/after pair is exact even for a COALESCEd (partial) update. A first-ever
+        // row has no `prev` -> oldValue null. Amounts are paise strings.
+        const changed = (await tx.execute(sql`
+          WITH prev AS (
+            SELECT employee_contrib_minor::text AS "lwfEmployeeMinor",
+                   employer_contrib_minor::text AS "lwfEmployerMinor",
+                   frequency AS "lwfFrequency"
+              FROM payroll.payroll_lwf
+             WHERE tenant_id = ${p.tenantId}::uuid AND state_code = ${p.stateCode}
+               FOR UPDATE
+          ), up AS (
+            INSERT INTO payroll.payroll_lwf
+              (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor, frequency)
+            VALUES (${p.tenantId}::uuid, ${p.stateCode},
+              COALESCE(${emp}::bigint, 0),
+              COALESCE(${er}::bigint, 0),
+              COALESCE(${freq}::varchar, 'half_yearly'))
+            ON CONFLICT (tenant_id, state_code)
+            DO UPDATE SET
+              employee_contrib_minor = COALESCE(${emp}::bigint, payroll.payroll_lwf.employee_contrib_minor),
+              employer_contrib_minor = COALESCE(${er}::bigint, payroll.payroll_lwf.employer_contrib_minor),
+              frequency = COALESCE(${freq}::varchar, payroll.payroll_lwf.frequency)
+            RETURNING employee_contrib_minor::text AS "lwfEmployeeMinor",
+                      employer_contrib_minor::text AS "lwfEmployerMinor",
+                      frequency AS "lwfFrequency"
+          )
+          SELECT (SELECT to_jsonb(prev) FROM prev) AS before,
+                 (SELECT to_jsonb(up) FROM up) AS after
+        `)) as unknown as Array<{ before: Record<string, string> | null; after: Record<string, string> | null }>;
+        lwfChange = { oldValue: changed[0]?.before ?? null, newValue: changed[0]?.after ?? null };
       }
       await enqueue(tx, {
         topic: EVENTS.stateRulesUpserted, eventType: EVENTS.stateRulesUpserted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { stateCode: p.stateCode },
       });
-      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
+      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode, lwfChange);
     });
   });
 
@@ -1446,7 +1467,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; effectiveDate: string;
       oldBasicMinor: number; newBasicMinor: number; oldGrossMinor: number; newGrossMinor: number;
-      revisionType: string; orderNo?: string | null;
+      revisionType: string; orderNo?: string | null; reason?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1481,7 +1502,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
         });
       }
-      await audit(tx, msg, "create", "payroll_salary_revision", p.id, { newValue: { status } });
+      // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's reason and the sanctioning
+      // order go on the audit record (no free text lands anywhere else).
+      await audit(tx, msg, "create", "payroll_salary_revision", p.id, {
+        newValue: { status, ...(p.orderNo ? { orderNo: p.orderNo } : {}) },
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
   });
 

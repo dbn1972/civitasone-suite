@@ -53,7 +53,7 @@ describe("PayrollPeriodPage", () => {
     expect(screen.queryByText("₹5,000.00")).not.toBeInTheDocument();
   });
 
-  it("does not fall back to the legacy rupee floats: a payload without the paise strings shows an em dash", async () => {
+  it("a payload without the paise strings falls back to the legacy rupee floats through the shared adapter (GAP-PAYROLL-RUNS-01)", async () => {
     fetchJsonMock.mockResolvedValue({
       data: [
         { id: "run-2", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10, grossAmount: 500000, netAmount: 430000, deductions: 70000, status: "paid" },
@@ -64,9 +64,33 @@ describe("PayrollPeriodPage", () => {
     const ui = await PayrollPeriodPage();
     render(ui);
 
-    expect(screen.queryByText("₹5,00,000.00")).not.toBeInTheDocument();
-    expect(screen.queryByText("₹4,30,000.00")).not.toBeInTheDocument();
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹4,30,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹70,000.00")).toBeInTheDocument();
+  });
+
+  // GAP-PAYROLL-RUNS-01: the period summary renders run money through the same adapter as the runs list and
+  // the run detail, so one run shows one figure everywhere -- exact paise first, rupee float only as a fallback.
+  it("renders the exact paise strings (grossMinor/netMinor/deductionsMinor) in preference to the rupee floats", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10, grossAmount: 1, netAmount: 1, deductions: 1, grossMinor: "15000000", netMinor: "12345678", deductionsMinor: "2654322", status: "paid" },
+      ],
+      source: "api",
+    });
+    render(await PayrollPeriodPage());
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹26,543.22")).toBeInTheDocument();
+  });
+
+  it("a run with no money fields shows dashes, not a fabricated ₹0.00", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ id: "run-2", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10, status: "draft" }],
+      source: "api",
+    });
+    render(await PayrollPeriodPage());
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
   });
 
   it("tells the truth on a fetch failure", async () => {

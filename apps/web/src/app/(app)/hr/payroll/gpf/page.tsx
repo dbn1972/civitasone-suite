@@ -8,6 +8,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 import { reconciliationKey, countNeedingAttention } from "../_components/reconciliation";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { listQuerySchema } from "@civitasone/schemas/common";
 
 type GpfRow = {
   id: string;
@@ -21,9 +22,18 @@ type GpfRow = {
   reconciliation: string;
 } & Record<string, unknown>;
 
+/**
+ * GET /v1/payroll/statutory/gpf is paged: this page asks without a limit, so
+ * payroll-service applies its default (listQuerySchema, shared with the
+ * service). When a full page comes back there may be more history that was NOT
+ * loaded, and the tile counts / totals below cover only what was loaded --
+ * GAP-PAYROLL-STATUTORY-GPF-05.
+ */
+const GPF_PAGE_LIMIT = listQuerySchema.parse({}).limit;
+
 export default async function GpfStatementsPage() {
   const t = await getTranslations("gpfStatements");
-  const tCommon = await getTranslations("payrollCommon");
+  const tNav = await getTranslations("payrollRouteError");
   // GAP-PAYROLL-GPF-05: hr/layout.tsx admits employee/manager to every
   // /hr/payroll* route, and this ledger lists every employee's GPF
   // contributions. Gate on the same READER_ROLES payroll-service enforces on
@@ -52,6 +62,7 @@ export default async function GpfStatementsPage() {
     contrib: r.empContribMinor ?? null,
   }));
 
+  const mayBeTruncated = !errored && rows.length >= GPF_PAGE_LIMIT;
   const attentionCount = errored ? 0 : countNeedingAttention(rows);
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   const uniquePeriods = errored ? null : new Set(tableRows.map((r) => r.period)).size;
@@ -81,7 +92,7 @@ export default async function GpfStatementsPage() {
       <PageHeader
         title={t.rich("title", { term: () => <Term name="GPF" /> })}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
+        back="/hr/payroll" backLabel={tNav("backToPayroll")}
         help="payroll"
       />
 
@@ -98,6 +109,12 @@ export default async function GpfStatementsPage() {
           "Projected Value at Retirement" tile (a tenant-wide contributions
           total projected 20 years at a single rate) are removed. A corpus
           belongs here only once the API returns real per-account balances. */}
+      {mayBeTruncated && (
+        <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
+          {t("ledgerLimitNote", { limit: GPF_PAGE_LIMIT })}
+        </p>
+      )}
+
       {!errored && attentionCount > 0 && (
         <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
           {t("reconcileAttentionNote", { count: attentionCount })}

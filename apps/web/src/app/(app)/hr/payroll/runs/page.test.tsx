@@ -67,6 +67,22 @@ describe("PayrollRunsPage", () => {
     expect(screen.getByText("₹4,30,000.00")).toBeInTheDocument();
   });
 
+  it("GAP-PAYROLL-RUNS-01: renders the exact paise strings (grossMinor/netMinor), same figure as the legacy float payload", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        // rupee floats deliberately disagree with the paise strings: the strings win.
+        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 1, netAmount: 1, deductions: 0, grossMinor: "15000000", netMinor: "12345678", deductionsMinor: "2654322", status: "paid" },
+      ],
+      source: "api",
+    });
+
+    const ui = await PayrollRunsPage();
+    renderWithProvider(ui);
+
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+  });
+
   it("points the empty-state CTA at the working /hr/payroll page, not the broken /hr/payroll/period page", async () => {
     // Regression test: the old empty-state CTA and the dashboard/quick-action
     // "Start Run"/"Run Payroll" buttons across the module all pointed at

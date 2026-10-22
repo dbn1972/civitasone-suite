@@ -2,15 +2,16 @@
 
 import { useTranslations } from "next-intl";
 import { formatMoney } from "@/lib/formatters";
-import { formatTenths, parseMinor, tenthsOfPercent } from "@/lib/payroll/minor";
+import { parseMinorString, percentOneDecimal } from "@/lib/payroll/runMoney";
 
 /**
- * GAP-PAYROLL-HOME-01: every amount here is an integer-paise string (the API's
- * grossMinor / netMinor), compared with bigint arithmetic and rendered with
- * formatMoney. The percentages are integer-rounded to one decimal, half away
- * from zero (see lib/payroll/minor.ts tenthsOfPercent), not float math.
+ * GAP-PAYROLL-RUNS-01: every figure here is EXACT integer paise (digit strings,
+ * so they cross the server -> client boundary without float or bigint
+ * serialisation issues). The % deltas are computed on the integer ratio
+ * (BigInt, rounded half-up to one decimal), never on rupee floats.
  */
 type Props = {
+  /** This run's gross in paise; null = unknown (renders "—", no delta, no ratio). */
   currentGrossMinor: string | null;
   /**
    * null means "we don't know" (the prior-period fetch failed) — distinct
@@ -19,6 +20,7 @@ type Props = {
    * delta line rather than a fabricated comparison against ₹0.
    */
   previousGrossMinor: string | null;
+  /** This run's net in paise; null = unknown. */
   currentNetMinor: string | null;
   currentPeriod: string;
   previousPeriod: string;
@@ -32,14 +34,14 @@ export function MonthOverMonthCards({
   previousPeriod,
 }: Props) {
   const t = useTranslations("monthOverMonthCards");
-  const currentGross = parseMinor(currentGrossMinor);
-  const previousGross = parseMinor(previousGrossMinor);
-  const currentNet = parseMinor(currentNetMinor);
-  const diff  = previousGross !== null && currentGross !== null ? currentGross - previousGross : null;
-  const pctTenths = diff !== null && previousGross !== null && previousGross > 0n ? tenthsOfPercent(diff, previousGross) : null;
-  const isUp  = diff !== null && diff >= 0n;
+  const currentGross = parseMinorString(currentGrossMinor);
+  const previousGross = parseMinorString(previousGrossMinor);
+  const currentNet = parseMinorString(currentNetMinor);
+  const diff = currentGross !== null && previousGross !== null ? currentGross - previousGross : null;
+  const pct = diff !== null && previousGross !== null && previousGross > 0n ? percentOneDecimal(diff, previousGross) : null;
+  const isUp = diff !== null && diff >= 0n;
   const ratio = currentGross !== null && currentNet !== null && currentGross > 0n
-    ? formatTenths(tenthsOfPercent(currentNet, currentGross))
+    ? percentOneDecimal(currentNet, currentGross) ?? "—"
     : "—";
 
   const cardStyle: React.CSSProperties = {
@@ -72,14 +74,14 @@ export function MonthOverMonthCards({
       {/* Current month gross */}
       <div style={cardStyle}>
         <div style={labelStyle}>{t("periodGrossLabel", { period: currentPeriod })}</div>
-        <div style={valueStyle}>{formatMoney(currentGrossMinor)}</div>
+        <div style={valueStyle}>{formatMoney(currentGross)}</div>
       </div>
 
       {/* Previous month gross + MoM delta */}
       <div style={cardStyle}>
         <div style={labelStyle}>{t("periodGrossLabel", { period: previousPeriod })}</div>
-        <div style={valueStyle}>{formatMoney(previousGrossMinor)}</div>
-        {pctTenths !== null && (
+        <div style={valueStyle}>{formatMoney(previousGross)}</div>
+        {pct !== null && (
           <div
             style={{
               marginTop: 4,
@@ -88,7 +90,7 @@ export function MonthOverMonthCards({
               color: isUp ? "var(--success)" : "var(--danger)",
             }}
           >
-            {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct: formatTenths(pctTenths), period: previousPeriod })}
+            {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct, period: previousPeriod })}
           </div>
         )}
       </div>
@@ -98,7 +100,7 @@ export function MonthOverMonthCards({
         <div style={labelStyle}>{t("netToGrossRatioLabel")}</div>
         <div style={valueStyle}>{ratio}{ratio !== "—" ? "%" : ""}</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "var(--mut)" }}>
-          {t("netOfGrossSummary", { net: formatMoney(currentNetMinor), gross: formatMoney(currentGrossMinor) })}
+          {t("netOfGrossSummary", { net: formatMoney(currentNet), gross: formatMoney(currentGross) })}
         </div>
       </div>
     </div>

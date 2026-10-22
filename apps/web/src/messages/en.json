@@ -1026,7 +1026,9 @@
     "reconcileNoChallan": "No challan",
     "reconcilePendingFinalisation": "Run not finalised",
     "filingBlockedMismatchBody": "TDS deducted for {period} does not match the {formType} challans deposited. Resolve the difference before filing {formType}.",
-    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled."
+    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled.",
+    "colFormType": "Form",
+    "reconcileNotMatched": "Not matched"
   },
   "checkinLog": {
     "title": "Check-In Log",
@@ -1972,12 +1974,14 @@
     "newGrossRequiredError": "New gross must be a positive value in rupees.",
     "newBasicBelowOldError": "New basic is below old basic — use revision type \"Correction\" if this is intentional.",
     "newGrossBelowBasicError": "New gross cannot be less than new basic.",
+    "amountTooLargeError": "Amount is too large to record. Check the figure and try again.",
     "recordedMessage": "Salary revision to {amount} for employee {employeeId} submitted. It is saved in the background and will appear in the history below shortly.",
     "confirmTitle": "Record this salary revision?",
     "confirmLabel": "Record revision",
     "confirmDescription": "Record a {revisionType} revision to {amount} basic for employee <strong>{employeeId}</strong>, effective {effectiveDate}.",
     "networkError": "Network error. Please try again.",
-    "orderNoRequiredError": "Enter the order number that sanctions this revision."
+    "orderNoRequiredError": "Enter the order number that sanctions this revision.",
+    "reasonLabel": "Reason for this revision"
   },
   "crm": {
     "loading": {
@@ -3787,10 +3791,10 @@
     "errorArea": "GPF statements",
     "title": "<term>GPF</term> Statements",
     "subtitle": "General Provident Fund contributions by employee and period.",
-    "statStatements": "Statements",
-    "statEmployees": "Employees",
-    "statTotalContributions": "Total Contributions",
-    "statPeriods": "Periods",
+    "statStatements": "Statements (listed below)",
+    "statEmployees": "Employees (listed below)",
+    "statTotalContributions": "Total Contributions (listed below)",
+    "statPeriods": "Periods Covered (listed below)",
     "lastPeriodLabel": "Last Period Contribution",
     "periodValue": "Period: {period}",
     "trendCardTitle": "Contribution Trend (last 6 periods)",
@@ -3813,7 +3817,8 @@
     "emptyMessageFiltered": "No General Provident Fund records match your filter.",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} no contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "GPF Statements"
+    "loadingHeading": "GPF Statements",
+    "ledgerLimitNote": "Only the first {limit} statements are loaded, so the counts and totals above cover those statements only, not the full history."
   },
   "gratuity": {
     "ceilingNote": "Payment of Gratuity Act ceiling: {amount}. Government (CCS Pension Rules) DCRG follows separate rules and ceilings, so this cap does not apply to every row.",
@@ -5338,6 +5343,29 @@
       "disbursed": "Disbursed",
       "failed": "Failed"
     }
+  },
+  "payrollRouteError": {
+    "backToHr": "Back to HR",
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToMyPayslips": "Back to My Payslips",
+    "areaHr": "HR page",
+    "areaSalarySlip": "Salary Slip",
+    "areaPayrollComparison": "Payroll Comparison",
+    "areaCostAllocation": "Cost Allocation",
+    "areaCtcConfiguration": "CTC Configuration",
+    "areaDdoManagement": "DDO Management",
+    "areaFlexBenefits": "Flex Benefits",
+    "areaFullAndFinal": "Full & Final Settlement",
+    "areaPayGroups": "Pay Groups",
+    "areaPayrollRegister": "Payroll Register",
+    "areaReimbursements": "Reimbursements",
+    "areaPayStructures": "Pay Structures",
+    "areaTaxConfiguration": "Tax Configuration",
+    "areaTdsReturns": "TDS Returns"
+  },
+  "routeError": {
+    "backToDashboard": "Back to dashboard"
   },
   "payrollLoans": {
     "loadingAriaLabel": "Loading…",
@@ -7029,7 +7057,7 @@
     "historyCardTitle": "Salary Revision History",
     "filterPlaceholder": "Filter by employee or order no…",
     "emptyTitle": "No salary revisions yet",
-    "emptyMessage": "Revisions recorded upstream in HRMS pay-fixation will appear here.",
+    "emptyMessage": "Salary revisions will appear here once they are recorded.",
     "colEmployee": "Employee",
     "colEffectiveDate": "Effective Date",
     "colRevisionType": "Revision Type",

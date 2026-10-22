@@ -127,6 +127,6 @@ describe("PayrollRunDetailPage", () => {
   it("the back link label is translated (no hard-coded English)", async () => {
     getPayrollRunByIdMock.mockResolvedValue({ data: null, source: "api" });
     await renderPage();
-    expect(screen.getByRole("link", { name: "Payroll Runs" })).toHaveAttribute("href", "/hr/payroll");
+    expect(screen.getByRole("link", { name: "Back to Payroll" })).toHaveAttribute("href", "/hr/payroll");
   });
 });

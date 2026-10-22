@@ -1,5 +1,6 @@
 import type { PayrollRunDetail } from "@civitasone/types";
-import { parseMinor } from "./minor";
+import { isPaidPayrollRunStatus } from "./statusLabels";
+import { minorOrLegacy } from "./runMoney";
 
 /**
  * GAP-PAYROLL-HOME-03/04: the Payroll home KPI tiles.
@@ -28,7 +29,7 @@ export function summariseRunStatuses(runs: readonly Pick<PayrollRunDetail, "stat
   let awaitingDisbursement = 0;
   let failed = 0;
   for (const r of runs) {
-    if (r.status === "paid" || r.status === "disbursed") paid += 1;
+    if (isPaidPayrollRunStatus(r.status)) paid += 1;
     else if (r.status === "completed") awaitingDisbursement += 1;
     else if (r.status === "failed") failed += 1;
   }
@@ -52,7 +53,7 @@ export function latestPaidRun<T extends Pick<PayrollRunDetail, "status" | "payPe
 ): T | null {
   let best: T | null = null;
   for (const r of runs) {
-    if (r.status !== "paid" && r.status !== "disbursed") continue;
+    if (!isPaidPayrollRunStatus(r.status)) continue;
     if (best === null) { best = r; continue; }
     const byPeriod = cmp(r.payPeriod, best.payPeriod);
     const byDate = cmp(r.runDate ?? "", best.runDate ?? "");
@@ -107,9 +108,9 @@ export type PaidPeriodTotals = {
  * it can never inflate the headcount. Gross is summed in bigint paise.
  */
 export function latestPaidPeriodTotals<
-  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor" | "runType">,
+  T extends Pick<PayrollRunDetail, "status" | "payPeriod" | "employeeCount" | "grossMinor" | "grossAmount" | "runType">,
 >(runs: readonly T[]): PaidPeriodTotals | null {
-  const isPaid = (r: Pick<PayrollRunDetail, "status">) => r.status === "paid" || r.status === "disbursed";
+  const isPaid = (r: Pick<PayrollRunDetail, "status">) => isPaidPayrollRunStatus(r.status);
   const isRegular = (r: Pick<PayrollRunDetail, "runType">) => (r.runType ?? "regular") === "regular";
   let regularPeriod: string | null = null;
   let anyPeriod: string | null = null;
@@ -127,7 +128,9 @@ export function latestPaidPeriodTotals<
     if (!isPaid(r) || r.payPeriod !== payPeriod) continue;
     runCount += 1;
     if (isRegular(r)) employeeCount += r.employeeCount;
-    const m = parseMinor(r.grossMinor);
+    // Same adapter as every other payroll-run screen (GAP-PAYROLL-RUNS-01): exact paise
+    // string first, the legacy rupee float only when the string is absent.
+    const m = minorOrLegacy(r.grossMinor, r.grossAmount);
     grossMinor = grossMinor === null || m === null ? null : grossMinor + m;
   }
   return { payPeriod, runCount, employeeCount, grossMinor };

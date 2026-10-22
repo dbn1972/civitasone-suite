@@ -4,14 +4,14 @@ import { useTranslations } from "next-intl";
 import { RouteError } from "@/app/_components/RouteError";
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  const t = useTranslations("payrollCommon");
+  const t = useTranslations("payrollRouteError");
   return (
     <RouteError
       error={error}
       reset={reset}
       backHref="/hr"
       backLabel={t("backToHr")}
-      area="HR page"
+      area={t("areaHr")}
     />
   );
 }

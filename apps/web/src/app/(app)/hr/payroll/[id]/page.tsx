@@ -3,7 +3,8 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunById, getPayrollRunDetails } from "../../../../_data/loaders";
-import { formatMoney, formatIndianDate, formatMonthYear } from "@/lib/formatters";
+import { formatIndianDate, formatMonthYear } from "@/lib/formatters";
+import { formatRunMoney, runMinor } from "@/lib/payroll/runMoney";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
@@ -17,7 +18,10 @@ type SalarySlipRow = {
   id: string;
   employeeId: string;
   employeeName: string;
-  /** GAP-PAYROLL-HOME-01: integer-paise strings; rendered with formatMoney. */
+  gross: number;
+  deductions: number;
+  net: number;
+  /** GAP-PAYROLL-RUNS-01: exact integer-paise twins of gross / deductions / net. */
   grossMinor?: string;
   deductionsMinor?: string;
   netMinor?: string;
@@ -52,6 +56,7 @@ function prevPeriodIso(pp: string): string | null {
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("payrollDetail");
+  const tNav = await getTranslations("payrollRouteError");
   // GAP-PAYROLL-DETAIL-08: reuses payrollRunsTable's existing status.*
   // translations instead of adding a parallel, independently-drifting copy
   // under payrollDetail -- the run-list table and this detail page now show
@@ -72,7 +77,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!canView) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={t("backLabel")} />
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
         <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
     );
@@ -83,7 +88,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!run) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={t("backLabel")} />
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
         <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
@@ -101,15 +106,20 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   // that row fell outside the fetched batch. Ask the backend for exactly
   // that one month instead.
   const prevIso = prevPeriodIso(run.payPeriod);
-  // `previousGrossMinor` (integer paise, a string) distinguishes "no prior run
-  // existed" (a real "0" — no parseable previous period, or the fetch succeeded
-  // and simply found none) from "unknown" (null: the fetch for the prior run
-  // failed, or it returned a run without its paise total) — an unknown value
-  // must not read as a fabricated ₹0 prior payroll in the MoM comparison below.
+  // `previousGrossMinor` distinguishes "no prior run existed" (a real "0" — no
+  // parseable previous period, or the fetch succeeded and simply found none)
+  // from "the fetch for the prior run failed" (null) — a fetch failure must
+  // not read as a fabricated ₹0 prior payroll in the MoM comparison below.
+  // GAP-PAYROLL-RUNS-01: carried as exact integer paise (digit string).
   let previousGrossMinor: string | null = "0";
   if (prevIso) {
     const { data: prevRuns, source: prevSource } = await getPayrollRunDetails({ limit: 1, month: prevIso });
-    previousGrossMinor = prevSource === "error" ? null : prevRuns[0] ? (prevRuns[0].grossMinor ?? null) : "0";
+    const prevRun = prevRuns[0];
+    previousGrossMinor = prevSource === "error"
+      ? null
+      : prevRun
+        ? (runMinor(prevRun, "gross")?.toString() ?? null)
+        : "0";
   }
 
   const slipRows = run.salarySlips as SalarySlipRow[];
@@ -121,7 +131,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         title={t("title", { period: run.payPeriod })}
         subtitle={t("subtitle", { date: formatIndianDate(run.runDate) })}
         back="/hr/payroll"
-        backLabel={t("backLabel")}
+        backLabel={tNav("backToPayroll")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       {canViewRegister && (
@@ -142,16 +152,16 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
       {/* KPI summary cards */}
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")}  value={run.employeeCount.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")}      value={formatMoney(run.grossMinor)} />
-        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statDeductions")} value={formatMoney(run.deductionsMinor)} />
-        <StatCard icon="✅" iconBg="var(--panel)"  label={t("statNetPay")}    value={formatMoney(run.netMinor)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")}      value={formatRunMoney(run, "gross")} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statDeductions")} value={formatRunMoney(run, "deductions")} />
+        <StatCard icon="✅" iconBg="var(--panel)"  label={t("statNetPay")}    value={formatRunMoney(run, "net")} />
       </StatGrid>
 
       {/* Month-over-Month KPI cards */}
       <MonthOverMonthCards
-        currentGrossMinor={run.grossMinor ?? null}
+        currentGrossMinor={runMinor(run, "gross")?.toString() ?? null}
         previousGrossMinor={previousGrossMinor}
-        currentNetMinor={run.netMinor ?? null}
+        currentNetMinor={runMinor(run, "net")?.toString() ?? null}
         currentPeriod={run.payPeriod}
         previousPeriod={prevPeriodLabel(run.payPeriod)}
       />
@@ -164,8 +174,8 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         runId={run.id}
         status={run.status}
         employeeCount={run.employeeCount}
-        grossMinor={run.grossMinor}
-        netMinor={run.netMinor}
+        grossMinor={runMinor(run, "gross")?.toString() ?? null}
+        netMinor={runMinor(run, "net")?.toString() ?? null}
         payPeriod={run.payPeriod}
         canAdminister={canAdminister}
         exceptionCount={exceptions.length}
@@ -201,15 +211,15 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           </div>
           <div className="fld">
             <div className="l">{t("fieldGrossAmount")}</div>
-            <div className="v">{formatMoney(run.grossMinor)}</div>
+            <div className="v">{formatRunMoney(run, "gross")}</div>
           </div>
           <div className="fld">
             <div className="l">{t("fieldDeductions")}</div>
-            <div className="v">{formatMoney(run.deductionsMinor)}</div>
+            <div className="v">{formatRunMoney(run, "deductions")}</div>
           </div>
           <div className="fld">
             <div className="l">{t("fieldNetAmount")}</div>
-            <div className="v">{formatMoney(run.netMinor)}</div>
+            <div className="v">{formatRunMoney(run, "net")}</div>
           </div>
         </div>
       </Card>

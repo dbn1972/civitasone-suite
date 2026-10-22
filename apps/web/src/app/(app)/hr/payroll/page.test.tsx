@@ -266,3 +266,45 @@ describe("PayrollPage", () => {
     }
   });
 });
+
+// GAP-PAYROLL-RUNS-01: the "Total Gross" tile is the latest PAID run's exact paise total,
+// rendered through the same adapter the runs table and the run-detail page use.
+describe("PayrollPage — Total Gross tile uses exact paise", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  function totalGrossTile(): string {
+    return screen.getByText("statTotalGross").nextElementSibling?.textContent ?? "";
+  }
+
+  it("shows the latest paid run's grossMinor, not a draft run's and not the rupee float", async () => {
+    mockFetchJson({
+      data: [
+        { id: "r1", payPeriod: "2026-08", employeeCount: 40, grossAmount: 1, netAmount: 1, grossMinor: "12345678", netMinor: "11000000", status: "paid" },
+        { id: "r2", payPeriod: "2026-09", employeeCount: 42, grossAmount: 2, netAmount: 2, grossMinor: "99999999", netMinor: "90000000", status: "draft" },
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(totalGrossTile()).toBe("₹1,23,456.78");
+  });
+
+  it("a legacy payload (rupee float only) renders the same string", async () => {
+    mockFetchJson({
+      data: [{ id: "r1", payPeriod: "2026-08", employeeCount: 40, grossAmount: 123456.78, netAmount: 110000, status: "paid" }],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(totalGrossTile()).toBe("₹1,23,456.78");
+  });
+
+  it("no paid run yet is a real zero; a failed fetch is a dash", async () => {
+    mockFetchJson({ data: [{ id: "r2", payPeriod: "2026-09", employeeCount: 42, grossAmount: 2, netAmount: 2, status: "draft" }], source: "api" });
+    const first = render(<NextIntlClientProvider locale="en" messages={enMessages}>{await PayrollPage()}</NextIntlClientProvider>);
+    expect(totalGrossTile()).toBe("₹0.00");
+    first.unmount();
+
+    mockFetchJson({ data: [], source: "error" });
+    renderPage(await PayrollPage());
+    expect(totalGrossTile()).toBe("—");
+  });
+});
