@@ -7,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { classifyServiceLoad, loadService } from "../../_data/loadService";
 import { ServiceRuntimeFlow } from "../../_components/ServiceRuntimeFlow";
+import { resolveCitizenPaymentMode } from "../../_data/paymentMode";
 
 interface Props {
   params: { serviceKey: string };
@@ -73,7 +74,7 @@ export default async function ServiceApplyPage({ params, searchParams }: Props) 
           </Link>
         }
       />
-      <ServiceRuntimeFlow service={service} counterMode={counterMode} assistedBy={assistedBy} />
+      <ServiceRuntimeFlow service={service} counterMode={counterMode} assistedBy={assistedBy} paymentMode={resolveCitizenPaymentMode()} />
     </>
   );
 }

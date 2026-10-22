@@ -7,7 +7,7 @@ import {
   evaluateRule, evaluateEligibility, assertRulesWellFormed, type EligibilityRule,
 } from "../src/modules/eligibility/domain.js";
 import {
-  computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, assertPaymentConfirmable,
+  computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, assertPaymentConfirmable, isSandboxPaymentEnabled,
   type ExemptionRule,
 } from "../src/modules/fee-payment/domain.js";
 import {
@@ -145,22 +145,37 @@ describe("SVC-085 helpers", () => {
     expect(isGatewayConfigured({ PAYMENT_GATEWAY_KEY: "sk_live" })).toBe(true);
     expect(isGatewayConfigured({ CITIZEN_PAYMENT_GATEWAY_KEY: "k" })).toBe(true);
   });
-  it("assertPaymentConfirmable — sandbox always allowed for pending; gateway needs ref", () => {
+  it("assertPaymentConfirmable — sandbox allowed for pending only when enabled; gateway needs ref", () => {
     expect(() => assertPaymentConfirmable({
-      status: "pending", mode: "sandbox", gatewayConfigured: false,
+      status: "pending", mode: "sandbox", gatewayConfigured: false, sandboxEnabled: true,
     })).not.toThrow();
     expect(() => assertPaymentConfirmable({
-      status: "pending", mode: "gateway", gatewayConfigured: false, gatewayRef: "pi_x",
+      status: "pending", mode: "sandbox", gatewayConfigured: false, sandboxEnabled: false,
+    })).toThrow("SANDBOX_DISABLED");
+    // a disabled sandbox is never rescued by a configured gateway
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "sandbox", gatewayConfigured: true, gatewayRef: "pi_ok", sandboxEnabled: false,
+    })).toThrow("SANDBOX_DISABLED");
+    expect(() => assertPaymentConfirmable({
+      status: "pending", mode: "gateway", gatewayConfigured: false, gatewayRef: "pi_x", sandboxEnabled: false,
     })).toThrow("GATEWAY_NOT_CONFIGURED");
     expect(() => assertPaymentConfirmable({
-      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "",
+      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "", sandboxEnabled: false,
     })).toThrow("GATEWAY_REF_REQUIRED");
     expect(() => assertPaymentConfirmable({
-      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "pi_ok",
+      status: "pending", mode: "gateway", gatewayConfigured: true, gatewayRef: "pi_ok", sandboxEnabled: false,
     })).not.toThrow();
     expect(() => assertPaymentConfirmable({
-      status: "paid", mode: "sandbox", gatewayConfigured: false,
+      status: "paid", mode: "sandbox", gatewayConfigured: false, sandboxEnabled: true,
     })).toThrow("PAYMENT_NOT_PENDING");
+  });
+  it("isSandboxPaymentEnabled — off by default, never in production", () => {
+    expect(isSandboxPaymentEnabled({})).toBe(false);
+    expect(isSandboxPaymentEnabled({ CITIZEN_PAYMENTS_SANDBOX_ENABLED: "false" })).toBe(false);
+    expect(isSandboxPaymentEnabled({ CITIZEN_PAYMENTS_SANDBOX_ENABLED: "1" })).toBe(false);
+    expect(isSandboxPaymentEnabled({ CITIZEN_PAYMENTS_SANDBOX_ENABLED: "true" })).toBe(true);
+    expect(isSandboxPaymentEnabled({ CITIZEN_PAYMENTS_SANDBOX_ENABLED: "true", NODE_ENV: "test" })).toBe(true);
+    expect(isSandboxPaymentEnabled({ CITIZEN_PAYMENTS_SANDBOX_ENABLED: "true", NODE_ENV: "production" })).toBe(false);
   });
   it("isRefundable", () => {
     expect(isRefundable("paid")).toBe(true);
