@@ -1,7 +1,7 @@
 /**
  * scheduled repo — Drizzle queries against reports.scheduled_reports.
  */
-import { eq, and, count } from "drizzle-orm";
+import { eq, and, count, isNull } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
 import {
   scheduledReports,
@@ -19,6 +19,7 @@ function toView(r: ScheduledReportRow): ScheduledReportView {
     recipients: (r.recipients ?? []) as string[],
     format: r.format,
     enabled: r.enabled,
+    status: r.enabled ? "active" : "disabled",
     lastRunAt: r.lastRunAt,
     nextRunAt: r.nextRunAt,
     version: r.version,
@@ -34,7 +35,7 @@ export async function findById(id: string, tenantId: string): Promise<ScheduledR
     tx
       .select()
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.id, id), eq(scheduledReports.tenantId, tenantId)))
+      .where(and(eq(scheduledReports.id, id), eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt)))
       .limit(1),
   );
   const row = rows[0];
@@ -51,7 +52,9 @@ export async function listByTenant(
     tx
       .select()
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true)))
+      // Disabled schedules are listed too (with status "disabled") so they stay
+      // visible and can be re-enabled; only deleted ones are hidden.
+      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt)))
       .limit(limit)
       .offset(offset),
   );
@@ -65,8 +68,8 @@ export async function insert(tx: Writer, row: ScheduledReportInsert): Promise<vo
 }
 
 /**
- * GAP2-REPORTS-PAGINATION-01: tenant-scoped total of ENABLED scheduled
- * reports — the same predicate listByTenant uses — so meta.total matches the
+ * GAP2-REPORTS-PAGINATION-01: tenant-scoped total of non-deleted scheduled
+ * reports (enabled AND disabled) — the same predicate listByTenant uses — so meta.total matches the
  * rows actually listed rather than the capped page length.
  */
 export async function countByTenant(tenantId: string): Promise<number> {
@@ -74,7 +77,7 @@ export async function countByTenant(tenantId: string): Promise<number> {
     tx
       .select({ value: count() })
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.tenantId, tenantId), eq(scheduledReports.enabled, true))),
+      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt))),
   );
   return Number(rows[0]?.value ?? 0);
 }
@@ -102,7 +105,7 @@ export async function update(
 export async function disable(tx: Writer, id: string, tenantId: string, actorId: string): Promise<boolean> {
   const result = await tx
     .update(scheduledReports)
-    .set({ enabled: false, updatedAt: new Date(), updatedBy: actorId })
+    .set({ enabled: false, deletedAt: new Date(), updatedAt: new Date(), updatedBy: actorId })
     .where(and(eq(scheduledReports.id, id), eq(scheduledReports.tenantId, tenantId)));
   return (result as unknown as { rowCount: number }).rowCount > 0;
 }

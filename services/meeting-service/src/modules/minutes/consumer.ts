@@ -637,7 +637,16 @@ async function handleMinutesReject(msg: CommandEnvelope<MinutesRejectPayload>): 
       id: p.minutesId,
       tenantId: msg.tenantId,
       expectedVersion: p.version,
-      set: { status: "draft", currentVersion: newVersion, updatedBy: msg.actorId, updatedAt: new Date() },
+      set: {
+        status: "draft",
+        currentVersion: newVersion,
+        // Persist the rejection so GET minutes can show the secretary why / when / by whom.
+        rejectionComments: p.rejectionComments,
+        rejectedAt: new Date(),
+        rejectedBy: msg.actorId,
+        updatedBy: msg.actorId,
+        updatedAt: new Date(),
+      },
       entity: "minutes",
     });
     await enqueue(tx, {

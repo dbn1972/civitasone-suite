@@ -22,6 +22,32 @@ import { maskPiiColumns } from "../../shared/mask.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/** Max rows persisted for the job detail preview (the full data lives in the export file). */
+export const RESULT_PREVIEW_ROWS = 200;
+
+function cellToString(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return v instanceof Date ? v.toISOString() : JSON.stringify(v);
+  return String(v);
+}
+
+/**
+ * Bounded, string-only preview of the rendered rows for GET report-jobs/:id.
+ * Built from the SAME rows that were rendered, i.e. AFTER PII masking.
+ */
+export function buildResultPreview(
+  columns: Array<{ key: string }> | undefined,
+  rows: Record<string, unknown>[],
+): { resultColumns: string[]; resultRows: Array<Record<string, string>> } {
+  const keys = columns && columns.length > 0 ? columns.map((c) => c.key) : rows[0] ? Object.keys(rows[0]) : [];
+  const resultRows = rows.slice(0, RESULT_PREVIEW_ROWS).map((r) => {
+    const out: Record<string, string> = {};
+    for (const k of keys) out[k] = cellToString(r[k]);
+    return out;
+  });
+  return { resultColumns: keys, resultRows };
+}
+
 const log = pino({ name: "render-consumer" });
 
 interface RenderPayload {
@@ -144,6 +170,7 @@ export function registerRenderConsumers(queue: Queue): void {
             downloadUrl,
             format: ext,
             rowCount: p.rows?.length ?? null,
+            ...buildResultPreview(p.columns, rows),
             completedAt: new Date(),
             updatedAt: new Date(),
             updatedBy: msg.actorId,

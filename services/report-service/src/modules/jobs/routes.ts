@@ -83,7 +83,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
-    const job = await queries.getJob(ctx.tenantId, id);
+    const job = await queries.getJobDetail(ctx.tenantId, id);
     if (!job) throw new HttpError(404, "NOT_FOUND", "report job not found");
     sendValidated(reply, ReportJobDetailSchema, {
       id: job.id,
@@ -99,9 +99,10 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
       downloadUrl: job.downloadUrl ?? undefined,
       rowCount: job.rowCount ?? undefined,
-      columns: [],
-      rows: [],
-      totalCount: job.rowCount ?? 0,
+      parameters: job.parameters,
+      columns: job.resultColumns,
+      rows: job.resultRows,
+      totalCount: job.rowCount ?? job.resultRows.length,
     });
   });
 

@@ -3,7 +3,7 @@
  */
 import { and, eq, count } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
-import { jobs, type JobRow, type JobInsert, type JobView } from "./schema.js";
+import { jobs, type JobRow, type JobInsert, type JobView, type JobDetailView } from "./schema.js";
 
 function toView(r: JobRow): JobView {
   return {
@@ -52,6 +52,20 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: JobInsert): Promise<void> {
   await tx.insert(jobs).values(row);
+}
+
+/** Job row + stored parameters / result preview, for the detail screen. */
+export async function findDetailById(id: string, tenantId: string): Promise<JobDetailView | null> {
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.tenantId, tenantId))).limit(1));
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ...toView(row),
+    parameters: row.parameters ?? {},
+    resultColumns: row.resultColumns ?? [],
+    resultRows: row.resultRows ?? [],
+  };
 }
 
 export { toView };

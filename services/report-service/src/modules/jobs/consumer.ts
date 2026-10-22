@@ -29,6 +29,7 @@ export function registerJobConsumers(queue: Queue): void {
         name: p.name,
         reportType: p.reportType,
         status: p.status,
+        ...(p.parameters ? { parameters: p.parameters } : {}),
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
         version: 1,

@@ -3,16 +3,17 @@ import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createStageBody, idParam, stagesListSchema } from "./validators.js";
+import { createStageBody, idParam, stagesListSchema, stepVerbParam } from "./validators.js";
 import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
-import { queue } from "../../shared/infra.js";
-import { COMMANDS } from "../../topics.js";
 import * as commands from "./commands.js";
 import * as domainPackCommands from "./domain-pack-commands.js";
 import * as queries from "./queries.js";
 import { MUNICIPAL_ONBOARDING_PACK_KEYS } from "../orchestrator/domain-pack-constants.js";
 
 const ROLES = ["install_user","install_admin","super_admin","tenant_admin"];
+
+const STEP_STATUSES = ["pending", "in_progress", "completed", "failed", "skipped"] as const;
+type StepStatus = (typeof STEP_STATUSES)[number];
 
 // GAP-TENANT-ADMIN-INSTALL-05: steps and stages are NOT two different
 // resources at two granularities — `/v1/install/steps` is a 1:1 view over the
@@ -27,20 +28,31 @@ export function stageToStep(stage: {
   name: string;
   description?: string | null;
   status: string;
-}): { id: string; stepNo: number; title: string; description: string | undefined; status: "pending" | "in_progress" | "completed" | "skipped"; completedAt: undefined } {
+  isRequired?: boolean;
+  completedAt?: string | null;
+  errorMessage?: string | null;
+}): {
+  id: string;
+  stepNo: number;
+  title: string;
+  description: string | undefined;
+  isRequired: boolean;
+  status: StepStatus;
+  completedAt: string | undefined;
+  errorMessage: string | undefined;
+} {
   return {
     id: stage.id,
     stepNo: stage.stepNumber,
     title: stage.name,
     description: stage.description ?? undefined,
-    status: (stage.status === "completed"
-      ? "completed"
-      : stage.status === "skipped"
-        ? "skipped"
-        : stage.status === "in_progress"
-          ? "in_progress"
-          : "pending") as "pending" | "in_progress" | "completed" | "skipped",
-    completedAt: undefined,
+    isRequired: stage.isRequired ?? true,
+    // Real status, incl. "failed" (previously collapsed to "pending", which hid
+    // failures and offered Run instead of Retry). Unknown values stay "pending"
+    // so a stray status never fabricates completion.
+    status: (STEP_STATUSES as readonly string[]).includes(stage.status) ? (stage.status as StepStatus) : "pending",
+    completedAt: stage.completedAt ?? undefined,
+    errorMessage: stage.errorMessage ?? undefined,
   };
 }
 
@@ -113,26 +125,8 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/install/steps/:id/:verb", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const params = idParam.extend({ verb: z.enum(["run", "skip", "retry"]) }).parse(req.params);
-    const { id, verb } = params;
-
-    const topicMap = {
-      run: COMMANDS.stepStart,
-      retry: COMMANDS.stepStart,
-      skip: COMMANDS.stepSkip,
-    } as const;
-    const topic = topicMap[verb];
-
-    await queue.publish(topic, {
-      messageId: id,
-      type: topic,
-      tenantId: ctx.tenantId,
-      actorId: ctx.actorId,
-      correlationId: ctx.correlationId,
-      schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, verb },
-    });
-    sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+    const { id, verb } = stepVerbParam.parse(req.params);
+    sendAccepted(reply, acceptedResponseSchema, await commands.transitionStage(ctx, id, verb));
   });
 
   app.setErrorHandler((err, req, reply) => {

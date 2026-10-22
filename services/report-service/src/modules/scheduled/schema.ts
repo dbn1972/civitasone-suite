@@ -16,6 +16,9 @@ export const scheduledReports = domainSchema.table("scheduled_reports", {
   recipients: jsonb("recipients").$type<string[]>().notNull().default([]),
   format: varchar("format", { length: 8 }).notNull().default("pdf"),
   enabled: boolean("enabled").notNull().default(true),
+  // Migration 0020: set by DELETE. A deleted schedule is hidden; a merely
+  // disabled one (enabled=false, deleted_at null) is listed and re-enableable.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
   lastRunAt: timestamp("last_run_at", { withTimezone: true }),
   nextRunAt: timestamp("next_run_at", { withTimezone: true }).notNull(),
   createdBy: uuid("created_by").notNull(),
@@ -36,6 +39,8 @@ export type ScheduledReportView = {
   recipients: string[];
   format: string;
   enabled: boolean;
+  /** "active" when enabled, otherwise "disabled" (re-enable with PATCH {enabled:true}). */
+  status: "active" | "disabled";
   lastRunAt: Date | null;
   nextRunAt: Date;
   version: number;

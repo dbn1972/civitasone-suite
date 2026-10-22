@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { stages, type StageRow, type StageInsert, type StageView } from "./schema.js";
@@ -28,6 +28,9 @@ function toView(r: StageRow): StageView {
     stepNumber: r.stepNumber,
     description: r.description,
     status: r.status,
+    isRequired: r.isRequired,
+    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    errorMessage: r.errorMessage,
     version: r.version,
   };
 }
@@ -50,6 +53,30 @@ export async function listByTenant(tenantId: string, limit: number, offset: numb
 
 export async function insert(tx: Writer, row: StageInsert): Promise<void> {
   await tx.insert(stages).values(row);
+}
+
+/** Tenant-scoped raw row on the caller's open transaction (consumer path). */
+export async function findRowTx(tx: Writer, id: string, tenantId: string): Promise<StageRow | null> {
+  const rows = await (tx as unknown as typeof db)
+    .select()
+    .from(stages)
+    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+export async function updateLifecycle(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  actorId: string,
+  version: number,
+  patch: Partial<Pick<StageInsert, "status" | "startedAt" | "completedAt" | "errorMessage">>,
+): Promise<void> {
+  await tx
+    .update(stages)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: actorId, version: version + 1 })
+    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId)));
 }
 
 export { toView };

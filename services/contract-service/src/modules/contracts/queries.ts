@@ -29,6 +29,16 @@ export async function listContracts(tenantId: string, limit: number): Promise<Co
   return rows ?? [];
 }
 
+/** Whole-tenant counts for the Contracts hub (see repo.expirySummaryByTenant). */
+export async function getExpirySummary(tenantId: string): Promise<repo.ContractExpirySummary> {
+  const summary = await cache.getOrLoad(
+    cache.makeKey(tenantId, "contract", "expiry-summary"),
+    () => repo.expirySummaryByTenant(tenantId),
+    60,
+  );
+  return summary ?? repo.expirySummaryByTenant(tenantId);
+}
+
 /** Read model: active contracts in force. */
 export async function listActive(tenantId: string, limit: number): Promise<ContractRow[]> {
   return repo.listActiveByTenant(tenantId, limit);

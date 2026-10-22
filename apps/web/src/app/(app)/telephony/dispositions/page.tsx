@@ -2,22 +2,19 @@
 
 /**
  * Telephony — Dispositions breakdown.
- * Aggregates completed-call wrap-up codes from the call API into a count +
- * share table (call-centre quality view). Offline-capable read; no PII is
+ * Shows completed-call wrap-up codes from the server-side aggregate
+ * (/v1/telephony/calls/metrics, grouped over EVERY completed call in the window —
+ * not the rows of one default 50-row list page) as a count + share table
+ * (call-centre quality view). Offline-capable read; no PII is
  * displayed on this screen at all (counts only).
  * WCAG 2.2 AA: semantic structure, aria-live status, DS DataTable.
  */
 import { useMemo, useState } from "react";
 import { PageHeader, StatCard, StatGrid, DataTable, ProgressBar, Segmented, ErrorState, Button } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
+import { callMetricsPath, toCallMetrics, type CallMetrics } from "@/lib/telephony/callMetrics";
 import { humaniseCode } from "@/lib/labels";
 import { toHumanError } from "@/lib/messages";
-
-type CallRow = {
-  id: string;
-  status: string;
-  disposition: string | null;
-} & Record<string, unknown>;
 
 type DispositionRow = {
   disposition: string;
@@ -28,14 +25,6 @@ type DispositionRow = {
 
 /** Sentinel key for completed calls that carry no wrap-up code. */
 const NO_DISPOSITION = "__none";
-
-function toCalls(payload: unknown): CallRow[] {
-  if (payload && typeof payload === "object" && Array.isArray((payload as { data?: unknown }).data)) {
-    return (payload as { data: CallRow[] }).data;
-  }
-  if (Array.isArray(payload)) return payload as CallRow[];
-  return [];
-}
 
 /**
  * GAP-TELEPHONY-DISPOSITIONS-04: largest-remainder rounding so whole-percent
@@ -64,14 +53,14 @@ type Aggregate = { rows: DispositionRow[]; completedTotal: number; noDisposition
  * completed calls with no wrap-up code are bucketed under 'No disposition'
  * instead of vanishing, so the figures reconcile with the Call Log.
  */
-function aggregate(calls: CallRow[]): Aggregate {
-  const completed = calls.filter((c) => c.status === "completed");
+function aggregate(metrics: CallMetrics | null): Aggregate {
+  if (!metrics) return { rows: [], completedTotal: 0, noDispositionCount: 0 };
   const counts = new Map<string, number>();
-  for (const c of completed) {
-    const key = c.disposition ?? NO_DISPOSITION;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+  for (const d of metrics.dispositions) {
+    const key = d.disposition ?? NO_DISPOSITION;
+    counts.set(key, (counts.get(key) ?? 0) + d.count);
   }
-  const completedTotal = completed.length;
+  const completedTotal = metrics.completed;
   const entries = [...counts.entries()].sort((a, b) => b[1] - a[1]);
   const shares = largestRemainderPct(
     entries.map(([, n]) => n),
@@ -116,17 +105,16 @@ function rangeFrom(range: Range, now: Date): string | null {
 export default function TelephonyDispositionsPage() {
   const [range, setRange] = useState<Range>("30 days");
   const from = useMemo(() => rangeFrom(range, new Date()), [range]);
-  const path = from ? `/v1/telephony/calls?from=${encodeURIComponent(from)}` : "/v1/telephony/calls";
 
-  const { data: calls, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, CallRow[]>(
-    `telephony.calls:${range}`,
-    path,
-    { map: toCalls, initialData: [] },
+  const { data: metrics, source, offline, cachedAt, loading, error, refresh } = useOfflineResource<unknown, CallMetrics | null>(
+    `telephony.callmetrics:${range}`,
+    callMetricsPath(from),
+    { map: toCallMetrics, initialData: null },
   );
 
-  const hasData = calls.length > 0;
+  const hasData = metrics !== null;
   const showingCache = (offline || source === "cache") && cachedAt !== null;
-  const { rows, completedTotal, noDispositionCount } = aggregate(calls);
+  const { rows, completedTotal, noDispositionCount } = aggregate(metrics);
 
   // GAP-TELEPHONY-DISPOSITIONS-05: top-N dispositions as dynamic cards rather
   // than two hard-coded keys (resolved/escalated); any tenant-defined code
