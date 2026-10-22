@@ -7,18 +7,43 @@ vi.mock("../../../_data/loaders", () => ({
 }));
 
 const mockRoles = vi.fn<() => string[]>();
+const mockUserId = vi.fn<() => string | null>();
 vi.mock("@/lib/auth/roleGuard", async (orig) => {
   const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
-  return { ...actual, getSessionRoles: () => mockRoles() };
+  return { ...actual, getSessionRoles: () => mockRoles(), getSessionUserId: () => mockUserId() };
 });
+
+// GAP-CRM-SERVICE-REQUESTS-03: the page resolves owner ids to names through the shared directory helper.
+const resolveUsersMock = vi.fn<(ids: Iterable<string>) => Promise<Map<string, string>>>();
+vi.mock("@/lib/directory/resolveUsers", () => ({
+  resolveUsers: (ids: Iterable<string>) => resolveUsersMock(ids),
+}));
 
 vi.mock("./ServiceRequestsTable", () => ({
   ServiceRequestsTable: (props: Record<string, unknown>) => {
-    return <div data-testid="table" data-can-export={String(props.canExport)} data-page={String(props.page)} data-page-count={String(props.pageCount)} data-total={String(props.total)} />;
+    return (
+      <div
+        data-testid="table"
+        data-can-export={String(props.canExport)}
+        data-page={String(props.page)}
+        data-page-count={String(props.pageCount)}
+        data-total={String(props.total)}
+        data-query-key={String(props.queryKey)}
+        data-assignee-names={JSON.stringify(props.assigneeNames)}
+      />
+    );
   },
 }));
 vi.mock("./ServiceRequestsFilterBar", () => ({
-  ServiceRequestsFilterBar: () => <div data-testid="filter-bar" />,
+  ServiceRequestsFilterBar: (props: Record<string, unknown>) => (
+    <div
+      data-testid="filter-bar"
+      data-assigned-to={String(props.assignedTo)}
+      data-overdue={String(props.overdue)}
+      data-sort={String(props.sort)}
+      data-current-user={String(props.currentUserId)}
+    />
+  ),
 }));
 
 import Page from "./page";
@@ -45,6 +70,10 @@ beforeEach(() => {
   getList.mockReset();
   mockRoles.mockReset();
   mockRoles.mockReturnValue(["crm_user"]);
+  mockUserId.mockReset();
+  mockUserId.mockReturnValue(null);
+  resolveUsersMock.mockReset();
+  resolveUsersMock.mockResolvedValue(new Map());
 });
 
 describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-01 (server pagination)", () => {
@@ -101,5 +130,53 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-02 (export role gate)
     mockRows(1, 1);
     render(withIntl(await Page({ searchParams: {} })));
     expect(screen.getByTestId("table").dataset.canExport).toBe("true");
+  });
+});
+
+describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-03 (owner names, overdue / mine filters, due-date sort)", () => {
+  const ME = "11111111-2222-4333-8444-555566667777";
+  const ANITA = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+
+  it("forwards assignedTo, overdue=true and sort=dueAt to the loader and the offline cache key", async () => {
+    mockRows(1, 1);
+    render(withIntl(await Page({ searchParams: { assignedTo: ME, overdue: "true", sort: "dueAt" } })));
+    expect(getList).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: ME, overdue: true, sort: "dueAt" }));
+    const key = screen.getByTestId("table").dataset.queryKey ?? "";
+    expect(key).toContain(`assignedTo=${ME}`);
+    expect(key).toContain("overdue=true");
+    expect(key).toContain("sort=dueAt");
+  });
+
+  it("ignores a malformed owner id, an unknown sort and overdue values other than 'true' instead of sending them", async () => {
+    mockRows(1, 1);
+    render(withIntl(await Page({ searchParams: { assignedTo: "not-a-uuid", overdue: "yes", sort: "citizenName" } })));
+    const arg = getList.mock.calls[0]![0] as Record<string, unknown>;
+    expect(arg).not.toHaveProperty("assignedTo");
+    expect(arg).not.toHaveProperty("overdue");
+    expect(arg).not.toHaveProperty("sort");
+  });
+
+  it("resolves the owners of the loaded rows to names in ONE directory call and hands them to the table", async () => {
+    const rows = [
+      { id: "sr-1", referenceNo: "R1", citizenName: "X", serviceType: "t", subject: "s", priority: "normal", status: "open", assignedTo: ANITA, dueAt: null, createdAt: null },
+      { id: "sr-2", referenceNo: "R2", citizenName: "Y", serviceType: "t", subject: "s", priority: "normal", status: "open", assignedTo: ANITA, dueAt: null, createdAt: null },
+      { id: "sr-3", referenceNo: "R3", citizenName: "Z", serviceType: "t", subject: "s", priority: "normal", status: "open", assignedTo: null, dueAt: null, createdAt: null },
+    ];
+    getList.mockResolvedValue({ data: { rows, total: 3, statusCounts: {} }, source: "api" });
+    resolveUsersMock.mockResolvedValue(new Map([[ANITA, "Anita Desai"]]));
+    render(withIntl(await Page({ searchParams: {} })));
+    expect(resolveUsersMock).toHaveBeenCalledTimes(1);
+    expect([...(resolveUsersMock.mock.calls[0]![0] as Iterable<string>)]).toEqual([ANITA, ANITA]);
+    expect(JSON.parse(screen.getByTestId("table").dataset.assigneeNames ?? "{}")).toEqual({ [ANITA]: "Anita Desai" });
+  });
+
+  it("passes the signed-in user id to the filter bar (for the 'Assigned to me' toggle)", async () => {
+    mockUserId.mockReturnValue(ME);
+    mockRows(1, 1);
+    render(withIntl(await Page({ searchParams: { assignedTo: ME, overdue: "true" } })));
+    const bar = screen.getByTestId("filter-bar");
+    expect(bar.dataset.currentUser).toBe(ME);
+    expect(bar.dataset.assignedTo).toBe(ME);
+    expect(bar.dataset.overdue).toBe("true");
   });
 });

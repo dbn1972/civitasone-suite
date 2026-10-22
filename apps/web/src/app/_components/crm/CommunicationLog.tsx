@@ -8,6 +8,7 @@
 import { formatIndianDateTime } from "@/lib/formatters";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { EmptyState, Button } from "../ds";
 import {
   getCommunications,
@@ -171,7 +172,7 @@ export function CommunicationLog({ subjectType, subjectId }: Props) {
 
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 14 }}>
           {source === "loading" ? (
-            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Loading communications…</p>
+            <PanelSkeleton />
           ) : source === "error" ? (
             <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               — Communications unavailable right now. <DataSourceBadge source="error" />

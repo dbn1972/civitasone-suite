@@ -13,14 +13,24 @@ export default async function PipelinePage({
 }) {
   const t = await getTranslations("crmPipelinePage");
   const selectedPipelineId = searchParams?.pipelineId;
-  const [{ data: pipelines, source: pipelineSource }, { data: deals, source: dealsSource, total = null }] =
-    await Promise.all([getPipelines(), getPipelineDeals(selectedPipelineId)]);
-
-  const source = pipelineSource === "error" || dealsSource === "error" ? "error" : "api";
+  const { data: pipelines, source: pipelineSource } = await getPipelines();
   // Honour the pipeline chosen via ?pipelineId when valid, else the first one.
   const pipeline =
     (selectedPipelineId && pipelines.find((p) => p.id === selectedPipelineId)) ||
     (pipelines.length > 0 ? pipelines[0] : null);
+
+  // GAP-CRM-PIPELINE-05 (rescan): deals carry no pipeline id of their own, so the board
+  // matches them to columns by stage NAME. With several pipelines, an unscoped fetch (the
+  // default view, no ?pipelineId) pulled every pipeline's deals into the first pipeline's
+  // columns whenever stage names coincide ("Negotiation" in two pipelines), and the "N of M"
+  // total and the stat tiles counted other pipelines' deals. Always fetch scoped to the
+  // pipeline actually being shown. With a single pipeline (or none configured) there is
+  // nothing to confuse, so the fetch stays unscoped — which also keeps deals that were
+  // created without a pipeline visible.
+  const scopedPipelineId = pipeline && pipelines.length > 1 ? pipeline.id : undefined;
+  const { data: deals, source: dealsSource, total = null } = await getPipelineDeals(scopedPipelineId);
+
+  const source = pipelineSource === "error" || dealsSource === "error" ? "error" : "api";
 
   const errored = source === "error";
 

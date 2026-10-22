@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { RTI_SECTIONS, sectionLabel } from "./rti";
+import { RTI_SECTIONS, sectionLabel, localisedSectionLabel, RTI_SECTION_I18N_NAMESPACE } from "./rti";
+import en from "@/messages/en.json";
+import hi from "@/messages/hi.json";
 
 describe("RTI sectionLabel (GAP-CRM-RTI-06)", () => {
   it("returns the full statutory label by default", () => {
@@ -24,5 +26,29 @@ describe("RTI sectionLabel (GAP-CRM-RTI-06)", () => {
       expect(s.label.length).toBeGreaterThan(0);
       expect(s.short.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("localisedSectionLabel (GAP-CRM-RTI-06: one label per section on every screen)", () => {
+  const ns = (messages: Record<string, unknown>) => messages[RTI_SECTION_I18N_NAMESPACE] as Record<string, string>;
+
+  it("reads the label from the shared namespace, and the English text equals the canonical full label", () => {
+    const t = (key: "section6" | "section11") => ns(en)[key]!;
+    for (const s of RTI_SECTIONS) {
+      expect(localisedSectionLabel(t, s.value)).toBe(s.label);
+    }
+  });
+
+  it("has a non-empty Hindi label for every canonical section", () => {
+    for (const s of RTI_SECTIONS) {
+      expect(ns(hi)[s.labelKey]?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns the raw value for an unknown section without calling the translator", () => {
+    const t = (key: "section6" | "section11"): string => {
+      throw new Error(`unexpected lookup of ${key}`);
+    };
+    expect(localisedSectionLabel(t, "s.99")).toBe("s.99");
   });
 });

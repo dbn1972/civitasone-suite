@@ -218,3 +218,28 @@ describe("OnboardingList (P1-9)", () => {
     }
   });
 });
+
+// W2 crm cluster 07 -- GAP-CRM-ONBOARDING-01: no id fragment is ever a customer identifier.
+describe("OnboardingList names (W2 crm cluster 07)", () => {
+  it("shows a dash, never an 8-character id fragment, when the account name does not resolve", async () => {
+    const accountId = "abcdef12-3456-7890-abcd-ef1234567890";
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [caseOf({ id: "11111111-1111-1111-1111-111111111111", accountId })], source: "api" });
+    vi.mocked(onb.getOnboardingLookups).mockResolvedValue({ dealNames: { d1: "Acme renewal" }, accountNames: {} });
+    const { container } = render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(screen.getByRole("link", { name: "Acme renewal" })).toBeInTheDocument());
+    expect(container.textContent).not.toContain("abcdef12");
+  });
+
+  it("asks for the names of the cases it just loaded", async () => {
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: cases, source: "api" });
+    render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(onb.getOnboardingLookups).toHaveBeenCalledWith(cases));
+  });
+
+  it("does not look names up for a failed load", async () => {
+    vi.mocked(onb.getOnboardingCases).mockResolvedValue({ data: [], source: "error" });
+    render(withIntl(<OnboardingList />));
+    await waitFor(() => expect(screen.getByText(/couldn.t be loaded/i)).toBeInTheDocument());
+    expect(onb.getOnboardingLookups).not.toHaveBeenCalled();
+  });
+});

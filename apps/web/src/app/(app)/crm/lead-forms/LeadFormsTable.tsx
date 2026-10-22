@@ -7,7 +7,7 @@ import { DataTable, StatusPill, Button, ConfirmDialog } from "../../../_componen
 import { LeadFormEditor } from "../../../_components/crm/LeadFormEditor";
 import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import type { CRMLeadCaptureForm } from "@civitasone/types";
-import { setLeadFormEnabled, setLeadFormConsent } from "@/lib/crm/leadForms";
+import { setLeadFormEnabled, setLeadFormConsent, rotateLeadFormKey } from "@/lib/crm/leadForms";
 import {
   formHealth,
   originSummary,
@@ -15,7 +15,6 @@ import {
   publicSubmitPath,
   absoluteSubmitUrl,
   embedSnippet,
-  HEALTH_LABEL,
   type FormHealth,
 } from "./leadForms";
 
@@ -117,6 +116,10 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
   const formError = useFormError("lead form");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmConsent, setConfirmConsent] = useState<CRMLeadCaptureForm | null>(null);
+  // GAP-CRM-LEAD-FORMS-01: rotating a key breaks every page embedding the old one, so
+  // it is always behind a confirm; the new key is shown once, here, after it succeeds.
+  const [confirmRotate, setConfirmRotate] = useState<CRMLeadCaptureForm | null>(null);
+  const [rotatedKey, setRotatedKey] = useState<string | null>(null);
 
   function openRegister() {
     setEditing(null);
@@ -173,13 +176,30 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
     }
   }
 
+  async function rotateKey(form: CRMLeadCaptureForm) {
+    setBusyId(form.id);
+    setConfirmRotate(null);
+    setError("");
+    setRotatedKey(null);
+    try {
+      const result = await rotateLeadFormKey(form.id);
+      if (result.formKey) setRotatedKey(result.formKey);
+      setMessage(result.formKey ? "" : t("rotatedNoKey"));
+      router.refresh();
+    } catch (e) {
+      setError(formError.fromException("save", e).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const tableRows: Row[] = rows.map((form) => {
     const health = formHealth(form);
     return {
       id: form.id,
       name: form.name,
       health,
-      healthLabel: HEALTH_LABEL[health] ?? health,
+      healthLabel: t(`health_${health}`),
       submitUrl: publicSubmitPath(form.formKey),
       origins: originSummary(form.allowedOrigins, {
         any: t("anyOrigin"),
@@ -214,6 +234,15 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: "0 0 12px" }}>
           {t.rich("registered", {
             path: publicSubmitPath(newKey),
+            code: (chunks) => <code>{chunks}</code>,
+          })}
+        </p>
+      ) : null}
+
+      {rotatedKey ? (
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: "0 0 12px" }}>
+          {t.rich("rotated", {
+            path: publicSubmitPath(rotatedKey),
             code: (chunks) => <code>{chunks}</code>,
           })}
         </p>
@@ -255,6 +284,9 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
                 <Button type="button" variant="ghost" size="sm" onClick={() => void togglePause(row.form)} disabled={busyId === row.id}>
                   {row.form.enabled ? t("pause") : t("enable")}
                 </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRotate(row.form)} disabled={busyId === row.id}>
+                  {t("rotateKey")}
+                </Button>
                 {row.health === "unlawful" ? (
                   <Button type="button" variant="danger" size="sm" onClick={() => setConfirmConsent(row.form)} disabled={busyId === row.id}>
                     {t("fixConsent")}
@@ -284,6 +316,17 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
         busy={confirmConsent ? busyId === confirmConsent.id : false}
         onCancel={() => setConfirmConsent(null)}
         onConfirm={() => confirmConsent && void fixConsent(confirmConsent)}
+      />
+
+      <ConfirmDialog
+        open={confirmRotate !== null}
+        danger
+        title={confirmRotate ? t("rotateConfirmTitle", { name: confirmRotate.name }) : ""}
+        description={t("rotateConfirmDescription")}
+        confirmLabel={t("rotateConfirmLabel")}
+        busy={confirmRotate ? busyId === confirmRotate.id : false}
+        onCancel={() => setConfirmRotate(null)}
+        onConfirm={() => confirmRotate && void rotateKey(confirmRotate)}
       />
     </>
   );

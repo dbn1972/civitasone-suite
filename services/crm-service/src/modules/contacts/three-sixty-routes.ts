@@ -257,6 +257,8 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
       const base = (await tx.execute(sql`
         SELECT id, name, lead_status AS "leadStatus", owner_id AS "ownerId", account_id AS "accountId",
                score, marketing_consent AS "marketingConsent", consent_date AS "consentDate",
+               consent_purpose AS "consentPurpose", consent_channel AS "consentChannel",
+               consent_updated_at AS "consentUpdatedAt",
                last_activity_at AS "lastActivityAt"
         FROM crm.contacts WHERE id = ${id} AND tenant_id = ${t}
       `)) as unknown as Rows;
@@ -324,7 +326,18 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
           id: b.id, name: b.name, leadStatus: b.leadStatus, ownerId: b.ownerId, accountId: b.accountId,
           score: b.score, lastActivityAt: b.lastActivityAt,
         },
-        consent: { marketingConsent: b.marketingConsent, consentDate: b.consentDate },
+        // GAP-CRM-CONTACTS-DETAIL-02: a DPDP consent record is more than a
+        // boolean - it also carries the PURPOSE it was given for, the CHANNEL it
+        // was captured through (the "source") and the instant it last changed.
+        // marketingConsent / consentDate are kept as-is for existing readers;
+        // purpose / channel / updatedAt are null for consent that predates them.
+        consent: {
+          marketingConsent: b.marketingConsent,
+          consentDate: b.consentDate,
+          purpose: b.consentPurpose ?? null,
+          channel: b.consentChannel ?? null,
+          updatedAt: b.consentUpdatedAt ?? null,
+        },
         activities, localCommunications, nextActions, contactRoles: roles, deals, quotations, addresses, syncedItems,
         // REAL, tenant-owned counts (source:'crm') — no longer a null·external stub.
         communications: projection.communications,
@@ -391,7 +404,10 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
       const deals = (await tx.execute(sql`
         SELECT id, name, stage, value_minor AS "valueMinor", currency, status
         FROM crm.deals WHERE tenant_id = ${t}
-          AND contact_id IN (SELECT id FROM crm.contacts WHERE tenant_id = ${t} AND account_id = ${id})
+          AND (
+            account_id = ${id}
+            OR contact_id IN (SELECT id FROM crm.contacts WHERE tenant_id = ${t} AND account_id = ${id})
+          )
         ORDER BY created_at DESC
       `)) as unknown as Rows;
 

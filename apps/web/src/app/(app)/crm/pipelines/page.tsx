@@ -6,7 +6,7 @@ export default function Page() {
   return (
     <>
       <PageHeader
-        title="Sales Pipelines"
+        title="Engagement Pipelines"
         subtitle="Define pipelines and, per stage, the mandatory fields, gates and product/region/business-unit scope that govern how opportunities progress."
         back="/crm"
         backLabel="CRM"

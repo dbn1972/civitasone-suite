@@ -28,6 +28,13 @@ export interface AssignmentRuleView {
   enabled: boolean;
   fallbackOwnerId: string | null;
   rrCursor: number;
+  /**
+   * GAP-CRM-ASSIGNMENT-RULES-05: who last changed the rule and when. Only the admin
+   * route read selects them (the assign-path reads do not need them), so they are
+   * optional; `updatedBy` is an opaque identity user id the route resolves to a name.
+   */
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 function mapRuleRows(rows: Row[]): AssignmentRuleView[] {
@@ -40,6 +47,10 @@ function mapRuleRows(rows: Row[]): AssignmentRuleView[] {
     enabled: r.enabled as boolean,
     fallbackOwnerId: (r.fallbackOwnerId ?? null) as string | null,
     rrCursor: Number(r.rrCursor),
+    ...(r.updatedAt != null
+      ? { updatedAt: r.updatedAt instanceof Date ? r.updatedAt.toISOString() : String(r.updatedAt) }
+      : {}),
+    ...(typeof r.updatedBy === "string" && r.updatedBy ? { updatedBy: r.updatedBy } : {}),
   }));
 }
 
@@ -47,7 +58,8 @@ function mapRuleRows(rows: Row[]): AssignmentRuleView[] {
 export async function listRules(tenantId: string): Promise<AssignmentRuleView[]> {
   const rows = (await scopedRead((tx) => tx.execute(sql`
     SELECT id, name, type AS "ruleType", criteria, ordinal, enabled,
-           fallback_owner_id AS "fallbackOwnerId", rr_cursor AS "rrCursor"
+           fallback_owner_id AS "fallbackOwnerId", rr_cursor AS "rrCursor",
+           updated_at AS "updatedAt", updated_by AS "updatedBy"
     FROM crm.assignment_rules
     WHERE tenant_id = ${tenantId}
     ORDER BY ordinal ASC, created_at ASC
@@ -326,6 +338,21 @@ export async function listAssignmentLog(tenantId: string, leadId: string): Promi
       ORDER BY assigned_at ASC
     `),
   )) as unknown as Row[];
+}
+
+/** The stored recipients + enabled flag of one escalation rule, or `undefined` when there is no such rule in the tenant. */
+export async function getEscalationRuleRecipients(
+  tenantId: string,
+  id: string,
+): Promise<{ recipientRole: string | null; recipientId: string | null; enabled: boolean } | undefined> {
+  const rows = (await scopedRead((tx) =>
+    tx.execute(sql`
+      SELECT recipient_role AS "recipientRole", recipient_id AS "recipientId", enabled
+      FROM crm.escalation_rules
+      WHERE tenant_id = ${tenantId} AND id = ${id}::uuid
+    `),
+  )) as unknown as Array<{ recipientRole: string | null; recipientId: string | null; enabled: boolean }>;
+  return rows[0];
 }
 
 export async function listEscalationRuleViews(tenantId: string): Promise<Row[]> {

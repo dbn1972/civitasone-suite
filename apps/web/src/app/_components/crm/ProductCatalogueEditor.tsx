@@ -9,13 +9,19 @@
  *
  * GAP-CRM-PRODUCTS-01: prices/tax flow straight into quotations, so this screen
  * is admin-gated by (app)/crm/products/layout.tsx. A "Last changed" column
- * surfaces updatedBy/updatedAt; Delete steers the admin to soft-disable.
+ * surfaces the editor's NAME and date (the API resolves the name; an unresolved
+ * editor reads "Unknown", never the user id). The row action is "Disable":
+ * the server never erases a product (it sets enabled=false so historical
+ * quotations keep their reference), and the confirm dialog says how many
+ * quotations and price books reference the product before the admin confirms.
  *
  * GAP-CRM-PRODUCTS-02 (tax classification): the Tax % free input is replaced by
  * a GST-slab select (0/5/12/18/28) plus an explicit "Custom…" path that caps the
- * rate at 100% and asks for confirmation, so a fat-fingered 81% can no longer
- * save silently. An HSN/SAC code + CGST/SGST/IGST split needs a backend
- * product-schema change (no column today) and is deferred — see the fixer report.
+ * rate at 100% and, for any rate that is not a standard slab, shows an inline
+ * warning and asks the admin to CONFIRM before saving — so a fat-fingered 81% can
+ * no longer save silently. The optional HSN/SAC code (4-8 digits) is saved with
+ * the product; the CGST/SGST/IGST split is decided per invoice from the place of
+ * supply (quotation-side), not stored on the product.
  *
  * GAP-CRM-PRODUCTS-03 (blank → 0): a blank Price or Tax is now INVALID (not a
  * silent ₹0.00 / 0% live product); an explicit, typed 0 price is allowed only
@@ -40,9 +46,11 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductUsage,
   isProductSelectable,
   ALLOWED_CURRENCIES,
   type Product,
+  type ProductUsage,
   type QpSource,
 } from "@/lib/crm/quotation";
 
@@ -59,8 +67,12 @@ interface Row extends Omit<Product, "priceMinor" | "taxRateBps"> {
   taxPercent: string;
   /** True when the tax rate is not a standard slab (drives the "Custom" input). */
   taxCustom: boolean;
+  /** Tax % as loaded/saved ("" for a new row): a custom rate is only re-confirmed when it CHANGES. */
+  loadedTaxPercent: string;
   /** JSON snapshot of the saved payload fields, for dirty detection (GAP-05). */
   snapshot: string;
+  /** Whether the product is enabled on the SERVER (not the unsaved checkbox). Disabling is a no-op when false. */
+  savedEnabled: boolean;
 }
 let SEQ = 0;
 
@@ -79,6 +91,8 @@ function toRow(p: Product): Row {
     priceRupees: priceMinor && priceMinor !== "0" ? rupees : "",
     taxPercent,
     taxCustom,
+    savedEnabled: p.enabled,
+    loadedTaxPercent: taxPercent,
   };
   return { ...base, snapshot: snapshotOf({ ...base, activeFrom: base.activeFrom ?? "", activeTo: base.activeTo ?? "" }) };
 }
@@ -95,8 +109,16 @@ export function ProductCatalogueEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  // GAP-CRM-PRODUCTS-01 (rescan): quotations / price books that reference the product being
+  // disabled, read when its confirm dialog opens. "error" means unknown — never shown as unused.
+  const [usage, setUsage] = useState<{ status: "loading" | "ready" | "error"; data: ProductUsage | null }>({
+    status: "loading",
+    data: null,
+  });
   // GAP-CRM-PRODUCTS-03: a typed-0 price saves only after this acknowledgement.
   const [confirmZeroKey, setConfirmZeroKey] = useState<string | null>(null);
+  // GAP-CRM-PRODUCTS-02: a tax rate that is not a standard GST slab saves only after this acknowledgement.
+  const [confirmCustomTaxKey, setConfirmCustomTaxKey] = useState<string | null>(null);
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -113,6 +135,21 @@ export function ProductCatalogueEditor() {
       live = false;
     };
   }, []);
+
+  // Read the usage of the product whose Disable dialog is open.
+  const confirmProductId = rows.find((r) => r.key === confirmKey)?.id;
+  useEffect(() => {
+    if (!confirmProductId) return;
+    let live = true;
+    setUsage({ status: "loading", data: null });
+    void getProductUsage(confirmProductId).then(({ data, source: s }) => {
+      if (!live) return;
+      setUsage(s === "error" || !data ? { status: "error", data: null } : { status: "ready", data });
+    });
+    return () => {
+      live = false;
+    };
+  }, [confirmProductId]);
 
   function update(key: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -140,6 +177,19 @@ export function ProductCatalogueEditor() {
     if (bps === null) return null;
     if (bps > MAX_TAX_PERCENT * 100) return null;
     return bps;
+  }
+  /** True when the parsed rate is exactly one of the standard GST slabs (18 and 18.00 both qualify). */
+  function isStandardSlab(row: Row): boolean {
+    const bps = taxBpsOf(row);
+    return bps !== null && bps % 100 === 0 && (GST_SLABS as readonly string[]).includes(String(bps / 100));
+  }
+  /**
+   * GAP-CRM-PRODUCTS-02: a valid rate that is NOT a standard slab must be confirmed
+   * before it is saved. Only when it differs from the rate the row was loaded with, so
+   * renaming a legitimately special-rate product does not re-prompt every time.
+   */
+  function needsCustomTaxConfirm(row: Row): boolean {
+    return taxBpsOf(row) !== null && !isStandardSlab(row) && row.taxPercent.trim() !== row.loadedTaxPercent.trim();
   }
   /** True only when the active window is coherent (to >= from), GAP-05. */
   function datesValid(row: Row): boolean {
@@ -208,7 +258,7 @@ export function ProductCatalogueEditor() {
     }
   }
 
-  async function save(row: Row) {
+  async function save(row: Row, acks: { zero?: boolean; customTax?: boolean } = {}) {
     setMessage("");
     setError("");
     const priceMinor = priceMinorOf(row);
@@ -226,14 +276,24 @@ export function ProductCatalogueEditor() {
       return;
     }
     // GAP-03: a genuine ₹0 price is allowed but must be acknowledged.
-    if (priceMinor === "0") {
+    if (priceMinor === "0" && !acks.zero) {
       setConfirmZeroKey(row.key);
+      return;
+    }
+    // GAP-02: a non-slab (custom) rate is allowed but must be acknowledged.
+    if (needsCustomTaxConfirm(row) && !acks.customTax) {
+      setConfirmCustomTaxKey(row.key);
       return;
     }
     await persist(row, buildPayload(row, priceMinor, taxRateBps));
   }
 
-  async function doDelete(row: Row) {
+  /**
+   * "Disable" a saved product. The server's DELETE is a soft-disable (enabled=false, audited), not
+   * an erase, so quotations that already reference the product keep working; the product just
+   * stops being selectable / priceable. An unsaved row has nothing server-side and is simply removed.
+   */
+  async function doDisable(row: Row) {
     if (!row.id) {
       setRows((prev) => prev.filter((r) => r.key !== row.key));
       setConfirmKey(null);
@@ -243,11 +303,11 @@ export function ProductCatalogueEditor() {
     setError("");
     try {
       await deleteProduct(row.id);
-      setMessage(`Product “${row.name}” deleted.`);
+      setMessage(t("disabledMessage", { name: row.name }));
       setConfirmKey(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the product.");
+      setError(e instanceof Error ? e.message : t("disableFailed"));
     } finally {
       setBusyKey(null);
     }
@@ -263,6 +323,7 @@ export function ProductCatalogueEditor() {
 
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
   const zeroRow = rows.find((r) => r.key === confirmZeroKey) ?? null;
+  const customTaxRow = rows.find((r) => r.key === confirmCustomTaxKey) ?? null;
 
   function onTaxSlabChange(key: string, value: string) {
     if (value === "custom") update(key, { taxCustom: true, taxPercent: "" });
@@ -400,6 +461,11 @@ export function ProductCatalogueEditor() {
                         </>
                       ) : null}
                       {row.taxPercent.trim() && taxOk ? <span style={{ fontSize: 11, color: "var(--muted)" }}>{formatBps(taxBpsOf(row)!)}</span> : null}
+                      {row.taxCustom && taxOk && !isStandardSlab(row) ? (
+                        <span role="status" style={{ display: "block", fontSize: 11, color: "#b45309" }}>
+                          {t("customTaxWarn", { slabs: GST_SLABS.join("/") })}
+                        </span>
+                      ) : null}
                       {row.taxPercent.trim() && !taxOk ? <span style={{ fontSize: 11, color: "#b42318" }}>{t("rateRange", { max: MAX_TAX_PERCENT })}</span> : null}
                     </td>
                     <td data-label={tCat("hsnHeader")}>
@@ -436,7 +502,8 @@ export function ProductCatalogueEditor() {
                         <span style={{ color: "#b45309", fontWeight: 600 }} aria-label={t("unsavedAria", { n })}>{t("unsaved")}</span>
                       ) : row.id && (row.updatedAt || row.updatedBy) ? (
                         <span aria-label={t("lastChangedAria", { n })}>
-                          {row.updatedBy ? row.updatedBy : t("unknownUser")}
+                          {/* The editor's NAME (resolved by the API); never the user id. */}
+                          {row.updatedByName ?? t("unknownUser")}
                           {row.updatedAt ? ` · ${formatIndianDate(row.updatedAt)}` : ""}
                         </span>
                       ) : (
@@ -448,9 +515,25 @@ export function ProductCatalogueEditor() {
                         <Button type="button" size="sm" onClick={() => void save(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
                         </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete product ${n}`}>
-                          Delete
-                        </Button>
+                        {/* The server never erases a product: DELETE retires it (enabled=false). The
+                            action is named for what it does. An unsaved row is just removed; an
+                            already-disabled product has nothing left to disable. */}
+                        {row.id ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmKey(row.key)}
+                            disabled={busy || !row.savedEnabled}
+                            aria-label={t("disableAria", { n })}
+                          >
+                            {t("disable")}
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => void doDisable(row)} disabled={busy} aria-label={t("removeAria", { n })}>
+                            {t("remove")}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -470,21 +553,27 @@ export function ProductCatalogueEditor() {
       <ConfirmDialog
         open={confirmRow !== null}
         danger
-        title={confirmRow ? `Delete product “${confirmRow.name || confirmRow.code || "(new)"}”?` : ""}
+        title={confirmRow ? t("disableTitle", { name: confirmRow.name || confirmRow.code || t("newLabel") }) : ""}
         description={
           <>
-            <p style={{ margin: "0 0 8px" }}>
-              {t("deleteWarning")}
+            {/* GAP-CRM-PRODUCTS-01: say how many quotations / price books reference the product
+                BEFORE the admin confirms. An unreadable count is "unknown", never "unused". */}
+            <p style={{ margin: "0 0 8px", fontWeight: 600 }} role="status" aria-live="polite">
+              {usage.status === "loading"
+                ? t("usageLoading")
+                : usage.status === "error" || !usage.data
+                  ? t("usageUnknown")
+                  : usage.data.quotations + usage.data.priceBooks === 0
+                    ? t("usageNone")
+                    : t("usageCounts", { quotations: usage.data.quotations, priceBooks: usage.data.priceBooks })}
             </p>
-            <p style={{ margin: 0, fontWeight: 600 }}>
-              {t.rich("deletePrefer", { em: (chunks) => <em>{chunks}</em> })}
-            </p>
+            <p style={{ margin: 0 }}>{t("disableExplain")}</p>
           </>
         }
-        confirmLabel={t("deleteAnyway")}
+        confirmLabel={t("disableConfirm")}
         busy={confirmRow ? busyKey === confirmRow.key : false}
         onCancel={() => setConfirmKey(null)}
-        onConfirm={() => confirmRow && void doDelete(confirmRow)}
+        onConfirm={() => confirmRow && void doDisable(confirmRow)}
       />
 
       <ConfirmDialog
@@ -497,10 +586,28 @@ export function ProductCatalogueEditor() {
         onConfirm={() => {
           const row = zeroRow;
           setConfirmZeroKey(null);
-          if (row) {
-            const taxRateBps = taxBpsOf(row);
-            if (taxRateBps !== null) void persist(row, buildPayload(row, "0", taxRateBps));
-          }
+          // Re-enter save(): a ₹0 product that ALSO carries a custom tax rate still needs that confirm.
+          if (row) void save(row, { zero: true });
+        }}
+      />
+
+      {/* GAP-CRM-PRODUCTS-02: confirm a tax rate that is not a standard GST slab. */}
+      <ConfirmDialog
+        open={customTaxRow !== null}
+        title={customTaxRow ? t("customTaxTitle", { name: customTaxRow.name || customTaxRow.code }) : ""}
+        description={
+          customTaxRow
+            ? t("customTaxDescription", { rate: formatBps(taxBpsOf(customTaxRow) ?? 0), slabs: GST_SLABS.join("/") })
+            : ""
+        }
+        confirmLabel={customTaxRow ? t("customTaxConfirm", { rate: formatBps(taxBpsOf(customTaxRow) ?? 0) }) : undefined}
+        busy={customTaxRow ? busyKey === customTaxRow.key : false}
+        onCancel={() => setConfirmCustomTaxKey(null)}
+        onConfirm={() => {
+          const row = customTaxRow;
+          setConfirmCustomTaxKey(null);
+          // zero: true -- the ₹0 confirm (if any) always precedes this one in save().
+          if (row) void save(row, { zero: true, customTax: true });
         }}
       />
     </div>

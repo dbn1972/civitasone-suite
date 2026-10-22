@@ -24,11 +24,15 @@ export function registerDealConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_contact");
         return;
       }
+      if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
+        await emitAudit(tx, msg, "create", p.id, await contactRepo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
+        return;
+      }
       await repo.insert(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name, stage: p.stage,
         pipelineId: p.pipelineId, stageId: p.stageId,
         valueMinor: BigInt(p.valueMinor), currency: p.currency,
-        contactId: p.contactId, ownerId: p.ownerId,
+        contactId: p.contactId, accountId: p.accountId, ownerId: p.ownerId,
         closeDate: p.closeDate, probability: p.probability,
         status: p.status,
         product: p.product, quantity: p.quantity,
@@ -74,6 +78,7 @@ export function registerDealConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string;
       valueMinor?: number; ownerId?: string | null; closeDate?: string | null; contactId?: string | null;
+      accountId?: string | null;
       product?: string | null; quantity?: number | null; competitors?: string[];
       nextStep?: string | null; expectedCloseDate?: string | null;
     };
@@ -83,11 +88,16 @@ export function registerDealConsumers(queue: Queue): void {
         await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_contact");
         return;
       }
+      if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
+        await emitAudit(tx, msg, "update", p.id, await contactRepo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
+        return;
+      }
       const fields: repo.DealPatch = {};
       if (p.valueMinor !== undefined) fields.valueMinor = BigInt(p.valueMinor);
       if (p.ownerId !== undefined) fields.ownerId = p.ownerId;
       if (p.closeDate !== undefined) fields.closeDate = p.closeDate;
       if (p.contactId !== undefined) fields.contactId = p.contactId;
+      if (p.accountId !== undefined) fields.accountId = p.accountId;
       if (p.product !== undefined) fields.product = p.product;
       if (p.quantity !== undefined) fields.quantity = p.quantity;
       if (p.competitors !== undefined) fields.competitors = p.competitors;

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * GAP-CRM-GRIEVANCES-NEW-03: the grievance-category master is platform-wide
@@ -8,9 +8,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
  * service-types). A non-admin would otherwise reach a fully-wired Save/Delete
  * UI for tenant-wide config.
  */
-const ALLOWED_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
-
 export default function GrievanceCategoriesLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(ALLOWED_ROLES, "/crm");
+  requireAnyRole(CRM_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

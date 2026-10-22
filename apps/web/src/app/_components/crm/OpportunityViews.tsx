@@ -298,7 +298,7 @@ export function OpportunityViews({ canClose = true }: { canClose?: boolean } = {
                       <div style={{ fontSize: 13, fontWeight: 600 }}>
                         {d.id ? <Link href={`/crm/opportunities/${d.id}/edit`}>{d.name}</Link> : d.name}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{formatMoney(d.valueMinor)} · {d.probability}%</div>
+                      <div style={{ fontSize: 12, color: "var(--muted)" }}>{formatMoney(d.valueMinor)} · {d.probability !== undefined ? `${d.probability}%` : "—"}</div>
                       {selectedPipeline && selectedPipeline.stages.length > 1 ? (
                         <label style={{ fontSize: 12, display: "grid", gap: 2, marginTop: 6 }}>
                           <span className="sr-only">Move {d.name} to another stage</span>
@@ -372,7 +372,7 @@ export function OpportunityViews({ canClose = true }: { canClose?: boolean } = {
                   <td>{d.id ? <Link href={`/crm/opportunities/${d.id}/edit`}>{d.name}</Link> : d.name}</td>
                   <td>{d.stage}</td>
                   <td className="num">{formatMoney(d.valueMinor)}</td>
-                  <td className="num">{d.probability}%</td>
+                  <td className="num">{d.probability !== undefined ? `${d.probability}%` : "—"}</td>
                   <td>{formatIndianDate(d.expectedCloseDate)}</td>
                   <td>
                     {d.status === "closed" || d.outcome ? (

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * Escalation-rule thresholds change how every case in the register gets escalated.
@@ -8,9 +8,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
  * so a non-admin could load and interact with a fully-wired Save/Delete UI
  * for platform-wide config that only admins should see.
  */
-const ALLOWED_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
-
 export default function EscalationRulesLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(ALLOWED_ROLES, "/crm");
+  requireAnyRole(CRM_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

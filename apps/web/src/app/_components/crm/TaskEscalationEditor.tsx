@@ -1,16 +1,27 @@
 "use client";
 /**
  * TaskEscalationEditor — AC-005 (config). CRUD the rules that escalate a task
- * left overdue past a threshold to a manager. Each row needs a positive whole
- * threshold in minutes and a manager (role or specific user), so an invalid row
- * is blocked from saving. Rows are created (POST), updated (PUT) or deleted
+ * left overdue past a threshold to a manager. Each row needs a name, a positive
+ * whole threshold in minutes and a manager (role or specific user), so an invalid
+ * row is blocked from saving. Rows are created (POST), updated (PUT) or deleted
  * (DELETE, governed via ConfirmDialog) individually. A failed load shows the
  * saved-info badge, never an empty rule-set presented as fact.
+ *
+ * GAP-CRM-TASK-ESCALATION-01: the manager is picked, never typed. The role and
+ * user pickers are fed by crm-service's staff directory (open to CRM admins, not
+ * just platform admins), the rule is sent in the shape crm-service accepts
+ * (name + recipientRole/recipientId), each saved rule shows the manager's
+ * resolved name (or flags one that no longer exists), and the preview line says
+ * how many tasks are overdue by at least that rule's threshold RIGHT NOW (a
+ * server count with the scheduler's arithmetic, not the length of a capped page).
+ * The server stays authoritative: it re-verifies the recipient and its refusal is
+ * shown in plain words.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { DirectoryUserSelect } from "./DirectoryUserSelect";
 import {
   getTaskEscalationRules,
   createTaskEscalationRule,
@@ -18,7 +29,8 @@ import {
   deleteTaskEscalationRule,
   getEscalationRoles,
   getEscalationUsers,
-  getOverdueTasks,
+  getOverdueMatchCount,
+  TaskEscalationRuleRejected,
   type TaskEscalationRule,
   type EscalationRole,
   type EscalationUser,
@@ -35,8 +47,15 @@ function toRow(r: TaskEscalationRule): Row {
   return { ...r, key: r.id ?? `new-${SEQ++}`, unit: naturalUnit(r.thresholdMinutes) };
 }
 
+const MAX_NAME_LENGTH = 200;
+
 function rowValid(r: Row): boolean {
-  return Number.isInteger(r.thresholdMinutes) && r.thresholdMinutes > 0 && (r.managerRole.trim().length > 0 || r.managerId.trim().length > 0);
+  return (
+    (r.name ?? "").trim().length > 0 &&
+    Number.isInteger(r.thresholdMinutes) &&
+    r.thresholdMinutes > 0 &&
+    (r.managerRole.trim().length > 0 || r.managerId.trim().length > 0)
+  );
 }
 
 /** Threshold units offered in the editor (GAP-CRM-TASK-ESCALATION-05). */
@@ -46,6 +65,8 @@ const UNIT_KEYS = { minutes: "unitMinutes", hours: "unitHours", days: "unitDays"
 const UNIT_FACTOR: Record<Unit, number> = { minutes: 1, hours: 60, days: 1440 };
 /** 1 year in minutes — an upper bound so a typo can't set an absurd threshold. */
 const MAX_THRESHOLD_MINUTES = 525600;
+/** Wait for a threshold to settle before asking the server how many tasks it matches. */
+const PREVIEW_DEBOUNCE_MS = 300;
 
 /** Pick the most natural unit for a stored minute count (exact day > exact hour > minutes). */
 function naturalUnit(minutes: number): Unit {
@@ -73,11 +94,17 @@ export function TaskEscalationEditor() {
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
   // GAP-CRM-TASK-ESCALATION-01: the tenant's roles + users back the pickers so a
-  // rule can only target a real role / user, and `overdueCount` powers the
-  // preview line that tells a clerk how many tasks a rule matches right now.
+  // rule can only target a real role / user. If either directory cannot be read the
+  // pickers would be silently empty, so say so instead.
   const [roles, setRoles] = useState<EscalationRole[]>([]);
   const [users, setUsers] = useState<EscalationUser[]>([]);
-  const [overdueCount, setOverdueCount] = useState<number | null>(null);
+  // True = `users` is not the whole directory (large tenant): each manager picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
+  const [directoryFailed, setDirectoryFailed] = useState(false);
+  // Overdue tasks matching each distinct threshold (minutes) -> count, or "error".
+  const [matchCounts, setMatchCounts] = useState<Record<number, number | "error">>({});
+  const requestedThresholds = useRef(new Set<number>());
+  const mounted = useRef(true);
   const headingId = useId();
 
   async function load(isLive: () => boolean = () => true) {
@@ -89,36 +116,68 @@ export function TaskEscalationEditor() {
   }
 
   useEffect(() => {
+    mounted.current = true;
     let live = true;
     void load(() => live);
-    // Directory + overdue count for the pickers and the preview line. Failures
-    // here are non-fatal: the editor still works, the preview just omits a count.
-    void Promise.all([getEscalationRoles(), getEscalationUsers(), getOverdueTasks()]).then(
-      ([r, u, o]) => {
-        if (!live) return;
-        setRoles(r.data);
-        setUsers(u.data);
-        setOverdueCount(o.source === "error" ? null : o.data.length);
-      },
-    );
+    void Promise.all([getEscalationRoles(), getEscalationUsers()]).then(([r, u]) => {
+      if (!live) return;
+      setRoles(r.data);
+      setUsers(u.data);
+      setUsersTruncated(u.truncated === true);
+      setDirectoryFailed(r.source === "error" || u.source === "error");
+    });
     return () => {
       live = false;
+      mounted.current = false;
     };
   }, []);
+
+  // Ask the server how many tasks each distinct, valid threshold matches right now.
+  const thresholds = useMemo(
+    () => [
+      ...new Set(
+        rows
+          .map((r) => r.thresholdMinutes)
+          .filter((m) => Number.isInteger(m) && m > 0 && m <= MAX_THRESHOLD_MINUTES),
+      ),
+    ],
+    [rows],
+  );
+  useEffect(() => {
+    const missing = thresholds.filter((m) => !requestedThresholds.current.has(m));
+    if (missing.length === 0) return;
+    const timer = setTimeout(() => {
+      for (const minutes of missing) {
+        if (requestedThresholds.current.has(minutes)) continue;
+        requestedThresholds.current.add(minutes);
+        void getOverdueMatchCount(minutes).then((res) => {
+          if (!mounted.current) return;
+          setMatchCounts((prev) => ({ ...prev, [minutes]: res.source === "error" ? "error" : res.data }));
+        });
+      }
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [thresholds]);
 
   function update(key: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
   function addRule() {
-    setRows((prev) => [...prev, toRow({ thresholdMinutes: 1440, managerRole: "", managerId: "", enabled: true })]);
+    setRows((prev) => [
+      ...prev,
+      toRow({ name: t("defaultRuleName"), thresholdMinutes: 1440, managerRole: "", managerId: "", enabled: true }),
+    ]);
   }
 
   /** Display name for a saved rule's manager, flagging one that no longer exists. */
   function managerSummary(row: Row): { text: string; missing: boolean } {
     if (row.managerId.trim()) {
       const u = users.find((x) => x.id === row.managerId.trim());
-      return u ? { text: u.name, missing: false } : { text: t("unknownUser"), missing: true };
+      if (u) return { text: u.name, missing: false };
+      // A truncated directory proves nothing about absence: the saved manager may simply not be in the
+      // loaded page, so do not call them "unknown"; the server vets the id when the rule is saved.
+      return usersTruncated ? { text: t("userNotListed"), missing: false } : { text: t("unknownUser"), missing: true };
     }
     if (row.managerRole.trim()) {
       const r = roles.find((x) => x.key === row.managerRole.trim());
@@ -131,7 +190,7 @@ export function TaskEscalationEditor() {
     setMessage("");
     setError("");
     if (!rowValid(row)) {
-      setError("Each rule needs a positive threshold in minutes and a manager role or user.");
+      setError(t("rowInvalid"));
       return;
     }
     if (row.thresholdMinutes > MAX_THRESHOLD_MINUTES) {
@@ -152,6 +211,8 @@ export function TaskEscalationEditor() {
     }
     const rule: TaskEscalationRule = {
       ...(row.id ? { id: row.id } : {}),
+      name: (row.name ?? "").trim(),
+      ...(row.appliesTo ? { appliesTo: row.appliesTo } : {}),
       thresholdMinutes: row.thresholdMinutes,
       managerRole: row.managerRole.trim(),
       managerId: row.managerId.trim(),
@@ -161,10 +222,12 @@ export function TaskEscalationEditor() {
     try {
       if (row.id) await updateTaskEscalationRule(row.id, rule);
       else await createTaskEscalationRule(rule);
-      setMessage("Task-escalation rule saved.");
+      setMessage(t("saved"));
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not save the rule.");
+      // The server verifies the manager itself; word its refusal precisely.
+      if (e instanceof TaskEscalationRuleRejected) setError(t(`rejected.${e.code}`));
+      else setError(e instanceof Error && e.message ? e.message : t("saveFailed"));
     } finally {
       setBusyKey(null);
     }
@@ -180,18 +243,18 @@ export function TaskEscalationEditor() {
     setError("");
     try {
       await deleteTaskEscalationRule(row.id);
-      setMessage("Task-escalation rule deleted.");
+      setMessage(t("deleted"));
       setConfirmKey(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the rule.");
+      setError(e instanceof Error && e.message ? e.message : t("deleteFailed"));
     } finally {
       setBusyKey(null);
     }
   }
 
   if (source === "loading") {
-    return <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>Loading task-escalation rules…</p>;
+    return <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>{t("loading")}</p>;
   }
 
   const confirmRow = rows.find((r) => r.key === confirmKey) ?? null;
@@ -199,12 +262,15 @@ export function TaskEscalationEditor() {
   return (
     <div className="card">
       <div className="card-h">
-        <h3 id={headingId}>Task escalation</h3>
+        <h3 id={headingId}>{t("heading")}</h3>
         {source === "error" ? <DataSourceBadge source="error" /> : null}
       </div>
       <div className="pad" style={{ display: "grid", gap: 12 }}>
+        {directoryFailed ? (
+          <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{t("directoryUnavailable")}</p>
+        ) : null}
         {rows.length === 0 ? (
-          <EmptyState icon="⏰" title="No task-escalation rules yet" message="Add a rule so overdue tasks reach a manager." />
+          <EmptyState icon="⏰" title={t("emptyTitle")} message={t("emptyMessage")} />
         ) : (
           // GAP-CRM-TASK-ESCALATION-05: show rules in ascending threshold order
           // so the escalation ladder reads top-to-bottom. Each rule fires
@@ -214,9 +280,23 @@ export function TaskEscalationEditor() {
             .sort((a, b) => (a.thresholdMinutes || 0) - (b.thresholdMinutes || 0))
             .map((row, i) => {
             const summary = managerSummary(row);
+            const count = matchCounts[row.thresholdMinutes];
             return (
             <fieldset key={row.key} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, display: "grid", gap: 10, margin: 0 }}>
-              <legend style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", padding: "0 6px" }}>Rule {i + 1}</legend>
+              <legend style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", padding: "0 6px" }}>{t("ruleLegend", { n: i + 1 })}</legend>
+              <div>
+                <label htmlFor={`${row.key}-nm`} style={labelStyle}>{t("ruleName")}</label>
+                <input
+                  id={`${row.key}-nm`}
+                  aria-label={t("ruleNameAria", { n: i + 1 })}
+                  type="text"
+                  maxLength={MAX_NAME_LENGTH}
+                  value={row.name ?? ""}
+                  onChange={(e) => update(row.key, { name: e.target.value })}
+                  aria-invalid={(row.name ?? "").trim() ? undefined : true}
+                  style={inputStyle}
+                />
+              </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
                 <div>
                   {/* GAP-CRM-TASK-ESCALATION-05: enter the threshold in a chosen
@@ -260,7 +340,7 @@ export function TaskEscalationEditor() {
                       roles, not free text — a mistyped role can no longer save
                       and escalate to nobody. Clearing the role is allowed (so a
                       user-targeted rule can drop it). */}
-                  <label htmlFor={`${row.key}-mr`} style={labelStyle}>Manager role</label>
+                  <label htmlFor={`${row.key}-mr`} style={labelStyle}>{t("managerRole")}</label>
                   <select
                     id={`${row.key}-mr`}
                     aria-label={t("managerRoleAria", { n: i + 1 })}
@@ -284,48 +364,47 @@ export function TaskEscalationEditor() {
                 <div>
                   {/* A searchable user picker (SELECT over the tenant directory)
                       storing the user id, not free text. */}
-                  <label htmlFor={`${row.key}-mi`} style={labelStyle}>Manager user</label>
-                  <select
+                  <label htmlFor={`${row.key}-mi`} style={labelStyle}>{t("managerUser")}</label>
+                  <DirectoryUserSelect
                     id={`${row.key}-mi`}
                     aria-label={t("managerUserAria", { n: i + 1 })}
+                    searchLabel={t("managerSearchAria", { n: i + 1 })}
                     value={row.managerId}
-                    onChange={(e) => update(row.key, { managerId: e.target.value })}
+                    onChange={(managerId) => update(row.key, { managerId })}
                     aria-invalid={row.managerRole.trim() || row.managerId.trim() ? undefined : true}
+                    users={users}
+                    truncated={usersTruncated}
+                    leading={<option value="">{t("noSpecificUser")}</option>}
+                    unlistedLabel={t("unknownUser")}
+                    unlistedTruncatedLabel={t("userNotListed")}
                     style={inputStyle}
-                  >
-                    <option value="">{t("noSpecificUser")}</option>
-                    {row.managerId && !users.some((u) => u.id === row.managerId) && (
-                      <option value={row.managerId}>{t("unknownUser")}</option>
-                    )}
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
-              {/* Resolved manager name + a preview of what the rule will do. */}
+              {/* Resolved manager name + a preview of what the rule will do. The count is the
+                  number of tasks overdue by at least THIS rule's threshold right now. */}
               <p style={{ fontSize: 12, margin: 0, color: summary.missing ? "#b42318" : "var(--muted)" }}>
                 {summary.missing
                   ? t.rich("escalatesMissing", { name: summary.text, strong: (chunks) => <strong>{chunks}</strong> })
-                  : overdueCount !== null
+                  : typeof count === "number"
                     ? t.rich("escalatesWithCount", {
                         name: summary.text,
-                        count: overdueCount,
-                        formatted: overdueCount.toLocaleString("en-IN"),
+                        count,
+                        formatted: count.toLocaleString("en-IN"),
                         strong: (chunks) => <strong>{chunks}</strong>,
                       })
                     : t.rich("escalates", { name: summary.text, strong: (chunks) => <strong>{chunks}</strong> })}
               </p>
               <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                <input type="checkbox" checked={row.enabled} aria-label={`Enable rule ${i + 1}`} onChange={(e) => update(row.key, { enabled: e.target.checked })} />
-                Enabled
+                <input type="checkbox" checked={row.enabled} aria-label={t("enableAria", { n: i + 1 })} onChange={(e) => update(row.key, { enabled: e.target.checked })} />
+                {t("enabled")}
               </label>
               <div style={{ display: "flex", gap: 8 }}>
                 <Button type="button" disabled={busyKey === row.key} onClick={() => void saveRow(row)} style={{ minHeight: 40 }}>
-                  {busyKey === row.key ? "Saving…" : row.id ? "Save" : "Create"}
+                  {busyKey === row.key ? t("saving") : row.id ? t("save") : t("create")}
                 </Button>
-                <Button type="button" variant="danger" aria-label={`Delete rule ${i + 1}`} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)} style={{ minHeight: 40 }}>
-                  Delete
+                <Button type="button" variant="danger" aria-label={t("deleteAria", { n: i + 1 })} disabled={busyKey === row.key} onClick={() => setConfirmKey(row.key)} style={{ minHeight: 40 }}>
+                  {t("delete")}
                 </Button>
               </div>
             </fieldset>
@@ -333,7 +412,7 @@ export function TaskEscalationEditor() {
           })
         )}
         <div>
-          <Button type="button" onClick={addRule} style={{ minHeight: 44 }}>+ Add task-escalation rule</Button>
+          <Button type="button" onClick={addRule} style={{ minHeight: 44 }}>{t("addRule")}</Button>
         </div>
         {rows.length > 0 ? (
           <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
@@ -346,9 +425,9 @@ export function TaskEscalationEditor() {
 
       <ConfirmDialog
         open={confirmRow !== null}
-        title="Delete this task-escalation rule?"
-        description="Overdue tasks will no longer escalate under this rule."
-        confirmLabel="Delete rule"
+        title={t("deleteTitle")}
+        description={t("deleteDescription")}
+        confirmLabel={t("deleteConfirm")}
         danger
         busy={busyKey !== null && confirmRow?.key === busyKey}
         onCancel={() => setConfirmKey(null)}

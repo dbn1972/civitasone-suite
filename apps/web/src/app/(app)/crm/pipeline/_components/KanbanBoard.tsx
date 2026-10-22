@@ -60,8 +60,11 @@ type PendingMove = {
 
 export function KanbanBoard({ pipeline, pipelines, deals: serverDeals, source }: Props) {
   const t = useTranslations("crmKanbanBoard");
+  // GAP-CRM-PIPELINE-05 (rescan): the offline/seeded copy is kept PER PIPELINE. One shared key
+  // meant a failed load of pipeline B could fall back to pipeline A's cached deals and drop
+  // them into B's columns (they are matched by stage name).
   const { data: deals, fromCache, offline, cachedAt } = useSeededResource<PipelineDealCard[]>(
-    "crm.pipeline.deals",
+    `crm.pipeline.deals.${pipeline?.id ?? "all"}`,
     serverDeals,
     source,
     (d) => d.length === 0,
@@ -283,55 +286,67 @@ export function KanbanBoard({ pipeline, pipelines, deals: serverDeals, source }:
   // GAP-CRM-PIPELINE-04: user-visible copy says "engagement(s)" throughout, matching the
   // screen header/cards and the /crm/deals vocabulary (decision: standardise on
   // "Engagement" to avoid a new split with the deals list, which also uses it).
+  // GAP-CRM-PIPELINE-05 (rescan): the picker is rendered by EVERY state below — the error and
+  // the empty states used to return without it, so choosing a pipeline with no engagements
+  // left the user on a board with no way to switch back.
+  const pipelinePicker =
+    pipelineList.length > 1 ? (
+      <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
+        {t("pipeline")}
+        <select
+          aria-label={t("pipeline")}
+          value={selectedPipelineId}
+          onChange={(e) => onSelectPipeline(e.target.value)}
+          style={{ padding: 6, borderRadius: 8, border: "1px solid var(--line)" }}
+        >
+          {pipelineList.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+      </label>
+    ) : null;
+
   if (localDeals.length === 0 && source === "error" && !fromCache && !offline) {
     return (
-      <div className="card">
-        <EmptyState
-          icon="⚠️"
-          title={t("loadErrorTitle")}
-          message={t("loadErrorMessage")}
-          action={
-            <button type="button" className="btn primary" onClick={() => window.location.reload()}>
-              {t("retry")}
-            </button>
-          }
-        />
+      <div className="space-y-3">
+        {pipelinePicker}
+        <div className="card">
+          <EmptyState
+            icon="⚠️"
+            title={t("loadErrorTitle")}
+            message={t("loadErrorMessage")}
+            action={
+              <button type="button" className="btn primary" onClick={() => window.location.reload()}>
+                {t("retry")}
+              </button>
+            }
+          />
+        </div>
       </div>
     );
   }
 
   if (localDeals.length === 0 && stages.length > 0) {
     return (
-      <div className="card">
-        <EmptyState
-          icon="📊"
-          title={t("emptyTitle")}
-          message={t("emptyMessage")}
-          action={<a href="/crm/deals/new" className="btn primary">{t("newEngagement")}</a>}
-        />
+      <div className="space-y-3">
+        {pipelinePicker}
+        <div className="card">
+          <EmptyState
+            icon="📊"
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
+            action={<a href="/crm/deals/new" className="btn primary">{t("newEngagement")}</a>}
+          />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {pipelineList.length > 1 && (
-        <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13 }}>
-          {t("pipeline")}
-          <select
-            aria-label={t("pipeline")}
-            value={selectedPipelineId}
-            onChange={(e) => onSelectPipeline(e.target.value)}
-            style={{ padding: 6, borderRadius: 8, border: "1px solid var(--line)" }}
-          >
-            {pipelineList.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
+      {pipelinePicker}
 
       {cacheNote && (
         <p role="status" aria-live="polite" className="text-xs text-amber-700 px-1">

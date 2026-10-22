@@ -6,7 +6,8 @@ import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, StatCard, StatGrid } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatMoney, formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatMoney, humanizeStatus } from "@/lib/formatters";
+import { DEAL_STAGE_LABEL_KEYS } from "@/lib/crm/dealStages";
 
 type Deal = {
   id: string;
@@ -34,28 +35,24 @@ type DealRow = {
   amount: string;
   stage: string;
   owner: string;
-  // GAP-CRM-DEALS-07: 'Expected close' (formatted) and 'Probability' columns.
-  closeDate: string;
-  probability: number;
+  // GAP-CRM-DEALS-07: 'Expected close' and 'Probability' columns. closeDate stays
+  // the RAW ISO date (null when unset) and is rendered by the DataTable "date"
+  // cell type, so sorting compares ISO strings (chronological) rather than the
+  // formatted "dd Mon yyyy" text, which sorts alphabetically by day number.
+  closeDate: string | null;
+  /** Undefined when the deal has no probability: shown as a dash, never a made-up 0%. */
+  probability: number | undefined;
 };
 
 // GAP-CRM-DEALS-01: the Stage column is driven by a canonical-key -> label map
 // (the backend/mapper always yields lower-case snake keys like "closed_won", so
 // the old case-sensitive `\bWon\b`/`\bLost\b` regex never matched and rows read
 // "closed won"). Won -> Concluded and Lost -> Lapsed is the module's vocabulary.
-// Unknown keys fall back to humanizeStatus so a new backend stage never renders
-// as a raw snake_case token.
-const STAGE_LABEL_KEYS: Record<string, string> = {
-  prospecting: "stageProspecting",
-  qualification: "stageQualification",
-  proposal: "stageProposal",
-  negotiation: "stageNegotiation",
-  closed_won: "stageConcluded",
-  closed_lost: "stageLapsed",
-};
-
+// The canonical-key -> label-key map lives in lib/crm/dealStages (one copy of the
+// stage vocabulary, GAP-CRM-DEALS-NEW-02). Unknown keys fall back to
+// humanizeStatus so a new backend stage never renders as a raw snake_case token.
 function stageLabel(stage: string, t: (key: string) => string): string {
-  const key = STAGE_LABEL_KEYS[stage];
+  const key = (DEAL_STAGE_LABEL_KEYS as Readonly<Record<string, string>>)[stage];
   return key ? t(key) : humanizeStatus(stage);
 }
 
@@ -126,10 +123,13 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       amount: d.amount,
       stage: stageLabel(d.stage, (k) => t(k)),
       owner: d.owner,
-      // GAP-CRM-DEALS-07: Indian-formatted expected close date ("—" when none),
-      // and the win probability as a whole-number percentage.
-      closeDate: d.closeDate ? formatIndianDate(d.closeDate) : "—",
-      probability: typeof d.probability === "number" ? d.probability : 0,
+      // GAP-CRM-DEALS-07: the raw ISO expected-close date (formatted + "—" when
+      // none by the DataTable date cell), and the win probability as a
+      // whole-number percentage.
+      closeDate: d.closeDate || null,
+      // GAP-CRM-OPPORTUNITIES-NEW-06: a deal with no probability stays unset (a dash), the
+      // same as the detail page, kanban and views; only a real 0 reads "0%".
+      probability: typeof d.probability === "number" ? d.probability : undefined,
     }));
 
   // GAP-CRM-DEALS-06: a bespoke exportCsv() used to live here. It was dead code
@@ -171,7 +171,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       </StatGrid>
       <div className="card">
         <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <h3 style={{ marginRight: "auto" }}>Engagements</h3>
+          <h3 style={{ marginRight: "auto" }}>{t("heading")}</h3>
           <Segmented
             options={SEGMENTS.map((s) => t(SEGMENT_LABEL_KEYS[s]))}
             value={t(SEGMENT_LABEL_KEYS[segment as (typeof SEGMENTS)[number]] ?? "segAll")}
@@ -179,23 +179,23 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
           />
         </div>
         {rows.length === 0 ? (
-          <EmptyState icon="◈" title="No engagements found" message="Start adding engagements to track your procurement pipeline." />
+          <EmptyState icon="◈" title={t("emptyTitle")} message={t("emptyMessage")} />
         ) : (
           <DataTable<DealRow>
             columns={[
-              { key: "dealName", label: "Engagement" },
+              { key: "dealName", label: t("colEngagement") },
               { key: "account", label: t("contactCompany"), render: contactCell },
-              { key: "amount", label: "Value", align: "right", cellType: "amount" },
-              { key: "stage", label: "Stage", cellType: "status" },
-              { key: "closeDate", label: "Expected close" },
-              { key: "probability", label: "Probability", align: "right", render: (row) => `${row.probability}%` },
-              { key: "owner", label: "Owner" },
+              { key: "amount", label: t("colValue"), align: "right", cellType: "amount" },
+              { key: "stage", label: t("colStage"), cellType: "status" },
+              { key: "closeDate", label: t("colExpectedClose"), cellType: "date" },
+              { key: "probability", label: t("colProbability"), align: "right", render: (row) => (typeof row.probability === "number" ? `${row.probability}%` : "—") },
+              { key: "owner", label: t("colOwner") },
             ]}
             rows={tableRows}
             rowHref={(row) => `/crm/deals/${row.id}`}
             sortable
             filterable
-            filterPlaceholder="Filter engagements…"
+            filterPlaceholder={t("filterPlaceholder")}
             exportable exportAudit="crm/deals"
             exportFilename="engagements"
             pageSize={15}

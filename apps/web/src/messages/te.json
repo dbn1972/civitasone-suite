@@ -258,6 +258,12 @@
     "stuckSetup": "Getting Started",
     "stuckNote": "Still stuck? Open {setupLink} to walk through setup again, or raise a ticket from {helpdeskLink}."
   },
+  "crm": {
+    "dashboard": {
+      "title": "CRM డాష్‌బోర్డ్",
+      "subtitle": "ప్రభుత్వ వాటాదారులు, విక్రేతల సంప్రదింపుల రిజిస్టర్"
+    }
+  },
   "attendanceConfig": {
     "title": "హాజరు నియమాలు",
     "subtitle": "ఆలస్య గుర్తులు, అర్ధ దినం, ఓవర్‌టైమ్, వారపు సెలవులు ఎలా లెక్కించబడతాయి (చదవడానికి మాత్రమే).",

@@ -258,6 +258,12 @@
     "stuckSetup": "Getting Started",
     "stuckNote": "Still stuck? Open {setupLink} to walk through setup again, or raise a ticket from {helpdeskLink}."
   },
+  "crm": {
+    "dashboard": {
+      "title": "CRM டாஷ்போர்டு",
+      "subtitle": "அரசு பங்குதாரர் மற்றும் விற்பனையாளர் தொடர்பு பதிவேடு"
+    }
+  },
   "attendanceConfig": {
     "title": "வருகைப் பதிவு விதிகள்",
     "subtitle": "தாமதக் குறிகள், அரை நாள், கூடுதல் நேரப்பணி, வாராந்திர விடுமுறை ஆகியவை எவ்வாறு கணக்கிடப்படுகின்றன (படிக்க மட்டும்).",

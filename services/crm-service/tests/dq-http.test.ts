@@ -352,4 +352,57 @@ describe("DQ-004 data-quality dashboard", () => {
     const res = await get("/v1/crm/data-quality?entity=widgets");
     expect(res.statusCode).toBe(400);
   });
+
+  // GAP-CRM-DATA-QUALITY-01: a data steward needs a name to recognise the record.
+  it("returns the contact name (never email/phone) on each drill-down row", async () => {
+    const name = `Named Sparse ${randomUUID().slice(0, 8)}`;
+    await createContact({ name });
+
+    const res = await get("/v1/crm/data-quality?entity=contacts&filter=missing");
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().data.records as Array<Record<string, unknown>>;
+    const row = rows.find((r) => r.name === name);
+    expect(row).toBeDefined();
+    expect(row!.issues).toContain("missing:email");
+    expect(typeof row!.score).toBe("number");
+    expect(row!.score as number).toBeLessThanOrEqual(1);
+    // Rows are display rows only: no raw PII leaks into the drill-down.
+    expect(Object.keys(row!).sort()).toEqual(["id", "issues", "name", "score"]);
+  });
+
+  // Names are record data: tenant_admin may open the dashboard but cannot list contacts,
+  // so it must not learn who the flagged records are through the drill-down.
+  it("withholds the display name from a caller who cannot list contacts (tenant_admin)", async () => {
+    const name = `Hidden Sparse ${randomUUID().slice(0, 8)}`;
+    await createContact({ name });
+
+    const asUser = await get("/v1/crm/data-quality?entity=contacts&filter=all", ["crm_user"]);
+    const userRows = asUser.json().data.recordsByFilter.missing as Array<{ name: string | null }>;
+    expect(userRows.some((r) => r.name === name)).toBe(true);
+
+    const asAdmin = await get("/v1/crm/data-quality?entity=contacts&filter=all", ["tenant_admin"]);
+    expect(asAdmin.statusCode).toBe(200);
+    const adminRep = asAdmin.json().data;
+    expect(adminRep.recordsByFilter.missing.length).toBeGreaterThan(0);
+    expect(adminRep.recordsByFilter.missing.every((r: { name: string | null }) => r.name === null)).toBe(true);
+    expect(JSON.stringify(adminRep)).not.toContain(name);
+    // The counts it always had are intact.
+    expect(adminRep.counts.missing).toBeGreaterThan(0);
+  });
+
+  // GAP-CRM-DATA-QUALITY-03: one request carries every tab, so switching tabs never re-asks.
+  it("filter=all returns the rows of every filter in a single response", async () => {
+    const res = await get("/v1/crm/data-quality?entity=contacts&filter=all");
+    expect(res.statusCode).toBe(200);
+    const rep = res.json().data;
+    expect(rep.filter).toBe("all");
+    expect(Object.keys(rep.recordsByFilter).sort()).toEqual(["invalid", "missing", "stale"]);
+    expect(rep.recordsByFilter.missing.length).toBeGreaterThan(0);
+    expect(rep.counts.missing).toBeGreaterThanOrEqual(rep.recordsByFilter.missing.length);
+  });
+
+  it("rejects an unknown filter (400)", async () => {
+    const res = await get("/v1/crm/data-quality?entity=contacts&filter=everything");
+    expect(res.statusCode).toBe(400);
+  });
 });

@@ -22,11 +22,22 @@ vi.mock("@/lib/crm/dataQuality", async (orig) => {
   return { ...actual, getDedupRules: vi.fn(), saveDedupRules: vi.fn() };
 });
 
+// GAP-CRM-DEDUP-RULES-02: a shared router.push spy so the in-app navigation
+// guard's "Leave without saving" path can be asserted.
+const routerPush = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), back: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/crm/dedup-rules",
+  useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+}));
+
 const rule: dq.DedupRule = { field: "email", matchType: "exact", weight: 50, threshold: 90, enabled: true };
 
 beforeEach(() => {
   vi.mocked(dq.getDedupRules).mockReset();
   vi.mocked(dq.saveDedupRules).mockReset();
+  routerPush.mockReset();
 });
 
 describe("DedupRulesEditor (GAP-CRM-DEDUP-RULES-01)", () => {
@@ -341,4 +352,107 @@ describe("DedupRulesEditor (DQ-001 admin) — restored", () => {
 
 });
 
+// GAP-CRM-DEDUP-RULES-02: a tenant-wide config edit must not be lost silently --
+// neither to a full page unload (beforeunload) nor to an in-app navigation.
+describe("DedupRulesEditor unsaved-changes guard (GAP-CRM-DEDUP-RULES-02)", () => {
+  function renderWithNav() {
+    return renderWithIntl(
+      <div>
+        <nav>
+          {/* The shell sidebar / breadcrumb / Back links are plain same-origin anchors. */}
+          <a href="/crm/data-quality">Data quality</a>
+          <a href="https://example.gov.in/elsewhere">External</a>
+        </nav>
+        <DedupRulesEditor />
+      </div>,
+    );
+  }
+  async function loadEditor() {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [rule], source: "api", version: "v1" });
+    renderWithNav();
+    await waitFor(() => expect(screen.getByDisplayValue("50")).toBeInTheDocument());
+  }
+  function fireBeforeUnload(): boolean {
+    const ev = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  }
 
+  it("prompts on beforeunload only while there are unsaved edits", async () => {
+    await loadEditor();
+    // Clean: nothing to lose, no prompt.
+    expect(fireBeforeUnload()).toBe(false);
+    // Dirty: the browser's unload prompt is armed.
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+    expect(fireBeforeUnload()).toBe(true);
+  });
+
+  it("disarms the beforeunload prompt after a successful save", async () => {
+    vi.mocked(dq.saveDedupRules).mockResolvedValue("v2");
+    await loadEditor();
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+    expect(fireBeforeUnload()).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await screen.findByText(/matching rules saved/i);
+    expect(fireBeforeUnload()).toBe(false);
+  });
+
+  it("does not intercept in-app navigation while the form is clean", async () => {
+    await loadEditor();
+    const link = screen.getByRole("link", { name: "Data quality" });
+    // Stop jsdom attempting a real navigation after the (un-intercepted) click.
+    link.addEventListener("click", (e) => e.preventDefault());
+    fireEvent.click(link);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("intercepts an in-app link click with unsaved edits and asks before leaving", async () => {
+    await loadEditor();
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+
+    const link = screen.getByRole("link", { name: "Data quality" });
+    // fireEvent returns false when the click's default action was cancelled.
+    const notCancelled = fireEvent.click(link);
+    expect(notCancelled).toBe(false);
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText(/leave without saving\?/i)).toBeInTheDocument();
+    // Nothing navigated yet.
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it("'Stay on this page' dismisses the prompt, keeps the edit and does not navigate", async () => {
+    await loadEditor();
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+    fireEvent.click(screen.getByRole("link", { name: "Data quality" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /stay on this page/i }));
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(routerPush).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/weight for rule 1/i)).toHaveValue(60);
+  });
+
+  it("'Leave without saving' continues to the clicked destination", async () => {
+    await loadEditor();
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+    fireEvent.click(screen.getByRole("link", { name: "Data quality" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /leave without saving/i }));
+
+    expect(routerPush).toHaveBeenCalledWith("/crm/data-quality");
+    expect(dq.saveDedupRules).not.toHaveBeenCalled();
+  });
+
+  it("leaves external links to the browser's beforeunload prompt (no in-app dialog)", async () => {
+    await loadEditor();
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "60" } });
+    const external = screen.getByRole("link", { name: "External" });
+    external.addEventListener("click", (e) => e.preventDefault());
+    fireEvent.click(external);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+});

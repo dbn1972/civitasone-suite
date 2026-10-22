@@ -49,4 +49,11 @@ describe("StageBreakdownTable", () => {
     expect(screen.getByRole("table")).toHaveTextContent("Negotiation");
     expect(screen.queryByText(/Negotiation ·/)).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-FORECAST-01 acceptance: a healthy but empty forecast still reads "No forecast yet".
+  it("says 'No forecast yet' (and shows no thresholds footnote) when there are no stages", () => {
+    render(<StageBreakdownTable stages={[]} />);
+    expect(screen.getByText("No forecast yet")).toBeInTheDocument();
+    expect(screen.queryByText(/Shares are truncated/)).not.toBeInTheDocument();
+  });
 });

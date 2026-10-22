@@ -26,6 +26,8 @@ import {
   createResource,
   updateResource,
   deleteResource,
+  ResourceInUseError,
+  type ResourceReferences,
   OWNERSHIP_RESOURCES,
   OWNERSHIP_RESOURCE_LABELS,
   OWNERSHIP_RESOURCE_SINGULAR,
@@ -54,6 +56,9 @@ function isRowDirty(row: Row): boolean {
   );
 }
 
+/** How many referencing names are spelled out before "and N more". */
+const IN_USE_NAME_LIMIT = 5;
+
 const inputStyle = { padding: 6, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 const TAB_LABELS = OWNERSHIP_RESOURCES.map((r) => OWNERSHIP_RESOURCE_LABELS[r]);
 const labelToResource = (label: string): OwnershipResource =>
@@ -73,7 +78,29 @@ function ResourceTable({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  /** Why the open delete confirmation failed, shown INSIDE the dialog (GAP-CRM-ASSIGNMENT-DIRECTORY-04). */
+  const [deleteError, setDeleteError] = useState("");
   const headingId = useId();
+
+  /**
+   * The plain-language reason a delete was refused with 409 IN_USE: how many
+   * assignment rules / branches still use the entry, and which ones.
+   */
+  function inUseMessage(name: string, refs: ResourceReferences): string {
+    const uses: string[] = [];
+    if (refs.assignmentRuleCount > 0) uses.push(t("inUseRules", { count: refs.assignmentRuleCount }));
+    if (refs.branchCount > 0) uses.push(t("inUseBranches", { count: refs.branchCount }));
+    if (uses.length === 0) return t("inUseGeneric", { name });
+    const usedBy = uses.length === 2 ? t("inUseJoin", { first: uses[0]!, second: uses[1]! }) : uses[0]!;
+    const named = [...refs.assignmentRules, ...refs.branches];
+    const total = refs.assignmentRuleCount + refs.branchCount;
+    const shown = named.slice(0, IN_USE_NAME_LIMIT);
+    const hidden = Math.max(total - shown.length, 0);
+    const which = shown.length > 0
+      ? ` ${t("inUseNames", { names: shown.join(", ") })}${hidden > 0 ? ` ${t("inUseMore", { count: hidden })}` : ""}`
+      : "";
+    return `${t("inUseMessage", { name, usedBy })}${which}`;
+  }
 
   // Report the table's dirty state to the parent (for the tab-switch guard).
   const anyDirty = rows.some(isRowDirty);
@@ -169,13 +196,22 @@ function ResourceTable({
     }
     setBusyKey(row.key);
     setError("");
+    setDeleteError("");
     try {
       await deleteResource(resource, row.id);
       setMessage(`“${row.name}” deleted.`);
       setConfirmKey(null);
       setRows((prev) => prev.filter((r) => r.key !== row.key));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the entry.");
+      // The reason belongs INSIDE the open dialog (a page-level alert rendered
+      // behind the modal is invisible to the admin and to screen readers).
+      setDeleteError(
+        e instanceof ResourceInUseError
+          ? inUseMessage(row.name || t("unnamed"), e.references)
+          : e instanceof Error
+            ? e.message
+            : t("deleteFailed"),
+      );
     } finally {
       setBusyKey(null);
     }
@@ -273,7 +309,7 @@ function ResourceTable({
                           Discard
                         </Button>
                       ) : null}
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete ${rowName}`}>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => { setDeleteError(""); setConfirmKey(row.key); }} disabled={busy} aria-label={`Delete ${rowName}`}>
                         Delete
                       </Button>
                     </div>
@@ -293,10 +329,14 @@ function ResourceTable({
         open={confirmRow !== null}
         danger
         title={confirmRow ? `Delete “${confirmRow.name || "(unnamed)"}”?` : ""}
-        description="This entry will no longer be available for assignment. This cannot be undone."
+        description={t("deleteDescription")}
         confirmLabel="Delete"
         busy={confirmRow ? busyKey === confirmRow.key : false}
-        onCancel={() => setConfirmKey(null)}
+        {...(deleteError ? { errorMessage: deleteError } : {})}
+        onCancel={() => {
+          setConfirmKey(null);
+          setDeleteError("");
+        }}
         onConfirm={() => confirmRow && void confirmDelete(confirmRow)}
       />
     </div>

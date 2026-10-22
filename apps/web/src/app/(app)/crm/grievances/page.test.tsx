@@ -69,7 +69,9 @@ describe("GrievancesPage stat cards", () => {
 
     // 3 open (REGISTERED/FORWARDED/ATTENDED), 1 escalated (APPEAL), 2 resolved (DISPOSED).
     expect(screen.getByText("Open (this page)").nextElementSibling).toHaveTextContent("3");
-    expect(screen.getByText(/First appeal/).nextElementSibling).toHaveTextContent("1");
+    // (The register now also says "First appeal" on the APPEAL row's status pill and in the status
+    // filter, so the tile is selected by its own full label.)
+    expect(screen.getByText("First appeal (this page)").nextElementSibling).toHaveTextContent("1");
     expect(screen.getByText(/Resolved/).nextElementSibling).toHaveTextContent("2");
   });
 

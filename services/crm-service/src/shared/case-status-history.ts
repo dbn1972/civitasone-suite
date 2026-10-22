@@ -12,6 +12,7 @@
  */
 import { sql } from "drizzle-orm";
 import { scopedRead } from "./db.js";
+import { resolveUserNames } from "./user-directory.js";
 
 export type CaseResourceType = "service_request" | "rti_request";
 
@@ -49,6 +50,13 @@ export interface CaseStatusHistoryRow {
   toStatus: string;
   note: string | null;
   actorId: string;
+  /**
+   * GAP-CRM-SERVICE-REQUESTS-DETAIL-03: the display name of the actor, resolved
+   * from identity-service so the timeline can say WHO made each change. `null`
+   * when the name could not be resolved (unknown user, or identity unreachable);
+   * the UI then says "name unavailable" rather than printing the id.
+   */
+  actorName: string | null;
   at: string;
 }
 
@@ -58,7 +66,7 @@ export async function listStatusHistory(
   resourceType: CaseResourceType,
   resourceId: string,
 ): Promise<CaseStatusHistoryRow[]> {
-  return (await scopedRead((tx) =>
+  const rows = (await scopedRead((tx) =>
     tx.execute(sql`
       SELECT id,
              from_status AS "fromStatus",
@@ -72,5 +80,7 @@ export async function listStatusHistory(
         AND resource_id = ${resourceId}
       ORDER BY at ASC, id ASC
     `),
-  )) as unknown as CaseStatusHistoryRow[];
+  )) as unknown as Array<Omit<CaseStatusHistoryRow, "actorName">>;
+  const names = await resolveUserNames(tenantId, rows.map((r) => r.actorId));
+  return rows.map((r) => ({ ...r, actorName: names.get(r.actorId) ?? null }));
 }

@@ -15,7 +15,25 @@ export async function listDeals(
   limit: number,
   offset: number,
   pipelineId?: string,
+  ids?: readonly string[],
 ): Promise<{ data: DealView[]; pagination: { hasMore: boolean; pageSize: number; total: number; cursor?: string } }> {
+  // A by-id lookup is small and bounded (<= 50 ids) and its key space is unbounded, so it
+  // skips the list cache and always reads the live rows.
+  if (ids) {
+    const [rows, total] = await Promise.all([
+      repo.listByTenant(tenantId, limit, offset, pipelineId, ids),
+      repo.countByTenant(tenantId, pipelineId, ids),
+    ]);
+    return {
+      data: rows,
+      pagination: {
+        hasMore: offset + rows.length < total,
+        pageSize: limit,
+        total,
+        ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
+      },
+    };
+  }
   return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${pipelineId ?? "*"}`, async () => {
     const [rows, total] = await Promise.all([
       repo.listByTenant(tenantId, limit, offset, pipelineId),

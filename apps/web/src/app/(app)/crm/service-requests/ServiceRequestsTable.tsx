@@ -59,7 +59,13 @@ export function ServiceRequestsTable({
   pageSize,
   canExport = false,
   queryKey = "",
+  assigneeNames = {},
 }: {
+  /**
+   * GAP-CRM-SERVICE-REQUESTS-03: owner id -> display name, resolved server-side from the
+   * tenant directory. An id missing from the map shows "Assigned" (never a raw uuid).
+   */
+  assigneeNames?: Record<string, string>;
   requests: CrmServiceRequestRow[];
   source?: "api" | "error";
   page: number;
@@ -109,6 +115,7 @@ export function ServiceRequestsTable({
               priority: searchParams?.get("priority") ?? undefined,
               serviceType: searchParams?.get("serviceType") ?? undefined,
               assignedTo: searchParams?.get("assignedTo") ?? undefined,
+              overdue: searchParams?.get("overdue") ?? undefined,
               search: searchParams?.get("search") ?? searchParams?.get("q") ?? undefined,
             }}
             kind="serviceRequests"
@@ -148,13 +155,12 @@ export function ServiceRequestsTable({
           {
             key: "assignedTo",
             label: t("colAssignedTo"),
-            // We only hold the owner's opaque id here, not a display name (there
-            // is no CRM assignee directory loader to resolve it, and showing a
-            // raw uuid is worse than useless to a desk officer). Show whether the
-            // request is owned at all; GAP-CRM-SERVICE-REQUESTS-03.
+            // GAP-CRM-SERVICE-REQUESTS-03: the owner's NAME, from the directory lookup the
+            // page does server-side. When the directory cannot resolve an id we say
+            // "Assigned" -- a raw uuid is worse than useless to a desk officer.
             render: (r) =>
               r.assignedTo ? (
-                t("assigned")
+                (assigneeNames[r.assignedTo] ?? t("assigned"))
               ) : (
                 <span style={{ color: "var(--ink2)" }}>{t("unassigned")}</span>
               ),

@@ -175,6 +175,27 @@ export async function update(
 }
 
 /**
+ * Guarded key rotation (GAP-CRM-LEAD-FORMS-01). Replaces form_key in place and bumps
+ * the version, so the form keeps its id (and the attribution on leads it captured).
+ * Returns false when nothing matched (the form was deleted after the route's 404
+ * check) so the caller does not audit a rotation that never happened. The old key
+ * stops resolving in the same statement.
+ */
+export async function rotateKey(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  formKey: string,
+  actorId: string,
+): Promise<boolean> {
+  const rows = await (tx as typeof db).update(leadCaptureForms)
+    .set({ formKey, updatedAt: new Date(), updatedBy: actorId, version: sql`${leadCaptureForms.version} + 1` })
+    .where(and(eq(leadCaptureForms.tenantId, tenantId), eq(leadCaptureForms.id, id)))
+    .returning({ id: leadCaptureForms.id });
+  return rows.length > 0;
+}
+
+/**
  * Hard DELETE, which is the one place this service diverges from "DELETE = soft-delete".
  * A capture form is not user data: it is a live credential on a public endpoint. Leaving
  * a `deleted_at` row behind would keep the URL resolvable unless every read remembered

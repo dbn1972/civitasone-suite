@@ -18,6 +18,9 @@
  */
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
+import { formatInternalRef } from "@/lib/formatters";
+import { fetchRowsByIds, type ListRow } from "./pagedList";
+import { fetchAccountsByIds } from "./accountLookup";
 
 export type OnbSource = "api" | "error" | "not-found";
 
@@ -355,11 +358,9 @@ export interface OnboardingLookups {
   accountNames: Record<string, string>;
 }
 
-function namesFromList(raw: unknown): Record<string, string> {
+function namesFromRows(rows: ListRow[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const item of toArray(raw)) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
+  for (const r of rows) {
     const id = str(r.id);
     const name = str(r.name);
     if (id && name) out[id] = name;
@@ -367,17 +368,114 @@ function namesFromList(raw: unknown): Record<string, string> {
   return out;
 }
 
-/** Fetch the deal + account name maps used to label onboarding rows. */
-export async function getOnboardingLookups(): Promise<OnboardingLookups> {
-  const [dealsRes, accountsRes] = await Promise.allSettled([
-    browserFetch("v1/crm/deals?limit=500"),
-    browserFetch("v1/crm/accounts?limit=500"),
+interface NameLookup {
+  names: Record<string, string>;
+  /**
+   * True when every request got a definitive answer. An id the server did not return is
+   * then known to be inactive or missing; false means a request failed, so a missing
+   * name only means "not found yet".
+   */
+  complete: boolean;
+}
+
+/**
+ * Name accounts by id with `GET /v1/crm/accounts?ids=` -- one request per 50 ids, however
+ * long the account list is. An inactive or missing account is simply absent from the
+ * answer, so it never forces the list to be paged to the end.
+ */
+async function accountNamesByIds(ids: ReadonlySet<string>): Promise<NameLookup> {
+  const { rows, complete } = await fetchAccountsByIds(ids);
+  return { names: namesFromRows(rows), complete };
+}
+
+/**
+ * Name deals by id with `GET /v1/crm/deals?ids=` -- one request per 50 ids, however long the
+ * deals list is. A deleted, cancelled or missing deal is simply absent from the answer (the
+ * list never includes it), so it never forces the list to be paged to the end.
+ */
+async function dealNamesByIds(ids: ReadonlySet<string>): Promise<NameLookup> {
+  const { rows, complete } = await fetchRowsByIds("v1/crm/deals", ids);
+  return { names: namesFromRows(rows), complete };
+}
+
+/** Name ONE deal with `GET /v1/crm/deals/:id`; a 404 is a definitive "no such deal". */
+async function dealNameById(dealId: string): Promise<{ name: string | null; complete: boolean }> {
+  try {
+    const res = await browserFetch(`v1/crm/deals/${encodeURIComponent(dealId)}`);
+    if (res.status === 404) return { name: null, complete: true };
+    if (!res.ok) return { name: null, complete: false };
+    const body: unknown = await res.json();
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const deal = record.data && typeof record.data === "object" ? (record.data as Record<string, unknown>) : record;
+    return { name: str(deal.name) || null, complete: true };
+  } catch {
+    return { name: null, complete: false };
+  }
+}
+
+/**
+ * Fetch the deal + account name maps used to label onboarding rows.
+ *
+ * Pass the cases being labelled. Accounts and deals are both looked up by id (one request
+ * per 50 of each, however many exist): a deal or account that is gone or inactive is simply
+ * absent from the answer and never forces a walk of the list. A failed request leaves those
+ * names out -- the UI then shows a neutral label, never a UUID (GAP-CRM-ONBOARDING-01).
+ */
+export async function getOnboardingLookups(
+  cases: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
+): Promise<OnboardingLookups> {
+  const wantedDeals = new Set(cases.map((c) => c.dealId).filter(Boolean));
+  const wantedAccounts = new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a));
+  const [dealNames, accountNames] = await Promise.all([
+    dealNamesByIds(wantedDeals).then((r) => r.names),
+    accountNamesByIds(wantedAccounts).then((r) => r.names),
   ]);
-  const dealNames =
-    dealsRes.status === "fulfilled" && dealsRes.value.ok ? namesFromList(await dealsRes.value.json()) : {};
-  const accountNames =
-    accountsRes.status === "fulfilled" && accountsRes.value.ok ? namesFromList(await accountsRes.value.json()) : {};
   return { dealNames, accountNames };
+}
+
+export interface CaseLookupResult {
+  lookups: OnboardingLookups;
+  /** False when a request failed: the caller should try again later rather than treat the gaps as final. */
+  complete: boolean;
+}
+
+/**
+ * Name ONE case's deal and account for the detail page: the deal by id and the account by
+ * id, two requests in all -- no list is paged. A deal or account that is gone or inactive
+ * comes back unnamed with `complete: true`, so the caller can stop asking.
+ */
+export async function getOnboardingCaseLookups(
+  c: Pick<OnboardingCase, "dealId" | "accountId">,
+): Promise<CaseLookupResult> {
+  const [deal, account] = await Promise.all([
+    c.dealId ? dealNameById(c.dealId) : Promise.resolve({ name: null, complete: true }),
+    c.accountId ? accountNamesByIds(new Set([c.accountId])) : Promise.resolve<NameLookup>({ names: {}, complete: true }),
+  ]);
+  return {
+    lookups: {
+      dealNames: c.dealId && deal.name ? { [c.dealId]: deal.name } : {},
+      accountNames: account.names,
+    },
+    complete: deal.complete && account.complete,
+  };
+}
+
+/**
+ * crm-service masks a KYC reference as "••••" + its last four characters (shared/pii-reveal.ts
+ * maskLast4). True for that server-masked shape - the only value the audited reveal control
+ * is offered for.
+ */
+export function isMaskedKycReference(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.startsWith("••••");
+}
+
+/**
+ * A short, non-identifying reference for support lookups ("Ref 3fa85f64"). The full
+ * record id lives in the URL only; it is never a primary identifier on screen
+ * (GAP-CRM-ONBOARDING-01 / -DETAIL-01).
+ */
+export function shortRef(id: string | null | undefined): string {
+  return formatInternalRef(id ? id.slice(0, 8) : null);
 }
 
 /** Merge resolved names onto cases; a missing name is left null (never a UUID). */

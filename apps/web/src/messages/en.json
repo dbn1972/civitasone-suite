@@ -2038,11 +2038,13 @@
       "stageLabel": "Stage",
       "contactLabel": "Contact (optional)",
       "contactPlaceholder": "Search contacts by name or organisation…",
-      "contactHint": "Link an existing contact, or leave blank to create the deal without one.",
+      "contactHint": "Link an existing contact, or leave blank to create the engagement without one.",
       "closeLabel": "Expected close date (optional)",
       "probabilityLabel": "Probability (%)",
       "creating": "Creating…",
-      "create": "Create engagement"
+      "create": "Create engagement",
+      "contactSearchError": "Couldn’t load contacts. Try again, or leave this blank and link a contact later.",
+      "contactRetry": "Retry"
     },
     "consent": {
       "incompleteNew": "Choose the purpose and how consent was captured before saving.",
@@ -2054,6 +2056,9 @@
       "channelLabel": "Captured via *",
       "selectChannel": "Select a channel…",
       "lastRecorded": "Last recorded {when}.",
+      "recordAria": "Consent record",
+      "purposeLine": "Purpose: {purpose}",
+      "sourceLine": "Captured via: {channel}",
       "purposes": {
         "marketing": "Marketing communications",
         "transactional": "Transactional messages",
@@ -2072,12 +2077,15 @@
       "title": "Post a reporting period",
       "periodStart": "Period start",
       "periodEnd": "Period end (optional)",
+      "currency": "Currency (ISO code)",
       "spend": "Spend ({currency})",
       "revenue": "Revenue ({currency})",
       "responses": "Responses",
       "post": "Post period",
       "posting": "Posting…",
-      "submitted": "Period submitted. Figures will appear once processing completes."
+      "submitted": "Period submitted. Figures will appear once processing completes.",
+      "campaignName": "Campaign name (optional)",
+      "campaignNamePlaceholder": "e.g. Diwali Outreach"
     },
     "editOpportunity": {
       "title": "Edit Opportunity",
@@ -2122,7 +2130,7 @@
       },
       "tiles": {
         "dashboard": {
-          "title": "Dashboard",
+          "title": "CRM Dashboard",
           "description": "Overview metrics and activity"
         },
         "contacts": {
@@ -2142,8 +2150,8 @@
           "description": "Calls, meetings, and follow-ups"
         },
         "pipelineBoard": {
-          "title": "Pipeline Board",
-          "description": "Visual kanban of deal stages"
+          "title": "Engagement Pipeline Board",
+          "description": "Visual kanban of engagement stages"
         },
         "pipelines": {
           "title": "Engagement Pipelines",
@@ -2178,7 +2186,7 @@
           "description": "Support requests and resolutions"
         },
         "campaigns": {
-          "title": "Campaigns",
+          "title": "Campaign Performance",
           "description": "Outreach campaign performance"
         },
         "voiceOfCustomer": {
@@ -2190,7 +2198,7 @@
           "description": "Relationship health scores"
         },
         "controlTower": {
-          "title": "Control Tower",
+          "title": "Executive Control Tower",
           "description": "Real-time operations overview"
         },
         "leadForms": {
@@ -2226,7 +2234,7 @@
           "description": "Extend data model"
         },
         "dedupRules": {
-          "title": "Matching Rules",
+          "title": "Duplicate Matching Rules",
           "description": "Deduplication logic"
         },
         "leadScoring": {
@@ -2254,7 +2262,7 @@
           "description": "Capacity and utilisation"
         },
         "escalationRules": {
-          "title": "Escalation Rules",
+          "title": "Lead Escalation Rules",
           "description": "SLA breach escalation"
         },
         "taskEscalation": {
@@ -2268,6 +2276,10 @@
         "dataQuality": {
           "title": "Data Quality",
           "description": "Data completeness scoring"
+        },
+        "overdueTasks": {
+          "title": "Overdue Tasks",
+          "description": "Open tasks past their due time, worst-aged first"
         }
       }
     },
@@ -2305,7 +2317,8 @@
       "filterPlaceholder": "Filter by account…",
       "emptyTitle": "No accounts at risk",
       "emptyMessage": "Accounts appear here once they are scored at risk or critical.",
-      "bandLabel": "Health band"
+      "bandLabel": "Health band",
+      "logFollowUp": "Log follow-up"
     },
     "hubSubtitle": "Pipeline and customer operations workspace.",
     "sectionEngagementPipeline": "Engagement Pipeline",
@@ -13689,7 +13702,8 @@
     "notFoundMessage": "This account does not exist or is no longer active.",
     "unavailableTitle": "Account detail unavailable",
     "unavailableMessage": "This account exists but could not be loaded here yet. Open it from the Accounts list.",
-    "reportingLineArea": "the reporting line"
+    "reportingLineArea": "the reporting line",
+    "newOpportunity": "+ New opportunity"
   },
   "crmAccountHealth": {
     "title": "Account Health",
@@ -13724,6 +13738,7 @@
     "reported": "Reported",
     "clampedHelp": "Clamped: the raw value for this signal was outside the allowed range and was capped before it was used in scoring. Reported: the value was used as received.",
     "contributionPts": "{value} pts",
+    "valueOutOf": "{value} out of 100",
     "recomputedTitle": "Score Recomputed From Signals",
     "recomputedBody": "The stored score for this account is {stored}, while recomputing from the signals above gives {score}. The recomputed value is shown so the score, band and signals always agree. A recompute will bring the stored value back in line.",
     "signal_productUsage": "Product usage",
@@ -13768,7 +13783,8 @@
     "toggleOnDescription": "New leads will start routing through this rule.",
     "toggleOffDescription": "New leads will no longer route through this rule.",
     "turnOn": "Turn on",
-    "turnOff": "Turn off"
+    "turnOff": "Turn off",
+    "justSaved": "Saved just now"
   },
   "crmCampaignDetail": {
     "performanceTitle": "Campaign Performance",
@@ -13776,7 +13792,16 @@
     "backLabel": "Campaigns",
     "loadArea": "campaign performance",
     "fallbackTitle": "Campaign",
-    "campaignId": "Campaign ID"
+    "campaignId": "Campaign ID",
+    "copyId": "Copy ID",
+    "copyIdAria": "Copy the full campaign ID",
+    "copied": "Copied",
+    "copyFailed": "Couldn’t copy. Please copy it manually.",
+    "noPerformanceTitle": "No performance recorded",
+    "noPerformanceMessage": "This campaign has no cost, revenue or response figures posted against it yet. Use the form below to post its first reporting period.",
+    "noPerformanceMessageReadOnly": "This campaign has no cost, revenue or response figures posted against it yet. A CRM administrator can post its first reporting period.",
+    "noPeriodsTitle": "No periods recorded",
+    "noPeriodsMessage": "No reporting periods have been recorded for this campaign."
   },
   "crmCampaignRoiTable": {
     "unnamedCampaign": "Unnamed campaign",
@@ -13799,7 +13824,22 @@
     "regardingInvalid": "Enter a valid service request ID, or leave this blank.",
     "noticeLive": "Your feedback is collected and processed under the <strong>Digital Personal Data Protection Act, 2023 (DPDP Act)</strong> solely to improve public service delivery. Any comment you leave is visible only to authorised administrators.",
     "submitting": "Submitting…",
-    "submitFeedback": "Submit feedback"
+    "submitFeedback": "Submit feedback",
+    "title": "Citizen Feedback",
+    "backLabel": "Voice of Citizen",
+    "serviceRatingLabel": "Service Rating",
+    "ratingPoor": "Poor",
+    "ratingFair": "Fair",
+    "ratingGood": "Good",
+    "ratingVeryGood": "Very Good",
+    "ratingExcellent": "Excellent",
+    "commentsLabel": "Comments / Suggestions",
+    "commentsPlaceholder": "Tell us about your experience with this service...",
+    "submissionType": "Submission Type",
+    "anonymous": "Anonymous",
+    "registeredCitizen": "Registered Citizen",
+    "registeredNote": "This form does not collect the citizen’s name, phone number or ID, so a Registered Citizen response is recorded without them. To tie it to the citizen’s record, enter the service request it is about in “Regarding” above.",
+    "cancel": "Cancel"
   },
   "crmContactToolbar": {
     "exportFiltered": "Export filtered",
@@ -13848,7 +13888,8 @@
     "chooseFile": "Or choose a CSV file (max 2 MB)",
     "tooManyRowsAlert": "Too many rows ({count}). Import at most {max} at a time; split the file and import in parts.",
     "previewHeading": "Preview",
-    "previewShowing": " — showing first 50 of {count}"
+    "previewShowing": " — showing first 50 of {count}",
+    "existingContactUnnamed": "Existing contact"
   },
   "crmCustomFieldsManager": {
     "sensitiveLabel": "Sensitive (mask on records)",
@@ -13872,7 +13913,29 @@
     "kindContact": "contact record",
     "kindAccount": "account record",
     "unnamedRecord": "Unnamed record",
-    "distributionBarAria": "{label}: {pct} of records"
+    "distributionBarAria": "{label}: {pct} of records",
+    "entityContacts": "Contacts & leads",
+    "entityAccounts": "Accounts",
+    "issueMissing": "Missing {field}",
+    "issueInvalid": "Invalid {field}",
+    "issueStale": "Not updated recently",
+    "fieldLabel": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "company": "Organisation",
+      "designation": "Designation",
+      "city": "City",
+      "leadSource": "Lead source",
+      "pincode": "PIN code",
+      "gstin": "GSTIN",
+      "pan": "PAN",
+      "industry": "Industry",
+      "website": "Website"
+    },
+    "truncatedNote": "Showing the first {shown} of {total} flagged records.",
+    "nothingFlaggedMessage": "No {entity} match this data-quality filter.",
+    "loadingDistribution": "Loading distribution…"
   },
   "crmDealDetail": {
     "logActivity": "Log Activity",
@@ -13899,8 +13962,34 @@
       "won": "Won",
       "lost": "Lost"
     },
-    "detailTitle": "Deal Detail",
-    "loadArea": "this deal"
+    "detailTitle": "Engagement Detail",
+    "loadArea": "this engagement",
+    "pageTitle": "Engagement {name}",
+    "pageSubtitle": "Stakeholder engagement system: leads, engagements and pipeline.",
+    "detailsHeading": "Engagement Details",
+    "contactOrganisation": "Contact / Organisation",
+    "labelValue": "Value",
+    "labelStage": "Stage",
+    "labelStatus": "Status",
+    "labelOwner": "Owner",
+    "labelCloseDate": "Close Date",
+    "labelProbability": "Probability",
+    "workflowHeading": "Workflow",
+    "activityLogged": "Activity logged.",
+    "logActivityFor": "Log activity for {name}",
+    "fieldType": "Type",
+    "typeCall": "Call",
+    "typeMeeting": "Meeting",
+    "typeEmail": "Email",
+    "typeTask": "Task",
+    "typeNote": "Note",
+    "fieldSubject": "Subject",
+    "subjectPlaceholder": "Short summary",
+    "fieldNotes": "Notes",
+    "notesPlaceholder": "What happened?",
+    "saveActivity": "Save activity",
+    "saving": "Saving…",
+    "cancel": "Cancel"
   },
   "crmDedupRulesEditor": {
     "field": {
@@ -13931,17 +14020,46 @@
     "threshold": "Threshold",
     "thresholdHelp": "The minimum similarity (0–100) this field must reach to count as a match. For a fuzzy match, 90 means \"almost identical\"; a lower threshold flags looser matches.",
     "totalEnabledWeight": "Total enabled weight: <strong>{total}</strong>",
-    "rulesRemoved": "{count, plural, one {1 rule removed — save to apply.} other {{count} rules removed — save to apply.}}"
+    "rulesRemoved": "{count, plural, one {1 rule removed — save to apply.} other {{count} rules removed — save to apply.}}",
+    "loading": "Loading matching rules…",
+    "saved": "Matching rules saved.",
+    "emptyTitle": "No matching rules yet",
+    "emptyMessage": "Add a rule to tell the system which fields identify a duplicate and how strictly to compare them.",
+    "colField": "Field",
+    "colMatchType": "Match type",
+    "colEnabled": "Enabled",
+    "colActions": "Actions",
+    "fieldForRule": "Field for rule {n}",
+    "matchForRule": "Match type for rule {n}",
+    "weightForRule": "Weight for rule {n}",
+    "thresholdForRule": "Threshold for rule {n}",
+    "enableRule": "Enable rule {n}",
+    "on": "On",
+    "off": "Off",
+    "remove": "Remove",
+    "removeRule": "Remove rule {n}",
+    "addRule": "+ Add rule",
+    "save": "Save rules",
+    "saving": "Saving…",
+    "leaveTitle": "Leave without saving?",
+    "leaveDescription": "You have unsaved changes to the matching rules. If you leave this page they will be lost.",
+    "leaveConfirm": "Leave without saving",
+    "leaveStay": "Stay on this page",
+    "area": "matching rules"
   },
   "crmEditContactForm": {
     "leadStatus": "Lead status",
     "changeStatus": "Change status",
     "classificationPartialSave": "Contact details were saved, but the classification could not be saved. Please retry — only the classification will be sent.",
     "classificationSaveError": "Could not save the classification.",
+    "noChanges": "No changes to save.",
     "linkAccountAria": "Link to an existing account",
     "searchAccounts": "Search accounts…",
-    "linkedTo": "Linked to <strong>{name}</strong>. Clear the picker to type a new organisation instead.",
-    "typeNewOrg": "Or type a new organisation"
+    "linkedTo": "Linked to <strong>{name}</strong>. Unlink it to type a new organisation instead.",
+    "unlinkAccount": "Unlink account",
+    "typeNewOrg": "Or type a new organisation",
+    "gstinNote": "Collected for invoicing and tax (KYC). Access is role-scoped and logged.",
+    "panNote": "Personal data collected for KYC/tax. Access is role-scoped and logged."
   },
   "crmFollowUpModal": {
     "defaultSubject": "Account health follow-up — {account}",
@@ -13950,7 +14068,7 @@
     "accountLabel": "Account: ",
     "closeDialog": "Close dialog",
     "contactName": "Contact Name",
-    "contactNamePlaceholder": "Citizen or account representative name",
+    "contactNamePlaceholder": "Name of the account contact",
     "phone": "Phone",
     "phonePlaceholder": "e.g. 9876543210",
     "serviceType": "Service Type",
@@ -14009,15 +14127,15 @@
   },
   "crmKanbanBoard": {
     "loadErrorTitle": "Pipeline couldn't be loaded",
-    "loadErrorMessage": "This is usually temporary. Refresh to try again — we won't show an empty board as if there were no deals.",
+    "loadErrorMessage": "This is usually temporary. Refresh to try again — we won't show an empty board as if there were no engagements.",
     "retry": "Retry",
     "moveTitle": "Move “{name}” to {stage}?",
     "moveDescription": "This changes the engagement's stage to <strong>{stage}</strong>.",
-    "replaceProbability": "Replace this deal's likelihood ({current}%) with the stage default ({stageDefault}%)",
+    "replaceProbability": "Replace this engagement's likelihood ({current}%) with the stage default ({stageDefault}%)",
     "moveConfirm": "Move",
     "moveCancelled": "Move cancelled.",
     "announcePickedUp": "Picked up engagement {name}. Use arrow keys or drop on a stage column.",
-    "versionConflict": "Version conflict — someone else updated this deal. Please refresh.",
+    "versionConflict": "Version conflict — someone else updated this engagement. Please refresh.",
     "announceVersionConflict": "Move failed for engagement {name}: version conflict. Please refresh.",
     "missingFields": "This stage needs more information first: {fields}. Open the engagement to fill them in, then move it again.",
     "announceMoveFailed": "Move failed for engagement {name}: {message}",
@@ -14069,7 +14187,7 @@
     "saved": "Form saved.",
     "paused": "Form paused.",
     "resumed": "Form resumed.",
-    "consentFixed": "Consent is now required — the form is lawful.",
+    "consentFixed": "Consent is now required on this form.",
     "registerForm": "Register form",
     "registered": "Form registered. Its public submit URL is <code>{path}</code> — embed this on your landing page.",
     "colForm": "Form",
@@ -14083,23 +14201,29 @@
     "pause": "Pause",
     "enable": "Enable",
     "fixConsent": "Fix consent",
+    "rotateKey": "Rotate key",
+    "rotateConfirmTitle": "Rotate the key for “{name}”?",
+    "rotateConfirmDescription": "The current public key stops working immediately, so every page that embeds this form will stop accepting submissions until it is updated with the new key. Rotate only if the key may have leaked or you are retiring an old embed. The rotation is recorded in the audit log.",
+    "rotateConfirmLabel": "Rotate key",
+    "rotated": "Key rotated. The new public submit URL is <code>{path}</code> — update every page that embeds this form. The old URL no longer works.",
+    "rotatedNoKey": "Key rotated. Reload the list to see the new submit URL; the old URL no longer works.",
     "emptyTitle": "No website forms registered",
     "emptyMessage": "Register a lead-capture form to mint a public key that landing pages can POST to.",
     "confirmTitle": "Require consent on “{name}”?",
-    "confirmDescription": "This form currently accepts submissions without explicit consent, which is an unlawful-capture risk under DPDP. Requiring consent makes it lawful; submissions without consent will be refused.",
+    "confirmDescription": "This form currently accepts submissions without requiring explicit consent. Once consent is required, submissions that do not include it will be refused.",
     "confirmLabel": "Require consent",
     "anyOrigin": "Any origin",
     "originsMore": "+{count} more",
     "ratePerMinute": "{rate}/min",
     "health_live": "Live",
     "health_paused": "Paused",
-    "health_unlawful": "Consent not required",
+    "health_unlawful": "Consent gap",
     "exportTitle": "Export the lead-form registry?",
     "exportDescription": "This CSV includes each form's public submit URL and origin allow-list. Only download it to a trusted location — the public URL lets anyone post leads into this tenant.",
     "exportConfirmLabel": "Download CSV"
   },
   "crmLeadScoreRulesEditor": {
-    "removedRules": "{count, plural, one {# rule will be removed and will no longer contribute to any lead score.} other {# rules will be removed and will no longer contribute to any lead score.}}",
+    "removedRules": "{count, plural, one {# rule is no longer in this list. Saving does not delete it: it keeps its saved weight and settings and keeps scoring. To stop it scoring, turn it off instead.} other {# rules are no longer in this list. Saving does not delete them: they keep their saved weights and settings and keep scoring. To stop them scoring, turn them off instead.}}",
     "heading": "Scoring rules",
     "paramsMustBeObject": "Params must be a JSON object.",
     "conflictChanged": "These scoring rules were changed by another admin. Reload to see the latest, then re-apply your changes.",
@@ -14107,17 +14231,113 @@
     "ruleNeedsFields": "Each rule needs an attribute, a whole-number weight from 0 to 100, and valid params for its score function. Fix the highlighted rules before saving.",
     "lastChangedAt": "Last changed {at}.",
     "lastChangedAtBy": "Last changed {at} by {by}.",
-    "emptyMessage": "Add a rule to weight a lead attribute (leadSource, company, lastActivityAt…) into the automatic score.",
+    "emptyMessage": "Add a rule to weight a lead field (lead source, company, last activity…) into the automatic score.",
     "share": "Share",
-    "attributePlaceholder": "e.g. leadSource",
-    "unknownAttribute": "Not a known lead field — scoring will only apply if this attribute really exists.",
+    "attributePlaceholder": "Choose a field",
     "exampleHint": "e.g. {hint}",
     "shareForRule": "Share for rule {n}",
     "totalEnabledWeight": "Total enabled weight",
-    "weightsNormalised": "Weights are normalised, so the share column shows each rule's contribution to the final score.",
-    "confirmTitle": "Apply scoring rules to every lead?",
-    "confirmDescription": "Saving these rules re-scores every lead with the new weights. Existing scores are recalculated — there is no per-lead preview.",
-    "confirmLabel": "Save and re-score"
+    "confirmTitle": "Save these scoring rules?",
+    "confirmDescription": "Saving applies these rules from now on. A lead's stored score updates the next time that lead is changed; scores already stored are not recalculated all at once. Use “Preview impact” first to see how scores would move.",
+    "confirmLabel": "Save rules",
+    "loading": "Loading scoring rules…",
+    "saved": "Scoring rules saved.",
+    "emptyTitle": "No scoring rules yet",
+    "colAttribute": "Attribute",
+    "colScoreFunction": "Score function",
+    "colWeight": "Weight",
+    "colParams": "Parameters",
+    "colEnabled": "Enabled",
+    "colActions": "Actions",
+    "attributeForRule": "Attribute for rule {n}",
+    "scoreFunctionForRule": "Score function for rule {n}",
+    "weightForRule": "Weight for rule {n}",
+    "paramsJsonForRule": "Params JSON for rule {n}",
+    "attr_leadSource": "Lead source",
+    "attr_company": "Company",
+    "attr_lastActivityAt": "Last activity",
+    "attr_email": "Email",
+    "attr_phone": "Phone",
+    "attr_leadStatus": "Lead status",
+    "attr_city": "City",
+    "attr_designation": "Designation",
+    "attributeNotScoreable": "Not a field the scorer reads, so this rule can never score. Turn the rule off, or choose a field from the list.",
+    "attributeDuplicate": "Another rule already uses this field. Each field can have one rule.",
+    "editAsJson": "Edit as JSON",
+    "useForm": "Use form",
+    "editAsJsonForRule": "Edit params as JSON for rule {n}",
+    "useFormForRule": "Use the form for rule {n}",
+    "cannotUseForm": "This JSON can't be shown in the form without losing information. Fix it first, or keep editing as JSON.",
+    "enableRule": "Enable rule {n}",
+    "on": "On",
+    "off": "Off",
+    "removeRule": "Remove rule {n}",
+    "remove": "Remove",
+    "addRule": "+ Add rule",
+    "saveRules": "Save rules",
+    "saving": "Saving…",
+    "previewImpact": "Preview impact",
+    "previewing": "Previewing…",
+    "previewFailed": "Couldn't preview the impact right now. Nothing was changed. Try again in a moment.",
+    "weightsNotNormalised": "Weights are not normalised: each lead's score is the weighted sum of the rule scores divided by 100, capped at 100. Enabled weights total {total}, so the highest possible score is {max}.",
+    "weightsBelow100": "The total is below 100, so no lead can score above {max}.",
+    "weightsAbove100": "The total is above 100, so high-scoring leads will all cap at 100.",
+    "confirmPreviewLine": "Preview: {changed} of {sampled} leads would score differently once re-scored.",
+    "previewHeading": "Impact preview",
+    "previewScope": "Scored {sampled} of {total} leads with the rules as edited. Nothing has been saved.",
+    "previewTruncated": "Only the most recently updated leads were included.",
+    "previewAverage": "Average score: {current} now, {proposed} with these rules.",
+    "previewChanged": "{raised} leads would score higher and {lowered} lower. {unscored} leads have no score yet.",
+    "previewCeiling": "Enabled weights total {total}, so the highest possible score is {max}.",
+    "previewRetained": "{count, plural, one {# saved rule is not in this list. It is still counted here because Save does not delete it.} other {# saved rules are not in this list. They are still counted here because Save does not delete them.}}",
+    "previewBandsLabel": "Score distribution",
+    "previewBand": "Score band",
+    "previewNow": "Now",
+    "previewAfter": "With these rules",
+    "explain_presence": "Gives one score when the field has a value and another when it is empty. Leave a box blank to use its default.",
+    "explain_map": "Gives each listed value its own score; any other value gets the default score. Values are matched ignoring case.",
+    "explain_recency": "Scores how recent the date is: the first tier that the age in days fits within wins.",
+    "explain_numeric_threshold": "Scores a number by the highest tier whose minimum it reaches.",
+    "presentLabel": "Score when present",
+    "absentLabel": "Score when absent",
+    "fieldForRule": "{field}, rule {n}",
+    "mapValueLabel": "Lead value",
+    "mapValueLabelN": "Lead value {n}",
+    "scoreLabel": "Score",
+    "mapScoreLabelN": "Score for value {n}",
+    "removeRow": "Remove",
+    "removeMapRow": "Remove value {n} from rule {rule}",
+    "addMapRow": "+ Add value",
+    "addMapRowFor": "Add a value to rule {n}",
+    "mapDefaultLabel": "Score for any other value",
+    "tierDaysLabel": "Within (days)",
+    "tierMinLabel": "At least",
+    "tierBoundN": "{label}, tier {n}",
+    "tierScoreN": "Score for tier {n}",
+    "removeTier": "Remove tier {n} from rule {rule}",
+    "addTier": "+ Add tier",
+    "addTierFor": "Add a tier to rule {n}",
+    "beyondLabel": "Score when older than every tier",
+    "noDateLabel": "Score when there is no date",
+    "belowFirstTierLabel": "Score below the first tier",
+    "err_notNumber": "Enter a number.",
+    "err_scoreRange": "A score must be between 0 and 100.",
+    "err_daysRange": "Days can't be negative.",
+    "err_keyBlank": "Enter the lead value to match.",
+    "err_keyCase": "Use lower case: values are matched ignoring case.",
+    "err_keyDuplicate": "This value is already listed.",
+    "err_valuesNotObject": "“values” must be an object of value → score.",
+    "err_valueNotNumber": "Every entry in “values” must be a number.",
+    "err_tiersNotArray": "“tiers” must be a list of tiers.",
+    "err_tierShape": "Each tier needs a numeric “{bound}” and “score”.",
+    "jsonErr_notNumber": "“{field}” must be a number.",
+    "jsonErr_scoreRange": "“{field}” must be between 0 and 100.",
+    "jsonErr_daysRange": "“{field}” can't be negative.",
+    "jsonErr_keyCase": "“{field}”: use lower case, values are matched ignoring case.",
+    "jsonErr_valuesNotObject": "“values” must be an object of value → score.",
+    "jsonErr_valueNotNumber": "Every entry in “values” must be a number.",
+    "jsonErr_tiersNotArray": "“tiers” must be a list of tiers.",
+    "jsonErr_tierShape": "Each tier needs a numeric “{bound}” and “score”."
   },
   "crmLinkedAccountsPanel": {
     "ownershipNotice": "Typing an email address only records your request to connect it — it does <strong>not</strong> prove you own that mailbox or calendar. Nothing will ever sync into CRM until the provider verifies ownership through its own consent (sign-in / OAuth) step, which keeps someone else’s inbox from being linked by mistake (Digital Personal Data Protection Act, 2023).",
@@ -14215,7 +14435,23 @@
     "taskFallback": "Task",
     "colDue": "Due",
     "colOverdueBy": "Overdue by",
-    "colOwner": "Owner"
+    "colOwner": "Owner",
+    "showing": "Showing {from}–{to} of {total}",
+    "pagerAria": "Overdue tasks pages",
+    "previousPage": "Previous",
+    "nextPage": "Next",
+    "pageOf": "Page {page} of {pages}",
+    "usersUnavailable": "The user list is unavailable right now, so tasks can’t be reassigned"
+  },
+  "crmDirectoryUserSelect": {
+    "searchLabel": "Search people by name",
+    "searchPlaceholder": "Search by name ({min}+ letters)…",
+    "truncatedNote": "Showing the first {count, plural, one {# person} other {# people}}. Search by name to find anyone else.",
+    "searching": "Searching…",
+    "noMatches": "No one matches “{query}”.",
+    "moreMatches": "Showing the first {count, plural, one {# match} other {# matches}}. Type more of the name to narrow the list.",
+    "searchFailed": "The search is unavailable right now. Try again.",
+    "resultsFound": "{count, plural, one {# person found} other {# people found}}"
   },
   "crmOwnerPicker": {
     "onLeave": "On leave",
@@ -14244,7 +14480,7 @@
     "moveStageDownTitle": "Move this stage later in the flow",
     "scopeLegend": "Scope (optional) — limits this stage to opportunities matching these values",
     "scope": "Scope",
-    "scopeHelp": "Optional filters. Leave blank to apply the stage to every opportunity, or enter a product, region or business unit to apply it only to matching opportunities. Pick an existing value from the list where possible so it matches.",
+    "scopeHelp": "Optional filters. Leave blank to apply the stage to every opportunity, or enter a product, region or business unit to apply it only to matching opportunities. Pick a value from the list where possible so it matches — product suggestions come from the product catalogue.",
     "productScope": "Product scope",
     "productScopeAria": "Product scope for stage {n}",
     "regionScope": "Region scope",
@@ -14274,7 +14510,39 @@
     "resolveCurrency": "Resolve currency",
     "resolveGeography": "Resolve geography",
     "resolveChannel": "Resolve channel",
-    "resolveFailed": "Couldn’t resolve the price book just now. Try Resolve again."
+    "resolveFailed": "Couldn’t resolve the price book just now. Try Resolve again.",
+    "unknownUser": "Unknown user",
+    "history": "History",
+    "historyAria": "Change history for price book {name}",
+    "historyTitle": "Change history — {name}",
+    "historyClose": "Close history",
+    "historyLoading": "Loading change history…",
+    "historyLoadFailed": "The change history couldn’t be loaded just now.",
+    "historyRetry": "Retry",
+    "historyEmpty": "No changes recorded yet. Edits made before change history was introduced are not listed.",
+    "historyHeading": "v{version} · {action} by {by} · {when}",
+    "historyCreated": "Created",
+    "historyEdited": "Edited",
+    "historyPriceEdited": "Price edited",
+    "historyReason": "Reason: {reason}",
+    "historyFieldChange": "{field}: {from} → {to}",
+    "historyFieldName": "Name",
+    "historyFieldSegment": "Segment",
+    "historyFieldCurrency": "Currency",
+    "historyFieldGeography": "Geography",
+    "historyFieldChannel": "Channel",
+    "historyFieldPriority": "Priority",
+    "historyFieldEnabled": "Status",
+    "historyAny": "any",
+    "historyOn": "Enabled",
+    "historyOff": "Disabled",
+    "historyPriceChange": "{product}: {from} → {to}",
+    "historyPriceAdded": "{product}: added at {to}",
+    "historyPriceRemoved": "{product}: removed (was {from})",
+    "historyUnknownProduct": "Unknown product",
+    "historyMorePrices": "+{count, plural, one {# more price change} other {# more price changes}} not listed",
+    "unknownValue": "No other price book uses “{value}”. A book only matches quotations that carry exactly this text — check the spelling.",
+    "didYouMean": "“{value}” differs only in letter case from “{existing}”, which other price books use. Matching is exact, so this book would not match those quotations."
   },
   "crmProductCatalogueEditor": {
     "currency": "Currency",
@@ -14285,9 +14553,6 @@
     "colLastChanged": "Last changed",
     "lastChangedAria": "Last changed for product {n}",
     "unknownUser": "Unknown",
-    "deleteWarning": "This product may be referenced by existing quotations and price books. Deleting it can leave those documents pointing at a product that no longer exists, and it cannot be undone.",
-    "deletePrefer": "Prefer turning the product <em>Off</em> (unticking Enabled) instead — that stops it being quoted while keeping it on existing documents.",
-    "deleteAnyway": "Delete anyway",
     "newLabel": "(new)",
     "activeToBeforeFrom": "Product “{name}”: Active to cannot be before Active from.",
     "needsFields": "Product “{name}” needs a name, code, a valid price (max 2 decimals) and a tax rate (choose a GST slab or a custom rate up to {max}%).",
@@ -14316,7 +14581,24 @@
     "colActiveFrom": "Active from",
     "colActiveTo": "Active to",
     "colEnabled": "Enabled",
-    "colActions": "Actions"
+    "colActions": "Actions",
+    "disable": "Disable",
+    "disableAria": "Disable product {n}",
+    "remove": "Remove",
+    "removeAria": "Remove unsaved product {n}",
+    "disableTitle": "Disable product “{name}”?",
+    "disableConfirm": "Disable product",
+    "disableExplain": "Disabling retires the product — it is not erased. Existing quotations keep the price and tax they captured, but the product can no longer be added to new quotations or priced in price books. You can switch it back on later by ticking Enabled and saving.",
+    "usageLoading": "Checking where this product is used…",
+    "usageUnknown": "We couldn’t check where this product is used. Review quotations and price books before disabling it.",
+    "usageNone": "This product is not used in any quotation or price book.",
+    "usageCounts": "Used in {quotations, plural, one {# quotation} other {# quotations}} and {priceBooks, plural, one {# price book} other {# price books}}.",
+    "disabledMessage": "Product “{name}” disabled.",
+    "disableFailed": "Could not disable the product. Try again.",
+    "customTaxWarn": "Not a standard GST slab ({slabs}%). You will be asked to confirm before it saves.",
+    "customTaxTitle": "Save “{name}” with a non-standard tax rate?",
+    "customTaxDescription": "{rate} is not one of the standard GST slabs ({slabs}%). It will be applied to every quotation line that uses this product. Confirm only if this rate is intended (for example a special-rate item or a cess).",
+    "customTaxConfirm": "Save at {rate}"
   },
   "crmQualificationFrameworksEditor": {
     "added": "New framework added — enter its name below.",
@@ -14347,7 +14629,13 @@
     "businessLineHelp": "Matched to a lead’s business line case-insensitively — stored lowercase so “Government” and “government” match the same leads.",
     "saved": "Framework “{name}” saved.",
     "conflict": "This framework was changed by someone else while you were editing it. Reload to see their version, then re-apply your changes.",
-    "questionHasAnswers": "A question you removed has already been answered on leads, so it cannot be deleted without losing those answers. Restore the question (you can set its weight to 0 to stop it affecting scores) and save again."
+    "questionHasAnswers": "A question you removed has already been answered on leads, so it cannot be deleted without losing those answers. Restore the question (you can set its weight to 0 to stop it affecting scores) and save again.",
+    "noActiveFrameworkHint": "No active framework for: {lines}. Leads in these business lines cannot be qualified until one is activated.",
+    "newLineTitle": "Use the new business line “{line}”?",
+    "newLineBody": "No saved framework uses “{line}”. A framework only applies to leads whose business line matches exactly, so a misspelling would silently never match.",
+    "newLineDidYouMean": "Did you mean “{suggestion}”? Cancel and change it to reuse that line.",
+    "newLineKnown": "Business lines in use: {lines}.",
+    "newLineConfirm": "Use this business line"
   },
   "crmQuotationApprovalPanel": {
     "rejected": "Approval rejected.",
@@ -14403,11 +14691,15 @@
     "recordAcceptanceTitle": "Record the customer's acceptance?",
     "recordAcceptanceDescription": "This marks the quotation accepted on the customer's behalf. Confirm only against a real acceptance.",
     "recordAcceptance": "Record acceptance",
-    "quotationAccepted": "Quotation accepted."
+    "quotationAccepted": "Quotation accepted.",
+    "versionHistoryError": "Version history couldn’t be loaded.",
+    "versionHistoryRetry": "Retry",
+    "listPrice": "List price {price}",
+    "belowList": "{pct} below list",
+    "discountBanner": "This quotation is priced {pct} below the catalogue list price overall. A discount above your tenant’s approval threshold must be approved (see Approvals below) before it can be sent."
   },
   "crmReasonCodesEditor": {
     "title": "Lead Stage Reasons",
-    "heading": "Reason codes",
     "conflictChanged": "These reason codes were changed by another admin. Reload to see the latest, then re-apply your changes.",
     "couldNotSave": "Could not save the reason codes.",
     "fixHighlightedRows": "Fix the highlighted rows: each reason needs a valid lowercase code, a label and a status, and codes must be unique per status.",
@@ -14474,7 +14766,15 @@
     "authorityName": "Authority name",
     "otherAuthorityAriaLabel": "Other authority name",
     "authorityNamePlaceholder": "Full name of the public authority",
-    "selectAuthorityError": "Select the public authority to transfer this request to."
+    "selectAuthorityError": "Select the public authority to transfer this request to.",
+    "respondCharCount": "{count} of {max} characters (at least {min} required).",
+    "reviewResponse": "Review response",
+    "reviewTitle": "Check the response before sending",
+    "reviewBody": "This is exactly what will be recorded as the statutory response to the applicant. It cannot be edited here once sent.",
+    "reviewTextAria": "Response text to be sent",
+    "sendResponse": "Send response",
+    "backToEdit": "Back to edit",
+    "sendFailed": "The response could not be sent. Try again."
   },
   "crmRtiDetail": {
     "modeOnline": "Online / RTI portal",
@@ -14496,10 +14796,8 @@
     "secondAppealRecorded": "{ref} — recorded {date}",
     "disposed": "Disposed",
     "disposalReason": "Disposal Reason",
-    "applicantDataNoticeLogged": "Personal data of the RTI applicant. Access is logged.",
+    "applicantDataNoticeLogged": "Personal data of the RTI applicant. Shown masked by default; revealing a value needs a stated reason and is recorded in the audit log.",
     "applicantDataNoticeMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full contact.",
-    "section6": "§6 — Information Request",
-    "section11": "§11 — Third-party Information",
     "title": "RTI Request",
     "backLabel": "RTI Applications",
     "notFoundTitle": "RTI request not found",
@@ -14520,7 +14818,12 @@
     "responded": "Responded {date}",
     "applicantCard": "Applicant",
     "name": "Name",
-    "contact": "Contact"
+    "contact": "Contact",
+    "transferredFrom": "Transferred from {from} on {date}",
+    "transferredFromNoDate": "Transferred from {from}",
+    "revealNameLabel": "applicant name",
+    "revealContactLabel": "applicant contact",
+    "maskedAriaLabel": "{label} (masked)"
   },
   "crmRtiFilters": {
     "statusAll": "All statuses",
@@ -14532,8 +14835,6 @@
     "statusSecondAppeal": "Second Appeal",
     "statusDisposed": "Disposed",
     "sectionAll": "All sections",
-    "section6": "§6 — Information",
-    "section11": "§11 — Third-party",
     "status": "Status",
     "filterByStatus": "Filter by status",
     "section": "Section",
@@ -14570,8 +14871,6 @@
     "selectMode": "Select mode…",
     "dpdpNotice": "Personal data collected here is used only to process this request under the Right to Information Act 2005, and is retained and disclosed in line with the applicable record-retention schedule and the DPDP Act 2023. Access to applicant contact details is logged.",
     "contactPlaceholder": "10-digit mobile or email",
-    "section6": "§6 — Information Request",
-    "section11": "§11 — Third-party Information",
     "feeRequired": "Enter the fee amount paid (use 0 for an exempt / BPL applicant).",
     "title": "New RTI Request",
     "subtitle": "Log a Right to Information Act 2005 request.",
@@ -14610,6 +14909,8 @@
     "backLabel": "Service Requests",
     "title": "Service Request",
     "detailsCard": "Request Details",
+    "relatedAccount": "Related account",
+    "viewRelatedAccount": "View account",
     "serviceType": "Service Type",
     "priority": "Priority",
     "status": "Status",
@@ -14630,7 +14931,26 @@
     "priority_urgent": "Urgent",
     "priority_high": "High",
     "priority_normal": "Normal",
-    "priority_low": "Low"
+    "priority_low": "Low",
+    "piiRevealNote": "Contact details are masked under the DPDP Act 2023. Reveal a value to see it: a reason is required and the access is recorded in the audit log.",
+    "revealPhoneLabel": "citizen phone",
+    "revealEmailLabel": "citizen email",
+    "maskedAriaLabel": "{label} (masked)",
+    "assignedNameUnavailable": "Assigned (name unavailable)",
+    "noDueDate": "No target date set",
+    "nameUnavailable": "Name unavailable",
+    "loggedBy": "Logged by",
+    "lastUpdatedBy": "Last updated by",
+    "linkedContact": "Linked contact",
+    "contactNameUnavailable": "Contact (name unavailable)",
+    "notificationCard": "Citizen notification",
+    "channel_email": "email",
+    "channel_sms": "SMS",
+    "notifyQueued": "A notice is being sent to the citizen by {channel}.",
+    "notifySent": "The citizen was notified by {channel} on {when}.",
+    "notifyFailed": "The notice could not be delivered by {channel}. Please contact the citizen directly.",
+    "notifyNoTemplate": "The citizen was not notified: this office has no “service_request_resolution” {channel} template set up. Ask an administrator to create one, and contact the citizen directly.",
+    "notifyNoContact": "The citizen was not notified: there is no phone number or email on this request."
   },
   "crmServiceRequestNew": {
     "phoneHint": "Enter a 10-digit mobile number.",
@@ -14676,7 +14996,14 @@
     "descriptionPlaceholder": "Detailed description of the service request…",
     "cancel": "Cancel",
     "saving": "Saving…",
-    "submit": "Submit Request"
+    "submit": "Submit Request",
+    "dupHeading": "Possible duplicate",
+    "dupIntro": "This citizen already has {count, plural, one {an open request} other {# open requests}}. Check before logging another.",
+    "dupLabel": "Possible duplicate:",
+    "dupCheckFailed": "Couldn’t check for existing requests from this phone or email. You can still log the request.",
+    "dupConfirmTitle": "File another request of the same type?",
+    "dupConfirmDescription": "{ref} is already open for this citizen and service type. File a new request only if this is a different matter.",
+    "dupConfirmLabel": "File anyway"
   },
   "crmServiceRequestsFilterBar": {
     "searchAria": "Search service requests",
@@ -14702,7 +15029,13 @@
       "normal": "normal",
       "high": "high",
       "urgent": "urgent"
-    }
+    },
+    "overdueOnly": "Overdue only",
+    "assignedToMe": "Assigned to me",
+    "sortBy": "Sort",
+    "sortAria": "Sort requests",
+    "sortDefault": "Priority, newest first",
+    "sortDueAt": "Due date, soonest first"
   },
   "crmServiceRequestsTable": {
     "exportTitle": "Export citizen service requests?",
@@ -14748,10 +15081,14 @@
     "colEnabled": "Enabled",
     "enabledForLimit": "Enabled for limit {n}",
     "enabled": "Enabled",
-    "paused": "Paused"
+    "paused": "Paused",
+    "legacyKeyAlert": "This limit was saved under the key “{key}”, which matches no deal. Choose the stage “{name}” again and save, then delete this old limit.",
+    "allPipelinesOption": "{stage} — applies to all pipelines",
+    "globalLimitNote": "This limit applies to every pipeline. Choose a pipeline to scope it, then pick the stage again."
   },
   "crmTaskEscalationEditor": {
     "unknownUser": "Unknown user (no longer exists)",
+    "userNotListed": "Saved user (not in the loaded list)",
     "unknownRole": "Unknown role \"{role}\"",
     "noManager": "No manager set",
     "managerRoleAria": "Manager role for rule {n}",
@@ -14760,7 +15097,7 @@
     "noSpecificUser": "No specific user",
     "escalates": "Escalates to <strong>{name}</strong>",
     "escalatesMissing": "Escalates to <strong>{name}</strong> — fix this before it can escalate.",
-    "escalatesWithCount": "Escalates to <strong>{name}</strong> · {count, plural, one {{formatted} task currently overdue} other {{formatted} tasks currently overdue}}",
+    "escalatesWithCount": "Escalates to <strong>{name}</strong> · {count, plural, one {{formatted} task is} other {{formatted} tasks are}} already overdue by at least this long",
     "unitMinutes": "minutes",
     "unitHours": "hours",
     "unitDays": "days",
@@ -14772,7 +15109,42 @@
     "overdueBy": "Overdue by",
     "thresholdValueAria": "Threshold value for rule {n}",
     "thresholdUnitAria": "Threshold unit for rule {n}",
-    "rulesListedHelp": "Rules are listed by threshold, soonest first. Each rule fires independently when a task passes its threshold."
+    "rulesListedHelp": "Rules are listed by threshold, soonest first. Each rule fires independently when a task passes its threshold.",
+    "loading": "Loading task-escalation rules…",
+    "heading": "Task escalation",
+    "emptyTitle": "No task-escalation rules yet",
+    "emptyMessage": "Add a rule so overdue tasks reach a manager.",
+    "ruleLegend": "Rule {n}",
+    "ruleName": "Rule name",
+    "ruleNameAria": "Name for rule {n}",
+    "defaultRuleName": "Escalate overdue tasks",
+    "managerRole": "Manager role",
+    "managerUser": "Manager user",
+    "enabled": "Enabled",
+    "enableAria": "Enable rule {n}",
+    "save": "Save",
+    "create": "Create",
+    "saving": "Saving…",
+    "delete": "Delete",
+    "deleteAria": "Delete rule {n}",
+    "addRule": "+ Add task-escalation rule",
+    "rowInvalid": "Each rule needs a name, a positive threshold in minutes and a manager role or user.",
+    "saved": "Task-escalation rule saved.",
+    "saveFailed": "Could not save the rule.",
+    "deleted": "Task-escalation rule deleted.",
+    "deleteFailed": "Could not delete the rule.",
+    "deleteTitle": "Delete this task-escalation rule?",
+    "deleteDescription": "Overdue tasks will no longer escalate under this rule.",
+    "deleteConfirm": "Delete rule",
+    "directoryUnavailable": "Roles and users could not be loaded, so a manager can’t be chosen right now. Reload the page to try again.",
+    "rejected": {
+      "INVALID_RECIPIENT_ROLE": "That role isn’t one of this office’s roles any more. Pick another role.",
+      "INVALID_RECIPIENT": "That person isn’t an active user of this office. Pick another user.",
+      "RECIPIENT_REQUIRED": "Choose a manager role or a manager user.",
+      "DIRECTORY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly.",
+      "IDENTITY_UNAVAILABLE": "The role and user directory is unavailable right now, so this rule can’t be checked. Try again shortly."
+    },
+    "managerSearchAria": "Search people by name for rule {n}"
   },
   "crmVoiceOfCitizen": {
     "windowRange": "Window: {from} to {to}",
@@ -14781,7 +15153,7 @@
     "windowAll": "Window: all time",
     "subtitle": "What citizens and stakeholders are saying — every logged interaction is scored for sentiment and grouped by theme • {window} • नागरिक प्रतिक्रिया",
     "feedbackForm": "Feedback form",
-    "invalidPeriod": "That reporting period isn’t valid (the start date must be on or before the end date). Showing all activity instead.",
+    "invalidPeriod": "That reporting period isn’t valid (the dates must be real calendar dates, and the start date must be on or before the end date). Choose a new period to see the figures.",
     "partialWindowBody": "More interactions have been scored than this summary can scan in one pass, so the figures below cover the most recent activity only. Use the period control above to narrow the window and read an exact figure.",
     "dataProtectionNotice": "Data protection notice",
     "averageScore": "Average Score ({min} to +{max})",
@@ -14790,7 +15162,9 @@
     "ratingsReceived": "Ratings received",
     "citizenRatingsNote": "Citizen-submitted service ratings, shown separately from the model-scored sentiment above.",
     "openFeedbackForm": "Open the feedback form",
-    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting."
+    "hiddenSensitiveThemes": "{count} vigilance-sensitive {count, plural, one {theme is} other {themes are}} hidden from this view and excluded from export. Totals below cover the themes you can see. Contact a CRM administrator for staff-conduct and integrity reporting.",
+    "allActivities": "All Activities",
+    "windowInvalid": "Window: not valid"
   },
   "crmAccountHierarchy": {
     "heading": "Account Hierarchy",
@@ -14815,7 +15189,13 @@
     "subtreeClause": " and its {count, plural, one {# sub-account} other {# sub-accounts}}",
     "confirmTitle": "Move account in hierarchy?",
     "confirmDescription": "Move <strong>{name}</strong>{subtree} under <strong>{target}</strong>?",
-    "confirmLabel": "Move account"
+    "confirmLabel": "Move account",
+    "reportsTo": "Reports to",
+    "searchPlaceholder": "Type to search accounts",
+    "noMatches": "No matching accounts",
+    "searching": "Searching…",
+    "searchError": "Couldn’t load accounts. Please try again.",
+    "makeTopLevel": "Make top level (no parent)"
   },
   "crmNewAccountForm": {
     "nameRequired": "Enter an account name (at least 2 characters).",
@@ -14832,8 +15212,8 @@
     "parentSkipped": "Account created; the parent could not be set yet. Set it from the <link>accounts list</link> once it appears."
   },
   "crmActivitiesTable": {
-    "heading": "Interactions",
-    "loadArea": "interactions"
+    "heading": "Activities",
+    "loadArea": "activities"
   },
   "crmCampaignsPage": {
     "title": "Campaign Performance",
@@ -14855,22 +15235,32 @@
     "emptyTitle": "No contacts yet",
     "emptyMessage": "Add your first contact to get started.",
     "newContact": "+ New Contact",
-    "colTemperature": "Temperature"
+    "colTemperature": "Temperature",
+    "fieldPhone": "phone number",
+    "fieldEmail": "email address"
   },
   "crmContactDetailPage": {
     "title": "Contact Detail",
     "loadArea": "contact",
-    "backLabel": "Contacts"
+    "backLabel": "Contacts",
+    "fieldPhone": "phone number",
+    "fieldEmail": "email address",
+    "maskedPhoneAria": "Masked phone number",
+    "maskedEmailAria": "Masked email address"
   },
   "crmDealsPage": {
-    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
+    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions",
+    "title": "Vendor / Stakeholder Engagements",
+    "newEngagement": "+ New Engagement"
   },
   "crmContactsPage": {
     "subtitle": "Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master",
     "filteredToAccount": "Filtered to one account",
     "filteredToAccountNamed": "Filtered to one account: {name}",
     "clearAccountFilterAria": "Clear account filter",
-    "clearAccountFilter": "Clear ✕"
+    "clearAccountFilter": "Clear ✕",
+    "piiBannerReveal": "Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Phone numbers and email addresses are masked; revealing one needs a stated reason and is recorded in the audit trail.",
+    "piiBannerMasked": "Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Phone numbers and email addresses are masked for your role."
   },
   "crmContactNewPage": {
     "contactArea": "contact",
@@ -14881,7 +15271,18 @@
     "gstinNote": "Collected for invoicing and tax (KYC). Access is role-scoped and logged.",
     "panNote": "Personal data collected for KYC/tax. Access is role-scoped and logged.",
     "marketingConsent": "I consent to marketing communications (DPDP Act, 2023)",
-    "created": "Created"
+    "created": "Created",
+    "missingMandatory": "Please fill in the required field(s): {fields}.",
+    "fieldRequired": "{field} is required.",
+    "fieldLabel": {
+      "name": "Full name",
+      "email": "Email",
+      "phone": "Phone (mobile)",
+      "company": "Organisation",
+      "designation": "Designation",
+      "city": "City",
+      "leadSource": "Lead source"
+    }
   },
   "crmControlTowerPage": {
     "title": "Executive Control Tower",
@@ -14894,7 +15295,8 @@
     "regionEmptyMessage": "Active deals with a contact region appear here."
   },
   "crmDashboardPage": {
-    "moduleNote": "This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts. Engagement and procurement pipeline tools live under Engagement Pipeline — it is not a commercial sales CRM."
+    "moduleNote": "This module tracks vendor interactions, stakeholder engagements, and beneficiary contacts. Engagement and procurement pipeline tools live under Engagement Pipeline — it is not a commercial sales CRM.",
+    "statActivitiesToday": "Activities Today"
   },
   "crmDealsTable": {
     "stageProspecting": "Prospecting",
@@ -14912,21 +15314,33 @@
     "statActive": "Active Engagements",
     "statActiveValue": "Active Procurement Value",
     "statConcludedValue": "Concluded Value",
-    "statLapsed": "Lapsed Engagements"
+    "statLapsed": "Lapsed Engagements",
+    "heading": "Engagements",
+    "colEngagement": "Engagement",
+    "colValue": "Value",
+    "colStage": "Stage",
+    "colExpectedClose": "Expected close",
+    "colProbability": "Probability",
+    "colOwner": "Owner",
+    "emptyTitle": "No engagements found",
+    "emptyMessage": "Start adding engagements to track your procurement pipeline.",
+    "filterPlaceholder": "Filter engagements…"
   },
   "crmDealError": {
     "backLabel": "Back to engagements",
-    "area": "deal"
+    "area": "engagement",
+    "listBackLabel": "Back to CRM",
+    "listArea": "CRM engagements"
   },
   "crmDealNewPage": {
-    "nameRequired": "Enter a deal name.",
+    "nameRequired": "Enter an engagement name.",
     "invalidAmount": "Enter a valid amount (rupees, up to 2 decimal places).",
     "valuePlaceholder": "e.g. 1234567.89",
     "valuePreview": "Will be stored as {value}",
     "valueHint": "Enter a valid rupee amount (up to 2 decimal places).",
     "contactAria": "Contact (optional)",
     "searchContacts": "Search contacts by name or organisation…",
-    "contactHint": "Link an existing contact, or leave blank to create the deal without one."
+    "contactHint": "Link an existing contact, or leave blank to create the engagement without one."
   },
   "crmDedupCandidates": {
     "unnamed": "Unnamed",
@@ -14952,7 +15366,17 @@
     "dismissConfirm": "Dismiss pair",
     "dismissReasonLabel": "Reason (optional)",
     "dismissFailed": "Dismiss failed",
-    "page": "Page {page} of {total}"
+    "page": "Page {page} of {total}",
+    "fieldName": "Name",
+    "fieldEmail": "Email",
+    "fieldPhone": "Phone",
+    "fieldCompany": "Company",
+    "fieldLastActivity": "Last activity",
+    "fieldGstin": "GSTIN",
+    "fieldPan": "PAN",
+    "matchedOn": "Matched on: {fields}",
+    "revealEmailLabel": "email of {name}",
+    "revealPhoneLabel": "phone number of {name}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "Missing mandatory",
@@ -14989,10 +15413,10 @@
   "crmForecastPeriod": {
     "quarterLabel": "FY {start}-{end} · Q{q} ({q, select, 1 {Apr–Jun} 2 {Jul–Sep} 3 {Oct–Dec} other {Jan–Mar}})",
     "fullYearLabel": "FY {start}-{end} (full year)",
-    "allOpenDeals": "all open deals",
+    "allOpenEngagements": "all open engagements",
     "period": "Period",
     "filterAria": "Filter forecast by period",
-    "allOpenDealsOption": "All open deals",
+    "allOpenEngagementsOption": "All open engagements",
     "recalculating": "Recalculating…",
     "pipelineLabel": "Pipeline",
     "pipelineFilterAria": "Filter forecast by pipeline",
@@ -15025,7 +15449,7 @@
     "statusForwarded": "Forwarded",
     "statusAttended": "Attended",
     "statusDisposed": "Disposed",
-    "statusAppeal": "Appeal",
+    "statusAppeal": "First appeal",
     "priorityLabel": "Priority",
     "filterByPriority": "Filter by priority",
     "allPriorities": "All priorities",
@@ -15056,7 +15480,8 @@
       "high": "High",
       "normal": "Normal",
       "low": "Low"
-    }
+    },
+    "statusFirstAppeal": "First appeal"
   },
   "crmGrievanceDetail": {
     "assignedId": "Assigned (ID {id}…)",
@@ -15092,6 +15517,9 @@
     "maskedPhone": "Masked citizen phone",
     "maskedEmail": "Masked citizen email",
     "maskedNotice": "Contact details are masked under the DPDP Act 2023. Ask a CRM administrator if you need to reach this citizen.",
+    "revealNotice": "Contact details are masked under the DPDP Act 2023. Use Reveal to see one; you must give a reason and every reveal is recorded in the audit log.",
+    "revealLabelPhone": "citizen phone",
+    "revealLabelEmail": "citizen email",
     "timelineCard": "Status Timeline",
     "timelineAriaLabel": "Grievance lifecycle steps",
     "priority_urgent": "Urgent",
@@ -15121,6 +15549,14 @@
     "category": "Category",
     "selectCategory": "Select category…",
     "standardCategoryNote": "Showing the standard category list. An administrator can tailor it under Grievance Categories.",
+    "linkContact": "Link existing contact",
+    "optional": "(optional)",
+    "linkContactAriaLabel": "Link existing contact (optional)",
+    "searchContactsPlaceholder": "Search contacts by name or organisation…",
+    "linkedNote": "This grievance will be linked to the selected contact. Clear the field to log it against a new citizen instead.",
+    "possibleContactNote": "Possible existing contact? Search above and link it so repeat grievances stay on one record.",
+    "duplicateAria": "Possible duplicate grievances",
+    "duplicateWarning": "This contact already has {count, plural, one {# open grievance} other {# open grievances}}. Check whether this is a duplicate before you file another:",
     "priority": "Priority",
     "priorityLow": "Low",
     "priorityNormal": "Normal",
@@ -15132,7 +15568,13 @@
     "descriptionPlaceholder": "Detailed description of the grievance…",
     "cancel": "Cancel",
     "saving": "Saving…",
-    "submit": "Submit Grievance"
+    "submit": "Submit Grievance",
+    "contactMatchAria": "Existing contact check",
+    "contactMatchWarning": "{count, plural, one {An existing contact} other {# existing contacts}} already {count, plural, one {has} other {have}} this {fields, select, phone {phone number} email {email address} other {phone number or email address}}.",
+    "contactMatchUnnamed": "Existing contact",
+    "contactMatchOpenGrievances": "{count, plural, one {# open grievance:} other {# open grievances:}}",
+    "contactMatchHint": "To keep one record for this citizen, choose them under “{label}” below. This is only a warning; you can still file the grievance.",
+    "contactMatchUnavailable": "Could not check whether this phone or email already belongs to a contact. You can still file the grievance."
   },
   "crmWatchlistTable": {
     "band_critical": "Critical",
@@ -15146,7 +15588,7 @@
     "backLabel": "CRM",
     "statForms": "Forms",
     "statLive": "Live",
-    "statConsentGaps": "Consent gaps",
+    "statConsentGaps": "Consent gap",
     "consentGapNote": "Enabled without requiring consent. The DPDP Act 2023 requires consent for marketing-intake forms — require consent or pause these forms.",
     "loadErrorWhat": "The lead-form registry couldn't be loaded.",
     "loadErrorNext": "This is usually temporary. Try again, or go back to CRM.",
@@ -15260,8 +15702,14 @@
     "summary": "{count, plural, one {# engagement} other {# engagements}} · {probability}% prob",
     "dropHere": "Drop engagements here"
   },
+  "crmDealCard": {
+    "roleDescription": "draggable engagement card",
+    "cardLabel": "Engagement: {name}, value {value}, likelihood {likelihood}%, {hasAssignee, select, yes {assignee {assignee}} other {unassigned}}. Tab to the engagement name and press Enter to open its record.",
+    "moveHandle": "Move engagement {name}. Use the left and right arrow keys to move it between stages.",
+    "updating": "Updating…"
+  },
   "crmPipelinePage": {
-    "title": "Engagement Pipeline",
+    "title": "Engagement Pipeline Board",
     "subtitle": "Move engagements between stages to track procurement progress • पाइपलाइन",
     "newEngagement": "+ New Engagement",
     "truncatedOf": "Showing {shown} of {total} engagements. The board and the figures below cover the loaded engagements only — refine by pipeline to see the rest.",
@@ -15271,6 +15719,10 @@
     "engagementValue": "Engagement Value",
     "avgLikelihood": "Avg Likelihood",
     "highValueEngagements": "High-Value Engagements (≥ {threshold})"
+  },
+  "crmRtiSections": {
+    "section6": "§6 — Information Request",
+    "section11": "§11 — Third-party Information"
   },
   "crmRtiTable": {
     "closed": "Closed",
@@ -15310,7 +15762,28 @@
     "cancelRequest": "Cancel request",
     "cancelTitle": "Cancel this request?",
     "cancelDescription": "Use this when the request is withdrawn or will not be actioned. This is final.",
-    "cancelReason": "Reason for cancellation"
+    "cancelReason": "Reason for cancellation",
+    "assign": "Assign",
+    "reassign": "Reassign",
+    "assignTitle": "Assign this request",
+    "reassignTitle": "Reassign this request",
+    "assignDescription": "Choose the officer responsible for this request.",
+    "reassignDescription": "Currently assigned to {name}. Choose another officer.",
+    "currentOfficerUnavailable": "an officer (name unavailable)",
+    "assignLoading": "Loading officers…",
+    "assignDirectoryUnavailable": "The officer list is unavailable right now. Try again shortly.",
+    "assignNoOfficers": "There are no other officers to choose from.",
+    "assignOfficer": "Officer",
+    "assignSelect": "Select an officer…",
+    "assigning": "Assigning…",
+    "assignCancel": "Cancel",
+    "assignInvalid": "That person is not an active user of this office. Choose someone else.",
+    "assignUnavailable": "The officer could not be verified right now. Try again shortly.",
+    "noticeNoContact": "Saved. The citizen was not notified: there is no phone number or email on this request.",
+    "noticeQueued": "Saved. A notice is being sent to the citizen by {channel}; the result will show on this page.",
+    "noticeQueuedNoChannel": "Saved. A notice is being sent to the citizen; the result will show on this page.",
+    "channel_email": "email",
+    "channel_sms": "SMS"
   },
   "crmServiceRequestsPage": {
     "openInProgress": "Open / In Progress",
@@ -15348,7 +15821,8 @@
   "crmThemeTable": {
     "toneNeedsAttention": "Needs attention",
     "toneWatch": "Watch",
-    "toneHealthy": "Healthy"
+    "toneHealthy": "Healthy",
+    "logActivity": "Log an activity"
   },
   "crmAgentWorkloadEditor": {
     "needsWholeNumber": "{name} needs a whole-number lead capacity of 0 or more.",
@@ -15365,19 +15839,31 @@
     "newLabel": "(new)",
     "selectAtLeastOne": "Select at least one record type.",
     "mandatoryHelp": "Mandatory flags a missing document on every record of the selected types.",
-    "deleteDescription": "“{name}” will no longer be selectable for new uploads. Documents already filed under this type keep their type and are not deleted. Give a reason for the audit trail.",
-    "deleteReasonLabel": "Reason for deletion"
+    "deleteReasonLabel": "Reason for deletion",
+    "deleteDescriptionUnused": "“{name}” has no documents filed under it. It will be removed from the catalogue and will no longer be selectable for new uploads. Give a reason for the audit trail.",
+    "deleteDescriptionUnknown": "“{name}” will be removed and will no longer be selectable for new uploads. If documents are already filed under it, the delete is refused — turn off Enabled instead. Give a reason for the audit trail.",
+    "inUseHint": "{count, plural, one {1 document uses this type, so it can’t be deleted.} other {{count} documents use this type, so it can’t be deleted.}} Turn off Enabled to stop new uploads of it."
   },
   "crmEscalationRulesEditor": {
     "ruleNeedsThresholdRecipient": "Each rule needs a positive threshold in minutes and a recipient role or user from the directory.",
     "noRole": "No role",
     "unknownRole": "Unknown role \"{role}\"",
-    "rolePlaceholder": "e.g. sales_manager",
     "noSpecificUser": "No specific user",
     "unknownUser": "Unknown user (no longer exists)",
-    "userIdPlaceholder": "user id (optional)",
     "ruleUnsavedAria": "Rule {n} has unsaved changes",
-    "unsaved": "Unsaved"
+    "unsaved": "Unsaved",
+    "recipientNotInDirectory": "That recipient is not in the directory (a role of this office or an active user). Pick one from the list.",
+    "recipientDirectoryUnavailable": "The role and user directory could not be loaded, so the recipient cannot be checked and this rule was not saved. Retry loading the directory, then save again.",
+    "directoryUnavailable": "Couldn’t load the role and user directory, so recipients can’t be chosen or verified right now.",
+    "rolesUnavailable": "Couldn’t load the role directory, so a recipient role can’t be chosen or verified right now.",
+    "usersUnavailable": "Couldn’t load the user directory, so a recipient user can’t be chosen or verified right now.",
+    "directoryRetry": "Retry loading directory",
+    "unverifiedRecipient": "Saved recipient (not verified)",
+    "userNotListed": "Saved user (not in the loaded list)",
+    "ruleName": "{trigger} · {threshold} → {recipient}",
+    "recipientRoleLabel": "Recipient role for rule {n}",
+    "recipientUserLabel": "Recipient user for rule {n}",
+    "recipientSearchLabel": "Search people by name for rule {n}"
   },
   "crmGrievanceCategoriesEditor": {
     "validationError": "Category “{name}” — {error}",
@@ -15443,7 +15929,17 @@
   },
   "crmOwnershipDirectoryEditor": {
     "namePlaceholder": "{singular} name",
-    "addSingular": "+ Add {singular}"
+    "addSingular": "+ Add {singular}",
+    "deleteDescription": "This entry will no longer be available for assignment. This cannot be undone. If an assignment rule or branch still uses it, the delete is refused and nothing changes.",
+    "deleteFailed": "Could not delete the entry. Please try again.",
+    "unnamed": "this entry",
+    "inUseRules": "{count, plural, one {# assignment rule} other {# assignment rules}}",
+    "inUseBranches": "{count, plural, one {# branch} other {# branches}}",
+    "inUseJoin": "{first} and {second}",
+    "inUseMessage": "“{name}” can’t be deleted because it is still used by {usedBy}. Change or remove those first, then try again.",
+    "inUseGeneric": "“{name}” can’t be deleted because it is still in use. Change or remove what uses it first, then try again.",
+    "inUseNames": "Used by: {names}.",
+    "inUseMore": "…and {count} more."
   },
   "crmExport": {
     "button": "⬇ Export CSV",
@@ -15483,7 +15979,9 @@
   "crmTimeline": {
     "title": "Status timeline",
     "empty": "No status changes recorded yet.",
-    "opened": "Opened"
+    "opened": "Opened",
+    "by": "by {name}",
+    "byUnknown": "by a user (name unavailable)"
   },
   "crmCatalogue": {
     "hsnHeader": "HSN/SAC",
@@ -16174,5 +16672,12 @@
       "reasonLowConfidence": "Assistant could not answer",
       "reasonGuardrail": "Guardrail flagged the exchange"
     }
+  },
+  "crmAccountRelationships": {
+    "searchPlaceholder": "Type to search accounts",
+    "noMatches": "No matching accounts",
+    "searching": "Searching…",
+    "searchError": "Couldn’t load accounts. Please try again.",
+    "unnamedAccount": "Unnamed account"
   }
 }

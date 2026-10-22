@@ -62,6 +62,7 @@ import { integrationRoutes } from "./modules/integrations/routes.js";
 import { threeSixtyRoutes } from "./modules/contacts/three-sixty-routes.js";
 import { timelineRoutes } from "./modules/contacts/timeline-routes.js";
 import { taskEscalationRuleRoutes } from "./modules/activities/task-escalation-routes.js";
+import { directoryRoutes } from "./modules/directory/routes.js";
 import { stageLimitRoutes } from "./modules/deals/stage-limits-routes.js";
 import { productRoutes } from "./modules/products/routes.js";
 import { priceBookRoutes } from "./modules/price-books/routes.js";
@@ -200,6 +201,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // G6: Unified customer timeline aggregating CRM-local + cross-service data
   await app.register(timelineRoutes);
   await app.register(taskEscalationRuleRoutes);
+  // GAP-CRM-TASK-ESCALATION-01/-02/-03: staff + role pickers any CRM role can use.
+  await app.register(directoryRoutes);
   // ── OP/QP: opportunity + product/pricing/quotation surfaces ──
   await app.register(stageLimitRoutes);
   await app.register(productRoutes);

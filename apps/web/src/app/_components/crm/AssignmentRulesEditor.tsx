@@ -47,6 +47,14 @@ interface RuleRow extends Omit<AssignmentRule, "criteria"> {
    * chain (which wiped unsaved edits in other rows). Absent for a new row.
    */
   saved?: RuleSnapshot;
+  /**
+   * GAP-CRM-ASSIGNMENT-RULES-05: set once THIS session has saved/reordered the row.
+   * The row is not reloaded after a save (that would wipe other rows' unsaved
+   * edits), so its "last changed" metadata from the last load is stale; the cell
+   * says "Saved just now" instead of repeating an older actor/date, and never
+   * guesses the actor.
+   */
+  justSaved?: boolean;
 }
 
 interface RuleSnapshot {
@@ -81,6 +89,25 @@ function isRuleDirty(row: RuleRow): boolean {
     s.enabled !== row.saved.enabled ||
     s.fallbackOwnerId !== row.saved.fallbackOwnerId
   );
+}
+
+/**
+ * The PUT payload for a persisted row built from its LAST SAVED values with only
+ * the ordinal replaced -- used by Move up/down so a reorder never persists the
+ * row's other unsaved edits (e.g. an enabled flip that must be confirmed first).
+ */
+function ruleFromSaved(row: RuleRow, ordinal: number): AssignmentRule | null {
+  if (!row.id || !row.saved) return null;
+  const s = row.saved;
+  return {
+    id: row.id,
+    name: s.name.trim(),
+    ruleType: s.ruleType,
+    criteria: parseCriteria(s.criteriaText) ?? {},
+    ordinal,
+    enabled: s.enabled,
+    fallbackOwnerId: s.fallbackOwnerId,
+  };
 }
 
 let SEQ = 0;
@@ -184,6 +211,19 @@ export function AssignmentRulesEditor() {
     return () => { live = false; };
   }, []);
 
+  // GAP-CRM-ASSIGNMENT-RULES-06: warn before a full-page navigation / reload while
+  // any row has unsaved edits (a new row counts as unsaved).
+  const anyDirty = rows.some(isRuleDirty);
+  useEffect(() => {
+    if (!anyDirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [anyDirty]);
+
   function update(key: string, patch: Partial<RuleRow>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
@@ -230,17 +270,31 @@ export function AssignmentRulesEditor() {
     const idx = sorted.findIndex((r) => r.key === row.key);
     const neighbour = dir === "up" ? sorted[idx - 1] : sorted[idx + 1];
     if (!neighbour || !row.id || !neighbour.id) return;
-    const a = { ...row, ordinal: neighbour.ordinal };
-    const b = { ...neighbour, ordinal: row.ordinal };
-    setRows((prev) => prev.map((r) => (r.key === a.key ? a : r.key === b.key ? b : r)));
+    // Persist ONLY the swapped ordinals, taken from each row's saved values: a
+    // reorder must not smuggle in a row's other unsaved edits (an enabled flip
+    // would take effect without its confirmation), and the chain is not reloaded
+    // afterwards so no other row loses its unsaved edits (GAP-CRM-ASSIGNMENT-RULES-05/06).
+    const payloadA = ruleFromSaved(row, neighbour.ordinal);
+    const payloadB = ruleFromSaved(neighbour, row.ordinal);
+    if (!payloadA || !payloadB) return;
     setMessage("");
     setError("");
     setBusyKey(row.key);
     try {
-      await updateAssignmentRule(a.id!, toRule(a));
-      await updateAssignmentRule(b.id!, toRule(b));
+      await updateAssignmentRule(row.id, payloadA);
+      await updateAssignmentRule(neighbour.id, payloadB);
+      const swap = (r: RuleRow, ordinal: number): RuleRow => ({
+        ...r,
+        ordinal,
+        justSaved: true,
+        ...(r.saved ? { saved: { ...r.saved, ordinal } } : {}),
+      });
+      setRows((prev) =>
+        prev.map((r) =>
+          r.key === row.key ? swap(r, neighbour.ordinal) : r.key === neighbour.key ? swap(r, row.ordinal) : r,
+        ),
+      );
       setMessage(t("ruleOrderUpdated"));
-      await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : t("couldNotReorder"));
     } finally {
@@ -303,7 +357,7 @@ export function AssignmentRulesEditor() {
         setRows((prev) =>
           prev.map((r) => {
             if (r.key !== row.key) return r;
-            const next: RuleRow = { ...r, origEnabled: r.enabled };
+            const next: RuleRow = { ...r, origEnabled: r.enabled, justSaved: true };
             next.saved = snapshotOf(next);
             return next;
           }),
@@ -321,17 +375,25 @@ export function AssignmentRulesEditor() {
           setRows((prev) =>
             prev.map((r) => {
               if (r.key !== row.key) return r;
-              const next: RuleRow = { ...r, origEnabled: r.enabled };
+              const next: RuleRow = { ...r, origEnabled: r.enabled, justSaved: true };
               next.saved = snapshotOf(next);
               return next;
             }),
           );
         } else {
-          const serverRows = data.map(toRow);
           setRows((prev) => {
-            // Preserve other rows that still have unsaved edits.
-            const dirtyOthers = prev.filter((r) => r.key !== row.key && isRuleDirty(r));
-            return [...serverRows, ...dirtyOthers];
+            // One row per persisted rule. A persisted row that still has unsaved
+            // edits keeps ITS local state (not the server copy) so the edit
+            // survives; every other persisted row takes the fresh server data.
+            const localById = new Map(prev.filter((r) => r.id).map((r) => [r.id as string, r]));
+            const merged = data.map(toRow).map((server) => {
+              const local = server.id ? localById.get(server.id) : undefined;
+              return local && isRuleDirty(local) ? local : server;
+            });
+            // Other brand-new rows that are not saved yet stay as they are; the
+            // row just created is replaced by its server copy above.
+            const stillNew = prev.filter((r) => !r.id && r.key !== row.key);
+            return [...merged, ...stillNew];
           });
         }
       }
@@ -379,7 +441,9 @@ export function AssignmentRulesEditor() {
       await deleteAssignmentRule(row.id);
       setMessage(`Rule “${row.name}” deleted.`);
       setConfirmKey(null);
-      await load();
+      // Drop ONLY this row; reloading the chain would replace every row with
+      // server data and wipe the other rows' unsaved edits (GAP-CRM-ASSIGNMENT-RULES-06).
+      setRows((prev) => prev.filter((r) => r.key !== row.key));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not delete the rule.");
     } finally {
@@ -541,7 +605,9 @@ export function AssignmentRulesEditor() {
                     <td>
                       {/* GAP-CRM-ASSIGNMENT-RULES-05: show real change history when
                           the backend returns it; never fabricate one. */}
-                      {row.updatedAt || row.updatedBy ? (
+                      {row.justSaved ? (
+                        <span style={{ fontSize: 11, color: "var(--muted)" }}>{t("justSaved")}</span>
+                      ) : row.updatedAt || row.updatedBy ? (
                         <span style={{ fontSize: 11, color: "var(--muted)" }}>
                           {row.updatedBy ? t("byUser", { name: row.updatedBy }) : ""}
                           {row.updatedBy && row.updatedAt ? " · " : ""}

@@ -455,8 +455,8 @@ export default function ImportContactsPage() {
                 {duplicates.slice(0, 10).map((d) => (
                   <li key={d.id}>
                     {d.matchedFields.length
-                      ? t("matchedLine", { name: d.name ?? d.id, fields: d.matchedFields.join(", ") })
-                      : (d.name ?? d.id)}
+                      ? t("matchedLine", { name: d.name ?? t("existingContactUnnamed"), fields: d.matchedFields.join(", ") })
+                      : (d.name ?? t("existingContactUnnamed"))}
                   </li>
                 ))}
               </ul>

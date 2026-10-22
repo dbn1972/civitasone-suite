@@ -14,7 +14,9 @@ export default function Loading() {
         subtitle={t("serviceRequestsSubtitle")}
         back="/crm"
       />
-      <SkeletonTable rows={8} />
+      {/* Five tiles: the loaded page shows Open, Pending, Closed, Cancelled and Total
+          (GAP-CRM-SERVICE-REQUESTS-05 added Cancelled). loading.test.tsx pins the count to the page. */}
+      <SkeletonTable rows={8} statCards={5} />
     </div>
   );
 }

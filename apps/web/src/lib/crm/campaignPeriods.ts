@@ -28,7 +28,16 @@ export interface PostPeriodInput {
   responses: number;
   /** ISO-4217 currency code; defaults to INR. */
   currency?: string;
+  /**
+   * Optional display name for the campaign (GAP-CRM-CAMPAIGNS-01). Stored with the
+   * period so the ROI list and detail page show the campaign by name instead of a
+   * raw id. Blank = leave any stored name unchanged.
+   */
+  campaignName?: string;
 }
+
+/** Server cap on the campaign name (PUT /v1/crm/campaigns/:id/performance). */
+export const MAX_CAMPAIGN_NAME_LENGTH = 200;
 
 export class CampaignPeriodValidationError extends Error {
   constructor(message: string) {
@@ -38,6 +47,15 @@ export class CampaignPeriodValidationError extends Error {
 }
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Minor-unit exponent of an ISO 4217 code (2 for INR/USD, 0 for JPY); 2 if Intl does not know the code. */
+function minorUnitDigits(code: string): number {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
 
 /**
  * Build the request body for the performance upsert, converting rupees to
@@ -53,6 +71,7 @@ export function buildPerformanceBody(input: PostPeriodInput): {
   revenueMinor: string;
   responses: number;
   currency: string;
+  campaignName?: string;
 } {
   if (!ISO_DATE.test(input.periodStart)) {
     throw new CampaignPeriodValidationError("Enter a valid period start date.");
@@ -62,6 +81,17 @@ export function buildPerformanceBody(input: PostPeriodInput): {
   }
   if (input.periodEnd && input.periodEnd < input.periodStart) {
     throw new CampaignPeriodValidationError("The period end date cannot be before the start date.");
+  }
+  // The form caps the field at the server maximum; the slice is a backstop so an
+  // over-long value can never turn into a 400 for something the user cannot see.
+  const campaignName = (input.campaignName ?? "").trim().slice(0, MAX_CAMPAIGN_NAME_LENGTH);
+  const currency = (input.currency ?? "INR").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new CampaignPeriodValidationError("Enter a three-letter currency code, for example INR.");
+  }
+  if (minorUnitDigits(currency) !== 2) {
+    // rupeesToMinorString scales by 100; a 0- or 3-decimal currency would be mis-stated.
+    throw new CampaignPeriodValidationError("Only currencies with two decimal places can be posted here.");
   }
   const costMinor = rupeesToMinorString(input.costRupees, { allowZero: true });
   if (costMinor === null) {
@@ -80,14 +110,15 @@ export function buildPerformanceBody(input: PostPeriodInput): {
     costMinor,
     revenueMinor,
     responses: input.responses,
-    currency: (input.currency ?? "INR").toUpperCase(),
+    currency,
+    ...(campaignName ? { campaignName } : {}),
   };
 }
 
 /** Post (upsert) a reporting period's cost, revenue and responses for a campaign. */
 export async function postCampaignPeriod(campaignId: string, input: PostPeriodInput): Promise<void> {
   const body = buildPerformanceBody(input);
-  const res = await browserFetch(`v1/crm/campaigns/${campaignId}/performance`, {
+  const res = await browserFetch(`v1/crm/campaigns/${encodeURIComponent(campaignId)}/performance`, {
     method: "PUT",
     body: JSON.stringify(body),
   });

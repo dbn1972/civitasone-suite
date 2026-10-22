@@ -7,7 +7,7 @@ import { localizedPeriodLabel, periodOptions } from "./period";
 /**
  * Forecast period picker (GAP-CRM-FORECAST-03). Narrows the weighted forecast to
  * a financial-year quarter (or whole FY) by round-tripping through the server —
- * the total is recomputed from deals whose expected close date falls in the
+ * the total is recomputed from engagements whose expected close date falls in the
  * window, so filtering client-side would report the wrong number.
  */
 export function PeriodFilter() {
@@ -37,7 +37,7 @@ export function PeriodFilter() {
         onChange={(e) => onChange(e.target.value)}
         aria-label={t("filterAria")}
       >
-        <option value="">{t("allOpenDealsOption")}</option>
+        <option value="">{t("allOpenEngagementsOption")}</option>
         {options.map((p) => (
           <option key={p.key} value={p.key}>{localizedPeriodLabel(p, (k, v) => t(k, v))}</option>
         ))}

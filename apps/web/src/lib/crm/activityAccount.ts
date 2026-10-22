@@ -11,8 +11,14 @@
  * crm-service is being extended concurrently, so the UI stays forgiving and any
  * mismatch is reported rather than silently mis-rendered.
  */
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { minutesSince, formatAgeing } from "@/lib/crm/assignment";
+import {
+  normaliseEscalationRoles,
+  normaliseEscalationUsers,
+  type EscalationRole,
+  type EscalationUser,
+} from "./directory";
 import { UserFacingError } from "@/lib/userFacingError";
 
 export type AaSource = "api" | "error";
@@ -190,11 +196,22 @@ export async function createActivity(input: ActivityInput): Promise<AcceptResult
 
 /* ============================================================ AC-005 ===== */
 
+export const ESCALATION_APPLIES_TO = ["next_action", "task", "both"] as const;
+export type EscalationAppliesTo = (typeof ESCALATION_APPLIES_TO)[number];
+
 export interface TaskEscalationRule {
   id?: string;
+  /** Short label for the rule. crm-service requires one (max 200 chars). */
+  name?: string;
+  /** What the rule watches; crm-service defaults to "both" when unset. */
+  appliesTo?: EscalationAppliesTo;
   /** Escalate a task overdue by more than this many minutes. */
   thresholdMinutes: number;
-  /** Escalate to a manager role OR a specific manager — one is used. */
+  /**
+   * Escalate to a manager role OR a specific manager — one is used. These are the
+   * editor's names; on the wire they are crm-service's `recipientRole` /
+   * `recipientId` (see taskEscalationRuleBody / normaliseTaskEscalationRule).
+   */
   managerRole: string;
   managerId: string;
   enabled: boolean;
@@ -204,13 +221,66 @@ export function normaliseTaskEscalationRule(raw: unknown): TaskEscalationRule | 
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const threshold = numOrNull(r.thresholdMinutes);
+  const appliesTo = ESCALATION_APPLIES_TO.find((a) => a === r.appliesTo);
   return {
     ...(typeof r.id === "string" ? { id: r.id } : {}),
+    ...(optStr(r.name) ? { name: str(r.name) } : {}),
+    ...(appliesTo ? { appliesTo } : {}),
     thresholdMinutes: threshold ?? 0,
-    managerRole: str(r.managerRole),
-    managerId: str(r.managerId),
+    // crm-service stores the manager as recipientRole / recipientId. Reading only
+    // managerRole/managerId (names no service uses) meant a saved manager was never
+    // shown again - every rule looked like it had none. Accept the legacy names too.
+    managerRole: str(r.recipientRole) || str(r.managerRole),
+    managerId: str(r.recipientId) || str(r.managerId),
     enabled: bool(r.enabled, true),
   };
+}
+
+/**
+ * The request body crm-service's task-escalation-rules routes accept. The editor's
+ * managerRole/managerId map to recipientRole/recipientId, and `name` (required by the
+ * service) is always sent - posting the editor's own shape 400'd because it had no name
+ * and the manager fields were unknown to the schema.
+ */
+export function taskEscalationRuleBody(rule: TaskEscalationRule): Record<string, unknown> {
+  return {
+    name: (rule.name ?? "").trim(),
+    appliesTo: rule.appliesTo ?? "both",
+    thresholdMinutes: rule.thresholdMinutes,
+    recipientRole: rule.managerRole.trim() || null,
+    recipientId: rule.managerId.trim() || null,
+    enabled: rule.enabled,
+  };
+}
+
+/**
+ * crm-service refused a rule for a reason the editor can word precisely (a recipient that does
+ * not exist, no recipient, the directory unreachable). `code` is the server's machine code; the
+ * editor maps it to translated copy - the code itself is never shown.
+ */
+export const RULE_REJECTION_CODES = [
+  "INVALID_RECIPIENT_ROLE",
+  "INVALID_RECIPIENT",
+  "RECIPIENT_REQUIRED",
+  "DIRECTORY_UNAVAILABLE",
+  "IDENTITY_UNAVAILABLE",
+] as const;
+export type RuleRejectionCode = (typeof RULE_REJECTION_CODES)[number];
+
+export class TaskEscalationRuleRejected extends UserFacingError {
+  readonly code: RuleRejectionCode;
+  constructor(code: RuleRejectionCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+async function throwRuleFailure(res: Response): Promise<never> {
+  const code = await errorCodeFromResponse(res);
+  const known = RULE_REJECTION_CODES.find((c) => c === code);
+  const message = await errorMessageFromResponse(res);
+  if (known) throw new TaskEscalationRuleRejected(known, message);
+  throw new UserFacingError(message);
 }
 
 export function normaliseTaskEscalationRules(raw: unknown): TaskEscalationRule[] {
@@ -231,41 +301,12 @@ export async function getTaskEscalationRules(): Promise<LoaderResult<TaskEscalat
 
 /* -- GAP-CRM-TASK-ESCALATION-01: role + user pickers for escalation targets -- */
 
-/** A selectable manager role (from policy-service). */
-export interface EscalationRole {
-  key: string;
-  label: string;
-}
-
-/** A selectable manager user (from identity-service). */
-export interface EscalationUser {
-  id: string;
-  name: string;
-}
-
-export function normaliseEscalationRoles(raw: unknown): EscalationRole[] {
-  const out: EscalationRole[] = [];
-  for (const item of toArray(raw, "roles")) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const key = str(r.key) || str(r.name) || str(r.id);
-    if (!key) continue;
-    out.push({ key, label: str(r.label) || str(r.name) || key });
-  }
-  return out;
-}
-
-export function normaliseEscalationUsers(raw: unknown): EscalationUser[] {
-  const out: EscalationUser[] = [];
-  for (const item of toArray(raw, "users")) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const id = str(r.id);
-    if (!id) continue;
-    out.push({ id, name: str(r.name) || str(r.email) || id });
-  }
-  return out;
-}
+/*
+ * The role / user shapes and their normalisers live in ./directory (shared with the lead
+ * escalation editor in assignment.ts); re-exported here so existing importers keep working.
+ */
+export { normaliseEscalationRoles, normaliseEscalationUsers };
+export type { EscalationRole, EscalationUser };
 
 /**
  * GAP-CRM-TASK-ESCALATION-01: the tenant's assignable roles. A free-text role
@@ -274,7 +315,8 @@ export function normaliseEscalationUsers(raw: unknown): EscalationUser[] {
  */
 export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[]>> {
   try {
-    const res = await browserFetch("policy/roles");
+    // crm-service's directory (admin tier), not the platform-admin-only policy/roles.
+    const res = await browserFetch("v1/crm/directory/roles");
     if (!res.ok) return { data: [], source: "error" };
     return { data: normaliseEscalationRoles(await res.json()), source: "api" };
   } catch {
@@ -282,31 +324,59 @@ export async function getEscalationRoles(): Promise<LoaderResult<EscalationRole[
   }
 }
 
-/** The tenant's users, for the manager user picker (stores the user id). */
-export async function getEscalationUsers(): Promise<LoaderResult<EscalationUser[]>> {
+/**
+ * The users a picker offers, plus whether that list is the WHOLE directory. `truncated` is the
+ * server's own flag (meta.truncated): the plain list is bounded (and a search shows at most a
+ * fixed number of matches), so on a large tenant someone can be missing from it -- the picker says
+ * so and offers a name search (searchEscalationUsers) instead of silently omitting people.
+ */
+export interface EscalationUsersResult extends LoaderResult<EscalationUser[]> {
+  truncated?: boolean;
+}
+
+async function readEscalationUsers(path: string): Promise<EscalationUsersResult> {
   try {
-    const res = await browserFetch("identity/users?limit=500");
+    // crm-service's own directory (id + name only), open to CRM roles. The admin-only
+    // identity/users listing this used to call left every CRM user who was not also a
+    // tenant admin with an empty picker.
+    const res = await browserFetch(path);
     if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseEscalationUsers(await res.json()), source: "api" };
+    const body: unknown = await res.json();
+    const meta = body && typeof body === "object" ? (body as { meta?: { truncated?: unknown } }).meta : undefined;
+    return { data: normaliseEscalationUsers(body), source: "api", truncated: meta?.truncated === true };
   } catch {
     return { data: [], source: "error" };
   }
 }
 
+/** The tenant's users, for the manager user picker (stores the user id). */
+export async function getEscalationUsers(): Promise<EscalationUsersResult> {
+  return readEscalationUsers("v1/crm/directory/users");
+}
+
+/**
+ * Server-side NAME search of the tenant's users (2+ characters), for a picker whose plain list is
+ * `truncated`. Reaches people the bounded list leaves out; `truncated` is true when the match list
+ * itself hit its cap, i.e. the query should be narrowed.
+ */
+export async function searchEscalationUsers(query: string): Promise<EscalationUsersResult> {
+  return readEscalationUsers(`v1/crm/directory/users?q=${encodeURIComponent(query.trim())}`);
+}
+
 export async function createTaskEscalationRule(rule: TaskEscalationRule): Promise<void> {
   const res = await browserFetch("v1/crm/task-escalation-rules", {
     method: "POST",
-    body: JSON.stringify(rule),
+    body: JSON.stringify(taskEscalationRuleBody(rule)),
   });
-  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  if (!res.ok) await throwRuleFailure(res);
 }
 
 export async function updateTaskEscalationRule(id: string, rule: TaskEscalationRule): Promise<void> {
-  const res = await browserFetch(`v1/crm/task-escalation-rules/${id}`, {
+  const res = await browserFetch(`v1/crm/task-escalation-rules/${encodeURIComponent(id)}`, {
     method: "PUT",
-    body: JSON.stringify(rule),
+    body: JSON.stringify(taskEscalationRuleBody(rule)),
   });
-  if (!res.ok) throw new UserFacingError(await errorMessageFromResponse(res));
+  if (!res.ok) await throwRuleFailure(res);
 }
 
 export async function deleteTaskEscalationRule(id: string): Promise<void> {
@@ -349,7 +419,7 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
     // when the API sent no name. Keep the id separate: `owner` is a display
     // name ONLY (owner/actorName); `ownerId` carries the raw id for an optional
     // name lookup, and is never rendered verbatim.
-    const ownerName = optStr(r.owner) ?? optStr(r.actorName);
+    const ownerName = optStr(r.owner) ?? optStr(r.ownerName) ?? optStr(r.actorName);
     const ownerId = optStr(r.ownerId);
     out.push({
       id,
@@ -365,19 +435,60 @@ export function normaliseOverdueTasks(raw: unknown, now: number = Date.now()): O
   return out.sort((a, b) => b.ageMinutes - a.ageMinutes);
 }
 
-export async function getOverdueTasks(): Promise<LoaderResult<OverdueTask[]>> {
+/** Rows per page on the overdue-task monitor (the server allows up to 200). */
+export const OVERDUE_PAGE_SIZE = 50;
+
+export interface OverduePage {
+  tasks: OverdueTask[];
+  /** The REAL number of overdue tasks (meta.total), not the length of this page. */
+  total: number;
+}
+
+/**
+ * One page of overdue open tasks, oldest due date first, plus the true total.
+ *
+ * GAP-CRM-TASK-ESCALATION-02: the list used to fetch a single capped page (limit=50, no offset)
+ * and page it client-side, so tasks past the 50th were unreachable and the headline count
+ * understated a big backlog. It now asks the server for the page the reader is on and reports
+ * meta.total, so "Showing 51-100 of 214" is true.
+ * GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route. The old query
+ * (/v1/crm/activities?type=task&overdue=true) 400'd because that route requires
+ * subjectType+subjectId, so the alerts list never loaded.
+ */
+export async function getOverdueTaskPage(
+  opts: { limit?: number; offset?: number } = {},
+): Promise<LoaderResult<OverduePage>> {
+  const limit = Math.min(Math.max(Math.trunc(opts.limit ?? OVERDUE_PAGE_SIZE), 1), 200);
+  const offset = Math.max(Math.trunc(opts.offset ?? 0), 0);
   try {
-    // GAP-CRM-TASK-ESCALATION-02: cap the request so the alert table can't grow
-    // unbounded. The worst-aged sort is applied server-side (overdue=true) and
-    // re-applied here; 50 is the display cap the UI pages against.
-    // GAP-CRM-TASK-ESCALATION-06: the dedicated overdue-tasks route. The old
-    // query (/v1/crm/activities?type=task&overdue=true) 400'd because that
-    // route requires subjectType+subjectId, so the alerts list never loaded.
-    const res = await browserFetch("v1/crm/activities/overdue-tasks?limit=50");
-    if (!res.ok) return { data: [], source: "error" };
-    return { data: normaliseOverdueTasks(await res.json()), source: "api" };
+    const res = await browserFetch(`v1/crm/activities/overdue-tasks?limit=${limit}&offset=${offset}`);
+    if (!res.ok) return { data: { tasks: [], total: 0 }, source: "error" };
+    const raw: unknown = await res.json();
+    const tasks = normaliseOverdueTasks(raw);
+    const metaTotal =
+      raw && typeof raw === "object" ? numOrNull((raw as { meta?: { total?: unknown } }).meta?.total) : null;
+    return { data: { tasks, total: metaTotal !== null && metaTotal >= 0 ? metaTotal : tasks.length }, source: "api" };
   } catch {
-    return { data: [], source: "error" };
+    return { data: { tasks: [], total: 0 }, source: "error" };
+  }
+}
+
+/**
+ * How many tasks are overdue by AT LEAST `minAgeMinutes` right now - what a rule with that
+ * threshold would match (GAP-CRM-TASK-ESCALATION-01). Asks the server to count (limit=1,
+ * meta.total) with the same arithmetic the escalation scheduler uses, rather than counting a
+ * capped page here.
+ */
+export async function getOverdueMatchCount(minAgeMinutes: number): Promise<LoaderResult<number>> {
+  const minutes = Math.max(Math.trunc(minAgeMinutes), 0);
+  try {
+    const res = await browserFetch(`v1/crm/activities/overdue-tasks?limit=1&offset=0&minAgeMinutes=${minutes}`);
+    if (!res.ok) return { data: 0, source: "error" };
+    const raw: unknown = await res.json();
+    const total = raw && typeof raw === "object" ? numOrNull((raw as { meta?: { total?: unknown } }).meta?.total) : null;
+    return total === null ? { data: 0, source: "error" } : { data: total, source: "api" };
+  } catch {
+    return { data: 0, source: "error" };
   }
 }
 
@@ -755,6 +866,10 @@ export interface NextAction360 {
 export interface Consent360 {
   marketing: boolean | null;
   updatedAt?: string;
+  /** DPDP: what the consent was given for (marketing / transactional / service_updates / research). */
+  purpose?: string;
+  /** DPDP: the channel/source it was captured through (web_form / email / phone / in_person / import). */
+  channel?: string;
 }
 /** Honest external stub: counts are null when the source isn't wired live. */
 export interface External360 {
@@ -928,7 +1043,13 @@ export function normaliseCampaignActivity360(raw: unknown): CampaignActivity360 
 }
 
 export function normalise360(raw: unknown): Customer360 {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const outer = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // crm-service answers both 360 endpoints as `{ data: { ... } }`; reading the
+  // top level of that envelope found no activities, deals, consent or score on a
+  // live response. Unwrap it (a bare payload, as the unit fixtures use, still works).
+  const r = (
+    outer.data && typeof outer.data === "object" && !Array.isArray(outer.data) ? outer.data : outer
+  ) as Record<string, unknown>;
   const consentRaw = r.consent && typeof r.consent === "object" ? (r.consent as Record<string, unknown>) : null;
   return {
     activities: normaliseActivities(r.activities),
@@ -946,8 +1067,19 @@ export function normalise360(raw: unknown): Customer360 {
     addresses: normaliseAddresses(r.addresses),
     consent: consentRaw
       ? {
-          marketing: typeof consentRaw.marketing === "boolean" ? consentRaw.marketing : null,
-          ...(optStr(consentRaw.updatedAt) ? { updatedAt: str(consentRaw.updatedAt) } : {}),
+          // The contact 360 sends `marketingConsent` / `consentDate` (+ purpose,
+          // channel, updatedAt); `marketing` / `updatedAt` are the older names.
+          marketing:
+            typeof consentRaw.marketing === "boolean"
+              ? consentRaw.marketing
+              : typeof consentRaw.marketingConsent === "boolean"
+                ? consentRaw.marketingConsent
+                : null,
+          ...(optStr(consentRaw.updatedAt ?? consentRaw.consentDate)
+            ? { updatedAt: str(consentRaw.updatedAt ?? consentRaw.consentDate) }
+            : {}),
+          ...(optStr(consentRaw.purpose) ? { purpose: str(consentRaw.purpose) } : {}),
+          ...(optStr(consentRaw.channel) ? { channel: str(consentRaw.channel) } : {}),
         }
       : null,
     score: numOrNull(r.score),

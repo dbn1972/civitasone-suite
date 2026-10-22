@@ -83,6 +83,58 @@ export function buildScoreFn(type: ScoreFnType, params: Record<string, unknown>)
   }
 }
 
+/**
+ * GAP-CRM-LEAD-SCORING-03: the lead attributes a rule can actually score on.
+ *
+ * This is the scorer's whole input (consumer.ts recalculateScore builds the attribute
+ * map from exactly these crm.contacts columns via leadAttributesFromRow), so a rule on
+ * any other attribute would be scored against `undefined` on every lead and never
+ * contribute real signal. The validator rejects such a rule at save time and the GET
+ * advertises this list so the editor offers only real fields. Custom fields are NOT
+ * scoreable today (they are not part of the scoring input) - opening this list to
+ * them is a product decision, see the gap ledger.
+ */
+export const SCORE_ATTRIBUTE_COLUMNS = {
+  leadSource: "lead_source",
+  company: "company",
+  lastActivityAt: "last_activity_at",
+  email: "email",
+  phone: "phone",
+  leadStatus: "lead_status",
+  city: "city",
+  designation: "designation",
+} as const;
+export type ScoreableLeadAttribute = keyof typeof SCORE_ATTRIBUTE_COLUMNS;
+export const SCOREABLE_LEAD_ATTRIBUTES = Object.keys(SCORE_ATTRIBUTE_COLUMNS) as ScoreableLeadAttribute[];
+
+export function isScoreableAttribute(attribute: string): attribute is ScoreableLeadAttribute {
+  return Object.prototype.hasOwnProperty.call(SCORE_ATTRIBUTE_COLUMNS, attribute);
+}
+
+/** crm.contacts row (snake_case columns) -> the attribute map the scorer evaluates. */
+export function leadAttributesFromRow(row: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const attr of SCOREABLE_LEAD_ATTRIBUTES) out[attr] = row[SCORE_ATTRIBUTE_COLUMNS[attr]];
+  return out;
+}
+
+/**
+ * The rule set a PUT would leave behind. PUT is an additive upsert by (tenant, attribute):
+ * a proposed rule replaces the stored rule for its attribute and every stored rule the
+ * proposal omits is kept as it is. Proposed entries apply in order, so a later entry wins
+ * over an earlier one with the same attribute (exactly like the sequential upserts).
+ * The dry-run preview scores THIS set, so its numbers describe the rules Save will leave behind.
+ */
+export function overlayRules(
+  stored: readonly StoredScoreRule[],
+  proposed: readonly StoredScoreRule[],
+): StoredScoreRule[] {
+  const byAttribute = new Map<string, StoredScoreRule>();
+  for (const r of stored) byAttribute.set(r.attribute, r);
+  for (const r of proposed) byAttribute.set(r.attribute, r);
+  return [...byAttribute.values()];
+}
+
 /** Turn stored rules into executable ScoringRules, dropping disabled ones. */
 export function toScoringRules(stored: readonly StoredScoreRule[]): ScoringRule[] {
   return stored

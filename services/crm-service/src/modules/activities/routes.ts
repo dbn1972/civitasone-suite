@@ -9,8 +9,13 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { isActiveTenantUser } from "../../shared/identity-client.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// GAP-CRM-TASK-ESCALATION-03: the overdue-task monitor is also open to tenant_admin. The web
+// CRM layout already admits tenant_admin to /crm/overdue-tasks, and the sibling escalation-rule
+// and service-request reads list it, so without this the page loaded and then failed on 403.
+const OVERDUE_READ_ROLES = [...CRM_ROLES, "tenant_admin"];
 // Who may reassign a task they do not own (crm-service has no separate manager role: the
 // admin tier is the same one that manages assignment/escalation rules).
 const TASK_MANAGER_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
@@ -53,10 +58,13 @@ export async function activityRoutes(app: FastifyInstance): Promise<void> {
   // static path so it never collides with /:id routes.
   app.get("/v1/crm/activities/overdue-tasks", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, OVERDUE_READ_ROLES);
     const q = overdueTasksQuery.parse(req.query ?? {});
-    const { rows, total } = await repo.listOverdueTasks(ctx.tenantId, q.limit, q.offset);
-    sendValidated(reply, overdueTasksListSchema, { data: rows, meta: { total, limit: q.limit, offset: q.offset } });
+    const { rows, total } = await repo.listOverdueTasks(ctx.tenantId, q.limit, q.offset, q.minAgeMinutes);
+    // GAP-CRM-TASK-ESCALATION-02: owner ids -> display names for every viewer (fail-open).
+    const names = await resolveUserNames(ctx.tenantId, rows.map((r) => r["ownerId"] as string));
+    const data = rows.map((r) => ({ ...r, ownerName: names.get(r["ownerId"] as string) ?? null }));
+    sendValidated(reply, overdueTasksListSchema, { data, meta: { total, limit: q.limit, offset: q.offset } });
   });
 
   app.patch("/v1/crm/activities/:id", async (req, reply) => {

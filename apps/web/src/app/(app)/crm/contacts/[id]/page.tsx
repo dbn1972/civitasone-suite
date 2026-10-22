@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, EmptyState, maskPhone, maskEmail } from "../../../../_components/ds";
+import { PageHeader, EmptyState, Masked } from "../../../../_components/ds";
 import { LoadErrorState } from "../../../../_components/ds/LoadErrorState";
 import { getContactById } from "../../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_VERIFY_ROLES, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { displayMaskedEmail, displayMaskedPhone } from "@/lib/crm/maskedPii";
 import { LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/crm/leadQualification";
 import { ContactDetailActions } from "./ContactDetailActions";
 import { QualifyPanel } from "../../../../_components/crm/QualifyPanel";
@@ -20,6 +21,7 @@ import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
 import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
 export default async function Page({ params }: { params: { id: string } }) {
+  const t = await getTranslations("crmContactDetailPage");
   const { data: contact, source, status, errorMessage } = await getContactById(params.id);
 
   if (!contact) {
@@ -28,11 +30,10 @@ export default async function Page({ params }: { params: { id: string } }) {
     // Only a genuine 404 is "not found"; anything else is a transient failure
     // that must offer Retry (and a 403 its own access-restricted copy).
     if (source === "error" && status !== 404) {
-      const tErr = await getTranslations("crmContactDetailPage");
       return (
         <>
-          <PageHeader title={tErr("title")} back="/crm/contacts" backLabel={tErr("backLabel")} />
-          <LoadErrorState result={{ status, errorMessage }} area={tErr("loadArea")} backHref="/crm/contacts" backLabel={tErr("backLabel")} />
+          <PageHeader title={t("title")} back="/crm/contacts" backLabel={t("backLabel")} />
+          <LoadErrorState result={{ status, errorMessage }} area={t("loadArea")} backHref="/crm/contacts" backLabel={t("backLabel")} />
         </>
       );
     }
@@ -44,8 +45,11 @@ export default async function Page({ params }: { params: { id: string } }) {
     );
   }
 
-  // GAP-CRM-CONTACTS-DETAIL-02: DPDP — mask phone/email unless the role may
-  // read PII. Computed server-side from the session.
+  // GAP-CRM-CONTACTS-DETAIL-02: DPDP - phone/email are masked for EVERY role on
+  // the server, so the clear value is never in the page props or the DOM. A role
+  // in CRM_PII_READ_ROLES gets a Reveal control that calls the audited reveal
+  // endpoint (reason required, one pii_reveal audit event per reveal); any other
+  // role has no reveal control at all.
   const canViewPii = hasAnyRole(getSessionRoles(), CRM_PII_READ_ROLES);
   // Document verify/reject is an approval control restricted to CRM admins
   // (GAP-CRM-ACCOUNTS-DETAIL-02); the server stays the authority.
@@ -54,8 +58,8 @@ export default async function Page({ params }: { params: { id: string } }) {
   // DELETE requires crm_admin|super_admin). Hide the control from roles that
   // would only get a 403 after typing a deletion reason; server stays authority.
   const canDelete = hasAnyRole(getSessionRoles(), CRM_ADMIN_ROLES);
-  const phoneDisplay = contact.phone ? (canViewPii ? contact.phone : maskPhone(contact.phone)) : null;
-  const emailDisplay = contact.email ? (canViewPii ? contact.email : maskEmail(contact.email)) : null;
+  const phoneMasked = displayMaskedPhone(contact.phone);
+  const emailMasked = displayMaskedEmail(contact.email);
 
   // GAP-CRM-CONTACTS-DETAIL-07: humanize the raw enum values (hot/high/…) so the
   // detail page reads like the forms ("Hot", "High") rather than lower-case enums.
@@ -84,8 +88,26 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">Name</div><div className="v">{contact.name}</div></div>
               {contact.designation && <div className="fld"><div className="l">Designation</div><div className="v">{contact.designation}</div></div>}
               {contact.organization && <div className="fld"><div className="l">Organisation</div><div className="v">{contact.organization}</div></div>}
-              {phoneDisplay && <div className="fld"><div className="l">Phone</div><div className="v">{phoneDisplay}</div></div>}
-              {emailDisplay && <div className="fld"><div className="l">Email</div><div className="v">{emailDisplay}</div></div>}
+              {phoneMasked && (
+                <div className="fld"><div className="l">Phone</div><div className="v">
+                  <Masked
+                    kind="phone"
+                    value={phoneMasked}
+                    ariaLabel={t("maskedPhoneAria")}
+                    onReveal={{ canReveal: canViewPii, resourceType: "contact", resourceId: contact.id, field: "phone", label: t("fieldPhone") }}
+                  />
+                </div></div>
+              )}
+              {emailMasked && (
+                <div className="fld"><div className="l">Email</div><div className="v">
+                  <Masked
+                    kind="email"
+                    value={emailMasked}
+                    ariaLabel={t("maskedEmailAria")}
+                    onReveal={{ canReveal: canViewPii, resourceType: "contact", resourceId: contact.id, field: "email", label: t("fieldEmail") }}
+                  />
+                </div></div>
+              )}
               {contact.city && <div className="fld"><div className="l">City</div><div className="v">{contact.city}</div></div>}
               {/* GAP-CRM-CONTACTS-DETAIL-07: show the canonical label ("Disqualified"),
                   not the raw enum ("disqualified"), matching the list and forms. */}
@@ -103,8 +125,8 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="card">
               <div className="card-h"><h3>Classification &amp; segmentation</h3></div>
               <div className="pad" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {classificationTags.map((t) => (
-                  <span key={t.label} className="pill info">{t.label}: {t.value}</span>
+                {classificationTags.map((tag) => (
+                  <span key={tag.label} className="pill info">{tag.label}: {tag.value}</span>
                 ))}
               </div>
             </div>
@@ -135,7 +157,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             <div className="card">
               <div className="card-h"><h3>Tags</h3></div>
               <div className="pad" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {contact.tags.map((t) => <span key={t} className="pill info">{t}</span>)}
+                {contact.tags.map((tag) => <span key={tag} className="pill info">{tag}</span>)}
               </div>
             </div>
           )}

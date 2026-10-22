@@ -22,14 +22,17 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { Button, ConfirmDialog, EmptyState, ErrorState, StatusPill } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EmptyState, ErrorState, PageHeader, StatusPill } from "../../../../_components/ds";
+import { MaskedReveal } from "../../../../_components/ds/MaskedReveal";
 import { formatIndianDateTime } from "@/lib/formatters";
 import {
   advanceStage,
   recordKyc,
   getOnboardingCase,
-  getOnboardingLookups,
+  getOnboardingCaseLookups,
   resolveCaseNames,
+  shortRef,
+  isMaskedKycReference,
   allowedNextKycStatuses,
   nextStageOptions,
   isOnboardingStage,
@@ -59,7 +62,26 @@ function fmtDate(iso: string | null): string {
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
-export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; canApproveKyc?: boolean }) {
+/**
+ * GAP-CRM-ONBOARDING-DETAIL-01: the page header is rendered here (not by the server
+ * page) so its h1 can name the customer once the case has loaded. `title` is the
+ * fallback / subtitle ("Onboarding case"), already translated by the server page.
+ */
+export interface OnboardingDetailHeader {
+  title: string;
+  backHref: string;
+  backLabel: string;
+}
+
+export function OnboardingDetail({
+  id,
+  canApproveKyc = false,
+  header,
+}: {
+  id: string;
+  canApproveKyc?: boolean;
+  header?: OnboardingDetailHeader;
+}) {
   const t = useTranslations("crmOnboardingDetail");
   const formError = useFormError("onboarding case");
   const stageText = useCallback((s: string): string => (isOnboardingStage(s) ? t(`stage_${s}`) : s), [t]);
@@ -95,6 +117,24 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     };
   }, []);
 
+  // The deal/account NAMES of this case. They do not change when the case advances, so they
+  // are resolved once per page view and reused by every reload and poll retry. Only a
+  // complete answer is final (a deal or account that is gone is then known to be unnamed);
+  // after a failed request the names found so far are kept and the lookup is tried again.
+  const namesRef = useRef<{ key: string; lookups: OnboardingLookups; complete: boolean } | null>(null);
+  const lookupsFor = useCallback(async (c: OnboardingCase): Promise<OnboardingLookups> => {
+    const key = `${c.dealId}|${c.accountId ?? ""}`;
+    const prev = namesRef.current && namesRef.current.key === key ? namesRef.current : null;
+    if (prev?.complete) return prev.lookups;
+    const { lookups, complete } = await getOnboardingCaseLookups(c);
+    const merged: OnboardingLookups = {
+      dealNames: { ...prev?.lookups.dealNames, ...lookups.dealNames },
+      accountNames: { ...prev?.lookups.accountNames, ...lookups.accountNames },
+    };
+    namesRef.current = { key, lookups: merged, complete };
+    return merged;
+  }, []);
+
   const load = useCallback(
     (signal?: { alive: boolean }) => {
       setSource("loading");
@@ -102,16 +142,15 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
       // the case so the customer being onboarded is named, not shown as a raw
       // UUID. The onboarding module stores only opaque ids and never joins to
       // the deals/accounts modules (L2 isolation), so names are resolved in the
-      // web layer from the list endpoints; a failed lookup just leaves names null.
-      return Promise.all([getOnboardingCase(id), getOnboardingLookups()]).then(
-        ([{ data, source: s }, lookups]: [{ data: OnboardingCase | null; source: OnbSource }, OnboardingLookups]) => {
-          if (signal && !signal.alive) return;
-          setItem(data ? resolveCaseNames([data], lookups)[0] ?? data : null);
-          setSource(s);
-        },
-      );
+      // web layer by id (deal by id, account by id); a failed lookup just leaves names null.
+      return getOnboardingCase(id).then(async ({ data, source: s }: { data: OnboardingCase | null; source: OnbSource }) => {
+        const lookups: OnboardingLookups = data ? await lookupsFor(data) : { dealNames: {}, accountNames: {} };
+        if (signal && !signal.alive) return;
+        setItem(data ? resolveCaseNames([data], lookups)[0] ?? data : null);
+        setSource(s);
+      });
     },
-    [id],
+    [id, lookupsFor],
   );
 
   useEffect(() => {
@@ -125,6 +164,18 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
   const reload = useCallback(() => {
     void load(mountedRef.current);
   }, [load]);
+
+  // GAP-CRM-ONBOARDING-DETAIL-01: the browser tab names the customer too, not just the h1.
+  const tabName = item ? (item.dealName ?? item.accountName ?? null) : null;
+  const tabTitle = header?.title;
+  useEffect(() => {
+    if (!tabTitle || !tabName || typeof document === "undefined") return;
+    const prev = document.title;
+    document.title = `${tabName} · ${tabTitle}`;
+    return () => {
+      document.title = prev;
+    };
+  }, [tabName, tabTitle]);
 
   /**
    * GAP-CRM-ONBOARDING-DETAIL-06: an accepted (HTTP 202) mutation is applied
@@ -140,7 +191,8 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
       for (let i = 0; i < tries; i++) {
         await new Promise((r) => setTimeout(r, delayMs));
         if (!mountedRef.current.alive) return;
-        const [{ data, source: s }, lookups] = await Promise.all([getOnboardingCase(id), getOnboardingLookups()]);
+        const { data, source: s } = await getOnboardingCase(id);
+        const lookups: OnboardingLookups = data ? await lookupsFor(data) : { dealNames: {}, accountNames: {} };
         if (!mountedRef.current.alive) return;
         const resolved = data ? resolveCaseNames([data], lookups)[0] ?? data : null;
         setItem(resolved);
@@ -148,7 +200,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
         if (resolved && resolved.version > priorVersion) return; // change landed
       }
     },
-    [id],
+    [id, lookupsFor],
   );
 
   const isError = source === "error";
@@ -301,11 +353,27 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     [item, stageTarget, selectedOption, reload, t, stageText, formError, pollUntilChanged],
   );
 
+  // GAP-CRM-ONBOARDING-DETAIL-01: the page h1 names the customer once the case has loaded
+  // (deal name, else account name); until then - and when the case cannot be loaded - it
+  // keeps the generic "Onboarding case" title.
+  const customerName = item ? (item.dealName ?? item.accountName ?? null) : null;
+  const headerEl = header ? (
+    <PageHeader
+      title={customerName ?? header.title}
+      {...(customerName ? { subtitle: header.title } : {})}
+      back={header.backHref}
+      backLabel={header.backLabel}
+    />
+  ) : null;
+
   if (isLoading) {
     return (
-      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
-        {t("loading")}
-      </p>
+      <>
+        {headerEl}
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
+          {t("loading")}
+        </p>
+      </>
     );
   }
 
@@ -317,6 +385,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
     if (isError) {
       return (
         <>
+          {headerEl}
           <DataSourceBadge source="error" />
           <ErrorState
             error={{
@@ -331,26 +400,30 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
       );
     }
     return (
-      <EmptyState
-        icon="📋"
-        title={t("notFoundTitle")}
-        message={t("notFoundMessage")}
-        action={
-          <Link href="/crm/onboarding" className="btn ghost">
-            {t("backToOnboarding")}
-          </Link>
-        }
-      />
+      <>
+        {headerEl}
+        <EmptyState
+          icon="📋"
+          title={t("notFoundTitle")}
+          message={t("notFoundMessage")}
+          action={
+            <Link href="/crm/onboarding" className="btn ghost">
+              {t("backToOnboarding")}
+            </Link>
+          }
+        />
+      </>
     );
   }
 
   const terminal = stage ? isTerminalStage(stage) : false;
-  // GAP-CRM-ONBOARDING-DETAIL-01: name the customer being onboarded. Prefer the
-  // deal name, fall back to the account name; the opaque id is kept only as a
-  // small muted "Ref" for support lookups, never as the primary heading.
-  const customerName = item.dealName ?? item.accountName ?? null;
+  // GAP-CRM-ONBOARDING-DETAIL-01: the customer being onboarded is named in the page h1
+  // (above) and the card heading. The opaque id is kept only as a short, muted "Ref"
+  // for support lookups - never as a heading or as the Account/Deal value.
 
   return (
+    <>
+    {headerEl}
     <div style={{ display: "grid", gap: 16 }}>
       {/* GAP-CRM-ONBOARDING-DETAIL-06: while an accepted (202) change is still
           settling, show a pending banner and a manual Refresh fallback so a
@@ -372,7 +445,8 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
         </div>
         <div className="pad" style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
           <Field label={t("ref")}>
-            <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>{item.id}</span>
+            {/* Short ref only (formatInternalRef guards a missing id): the full UUID is in the URL. */}
+            <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--muted)" }}>{shortRef(item.id)}</span>
           </Field>
           <Field label={t("stage")}>
             <StagePill stage={item.stage} label={stageText(item.stage)} />
@@ -401,9 +475,23 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
                 (last 4) for everyone except the KYC approver roles and sends
                 the clear value only to approvers, so the page renders what the
                 server returned — no client-side masking. */}
-            <span style={{ fontFamily: "monospace" }}>
-              {item.kycReference ?? "—"}
-            </span>
+            {/* GAP-CRM-ONBOARDING-DETAIL-05: when the server hands an approver a MASKED reference
+                (the audited-reveal policy), offer the audited reveal; reveal needs a reason, is
+                written to the audit trail by the server, and re-masks itself. Today the server
+                sends approvers the clear value, in which case there is nothing to reveal. */}
+            {item.kycReference !== null && canApproveKyc && isMaskedKycReference(item.kycReference) ? (
+              <MaskedReveal
+                maskedText={item.kycReference}
+                resourceType="onboarding"
+                resourceId={item.id}
+                field="kycReference"
+                label={t("kycReference")}
+              />
+            ) : (
+              <span style={{ fontFamily: "monospace" }}>
+                {item.kycReference ?? "—"}
+              </span>
+            )}
           </Field>
           <Field label={t("kycVerified")}>{fmtDate(item.kycVerifiedAt)}</Field>
           <Field label={t("completed")}>{fmtDate(item.completedAt)}</Field>
@@ -600,6 +688,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
         onConfirm={(reason) => void applyStage(reason)}
       />
     </div>
+    </>
   );
 }
 

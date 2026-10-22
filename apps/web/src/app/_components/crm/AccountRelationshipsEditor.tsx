@@ -5,10 +5,17 @@
  * resulting web. Adding a relationship needs a target account; existing links
  * are grouped by type and removed via ConfirmDialog. A failed load shows the
  * saved-info badge, never an empty web presented as fact.
+ *
+ * The related account is picked through a server-side search (EntityPicker over
+ * GET /v1/crm/accounts?search=), not from a pre-loaded list, so it works for a
+ * tenant with more accounts than the capped list endpoint returns
+ * (GAP-CRM-ACCOUNTS-DETAIL-01).
  */
-import { useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
-import { ConfirmDialog, EmptyState, Button } from "../ds";
+import { ConfirmDialog, EmptyState, Button, EntityPicker, type EntityOption } from "../ds";
+import { resolveCrmAccounts, searchCrmAccounts } from "@/lib/entityAdapters/crmAccount";
 import {
   getAccountRelationships,
   createAccountRelationship,
@@ -23,18 +30,12 @@ import {
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
-interface AccountOption {
-  id: string;
-  name: string;
-}
-
 interface Props {
   accountId: string;
-  /** Other accounts for the target picker (self is filtered out). */
-  accountOptions?: AccountOption[];
 }
 
-export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: Props) {
+export function AccountRelationshipsEditor({ accountId }: Props) {
+  const t = useTranslations("crmAccountRelationships");
   const [rels, setRels] = useState<AccountRelationship[]>([]);
   const [source, setSource] = useState<AaSource | "loading">("loading");
   const [relType, setRelType] = useState<RelationshipType>("subsidiary");
@@ -45,11 +46,15 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const headingId = useId();
 
-  const options = useMemo(() => accountOptions.filter((a) => a.id !== accountId), [accountOptions, accountId]);
-  const nameOf = useMemo(() => {
-    const m = new Map(accountOptions.map((a) => [a.id, a.name]));
-    return (id: string) => m.get(id) ?? id;
-  }, [accountOptions]);
+  // An account cannot relate to itself, so it is hidden from the picker; the
+  // server rejects a self-loop as well.
+  const searchAccounts = useCallback(
+    (query: string, signal: AbortSignal): Promise<EntityOption[]> =>
+      searchCrmAccounts(query, signal, { excludeIds: [accountId], strict: true }),
+    [accountId],
+  );
+  /** A neutral label for a link whose target name was not returned -- never the raw id. */
+  const nameOf = (r: AccountRelationship) => r.toAccountName ?? t("unnamedAccount");
 
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
@@ -125,27 +130,22 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
           <div>
             <label htmlFor={`${headingId}-type`} style={labelStyle}>Relationship</label>
             <select id={`${headingId}-type`} value={relType} onChange={(e) => setRelType(e.target.value as RelationshipType)} style={inputStyle}>
-              {RELATIONSHIP_TYPES.map((t) => <option key={t} value={t}>{RELATIONSHIP_TYPE_LABELS[t]}</option>)}
+              {RELATIONSHIP_TYPES.map((type) => <option key={type} value={type}>{RELATIONSHIP_TYPE_LABELS[type]}</option>)}
             </select>
           </div>
           <div>
             <label htmlFor={`${headingId}-to`} style={labelStyle}>Related account</label>
-            {options.length > 0 ? (
-              <select id={`${headingId}-to`} value={toAccountId} onChange={(e) => setToAccountId(e.target.value)} aria-required="true" style={inputStyle}>
-                <option value="">— Choose an account —</option>
-                {options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-            ) : (
-              <input
-                id={`${headingId}-to`}
-                value={toAccountId}
-                onChange={(e) => setToAccountId(e.target.value)}
-                placeholder="Related account id"
-                aria-required="true"
-                aria-invalid={toAccountId.trim() ? undefined : true}
-                style={inputStyle}
-              />
-            )}
+            <EntityPicker
+              id={`${headingId}-to`}
+              value={toAccountId || null}
+              onChange={(next) => setToAccountId(typeof next === "string" ? next : "")}
+              search={searchAccounts}
+              resolve={resolveCrmAccounts}
+              placeholder={t("searchPlaceholder")}
+              noResultsText={t("noMatches")}
+              searchingText={t("searching")}
+              searchErrorText={t("searchError")}
+            />
           </div>
           <div>
             <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>
@@ -167,17 +167,17 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
             <EmptyState icon="🕸️" title="No relationships yet" message="Link this account to a parent, subsidiary, branch or partner above." />
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
-              {RELATIONSHIP_TYPES.filter((t) => grouped.has(t)).map((t) => (
-                <div key={t}>
-                  <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>{RELATIONSHIP_TYPE_LABELS[t]}</h4>
+              {RELATIONSHIP_TYPES.filter((type) => grouped.has(type)).map((type) => (
+                <div key={type}>
+                  <h4 style={{ margin: "0 0 6px", fontSize: 13 }}>{RELATIONSHIP_TYPE_LABELS[type]}</h4>
                   <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-                    {grouped.get(t)!.map((r) => (
+                    {grouped.get(type)!.map((r) => (
                       <li key={r.id ?? r.toAccountId} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                        <a href={`/crm/accounts/${r.toAccountId}`}>{r.toAccountName ?? nameOf(r.toAccountId)}</a>
+                        <a href={`/crm/accounts/${encodeURIComponent(r.toAccountId)}`}>{nameOf(r)}</a>
                         <Button
                           type="button"
                           variant="danger"
-                          aria-label={`Remove ${RELATIONSHIP_TYPE_LABELS[t]} link to ${r.toAccountName ?? nameOf(r.toAccountId)}`}
+                          aria-label={`Remove ${RELATIONSHIP_TYPE_LABELS[type]} link to ${nameOf(r)}`}
                           disabled={busy || !r.id}
                           onClick={() => r.id && setConfirmId(r.id)}
                           style={{ minHeight: 36 }}

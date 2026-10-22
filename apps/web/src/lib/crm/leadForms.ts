@@ -10,8 +10,10 @@
  * Mutations are CQRS (202 Accepted); create additionally returns the minted
  * public form key so the caller can show the embed URL immediately.
  *
- * NOTE: crm-service exposes no key-rotation endpoint today, so this client
- * intentionally offers no rotateKey() — see the fixer report decision.
+ * Key rotation (GAP-CRM-LEAD-FORMS-01) has its own explicit endpoint,
+ * POST /v1/crm/lead-capture-forms/:id/rotate-key: it replaces the key in place, so
+ * the form keeps its id (and the attribution on leads it already captured) while the
+ * OLD key stops working at once. The new key is returned once.
  */
 import { z } from "zod";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
@@ -75,6 +77,27 @@ export async function updateLeadForm(id: string, patch: LeadFormUpdate): Promise
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+}
+
+/**
+ * Rotate a form's public key. The caller MUST have confirmed with the admin first:
+ * every page that embeds the old key stops working immediately. Returns the new key
+ * when the service sent it (it is shown once, like on create).
+ */
+export async function rotateLeadFormKey(id: string): Promise<CreateLeadFormResult> {
+  const res = await browserFetch(`v1/crm/lead-capture-forms/${encodeURIComponent(id)}/rotate-key`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  let formKey: string | undefined;
+  try {
+    const parsed = createAcceptedSchema.parse(await res.json());
+    formKey = typeof parsed.formKey === "string" ? parsed.formKey : undefined;
+  } catch {
+    /* envelope shape tolerated -- the list reload shows the row */
+  }
+  return { formKey };
 }
 
 /** Pause (enabled=false) or resume (enabled=true) a form. */

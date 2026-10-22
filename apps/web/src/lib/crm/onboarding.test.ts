@@ -238,20 +238,81 @@ describe("onboarding HTTP client", () => {
   });
 
   // GAP-CRM-ONBOARDING-01 — deal/account name resolution for the list.
-  it("getOnboardingLookups builds id→name maps from the deals + accounts lists", async () => {
-    fetchMock
-      .mockResolvedValueOnce(res({ data: [{ id: "d1", name: "Acme renewal" }, { id: "d2", name: "Beta expansion" }] }))
-      .mockResolvedValueOnce(res({ data: [{ id: "a1", name: "Acme Corp" }] }));
-    const lk = await onb.getOnboardingLookups();
-    expect(lk.dealNames).toEqual({ d1: "Acme renewal", d2: "Beta expansion" });
-    expect(lk.accountNames).toEqual({ a1: "Acme Corp" });
-  });
-
   it("getOnboardingLookups degrades to empty maps when a lookup fails (names left to resolve to null)", async () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 500 })).mockRejectedValueOnce(new Error("network"));
-    const lk = await onb.getOnboardingLookups();
+    const lk = await onb.getOnboardingLookups([{ dealId: "d1", accountId: "a1" }]);
     expect(lk.dealNames).toEqual({});
     expect(lk.accountNames).toEqual({});
+  });
+
+  // Efficiency (rework): naming cases must not page the whole accounts list.
+  it("getOnboardingLookups(cases) names accounts AND deals by id, one request each (no list paging)", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.endsWith("/v1/crm/deals")) return res({ data: [{ id: "d1", name: "Acme renewal" }], pagination: { total: 1 } });
+      if (url.pathname.endsWith("/v1/crm/accounts")) return res({ data: [{ id: "a1", name: "Acme Corp" }] });
+      return res({}, { status: 404 });
+    });
+    const lk = await onb.getOnboardingLookups([{ dealId: "d1", accountId: "a1" }, { dealId: "d1", accountId: "gone" }, { dealId: "d-deleted", accountId: null }]);
+    expect(lk).toEqual({ dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } });
+    const callsTo = (suffix: string) => fetchMock.mock.calls.map((c) => new URL(String(c[0]), "http://localhost")).filter((u) => u.pathname.endsWith(suffix));
+    const accountCalls = callsTo("/v1/crm/accounts");
+    expect(accountCalls).toHaveLength(1); // the unknown account "gone" did not force a walk of the list
+    expect(accountCalls[0]!.searchParams.get("ids")).toBe("a1,gone");
+    expect(accountCalls[0]!.searchParams.has("offset")).toBe(false);
+    const dealCalls = callsTo("/v1/crm/deals");
+    expect(dealCalls).toHaveLength(1); // the deleted deal "d-deleted" did not force a walk of the list either
+    expect(dealCalls[0]!.searchParams.get("ids")).toBe("d1,d-deleted");
+    expect(dealCalls[0]!.searchParams.has("offset")).toBe(false);
+  });
+
+  it("getOnboardingCaseLookups names ONE case with the deal by id and the account by id - two requests, no list paging", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.endsWith("/v1/crm/deals/d1")) return res({ id: "d1", name: "Acme renewal", stage: "Won" });
+      if (url.pathname.endsWith("/v1/crm/accounts")) return res({ data: [{ id: "a1", name: "Acme Corp" }] });
+      return res({}, { status: 404 });
+    });
+    const r = await onb.getOnboardingCaseLookups({ dealId: "d1", accountId: "a1" });
+    expect(r).toEqual({ lookups: { dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } }, complete: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const urls = fetchMock.mock.calls.map((c) => new URL(String(c[0]), "http://localhost"));
+    expect(urls.some((u) => u.pathname.endsWith("/v1/crm/deals/d1"))).toBe(true);
+    expect(urls.some((u) => u.pathname.endsWith("/v1/crm/deals"))).toBe(false); // the deals LIST is never read
+    expect(urls.every((u) => !u.searchParams.has("offset"))).toBe(true);
+  });
+
+  it("getOnboardingCaseLookups: a deleted deal (404) and an inactive account are definitive - unnamed, complete", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.includes("/v1/crm/deals/")) return res({ code: "NOT_FOUND" }, { status: 404 });
+      return res({ data: [] });
+    });
+    expect(await onb.getOnboardingCaseLookups({ dealId: "d9", accountId: "a9" })).toEqual({
+      lookups: { dealNames: {}, accountNames: {} },
+      complete: true,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("getOnboardingCaseLookups: a failed request is reported as incomplete, keeping what the other request found", async () => {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname.includes("/v1/crm/deals/")) return res({}, { status: 500 });
+      return res({ data: [{ id: "a1", name: "Acme Corp" }] });
+    });
+    expect(await onb.getOnboardingCaseLookups({ dealId: "d1", accountId: "a1" })).toEqual({
+      lookups: { dealNames: {}, accountNames: { a1: "Acme Corp" } },
+      complete: false,
+    });
+  });
+
+  it("getOnboardingCaseLookups skips the request for an id the case does not have", async () => {
+    fetchMock.mockResolvedValue(res({ id: "d1", name: "Acme renewal" }));
+    const r = await onb.getOnboardingCaseLookups({ dealId: "d1", accountId: null });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r.lookups.dealNames).toEqual({ d1: "Acme renewal" });
+    expect(r.complete).toBe(true);
   });
 
   it("resolveCaseNames fills deal/account names and never leaves a UUID as a name", () => {
@@ -271,5 +332,116 @@ describe("onboarding HTTP client", () => {
     const [unresolved] = onb.resolveCaseNames([base], { dealNames: {}, accountNames: {} });
     expect(unresolved.dealName).toBeNull();
     expect(unresolved.accountName).toBeNull();
+  });
+});
+
+// GAP-CRM-ONBOARDING-01 / -DETAIL-01 (W2 crm cluster 07): the deal/account lookup must
+// respect the server's page cap. GET /v1/crm/accounts caps `limit` at 200 and answers a
+// larger one with a 400, so the old `?limit=500` lookup never resolved a single account
+// name in practice. The lookup now pages with the real page size until it has found the
+// deals/accounts of the cases being labelled.
+describe("getOnboardingLookups pages within the server cap (GAP-CRM-ONBOARDING-01)", () => {
+  const filler = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => ({ id: `${prefix}-${i}`, name: `${prefix} ${i}` }));
+  const wanted = [{ dealId: "d-wanted", accountId: "a-wanted" }];
+
+  /** Serve `deals`/`accounts` by their `offset`, like the real list routes. */
+  function serve(deals: Array<{ id: string; name: string }>, accounts: Array<{ id: string; name: string }>) {
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const limit = Number(url.searchParams.get("limit"));
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      if (limit > 200) return res({ code: "VALIDATION_FAILED" }, { status: 400 }); // the real accounts cap
+      const ids = url.searchParams.get("ids")?.split(","); // GET /v1/crm/accounts?ids= (lookup of known ids)
+      const all = (url.pathname.endsWith("/accounts") ? accounts : deals).filter((r) => !ids || ids.includes(r.id));
+      return res({ data: all.slice(offset, offset + limit), meta: { total: all.length } });
+    });
+  }
+  const urlsFor = (suffix: string) =>
+    fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => new URL(u, "http://localhost").pathname.endsWith(suffix));
+
+  it("never asks for more than 200 rows a page, so the accounts endpoint no longer 400s", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], [{ id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk).toEqual({ dealNames: { "d-wanted": "Acme renewal" }, accountNames: { "a-wanted": "Acme Corp" } });
+    for (const u of fetchMock.mock.calls.map((c) => String(c[0]))) expect(u).not.toMatch(/limit=(?:[3-9]\d\d|\d{4,})/);
+  });
+
+  it("finds an account deep in the list with one lookup by id, not by paging to it", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], [...filler("other", 450), { id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.accountNames["a-wanted"]).toBe("Acme Corp");
+    const calls = urlsFor("/accounts").map((u) => new URL(u, "http://localhost").searchParams);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.get("ids")).toBe("a-wanted");
+    expect(calls[0]!.has("offset")).toBe(false);
+  });
+
+  it("an account that is inactive or missing costs the same single lookup (it never walks the whole list)", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], filler("other", 450));
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.accountNames).toEqual({});
+    expect(urlsFor("/accounts")).toHaveLength(1);
+  });
+
+  it("finds a deal deep in the list with one lookup by id, wherever it sits (no paging to reach it)", async () => {
+    serve(filler("d", 450).concat([{ id: "d-wanted", name: "Acme renewal" }]), [{ id: "a-wanted", name: "Acme Corp" }]);
+    // d-wanted is the very last of 451 deals; the old lookup needed all three pages for it.
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.dealNames["d-wanted"]).toBe("Acme renewal");
+    const calls = urlsFor("/deals").map((u) => new URL(u, "http://localhost").searchParams);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.get("ids")).toBe("d-wanted");
+    expect(calls[0]!.has("offset")).toBe(false);
+    expect(urlsFor("/accounts")).toHaveLength(1);
+  });
+
+  it("a deal that is deleted, cancelled or missing costs the same single lookup (it never walks the whole list)", async () => {
+    // Deleted and cancelled deals are never listed, so d-wanted is absent from the 450 deals served.
+    serve(filler("d", 450), [{ id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.dealNames).toEqual({});
+    expect(lk.accountNames).toEqual({ "a-wanted": "Acme Corp" });
+    expect(urlsFor("/deals")).toHaveLength(1);
+  });
+
+  it("looks a long list of deals up 50 ids to a request", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({ id: `d-${i}`, name: `Deal ${i}` }));
+    serve(many, []);
+    const lk = await onb.getOnboardingLookups(many.map((d) => ({ dealId: d.id, accountId: null })));
+    expect(Object.keys(lk.dealNames)).toHaveLength(120);
+    expect(urlsFor("/deals")).toHaveLength(3); // 50 + 50 + 20
+  });
+
+  it("does not fetch a list at all when no case references it", async () => {
+    serve([], []);
+    const lk = await onb.getOnboardingLookups([{ dealId: "", accountId: null }]);
+    expect(lk).toEqual({ dealNames: {}, accountNames: {} });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves the name unresolved (null, never a UUID) when the account cannot be found", async () => {
+    serve([{ id: "d-wanted", name: "Acme renewal" }], filler("other", 3));
+    const lk = await onb.getOnboardingLookups(wanted);
+    const [c] = onb.resolveCaseNames(
+      [{ id: "c1", dealId: "d-wanted", accountId: "a-wanted", stage: "initiated", kycStatus: "pending", kycReference: null, kycVerifiedAt: null, completedAt: null, cancellationReason: null, createdAt: "", updatedAt: "", version: 1, accountName: null, dealName: null }],
+      lk,
+    );
+    expect(c!.dealName).toBe("Acme renewal");
+    expect(c!.accountName).toBeNull();
+  });
+});
+
+describe("onboarding display helpers (GAP-CRM-ONBOARDING-DETAIL-01 / -05)", () => {
+  it("shortRef shows only the first 8 characters, and a dash for a missing id", () => {
+    expect(onb.shortRef("3fa85f64-5717-4562-b3fc-2c963f66afa6")).toBe("3fa85f64");
+    expect(onb.shortRef(null)).toBe("—");
+    expect(onb.shortRef("")).toBe("—");
+  });
+
+  it("isMaskedKycReference recognises only the server-masked shape", () => {
+    expect(onb.isMaskedKycReference("••••7890")).toBe(true);
+    expect(onb.isMaskedKycReference("••••")).toBe(true);
+    expect(onb.isMaskedKycReference("KYCPROV-ABCD1234")).toBe(false);
+    expect(onb.isMaskedKycReference(null)).toBe(false);
   });
 });

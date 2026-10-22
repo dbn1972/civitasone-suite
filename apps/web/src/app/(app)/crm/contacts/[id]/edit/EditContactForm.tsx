@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { rupeesToMinorString } from "@/lib/money";
 import { saveClassification, type ClassificationPatch, type Temperature, type Priority, LEAD_STATUS_LABELS, type LeadStatus } from "@/lib/crm/leadQualification";
@@ -9,7 +9,7 @@ import { buildContactPatch, isEmptyPatch } from "@/lib/crm/contactPatch";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 import { ConsentField, type ConsentValue } from "../../../../../_components/crm/ConsentField";
 import { DuplicateCheckPanel } from "../../../../../_components/crm/DuplicateCheckPanel";
-import { duplicateCheck, parseFieldError, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
+import { duplicateCheck, parseFieldErrors, readJsonBody, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button, ConfirmDialog, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -130,6 +130,15 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
   // accountId; the label is resolved by the picker's resolve() on first render.
   const [accountId, setAccountId] = useState<string | null>(initial.accountId ?? null);
   const [accountLabel, setAccountLabel] = useState<string>(initial.organization ?? "");
+  // The picker's onChange hands back only an id, and resolve() runs only for ids the picker has not
+  // already seen, so re-pointing the contact at another account left the OLD account's name as its
+  // label. Remember the label of every account the search offered, so a pick names the new account.
+  const seenAccountLabels = useRef(new Map<string, string>());
+  const searchAccountsSeen = useCallback(async (query: string, signal: AbortSignal) => {
+    const opts = await searchAccounts(query, signal);
+    for (const o of opts) seenAccountLabels.current.set(o.id, o.label);
+    return opts;
+  }, []);
   const [classification, setClassification] = useState<ClassificationFormValue>({
     temperature: initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "",
     priority: initial.priority && isPriority(initial.priority) ? initial.priority : "",
@@ -163,6 +172,15 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
   // GAP-CRM-CONTACTS-DETAIL-EDIT-06: dirty detection drives the Cancel confirm
   // and the beforeunload guard. Compare the live form/consent/classification
   // against the initial values the page loaded with.
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-01: the classification half is compared on its
+  // own so an unchanged classification is not re-PATCHed on every save.
+  const classificationDirty =
+    classification.temperature !== (initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "") ||
+    classification.priority !== (initial.priority && isPriority(initial.priority) ? initial.priority : "") ||
+    classification.segment !== (initial.segment ?? "") ||
+    classification.product !== (initial.product ?? "") ||
+    classification.region !== (initial.region ?? "") ||
+    classification.expectedValueRupees !== minorToRupees(initial.expectedValueMinor);
   const dirty =
     form.name !== initial.name ||
     form.email !== (initial.email ?? "") ||
@@ -178,12 +196,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
     consent.granted !== (initial.marketingConsent ?? false) ||
     consent.purpose !== (initial.consentPurpose ?? "") ||
     consent.channel !== (initial.consentChannel ?? "") ||
-    classification.temperature !== (initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "") ||
-    classification.priority !== (initial.priority && isPriority(initial.priority) ? initial.priority : "") ||
-    classification.segment !== (initial.segment ?? "") ||
-    classification.product !== (initial.product ?? "") ||
-    classification.region !== (initial.region ?? "") ||
-    classification.expectedValueRupees !== minorToRupees(initial.expectedValueMinor);
+    classificationDirty;
 
   const [cancelOpen, setCancelOpen] = useState(false);
   // Hold the success-redirect timer so it can be cleared on unmount (the old
@@ -362,18 +375,22 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       // GAP-CRM-CONTACTS-DETAIL-EDIT-03: run the core PATCH only when something
       // core/consent changed AND it is not already saved from a prior attempt,
       // so a retry after a classification failure never re-persists the core.
-      if ((!isEmptyPatch(corePatch) || consentChanged || accountChanged || identifiersChanged) && !coreSaved) {
+      const coreChanged = !isEmptyPatch(corePatch) || consentChanged || accountChanged || identifiersChanged;
+      if (coreChanged && !coreSaved) {
         const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
           method: "PATCH",
           body: JSON.stringify(body),
         });
         if (!res.ok) {
           // GAP-CRM-CONTACTS-DETAIL-EDIT-05: surface a format error (e.g.
-          // INVALID_MOBILE) under its field instead of one generic banner.
-          const parsed = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
-          const fe = parseFieldError({ code: parsed?.code, message: parsed?.message });
-          if (fe) {
-            setFieldErrors({ [fe.field]: fe.message });
+          // INVALID_MOBILE) under its field instead of one generic banner. The
+          // real crm-service 400 carries the code in fieldErrors[].message under
+          // VALIDATION_FAILED, which parseFieldErrors reads (a top-level-code-only
+          // parse never matched a real response). Read a clone so the generic
+          // fallback below can still read the body.
+          const fes = parseFieldErrors(await readJsonBody(res));
+          if (Object.keys(fes).length > 0) {
+            setFieldErrors(fes);
             return;
           }
           throw new Error(await errorMessageFromResponse(res));
@@ -383,17 +400,25 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       // LQ-003: persist classification on its dedicated endpoint, in its OWN
       // try/catch so a classification failure after the core already saved is a
       // PARTIAL success — the form stays open and the user can retry just this.
-      try {
-        await saveClassification(params.id, classificationPatch);
-      } catch (ce) {
-        setError(
-          coreSaved || !isEmptyPatch(corePatch) || consentChanged
-            ? t("classificationPartialSave")
-            : ce instanceof Error ? ce.message : t("classificationSaveError"),
-        );
-        return;
+      // An untouched classification is not re-sent (acceptance: an unchanged form
+      // sends no request at all).
+      if (classificationDirty) {
+        try {
+          await saveClassification(params.id, classificationPatch);
+        } catch (ce) {
+          setError(
+            coreSaved || coreChanged
+              ? t("classificationPartialSave")
+              : ce instanceof Error ? ce.message : t("classificationSaveError"),
+          );
+          return;
+        }
       }
-      setMessage("Contact updated.");
+      if (!coreChanged && !coreSaved && !classificationDirty) {
+        setMessage(t("noChanges"));
+      } else {
+        setMessage("Contact updated.");
+      }
       // GAP-CRM-CONTACTS-DETAIL-EDIT-06: keep a short confirmation beat, but hold
       // the timer so it is cleared on unmount (no router.push after unmount).
       redirectTimer.current = setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);
@@ -452,8 +477,12 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
                 const id = typeof v === "string" ? v : null;
                 setAccountId(id);
                 if (!id) setAccountLabel("");
+                else {
+                  const picked = seenAccountLabels.current.get(id);
+                  if (picked) setAccountLabel(picked);
+                }
               }}
-              search={searchAccounts}
+              search={searchAccountsSeen}
               resolve={async (ids) => {
                 const opts = await resolveAccounts(ids);
                 if (opts[0]) setAccountLabel(opts[0].label);
@@ -464,7 +493,20 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
             />
             {accountId ? (
               <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
-                {t.rich("linkedTo", { name: accountLabel || accountId, strong: (chunks) => <strong>{chunks}</strong> })}
+                {t.rich("linkedTo", { name: accountLabel || accountId, strong: (chunks) => <strong>{chunks}</strong> })}{" "}
+                {/* The single-select EntityPicker has no clear control of its own, so
+                    this is how a contact is unlinked: Save then sends accountId: null. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAccountId(null);
+                    setAccountLabel("");
+                  }}
+                >
+                  {t("unlinkAccount")}
+                </Button>
               </p>
             ) : (
               <input id="edit-company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder={t("typeNewOrg")} style={{ ...inputStyle, marginTop: 6 }} />
@@ -487,11 +529,14 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               id="edit-gstin"
               value={form.gstin}
               onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-              placeholder="29ABCDE1234F1Z5"
+              placeholder="21ABCDE1234F1Z5"
               style={inputStyle}
               aria-invalid={fieldErrors.gstin ? true : undefined}
-              aria-describedby={fieldErrors.gstin ? gstinErrId : undefined}
+              aria-describedby={[fieldErrors.gstin ? gstinErrId : null, "edit-gstin-note"].filter(Boolean).join(" ")}
             />
+            {/* GAP-CRM-CONTACTS-NEW-03: why we collect this + that access is role-scoped
+                (same notice as the New Contact form, read via aria-describedby). */}
+            <p id="edit-gstin-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{t("gstinNote")}</p>
             {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.gstin}</p> : null}
           </div>
           <div>
@@ -503,8 +548,10 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               placeholder="ABCDE1234F"
               style={inputStyle}
               aria-invalid={fieldErrors.pan ? true : undefined}
-              aria-describedby={fieldErrors.pan ? panErrId : undefined}
+              aria-describedby={[fieldErrors.pan ? panErrId : null, "edit-pan-note"].filter(Boolean).join(" ")}
             />
+            {/* GAP-CRM-CONTACTS-NEW-03: PAN of an individual is personal data under DPDP. */}
+            <p id="edit-pan-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{t("panNote")}</p>
             {fieldErrors.pan ? <p id={panErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.pan}</p> : null}
           </div>
           <div>

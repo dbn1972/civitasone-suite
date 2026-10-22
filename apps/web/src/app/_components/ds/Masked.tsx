@@ -19,7 +19,7 @@
  */
 import { MaskedReveal, type PiiResourceType } from "./MaskedReveal";
 
-export type MaskedKind = "pan" | "account" | "last4" | "phone" | "email";
+export type MaskedKind = "pan" | "account" | "last4" | "phone" | "email" | "name";
 
 /**
  * GAP-PAYROLL-PENSIONERS-NEW-02 / GAP-PAYROLL-NPS-02: show only the last four
@@ -190,7 +190,9 @@ export function Masked({ value, kind, fallback = null, className, ariaLabel, onR
           ? maskPhone(value)
           : kind === "email"
             ? maskEmail(value)
-            : maskLast4(value);
+            : kind === "name"
+              ? maskName(value)
+              : maskLast4(value);
   return (
     <span className={className} style={{ fontFamily: "monospace" }} aria-label={ariaLabel}>
       {masked}

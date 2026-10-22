@@ -24,6 +24,7 @@ import {
   createCustomField,
   updateCustomField,
   deleteCustomField,
+  fieldReflectsDraft,
   toDraft,
   blankDraft,
   validateDraft,
@@ -211,8 +212,10 @@ export function CustomFieldsManager() {
       if (gen !== genRef.current || !mountedRef.current) return false;
       if (source === "error") return false;
       const name = row.fieldName.trim().toLowerCase();
+      // A create is reflected once a field of that name exists; an edit only once
+      // the saved row carries the edited values (not merely the same id/type).
       const present = row.id
-        ? data.some((f) => f.id === row.id && f.fieldType === row.fieldType)
+        ? data.some((f) => f.id === row.id && fieldReflectsDraft(row, f))
         : data.some((f) => f.fieldName.trim().toLowerCase() === name);
       if (present) {
         const nextRows = data.map((f) => toRow(toDraft(f)));
@@ -236,13 +239,13 @@ export function CustomFieldsManager() {
       if (row.id) await updateCustomField(row.id, row);
       else await createCustomField(row);
       if (gen !== genRef.current) return;
+      // The write is queued (202): say "submitted" straight away and only upgrade
+      // to "saved" once a reload actually shows it, so the line never claims a
+      // save over a stale list while the poll is still running.
+      setMessage(t("submittedMessage", { name: row.fieldName.trim() }));
       const reflected = await reloadUntilReflected(row, gen);
       if (gen !== genRef.current) return;
-      setMessage(
-        reflected
-          ? t("savedMessage", { name: row.fieldName.trim() })
-          : t("submittedMessage", { name: row.fieldName.trim() }),
-      );
+      if (reflected) setMessage(t("savedMessage", { name: row.fieldName.trim() }));
     } catch (e) {
       setError(formError.fromException("save", e).message);
     } finally {

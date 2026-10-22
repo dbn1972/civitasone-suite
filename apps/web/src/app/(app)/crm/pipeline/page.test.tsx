@@ -35,6 +35,7 @@ const MOCK_DEALS = [
 
 describe("Pipeline Page", () => {
   beforeEach(() => {
+    vi.mocked(getPipelineDeals).mockReset();
     vi.mocked(getPipelines).mockResolvedValue({ data: MOCK_PIPELINE, source: "api" });
     vi.mocked(getPipelineDeals).mockResolvedValue({ data: MOCK_DEALS, source: "api" });
   });
@@ -126,5 +127,44 @@ describe("Pipeline Page", () => {
     render(await PipelinePage({}));
     expect(screen.getByText("Total Engagements")).toBeInTheDocument();
     expect(screen.queryByText(/Total Deals/i)).not.toBeInTheDocument();
+  });
+  // GAP-CRM-PIPELINE-05 (W2 rescan): deals have no pipeline id of their own and the board matches
+  // them to columns by stage NAME, so the default view (no ?pipelineId) must be fetched scoped to
+  // the pipeline it actually renders — otherwise another pipeline's same-named stage mixes in and
+  // the "N of M" / stat tiles count foreign engagements.
+  describe("scopes the deal fetch to the pipeline being shown (GAP-CRM-PIPELINE-05)", () => {
+    const TWO = [
+      { id: "p1", name: "Procurement Pipeline", stages: [], status: "active" as const },
+      { id: "p2", name: "Works Pipeline", stages: [], status: "active" as const },
+    ];
+
+    it("default view with several pipelines fetches the FIRST pipeline's deals, not everything", async () => {
+      vi.mocked(getPipelines).mockResolvedValue({ data: TWO, source: "api" });
+      render(await PipelinePage({}));
+      expect(getPipelineDeals).toHaveBeenCalledWith("p1");
+    });
+
+    it("an explicit ?pipelineId=<valid> fetches that pipeline", async () => {
+      vi.mocked(getPipelines).mockResolvedValue({ data: TWO, source: "api" });
+      render(await PipelinePage({ searchParams: { pipelineId: "p2" } }));
+      expect(getPipelineDeals).toHaveBeenCalledWith("p2");
+    });
+
+    it("an unknown ?pipelineId falls back to the default pipeline instead of querying a bogus id", async () => {
+      vi.mocked(getPipelines).mockResolvedValue({ data: TWO, source: "api" });
+      render(await PipelinePage({ searchParams: { pipelineId: "does-not-exist" } }));
+      expect(getPipelineDeals).toHaveBeenCalledWith("p1");
+    });
+
+    it("with a single pipeline the fetch stays unscoped (keeps deals created without a pipeline visible)", async () => {
+      render(await PipelinePage({}));
+      expect(getPipelineDeals).toHaveBeenCalledWith(undefined);
+    });
+
+    it("when pipelines cannot be loaded the fetch is unscoped rather than guessing a pipeline", async () => {
+      vi.mocked(getPipelines).mockResolvedValue({ data: [], source: "error" });
+      render(await PipelinePage({}));
+      expect(getPipelineDeals).toHaveBeenCalledWith(undefined);
+    });
   });
 });

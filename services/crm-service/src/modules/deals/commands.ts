@@ -36,6 +36,7 @@ export async function createDeal(ctx: RequestContext, body: CreateDealBody): Pro
     valueDisplay: formatValue(valueMinor, body.currency),
     contactId: body.contactId ?? null,
     contactName: null,
+    accountId: body.accountId ?? null,
     ownerId: body.ownerId ?? ctx.actorId,
     closeDate: body.closeDate ?? null,
     closedAt: null,

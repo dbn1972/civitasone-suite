@@ -3,7 +3,8 @@ import { z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema } from "./validators.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
+import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema, dealIdsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -14,11 +15,30 @@ const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
 const pipelineScopeQuery = z.object({ pipelineId: z.string().uuid().optional() });
 
+/** 422 USE_CLOSE_ENDPOINT when `stage` is a terminal (deal-closing) stage. */
+function assertOpenCreateStage(stage: string): void {
+  if (isTerminalStage(stage)) {
+    throw new HttpError(
+      422,
+      "USE_CLOSE_ENDPOINT",
+      `stage '${stage}' is terminal; create the deal in an open stage and close it via POST /v1/crm/deals/:id/close with an outcome and reason`,
+    );
+  }
+}
+
 export async function dealRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/deals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createDealBody.parse(req.body);
+
+    // GAP-CRM-DEALS-NEW-01: a deal is only ever CREATED open. Won/Lost are terminal
+    // outcomes reached through the governed close flow (POST /v1/crm/deals/:id/close),
+    // which requires a reason (min 10 chars for a loss) and is the one path that emits
+    // the close audit event. Creating straight into a closed stage would bypass all of
+    // that, so reject it here exactly like the PATCH stage route does (by stage NAME, so
+    // it holds whether or not a pipeline is scoped).
+    if (body.stage !== undefined) assertOpenCreateStage(body.stage);
 
     // OP-002: stage names are per-pipeline, not a fixed enum (see validators.ts) — so
     // when the deal is scoped to a pipeline, resolve + validate the stage dynamically
@@ -32,6 +52,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     // requested stage is beyond the pipeline's entry (lowest-ordinal) stage, enforce the
     // target stage's mandatory fields against the create body, synchronously (422).
     let stage = body.stage;
+    // GAP-CRM-OPPORTUNITIES-NEW-06: the probability a blank form should get — the chosen
+    // stage's own configured probability (resolved below), never a hard-coded 0.
+    let stageDefaultProbability: number | undefined;
     if (body.pipelineId) {
       const stages = await pipelineRepo.stagesOf(body.pipelineId, ctx.tenantId);
       if (stages && stages.length > 0) {
@@ -41,6 +64,7 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         if (!target) {
           throw new HttpError(422, "INVALID_STAGE", `stage '${stage}' is not configured on this pipeline`);
         }
+        stageDefaultProbability = target.probability;
         if (target.id !== entry.id && target.name !== entry.name) {
           const snap = {
             product: body.product ?? null,
@@ -63,7 +87,28 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, { ...body, stage: stage ?? "Lead" }));
+    // The pipeline's resolved ENTRY stage must be open too (a pipeline whose lowest-ordinal
+    // stage were named Won/Lost would otherwise create closed deals by omission).
+    assertOpenCreateStage(stage ?? "Lead");
+
+    // GAP-CRM-OPPORTUNITIES-NEW-02: a supplied account must exist in the caller's tenant
+    // (synchronous 422, so the form can show it; the consumer re-checks defensively).
+    if (body.accountId && !(await repo.accountExists(ctx.tenantId, body.accountId))) {
+      throw new HttpError(422, "ACCOUNT_NOT_FOUND", "the selected account does not exist in this tenant");
+    }
+
+    // An explicit probability (including an explicit 0) is always honoured; only an
+    // OMITTED one takes the stage default, and a pipeline-less deal still stores 0.
+    const probability = body.probability ?? stageDefaultProbability;
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.createDeal(ctx, {
+        ...body,
+        stage: stage ?? "Lead",
+        ...(probability !== undefined ? { probability } : {}),
+      }),
+    );
   });
 
   app.get("/v1/crm/deals", async (req, reply) => {
@@ -73,7 +118,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-PIPELINE-05: optional pipelineId scopes the board to one pipeline;
     // the response's pagination.total lets the UI show "N of M" accurately.
     const { pipelineId } = pipelineScopeQuery.parse(req.query ?? {});
-    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId));
+    // GAP-CRM-ONBOARDING-01: optional `ids` looks specific deals up by id (<= 50, one request).
+    const { ids } = dealIdsQuery.parse(req.query ?? {});
+    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId, ids));
   });
 
   // OP-005: stage-ageing dashboard — opportunities exceeding their configured stage limit.
@@ -82,7 +129,13 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const q = pipelineScopeQuery.parse(req.query ?? {});
     const rows = await repo.stageAgeingExceeding(ctx.tenantId, q.pipelineId);
-    return reply.send({ data: rows, meta: { total: rows.length } });
+    // GAP-CRM-OPPORTUNITY-AGEING-03: a manager needs WHO to chase, not a user uuid. The
+    // row carries only owner_id, so resolve it to a display name (identity-service,
+    // fail-open: an unresolved owner yields ownerName null and the UI says so rather than
+    // printing the uuid). ownerId stays on the row.
+    const names = await resolveUserNames(ctx.tenantId, rows.map((r) => r.ownerId));
+    const data = rows.map((r) => ({ ...r, ownerName: r.ownerId ? names.get(r.ownerId) ?? null : null }));
+    return reply.send({ data, meta: { total: data.length } });
   });
 
   // OP-004: kanban board — deals grouped by stage.
@@ -203,6 +256,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateDealBody.parse(req.body);
+    if (body.accountId && !(await repo.accountExists(ctx.tenantId, body.accountId))) {
+      throw new HttpError(422, "ACCOUNT_NOT_FOUND", "the selected account does not exist in this tenant");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDeal(ctx, id, body));
   });
 

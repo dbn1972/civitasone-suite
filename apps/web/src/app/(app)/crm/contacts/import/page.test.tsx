@@ -15,6 +15,7 @@ vi.mock("@/lib/api/browserClient", async () => {
 });
 
 import ImportContactsPage from "./page";
+import { REAL_DUPLICATE_CHECK_RESPONSE, DUP_CONTACT_MEERA } from "@/lib/crm/testFixtures/duplicateCheckResponse";
 
 function makeRes(ok: boolean, status: number, body: unknown): Response {
   return { ok, status, json: async () => body } as unknown as Response;
@@ -136,6 +137,59 @@ describe("ImportContactsPage", () => {
     fireEvent.click(screen.getByLabelText(/Import anyway/));
     fireEvent.click(screen.getByRole("button", { name: /Import 1 contact/ }));
     await waitFor(() => expect(screen.getByText("Import 1 contact?")).toBeInTheDocument());
+  });
+});
+
+// The duplicate list, fed the EXACT body crm-service answers POST /v1/crm/contacts/duplicate-check with
+// ({ data: [{ id, name, matchedFields, score 0-100 }] }) through the real parser. Against that shape the page
+// used to find no duplicates at all (it read `candidates`) and, once it did, would have printed record ids.
+describe("ImportContactsPage duplicate list against the real server answer", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    browserFetchMock.mockReset();
+  });
+
+  function answerWith(body: unknown) {
+    browserFetchMock.mockImplementation((path: string) =>
+      Promise.resolve(path === "v1/crm/contacts/duplicate-check" ? makeRes(true, 200, body) : makeRes(true, 202, {})),
+    );
+  }
+  async function importOneRow() {
+    renderPage();
+    fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: `${HEADER}\nAsha Rao,,9900000000,,new,` } });
+    fireEvent.click(screen.getByRole("button", { name: /Import 1 contact/ }));
+    return screen.findByRole("alert");
+  }
+
+  it("lists each possible duplicate by NAME and matched fields, and holds the import until acknowledged", async () => {
+    answerWith(REAL_DUPLICATE_CHECK_RESPONSE);
+    const alert = await importOneRow();
+    expect(alert).toHaveTextContent("2 possible duplicates already in the registry.");
+    expect(alert).toHaveTextContent("Asha Rao — matches on email, phone");
+    expect(alert).toHaveTextContent("Meera Devi — matches on phone");
+    expect(screen.queryByText("Import 1 contact?")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Import 1 contact/ })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/Import anyway/));
+    fireEvent.click(screen.getByRole("button", { name: /Import 1 contact/ }));
+    await waitFor(() => expect(screen.getByText("Import 1 contact?")).toBeInTheDocument());
+  });
+
+  it("never shows a record id: a match without a name reads 'Existing contact'", async () => {
+    answerWith({ data: [{ id: DUP_CONTACT_MEERA, matchedFields: ["phone"], score: 30 }] });
+    const alert = await importOneRow();
+    expect(alert).toHaveTextContent("Existing contact — matches on phone");
+    expect(alert.textContent).not.toContain(DUP_CONTACT_MEERA);
+  });
+
+  it("asks the server about the row's own phone and does not hold the import when nothing matches", async () => {
+    answerWith({ data: [] });
+    renderPage();
+    fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: `${HEADER}\nAsha Rao,,9900000000,,new,` } });
+    fireEvent.click(screen.getByRole("button", { name: /Import 1 contact/ }));
+    await waitFor(() => expect(screen.getByText("Import 1 contact?")).toBeInTheDocument());
+    const call = browserFetchMock.mock.calls.find(([p]) => p === "v1/crm/contacts/duplicate-check")!;
+    expect(JSON.parse((call[1] as { body: string }).body)).toMatchObject({ name: "Asha Rao", phone: "9900000000" });
   });
 });
 
