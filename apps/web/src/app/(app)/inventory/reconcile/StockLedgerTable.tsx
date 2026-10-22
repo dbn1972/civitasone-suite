@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable } from "../../../_components/ds";
-import { INVENTORY_LEDGER_EXPORT_ROLES } from "@/lib/auth/roleGuard";
+import { INVENTORY_LEDGER_EXPORT_ROLES } from "@/lib/auth/adminRoles";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 type LedgerEntry = {
