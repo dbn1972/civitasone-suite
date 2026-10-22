@@ -694,6 +694,9 @@ export const BillSummarySchema = z.object({
   // as a legacy value only so older fixtures/clients still parse.
   status: z.enum(["pending", "passed", "approved", "paid", "rejected", "on_hold", "under_review"]),
   poRef: z.string().optional(),
+  // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number (e.g. "PO-2026-014") snapshotted from the GRN the bill was
+  // drafted from. Absent on hand-lodged and older bills, which fall back to the id form of poRef.
+  poNumber: z.string().optional(),
   // The list emits "na"; the detail query emits matched | pending | na.
   threeWayMatch: z.enum(["matched", "pending", "partial", "unmatched", "na"]).default("na"),
 });
@@ -712,6 +715,10 @@ export const BillDetailSchema = BillSummarySchema.extend({
   grnRef: z.string().optional(),
   invoiceNo: z.string().optional(),
   paymentRef: z.string().optional(),
+  // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: who lodged the bill and (while it is passed) who passed it, so the page can
+  // withhold the maker-checker actions the server would refuse. User ids, never names; the server stays the authority.
+  createdBy: z.string().optional(),
+  passedBy: z.string().optional(),
 });
 
 export const AdvanceSummarySchema = z.object({
@@ -740,6 +747,8 @@ export const UCSummarySchema = z.object({
   id: z.string(),
   ucNo: z.string(),
   grantRef: z.string().optional(),
+  // The Scheme Tracking code (finance_schemes.code) the certificate was raised against; absent on older certificates.
+  schemeCode: z.string().optional(),
   grantee: z.string(),
   // Bigint-safe string, not z.number(): payments/queries.ts's listUCs
   // returns row.amountMinor.toString() (H3: paise can exceed 2^53), so a

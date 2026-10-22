@@ -11,7 +11,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -132,6 +132,14 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message, [{ field: "periodTo", message: "The period end must not be before the period start." }]);
       throw err;
     }
+    // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: a scheme code must be one of this tenant's schemes. The
+    // consumer repeats the check in its own transaction.
+    if (body.schemeCode) {
+      const schemeCode = body.schemeCode;
+      if (!(await scopedRead((tx) => ucRepo.findSchemeByCode(tx, ctx.tenantId, schemeCode)))) {
+        throw new HttpError(400, "UNKNOWN_SCHEME", "scheme not found for this office", [{ field: "schemeCode", message: "Choose one of the schemes set up in Scheme Tracking." }]);
+      }
+    }
     // Over-claim pre-check (GAP-...-UTILIZATION-CERTIFICATES-NEW-02). The consumer repeats it
     // under a row lock on the sanction, which is what makes it race-safe.
     if (body.grantRef) {
@@ -197,6 +205,10 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const bill = await repo.findBillByIdAndTenant(id, ctx.tenantId);
     if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
     try {
+      // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: the maker cannot pass their own bill. The consumer enforces the same
+      // rule authoritatively; checking it here too means a self-approval is an immediate 409 the officer sees, not a
+      // 202 that only fails later in the queue. Same order as the consumer (maker-checker, then status/stage).
+      assertDistinctMakerChecker(bill.createdBy, ctx.actorId);
       assertBillApprovable(bill.status, bill.stage ?? "section");
     } catch (err) { toDomain(err, 409); }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
@@ -206,11 +218,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
-    // Synchronous pre-check of the passer != payer rule (the consumer stays
-    // authoritative): the common case gets an immediate 409, not a silent 202.
+    // Synchronous pre-check of the segregation-of-duties rules (the consumer stays authoritative): the common case
+    // gets an immediate 409, not a silent 202. The payer must be neither the officer who lodged the bill (maker !=
+    // checker) nor the officer who passed it (passer != payer).
     const bill = await repo.findBillByIdAndTenant(body.billId, ctx.tenantId);
     if (bill) {
-      try { assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId); } catch (err) { toDomain(err, 409); }
+      try {
+        assertDistinctMakerChecker(bill.createdBy, ctx.actorId);
+        assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId);
+      } catch (err) { toDomain(err, 409); }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.initiatePayment(ctx, body));
   });

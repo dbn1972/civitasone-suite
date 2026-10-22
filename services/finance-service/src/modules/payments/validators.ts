@@ -101,6 +101,10 @@ export const createUCBody = z.object({
   ucNo:        z.string().min(1).max(64),
   purpose:     z.string().min(1).max(500),
   scheme:      z.string().max(200).optional(),
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: the Scheme Tracking code the certificate is raised against
+  // (unique per tenant). Validated against the tenant's schemes by the route and again by the consumer. `scheme` above is
+  // the older free-text field, still accepted from existing clients.
+  schemeCode:  z.string().trim().min(1).max(64).optional(),
   // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02: the body that utilised the grant.
   grantee:     z.string().trim().min(2, "Name the grantee").max(200),
   grantRef:    z.string().max(200).optional(),

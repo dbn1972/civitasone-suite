@@ -157,12 +157,42 @@ describe("NewUCForm", () => {
     expect(await screen.findByText("Select the scheme this certificate is for.")).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fireEvent.change(picker, { target: { value: "Housing Scheme" } });
+    fireEvent.change(picker, { target: { value: "PMAY" } });
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(JSON.parse(init.body as string)).toMatchObject({ scheme: "Housing Scheme" });
+    // The scheme's CODE goes in its own field (the name is not unique; it used to ride in the grant reference).
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject({ schemeCode: "PMAY" });
+    expect(body).not.toHaveProperty("scheme");
+  });
+
+  it("offers each scheme by its code, and keeps the scheme when a grant reference is typed as well", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewUCForm schemes={[{ code: "PMAY", name: "Housing Scheme" }, { code: "MGN", name: "Rural Jobs" }]} />);
+    const options = Array.from((screen.getByLabelText("Scheme / grant") as HTMLSelectElement).options).map((o) => [o.value, o.textContent]);
+    expect(options).toEqual([["", "— select a scheme —"], ["PMAY", "Housing Scheme (PMAY)"], ["MGN", "Rural Jobs (MGN)"]]);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Scheme / grant"), { target: { value: "MGN" } });
+    fireEvent.change(screen.getByLabelText("Grant reference"), { target: { value: "SAN/2026/77" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ schemeCode: "MGN", grantRef: "SAN/2026/77" });
+  });
+
+  it("shows the server's unknown-scheme message on the scheme field", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "UNKNOWN_SCHEME", message: "x", fieldErrors: [{ field: "schemeCode", message: "Choose one of the schemes set up in Scheme Tracking." }],
+    }), { status: 400 }));
+    renderPage(<NewUCForm schemes={[{ code: "PMAY", name: "Housing Scheme" }]} />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Scheme / grant"), { target: { value: "PMAY" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
+    expect(await screen.findByText("Choose one of the schemes set up in Scheme Tracking.")).toBeInTheDocument();
   });
 
   it("disables submit when the scheme list failed to load (no free-text fallback)", () => {

@@ -290,6 +290,9 @@ async function inspectGrn(
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           grnId, poRef: grn.poRef, vendorId: grn.vendorId, grossMinor: grossMinorStr,
+          // Human PO number (e.g. "PO-2026-014") so finance can show it beside the opaque poRef on the bill it drafts
+          // (GAP-FINANCE-EXPENDITURE-BILLS-06). Absent when the PO row cannot be read; never a fabricated value.
+          ...(po?.poNo ? { poNo: po.poNo } : {}),
           // R5: paise as strings so > 2^53 stays exact across the queue boundary.
           poAmountMinor: poAmountMinor.toString(),
           grnAmountMinor: grnAmountMinor.toString(),

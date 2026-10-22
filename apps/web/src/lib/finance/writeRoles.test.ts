@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { canWrite, VENDOR_WRITE_ROLES, RECURRING_WRITE_ROLES, BILL_CREATE_ROLES, ADVANCE_CREATE_ROLES, BILL_APPROVE_ROLES } from "./writeRoles";
+import { canWrite, VENDOR_WRITE_ROLES, RECURRING_WRITE_ROLES, BILL_CREATE_ROLES, ADVANCE_CREATE_ROLES, BILL_APPROVE_ROLES, PAYMENT_RELEASE_ROLES } from "./writeRoles";
 
 describe("canWrite", () => {
   it("hides vendor writes from readers the server would 403", () => {
@@ -26,5 +26,12 @@ describe("bill / advance create + approve roles (GAP-FINANCE-EXPENDITURE-BILLS-0
   it("Pass bill needs an approver role, not a plain finance_officer (BILLS-DETAIL-03)", () => {
     expect(canWrite(["finance_officer"], BILL_APPROVE_ROLES)).toBe(false);
     expect(canWrite(["accounts_officer"], BILL_APPROVE_ROLES)).toBe(true);
+  });
+});
+
+describe("payment release roles (GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03)", () => {
+  it("offers Release payment to finance staff only, not to readers or approvers without a finance role", () => {
+    for (const r of ["finance_officer", "finance_admin", "super_admin"]) expect(canWrite([r], PAYMENT_RELEASE_ROLES)).toBe(true);
+    for (const r of ["audit_officer", "procurement_officer", "accounts_officer", "budget_officer"]) expect(canWrite([r], PAYMENT_RELEASE_ROLES)).toBe(false);
   });
 });

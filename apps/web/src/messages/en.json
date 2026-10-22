@@ -3329,7 +3329,12 @@
     "fieldPaymentRef": "Payment Ref",
     "cardTitleLineItems": "Line items",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "titleLoadFailed": "Bill Detail",
+    "areaBill": "bill details",
+    "cannotPassOwn": "You lodged this bill, so another officer must pass it.",
+    "cannotReleaseLodged": "You lodged this bill, so another officer must release its payment.",
+    "cannotReleasePassed": "You passed this bill, so another officer must release its payment."
   },
   "expenditureBillLineItemsTable": {
     "colDescription": "Description",
@@ -3369,17 +3374,17 @@
   },
   "expenditureGuarantees": {
     "title": "Bank Guarantees & EMDs",
-    "subtitle": "Read-only register. EMD and bank-guarantee instruments are lodged, released and invoked in Procurement — Finance only mirrors them here for reporting.",
+    "subtitle": "Read-only register of the guarantees recorded in Finance. Tender EMD and bank-guarantee instruments are a separate register in Procurement.",
     "statTotal": "Total Guarantees",
     "statActive": "Active",
     "statReleased": "Released",
     "cardTitle": "Guarantees & Securities (reporting only)",
-    "reportingOnlyNote": "This register is a read-only mirror of Procurement-managed EMD / bank-guarantee instruments. Release, invoke and other lifecycle changes are performed in Procurement, not here.",
+    "reportingOnlyNote": "This register is read-only: guarantees cannot be recorded, released or invoked from this screen yet. Procurement keeps its own register of tender EMD / bank-guarantee instruments, which is not copied here.",
     "routeErrorBackLabel": "Back to Finance",
     "routeErrorArea": "Finance page",
     "statOtherStatus": "Expired / invoked / other",
     "areaGuarantees": "guarantees",
-    "manageInProcurementLink": "EMD & bank guarantees (Procurement)",
+    "manageInProcurementLink": "EMD & bank guarantees register (Procurement)",
     "statExpiringSoon": "Expiring within {days} days",
     "statLapsed": "Validity lapsed"
   },

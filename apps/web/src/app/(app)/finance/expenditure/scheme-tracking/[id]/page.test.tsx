@@ -100,4 +100,21 @@ describe("SchemeDetailPage", () => {
     render(await SchemeDetailPage({ params: { id: "s1" } }));
     expect(screen.getByText("100.3% · Over-utilised")).toBeInTheDocument();
   });
+
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: related records link to routes that exist, narrowed by the scheme CODE.
+  it("links the related UC register by the scheme code and the fund releases register", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, code: "PMAY G/1", name: "Housing Scheme" }, source: "api" });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.getByRole("link", { name: "Utilization certificates for this scheme" })).toHaveAttribute(
+      "href",
+      "/finance/expenditure/utilization-certificates?scheme=PMAY%20G%2F1",
+    );
+    expect(screen.getByRole("link", { name: "Fund releases register" })).toHaveAttribute("href", "/finance/budget/fund-releases");
+  });
+
+  it("shows no related-record links when the scheme could not be loaded", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    expect(screen.queryByRole("link", { name: "Utilization certificates for this scheme" })).not.toBeInTheDocument();
+  });
 });

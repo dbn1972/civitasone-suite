@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -109,9 +109,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
-      netMinor: number; poRef?: string; grnRef?: string; billDate?: string;
+      netMinor: number; poRef?: string; poNumber?: string; grnRef?: string; billDate?: string;
       poAmountMinor?: string; grnAmountMinor?: string;
     };
+    // GAP-FINANCE-EXPENDITURE-BILLS-06: display snapshot of the human PO number (grn.accepted carries it).
+    const poNumber = normalisePoNumber(p.poNumber);
     // B1: when the producer (e.g. grn.accepted integration handler) omits ddoCode,
     // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
     // defaultDdo, then the constant DDO000001 (prevents dead-lettering every GRN bill).
@@ -202,7 +204,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
         deductions: p.deductions, netMinor,
-        poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
+        poRef: p.poRef ?? null, poNumber, grnRef: p.grnRef ?? null,
         ...(poAmountMinor != null ? { poAmountMinor } : {}),
         ...(grnAmountMinor != null ? { grnAmountMinor } : {}),
         billDate,
@@ -571,7 +573,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
 
   sub(COMMANDS.ucCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string; grantee?: string;
+      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string; schemeCode?: string; grantee?: string;
       grantRef?: string; amountMinor: number | string; currency?: string; periodFrom?: string; periodTo?: string;
       declaration?: boolean;
     };
@@ -581,10 +583,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const grantee = (p.grantee ?? "").trim();
     if (!grantee) throw new NonRetryableError("[finance/payments] ucCreate SCHEMA_VIOLATION: grantee is required");
     const grantRef = p.grantRef ?? p.scheme ?? null;
+    // The scheme is linked by its Scheme Tracking code, independent of the grant reference (which used to carry it and
+    // lost it whenever a grant reference was typed as well).
+    const schemeCode = p.schemeCode?.trim() || null;
     const amountMinor = BigInt(p.amountMinor);
     assertUCPeriodValid(p.periodFrom, p.periodTo);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if (schemeCode && !(await ucRepo.findSchemeByCode(tx, p.tenantId, schemeCode))) {
+        throw new NonRetryableError(`[finance/payments] ucCreate UNKNOWN_SCHEME: ${schemeCode} is not a scheme of this tenant`);
+      }
       // Over-claim guard (race-safe): when the grant reference is an approved
       // sanction's number, lock that sanction row so concurrent UCs for it are
       // serialised, then require sum(other claiming UCs) + this <= sanctioned.
@@ -597,6 +605,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await repo.insertUC(tx, {
         id: p.id, tenantId: p.tenantId, ucNo: p.ucNo,
         grantRef,
+        schemeCode,
         grantee,
         amountMinor, currency: p.currency ?? "INR",
         periodFrom: p.periodFrom ?? today,

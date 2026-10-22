@@ -2178,7 +2178,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-06  ·  LOW  ·  partly  ·  theme UUID
 
-- [x] **Status** — PR #1805 (merged)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** PO Ref uses formatInternalRef and shows raw ids in the mono cell for Bill (BillsTable.tsx:46); dates via formatIndianDate.
 - **Verified evidence:** BillsTable.tsx:43 renders formatInternalRef(b.poRef) which returns the raw ref string as-is (formatters.ts:26-29), e.g. 'procurement_po:abc-123' with the type prefix and id - only null/'undefined' become '—'. But the observation's 'raw ids in the mono cell for Bill' is wrong: the mono cell (l.41) is b.billNo, a human bill number, not an id. Dates use formatIndianDate (l.45-46) correctly.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/BillsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2200,7 +2200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** — PR #1786 (merged)
+- [x] **Status** — PR #1786 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** A failed fetch is indistinguishable from a missing bill: getFinanceBillById falls back to null, so the page renders "Bill not found - may have been removed or the ID is invalid" (page.tsx:17-24) and the DataSourceBadge on the found branch (page.tsx:45) can never show for a load failure.
 - **Verified evidence:** getFinanceBillById (loaders.ts:1900-1907) returns null data with source 'error' on any failure; page.tsx:13-23 renders not-found whenever !bill regardless of source, so 500/403/network errors read 'not found' - true. The found-branch badge (line 41) only shows when bill exists and source==='error' which cannot occur with fetchJson, so it is dead. However apiClient.ts already returns status/errorCode (lines 8-26, 144), so the fix is available.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/[id]/page.tsx`
@@ -2312,7 +2312,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-GUARANTEES-04  ·  LOW  ·  partly  ·  theme MISSING-ACTION (was DEADROUTE)
 
-- [x] **Status** — PR #1805 (merged)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: PARTIAL. The register copy no longer claims it mirrors Procurement (finance_guarantees rows come only from finance-service's own create command, POST /v1/finance/guarantees, which still has no web caller) and the header link is worded as the separate Procurement EMD/PBG register, which is itself read-only. OWNER DECISION still open: which module owns recording, releasing and invoking guarantees, and whether Procurement EMD/PBG instruments should be copied into the Finance register. Release/invoke are money-affecting and need maker-checker + an audit event once the owner picks a home.
 - **First-pass claim:** Read-only: no create/release/invoke action exists in the route, so guarantees can only be entered elsewhere (not determinable from the route; finance-service absent).
 - **Verified evidence:** True that the guarantees route is read-only: page.tsx and GuaranteesTable.tsx contain no create/release/invoke action and no rowHref. Nothing in the web app writes guarantees (grep of finance for guarantee only finds this route, finance/page.tsx card and procurement/emd-bg, which is a separate EMD/BG surface). Whether the backend supports create/release/invoke is cannot-verify. 'DEADROUTE' is the wrong theme - no dead link exists; it is a missing capability/decision.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/guarantees/page.tsx`, `apps/web/src/app/(app)/finance/expenditure/guarantees/GuaranteesTable.tsx`
@@ -2500,7 +2500,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05  ·  LOW  ·  partly  ·  theme MISSING-LINK (was DEADROUTE)
 
-- [x] **Status** — PR #1843 (merged)
+- [x] **Status** — PR #1843 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Scheme detail has no link to related UCs or fund releases, though the list subtitle promises UC status and progress.
 - **Verified evidence:** Confirmed: detail Card (l.133-145) has only the scheme's own fields and no links to UCs or fund releases. The list subtitle (en.json expenditureSchemeTracking.subtitle) does promise 'milestones, UC status, and progress'. UCs carry only a free-text `scheme` field on create (new/page.tsx:173) so a reliable scheme->UC link may need backend (schemeId); cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/scheme-tracking/[id]/page.tsx`
@@ -2586,7 +2586,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-05  ·  LOW  ·  partly  ·  theme CONTENT (was VALIDATION)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: OPEN, OWNER DECISION. No GFR 12-A / department UC format file exists in the repo and its content must come from the finance department, so nothing was invented. Question: which official UC format (PDF or DOCX) should be offered, and where is it hosted (apps/web/public/templates or object storage)? Once supplied, restore the secondary 'Download Format' <a download> header button.
 - **First-pass claim:** The code comment records that a "Download Format" duplicate button was removed because no UC template exists (page.tsx:21-24) - the register still has no template for grantees.
 - **Verified evidence:** page.tsx:25-27 comment says the duplicate 'Download Format' button was removed because no UC template exists; header now only has '+ New UC' (l.28). This is a code comment describing a removal, not a defect; a missing template is a content/product gap. Theme is not VALIDATION.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/page.tsx`, `apps/web/public (template file, new)`
@@ -2640,7 +2640,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was OTHER)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: PARTIAL. Done: the picker sends the scheme's CODE (unique per office) as `schemeCode`, stored in its own nullable column finance_uc.scheme_code (migration 0154) and validated against the tenant's schemes (400 UNKNOWN_SCHEME), independent of a typed grant reference; the UC register and the scheme detail link match by that code (older certificates still match by name). OWNER DECISIONS still open: (a) is the scheme CODE (not a schemeId FK) the canonical link? (b) must a UC be blocked when the office has no schemes? Today the field is required whenever schemes exist and optional only when there are none.
 - **First-pass claim:** "Scheme / grant" is an optional free-text input (page.tsx:79-81), not a picker over Scheme Tracking records, so UCs cannot be reliably linked to a scheme for the Pending UC count.
 - **Verified evidence:** Confirmed: new/page.tsx:213-214 is an optional plain <input id='uc-scheme'> (no `required`, sent as scheme||undefined at l.173). Partly wrong: the Pending UC stat on scheme-tracking is computed from scheme status (scheme-tracking/page.tsx:23), not from UCs, so free text does not affect that count. A picker over getFinanceSchemes (loaders.ts:2037) is feasible; whether backend expects scheme id vs name/code is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2655,7 +2655,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-04  ·  LOW  ·  partly  ·  theme MISSING-FEATURE (was OTHER)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: OPEN, OWNER DECISION. Not built: finance-service has no UC attachment endpoint, column or listing, and the scanned-documents link flow covers only payments, bills and vouchers. Question: should signed-UC / supporting-statement attachments use the existing scanned-documents link flow (add a 'uc' target kind and a UC detail page to show them) or a new upload endpoint, and what file type, size cap and malware-scan rules apply to government documents?
 - **First-pass claim:** No attachment upload for the signed UC or supporting statements, though the register status flow is pending > submitted > verified.
 - **Verified evidence:** Confirmed: form (new/page.tsx:203-237) has no file input. However the status flow pending>submitted>verified is only inferred from UCsTable TAB_STATUS_MAP; no submit/verify UI exists at all in the web app for this route. Object-storage/attachment endpoint for finance is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/new/page.tsx`
@@ -2888,7 +2888,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-GST-05  ·  MEDIUM  ·  partly  ·  theme OTHER (was PII)
 
-- [x] **Status** — PR #1843 (merged)
+- [~] **Status** — PR #1843 (merged); W2 finance rescan: PARTIAL. Done: input (AP) invoice numbers link to the source bill, low-priority columns sit behind a toggle, and the CSV export is role-gated, confirmed and audited fail-closed. OWNER DECISION still open: the link target for OUTPUT (sales) rows. The GST ledger has no producer in this repo (nothing publishes finance.gst.entry_record) and finance-service cannot verify an AR invoice id across services, so linking to /billing/invoices/{id} would be a guess. Question: what does gst_ledger.invoice_id reference for direction=output, and may it link to /billing/invoices/{id}? Also note the ledger is fetched 500 rows at a time with a truncation warning, so the CSV of a very busy month can be incomplete.
 - **First-pass claim:** Ledger table has 11 columns, including Party GSTIN and HSN, with no column chooser, no export and no link to the source invoice (invoice_id is fetched but not linked).
 - **Verified evidence:** Table columns GstConsole.tsx:57-67 are exactly 11 (Invoice No., Date, GSTIN, Party, Direction, GST Type, HSN, Rate, Taxable, Tax, Status). Confirmed: no column chooser, no export, and invoice_id (types.ts:96) is fetched but unused. The PII framing is weak: GSTIN/HSN are business identifiers, largely public, so masking is not the right fix; there is also no finance invoice-detail route in this snapshot to link to (finance folder has bills under expenditure/bills only), and the console page has no export control (TDS returns has CSV export per hub copy).
 - **Files to change:** `apps/web/src/app/(app)/finance/gst/GstConsole.tsx`, `apps/web/src/app/(app)/finance/gst/types.ts`, `apps/web/src/app/_components/ds (DataTable column props)`
@@ -2920,7 +2920,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-GST-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** — PR #1807 (merged)
+- [x] **Status** — PR #1807 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** loading.tsx is one empty .skeleton block for a three-fetch, table-heavy page (gst/loading.tsx).
 - **Verified evidence:** gst/loading.tsx is one `<div className="skeleton" role="status">` (identical to fiscal-years/loading.tsx). The page awaits three fetches then renders header, period card, four stat cards and a tabbed table (page.tsx:57-83).
 - **Files to change:** `apps/web/src/app/(app)/finance/gst/loading.tsx`
@@ -5200,7 +5200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1805 (merged)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Both actions render for every FINANCE_ROLES member; the maker-checker rule (distinct officer) is stated in dialog copy but enforced only server-side, absent from the snapshot (FinanceActions.tsx:130,145).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/bills/:id/pass', 'POST /v1/finance/bills/:id/pay']`
 - **Question:** Do pass and pay require distinct users (maker != checker) and respective roles?
