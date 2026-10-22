@@ -253,6 +253,12 @@ describe("GAP-WORKS-APPROVALS-TS-NEW-01: work picker search returns status and c
     expect(searchSpy).toHaveBeenCalledWith(TENANT, "WK", 50, ["dao_finalized", "ts_eligible"]);
   });
 
+  it("an EMPTY q still takes the picker path and honours ?limit and ?prefer (no unordered paginated fallthrough)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/works/proposals?q=&limit=50&prefer=dao_finalized,ts_eligible", headers: authHeader() });
+    expect(res.statusCode).toBe(200);
+    expect(searchSpy).toHaveBeenCalledWith(TENANT, "", 50, ["dao_finalized", "ts_eligible"]);
+  });
+
   for (const bad of ["limit=0", "limit=51", "limit=abc", "prefer=DAO-Finalized", "prefer=a,b,c,d,e,f"]) {
     it(`400 for ?${bad}, never silently ignored`, async () => {
       const res = await app.inject({ method: "GET", url: `/v1/works/proposals?q=WK&${bad}`, headers: authHeader() });

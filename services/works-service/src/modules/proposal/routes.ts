@@ -36,7 +36,15 @@ export async function proposalRoutes(app: FastifyInstance): Promise<void> {
       return reply.send({ data });
     }
     const qParam = typeof rawQuery.q === "string" ? rawQuery.q : "";
-    if (qParam.trim().length > 0) {
+    // Picker mode: a non-empty q, OR any picker-only param (q= sent empty, limit, prefer). An empty-q
+    // picker open must still honour limit/prefer (newest first, eligible statuses first) rather than
+    // fall through to the unordered paginated list. Plain list callers send page/pageSize only.
+    const pickerMode =
+      qParam.trim().length > 0 ||
+      typeof rawQuery.q === "string" ||
+      rawQuery.limit !== undefined ||
+      rawQuery.prefer !== undefined;
+    if (pickerMode) {
       // Optional, additive: ?limit=<1..50> (default 20) and ?prefer=status1,status2 (those statuses sort first).
       // Both are validated; a malformed value is a 400, never silently ignored.
       const picker = pickerSearchSchema.parse(rawQuery);
