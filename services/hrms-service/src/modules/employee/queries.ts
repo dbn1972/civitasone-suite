@@ -32,13 +32,27 @@ export type EmployeeDetailShape = {
   pan: string | null;
   managerId?: string;
   payStructureId?: string;
+  /**
+   * Basic pay in paise. Present ONLY when the caller asked for it
+   * (`includePay`, which the route sets for HR roles) -- never part of the
+   * shared/cached shape, so a manager or the employee themself cannot receive
+   * it by hitting the same endpoint.
+   */
+  basicMinor?: number;
   uanNumber?: string;
   esicIpNumber?: string;
   pran?: string;
 };
 
-/** Returns a shaped response matching EmployeeDetailSchema (web). */
-export async function getEmployeeDetail(id: string, tenantId: string): Promise<EmployeeDetailShape | null> {
+/**
+ * Returns a shaped response matching EmployeeDetailSchema (web).
+ *
+ * `opts.includePay` (GAP-HR-EMPLOYEES-NEW-02): adds `basicMinor`. The cached
+ * unit is the raw employee row and this shaping runs per request, so a role
+ * decision here is never baked into a cache entry shared with a caller who
+ * must not see pay. Defaults to false: every existing caller is unchanged.
+ */
+export async function getEmployeeDetail(id: string, tenantId: string, opts: { includePay?: boolean } = {}): Promise<EmployeeDetailShape | null> {
   const emp = await cache.getOrLoad<EmployeeRow>(
     cache.makeKey(tenantId, "employee", id),
     () => repo.findById(id, tenantId),
@@ -156,6 +170,12 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     ...(emp.uanNumber      ? { uanNumber: emp.uanNumber }              : {}),
     ...(emp.esicIpNumber   ? { esicIpNumber: emp.esicIpNumber }        : {}),
     ...(emp.pran           ? { pran: emp.pran }                        : {}),
+    // GAP-HR-EMPLOYEES-NEW-02: the wizard captures basic pay at creation but the
+    // record never showed it back. Opt-in per request (see the doc comment), as
+    // paise -- a safe integer for any real salary; anything beyond 2^53 paise is
+    // dropped rather than rounded into a wrong figure.
+    // The conversion is exact: Number.isSafeInteger guards it (paise, serialised as a JSON number).
+    ...(opts.includePay && Number.isSafeInteger(Number(emp.basicMinor)) ? { basicMinor: Number(emp.basicMinor) } : {}), // precision-ok
   };
 }
 
@@ -199,7 +219,7 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
  * cannot be added yet (no column); see docs/SECURITY.md's Directory Fields
  * note for the recorded policy and this gap.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[], status?: string): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[], status?: string, excludeStatuses?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; total?: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
@@ -245,8 +265,13 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
   // shared "employee" resource prefix also used by getEmployee/
   // getEmployeeDetail's single-record cache keys (makeKey), which this
   // change does not affect and must not invalidate.
-  return cache.listOrLoad(tenantId, "employee", `list:v2:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}:${status ?? ""}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status);
+  // GAP-HR-LEAVE-ALLOCATE-04: "v3" -- the page is now name-ordered and carries
+  // a real `total`; an entry cached under "v2" is unordered and has no total.
+  return cache.listOrLoad(tenantId, "employee", `list:v3:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}:${status ?? ""}:${excludeStatuses && excludeStatuses.length > 0 ? [...excludeStatuses].sort().join("+") : ""}`, async () => {
+    const [rows, total] = await Promise.all([
+      repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status, excludeStatuses),
+      repo.countByTenant(tenantId, employeeType, managerScope, q, status, excludeStatuses),
+    ]);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     const desigs = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, tenantId)));
@@ -270,8 +295,11 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
         };
       }),
       pagination: {
-        hasMore: rows.length === limit,
+        // Exact now that the real total is known (was `rows.length === limit`,
+        // which said "more" for a result that ended exactly on a page boundary).
+        hasMore: offset + rows.length < total,
         pageSize: limit,
+        total,
         ...(rows.length > 0 ? { cursor: String(offset + rows.length) } : {}),
       },
     };

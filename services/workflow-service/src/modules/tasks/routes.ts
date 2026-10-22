@@ -41,10 +41,15 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       status: z.string().optional(),
       // D1 (FE↔BE high ROI) — scope the task list to one instance.
       instanceId: z.string().uuid().optional(),
+      // GAP-HR-LEAVE-APPROVALS-02 — scope the list to one record type (e.g.
+      // leave_app) in SQL, so a module inbox is not paged out by other modules'
+      // tasks. Same bound as the refType column (varchar(64)).
+      refType: z.string().min(1).max(64).optional(),
     }).parse(req.query);
-    const listOpts: { status?: string; roles?: string[]; instanceId?: string } = {};
+    const listOpts: { status?: string; roles?: string[]; instanceId?: string; refType?: string } = {};
     if (q.status !== undefined) listOpts.status = q.status;
     if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
+    if (q.refType !== undefined) listOpts.refType = q.refType;
     if (ctx.roles.length) listOpts.roles = ctx.roles;
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });

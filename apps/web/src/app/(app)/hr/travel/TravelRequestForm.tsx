@@ -48,7 +48,9 @@ export function TravelRequestForm() {
     if (!fields.fromDate) errs.add("fromDate");
     if (!fields.toDate) errs.add("toDate");
     if (fields.fromDate && fields.toDate && fields.toDate < fields.fromDate) errs.add("toDate");
-    if (fields.advanceRequired && rupeesToMinorString(fields.advanceRequired) === null) errs.add("advanceRequired");
+    // GAP-HR-TRAVEL-05: an advance of 0 is valid (the route accepts int >= 0);
+    // anything with more than 2 decimals (e.g. 1.005) or a sign is rejected.
+    if (fields.advanceRequired && rupeesToMinorString(fields.advanceRequired, { allowZero: true }) === null) errs.add("advanceRequired");
     setInvalid(errs);
     return errs.size === 0;
   }
@@ -75,7 +77,7 @@ export function TravelRequestForm() {
         // (advanceRequired: z.number().int()) expects a plain integer, not
         // a bigint-sized value -- travel advances are well within
         // Number.MAX_SAFE_INTEGER.
-        const minor = rupeesToMinorString(fields.advanceRequired);
+        const minor = rupeesToMinorString(fields.advanceRequired, { allowZero: true });
         body.advanceRequired = Number(minor);
       }
       const res = await fetch("/api/proxy/v1/hrms/travel-requests", {

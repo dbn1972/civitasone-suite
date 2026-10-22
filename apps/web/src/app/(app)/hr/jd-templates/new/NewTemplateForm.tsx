@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { AcceptedNotice, Button, Field, Input, Select, Textarea, ConfirmDialog } from "../../../../_components/ds";
+import { AcceptedNotice, Button, Field, Input, Select, Textarea, ConfirmDialog, SkeletonBar, SkeletonRegion } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { acceptedCopy } from "@/lib/acceptedCopy";
@@ -41,6 +41,11 @@ const LIMITS = {
   docsCount: 30,
 };
 
+/** The library URL, carrying the just-created id so the list can highlight (or show a pending row for) it. */
+function libraryHref(createdId?: string | null): string {
+  return createdId ? `/hr/jd-templates?created=${encodeURIComponent(createdId)}` : "/hr/jd-templates";
+}
+
 type TemplateResponse = {
   name?: string;
   vacancyType?: string;
@@ -68,7 +73,27 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   const tAction = useTranslations("action");
   const TYPE_LABEL = typeLabels(t);
   const router = useRouter();
-  const accepted = useAcceptedWrite();
+  // GAP-HR-JD-TEMPLATES-NEW-01: POST /jd-templates replies 202 with the new
+  // id and only QUEUES the insert. The create flow therefore polls that
+  // template's own GET (404 until the consumer has run) and, once it is
+  // really there, moves on to the list with the id so the list can highlight
+  // it -- no timed guess. PATCH (edit) has nothing new to look up, so it
+  // keeps the plain accepted notice.
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const acceptedCreate = useAcceptedWrite<string, true>({
+    poll: async (newId) => {
+      const res = await fetch(`/api/proxy/v1/hrms/jd-templates/${encodeURIComponent(newId)}`);
+      if (!res.ok) throw new Error("template not readable yet");
+      return true as const;
+    },
+    isDone: () => true,
+    onConfirmed: (_polled, newId) => router.push(libraryHref(newId)),
+    initialDelayMs: 600,
+    maxAttempts: 6,
+  });
+  const acceptedEdit = useAcceptedWrite();
+  // createdId is only ever set by the create path below.
+  const accepted = createdId ? acceptedCreate : acceptedEdit;
   const formError = useFormError("JD template");
   const isEdit = !!templateId;
   const [name, setName] = useState("");
@@ -93,6 +118,8 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(isEdit);
   const [loadError, setLoadError] = useState<"not_found" | "other" | null>(null);
+  // Bumped by "Try again" to re-run the template load after a 5xx / network failure.
+  const [reloadKey, setReloadKey] = useState(0);
   const [dirty, setDirty] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
@@ -123,7 +150,13 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [templateId]);
+  }, [templateId, reloadKey]);
+
+  function retryLoad() {
+    setLoadError(null);
+    setLoading(true);
+    setReloadKey((k) => k + 1);
+  }
 
   // GAP-HR-JD-TEMPLATES-DETAIL-06/NEW-05: warn on an actual browser-level
   // navigation (reload/close tab) while there are unsaved edits -- the
@@ -211,8 +244,19 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
       setDirty(false);
       setStatus("success");
       setMessage(isEdit ? t("updateSubmitted") : t("createSubmitted"));
-      // 202: no timed redirect that guesses the write has landed; the user continues from the notice.
-      void accepted.accept();
+      if (isEdit) {
+        // 200 "accepted": no timed redirect that guesses the write has landed; the user continues from the notice.
+        void acceptedEdit.accept();
+      } else {
+        const body = (await res.json().catch(() => null)) as { id?: unknown } | null;
+        const newId = typeof body?.id === "string" ? body.id : null;
+        if (newId) {
+          setCreatedId(newId);
+          void acceptedCreate.accept(newId);
+        } else {
+          void acceptedEdit.accept();
+        }
+      }
     } catch {
       setStatus("error");
       setMessage(t("networkError"));
@@ -227,7 +271,19 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   }
 
   if (loading) {
-    return <p style={{ textAlign: "center", color: "var(--mut)", padding: "48px 0" }}>{t("loadingTemplate")}</p>;
+    // GAP-HR-JD-TEMPLATES-DETAIL-04: a form-shaped skeleton (same width and
+    // field rhythm as the form below) instead of a bare "Loading..." line, so
+    // the layout does not jump when the template arrives.
+    return (
+      <SkeletonRegion label={t("loadingTemplate")} live style={{ maxWidth: 640, display: "grid", gap: 18 }}>
+        {[34, 38, 120, 38, 38, 76, 38, 38].map((h, i) => (
+          <div key={i} style={{ display: "grid", gap: 8 }}>
+            <SkeletonBar w="30%" h={12} />
+            <SkeletonBar w="100%" h={h} />
+          </div>
+        ))}
+      </SkeletonRegion>
+    );
   }
 
   if (loadError) {
@@ -236,9 +292,16 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
         <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", color: "var(--bad)", fontSize: 13, border: "1px solid var(--badbd)" }}>
           {loadError === "not_found" ? t("loadNotFound") : t("loadOtherError")}
         </p>
-        <Link href="/hr/jd-templates" style={{ display: "inline-block", marginTop: 14, padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2)", background: "var(--bg)", borderRadius: 8, textDecoration: "none" }}>
-          {t("backToTemplates")}
-        </Link>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
+          {/* A 404 is permanent (the template is gone), so retrying cannot help;
+              a 5xx / network failure is transient, so offer to try again. */}
+          {loadError === "other" && (
+            <Button variant="primary" onClick={retryLoad}>{t("retryLoad")}</Button>
+          )}
+          <Link href="/hr/jd-templates" style={{ display: "inline-block", padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2)", background: "var(--bg)", borderRadius: 8, textDecoration: "none" }}>
+            {t("backToTemplates")}
+          </Link>
+        </div>
       </div>
     );
   }
@@ -335,7 +398,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
         )}
         <AcceptedNotice
           {...accepted.noticeProps}
-          onRefresh={() => { router.push("/hr/jd-templates"); router.refresh(); }}
+          onRefresh={() => { router.push(libraryHref(createdId)); router.refresh(); }}
           labels={{ refresh: acceptedCopy().continue }}
         />
 

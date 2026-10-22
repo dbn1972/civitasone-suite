@@ -1,4 +1,15 @@
+import { fileURLToPath } from "node:url";
+
 export default {
+  // Root tests that load apps/web source (e.g. tests/contract/disciplinary-case-actions-parity.contract.test.ts
+  // imports the case-page action table, which imports "@/lib/auth/workRoles") need the same "@" -> apps/web/src
+  // alias apps/web/vitest.config.ts defines; without it the file cannot even be loaded at the repo root. A string
+  // alias matches only "@" and "@/..." specifiers, never a scoped package such as "@civitasone/schemas".
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)),
+    },
+  },
   test: {
     include: ["tests/**/*.test.ts"],
     passWithNoTests: false,

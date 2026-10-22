@@ -150,7 +150,7 @@ export function AddHolidayForm({ year }: Props) {
           <Field label={t("fieldApplicableTo")} error={formError.fieldError("applicableTo")}>
             <Input
               type="text"
-              placeholder="all"
+              placeholder={t("fieldApplicableToPlaceholder")}
               value={fields.applicableTo}
               onChange={(e) => set("applicableTo", e.target.value)}
             />

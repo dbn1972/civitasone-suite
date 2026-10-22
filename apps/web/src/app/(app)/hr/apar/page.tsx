@@ -12,6 +12,8 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { APARFlowList, type AparRecord } from "./_components/APARFlowCard";
 import { APARCycleProgress } from "./_components/APARCycleProgress";
+import { AparPager } from "./_components/AparPager";
+import { APAR_PAGE_SIZE, offsetForPage, parsePage } from "@/lib/apar/paging";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
@@ -52,13 +54,17 @@ interface AparListData {
 
 const EMPTY_COUNTS: AparListCounts = { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 };
 
-// GAP-HR-APAR-06: forwards the page's own ?status=/?period= filters to the
-// backend (repo.listAppraisals' new optional exact-match filters) instead
-// of always fetching an unfiltered, silently-capped-at-100 list.
-async function getApars(filters: { status?: string; period?: string }) {
+// GAP-HR-APAR-06: forwards the page's own ?status=/?period=/?q= filters and
+// its ?page= window to the backend (repo.listAppraisals' optional filters and
+// limit/offset) instead of always fetching an unfiltered, silently-capped
+// list.
+async function getApars(filters: { status?: string; period?: string; q?: string; page: number }) {
   const params = new URLSearchParams();
   if (filters.status) params.set("status", filters.status);
   if (filters.period) params.set("period", filters.period);
+  if (filters.q) params.set("q", filters.q);
+  params.set("limit", String(APAR_PAGE_SIZE));
+  params.set("offset", String(offsetForPage(filters.page)));
   const qs = params.toString();
   return fetchJson<unknown, AparListData | null>(`/api/v1/hrms/apar${qs ? `?${qs}` : ""}`, null, {
     telemetryKey: "apar.list",
@@ -85,7 +91,7 @@ async function getApars(filters: { status?: string; period?: string }) {
 export default async function AparListPage({
   searchParams,
 }: {
-  searchParams: { status?: string; period?: string };
+  searchParams: { status?: string; period?: string; q?: string; page?: string };
 }) {
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
@@ -106,10 +112,29 @@ export default async function AparListPage({
   const tStage = await getTranslations("aparDetail");
   const statusFilter = typeof searchParams.status === "string" ? searchParams.status : undefined;
   const periodFilter = typeof searchParams.period === "string" ? searchParams.period : undefined;
-  const result = await getApars({ status: statusFilter, period: periodFilter });
+  // GAP-HR-APAR-06: free-text search over appraisee name / employee number.
+  const qFilter = typeof searchParams.q === "string" && searchParams.q.trim() ? searchParams.q.trim().slice(0, 100) : undefined;
+  const page = parsePage(searchParams.page);
+  const result = await getApars({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(periodFilter ? { period: periodFilter } : {}),
+    ...(qFilter ? { q: qFilter } : {}),
+    page,
+  });
   const errored = result.source === "error";
-  const { records: apars, total, hasMore, counts } = result.data ?? {
+  const { records: apars, total, counts } = result.data ?? {
     records: [], total: 0, hasMore: false, counts: EMPTY_COUNTS,
+  };
+  const offset = offsetForPage(page);
+  // Keeps the active filters while moving between pages (page 1 drops ?page=).
+  const hrefForPage = (p: number) => {
+    const sp = new URLSearchParams();
+    if (statusFilter) sp.set("status", statusFilter);
+    if (periodFilter) sp.set("period", periodFilter);
+    if (qFilter) sp.set("q", qFilter);
+    if (p > 1) sp.set("page", String(p));
+    const qs = sp.toString();
+    return qs ? `/hr/apar?${qs}` : "/hr/apar";
   };
 
   return (
@@ -132,7 +157,7 @@ export default async function AparListPage({
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")}           value={errored ? null : total} />
         <StatCard icon="✍️" iconBg="var(--warnbg)" label={t("statSelfAppraisal")}    value={errored ? null : counts.selfPending} />
-        <StatCard icon="🔍" iconBg="var(--infobg)" label={t("statUnderReview")}      value={errored ? null : counts.inReview} />
+        <StatCard icon="🔍" iconBg="var(--infobg)" label={t("statInOfficerReview")} hint={t("statInOfficerReviewHint")} value={errored ? null : counts.inReview} />
         <StatCard icon="📨" iconBg="var(--warnbg)" label={t("statAwaitingClosure")}  value={errored ? null : counts.awaitingClosure} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalised")}        value={errored ? null : counts.finalised} />
       </StatGrid>
@@ -147,7 +172,7 @@ export default async function AparListPage({
           Unfiltered view only: the backend applies ?status=/?period= to
           `total` but not to `counts`, so a filtered view would mix two
           different sets (e.g. "25 of 3 finalised"). */}
-      {!errored && !statusFilter && !periodFilter && <APARCycleProgress total={total} finalised={counts.finalised} />}
+      {!errored && !statusFilter && !periodFilter && !qFilter && <APARCycleProgress total={total} finalised={counts.finalised} />}
 
       {!errored && (
         <form method="get" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "4px 0 16px" }}>
@@ -177,8 +202,21 @@ export default async function AparListPage({
               maxLength={16}
             />
           </div>
+          <div>
+            <label htmlFor="apar-filter-q" style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>
+              {t("filterSearchLabel")}
+            </label>
+            <input
+              id="apar-filter-q"
+              name="q"
+              type="search"
+              defaultValue={qFilter ?? ""}
+              placeholder={t("filterSearchPlaceholder")}
+              maxLength={100}
+            />
+          </div>
           <button type="submit" className="btn primary">{t("filterApplyBtn")}</button>
-          {(statusFilter || periodFilter) && (
+          {(statusFilter || periodFilter || qFilter) && (
             <Link href="/hr/apar" className="btn ghost">{t("filterClearBtn")}</Link>
           )}
         </form>
@@ -192,10 +230,8 @@ export default async function AparListPage({
         ) : (
           <div style={{ padding: 16 }}>
             <APARFlowList records={apars} />
-            {hasMore && (
-              <p style={{ marginTop: 12, fontSize: 13, color: "var(--mut)" }}>
-                {t("showingOfTotal", { shown: apars.length, total })}
-              </p>
+            {(total > APAR_PAGE_SIZE || offset > 0) && (
+              <AparPager total={total} offset={offset} shown={apars.length} hrefFor={hrefForPage} />
             )}
           </div>
         )}

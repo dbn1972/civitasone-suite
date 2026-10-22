@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
@@ -22,6 +22,7 @@ export function NewDesignationPageClient() {
   const t = useTranslations("addDesignationForm");
   const router = useRouter();
   const [justAdded, setJustAdded] = useState(false);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <div className="page-main wrap">
@@ -32,6 +33,7 @@ export function NewDesignationPageClient() {
         backLabel={t("pageBackLabel")}
       />
       <AddDesignationForm
+        codeInputRef={codeInputRef}
         onCancel={() => { router.push("/hr/designations"); }}
         onSuccess={() => {
           router.refresh();
@@ -44,7 +46,13 @@ export function NewDesignationPageClient() {
             <button
               type="button"
               className="btn"
-              onClick={() => setJustAdded(false)}
+              onClick={() => {
+                setJustAdded(false);
+                // GAP-HR-DESIGNATIONS-NEW-04: this button unmounts as soon as
+                // justAdded flips, which would drop focus to <body>; hand it
+                // to the Code field so the next entry can start immediately.
+                codeInputRef.current?.focus();
+              }}
             >
               {t("addAnother")}
             </button>

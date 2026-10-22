@@ -20,12 +20,26 @@ export interface GradeResult {
   attributeCount: number;
 }
 
-/** DoPT/SPARROW grade bands on the 1..10 numeric scale. */
+/**
+ * DoPT/SPARROW grade bands on the 1..10 numeric scale, highest first. `min`
+ * is the inclusive lower bound; `null` marks the catch-all lowest band. This
+ * table is the ONE source of truth: `bandForGrade` below reads it, and
+ * GET /v1/hrms/apar/:id returns it as `gradeBands` so the detail page prints
+ * the scale from the API instead of keeping its own hard-coded copy
+ * (GAP-HR-APAR-DETAIL-05). Changing a cut-off needs HR sign-off first.
+ */
+export const GRADE_BANDS: ReadonlyArray<{ band: AparBand; min: number | null }> = [
+  { band: "Outstanding", min: 9 },
+  { band: "Very Good", min: 7 },
+  { band: "Good", min: 5 },
+  { band: "Average", min: 4 },
+  { band: "Below Average", min: null },
+];
+
 export function bandForGrade(grade: number): AparBand {
-  if (grade >= 9) return "Outstanding";
-  if (grade >= 7) return "Very Good";
-  if (grade >= 5) return "Good";
-  if (grade >= 4) return "Average";
+  for (const b of GRADE_BANDS) {
+    if (b.min === null || grade >= b.min) return b.band;
+  }
   return "Below Average";
 }
 

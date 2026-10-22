@@ -15,6 +15,31 @@ export function canTerminate(status: string, roles: string[]): boolean {
   return status === "active" && roles.some((r) => CONTRACT_HR_ROLES.includes(r));
 }
 
+/** A contract still in force that ends within this many days counts as "expiring" (mirrors hrms-service CONTRACT_EXPIRING_WINDOW_DAYS). */
+export const EXPIRING_WINDOW_DAYS = 30;
+
+export type ContractExpiryState = "expired" | "expiring" | "active" | "none";
+
+/**
+ * GAP-HR-CONTRACTUAL-04: where a contract stands against today, from its status AND its end date
+ * (`daysToExpiry` = whole IST calendar days from today to the end date; negative once past it; null when the
+ * date is missing/unparseable). The same classes hrms-service uses for the register's counts
+ * (contracts/repo.ts summarizeContracts), so a row's badge and the stat cards can never disagree:
+ *   none      terminated / renewed / draft, or an unreadable end date on an open contract -- not in force
+ *   expired   status 'expired', or still open (active/expiring/escalated) and past its end date
+ *   expiring  in force and ending within EXPIRING_WINDOW_DAYS -- by END DATE only; the scheduler's own 'expiring'
+ *             status is set at <=90 days, so it is not a 30-day signal by itself
+ *   active    in force, further out (a scheduler-flagged 'expiring' contract 45 days out is here)
+ */
+export function contractExpiryState(status: string, daysToExpiry: number | null): ContractExpiryState {
+  if (status === "terminated" || status === "renewed" || status === "draft") return "none";
+  if (status === "expired") return "expired";
+  if (daysToExpiry === null || Number.isNaN(daysToExpiry)) return "none";
+  if (daysToExpiry < 0) return "expired";
+  if (daysToExpiry <= EXPIRING_WINDOW_DAYS) return "expiring";
+  return "active";
+}
+
 export type HistoryRow = { id: string; contractNo: string; startDate: string; endDate: string; status: string };
 
 /**
@@ -37,4 +62,47 @@ export function validateNewEndDate(newEndDate: string, currentEndDate: string): 
   if (!newEndDate) return "required";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(newEndDate) || Number.isNaN(Date.parse(newEndDate))) return "invalid";
   return newEndDate > currentEndDate ? null : "notAfter";
+}
+
+/**
+ * GAP-HR-WORKFORCE-CONTRACTUAL-01: the "Expiring ≤30d" window carried over
+ * from the retired /hr/workforce/contractual page (GFR 2017 Ch. 8 renewal
+ * alerts). It IS EXPIRING_WINDOW_DAYS -- one constant, so the tile, the per-row
+ * badge and the pill can never use different windows.
+ */
+export const EXPIRING_SOON_DAYS = EXPIRING_WINDOW_DAYS;
+
+/**
+ * True only for a LIVE engagement (active, already flagged "expiring" by
+ * hrms-service's expiry consumer, or "escalated" by it) whose end date is today
+ * or within the next EXPIRING_WINDOW_DAYS. The backend flips active -> expiring
+ * at <=90 days, so the `expiring` status alone is NOT a 30-day signal; and a
+ * contract whose end date has already passed (negative `daysToExpiry`) is
+ * ended, not expiring, even if its stored status has not been swept yet.
+ * Terminated / renewed / expired / draft contracts never count. A missing or
+ * unreadable end date never counts. This delegates to contractExpiryState --
+ * the one implementation of the end-date rule, which is also hrms-service's
+ * summarizeContracts rule (the register's "Expiring <=30d" tile) -- so the two
+ * cannot drift.
+ */
+export function isExpiringSoon(status: string, daysToExpiry: number | null): boolean {
+  return contractExpiryState(status, daysToExpiry) === "expiring";
+}
+
+/** The pseudo-status shown on the register's status badge for a contract ending within 30 days. */
+export const EXPIRING_SOON_STATUS = "expiring_30d";
+
+/**
+ * The status the register's badge shows. Raw statuses pass through unchanged
+ * except: a live contract ending within 30 days reads `expiring_30d`
+ * (highlighted), and a live contract already past its end date reads
+ * `expired` (the same rule the Expired tile counts by) instead of a stale
+ * green "Active". An `escalated` contract keeps its own pill (no renewal was
+ * started -- more important to see than the window), although the tile still
+ * counts it.
+ */
+export function contractDisplayStatus(status: string, daysToExpiry: number | null): string {
+  if (status !== "escalated" && isExpiringSoon(status, daysToExpiry)) return EXPIRING_SOON_STATUS;
+  if ((status === "active" || status === "expiring") && daysToExpiry !== null && daysToExpiry < 0) return "expired";
+  return status;
 }

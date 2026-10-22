@@ -35,12 +35,18 @@ export type Row = {
   canDecide: boolean;
 } & Record<string, unknown>;
 
-function pluralMonths(n: number): string {
+/**
+ * GAP-HR-ADVANCES-07: the Recovery column's wording ("1 month" / "6 months")
+ * used to be built here in English. The caller now supplies the formatter
+ * (page.tsx passes advances.recoveryMonthsValue, an ICU plural), so the unit
+ * is localised; an unknown / non-finite count stays a dash.
+ */
+function recoveryLabel(n: number, formatMonths: (months: number) => string): string {
   if (!Number.isFinite(n)) return "—";
-  return n === 1 ? "1 month" : `${n} months`;
+  return formatMonths(n);
 }
 
-export function mapAdvances(rows: ApiAdvance[]): Row[] {
+export function mapAdvances(rows: ApiAdvance[], formatMonths: (months: number) => string): Row[] {
   return rows.map((a) => ({
     id: a.id,
     // Acceptance (GAP-HR-ADVANCES-01): missing name renders "—", never a
@@ -52,7 +58,7 @@ export function mapAdvances(rows: ApiAdvance[]): Row[] {
       : "—",
     amount: a.amountMinor ?? 0,
     purpose: a.purpose ?? "—",
-    recoveryMonths: pluralMonths(a.recoveryMonths),
+    recoveryMonths: recoveryLabel(a.recoveryMonths, formatMonths),
     recovered: a.recoveredMinor ?? 0,
     requestDate: a.requestDate ?? a.created_at ?? "—",
     status: a.status === "active" ? "approved" : (a.status ?? "pending"),

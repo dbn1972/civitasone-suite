@@ -24,6 +24,7 @@ const FULL: WizardData = {
   fullName: "Priya Sharma", dateOfBirth: "1990-04-02", gender: "female", maritalStatus: "married", bloodGroup: "O+",
   mobile: "9876543210", email: "priya@example.gov.in", employeeNo: "E-1", departmentId: "d1", designationId: "g1",
   grade: "Group-B", dateOfJoining: "2026-01-01", employeeType: "permanent", basicPay: "44900.50",
+  payStructureId: "11111111-2222-4333-8444-555555555555",
   managerId: "m1", workLocation: "Delhi", locationId: "loc-1", shift: "morning", costCenterId: "cc1", workStateCode: "MH",
   pan: "ABCDE1234F", aadhaarRef: "ref", bankAccountNo: "1234567890", bankIfsc: "SBIN0001234",
 };
@@ -45,6 +46,12 @@ describe("AddEmployeeWizard buildPayload contract", () => {
     for (const gone of ["grade", "costCenter", "workLocation", "pfEnrolled", "esiEnrolled", "ptApplicable"]) {
       expect(body).not.toHaveProperty(gone);
     }
+  });
+
+  // GAP-HR-EMPLOYEES-NEW-02: the pay structure picked in Step 2 reaches the create body.
+  it("sends the picked payStructureId, and omits it when none is picked", () => {
+    expect(buildPayload(FULL)).toMatchObject({ payStructureId: "11111111-2222-4333-8444-555555555555" });
+    expect(buildPayload({ ...FULL, payStructureId: "" })).not.toHaveProperty("payStructureId");
   });
 
   it("sends a real state / UT code as workStateCode and drops a blank or unknown one", () => {

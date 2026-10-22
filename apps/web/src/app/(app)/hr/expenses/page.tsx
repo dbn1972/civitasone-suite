@@ -7,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { mapExpenses, type ApiExpense, type Row } from "./mapExpenses";
 import { NewExpenseClaimForm } from "./NewExpenseClaimForm";
+import { parseTravelRequestId } from "./travelLink";
 import { ExpensesView } from "./ExpensesView";
 
 // (services/hrms-service/src/modules/social/routes.ts) -- same convention as
@@ -36,7 +37,9 @@ async function getApprovalsData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
-export default async function ExpensesPage() {
+export default async function ExpensesPage({ searchParams }: { searchParams?: { travelRequestId?: string | string[] } }) {
+  // GAP-HR-TRAVEL-02: an approved travel request links here to pre-link the claim.
+  const travelRequestId = parseTravelRequestId(searchParams?.travelRequestId);
   const t = await getTranslations("expenses");
   const roles = getSessionRoles();
   const canDecide = roles.some((r) => HR_EXPENSE_DECIDE_ROLES.includes(r));
@@ -63,7 +66,7 @@ export default async function ExpensesPage() {
         <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
 
-      <NewExpenseClaimForm />
+      <NewExpenseClaimForm {...(travelRequestId ? { travelRequestId } : {})} />
 
       <Card title={t("cardTitle")}>
         {errored ? (

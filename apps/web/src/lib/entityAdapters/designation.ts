@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict, type StrictOpt } from "./strict";
 
 type DesignationRow = { id: string; name: string; grade?: string };
 
@@ -19,15 +20,19 @@ function toOption(row: DesignationRow): EntityOption {
  * list, this can move to real server-side search without EntityPicker or
  * its callers changing at all.
  */
-async function fetchAll(signal?: AbortSignal): Promise<DesignationRow[]> {
+async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<DesignationRow[]> {
   const res = await fetch("/api/proxy/v1/hrms/designations", { signal });
+  // GAP-HR-PROMOTION-05: a caller that passes `{ strict: true }` gets a thrown
+  // error instead of [] so EntityPicker shows "could not load" (with Retry)
+  // rather than "No matches" for a designations list that failed to load.
+  failStrict(res, opts);
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: DesignationRow[] } | DesignationRow[];
   return Array.isArray(body) ? body : (body.data ?? []);
 }
 
-export async function searchDesignations(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+export async function searchDesignations(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
+  const rows = await fetchAll(signal, opts);
   const q = query.trim().toLowerCase();
   const filtered = q ? rows.filter((r) => r.name.toLowerCase().includes(q)) : rows;
   return filtered.map(toOption);

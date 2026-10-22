@@ -1,10 +1,16 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
 import { ZodError, z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { auditEventsListSchema, TenantAuditEventListSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
+import { exportActorLabel, exportOutcome } from "./domain.js";
+import { MAX_EXPORT_ROWS } from "../exports/validators.js";
+import { toCsv } from "../../shared/csv.js";
+
+const EVENT_READ_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_admin"];
 
 /**
  * G-FIX-3 (partial): CLAUDE.md requires cross-tenant data access to "trigger
@@ -60,7 +66,100 @@ function toFilters(q: { service?: string | undefined; resourceType?: string | un
   };
 }
 
+/** Same default window the list routes apply when `from` is not supplied. */
+const DEFAULT_WINDOW_MS = 7 * 86400 * 1000;
+
+/**
+ * GAP-HR-AUDIT-LOG-04: query shared by the count and export routes -- exactly
+ * the narrowing the list routes accept, so "N matching events", the export and
+ * the page itself can never disagree about what matches. Both are strictly
+ * caller-tenant-scoped (no ?tenantId=): a cross-tenant trail read stays on the
+ * list routes, where it is gated and audited.
+ */
+const rangeQuery = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  type: z.string().optional(),
+  ...eventFilterQuery,
+});
+function resolveRange(q: { from?: string | undefined; to?: string | undefined }): { from: Date; to: Date } {
+  return {
+    from: q.from ? new Date(q.from) : new Date(Date.now() - DEFAULT_WINDOW_MS),
+    to: q.to ? new Date(q.to) : new Date(),
+  };
+}
+
+const RATE_LIMIT = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } } as const;
+const EXPORT_RATE_LIMIT = { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } } as const;
+
 export async function eventRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-HR-AUDIT-LOG-04: total events matching the filters (whole range, not one page).
+  const countHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EVENT_READ_ROLES);
+    const q = rangeQuery.parse(req.query);
+    const { from, to } = resolveRange(q);
+    return reply.send({ total: await queries.countEvents(ctx.tenantId, from, to, q.type, toFilters(q)) });
+  };
+  app.get("/audit/events/count", RATE_LIMIT, countHandler);
+  app.get("/v1/audit/events/count", RATE_LIMIT, countHandler);
+
+  // GAP-HR-AUDIT-LOG-04: CSV of EVERY event matching the filters. Refuses (413)
+  // rather than silently truncating when the match set exceeds the export cap,
+  // and records the export on the trail itself BEFORE any data leaves -- fail
+  // closed: if the audit write fails the caller gets an error and no file.
+  const exportHandler = async (req: FastifyRequest, reply: FastifyReply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EVENT_READ_ROLES);
+    const q = rangeQuery.parse(req.query);
+    const { from, to } = resolveRange(q);
+    const filters = toFilters(q);
+    const rows = await queries.listEventsForExport(ctx.tenantId, from, to, q.type, filters, MAX_EXPORT_ROWS);
+    if (rows.length > MAX_EXPORT_ROWS) {
+      throw new HttpError(413, "EXPORT_TOO_LARGE", `more than ${MAX_EXPORT_ROWS} events match; narrow the date range or filters and export again`);
+    }
+    const exportId = randomUUID();
+    await queries.writeEvent(
+      ctx.tenantId,
+      ctx.actorId,
+      "audit.events.exported",
+      "audit_export",
+      exportId,
+      "info",
+      {
+        service: "audit", action: "export", outcome: "success", format: "csv", rowCount: rows.length,
+        filters: { from: from.toISOString(), to: to.toISOString(), ...(q.type ? { type: q.type } : {}), ...filters },
+      },
+      ctx.correlationId,
+      (req.headers["x-forwarded-for"] as string | undefined) ?? req.ip,
+      req.headers["user-agent"] as string | undefined,
+    );
+    const csv = toCsv(
+      ["Event ID", "Occurred at (UTC)", "Service", "Action", "Event type", "Resource type", "Resource ID", "Actor", "Actor ID", "Outcome", "Severity"],
+      rows.map((r) => [
+        r.id,
+        r.occurredAt.toISOString(),
+        r.service ?? "",
+        r.action ?? "",
+        r.type,
+        r.resourceType ?? "",
+        r.resourceId ?? r.target ?? "",
+        exportActorLabel(r.actor),
+        typeof r.actor.actorId === "string" ? r.actor.actorId : "",
+        exportOutcome(r.outcome, r.severity),
+        r.severity,
+      ]),
+    );
+    void reply.header("content-type", "text/csv; charset=utf-8");
+    void reply.header("content-disposition", `attachment; filename="audit-events-${new Date().toISOString().slice(0, 10)}.csv"`);
+    void reply.header("cache-control", "no-store");
+    void reply.header("x-export-row-count", String(rows.length));
+    // UTF-8 BOM so Excel opens non-ASCII actor names correctly.
+    return reply.send(`\uFEFF${csv}`);
+  };
+  app.get("/audit/events/export", EXPORT_RATE_LIMIT, exportHandler);
+  app.get("/v1/audit/events/export", EXPORT_RATE_LIMIT, exportHandler);
+
   app.get("/audit/events", async (req, reply) => {
     const ctx = resolveContext(req);
     const q = listQuerySchema.extend({

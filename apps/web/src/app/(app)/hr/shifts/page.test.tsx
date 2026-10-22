@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -16,8 +16,16 @@ vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 import ShiftsPage from "./page";
 
 const MOCK_SHIFTS = [
-  { id: "s1", name: "General Duty", startTime: "09:00", endTime: "17:30", breakDuration: "30 min", workingHours: "8 hrs", applicableTo: "All Cadres", status: "active" },
-  { id: "s2", name: "Night Shift", startTime: "22:00", endTime: "06:00", breakDuration: "30 min", workingHours: "7.5 hrs", applicableTo: "Essential Services", status: "active" },
+  { id: "s1", name: "General Duty", startTime: "09:00", endTime: "17:30", gracePeriod: "15 min", workingHours: "8h 30m", applicableTo: "All Cadres", status: "active", graceMinutes: 15 },
+  { id: "s2", name: "Night Shift", startTime: "22:00", endTime: "06:00", gracePeriod: "15 min", workingHours: "8h 0m", applicableTo: "Essential Services", status: "active", graceMinutes: 15 },
+];
+
+// The real API shape (attendance/repo.ts listShifts): numeric minutes only,
+// cross-midnight already wrapped by the backend (22:00-06:00 -> 480).
+const API_SHIFTS = [
+  { id: "s1", name: "General Duty", startTime: "09:00", endTime: "17:30", graceMinutes: 10, workingMinutes: 510, applicableTo: "All", status: "active" },
+  { id: "s2", name: "Night Shift", startTime: "22:00", endTime: "06:00", graceMinutes: 15, workingMinutes: 480, applicableTo: "All", status: "active" },
+  { id: "s3", name: "Flexi", startTime: "10:00", endTime: "10:45", graceMinutes: 0, workingMinutes: 45, applicableTo: "All", status: "active" },
 ];
 
 describe("ShiftsPage", () => {
@@ -113,5 +121,54 @@ describe("ShiftsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
     render(await ShiftsPage());
     expect(screen.getByText("All Shift Definitions")).toBeInTheDocument();
+  });
+});
+
+// GAP-HR-SHIFTS-02: run the page's REAL mapResponse over the API's actual
+// shape. The register used to key its Grace column off a `breakDuration` the
+// API no longer returns, so every row showed a dash and grace minutes were
+// never displayed; ShiftCard still called the same value "Break".
+describe("ShiftsPage grace period and working time (GAP-HR-SHIFTS-02)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue([]);
+    fetchJsonMock.mockImplementation(async (_url: string, _fallback: unknown, opts: { mapResponse: (p: unknown) => unknown }) => ({
+      data: opts.mapResponse({ data: API_SHIFTS }),
+      source: "api",
+    }));
+  });
+
+  function rowFor(name: string): HTMLElement {
+    const table = screen.getByRole("table");
+    const cell = within(table).getByText(name);
+    return cell.closest("tr") as HTMLElement;
+  }
+
+  it("labels the column 'Grace period' (not Break) and shows each shift's grace minutes", async () => {
+    render(await ShiftsPage());
+    const table = screen.getByRole("table");
+    expect(within(table).getByRole("columnheader", { name: /grace period/i })).toBeInTheDocument();
+    expect(within(table).queryByRole("columnheader", { name: /^break/i })).toBeNull();
+    expect(within(rowFor("General Duty")).getByText("10 min")).toBeInTheDocument();
+    expect(within(rowFor("Night Shift")).getByText("15 min")).toBeInTheDocument();
+    // zero grace is real data, shown as 0 min -- not a dash standing in for "unknown"
+    expect(within(rowFor("Flexi")).getByText("0 min")).toBeInTheDocument();
+  });
+
+  it("shows a cross-midnight night shift (22:00-06:00) as 8h 0m, not a dash", async () => {
+    render(await ShiftsPage());
+    expect(within(rowFor("Night Shift")).getByText("8h 0m")).toBeInTheDocument();
+    expect(within(rowFor("General Duty")).getByText("8h 30m")).toBeInTheDocument();
+    expect(within(rowFor("Flexi")).getByText("45 min")).toBeInTheDocument();
+  });
+
+  it("the shift cards carry the same grace period under a Grace label, never 'Break'", async () => {
+    render(await ShiftsPage());
+    const night = screen.getByRole("article", { name: /night shift/i });
+    expect(within(night).getByText("Grace")).toBeInTheDocument();
+    expect(within(night).getByText("15 min")).toBeInTheDocument();
+    expect(within(night).getByText("8h 0m")).toBeInTheDocument();
+    expect(within(night).queryByText("Break")).toBeNull();
   });
 });

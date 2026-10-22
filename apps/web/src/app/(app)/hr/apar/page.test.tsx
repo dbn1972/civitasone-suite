@@ -21,7 +21,7 @@ import AparListPage from "./page";
 // unlike DataTable's own useSafeTranslations fallback -- so every render
 // here needs a real provider in the tree, same pattern as
 // dpc/page.test.tsx and SeniorityListActions.test.tsx.
-async function renderPage(searchParams: { status?: string; period?: string }) {
+async function renderPage(searchParams: { status?: string; period?: string; q?: string; page?: string }) {
   const ui = await AparListPage({ searchParams });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
@@ -66,7 +66,7 @@ describe("AparListPage", () => {
 
     expect(screen.getByText("42")).toBeInTheDocument(); // Total
     expect(screen.getByText("3")).toBeInTheDocument();  // Self-Appraisal
-    expect(screen.getByText("10")).toBeInTheDocument(); // Under Review
+    expect(screen.getByText("10")).toBeInTheDocument(); // In Officer Review
     expect(screen.getByText("4")).toBeInTheDocument();  // Awaiting Closure
     expect(screen.getByText("25")).toBeInTheDocument(); // Finalised
   });
@@ -124,22 +124,129 @@ describe("AparListPage", () => {
     expect(screen.queryByText(/finalised \(/)).not.toBeInTheDocument();
   });
 
-  it("shows an honest 'showing N of total' notice when the backend reports hasMore, instead of a silent cap (GAP-HR-APAR-06)", async () => {
+  // GAP-HR-APAR-06: the old "Showing 100 of 150 -- narrow with a filter"
+  // dead end is replaced by real paging: the page asks for 20, shows the true
+  // total and links to the next page.
+  it("pages the list: page 1 of 150 asks for 20 rows, shows 'Showing 1\u201320 of 150' and links to page 2 (GAP-HR-APAR-06)", async () => {
     fetchJsonMock.mockResolvedValue({
       source: "api",
       data: {
-        records: Array.from({ length: 100 }, (_, i) => ({
+        records: Array.from({ length: 20 }, (_, i) => ({
           id: `a${i}`, employeeId: `e${i}`, appraisalPeriod: "2025-26", status: "self_pending", updatedAt: "2026-04-01T00:00:00Z",
         })),
         total: 150,
         hasMore: true,
-        counts: { selfPending: 150, inReview: 0, awaitingClosure: 0, finalised: 0 },
+        counts: { selfPending: 120, inReview: 0, awaitingClosure: 0, finalised: 30 },
       },
     });
 
     await renderPage({});
 
-    expect(screen.getByText(/Showing 100 of 150/)).toBeInTheDocument();
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(url).toContain("limit=20");
+    expect(url).toContain("offset=0");
+    // The Total stat is the server total (150), not the length of the 20-row page
+    expect(screen.getByText("Total APARs").closest(".stat")).toHaveTextContent("150");
+    expect(screen.getByText("Showing 1\u201320 of 150")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute("href", "/hr/apar?page=2");
+    expect(screen.queryByRole("link", { name: "Previous" })).not.toBeInTheDocument();
+  });
+
+  it("a middle page requests the matching offset and links both ways, keeping the active filters (GAP-HR-APAR-06)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        records: Array.from({ length: 20 }, (_, i) => ({
+          id: `a${i}`, employeeId: `e${i}`, appraisalPeriod: "2025-26", status: "self_pending", updatedAt: "2026-04-01T00:00:00Z",
+        })),
+        total: 150, hasMore: true,
+        counts: { selfPending: 150, inReview: 0, awaitingClosure: 0, finalised: 0 },
+      },
+    });
+
+    await renderPage({ page: "3", status: "self_pending", q: "priya" });
+
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(url).toContain("offset=40");
+    expect(url).toContain("q=priya");
+    expect(screen.getByText("Showing 41\u201360 of 150")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute("href", "/hr/apar?status=self_pending&q=priya&page=4");
+    // page 2's link must keep the filters; page 1's link drops ?page=
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/hr/apar?status=self_pending&q=priya&page=2");
+  });
+
+  it("the last, partial page shows the remaining rows with no Next link (GAP-HR-APAR-06)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        records: Array.from({ length: 10 }, (_, i) => ({
+          id: `a${i}`, employeeId: `e${i}`, appraisalPeriod: "2025-26", status: "self_pending", updatedAt: "2026-04-01T00:00:00Z",
+        })),
+        total: 150, hasMore: false,
+        counts: { selfPending: 150, inReview: 0, awaitingClosure: 0, finalised: 0 },
+      },
+    });
+
+    await renderPage({ page: "8" });
+
+    expect(screen.getByText("Showing 141\u2013150 of 150")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Next" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/hr/apar?page=7");
+  });
+
+  it("shows no pager when everything fits on one page", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 12, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({});
+    expect(screen.queryByRole("navigation", { name: "APAR list pages" })).not.toBeInTheDocument();
+  });
+
+  it("a page past the end still offers a way back instead of a dead end (GAP-HR-APAR-06)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 30, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({ page: "9" });
+    expect(screen.getByText("No records on this page (30 in total)")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/hr/apar?page=8");
+  });
+
+  it("treats a non-numeric ?page= as page 1 (GAP-HR-APAR-06)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({ page: "x" });
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(url).toContain("offset=0");
+  });
+
+  it("offers a free-text search box that is forwarded as ?q= and echoed back (GAP-HR-APAR-06)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({ q: "  Priya  " });
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(url).toContain("q=Priya");
+    expect(url).not.toContain("q=%20");
+    expect(screen.getByLabelText("Search")).toHaveValue("Priya");
+    expect(screen.getByRole("link", { name: "Clear" })).toBeInTheDocument();
+  });
+
+  // GAP-HR-APAR-05: one DoPT vocabulary for stages 2-4 everywhere.
+  it("uses the DoPT stage names in the page subtitle and the grouped stat, with no 'Counter-signing' or 'Under Review' (GAP-HR-APAR-05)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({});
+    expect(screen.getByText(/Reporting Officer \u2192 Reviewing Officer \u2192 Accepting Authority/)).toBeInTheDocument();
+    expect(screen.getByText("In Officer Review")).toBeInTheDocument();
+    expect(screen.queryByText(/Counter-signing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Under Review")).not.toBeInTheDocument();
   });
 
   it("forwards ?status=/?period= search params to the backend request", async () => {

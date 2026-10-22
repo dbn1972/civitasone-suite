@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { searchEmployees, resolveEmployees } from "./employee";
+import { searchEmployees, resolveEmployees, MANAGER_INELIGIBLE_STATUSES } from "./employee";
 
 describe("entityAdapters/employee", () => {
   const fetchMock = vi.fn();
@@ -26,6 +26,33 @@ describe("entityAdapters/employee", () => {
     expect(result).toEqual([{ id: "e1", label: "Asha Rao (EMP001)", sublabel: "Finance" }]);
   });
 
+  // GAP-HR-EMPLOYEES-NEW-04: a name alone cannot tell two people apart.
+  it("puts the designation ahead of the department in the second line when the API returns one", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", designation: "Under Secretary" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const result = await searchEmployees("Asha", new AbortController().signal);
+    expect(result).toEqual([{ id: "e1", label: "Asha Rao (EMP001)", sublabel: "Under Secretary · Finance" }]);
+  });
+
+  it("shows the designation alone when there is no department, and no second line when there is neither", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "e1", name: "A", designation: "Director" }, { id: "e2", name: "B" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const result = await searchEmployees("x", new AbortController().signal);
+    expect(result).toEqual([{ id: "e1", label: "A", sublabel: "Director" }, { id: "e2", label: "B", sublabel: undefined }]);
+  });
+
+  it("MANAGER_INELIGIBLE_STATUSES is exactly the permanent-exit set (on_leave / suspended stay pickable)", () => {
+    expect([...MANAGER_INELIGIBLE_STATUSES].sort()).toEqual(["retired", "separated", "terminated"]);
+  });
+
   it("searchEmployees returns an empty list on a non-ok response rather than throwing", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     const result = await searchEmployees("x", new AbortController().signal);
@@ -33,6 +60,29 @@ describe("entityAdapters/employee", () => {
   });
 
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-05
+  describe("excludeStatuses sent to the server", () => {
+    beforeEach(() => {
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+
+    it("forwards the list as ?excludeStatuses=a,b,c so the 20-row page is filtered in the query", async () => {
+      await searchEmployees("Asha", new AbortController().signal, { excludeStatuses: ["terminated", "separated", "retired"] });
+      expect(fetchMock.mock.calls[0]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20&excludeStatuses=terminated,separated,retired");
+    });
+
+    it("sends no excludeStatuses param when none is requested (URL unchanged for every other caller)", async () => {
+      await searchEmployees("Asha", new AbortController().signal);
+      await searchEmployees("Asha", new AbortController().signal, { excludeStatuses: [] });
+      expect(fetchMock.mock.calls[0]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20");
+      expect(fetchMock.mock.calls[1]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20");
+    });
+
+    it("strict mode throws on a failed lookup instead of returning 'no results'", async () => {
+      fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+      await expect(searchEmployees("x", new AbortController().signal, { strict: true })).rejects.toThrow();
+    });
+  });
+
   describe("excludeStatuses", () => {
     const ROWS = [
       { id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", status: "confirmed" },

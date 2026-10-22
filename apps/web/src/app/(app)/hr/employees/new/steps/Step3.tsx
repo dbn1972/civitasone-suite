@@ -10,7 +10,7 @@ import {
   grid2,
 } from "../wizardTypes";
 import { Field, EntityPicker, Input, Select } from "@/app/_components/ds";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchEmployees, resolveEmployees, MANAGER_INELIGIBLE_STATUSES } from "@/lib/entityAdapters/employee";
 import { searchCostCenters, resolveCostCenters } from "@/lib/entityAdapters/costCenter";
 import { searchLocations, resolveLocations } from "@/lib/entityAdapters/location";
 
@@ -46,12 +46,17 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
             EntityPicker + searchEmployees adapter EditEmployeeForm.tsx
             already uses for this exact "pick an employee" case (GAP-HR-SF-06)
             -- searches the real GET /v1/hrms/employees?q= as the user
-            types, no preload, no row cap. */}
+            types, no preload, no row cap. Each option shows name + employee
+            number, with the person's designation and department underneath.
+            People who have left for good (terminated / separated / retired)
+            are not offered -- the same rule EditEmployeeForm's manager picker
+            has applied since GAP-HR-EMPLOYEES-DETAIL-EDIT-05; on_leave and
+            suspended stay pickable. Nothing is auto-picked. */}
         <Field label={t("reportingManagerLabel")}>
           <EntityPicker
             value={data.managerId || null}
             onChange={(v) => onChange("managerId", (Array.isArray(v) ? v[0] : v) ?? "")}
-            search={searchEmployees}
+            search={(q, signal) => searchEmployees(q, signal, { excludeStatuses: MANAGER_INELIGIBLE_STATUSES })}
             resolve={resolveEmployees}
             placeholder={t("selectManagerSearchPlaceholder")}
             searchingText={t("pickerSearching")}

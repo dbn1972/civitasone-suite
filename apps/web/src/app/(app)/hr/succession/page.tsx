@@ -42,6 +42,7 @@ type PipelineRow = {
 
 type RiskRow = {
   role_ref: string;
+  // The API also sends department_id; the page deliberately never renders it.
   department_id?: string;
   department?: string;
 } & Record<string, unknown>;
@@ -128,6 +129,14 @@ export default async function SuccessionPage() {
   const readyNow = pipeline.reduce((s, r) => s + Number(r.ready_now ?? 0), 0);
   const totalNominees = pipeline.reduce((s, r) => s + Number(r.nominee_count ?? 0), 0);
 
+  // GAP-HR-SUCCESSION-02: only the two displayed fields reach the table --
+  // never the raw department_id -- and a plan with no department reads '—'
+  // rather than an empty cell.
+  const riskRows: RiskRow[] = atRisk.map((r) => ({
+    role_ref: String(r.role_ref ?? "—"),
+    department: r.department ? String(r.department) : "—",
+  }));
+
   const RISK_COLS: { key: keyof RiskRow & string; label: string }[] = [
     { key: "role_ref", label: t("colRoleAtRisk") },
     { key: "department", label: t("colDepartment") },
@@ -184,7 +193,7 @@ export default async function SuccessionPage() {
           ) : (
             <DataTable<RiskRow>
               columns={RISK_COLS}
-              rows={atRisk}
+              rows={riskRows}
               sortable
               pageSize={10}
               emptyIcon="⚠️"

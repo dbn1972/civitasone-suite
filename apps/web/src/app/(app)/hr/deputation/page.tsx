@@ -49,7 +49,7 @@ export default async function DeputationPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
       />
 
       <StatGrid>

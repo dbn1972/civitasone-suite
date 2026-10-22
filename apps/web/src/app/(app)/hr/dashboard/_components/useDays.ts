@@ -12,6 +12,25 @@ export function englishDays(count: number): string {
   return `${count} day${count !== 1 ? "s" : ""}`;
 }
 
+export function englishMonthEnds(days: string): string {
+  return `Month ends in ${days}`;
+}
+
+/**
+ * GAP-HR-DASHBOARD-05: "Month ends in {days}" -- the honest label for what the
+ * dashboard's payroll nudges actually count (calendar days to month-end; the
+ * app has no payroll cutoff calendar to source a real deadline from). Same
+ * provider-optional fallback as useDays.
+ */
+export function useMonthEnds(): (days: string) => string {
+  try {
+    const t = useTranslations("dashboardDays");
+    return (days) => t("monthEnds", { days });
+  } catch {
+    return englishMonthEnds;
+  }
+}
+
 export function useDays(): (count: number) => string {
   try {
     const t = useTranslations("dashboardDays");

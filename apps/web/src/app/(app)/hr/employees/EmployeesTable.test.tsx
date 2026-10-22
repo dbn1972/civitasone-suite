@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
@@ -65,6 +65,52 @@ describe("EmployeesTable", () => {
     await waitFor(() => expect(screen.getByText("Couldn't load your team")).toBeInTheDocument());
     expect(screen.queryByText("Your team starts here")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add first employee" })).not.toBeInTheDocument();
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-02 (acceptance): the failure state is a real
+   * RefreshErrorState -- an alert with a working Retry -- not a static
+   * paragraph telling the user to refresh by hand.
+   */
+  it("renders an alert with a Retry control (and a way back) on a real load failure", async () => {
+    renderTable([], "error");
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByText("Couldn't load your team")).toBeInTheDocument();
+    expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(within(alert).getByRole("link", { name: "Go back" })).toHaveAttribute("href", "/hr");
+    // The failure replaces the grid: no table is rendered at all.
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("does not render an alert for a healthy roster", async () => {
+    renderTable(ROWS, "api");
+    await waitFor(() => expect(screen.getByText("Priya Sharma")).toBeInTheDocument());
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-04: the CSV is built from the rows of ONE server page,
+   * so the button must say so rather than imply a full-roster export.
+   */
+  it("labels the CSV export as covering only the rows on this page", async () => {
+    renderTable([...ROWS, { id: "e2", employeeNo: "E2", name: "Asha Rao", department: "HR", status: "confirmed", employeeType: "permanent" }]);
+    await waitFor(() => expect(screen.getByText("Asha Rao")).toBeInTheDocument());
+    expect(screen.getByRole("note")).toHaveTextContent("CSV includes only the 2 employees on this page.");
+  });
+
+  it("uses the singular wording for a one-row page", async () => {
+    renderTable(ROWS);
+    await waitFor(() => expect(screen.getByText("Priya Sharma")).toBeInTheDocument());
+    expect(screen.getByRole("note")).toHaveTextContent("CSV includes only the 1 employee on this page.");
+  });
+
+  it("does not add its own client-side pager (the server Prev/Next is the single paginator)", async () => {
+    const many: EmpRow[] = Array.from({ length: 40 }, (_, i) => ({ id: `e${i}`, employeeNo: `E${i}`, name: `Person ${i}`, department: "HR", status: "confirmed", employeeType: "permanent" }));
+    renderTable(many);
+    await waitFor(() => expect(screen.getByText("Person 39")).toBeInTheDocument());
+    expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
+    // header row + all 40 data rows: none hidden behind a nested pager.
+    expect(screen.getAllByRole("row").length).toBe(41);
   });
 
   it("still shows the honest 'add your first employee' empty state for a genuinely empty roster", async () => {

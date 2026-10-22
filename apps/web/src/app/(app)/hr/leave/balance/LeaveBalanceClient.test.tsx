@@ -1,7 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+
+// router.refresh() is what re-runs the server wrapper's profile fetch (see the
+// BALANCE-04 retry tests below), so the test needs to observe it.
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn(), refresh: refreshMock }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+}));
 
 import LeaveBalanceClient from "./LeaveBalanceClient";
 
@@ -197,5 +207,85 @@ describe("LeaveBalanceClient — no-linked-profile / profile-error states (GAP-H
     );
     expect(await screen.findByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(screen.queryByText(/no employee record is linked/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-BALANCE-04: the profile is fetched by the SERVER wrapper
+ * (page.tsx). "Try again" used to bump a client-side counter that only re-ran
+ * effects which return early while no employee id is known -- it did nothing.
+ * It now re-runs the server fetch (router.refresh()), and the client adopts the
+ * employee id that fetch then supplies.
+ */
+describe("LeaveBalanceClient — profile error Retry re-runs the profile fetch (GAP-HR-LEAVE-BALANCE-04)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); refreshMock.mockReset(); });
+
+  it("Try again calls router.refresh(); once the refreshed page supplies the employee id, the balance loads", async () => {
+    stubFetch(CONTEXT);
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveBalanceClient roles={["employee"]} myEmployeeId={null} noLinkedProfile={false} profileSource="error" />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /try again/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    // nothing to fetch yet: the retry has not produced an employee id
+    expect((fetch as ReturnType<typeof vi.fn>).mock.calls.filter((c) => String(c[0]).includes("/leave-context"))).toHaveLength(0);
+
+    // router.refresh() re-renders the server wrapper with the profile that now resolved
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveBalanceClient roles={["employee"]} myEmployeeId="emp-1" noLinkedProfile={false} profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("3 used")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-BALANCE-05: the balance page's employee picker used to treat a
+ * failed employee lookup (non-ok response) as an empty result -- the picker
+ * said "No matches" for what was actually an outage -- and offered no retry.
+ */
+describe("LeaveBalanceClient — employee list failure is distinct and retryable (GAP-HR-LEAVE-BALANCE-05)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderHr() {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveBalanceClient roles={["hr_admin"]} myEmployeeId={null} noLinkedProfile={false} profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("employees search 500 -> an 'employee list' error (never 'No matches'); Try again re-requests /employees with the same query and, on success, the pick loads the balance", async () => {
+    let employeeCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/leave-context")) return jsonResponse(CONTEXT);
+      if (u.includes("/hrms/employees")) {
+        employeeCalls++;
+        if (employeeCalls === 1) return new Response("db down", { status: 500 });
+        return jsonResponse({ data: [{ id: "emp-1", name: "Asha Verma", employeeNo: "E001", department: "Finance" }] });
+      }
+      return jsonResponse({});
+    }));
+    renderHr();
+
+    fireEvent.change(screen.getByRole("combobox", { name: /employee/i }), { target: { value: "Asha" } });
+    const alert = await screen.findByRole("alert", {}, { timeout: 3000 });
+    expect(alert).toHaveTextContent(/couldn't load the employee list/i);
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+    expect(employeeCalls).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() => expect(employeeCalls).toBe(2));
+    const calls = (fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/hrms/employees"));
+    expect(calls[1]).toBe(calls[0]); // the same ?q=Asha query, retyped by nobody
+
+    // EntityPicker commits a choice on mousedown
+    fireEvent.mouseDown(await screen.findByRole("option", { name: /asha verma/i }));
+    await waitFor(() => expect(screen.getByText("3 used")).toBeInTheDocument());
   });
 });

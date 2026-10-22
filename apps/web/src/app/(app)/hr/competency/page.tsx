@@ -71,8 +71,14 @@ export default async function CompetencyPage() {
   const canManage = roles.some((r: string) => COMPETENCY_ADMIN_ROLES.includes(r));
 
   const active      = frameworks.filter((f) => f.status === "active").length;
-  const technical   = competencies.filter((c) => c.category === "technical").length;
-  const behavioural = competencies.filter((c) => ["behavioural","behavioral"].includes(c.category)).length;
+  // GAP-HR-COMPETENCY-04: every competency lands in exactly one tile. The
+  // backend's createCompetencyBody defaults category to "general", so most
+  // rows are neither technical nor behavioural -- they used to sit in no tile
+  // at all. Compared case-insensitively, the same way the table label is.
+  const categoryOf = (c: Competency) => (c.category ?? "").toLowerCase();
+  const technical   = competencies.filter((c) => categoryOf(c) === "technical").length;
+  const behavioural = competencies.filter((c) => ["behavioural", "behavioral"].includes(categoryOf(c))).length;
+  const other       = competencies.length - technical - behavioural;
 
   const radar = buildMyRadar(mine.data, competencies);
   const fwCols: { key: keyof Framework & string; label: string; cellType?: "status" }[] = [
@@ -96,6 +102,7 @@ export default async function CompetencyPage() {
     const category =
       catKey === "technical" ? t("categoryTechnical")
       : catKey === "behavioural" || catKey === "behavioral" ? t("categoryBehavioural")
+      : catKey === "general" ? t("categoryGeneral")
       : c.category
         ? c.category.charAt(0).toUpperCase() + c.category.slice(1)
         : c.category;
@@ -117,6 +124,7 @@ export default async function CompetencyPage() {
         <StatCard icon="✅" iconBg="var(--goodbg)"  label={t("statActive")}      value={errored ? null : active} />
         <StatCard icon="💻" iconBg="var(--warnbg)"  label={t("statTechnical")}   value={errored ? null : technical} />
         <StatCard icon="🤝" iconBg="var(--bg)"  label={t("statBehavioural")} value={errored ? null : behavioural} />
+        <StatCard icon="🗂️" iconBg="var(--infobg)" label={t("statOther")}      value={errored ? null : other} />
       </StatGrid>
 
       {errored ? (
@@ -182,7 +190,9 @@ export default async function CompetencyPage() {
                 pageSize={15}
                 emptyIcon="📚"
                 emptyTitle={t("compEmptyTitle")}
-                emptyMessage={t("compEmptyMessage")}
+                // GAP-HR-COMPETENCY-02: "Add competencies within a framework" is an
+                // instruction only HR can act on; everyone else is told whom to ask.
+                emptyMessage={canManage ? t("compEmptyMessage") : t("compEmptyMessageReadOnly")}
               />
             </Card>
           </div>

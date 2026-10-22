@@ -2,13 +2,14 @@
 
 import React, { useState } from "react";
 import { useTranslations } from "next-intl";
+import { SKILL_BASELINE_LEVEL, type SkillLevel } from "@/lib/skillLevels";
 
 // Proficiency scale matches the backend's canonical vocabulary (beginner,
 // intermediate, advanced, expert — see gap-features/routes.ts POST
 // /v1/hrms/skills/assessments) 1:1, so level 3 ("advanced") is reachable
 // (GAP-HR-SKILLS-03; the previous 5-way label set mapped both advanced and
 // expert to 4 and left level 3 permanently unreachable).
-export type Proficiency = 0 | 1 | 2 | 3 | 4; // 0=not assessed,1=Beginner,2=Intermediate,3=Advanced,4=Expert
+export type Proficiency = SkillLevel; // 0=not assessed,1=Beginner,2=Intermediate,3=Advanced,4=Expert
 
 export interface SkillRecord {
   skill: string;
@@ -20,6 +21,12 @@ export interface SkillRecord {
 
 export interface SkillMatrixProps {
   records: SkillRecord[];
+  /**
+   * GAP-HR-SKILLS-03: the level every record is measured against when it
+   * carries no `requiredLevel` of its own, named in the legend so the colours
+   * are never read as a per-role requirement. Defaults to the shared baseline.
+   */
+  baselineLevel?: Proficiency;
 }
 
 // GAP-HR-SKILLS-04: colours are design tokens (light/dark aware) rather than
@@ -52,7 +59,7 @@ const cellStyle: React.CSSProperties = {
   border: "1px solid var(--line)",
 };
 
-export function SkillMatrix({ records }: SkillMatrixProps) {
+export function SkillMatrix({ records, baselineLevel = SKILL_BASELINE_LEVEL }: SkillMatrixProps) {
   const t = useTranslations("skills");
   const [filterCat, setFilterCat] = useState("All");
   const [filterEmp, setFilterEmp] = useState("");
@@ -124,6 +131,9 @@ export function SkillMatrix({ records }: SkillMatrixProps) {
       </div>
 
       {/* Legend */}
+      <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: "var(--ink2)" }}>
+        {t("legendBaseline", { level: PROFICIENCY_LABELS[baselineLevel] ?? "" })}
+      </p>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 11 }}>
         {[
           { color: "var(--good)", label: t("legendMeets") },
@@ -175,7 +185,7 @@ export function SkillMatrix({ records }: SkillMatrixProps) {
                 const recs = employees
                   .map((emp) => lookup.get(`${emp}::${skill}`))
                   .filter((r): r is SkillRecord => Boolean(r));
-                const required = (recs[0]?.requiredLevel ?? 3) as Proficiency;
+                const required = (recs[0]?.requiredLevel ?? baselineLevel) as Proficiency;
 
                 return recs.map((rec, idx) => {
                   const summary = t("rowSummary", {

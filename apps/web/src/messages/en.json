@@ -125,9 +125,9 @@
     "codePlaceholder": "e.g. CLERK",
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Upper Division Clerk",
-    "levelLabel": "Pay Level",
+    "levelLabel": "Pay Level (7th CPC, optional)",
     "levelPlaceholder": "e.g. 4",
-    "payGradeLabel": "Pay Grade",
+    "payGradeLabel": "Pay Grade (optional)",
     "payGradePlaceholder": "e.g. an old grade-pay reference",
     "addingBtn": "Adding…",
     "addBtn": "Add Designation",
@@ -362,11 +362,11 @@
   },
   "apar": {
     "title": "APAR — Annual Performance Appraisal",
-    "subtitle": "SPARROW-style multi-authority appraisal: Self-Appraisal → Reporting Officer → Counter-signing Officer → Acceptance.",
+    "subtitle": "SPARROW-style multi-authority appraisal: Self-Appraisal → Reporting Officer → Reviewing Officer → Accepting Authority.",
     "initiateBtn": "+ Initiate APAR",
     "statTotal": "Total APARs",
     "statSelfAppraisal": "Self-Appraisal",
-    "statUnderReview": "Under Review",
+    "statInOfficerReview": "In Officer Review",
     "statAwaitingClosure": "Awaiting Closure",
     "statFinalised": "Finalised",
     "flowCardTitle": "APAR Flow — Active Records",
@@ -377,9 +377,16 @@
     "filterPeriodPlaceholder": "e.g. 2025-26",
     "filterApplyBtn": "Apply",
     "filterClearBtn": "Clear",
-    "showingOfTotal": "Showing {shown} of {total} — narrow with a filter to see more",
     "cycleProgressTitle": "Cycle Progress",
-    "cycleProgressSummary": "{finalised} of {total} finalised ({pct}%)"
+    "cycleProgressSummary": "{finalised} of {total} finalised ({pct}%)",
+    "statInOfficerReviewHint": "Appraisals currently with the Reporting Officer, Reviewing Officer or Accepting Authority.",
+    "filterSearchLabel": "Search",
+    "filterSearchPlaceholder": "Employee name or number",
+    "pagerAria": "APAR list pages",
+    "pagerSummary": "Showing {from}–{to} of {total}",
+    "pagerBeyondEnd": "No records on this page ({total} in total)",
+    "pagerPrev": "Previous",
+    "pagerNext": "Next"
   },
   "aparDetail": {
     "detailPageTitle": "APAR Detail",
@@ -391,7 +398,7 @@
     "subtitleEmployeeStage": "Employee {employeeName} · {stageLabel}",
     "statTotalCriteria": "Total Criteria",
     "statScored": "Scored",
-    "statAvgScore": "Avg Score",
+    "statAvgScore": "Simple Average (unweighted)",
     "statStageChanges": "Stage Changes",
     "appraisalDetailsTitle": "Appraisal Details",
     "periodLabel": "Period",
@@ -434,9 +441,23 @@
     "colOverride": "Override",
     "overrideYes": "Yes — privileged override",
     "unknownOfficer": "Unknown officer",
-    "statProvisionalScore": "Provisional Score",
+    "statProvisionalScore": "Provisional Weighted Score",
     "confidentialBanner": "Confidential — APAR. This appraisal contains statutory confidential performance data.",
-    "printedByLine": "Printed by {name} on {date}"
+    "printedByLine": "Printed by {name} on {date}",
+    "statAvgScoreHint": "Plain mean of the scored criteria, ignoring weights. The Grade is the weighted mean, so the two can differ.",
+    "statProvisionalScoreHint": "Weighted mean of the scores recorded so far, using each criterion's weight. The final Grade is set when the Accepting Authority accepts.",
+    "gradeVsAverageNote": "The Grade is the weighted mean of the criteria; the Simple Average is unweighted, so the two can differ.",
+    "gradeScaleItem": "{band} ≥{min}",
+    "gradeScaleElse": "else {band}",
+    "bandOutstanding": "Outstanding",
+    "bandVeryGood": "Very Good",
+    "bandGood": "Good",
+    "bandAverage": "Average",
+    "bandBelowAverage": "Below Average",
+    "reviewingDecisionLabel": "Reviewing Officer — Decision",
+    "decisionConcur": "Concurred with the Reporting Officer's scores",
+    "decisionVary": "Varied the Reporting Officer's scores",
+    "variationLine": "{attribute}: varied to {score}"
   },
   "aparFlowCard": {
     "emptyText": "No APAR records found",
@@ -718,51 +739,51 @@
     "title": "Attendance Rules",
     "subtitle": "How late marks, half-days, overtime, and weekly-offs are computed (read-only reference).",
     "backLabel": "Attendance",
-    "defaultsNotice": "These are the attendance engine's built-in defaults, not settings read from this tenant's configuration — they may not match your tenant's actual policy, and there is nothing to customize from this screen. Raise a change request with the platform team if a rule below looks wrong.",
+    "defaultsNotice": "These are the attendance engine's built-in reference defaults, not settings read from this tenant's configuration, and they have not been verified against the engine itself — they may not match your tenant's actual policy, and there is nothing to customize from this screen. Raise a change request with the platform team if a rule below looks wrong.",
     "cardWorkingHours": "Working Hours",
     "cardLateMarkRules": "Late Mark Rules",
     "cardOvertimeRules": "Overtime Rules",
     "cardCompOff": "Compensatory Off (CO)",
     "whOfficeStart": "Office start time",
-    "whOfficeStartVal": "{value}",
+    "whOfficeStartTpl": "{value}",
     "whOfficeEnd": "Office end time",
-    "whOfficeEndVal": "{value}",
+    "whOfficeEndTpl": "{value}",
     "whGracePeriod": "Grace period (late mark)",
-    "whGracePeriodVal": "{mins} minutes",
+    "whGracePeriodTpl": "{mins} minutes",
     "whHalfDayCutoff": "Half-day cutoff",
-    "whHalfDayCutoffVal": "After {value} arrival",
+    "whHalfDayCutoffTpl": "After {value} arrival",
     "whMinHours": "Minimum hours for full day",
-    "whMinHoursVal": "{hours} hours",
+    "whMinHoursTpl": "{hours} hours",
     "whWeeklyOff": "Weekly off",
-    "whWeeklyOffVal": "{value}",
+    "whWeeklyOffTpl": "{pattern, select, sat_sun {Saturday & Sunday} other {—}}",
     "lmGracePeriod": "Grace period",
-    "lmGracePeriodVal": "{mins} min after start time",
+    "lmGracePeriodTpl": "{mins} min after start time",
     "lmTrigger": "Late mark trigger",
-    "lmTriggerVal": "Check-in after {value}",
+    "lmTriggerTpl": "Check-in after {value}",
     "lmHalfDayIf": "Half-day if",
-    "lmHalfDayIfVal": "Check-in after {value}",
+    "lmHalfDayIfTpl": "Check-in after {value}",
     "lmAbsentIf": "Absent if",
-    "lmAbsentIfVal": "No check-in by {value}",
+    "lmAbsentIfTpl": "No check-in by {value}",
     "lmDeduction": "Late marks → CL deduction",
-    "lmDeductionVal": "{marks} late marks = 1 CL deducted",
+    "lmDeductionTpl": "{marks} late marks = 1 CL deducted",
     "otEligible": "OT eligible after",
-    "otEligibleVal": "{hours} hours worked",
+    "otEligibleTpl": "{hours} hours worked",
     "otRateWeekday": "OT rate (weekday)",
-    "otRateWeekdayVal": "{multiplier}× hourly rate",
+    "otRateWeekdayTpl": "{multiplier}× hourly rate",
     "otRateWeeklyOff": "OT rate (weekly off / holiday)",
-    "otRateWeeklyOffVal": "{multiplier}× hourly rate",
+    "otRateWeeklyOffTpl": "{multiplier}× hourly rate",
     "otMaxPerDay": "Max OT per day",
-    "otMaxPerDayVal": "{hours} hours",
+    "otMaxPerDayTpl": "{hours} hours",
     "otRequiresApproval": "Requires approval",
-    "otRequiresApprovalVal": "{value}",
+    "otRequiresApprovalTpl": "{approver, select, supervisor {Yes (supervisor)} other {Yes}}",
     "coEarnedWhen": "Earned when",
-    "coEarnedWhenVal": "{value}",
+    "coEarnedWhenTpl": "{rule, select, holiday_or_weekly_off {Worked on a holiday / weekly off} other {—}}",
     "coMustAvail": "Must be availed within",
-    "coMustAvailVal": "{days} days of earning",
+    "coMustAvailTpl": "{days} days of earning",
     "coMaxAccumulation": "Max accumulation",
-    "coMaxAccumulationVal": "{count} COs at a time",
+    "coMaxAccumulationTpl": "{count} COs at a time",
     "coApprovalRequired": "Approval required",
-    "coApprovalRequiredVal": "{value}",
+    "coApprovalRequiredTpl": "{approver, select, supervisor {Yes (supervisor)} other {Yes}}",
     "footerNote": "These rules are applied automatically by the attendance engine when processing daily check-ins."
   },
   "attendanceRegularisation": {
@@ -1705,7 +1726,18 @@
     "filterPlaceholder": "Filter by name, agency or department…",
     "emptyTitle": "No contractual staff",
     "emptyMessage": "Contractual employees appear here, showing their engagement terms and contract expiry dates.",
-    "truncatedNotice": "Showing the first {count} contracts — more may exist. Search and filters below only cover this loaded set."
+    "pageNotice": "Showing contracts {from}–{to} of {total}, soonest end date first. Search and sorting only cover this page.",
+    "backLabel": "Back to HR",
+    "colExpiry": "Expiry",
+    "badgeExpired": "Expired",
+    "badgeExpiresToday": "Expires today",
+    "badgeExpiresIn": "{days, plural, one {Expires in # day} other {Expires in # days}}",
+    "pagerAriaLabel": "Contract pages",
+    "prevPageLink": "← Previous page",
+    "nextPageLink": "Next page →",
+    "pageLabel": "Page {page}",
+    "statusExpiring": "Expiring",
+    "statusExpiring30d": "Expiring ≤30d"
   },
   "corrections": {
     "loadingAriaLabel": "Loading…",
@@ -2286,7 +2318,8 @@
     "tileGrievanceCategoriesDesc": "Grievance taxonomy"
   },
   "dashboardDays": {
-    "count": "{count, plural, one {# day} other {# days}}"
+    "count": "{count, plural, one {# day} other {# days}}",
+    "monthEnds": "Month ends in {days}"
   },
   "dashboard": {
     "title": "HR Dashboard",
@@ -2317,7 +2350,7 @@
     "title": "Departments",
     "subtitle": "The teams in your office — Finance, HR, Establishment and others. Add departments so people and work can be sorted correctly.",
     "backLabel": "HR",
-    "newBtn": "+ New Department",
+    "newBtn": "New Department",
     "breadcrumbHome": "Home",
     "statTotalLabel": "Total Departments",
     "statRootLabel": "Root Departments",
@@ -2351,7 +2384,8 @@
     "deleteConfirmTitle": "Delete \"{name}\"?",
     "deleteConfirmDesc": "This department will be permanently removed. This action cannot be undone.",
     "deleteConfirmBtn": "Delete department",
-    "rowErrorRequired": "Code and name are required"
+    "rowErrorRequired": "Code and name are required",
+    "employeeCountUnavailable": "Employee count unavailable"
   },
   "designations": {
     "title": "Designations",
@@ -2373,7 +2407,9 @@
     "colCode": "Code",
     "colDesignation": "Designation",
     "colPayLevel": "Pay Level (7th CPC)",
-    "colServiceGroup": "Service Group",
+    "colServiceGroup": "Service Group (indicative)",
+    "serviceGroupIndicativeTitle": "Indicative: derived from the pay level, not stored on the designation",
+    "serviceGroupNote": "Service Group is indicative only. It is derived from the pay level ({bands}) and is not stored on the designation.",
     "colPayGrade": "Pay Grade",
     "designationCodeAriaLabel": "Designation code",
     "designationNameAriaLabel": "Designation name",
@@ -2394,7 +2430,9 @@
     "tableCaption": "Designations",
     "levelEditHint": "Blank clears the level (shown as \"—\").",
     "noMatchTitle": "No matching designations",
-    "noMatchMessage": "No designation matches your search."
+    "noMatchMessage": "No designation matches your search.",
+    "clearLevelBtn": "Clear level",
+    "deleteInUseHint": "In use by {count, plural, one {# record} other {# records}} — reassign or remove them before deleting."
   },
   "directory": {
     "title": "Employee Directory",
@@ -2529,6 +2567,7 @@
     "noEligibleTitle": "No eligible officers",
     "noEligibleMessage": "Officers who complete the minimum qualifying service period appear here in seniority order for DPC consideration.",
     "batchPromotionsTitle": "DPC Batch Promotions",
+    "batchScopeNote": "Shows promotions that are still in progress (raised, awaiting approval, or approved but not yet effective). Promotions are not yet linked to a particular DPC meeting.",
     "notYetEligibleTitle": "Not Yet Eligible — Service Below Minimum",
     "allEligibleTitle": "All officers are eligible",
     "allEligibleMessage": "Every officer in this list currently meets the minimum qualifying service.",
@@ -2548,6 +2587,8 @@
     "statTotalInBatch": "Total in Batch",
     "statInitiated": "Initiated",
     "statInApproval": "In Approval",
+    "statAwaitingEffective": "Approved, Awaiting Effective Date",
+    "statOther": "Other",
     "statSignedIssued": "Signed & Issued",
     "statCancelled": "Cancelled"
   },
@@ -2619,7 +2660,7 @@
     "quickActionsTitle": "Quick Actions",
     "lifecycleActionsTitle": "Lifecycle (HR only)",
     "actionsUnavailableExited": "Lifecycle actions are unavailable — this employee has left the organisation.",
-    "actionsUnavailableOther": "Actions are unavailable while the employee is {status}.",
+    "actionsUnavailableOther": "Actions are unavailable while the employee's status is {status}.",
     "actionApplyLeave": "🌴 Apply Leave",
     "actionSalarySlips": "🧾 Salary Slips",
     "actionInitiateTransfer": "🔄 Initiate Transfer",
@@ -2657,7 +2698,12 @@
     "marital_single": "Single",
     "marital_married": "Married",
     "marital_divorced": "Divorced",
-    "marital_widowed": "Widowed"
+    "marital_widowed": "Widowed",
+    "actionsLimitedOnLeave": "This employee is on leave. Transfer, promotion and separation are withheld until they return; leave, attendance, service book and salary slips stay available.",
+    "lifecycleUnavailable": "Transfers, promotions or deputations couldn't be loaded right now, so this history may be incomplete. Please try again in a moment.",
+    "updatedBanner": "Your changes were submitted and are being applied. If a value still looks old, refresh in a moment.",
+    "updatedBannerDismiss": "Dismiss",
+    "fieldBasicPay": "Basic Pay"
   },
   "employeeEdit": {
     "pageTitle": "Edit Employee",
@@ -2668,7 +2714,7 @@
     "formIntro": "Only the fields below can be updated. For structural changes (name, department, designation) contact HR administration.",
     "fixHighlightedFields": "Please fix the highlighted fields.",
     "noChangesDetected": "No changes detected. Update a field before saving.",
-    "updateSubmitted": "Update submitted. Redirecting…",
+    "updateSubmitted": "Update submitted.",
     "roLabelEmployeeId": "Employee ID",
     "roLabelDepartment": "Department",
     "roLabelDesignation": "Designation",
@@ -2710,7 +2756,18 @@
     "savingBtn": "Saving…",
     "saveChangesBtn": "Save Changes",
     "cancelBtn": "Cancel",
-    "loadingLabel": "Loading edit form…"
+    "loadingLabel": "Loading edit form…",
+    "currentValue": "Current: {value}",
+    "changeBtn": "Change",
+    "keepCurrentBtn": "Keep current",
+    "confirmBankAccountLabel": "Confirm bank account no.",
+    "confirmBankAccountPlaceholder": "Re-enter the account number",
+    "confirmAccountMismatch": "The two account numbers don't match. Re-enter them.",
+    "bankAccountFormatError": "Enter the account number as digits only (9 to 18 digits).",
+    "ifscFormatError": "Enter a valid IFSC: four letters, a zero, then six letters or digits (e.g. SBIN0001234).",
+    "pickerSearchError": "Couldn't load employees. Please try again.",
+    "basicPayLabel": "Basic Pay",
+    "basicPayRevisionHintRich": "Basic pay cannot be changed from this form. Use a <link>salary revision in Payroll</link>, which is approved, effective-dated and audited."
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
@@ -2756,9 +2813,7 @@
     "exDateOfJoining": "2024-01-15",
     "exBasicPay": "44900 (in rupees)",
     "exGender": "male / female / other",
-    "exManagerEmployeeNo": "EMP-045 (must already exist)",
-    "loadingTitle": "Import Employees",
-    "loadingSubtitle": "Bulk employee import."
+    "exManagerEmployeeNo": "EMP-045 (must already exist)"
   },
   "employeeImportForm": {
     "fileLabel": "CSV File",
@@ -2767,22 +2822,49 @@
     "errSelectFile": "Please select a CSV file.",
     "errMinRows": "CSV must have a header row + at least one data row.",
     "errMissingColumns": "Missing columns: {columns}",
-    "errUnknownDept": "department code \"{code}\"",
-    "errUnknownDesig": "designation code \"{code}\"",
+    "errUnknownDept": "unknown department code \"{code}\" (check the Departments page)",
+    "errUnknownDesig": "unknown designation code \"{code}\" (check the Designations page)",
     "errInvalidDate": "invalid date \"{value}\" (expected YYYY-MM-DD)",
     "errInvalidGender": "invalid gender \"{value}\" (expected male, female, or other)",
     "errInvalidBasicPay": "invalid basic pay \"{value}\" (expected a plain number in rupees, up to 2 decimal places)",
     "andJoiner": " and ",
     "errColumnCountRow": "Row {lineNo}: expected {expected} columns, found {found} — check for an unquoted comma in a value.",
-    "errUnknownRow": "Row {lineNo} ({fullName}): unknown {bad} — check spelling against the Departments/Designations pages.",
     "errRowSave": "Row {lineNo} ({fullName}): {message}",
     "errRowNetwork": "Row {lineNo} ({fullName}): network error",
     "errRowNetworkShort": "network error",
     "importingProgress": "Importing… ({success}/{total})",
-    "uploadBtn": "Upload & Import",
     "resultImported": "{success} submitted",
     "resultFailedSuffix": ", {failed} failed",
-    "downloadErrorReport": "Download error report (CSV)"
+    "downloadErrorReport": "Download error report (CSV)",
+    "errForbidden": "You don't have permission to import employees.",
+    "processingProgress": "Creating employees… ({done}/{submitted})",
+    "submittedProcessing": "{submitted} submitted for creation — waiting for confirmation.",
+    "resultCreated": "{created} created",
+    "resultUnconfirmed": "{submitted} submitted. {created} confirmed created so far, {pending} still being processed — check the employee list in a moment.",
+    "rowFailExists": "this employee number already exists",
+    "rowFailReference": "a record it refers to no longer exists",
+    "rowFailInvalid": "a value was rejected by the server",
+    "rowFailNotQueued": "it could not be queued — please import it again",
+    "rowFailGeneric": "the employee could not be created",
+    "errRowInvalid": "Row {lineNo} ({fullName}): {bad}",
+    "errRequiredField": "{field} is required",
+    "errDuplicateEmployeeNo": "employeeNo \"{value}\" appears more than once in this file (first on row {firstLine})",
+    "errInvalidEmail": "invalid email address",
+    "errInvalidMobile": "invalid mobile number",
+    "errUnterminatedQuote": "Line {lineNo}: a quoted value is opened but never closed. Check for a stray quotation mark.",
+    "errLoadMasters": "Couldn't load the department and designation lists, so the file can't be checked yet. Please try again.",
+    "reviewBtn": "Review file",
+    "reviewingBtn": "Reviewing…",
+    "previewSummary": "{total} rows read: {valid} ready to import, {invalid} with errors (will be skipped).",
+    "previewNote": "Nothing has been sent yet. Check the rows below, then confirm. Rows with errors are skipped and listed underneath.",
+    "previewCaption": "Showing {shown} of {total} rows",
+    "previewColRow": "Row",
+    "previewColCheck": "Check",
+    "previewRowReady": "Ready",
+    "previewRowSkipped": "Will be skipped",
+    "previewNothingToImport": "None of the rows can be imported. Fix the errors listed below and choose the file again.",
+    "confirmBtn": "{count, plural, one {Import # valid row} other {Import # valid rows}}",
+    "cancelReviewBtn": "Choose a different file"
   },
   "employeeTypes": {
     "title": "Employee Types",
@@ -2878,7 +2960,11 @@
     "createType": "Create type",
     "saveChanges": "Save changes",
     "loadingTitle": "Employee Types",
-    "loadingSubtitle": "Engagement type definitions."
+    "loadingSubtitle": "Engagement type definitions.",
+    "colBenefits": "Benefits",
+    "benefitGratuity": "Gratuity",
+    "benefitBonus": "Bonus",
+    "benefitLeaveEncashment": "Leave encashment"
   },
   "employeeWizard": {
     "pageTitle": "Add Employee",
@@ -2992,7 +3078,10 @@
     "hideBtn": "Hide",
     "showBtn": "Show",
     "workLocationOtherLabel": "Not in the list? Type the place instead",
-    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi"
+    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi",
+    "payStructureLabel": "Pay Structure",
+    "payStructureHint": "(optional)",
+    "payStructurePlaceholder": "Search pay structures…"
   },
   "employeeWizardStep5": {
     "heading": "Step 5 — Review & Submit",
@@ -3037,7 +3126,8 @@
     "shiftNight": "Night (10 PM – 6 AM)",
     "complianceImportant": "Important:",
     "complianceNote": "Sensitive fields (PAN, Aadhaar, Bank Account) are transmitted over TLS and stored AES-256 encrypted at rest in compliance with IT Act 2000 and DPDP Act 2023.",
-    "creatingRecord": "Creating employee record…"
+    "creatingRecord": "Creating employee record…",
+    "payStructure": "Pay Structure"
   },
   "employees": {
     "title": "Employees",
@@ -3072,7 +3162,8 @@
     "showingRange": "Showing {from}–{to} of {total} employees",
     "othersLegend": "Others: employees who are neither serving (probation, confirmed, deputation) nor on leave — e.g. suspended, retired, terminated, no-show.",
     "statusFilterLabel": "Filter by status",
-    "statusAll": "All statuses"
+    "statusAll": "All statuses",
+    "dashboardUnavailableNotice": "Summary figures couldn't be loaded — the cards show a dash. The employee list below is unaffected."
   },
   "employeesTable": {
     "colEmpCode": "Emp Code",
@@ -3087,7 +3178,8 @@
     "emptyMessage": "Add your first employee to unlock leave management, attendance tracking, and payroll processing.",
     "addFirstEmployee": "Add first employee",
     "emptyErrorTitle": "Couldn't load your team",
-    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe."
+    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe.",
+    "exportNotice": "{count, plural, one {CSV includes only the 1 employee on this page.} other {CSV includes only the # employees on this page.}}"
   },
   "error": {
     "load": {
@@ -3460,6 +3552,7 @@
     "formPlaceholderDescription": "What was this expense for?",
     "formSubmit": "Submit Claim",
     "formSubmitting": "Submitting…",
+    "formLinkedTravel": "This claim will be linked to your approved travel request.",
     "formSuccessMessage": "Claim submitted — it now shows as Pending.",
     "receiptNone": "No receipt",
     "receiptView": "View receipt",
@@ -3892,7 +3985,15 @@
     "deleteConfirmDescription": "\"{name}\" will be removed from the calendar. This affects leave and attendance calculations that read this calendar.",
     "filterPlaceholder": "Filter by holiday name or type…",
     "emptyTitle": "No holidays configured",
-    "emptyMessage": "National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll."
+    "emptyMessage": "National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll.",
+    "backLabel": "Back to HR",
+    "applicableToAll": "All",
+    "fieldApplicableToPlaceholder": "e.g. all",
+    "deleteForbidden": "You don't have permission to delete holidays.",
+    "deleteNotFound": "This holiday has already been removed. The list has been refreshed.",
+    "deleteSubmitted": "\"{name}\" deletion submitted — it will disappear from the list shortly.",
+    "deleteConfirmAction": "Delete",
+    "deleteCancelAction": "Keep holiday"
   },
   "home": {
     "title": "Dashboard",
@@ -4107,8 +4208,8 @@
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
-    "subtitle": "Recent audit trail entries for your tenant, most recent first. Required by e-Governance guidelines.",
-    "cardTitle": "Recent HR Actions",
+    "subtitle": "Audit trail of HR and payroll actions for your tenant, most recent first. Required by e-Governance guidelines.",
+    "cardTitle": "HR Actions",
     "colWhen": "When",
     "colAction": "Action",
     "colResource": "Resource",
@@ -4123,12 +4224,16 @@
     "applyFilter": "Apply",
     "clearFilter": "Clear",
     "showingRange": "Showing {from}–{to}",
+    "showingRangeOfTotal": "Showing {from}–{to} of {total}",
     "prevPage": "← Previous",
     "nextPage": "Next →",
     "resourceTypeLabel": "Resource type",
     "allResourceTypes": "All types",
     "actorLabel": "Actor",
-    "actorPlaceholder": "User ID (exact)"
+    "actorPlaceholder": "User ID (exact)",
+    "exportCsv": "Export all matching events (CSV)",
+    "exportCsvCount": "Export all {total} matching events (CSV)",
+    "exportTooLarge": "{total} events match, which is more than the {max} one export can hold. Narrow the date range or filters to export."
   },
   "icc": {
     "title": "ICC Complaints",
@@ -4173,7 +4278,8 @@
     "filterPlaceholder": "Filter by holder, card number, type or department…",
     "emptyTitle": "No ID cards issued",
     "emptyMessage": "ID cards for employees and vendor staff appear here once issued by HR administration.",
-    "loadingSubtitle": "Employee identity cards."
+    "loadingSubtitle": "Employee identity cards.",
+    "accessRestrictedReason": "ID cards include physical access-zone data, so this register is limited to HR administrators and security administrators."
   },
   "incomeTax": {
     "loadingAriaLabel": "Loading…",
@@ -4291,7 +4397,14 @@
     "colToDate": "To Date",
     "colDays": "Days",
     "colStatus": "Status",
-    "filterPlaceholder": "Search by employee, type or status…"
+    "filterPlaceholder": "Search by employee, type or status…",
+    "pagerLabel": "Leave requests pages",
+    "pagerShowing": "Showing {from}–{to} of {total} requests",
+    "pagerEmptyPage": "There are no requests on this page. {total} requests exist in total.",
+    "pagerPrev": "← Previous",
+    "pagerNext": "Next →",
+    "pagerNote": "The totals above count every request you can see. Search and sort apply to this page only.",
+    "managerOwnRequestsHintRich": "This list shows the requests of the people who report to you. Your own leave requests are on the <historyLink>History</historyLink> page."
   },
   "leaveAllocate": {
     "title": "Allocate Leave",
@@ -4382,7 +4495,15 @@
     "allocationOption": "{name} ({balance} days balance)",
     "charsCount": "{count} / 20+ chars",
     "balanceWarning": "You are applying for {days} days but only have {balance} days balance. The count shown is approximate (calendar days); the actual deduction may differ. Continue?",
-    "calendarDaysDisclaimer": "Approximate — excludes weekends & holidays."
+    "calendarDaysDisclaimer": "Approximate — shown as calendar days. The exact deduction is worked out under the leave rules (weekends and holidays) when the request is processed, so it may differ.",
+    "selectEmployeePlaceholder": "Search and select an employee…",
+    "selectEmployeeError": "Select the employee this leave is for.",
+    "applyForMyself": "Apply for myself",
+    "selectEmployeeFirst": "Select an employee first",
+    "previewBlockedTitle": "This request can't be submitted yet",
+    "balanceAfterMessage": "Balance after this request: {count, plural, one {# day} other {# days}}.",
+    "directCountNote": "Counted as entered for this leave type — weekends and holidays are not adjusted.",
+    "acceptedWithDaysMessage": "Leave request submitted for approval: {count, plural, one {# day} other {# days}} of {typeName}."
   },
   "leaveApprovals": {
     "title": "Leave Approvals",
@@ -4418,7 +4539,10 @@
     "toastRejected": "Leave rejected.",
     "actionFailedFallback": "{decision} failed ({status})",
     "loadTasksError": "Failed to load workflow tasks.",
-    "networkErrorRetry": "Network error. Please try again."
+    "networkErrorRetry": "Network error. Please try again.",
+    "panelTitleWithCount": "Pending Leave Approvals ({count})",
+    "truncatedNotice": "Showing the first {shown} pending leave approvals — more are waiting. Decide some of these and the rest will load.",
+    "truncatedEmptyMessage": "No leave approvals were found in the first {checked} workflow tasks, but more tasks exist, so this list may be incomplete. Try again later or contact support."
   },
   "leaveBalance": {
     "title": "Leave Balance",
@@ -4446,7 +4570,9 @@
     "viewMyBalanceLink": "View my own balance",
     "contactHrToAllocateMessage": "Contact HR to get leave allocated.",
     "noLinkedProfileTitle": "No employee record linked",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view a leave balance yet. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view a leave balance yet. Contact HR to get your account linked to your employee record.",
+    "employeeListError": "Couldn't load the employee list. Check your connection and try again.",
+    "employeeListRetry": "Try again"
   },
   "leaveHistory": {
     "title": "Leave History",
@@ -4493,7 +4619,8 @@
     "showingOfTotal": "Showing {shown} of {total}",
     "cancelReasonLabel": "Reason (optional unless reversing an approval, or cancelling on someone else's behalf)",
     "noLinkedProfileTitle": "No employee record linked",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view leave history yet. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view leave history yet. Contact HR to get your account linked to your employee record.",
+    "employeeListRetry": "Try again"
   },
   "leavePolicies": {
     "title": "Leave Policy Configuration",
@@ -4644,6 +4771,7 @@
     "emptyMessage": "Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module.",
     "backToHr": "Back to HR",
     "colEmiProgress": "EMI Progress",
+    "emiProgressAria": "{paid} of {total} EMIs paid",
     "statOtherLabel": "Other",
     "emptyActionLink": "Go to Payroll › Loans",
     "types": {
@@ -5913,6 +6041,8 @@
   "promotion": {
     "title": "Promotions",
     "subtitle": "Grade progression — DPC seniority list, individual promotions, and approval chain.",
+    "backLabel": "Back to HR",
+    "hasMoreNotice": "Showing the 500 most recent promotions. Older promotions are not listed here.",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "statTotal": "Total Promotions",
     "statApprovedSigned": "Approved / Signed",
@@ -5943,6 +6073,9 @@
     "stepIndicator": "Step {step} of 2",
     "errSelectEmployee": "Select an employee.",
     "errSelectDesignation": "Select the new designation.",
+    "retry": "Retry",
+    "lookupFailed": "Could not load designations. Check your connection and try again.",
+    "errNoDesignation": "This employee has no designation on record. Update their profile before raising a promotion.",
     "errEffectiveDateRequired": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
     "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
@@ -6914,7 +7047,17 @@
     "statTransfersLabel": "Transfers / Postings",
     "statPromotionsLabel": "Promotions / Increments",
     "cardTitle": "Service Book Entries",
-    "truncationNotice": "Showing {shown} of {total} entries."
+    "truncationNotice": "Showing {shown} of {total} entries.",
+    "backLabel": "Back to HR",
+    "employeePickerLabel": "Show one employee's service book",
+    "employeePickerPlaceholder": "Search by name or employee number…",
+    "employeePickerSearching": "Searching…",
+    "employeePickerNoResults": "No matching employees",
+    "employeePickerError": "Couldn't search employees. Please try again.",
+    "pagerAriaLabel": "Service book pages",
+    "newerEntriesLink": "← Newer entries",
+    "olderEntriesLink": "Older entries →",
+    "pageLabel": "Page {page}"
   },
   "serviceBookView": {
     "eventJoining": "Joining",
@@ -6935,8 +7078,6 @@
     "eventSuspension": "Suspension",
     "eventRetirement": "Retirement",
     "eventOther": "Other",
-    "searchEmployeePlaceholder": "Search employee…",
-    "filterByEmployeeAriaLabel": "Filter by employee name",
     "filterByEventTypeAriaLabel": "Filter by event type",
     "unattestedOnlyLabel": "Unattested only",
     "allEventTypes": "All Event Types",
@@ -7044,8 +7185,10 @@
     "sectionAriaLabel": "Shift cards",
     "cardStart": "Start",
     "cardEnd": "End",
-    "cardBreak": "Break",
+    "cardGrace": "Grace",
     "cardTotal": "Total",
+    "durationMinutes": "{minutes} min",
+    "durationHoursMinutes": "{hours}h {minutes}m",
     "manageTitle": "Manage shifts",
     "addShift": "Add shift",
     "editShift": "Edit shift",
@@ -7081,7 +7224,12 @@
     "byAuthorLine": "by {author}",
     "loadingSubtitle": "Team announcements and kudos.",
     "backToHr": "Back to HR",
-    "reactionsCount": "{count, plural, one {# reaction} other {# reactions}}"
+    "reactionsCount": "{count, plural, one {# reaction} other {# reactions}}",
+    "birthdaySharingTitle": "Birthday sharing",
+    "birthdaySharingLabel": "Show my birthday on the social feed",
+    "birthdaySharingHelp": "Off by default. When on, your name, department and designation are shown to colleagues on your birthday. Your date of birth and age are never shown. You can turn this off at any time.",
+    "birthdaySharingSavedOn": "Saved. Your birthday will be shown on the feed.",
+    "birthdaySharingSavedOff": "Saved. Your birthday will not be shown."
   },
   "sponsorBankConfigForm": {
     "currentConfigNote": "Currently configured: sponsor account ending in <strong>{last4}</strong>, settlement offset {days} day(s).",
@@ -7236,6 +7384,8 @@
     "devPlanAriaLabel": "Development plan for {name}",
     "devPlanLinkText": "Dev Plan",
     "noPlan": "No plan",
+    "devPlanLabel": "Development plan:",
+    "planOnFile": "Plan on file",
     "noPlansTitle": "No succession plans created",
     "noPlansMessage": "Succession plans for critical roles appear here. Each plan tracks nominees and readiness for role assumption.",
     "nomineeName": "Nominee {n}",
@@ -7478,7 +7628,7 @@
     "statChargeMemoStageLabel": "Charge Memo Stage",
     "statUnderInquiryLabel": "Under Inquiry",
     "cardTitle": "Vigilance Cases Register",
-    "filterPlaceholder": "Filter by employee, department or inquiry officer…",
+    "filterPlaceholder": "Case ref, employee, department or inquiry officer…",
     "emptyTitle": "No vigilance cases on record",
     "emptyMessage": "Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules.",
     "confidentialBannerTitle": "Confidential — Vigilance",
@@ -7488,7 +7638,19 @@
     "nextBatch": "Next 200",
     "statPenaltyAppealLabel": "Penalty & Appeal",
     "statClosedLabel": "Closed",
-    "statDroppedLabel": "Dropped"
+    "statDroppedLabel": "Dropped",
+    "filterFormLabel": "Filter vigilance cases",
+    "filterStatusLabel": "Status",
+    "filterAllStatuses": "All statuses",
+    "filterSearchLabel": "Search",
+    "applyFilter": "Apply",
+    "clearFilter": "Clear",
+    "resultsCount": "{total} matching cases",
+    "emptyFilteredTitle": "No cases match",
+    "emptyFilteredMessage": "No vigilance case matches this status and search. Clear the filter to see the whole register.",
+    "noCharges": "—",
+    "backToVigilance": "Back to Vigilance",
+    "crumbVigilance": "Vigilance"
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",
@@ -7531,7 +7693,8 @@
     "emptyTitle": "No WFH requests",
     "emptyMessage": "Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer.",
     "cardNewRequest": "New WFH Request",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a WFH request from here. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a WFH request from here. Contact HR to get your account linked to your employee record.",
+    "noFilerRoleMessage": "Work-from-home requests are filed by the employee or by HR. As a manager you can approve or reject your team's requests in the list below."
   },
   "workforce": {
     "title": "Workforce Overview",
@@ -7756,21 +7919,32 @@
     "myNoProfileTitle": "No employee profile linked",
     "myNoProfileMessage": "Your sign-in is not linked to an employee record, so there is no personal competency profile to show. Contact HR to link it.",
     "myRadarEmptyTitle": "Not enough recorded competencies",
-    "myRadarEmptyMessage": "A radar needs at least three recorded competencies. HR records your levels from assessments and training; they will appear here."
+    "myRadarEmptyMessage": "A radar needs at least three recorded competencies. HR records your levels from assessments and training; they will appear here.",
+    "compEmptyMessageReadOnly": "No competencies defined yet. Contact HR.",
+    "statOther": "Other",
+    "categoryGeneral": "General",
+    "frameworkSubmitted": "Submitted — the framework will appear in the list shortly.",
+    "frameworkStillProcessing": "Still processing — the framework was received but is not in the list yet. Refresh to check again."
   },
   "confirmation": {
     "title": "Probation Confirmations",
-    "subtitle": "Employees due for service confirmation after the mandatory 2-year probation (CCS Conduct Rules).",
+    "subtitle": "Employees due for service confirmation once their probation period ends (CCS Conduct Rules).",
     "statOnProbation": "On Probation",
     "statOverdue": "Overdue",
     "statDueSoon": "Due in 30 Days",
     "statTimely": "Timely",
     "statDateNotSet": "Date Not Set",
-    "cardTitle": "Probation Register — Confirmation Due"
+    "cardTitle": "Probation Register — Confirmation Due",
+    "recNotRecorded": "No manager recommendation on record",
+    "recAria": "Manager recommendation: {label}",
+    "emptyTitle": "No employees currently on probation",
+    "emptyMessage": "Employees on probation appear here once added to the service book.",
+    "probationPeriodHint": "{months, plural, one {# month probation} other {# months probation}}"
   },
   "deputation": {
     "title": "Deputation",
     "subtitle": "Officers on deputation to other government organisations.",
+    "backLabel": "Back to HR",
     "statTotal": "Total Deputations",
     "statActive": "Active",
     "statRepatriated": "Repatriated",
@@ -7808,6 +7982,8 @@
       "repatriateConfirmDescription": "{name} will be restored to their parent posting and reporting line. This is recorded in the service book.",
       "cancelConfirmTitle": "Cancel this deputation?",
       "cancelConfirmDescription": "{name}'s deputation will be cancelled and their parent posting restored. This is recorded in the service book.",
+      "confirmBtn": "Confirm",
+      "dismissBtn": "Go back",
       "actionFailed": "Couldn't complete this action. Please try again.",
       "notActive": "This deputation is no longer active."
     }
@@ -7873,12 +8049,15 @@
     "crumbHr": "HR",
     "crumbDisciplinary": "Disciplinary",
     "crumbNotFound": "Not found",
+    "breadcrumbLabel": "Breadcrumb",
     "backLabel": "Back to Disciplinary",
     "loadingTitle": "Disciplinary Case",
     "loadingSub": "Loading case details…",
     "notFoundTitle": "Disciplinary Case",
     "notFoundEmptyTitle": "Case not found",
-    "notFoundEmptyMessage": "This disciplinary case may have been removed or the ID is invalid."
+    "notFoundEmptyMessage": "This disciplinary case may have been removed or the ID is invalid.",
+    "loadErrorArea": "disciplinary case",
+    "eofficeSubject": "Disciplinary case {caseLabel}"
   },
   "goals": {
     "title": "Goals & Development",
@@ -7913,14 +8092,27 @@
     "targetLabel": "Target:",
     "progressLabel": "Progress",
     "checkinSaveFailed": "Couldn't save this check-in.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "statusOnTrack": "On Track",
+    "statusAtRisk": "At Risk",
+    "statusBehind": "Behind",
+    "statusAchieved": "Achieved",
+    "cascadeOrg": "Org",
+    "cascadeDept": "Dept",
+    "cascadeIndividual": "Individual",
+    "cascadedFrom": "Cascaded from:",
+    "dueOverdue": "{days}d overdue",
+    "dueToday": "Due today",
+    "dueLeft": "{days}d left",
+    "checkinSaved": "Check-in saved. Progress is now {progress}%.",
+    "checkinCompleted": "Check-in saved. This goal is now complete."
   },
   "skills": {
     "title": "Skill Matrix",
     "subtitle": "Employee competency mapping, proficiency levels, and skill gap identification.",
     "statTotal": "Skill Records",
     "statEmployees": "Employees Mapped",
-    "statExpert": "Expert / Advanced",
+    "statExpert": "Expert",
     "statBeginner": "Beginner / Basic",
     "cardTitle": "Competency Grid",
     "emptyTitle": "No skill assessments recorded",
@@ -7934,10 +8126,10 @@
     "levelAdvanced": "Advanced",
     "levelExpert": "Expert",
     "gapNotAssessed": "Not assessed",
-    "gapMeets": "Meets requirement",
-    "gapOneBelow": "1 level below requirement",
-    "gapBehind": "2+ levels below requirement",
-    "legendMeets": "At / above requirement",
+    "gapMeets": "Meets baseline",
+    "gapOneBelow": "1 level below baseline",
+    "gapBehind": "2+ levels below baseline",
+    "legendMeets": "At / above baseline",
     "legendOneBelow": "1 level below",
     "legendGap": "Gap ≥ 2 levels",
     "legendNotAssessed": "Not assessed",
@@ -7947,13 +8139,15 @@
     "filterAllCategories": "All categories",
     "noMatch": "No skill records match the filter.",
     "rowSummary": "{employee}: {level}, {gap}",
-    "truncationNotice": "Showing {shown} of {total} skill records."
+    "truncationNotice": "Showing {shown} of {total} skill records.",
+    "legendBaseline": "Baseline for all skills: {level}"
   },
   "retirement": {
     "title": "Retirement & Separation",
     "subtitle": "Upcoming retirements within 6 months, processing wizard, and full separation register.",
     "statTotal": "Total",
     "statUpcoming": "Next 6 Months",
+    "statOverdue": "Overdue",
     "statProcessed": "Processed",
     "statInitiated": "Initiated",
     "statVrs": "VRS",
@@ -7967,11 +8161,14 @@
     "colStatus": "Status",
     "filterPlaceholder": "Filter by employee, department or date…",
     "emptyTitle": "No retirement or separation records",
-    "emptyMessage": "Superannuation, VRS, and resignation records appear here."
+    "emptyMessage": "Superannuation, VRS, and resignation records appear here.",
+    "backLabel": "Back to HR",
+    "loadErrorMessage": "Couldn't load retirement records — showing nothing"
   },
   "retirementDashboard": {
     "noUpcomingTitle": "No retirements in the next 6 months",
     "noUpcomingMessage": "Employees retiring beyond 6 months appear in the full register below.",
+    "summaryCounts": "{upcoming} due in the next 6 months · {overdue} overdue",
     "cardAriaLabel": "Retirement: {name}",
     "colRetirementDate": "Retirement Date",
     "colDaysRemaining": "Days Remaining",
@@ -8080,6 +8277,7 @@
     "statEmployees": "Employees",
     "statReviewed": "Reviewed",
     "statPending": "Pending Review",
+    "statOther": "In Other Stages",
     "cardTitle": "Work Summary Records",
     "colEmployee": "Employee",
     "colDepartment": "Department",
@@ -8116,7 +8314,20 @@
     "colActions": "Actions",
     "statApprovedHours": "Approved Hours",
     "colDate": "Date",
-    "truncatedNotice": "Showing the first {count} of {total} requests. Refine the filter to find a specific one."
+    "truncatedNotice": "Showing the first {count} of {total} requests. Use the page links below to see the rest.",
+    "actionApprove": "Approve",
+    "actionReject": "Reject",
+    "approveTitle": "Approve this overtime request?",
+    "approveDescription": "This approves the overtime request. The decision is applied in the background, so the list may take a moment to update.",
+    "rejectTitle": "Reject this overtime request?",
+    "rejectDescription": "The reason you enter is recorded with the rejection.",
+    "rejectReasonLabel": "Reason for rejection",
+    "alreadyDecided": "This request was already decided by someone else (or removed). The list has been refreshed.",
+    "decisionQueued": "Decision recorded. It is being applied and the list will update shortly.",
+    "pageEmptyTitle": "No requests on this page",
+    "pageEmptyMessage": "The list has fewer requests than this page expects. Go back to the first page.",
+    "backToFirstPage": "Back to the first page",
+    "noRequestsMessageNoRequest": "Overtime requests from you and your direct reports will appear here."
   },
   "overtimeNew": {
     "title": "New Overtime Request",
@@ -8143,7 +8354,8 @@
     "backToOvertime": "Back to Overtime",
     "discardTitle": "Discard this request?",
     "discardMessage": "You have unsaved changes. Leaving now will discard them.",
-    "discardConfirm": "Discard"
+    "discardConfirm": "Discard",
+    "profileUnavailable": "Could not load your employee record, so a request cannot be filed right now. Refresh and try again."
   },
   "transfer": {
     "title": "Transfer Orders",
@@ -8153,6 +8365,7 @@
     "statPending": "Pending",
     "statApproved": "Order Issued",
     "statRelieved": "Relieved",
+    "statCancelled": "Cancelled",
     "cardTitle": "Transfer Orders — Table View",
     "colEmployee": "Employee",
     "colFrom": "From",
@@ -8161,9 +8374,11 @@
     "colOrderNo": "Order No.",
     "colRelievedDate": "Relieved Date",
     "colStatus": "Status",
-    "filterPlaceholder": "Filter by employee, office or order no…",
     "emptyTitle": "No transfer orders",
-    "emptyMessage": "Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office."
+    "emptyMessage": "Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office.",
+    "backLabel": "Back to HR",
+    "viewOnlyNote": "You have view-only access to transfer orders. Ask an HR admin to raise a new transfer.",
+    "loadErrorBadge": "Couldn't load transfer orders — showing nothing"
   },
   "advances": {
     "title": "Salary Advances",
@@ -8205,7 +8420,18 @@
     "formPurposeInvalid": "Purpose must be at least 2 characters.",
     "formSubmitting": "Submitting…",
     "formSubmit": "Submit Request",
-    "viewOnlyNoDirectoryAccess": "You have view-only access to salary advances. Ask an HR admin or your manager to file a request on your behalf."
+    "viewOnlyNoDirectoryAccess": "You have view-only access to salary advances. Ask an HR admin or your manager to file a request on your behalf.",
+    "backToHr": "Back to HR",
+    "listLoadError": "Couldn't load the advances list — you can still submit a new request below",
+    "errorArea": "HR page",
+    "recoveryMonthsValue": "{count, plural, one {# month} other {# months}}",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "approveDialogTitle": "Approve this salary advance?",
+    "approveDialogDescription": "The employee will be notified and the amount will be recovered from future salary as configured.",
+    "rejectDialogTitle": "Reject this salary advance?",
+    "rejectDialogDescription": "The employee will be notified of the rejection and the reason below.",
+    "rejectReasonLabel": "Reason for rejection"
   },
   "payrollPeriod": {
     "title": "Payroll Periods",
@@ -8875,7 +9101,7 @@
     "statCompleted": "Completed",
     "allProgramsTitle": "All Training Programs",
     "viewNominations": "View Nominations",
-    "feedbackReports": "Feedback Reports",
+    "completionResults": "Completion Results",
     "upcomingHeading": "Upcoming Programs",
     "upcomingSubtitle": "{count, plural, one {Next # scheduled training} other {Next # scheduled trainings}}",
     "startDate": "Start date",
@@ -8903,7 +9129,8 @@
       "ongoing": "Ongoing",
       "completed": "Completed",
       "cancelled": "Cancelled"
-    }
+    },
+    "pendingProgramMessage": "Your new programme was received and is still being processed. It will appear here shortly."
   },
   "trainingNew": {
     "title": "New Training Program",
@@ -8935,7 +9162,14 @@
     "pastDateWarning": "This start date is in the past. Only continue if you're recording a training that already took place.",
     "statusFixFields": "Please fix the highlighted fields.",
     "errToDateBeforeFromDate": "To date must be on or after from date.",
-    "errDeadlineAfterStart": "Enrolment deadline must be on or before the from date."
+    "errDeadlineAfterStart": "Enrolment deadline must be on or before the from date.",
+    "loadingAriaLabel": "Loading new training program form",
+    "stillProcessingMessage": "Still processing — your programme was received but is not in the list yet. Check the list again in a moment.",
+    "viewListLink": "View training programmes",
+    "errRequired": "This field is required.",
+    "errTooLong": "Must be {max} characters or fewer.",
+    "errInvalidDate": "Enter a valid date.",
+    "errWholeNumber": "Enter a whole number, 1 or more."
   },
   "trainingDetail": {
     "title": "Training Programme",
@@ -8963,7 +9197,19 @@
     "noEmployeeLink": "No linked employee record was found for your account — contact HR to enrol.",
     "enrollCta": "Enroll me",
     "enrolling": "Enrolling…",
-    "enrolled": "You're nominated for this programme."
+    "enrolled": "Nomination submitted — it will appear on the Nominations page shortly.",
+    "nominateTitle": "Nominate an employee",
+    "nominateHint": "Nominate a colleague for this programme. The nomination is sent for approval and appears on the Nominations page.",
+    "nominateEmployeeLabel": "Employee",
+    "nominateEmployeePlaceholder": "Search by name or employee number…",
+    "nominateNoResults": "No matching employees",
+    "nominateSearching": "Searching…",
+    "nominateSearchError": "Couldn't load employees. Please try again.",
+    "nominateEmployeeRequired": "Choose an employee to nominate.",
+    "nominateCta": "Nominate",
+    "nominating": "Submitting…",
+    "nominationSubmitted": "Nomination submitted — it will appear on the Nominations page shortly.",
+    "viewNominations": "View nominations"
   },
   "trainingFeedback": {
     "title": "Training Completion Results",
@@ -9031,24 +9277,42 @@
   },
   "travel": {
     "title": "Travel Requests",
-    "subtitle": "Submit and track official travel approvals — LTC, tour advance, and TA/DA settlement.",
+    "subtitle": "Submit and track official travel approvals and tour advances.",
+    "backToHr": "Back to HR",
     "statTotal": "Total Requests",
     "statPending": "Pending Approval",
     "statApproved": "Approved",
     "statRejected": "Rejected",
     "cardTitle": "Travel Requests",
     "pendingApprovalsCardTitle": "Pending Approvals",
+    "colEmployee": "Employee",
     "colDestination": "Destination",
     "colPurpose": "Purpose",
     "colFrom": "From",
     "colTo": "To",
     "colMode": "Mode",
     "colStatus": "Status",
+    "colRejectionReason": "Rejection reason",
+    "colActions": "Actions",
     "filterPlaceholder": "Filter by destination or purpose…",
     "emptyTitle": "No travel requests",
-    "emptyMessage": "Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking.",
+    "emptyMessage": "Official travel requests you submit with the form above appear here for tracking. Your reporting manager reviews each request before booking.",
+    "emptyMessageApprover": "Travel requests you submit with the form above appear here for tracking. Someone else decides your own requests; requests waiting for your decision are listed under Pending Approvals.",
     "colAdvance": "Advance",
-    "dataSourceErrorMessage": "Could not load the travel requests list."
+    "claimExpenses": "Claim expenses",
+    "claimExpensesAria": "Claim expenses for travel to {destination}",
+    "dataSourceErrorMessage": "Could not load the travel requests list.",
+    "approvalsFilterPlaceholder": "Filter by employee, destination or status…",
+    "approvalsEmptyTitle": "No requests to review",
+    "approvalsEmptyMessage": "Travel requests from the people you approve for appear here for a decision. Your own requests are never listed in this queue.",
+    "ownRequestNote": "Your own request",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "approveDialogTitle": "Approve this travel request?",
+    "approveDialogDescription": "The employee will be notified their travel is approved.",
+    "rejectDialogTitle": "Reject this travel request?",
+    "rejectDialogDescription": "The employee will be notified, along with the reason below if you provide one.",
+    "rejectReasonLabel": "Reason for rejection"
   },
   "jdTemplates": {
     "title": "JD Template Library",
@@ -9073,7 +9337,12 @@
     "networkError": "Network error. Please try again.",
     "archiveConfirmTitle": "Archive this template?",
     "archiveConfirmMessage": "\"{name}\" will be hidden from the library and can no longer be used for new job openings.",
-    "showingFirstN": "Showing the first {count} templates."
+    "showingFirstN": "Showing the first {count} templates.",
+    "archiveAccepted": "Archive request received for \"{name}\". It will leave the library shortly.",
+    "pendingTitle": "New template on its way",
+    "pendingMessage": "Your new template was submitted and is still being added to the library. Refresh in a moment to see it.",
+    "pendingRefresh": "Refresh",
+    "justAdded": "Just added"
   },
   "jdTemplateNew": {
     "title": "New JD Template",
@@ -9124,7 +9393,8 @@
     "saveTemplate": "Save template",
     "discardChangesTitle": "Discard unsaved changes?",
     "discardChangesMessage": "You have unsaved changes to this template. If you leave now, they will be lost.",
-    "discardChangesConfirm": "Discard changes"
+    "discardChangesConfirm": "Discard changes",
+    "retryLoad": "Try again"
   },
   "payrollDetail": {
     "exceptionMissingPan": "PAN is missing. Without it, tax is deducted at the higher rate (Section 206AA).",
@@ -9711,7 +9981,8 @@
     "noResults": "No matching employees",
     "clear": "Clear",
     "clearAriaLabel": "Clear selected employee",
-    "searchFailed": "Could not load employees. Check your connection and try again."
+    "searchFailed": "Could not load employees. Check your connection and try again.",
+    "retry": "Retry"
   },
   "directoryPicker": {
     "placeholder": {
@@ -9823,6 +10094,11 @@
     "showing": "Showing {shown} of {total} transfers",
     "noMatchTitle": "No transfers match your filters",
     "noMatchHint": "Try clearing the search or adjusting the date range.",
+    "viewCards": "Cards",
+    "viewTable": "Table",
+    "viewToggleAria": "Transfer view",
+    "filtersApplied": "{count, plural, one {# filter applied} other {# filters applied}}",
+    "clearFilters": "Clear filters",
     "csvEmployee": "Employee",
     "csvFromOffice": "From Office",
     "csvToOffice": "To Office",
@@ -9840,7 +10116,10 @@
       "pending_approval": "Pending Approval",
       "pending_effective": "Approved — Effective Soon",
       "completed": "Completed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "pending": "Pending",
+      "approved": "Approved",
+      "rejected": "Rejected"
     },
     "orderNo": "Order No.",
     "orderDate": "Order Date",
@@ -9876,6 +10155,8 @@
     "confirm": "Confirm",
     "errSelectEmployee": "Select an employee.",
     "errSelectDest": "Select the destination department.",
+    "errSameDept": "The destination department must be different from the current department.",
+    "errFromDeptUnavailable": "The employee's current department could not be determined, so a transfer cannot be raised. Ask HR to check their record.",
     "errEffectiveDate": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
     "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
@@ -9896,8 +10177,10 @@
     "selectEmployee": "Select employee…",
     "fromDept": "From (current department)",
     "fromDeptAria": "Current department (auto-filled)",
+    "notAvailable": "Not available",
     "toDept": "Transfer to (department)",
     "deptLoadFailed": "Couldn't load departments.",
+    "deptForbidden": "You don't have permission to view departments.",
     "retry": "Retry",
     "loadingDepts": "Loading departments…",
     "selectDest": "Select destination department…",

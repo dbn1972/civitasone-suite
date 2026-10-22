@@ -1,7 +1,8 @@
-import { eq, and, or, ilike, sql, inArray, desc, asc, gt } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
+import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
 import {
   hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions,
   type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
@@ -51,10 +52,39 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * exists, we use it as reporting officer" comment in
  * migrations/0007_geo_attendance_ro.sql).
  */
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string): Promise<EmployeeRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<EmployeeRow[]> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+  // GAP-HR-LEAVE-ALLOCATE-04: this had NO ORDER BY, so any limit/offset page --
+  // and above all the picker's first `limit` rows -- came back in arbitrary,
+  // unstable order (a row could repeat or vanish between pages). Name, then
+  // employee number, then id (a unique final tiebreak) makes every page
+  // deterministic and the picker's results read alphabetically.
+  return scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(...conditions))
+    .orderBy(asc(sql`lower(${hrmsEmployees.fullName})`), asc(hrmsEmployees.employeeNo), asc(hrmsEmployees.id))
+    .limit(limit)
+    .offset(offset));
+}
+
+/**
+ * GAP-HR-LEAVE-ALLOCATE-04: the real number of employees matching the SAME
+ * filters as listByTenant (not the size of the returned page), so a caller can
+ * say "showing 20 of 340" instead of guessing from `rows.length === limit`.
+ */
+export async function countByTenant(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<number> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+  const rows = await scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsEmployees)
+    .where(and(...conditions)));
+  return rows[0]?.count ?? 0;
+}
+
+/** Shared WHERE for listByTenant / countByTenant so the page and its total can never disagree. */
+function listConditions(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]) {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
   // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
   if (status) conditions.push(eq(hrmsEmployees.status, status));
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: pickers exclude people who cannot be chosen (exited staff).
+  if (excludeStatuses && excludeStatuses.length > 0) conditions.push(notInArray(hrmsEmployees.status, excludeStatuses));
   if (employeeType) {
     // Case-insensitive, multi-value ("intern,apprentice"); a single value behaves as before.
     const types = employeeType.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
@@ -68,10 +98,7 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
     const pattern = `%${q}%`;
     conditions.push(or(ilike(hrmsEmployees.fullName, pattern), ilike(hrmsEmployees.employeeNo, pattern))!);
   }
-  return scopedRead((tx) => tx.select().from(hrmsEmployees)
-    .where(and(...conditions))
-    .limit(limit)
-    .offset(offset));
+  return conditions;
 }
 
 /**
@@ -141,13 +168,10 @@ export async function insertProbationExtension(tx: Writer, row: ProbationExtensi
 /**
  * An employee's current probation end: the newEndDate of their most
  * recently recorded extension, if any, else the default of dateOfJoining +
- * 2 years. NOTE: this default formula is duplicated (not imported) in
- * lifecycle/m7-list-routes.ts's confirmations list handler, which needs the
- * same computation for every row in a batch rather than one employee at a
- * time -- module boundaries (CLAUDE.md rule 4) make a single shared helper
- * awkward without a larger refactor of that file's existing local batch*
- * pattern, which is unrelated to this fix and out of scope. Keep both in
- * sync if the default ever changes.
+ * the probation period configured for their employee type (probation-
+ * period.ts; 24 months when the type configures none). lifecycle/
+ * m7-list-routes.ts's confirmations list handler computes the same default
+ * for a whole batch through the SAME resolver, so the two cannot drift.
  */
 export async function findCurrentProbationEnd(id: string, tenantId: string): Promise<string | null> {
   const emp = await findById(id, tenantId);
@@ -159,9 +183,8 @@ export async function findCurrentProbationEnd(id: string, tenantId: string): Pro
     .orderBy(desc(hrmsProbationExtensions.createdAt))
     .limit(1));
   if (latest[0]) return latest[0].newEndDate;
-  const join = new Date(`${emp.dateOfJoining}T00:00:00Z`);
-  join.setUTCFullYear(join.getUTCFullYear() + 2);
-  return join.toISOString().slice(0, 10);
+  const months = (await loadProbationMonthsResolver(tenantId))(emp.employeeType);
+  return defaultProbationEnd(emp.dateOfJoining, months);
 }
 
 /**
@@ -225,6 +248,31 @@ export async function updateEmployeeIfStatus(
   const rowCount = (res as { rowCount?: number; count?: number }).rowCount
     ?? (res as { count?: number }).count ?? 0;
   return rowCount > 0;
+}
+
+/**
+ * GAP-HR-SOCIAL-FEED-01: guarded write of the employee's OWN birthday-sharing
+ * consent. The UPDATE only matches when the stored value actually differs, so
+ * it returns true exactly when the consent changed (a replay or a no-op toggle
+ * returns false and the caller writes no audit event). Tenant-scoped in the
+ * WHERE itself, in addition to RLS.
+ */
+export async function setShareBirthday(
+  tx: Writer,
+  tenantId: string,
+  employeeId: string,
+  share: boolean,
+  updatedBy: string,
+): Promise<boolean> {
+  const rows = await tx.update(hrmsEmployees)
+    .set({ shareBirthday: share, updatedBy, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsEmployees.id, employeeId),
+      eq(hrmsEmployees.tenantId, tenantId),
+      sql`${hrmsEmployees.shareBirthday} IS DISTINCT FROM ${share}`,
+    ))
+    .returning({ id: hrmsEmployees.id });
+  return rows.length > 0;
 }
 
 /**

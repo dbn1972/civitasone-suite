@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { ToastProvider } from "@/app/_components/ds";
+import { todayDateOnly } from "@/lib/retirement";
 
 const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn(() => ["hr_admin"]) }));
 vi.mock("@/lib/auth/roleGuard", () => ({
@@ -153,5 +154,71 @@ describe("RetirementPage ?empId= prefill wiring (SEC CRITICAL regression guard)"
 
     expect(screen.getByRole("button", { name: "+ Initiate Separation" })).toBeInTheDocument();
     expect(screen.queryByText(/has already exited/)).not.toBeInTheDocument();
+  });
+});
+
+// GAP-HR-RETIREMENT-05: the page KPIs, the card dashboard and the wizard all read
+// one shared partition (lib/retirement partitionRetirements), so the numbers on the
+// KPI strip are exactly the numbers the dashboard reports and the cards it renders.
+function daysFromNow(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+describe("RetirementPage KPIs agree with the dashboard (GAP-HR-RETIREMENT-05)", () => {
+  it("'Next 6 Months' and 'Overdue' equal the dashboard's own counts, and completed past rows are in neither", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        row({ id: "u1", employee: "Upcoming One", superannuationDate: daysFromNow(20) }),
+        row({ id: "u2", employee: "Upcoming Two", superannuationDate: daysFromNow(90) }),
+        row({ id: "o1", employee: "Overdue One", superannuationDate: daysFromNow(-12), status: "initiated" }),
+        row({ id: "done", employee: "Completed Past", superannuationDate: daysFromNow(-40), status: "completed" }),
+      ],
+      source: "api",
+    });
+    await renderPage();
+
+    expect(screen.getByText("Next 6 Months").closest(".stat")).toHaveTextContent("2");
+    expect(screen.getByText("Overdue").closest(".stat")).toHaveTextContent("1");
+    // The dashboard states the same two numbers...
+    expect(screen.getByText("2 due in the next 6 months · 1 overdue")).toBeInTheDocument();
+    // ...and renders exactly that many case cards (the completed past row is not one of them).
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(screen.getByRole("article", { name: "Retirement: Overdue One" })).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Retirement: Completed Past" })).not.toBeInTheDocument();
+  });
+
+  it("the Overdue KPI is 0 and the summary line says so when nothing is overdue", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [row({ id: "u1", superannuationDate: daysFromNow(10) })], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Overdue").closest(".stat")).toHaveTextContent("0");
+    expect(screen.getByText("1 due in the next 6 months · 0 overdue")).toBeInTheDocument();
+  });
+
+  it("an effective date of today counts as upcoming, not overdue", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [row({ id: "t1", superannuationDate: todayDateOnly() })], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Next 6 Months").closest(".stat")).toHaveTextContent("1");
+    expect(screen.getByText("Overdue").closest(".stat")).toHaveTextContent("0");
+  });
+});
+
+describe("RetirementPage shell copy comes from the message catalogue (GAP-HR-RETIREMENT-08)", () => {
+  it("renders the translated back link", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.getByText(enMessages.retirement.backLabel)).toBeInTheDocument();
+  });
+
+  it("renders the translated load-failure message", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    await renderPage();
+    expect(screen.getByText(enMessages.retirement.loadErrorMessage)).toBeInTheDocument();
   });
 });

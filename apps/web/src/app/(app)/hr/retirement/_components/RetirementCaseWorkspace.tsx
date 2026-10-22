@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card } from "@/app/_components/ds";
-import { isUpcoming, sortByDateAsc } from "@/lib/retirement";
+import { partitionRetirements } from "@/lib/retirement";
 import { RetirementDashboard, type RetirementRow } from "./RetirementDashboard";
 import { RetirementProcessWizard } from "./RetirementProcessWizard";
 
@@ -22,10 +22,14 @@ interface Props {
 
 export function RetirementCaseWorkspace({ rows }: Props) {
   const t = useTranslations("retirementWorkspace");
-  const upcoming = useMemo(() => sortByDateAsc(rows.filter((r) => isUpcoming(r))), [rows]);
+  // GAP-HR-RETIREMENT-05: the wizard can open exactly the cases the dashboard
+  // shows -- overdue ones (effective date passed, still "initiated") as well as
+  // upcoming. Selecting from upcoming only left an overdue card's "Process this
+  // retirement" button marking it selected while the wizard showed no retiree.
+  const cases = useMemo(() => partitionRetirements(rows).cases, [rows]);
 
-  const [selectedId, setSelectedId] = useState<string | undefined>(upcoming[0]?.id);
-  const selected = upcoming.find((r) => r.id === selectedId);
+  const [selectedId, setSelectedId] = useState<string | undefined>(cases[0]?.id);
+  const selected = cases.find((r) => r.id === selectedId);
 
   return (
     <>

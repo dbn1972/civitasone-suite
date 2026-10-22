@@ -188,7 +188,9 @@ export default async function OnboardingDetailPage({ params }: Props) {
       status: d.status,
       storageKey: d.storageKey ?? null,
       uploadedFileName: d.fileName ?? undefined,
-      category: "document",
+      // "attachment" accepts the PDF/JPG/PNG/DOCX the upload card offers; the "document" category
+      // would 400 at presign for an image (GAP-HR-ONBOARDING-DETAIL-02).
+      category: "attachment",
     }));
 
   return (

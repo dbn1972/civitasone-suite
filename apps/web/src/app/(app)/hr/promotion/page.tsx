@@ -15,38 +15,32 @@ import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 // raw 403 on submit.
 const PROMOTION_SUBMIT_ROLES = HR_STAFF_ROLES;
 
-async function getData(): Promise<LoaderResult<PromotionRow[]>> {
-  const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions", [], {
-    telemetryKey: "hr.promotion.lifecycle",
+// GAP-HR-PROMOTION-01: GET /v1/hrms/promotions (lifecycle/m7-list-routes.ts) is
+// the page's ONE source. It returns the enriched row the table columns are
+// keyed on (employee, department, fromGrade, toGrade, orderNo ...) and
+// newBasicMinor as a string. This page used to read the raw
+// /hrms/lifecycle/promotions list first and only fell back to this one when
+// that came back empty -- so as soon as a promotion existed, the table's
+// employee / grade / order-no cells were blank. The route caps at 500 rows
+// and reports `hasMore`; it is surfaced below instead of being dropped.
+type PromotionData = { rows: PromotionRow[]; hasMore: boolean };
+
+async function getData(): Promise<LoaderResult<PromotionData>> {
+  return fetchJson<unknown, PromotionData>("/api/v1/hrms/promotions", { rows: [], hasMore: false }, {
+    telemetryKey: "hr.promotion",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: PromotionRow[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      const body = p as { data?: PromotionRow[]; hasMore?: boolean } | PromotionRow[] | null;
+      const arr = Array.isArray(body) ? body : body?.data;
+      if (!Array.isArray(arr)) return null;
+      return { rows: arr, hasMore: Array.isArray(body) ? false : Boolean(body?.hasMore) };
     },
   });
-  // A genuine fetch error must not be silently papered over by the legacy
-  // fallback (UX-013) -- `r.data` is [] on error too, so the old
-  // `r.data.length === 0` check alone tried the fallback endpoint on error
-  // as if the lifecycle endpoint had simply never had any rows, discarding
-  // the real failure. Only fall back when the primary source truly
-  // succeeded with zero rows.
-  if (r.source === "error") {
-    return r;
-  }
-  if (r.data.length === 0) {
-    return fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/promotions", [], {
-      telemetryKey: "hr.promotion",
-      mapResponse: (p) => {
-        const arr = Array.isArray(p) ? p : (p as { data?: PromotionRow[] })?.data;
-        return Array.isArray(arr) ? arr : null;
-      },
-    });
-  }
-  return r;
 }
 
 export default async function PromotionPage() {
   const t = await getTranslations("promotion");
-  const { data: items, source, status, errorMessage } = await getData();
+  const { data, source, status, errorMessage } = await getData();
+  const { rows: items, hasMore } = data;
   const canPromote = getSessionRoles().some((r) => PROMOTION_SUBMIT_ROLES.includes(r));
 
   // GAP-HR-PROMOTION-02: pending_approval/pending_effective previously
@@ -77,7 +71,7 @@ export default async function PromotionPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
         actions={canPromote ? <PromoteWithApproval /> : undefined}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
@@ -90,6 +84,12 @@ export default async function PromotionPage() {
         <StatCard icon="📋" iconBg="var(--bg)"  label={t("statSignedIssued")}   value={completed} />
         <StatCard icon="🚫" iconBg="var(--badbg)"  label={t("statCancelled")}     value={cancelled} />
       </StatGrid>
+
+      {hasMore && (
+        <p role="note" style={{ margin: "0 0 14px", fontSize: "0.8125rem", color: "var(--warn)" }}>
+          {t("hasMoreNotice")}
+        </p>
+      )}
 
       {/* Card grid view */}
       {items.length > 0 && (

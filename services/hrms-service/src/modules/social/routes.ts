@@ -10,6 +10,8 @@ import { withRawTenantGuc } from "@civitasone/db";
 import { presignedGetUrl } from "@civitasone/storage";
 import { writeAuditLog } from "../../shared/audit.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { COMMANDS } from "../../topics.js";
+import type { RequestContext } from "@civitasone/types";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -123,6 +125,10 @@ const travelRequestSchema = z.object({
   mode: z.enum(["air", "rail", "road", "own_vehicle"]).optional(),
 });
 
+// GAP-HR-SOCIAL-FEED-01: the caller's own consent -- there is deliberately no
+// employeeId in this body; the target is always the authenticated actor.
+const birthdaySharingSchema = z.object({ share: z.boolean() }).strict();
+
 const birthdayWishSchema = z.object({
   message: z.string().min(1).max(200).optional(),
 });
@@ -153,6 +159,40 @@ const expenseListQuerySchema = z.object({
   // EXPENSE_BYPASS_ROLES' doc comment), same as travel-requests' "team".
   scope: z.enum(["approvals"]).optional(),
 });
+
+// ─── Audit-on-read for DOB-derived disclosures ──────────────────────────────
+
+/**
+ * GAP-HR-SOCIAL-FEED-01 (DPDP): publish an audit command when a response
+ * actually discloses opted-in birthday entries (name/department/designation
+ * derived from date_of_birth). COUNT only -- no names, no dates. Fire-and-forget
+ * from the route (a route may not write to Postgres directly; the consumer in
+ * social/consumer.ts records it to the audit outbox) and best-effort: a failed
+ * publish must never turn a successful read into a 500.
+ */
+async function auditBirthdaysDisclosed(
+  ctx: RequestContext,
+  req: { log: { warn: (o: unknown, m: string) => void } },
+  surface: "social_feed" | "birthdays_today",
+  rowCount: number,
+): Promise<void> {
+  try {
+    await queue.publish(COMMANDS.socialFeedBirthdaysRead, {
+      messageId: randomUUID(),
+      type: COMMANDS.socialFeedBirthdaysRead,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "hrms", action: "read", resourceType: "social_feed_birthdays", resourceId: ctx.tenantId,
+        outcome: "success", rowCount, surface,
+      },
+    });
+  } catch (err) {
+    req.log.warn({ err }, "birthdays-disclosed audit publish failed; serving the response anyway");
+  }
+}
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
 
@@ -398,6 +438,10 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       feed.push({ type: "kudos", ...k, reactions: Number(k.reactions ?? 0), createdAt: k.created_at });
     }
 
+    // GAP-HR-SOCIAL-FEED-01 (DPDP): this response is about to disclose
+    // DOB-derived birthday entries to the caller, so the read itself is audited.
+    if (birthdays.rows.length > 0) await auditBirthdaysDisclosed(ctx, req, "social_feed", birthdays.rows.length);
+
     const today = new Date();
     for (const b of birthdays.rows) {
       feed.push({
@@ -507,6 +551,36 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
   // ─── BIRTHDAYS ──────────────────────────────────────────────────────────
 
+  /**
+   * GET/PUT /v1/hrms/me/birthday-sharing — the caller's OWN birthday-sharing
+   * consent (GAP-HR-SOCIAL-FEED-01, DPDP). Opt-in, default off: until the
+   * employee turns this on, their name/department/designation never appear in
+   * anyone's "today's birthdays" (both /social/feed and /birthdays/today require
+   * share_birthday = true). Self-only by construction -- the target employee is
+   * resolved from the authenticated actor, the body carries no employee id, and
+   * HR roles get no on-behalf setter (consent must be the employee's own).
+   */
+  app.get("/v1/hrms/me/birthday-sharing", {
+    config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    return reply.send({ data: { linked: Boolean(emp), shareBirthday: emp?.shareBirthday === true } });
+  });
+
+  app.put("/v1/hrms/me/birthday-sharing", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const body = birthdaySharingSchema.parse(req.body);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (!emp) throw new HttpError(403, "EMPLOYEE_NOT_LINKED", "No employee record is linked to this account");
+    const accepted = await socialCommands.setBirthdaySharing(ctx, { targetEmployeeId: emp.id, share: body.share });
+    return reply.code(202).send(accepted);
+  });
+
   /** GET /v1/hrms/birthdays/today — today's birthdays */
   app.get("/v1/hrms/birthdays/today", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -530,6 +604,8 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
          AND EXTRACT(DAY FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(DAY FROM e.date_of_birth)`,
       [ctx.tenantId],
     ));
+
+    if (rows.rows.length > 0) await auditBirthdaysDisclosed(ctx, req, "birthdays_today", rows.rows.length);
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
@@ -688,20 +764,25 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         if (reportUserRefs.length === 0) return reply.send({ data: [] });
       }
 
+      // GAP-HR-TRAVEL-01: the approver's OWN requests are never part of the
+      // approvals queue. approve/reject answer 403 SELF_APPROVAL on them, so
+      // listing them (HR got the whole tenant, own rows included) only offered
+      // controls that could never succeed. They stay visible to their owner in
+      // the default self-scoped list.
       const rows = await withTenantGuc(ctx.tenantId, (pool) => (reportUserRefs
         ? pool.query(
             `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
              FROM claims.hrms_travel_requests
-             WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])
+             WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[]) AND employee_id <> $3
              ORDER BY created_at DESC`,
-            [ctx.tenantId, reportUserRefs],
+            [ctx.tenantId, reportUserRefs, ctx.actorId],
           )
         : pool.query(
             `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
              FROM claims.hrms_travel_requests
-             WHERE tenant_id = $1
+             WHERE tenant_id = $1 AND employee_id <> $2
              ORDER BY created_at DESC`,
-            [ctx.tenantId],
+            [ctx.tenantId, ctx.actorId],
           )));
       const requesterIds = [...new Set(rows.rows.map((r: { employee_id: string }) => r.employee_id))];
       const nameByActorId = new Map<string, string>();

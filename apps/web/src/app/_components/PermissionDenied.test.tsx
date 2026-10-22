@@ -36,6 +36,25 @@ describe("PermissionDenied", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("PermissionDenied"), "requires one of: hr_admin, hr_officer, super_admin");
   });
 
+  // GAP-HR-ID-CARDS-06: the page's OWN localised explanation is shown; the service's `reason` still is not.
+  it("shows a page-supplied explanation under the standard copy", () => {
+    render(<PermissionDenied explanation="This register is limited to HR administrators and security administrators." />);
+    expect(screen.getByText(STD)).toBeInTheDocument();
+    expect(screen.getByText("This register is limited to HR administrators and security administrators.")).toBeInTheDocument();
+  });
+
+  it("renders no explanation paragraph when none is given", () => {
+    const { container } = render(<PermissionDenied />);
+    expect(container.querySelectorAll("p")).toHaveLength(1);
+  });
+
+  it("shows the explanation but still never the backend reason when both are passed", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    render(<PermissionDenied reason="requires one of: hr_admin, security_admin" explanation="Limited to administrators." />);
+    expect(screen.getByText("Limited to administrators.")).toBeInTheDocument();
+    expect(screen.queryByText(/hr_admin|security_admin/)).not.toBeInTheDocument();
+  });
+
   it.each(["SELF_APPROVAL", "SELF_APPROVAL_FORBIDDEN"])("a %s code gets the specific self-approval copy", (code) => {
     render(<PermissionDenied code={code} reason="Cannot approve your own expense claim" />);
     expect(screen.getByText("You can't approve your own request. Another approver needs to do this.")).toBeInTheDocument();

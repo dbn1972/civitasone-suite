@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { serviceGroup, payLevelSchema, type ServiceGroup } from "@/lib/payLevels";
+import { serviceGroup, payLevelSchema, SERVICE_GROUP_BANDS, type ServiceGroup } from "@/lib/payLevels";
 
 // `& Record<string, unknown>` satisfies DataTable's `T extends
 // Record<string, unknown>` generic constraint -- same pattern already used
@@ -16,6 +16,13 @@ type Designation = {
   name: string;
   level: number;
   payGrade: string | null;
+  /**
+   * GAP-HR-DESIGNATIONS-02: how many records (employees, seniority lists,
+   * workforce posts, requisitions, ...) still reference this designation.
+   * Only present when the page asked the API for usage (`?withUsage=true`,
+   * admins only); absent means "unknown", never "zero".
+   */
+  usageCount?: number;
 } & Record<string, unknown>;
 
 // ── Service Group badge ─────────────────────────────────────────────────────
@@ -91,6 +98,11 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | undefined>();
   const formError = useFormError("designation");
+  // GAP-HR-DESIGNATIONS-NEW-03: the edit row's "Blank clears the level"
+  // hint is tied to its input via aria-describedby, so it is announced on
+  // focus; "Clear level" is the explicit way to do what a blank box means.
+  const levelEditHintId = useId();
+  const levelEditInputRef = useRef<HTMLInputElement>(null);
 
   function startEdit(item: Designation) {
     setEditingId(item.id);
@@ -235,7 +247,9 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
         editingId === item.id ? (
           <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
             <input
+              ref={levelEditInputRef}
               aria-label={t("payLevelAriaLabel")}
+              aria-describedby={levelEditHintId}
               type="text"
               inputMode="numeric"
               value={editLevel}
@@ -246,9 +260,20 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                 ("unclassified" everywhere it's read back) with nothing in
                 this row saying so -- same hint text/pattern as the create
                 form's levelHint (GAP-HR-DESIGNATIONS-NEW-03). */}
-            <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", textAlign: "end" }}>
+            <p id={levelEditHintId} style={{ margin: 0, fontSize: 11, color: "var(--mut)", textAlign: "end" }}>
               {t("levelEditHint")}
             </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={editLevel === ""}
+              onClick={() => {
+                setEditLevel("");
+                levelEditInputRef.current?.focus();
+              }}
+            >
+              {t("clearLevelBtn")}
+            </Button>
           </div>
         ) : item.level > 0 ? (
           <span style={{ fontWeight: 700, color: "var(--fg)" }}>{t("levelPrefix", { level: item.level })}</span>
@@ -260,7 +285,11 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       sortable: false,
       render: (item: Designation) => {
         const grp = editingId === item.id ? serviceGroup(editingLevelValue) : serviceGroup(item.level);
-        return <span style={groupBadgeStyle(grp)}>{grp ?? "—"}</span>;
+        // GAP-HR-DESIGNATIONS-01 (fix step 4): the group is derived from the
+        // pay level, not stored on the designation, so it is labelled
+        // "Indicative" in the column header, in a footnote under the table
+        // and in this badge's tooltip.
+        return <span style={groupBadgeStyle(grp)} title={grp ? t("serviceGroupIndicativeTitle") : undefined}>{grp ?? "—"}</span>;
       },
     },
     {
@@ -309,20 +338,43 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                   >
                     {t("editBtn")}
                   </Button>
+                  {/* GAP-HR-DESIGNATIONS-02: a designation that still has
+                      references can't be deleted (the API 409s), so say so up
+                      front instead of offering a dialog that can only fail.
+                      aria-disabled (not `disabled`) keeps the button
+                      focusable, so a keyboard/screen-reader user reaches it
+                      and hears the reason via aria-describedby. */}
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
+                    onClick={() => {
+                      if ((item.usageCount ?? 0) > 0) return;
+                      setDeleteError(undefined);
+                      setDeleteTarget(item);
+                    }}
                     aria-label={t("deleteAria", { name: item.name })}
+                    aria-disabled={(item.usageCount ?? 0) > 0 ? true : undefined}
+                    aria-describedby={(item.usageCount ?? 0) > 0 ? `desig-inuse-${item.id}` : undefined}
+                    style={(item.usageCount ?? 0) > 0 ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
                   >
                     {t("deleteBtn")}
                   </Button>
+                  {(item.usageCount ?? 0) > 0 && (
+                    <span id={`desig-inuse-${item.id}`} style={{ display: "block", fontSize: 11, color: "var(--mut)", marginTop: 4 }}>
+                      {t("deleteInUseHint", { count: item.usageCount ?? 0 })}
+                    </span>
+                  )}
                 </>
               ),
           },
         ]
       : []),
   ];
+
+  // "Group-C 1–5 · Group-B 6–9 · Group-A 10–18", straight from the shared bands.
+  const serviceGroupBandsText = SERVICE_GROUP_BANDS
+    .map((b) => `${b.group} ${b.minLevel}\u2013${b.maxLevel}`)
+    .join(" \u00b7 ");
 
   return (
     <>
@@ -344,6 +396,14 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
         emptyTitle={t("noMatchTitle")}
         emptyMessage={t("noMatchMessage")}
       />
+
+      {/* GAP-HR-DESIGNATIONS-01: Service Group is not a stored field -- it is
+          derived from the pay level (apps/web/src/lib/payLevels.ts) -- so say
+          so, and print the bands it uses, instead of presenting it as
+          recorded data. */}
+      <p style={{ margin: "10px 2px 0", fontSize: 12, color: "var(--mut)" }}>
+        {t("serviceGroupNote", { bands: serviceGroupBandsText })}
+      </p>
 
       <ConfirmDialog
         open={deleteTarget !== null}

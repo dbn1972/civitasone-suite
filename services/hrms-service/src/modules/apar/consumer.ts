@@ -8,6 +8,14 @@ import { COMMANDS } from "../../topics.js";
 const log = pino({ name: "apar-consumer" });
 const AUDIT = "audit.event.record";
 
+/**
+ * LEGACY command subscribers (hrms.apar.create/submit/review/accept). Nothing in
+ * the repo publishes these commands: the APAR routes publish `f3RouteWrite`
+ * ops (apar_routes__0..6), whose writes AND audit events live in
+ * ./f3-consumer.ts (GAP-HR-AUDIT-LOG-08). Do NOT treat the audit emission here
+ * as the production audit path, and do not start publishing these commands
+ * alongside the f3 ops, or the same action would be audited twice.
+ */
 export function registerAparConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.aparCreate, async (msg) => {
     const p = msg.payload as {

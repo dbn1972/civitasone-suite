@@ -3,13 +3,14 @@
  * Paginated, filterable chronological service record using ServiceBookView.
  */
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, Field, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "@/lib/serviceBookEventTypes";
 import { ServiceBookView, type ServiceEntry } from "./_components/ServiceBookView";
+import { ServiceBookEmployeePicker } from "./_components/ServiceBookEmployeePicker";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 const HR_ROLES = HR_STAFF_ROLES;
@@ -18,18 +19,37 @@ type ServiceBookPayload = {
   items: ServiceEntry[];
   total: number;
   hasMore: boolean;
+  /** Distinct employees with an entry in scope -- a full-scope aggregate, not a count of the loaded page. */
+  employeesTotal: number;
   transfersTotal: number;
   promotionsTotal: number;
 };
 
 function emptyPayload(): ServiceBookPayload {
-  return { items: [], total: 0, hasMore: false, transfersTotal: 0, promotionsTotal: 0 };
+  return { items: [], total: 0, hasMore: false, employeesTotal: 0, transfersTotal: 0, promotionsTotal: 0 };
 }
 
-async function getData(employeeId?: string): Promise<LoaderResult<ServiceBookPayload>> {
-  const path = employeeId
-    ? `/api/v1/hrms/service-book?employeeId=${encodeURIComponent(employeeId)}`
-    : "/api/v1/hrms/service-book";
+/**
+ * GAP-HR-SERVICE-BOOK-04: server-side paging. The API returns the newest entries first, so page 1 (no
+ * limit/offset) is the latest SERVICE_BOOK_PAGE_SIZE entries and "Older entries" walks back in time.
+ * Matches the API's own default and maximum `limit`.
+ */
+const SERVICE_BOOK_PAGE_SIZE = 1000;
+
+function parsePage(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+async function getData(employeeId: string | undefined, page: number): Promise<LoaderResult<ServiceBookPayload>> {
+  const params = new URLSearchParams();
+  if (employeeId) params.set("employeeId", employeeId);
+  if (page > 1) {
+    params.set("limit", String(SERVICE_BOOK_PAGE_SIZE));
+    params.set("offset", String((page - 1) * SERVICE_BOOK_PAGE_SIZE));
+  }
+  const qs = params.toString();
+  const path = qs ? `/api/v1/hrms/service-book?${qs}` : "/api/v1/hrms/service-book";
   return fetchJson<unknown, ServiceBookPayload>(path, emptyPayload(), {
     telemetryKey: "hr.service-book",
     mapResponse: (p) => {
@@ -41,6 +61,7 @@ async function getData(employeeId?: string): Promise<LoaderResult<ServiceBookPay
         items: arr,
         total: meta?.total ?? arr.length,
         hasMore: Boolean(meta?.hasMore),
+        employeesTotal: meta?.employeesTotal ?? new Set(arr.map((e) => e.employeeId).filter(Boolean)).size,
         transfersTotal: meta?.transfersTotal ?? 0,
         promotionsTotal: meta?.promotionsTotal ?? 0,
       };
@@ -61,7 +82,7 @@ async function getMyData(): Promise<LoaderResult<ServiceBookPayload>> {
       if (!Array.isArray(arr)) return null;
       const transfersTotal = arr.filter((e) => (SERVICE_BOOK_TRANSFER_TYPES as readonly string[]).includes(e.eventType)).length;
       const promotionsTotal = arr.filter((e) => (SERVICE_BOOK_PROMOTION_TYPES as readonly string[]).includes(e.eventType)).length;
-      return { items: arr, total: arr.length, hasMore: false, transfersTotal, promotionsTotal };
+      return { items: arr, total: arr.length, hasMore: false, employeesTotal: arr.length > 0 ? 1 : 0, transfersTotal, promotionsTotal };
     },
   });
 }
@@ -69,7 +90,7 @@ async function getMyData(): Promise<LoaderResult<ServiceBookPayload>> {
 export default async function ServiceBookPage({
   searchParams,
 }: {
-  searchParams?: { empId?: string };
+  searchParams?: { empId?: string; page?: string };
 }) {
   const t = await getTranslations("serviceBook");
   const roles = getSessionRoles();
@@ -84,11 +105,19 @@ export default async function ServiceBookPage({
   // own service book via the self-service endpoint instead; ?empId is an
   // HR-only navigation affordance (from the employee profile page) and is
   // ignored for a self-service caller.
-  const { data, source, status, errorMessage } = isHr ? await getData(empId) : await getMyData();
+  const page = isHr ? parsePage(searchParams?.page) : 1;
+  const { data, source, status, errorMessage } = isHr ? await getData(empId, page) : await getMyData();
   const errored = source === "error";
-  const { items, total, hasMore, transfersTotal, promotionsTotal } = data;
+  const { items, total, hasMore, employeesTotal, transfersTotal, promotionsTotal } = data;
 
-  const employeesCount = new Set(items.map((i) => i.employee ?? i.employeeId).filter(Boolean)).size;
+  // Prev/next links for the server pages, keeping the employee scope; page 1 has no ?page= at all.
+  const pageHref = (target: number): string => {
+    const params = new URLSearchParams();
+    if (empId) params.set("empId", empId);
+    if (target > 1) params.set("page", String(target));
+    const qs = params.toString();
+    return qs ? `/hr/service-book?${qs}` : "/hr/service-book";
+  };
 
   const title = isHr
     ? (empId ? t("titleForEmployee", { employee: items[0]?.employee ?? t("defaultEmployeeName") }) : t("title"))
@@ -100,7 +129,7 @@ export default async function ServiceBookPage({
       <PageHeader
         title={title}
         subtitle={subtitle}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
         actions={
           isHr && empId ? (
             <div style={{ display: "flex", gap: 8 }}>
@@ -121,11 +150,20 @@ export default async function ServiceBookPage({
       <StatGrid>
         <StatCard icon="📒" iconBg="var(--infobg)" label={t("statTotalEntriesLabel")} value={errored ? null : total} />
         {isHr && (
-          <StatCard icon="👥" iconBg="var(--bg)" label={t("statEmployeesLabel")} value={errored ? null : employeesCount} />
+          <StatCard icon="👥" iconBg="var(--bg)" label={t("statEmployeesLabel")} value={errored ? null : employeesTotal} />
         )}
         <StatCard icon="🔄" iconBg="var(--warnbg)" label={t("statTransfersLabel")} value={errored ? null : transfersTotal} />
         <StatCard icon="📈" iconBg="var(--goodbg)" label={t("statPromotionsLabel")} value={errored ? null : promotionsTotal} />
       </StatGrid>
+
+      {/* GAP-HR-SERVICE-BOOK-04: employee search-select (replaces the free-text filter): re-scopes the whole page via ?empId=. */}
+      {isHr && (
+        <div style={{ margin: "0 0 14px", maxWidth: 420 }}>
+          <Field label={t("employeePickerLabel")}>
+            <ServiceBookEmployeePicker selectedId={empId} selectedLabel={empId ? items[0]?.employee : undefined} />
+          </Field>
+        </div>
+      )}
 
       <Card title={t("cardTitle")}>
         {errored ? (
@@ -134,11 +172,19 @@ export default async function ServiceBookPage({
           </div>
         ) : (
           <div style={{ padding: 16 }}>
-            <ServiceBookView entries={items} hideEmployeeFilter={!isHr} />
-            {isHr && hasMore && (
-              <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
-                {t("truncationNotice", { shown: items.length, total })}
-              </p>
+            <ServiceBookView entries={items} />
+            {isHr && (hasMore || page > 1) && (
+              <>
+                <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
+                  {t("truncationNotice", { shown: items.length, total })}
+                </p>
+                {/* Server pagination, newest first: older entries are one page further back. */}
+                <nav aria-label={t("pagerAriaLabel")} style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                  {page > 1 && <Link href={pageHref(page - 1)} className="btn ghost">{t("newerEntriesLink")}</Link>}
+                  <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("pageLabel", { page })}</span>
+                  {hasMore && <Link href={pageHref(page + 1)} className="btn ghost">{t("olderEntriesLink")}</Link>}
+                </nav>
+              </>
             )}
           </div>
         )}

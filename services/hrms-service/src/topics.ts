@@ -1,5 +1,11 @@
 export const COMMANDS = {
   employeeCreate:       "hrms.employee.create",
+  // GAP-HR-EMPLOYEES-IMPORT-02: POST /v1/hrms/employees/bulk is CQRS -- the route only validates and publishes
+  // these; bulk-import/consumer.ts records the batch + its pending rows (one transaction) and then fans the
+  // per-employee hrms.employee.create commands out. _notQueued is the route's "the rest never made it onto the
+  // queue" compensation, so a half-published batch ends 'completed' with named failures, not 'processing' forever.
+  employeeBulkImportRecord:    "hrms.employee.bulk_import.record",
+  employeeBulkImportNotQueued: "hrms.employee.bulk_import.not_queued",
   employeeConfirm:      "hrms.employee.confirm",
   // GAP-HR-CONFIRMATION-05: probation-extension audit record.
   employeeProbationExtend: "hrms.employee.probation.extend",
@@ -90,6 +96,15 @@ export const COMMANDS = {
   // social: travel-request / expense-claim creates (route -> command -> consumer insert).
   travelRequestCreate:  "hrms.social.travel_request_create",
   expenseCreate:        "hrms.social.expense_create",
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): an employee's own opt-in / opt-out of having
+  // their birthday shown on the social feed (employee.hrms_employees.share_birthday).
+  // Route -> command -> consumer (markProcessed + guarded write + audit, one tx).
+  birthdaySharingSet:   "hrms.social.birthday_sharing_set",
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): audit-on-read when a social-feed response
+  // actually disclosed DOB-derived birthday entries. Published (fire-and-forget)
+  // from the route and recorded to the audit outbox by social/consumer.ts, same
+  // shape as medicalClaimsListRead (routes must not write to Postgres directly).
+  socialFeedBirthdaysRead: "hrms.social.feed_birthdays_read",
 
   // medical
   medicalClaimCreate:    "hrms.medical_claim.create",

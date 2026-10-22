@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 // Page now has a role gate (SEC fix: this page previously rendered for any
 // authenticated user with no check at all) -- default to an authorized role
@@ -27,6 +30,15 @@ vi.mock("./RequestAdvanceForm", () => ({
 
 import AdvancesPage from "./page";
 
+// GAP-HR-ADVANCES-07: the row actions (ApproveAdvanceButton) now read advances.*
+// through next-intl, so the page must render inside a provider like production.
+function renderWithIntl(ui: ReactElement) {
+  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
+
+// mapAdvances takes the (localised) recovery-months formatter from the page.
+const months = (n: number) => `${n} months`;
+
 describe("AdvancesPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
@@ -39,7 +51,7 @@ describe("AdvancesPage", () => {
     // no plausible claim on this page at all.
     getSessionRolesMock.mockReturnValue(["citizen"]);
     const ui = await AdvancesPage();
-    render(ui);
+    renderWithIntl(ui);
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
     expect(screen.queryByText("Request Advance")).not.toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -59,12 +71,12 @@ describe("AdvancesPage", () => {
     fetchJsonMock.mockResolvedValue({
       data: mapAdvances([
         { id: "adv-1", employeeId: "emp-77", amountMinor: 500000, purpose: "Medical", recoveryMonths: 6, requestDate: "2026-07-01", status: "pending" },
-      ]),
+      ], months),
       source: "api",
     });
 
     const ui = await AdvancesPage();
-    render(ui);
+    renderWithIntl(ui);
 
     expect(screen.queryByText("emp-77")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
@@ -75,12 +87,12 @@ describe("AdvancesPage", () => {
     fetchJsonMock.mockResolvedValue({
       data: mapAdvances([
         { id: "adv-2", employeeId: "emp-88", employeeName: "Sunita Devi", employeeNo: "E-88", amountMinor: 300000, purpose: "Festival", recoveryMonths: 3, requestDate: "2026-07-01", status: "pending" },
-      ]),
+      ], months),
       source: "api",
     });
 
     const ui = await AdvancesPage();
-    render(ui);
+    renderWithIntl(ui);
 
     expect(screen.getByText("Sunita Devi (E-88)")).toBeInTheDocument();
   });
@@ -92,12 +104,12 @@ describe("AdvancesPage", () => {
         { id: "a1", employeeId: "e1", employeeName: "A", amountMinor: 100000, purpose: "x", recoveryMonths: 1, requestDate: "2026-01-01", status: "active" },
         { id: "a2", employeeId: "e2", employeeName: "B", amountMinor: 100000, purpose: "x", recoveryMonths: 1, requestDate: "2026-01-01", status: "pending" },
         { id: "a3", employeeId: "e3", employeeName: "C", amountMinor: 100000, purpose: "x", recoveryMonths: 1, requestDate: "2026-01-01", status: "rejected" },
-      ]),
+      ], months),
       source: "api",
     });
 
     const ui = await AdvancesPage();
-    render(ui);
+    renderWithIntl(ui);
 
     // Each of Approved/Pending/Rejected appears twice: once as its StatCard
     // label (always present regardless of data) and once as the one
@@ -115,12 +127,12 @@ describe("AdvancesPage", () => {
     fetchJsonMock.mockResolvedValue({
       data: mapAdvances([
         { id: "a1", employeeId: "e1", employeeName: "A", amountMinor: 100000, purpose: "x", recoveryMonths: 1, requestDate: "2026-01-01", status: "pending" },
-      ]),
+      ], months),
       source: "api",
     });
 
     const ui = await AdvancesPage();
-    render(ui);
+    renderWithIntl(ui);
 
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
@@ -137,7 +149,7 @@ describe("AdvancesPage", () => {
         fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
         const ui = await AdvancesPage();
-        render(ui);
+        renderWithIntl(ui);
 
         expect(screen.getByText(/view-only access to salary advances/i)).toBeInTheDocument();
       });
@@ -148,7 +160,7 @@ describe("AdvancesPage", () => {
       fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
       const ui = await AdvancesPage();
-      render(ui);
+      renderWithIntl(ui);
 
       expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
     });
@@ -158,7 +170,7 @@ describe("AdvancesPage", () => {
       fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
       const ui = await AdvancesPage();
-      render(ui);
+      renderWithIntl(ui);
 
       expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
     });
@@ -168,7 +180,7 @@ describe("AdvancesPage", () => {
       fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
       const ui = await AdvancesPage();
-      render(ui);
+      renderWithIntl(ui);
 
       expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
     });

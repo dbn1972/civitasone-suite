@@ -187,3 +187,72 @@ describe("LeavePoliciesClient", () => {
     expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({ maxDaysPerYear: 22, prefixSuffixRule: false, proRataOnJoining: true });
   });
 });
+
+/**
+ * GAP-HR-LEAVE-POLICIES-07: each place an employee type is shown (filter
+ * button, table pill, edit drawer, deactivate dialog) reads the
+ * leavePolicyForm.employeeTypes i18n map, and a type the map does not know yet
+ * falls back to readable text instead of a raw message-key path.
+ */
+describe("LeavePoliciesClient — employee type labels (GAP-HR-LEAVE-POLICIES-07)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mockList(policies: Array<typeof EL_POLICY>) {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (typeof url === "string" && url.includes("/admin/leave-policies") && (!init || init.method === undefined)) {
+        return Promise.resolve(new Response(JSON.stringify({ data: policies }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ id: "x", status: "accepted", correlationId: "c1" }), { status: 202 }));
+    });
+  }
+
+  it("vendor_deputed reads 'Vendor Deputed' in the filter, the table pill, the edit drawer and the deactivate dialog — each checked on its own", async () => {
+    mockList([EL_POLICY]);
+    const { container } = renderClient();
+    await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
+
+    // filter button
+    const filters = screen.getByRole("group", { name: /filter/i });
+    expect(within(filters).getByRole("button", { name: "Vendor Deputed" })).toBeInTheDocument();
+    // table pill
+    const pills = Array.from(container.querySelectorAll(".pill")).map((el) => el.textContent);
+    expect(pills).toContain("Vendor Deputed");
+    // edit drawer
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const drawer = await screen.findByRole("dialog");
+    expect(drawer).toHaveTextContent("Vendor Deputed");
+    expect(drawer.textContent).not.toMatch(/vendor_deputed|vendor deputed/);
+    fireEvent.click(within(drawer).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    // deactivate dialog
+    fireEvent.click(screen.getByRole("button", { name: /^deactivate$/i }));
+    const confirm = await screen.findByRole("alertdialog");
+    expect(within(confirm).getByText("Vendor Deputed")).toBeInTheDocument();
+  });
+
+  it("an employee type missing from the i18n map falls back to space-separated text, never a raw message key", async () => {
+    mockList([{ ...EL_POLICY, id: "p9", employeeType: "gig_worker_x" }]);
+    const { container } = renderClient();
+    await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
+
+    const pills = Array.from(container.querySelectorAll(".pill")).map((el) => el.textContent);
+    expect(pills).toContain("gig worker x");
+    expect(container.textContent).not.toMatch(/employeeTypes\./);
+    expect(container.textContent).not.toMatch(/gig_worker_x/);
+  });
+
+  it("filter buttons carry no CSS text-transform (the i18n labels are already correctly cased)", async () => {
+    mockList([EL_POLICY]);
+    renderClient();
+    await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
+    const filters = screen.getByRole("group", { name: /filter/i });
+    for (const btn of within(filters).getAllByRole("button")) {
+      expect((btn as HTMLElement).style.textTransform).toBe("");
+    }
+  });
+});

@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import * as employeeRepo from "../employee/repo.js";
 
 const log = pino({ name: "hrms.social.consumer" });
 const AUDIT = "audit.event.record";
@@ -34,6 +35,45 @@ export function registerSocialConsumers(queue: Queue): void {
     });
     await cache.invalidateResource(msg.tenantId, "social");
     log.info({ id: msg.messageId, kudosId: p.id }, "Processed social.kudos_create");
+  });
+
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): an employee's OWN birthday-sharing consent.
+  // ONE transaction: markProcessed + guarded write (only when the stored value
+  // really changes, so a replay or a no-op toggle writes nothing) + audit.
+  // The audit event carries the actor, the employee and the new value -- never
+  // the date of birth itself.
+  queue.subscribe(COMMANDS.birthdaySharingSet, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; targetEmployeeId: string; share: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const changed = await employeeRepo.setShareBirthday(tx, msg.tenantId, p.targetEmployeeId, p.share === true, msg.actorId);
+      if (!changed) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "birthday_sharing_set", resourceType: "employee", resourceId: p.targetEmployeeId, outcome: "success",
+          metadata: { share: p.share === true },
+        },
+      });
+    });
+    log.info({ id: msg.messageId, employeeId: p.targetEmployeeId }, "Processed social.birthday_sharing_set");
+  });
+
+  // GAP-HR-SOCIAL-FEED-01 (DPDP): audit-on-read for a social-feed response that
+  // disclosed DOB-derived birthday entries. Published fire-and-forget by the
+  // route (a route may not write to Postgres directly); msg.payload is already
+  // the exact audit shape and carries a COUNT only, never names or dates.
+  queue.subscribe(COMMANDS.socialFeedBirthdaysRead, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: msg.payload as Record<string, unknown>,
+      });
+    });
+    log.info({ id: msg.messageId }, "Processed social.feed_birthdays_read audit");
   });
 
   queue.subscribe("hrms.social.announcement_create", async (msg) => {

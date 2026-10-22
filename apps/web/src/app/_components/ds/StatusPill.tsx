@@ -252,6 +252,18 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // Transfer / promotion / apar
   initiated: "warn",
   "order issued": "warn",
+  // GAP-HR-TRANSFER-07: the real transfer-order enum (requested -> ordered ->
+  // relieved -> joined; eOffice path pending_approval -> pending_effective ->
+  // completed) had no keys for "ordered", "joined" or "pending effective", so
+  // they fell through to the neutral "info" default. "ordered" reads like the
+  // existing "order issued" (warn: issued, not yet actioned); "pending
+  // effective" is an approved order awaiting its date (warn, like "pending
+  // approval"). "requested" is deliberately NOT added here -- other registers
+  // (onboarding, redemptions) share that word; the transfer screens pass an
+  // explicit tone (lib/hr/transferStatus.ts) instead.
+  ordered: "warn",
+  joined: "good",
+  "pending effective": "warn",
   relieved: "good",
   disputed: "bad",
   accepted: "good", // apar record accepted by the accepting authority -- final positive sign-off

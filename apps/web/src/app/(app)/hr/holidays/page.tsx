@@ -90,7 +90,7 @@ export default async function HolidaysPage({ searchParams }: { searchParams?: { 
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
       />
       <DataSourceBadge source={source} />
       <StatGrid>

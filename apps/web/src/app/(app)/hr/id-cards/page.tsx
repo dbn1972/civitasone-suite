@@ -18,7 +18,10 @@ import { ID_CARD_ROLES } from "@/lib/auth/workRoles";
 // excluded here too -- per the published decision packet's default
 // ("leave all four hr_admin-tier for now — each is either security-sensitive
 // or high-blast-radius"), this stays as-is; the fix is honest messaging
-// (below) instead of a silent dead end, not widening the gate.
+// (below) instead of a silent dead end, not widening the gate. Widening it
+// (hr_officer into ID_CARD_ROLES AND all six requireRole calls in
+// hrms-service id-cards/routes.ts, together) needs HR + Security sign-off --
+// see the ledger entry; do not change one side without the other.
 const ID_CARDS_ROLES = ID_CARD_ROLES;
 
 const PAGE_SIZE = 100;
@@ -43,6 +46,7 @@ async function getData(q: string | undefined, status: string | undefined, offset
 const STATUS_OPTIONS = ["", "active", "suspended", "revoked", "expired"] as const;
 
 export default async function IdCardsPage({ searchParams }: { searchParams?: Record<string, string> }) {
+  const t = await getTranslations("idCards");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => ID_CARDS_ROLES.includes(r));
@@ -54,15 +58,17 @@ export default async function IdCardsPage({ searchParams }: { searchParams?: Rec
         // GAP-HR-ID-CARDS-06: explains WHY, rather than a bare role list --
         // this register includes physical access-zone data, hence the
         // narrower (security_admin-inclusive, hr_officer-excluded) gate
-        // than the rest of /hr.
-        reason="ID cards include physical access-zone data, so this register is restricted to HR admins and security admins."
+        // than the rest of /hr. PermissionDenied deliberately never renders
+        // a service-authored `reason` (it can carry role slugs), so the
+        // user-facing explanation is this page's own localised copy,
+        // passed as `explanation`.
+        explanation={t("accessRestrictedReason")}
         backHref="/hr"
         backLabel="Back to HR"
       />
     );
   }
 
-  const t = await getTranslations("idCards");
   const q = searchParams?.q?.trim() || undefined;
   const status = searchParams?.status || undefined;
   const page = Math.max(1, parseInt(searchParams?.page ?? "1", 10) || 1);

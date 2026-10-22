@@ -7,6 +7,7 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { HR_FINANCE_DECIDER_ROLES, HR_LOANS_ROLES } from "@/lib/auth/workRoles";
+import { mapLoans, type ApiLoan, type Row } from "./mapLoans";
 
 // GAP-HR-LOANS-04: mirrors the backend's ALL_ROLES exactly (services/
 // hrms-service/src/modules/employee/loans-routes.ts) -- this page had no
@@ -26,54 +27,6 @@ const LOANS_ROLES = HR_LOANS_ROLES;
 const LOANS_EXPORT_ROLES = HR_FINANCE_DECIDER_ROLES;
 
 const LOAN_TYPES = ["hba", "motor_car", "computer", "festival", "personal", "medical", "other"] as const;
-
-type ApiLoan = {
-  id: string;
-  employeeId: string;
-  employeeName?: string;
-  department?: string;
-  loanType: string;
-  sanctionedAmountMinor: number;
-  emiMinor: number;
-  outstandingMinor: number;
-  totalEmis: number;
-  emisPaid: number;
-  status: string;
-};
-
-type Row = {
-  id: string;
-  employee: string;
-  department: string;
-  loanType: string;
-  sanctionedAmount: number | null;
-  emi: number | null;
-  balance: number | null;
-  emiProgress: string;
-  status: string;
-} & Record<string, unknown>;
-
-function mapLoans(apiLoans: ApiLoan[], loanTypeLabel: (code: string) => string): Row[] {
-  return apiLoans.map((l) => ({
-    id: l.id,
-    // GAP-HR-LOANS-01: employeeName/department are now resolved server-side
-    // (loans-routes.ts, via the shared batchEmployees/batchDepartments
-    // helper) -- "Unknown employee" (not the raw UUID) when genuinely absent,
-    // per this item's own acceptance text.
-    employee: l.employeeName ?? "Unknown employee",
-    department: l.department ?? "—",
-    loanType: loanTypeLabel(l.loanType),
-    sanctionedAmount: l.sanctionedAmountMinor ?? null,
-    emi: l.emiMinor != null ? l.emiMinor : null,
-    balance: l.outstandingMinor != null ? l.outstandingMinor : null,
-    // GAP-HR-LOANS-03: emisPaid/totalEmis were fetched by the API all along
-    // but never shown -- a plain "x / y" string needs no client-side
-    // render() (DataTable's default cell rendering is String(value), which
-    // is server-safe), so no ProgressBar visual is added here, only the text.
-    emiProgress: l.totalEmis > 0 ? `${l.emisPaid} / ${l.totalEmis}` : "—",
-    status: l.status,
-  }));
-}
 
 export default async function LoansPage() {
   const roles = getSessionRoles();

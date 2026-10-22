@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
+import { formatIndianDate } from "@/lib/formatters";
 import type { TrainingProgramSummary } from "@civitasone/types";
 import { ProgramCard } from "./ProgramCard";
 
@@ -12,7 +14,7 @@ import { ProgramCard } from "./ProgramCard";
  * next-intl -- this exercises the real trainingNew/training message keys
  * this PR adds to en.json too.
  */
-function renderCard(overrides: Partial<TrainingProgramSummary> = {}) {
+function renderCard(overrides: Partial<TrainingProgramSummary> = {}, locale: "en" | "hi" = "en") {
   const program: TrainingProgramSummary = {
     id: "prog-1",
     title: "Some Training",
@@ -27,7 +29,7 @@ function renderCard(overrides: Partial<TrainingProgramSummary> = {}) {
     ...overrides,
   };
   return render(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
+    <NextIntlClientProvider locale={locale} messages={locale === "hi" ? hiMessages : enMessages}>
       <ProgramCard program={program} />
     </NextIntlClientProvider>,
   );
@@ -67,5 +69,51 @@ describe("ProgramCard — GAP-HR-TRAINING-01/02/03", () => {
     // 2026-05-04 -> 2026-05-06 used to render "48 hrs".
     renderCard({ startDate: "2026-05-04", endDate: "2026-05-06" });
     expect(screen.getByText("3 days")).toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-TRAINING-06: one date formatter (lib/formatters), translated card
+ * copy and status, and the shared StatusPill for the status badge.
+ */
+describe("ProgramCard — GAP-HR-TRAINING-06", () => {
+  it("dates are exactly what lib/formatters.formatIndianDate returns (no local copy)", () => {
+    renderCard({ startDate: "2026-05-04", endDate: "2026-05-06", enrollmentDeadline: "2026-04-30" });
+    for (const iso of ["2026-05-04", "2026-05-06", "2026-04-30"]) {
+      expect(screen.getByText(formatIndianDate(iso))).toBeInTheDocument();
+    }
+    expect(formatIndianDate("2026-05-04")).toBe("04 May 2026");
+  });
+
+  it("the status badge is the shared StatusPill with the translated label", () => {
+    const { container, rerender } = renderCard({ status: "ongoing" });
+    const pill = container.querySelector("span.pill");
+    expect(pill).not.toBeNull();
+    expect(pill).toHaveTextContent("Ongoing");
+    expect(pill?.className).toContain("good");
+    // The old hand-styled uppercase tailwind span is gone.
+    expect(container.querySelector(".uppercase")).toBeNull();
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProgramCard program={{ id: "p", title: "T", category: null, mode: null, enrollmentDeadline: null, startDate: "2026-05-04", endDate: "2026-05-04", enrolledCount: 0, status: "cancelled" }} />
+      </NextIntlClientProvider>,
+    );
+    expect(container.querySelector("span.pill")?.className).toContain("bad");
+  });
+
+  it("Hindi: card text, category/mode badges, status and the Enroll link are translated", () => {
+    renderCard({ category: "mandatory", mode: "online", status: "upcoming", enrolledCount: 2, maxCapacity: 10, trainerName: "डॉ. शर्मा" }, "hi");
+    expect(screen.getByText("आरंभ तिथि")).toBeInTheDocument();
+    expect(screen.getByText("समाप्ति तिथि")).toBeInTheDocument();
+    expect(screen.getByText("प्रशिक्षक")).toBeInTheDocument();
+    expect(screen.getByText("अनिवार्य")).toBeInTheDocument();
+    expect(screen.getByText("ऑनलाइन")).toBeInTheDocument();
+    expect(screen.getByText("आगामी")).toBeInTheDocument(); // status pill
+    expect(screen.getByText("8 सीटें शेष")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "नामांकन करें" })).toBeInTheDocument();
+    for (const english of ["Start date", "End date", "Trainer", "Mandatory", "Upcoming", "Enroll"]) {
+      expect(screen.queryByText(english)).not.toBeInTheDocument();
+    }
   });
 });

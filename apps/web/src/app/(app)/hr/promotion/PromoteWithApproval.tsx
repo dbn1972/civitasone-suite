@@ -18,6 +18,14 @@
  * error + Retry, since a bare UUID input invites a copy-pasted or typo'd id
  * with zero validation.
  *
+ * GAP-HR-PROMOTION-05 (rescan): a failed lookup is never shown as "No matches".
+ * Employee/approver search uses the strict EmployeePicker and designations use
+ * the strict designation adapter, so a 500 / dropped connection shows the
+ * picker's "could not load" alert with a Retry button, and "Next" / "Submit"
+ * are held back while a required lookup is in that failed state. An employee
+ * whose record has no resolvable designation is blocked at step 1 with a
+ * message instead of being promoted from "nothing".
+ *
  * "Current designation" is now looked up via the employee detail endpoint
  * (GET /v1/hrms/employees/:id) once an employee is selected, and shown as
  * read-only text. NOTE: this is a display-only lookup -- neither this
@@ -35,7 +43,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button, Field, Input, Textarea, EntityPicker, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
+import { resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchDesignations, resolveDesignations } from "@/lib/entityAdapters/designation";
 import { useFormError } from "@/lib/useFormError";
 import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
@@ -51,6 +60,11 @@ function todayIsoIST(): string {
 // far-future date is treated as a likely data-entry error and blocked; a
 // past date gets a non-blocking notice instead of a hard stop.
 const MAX_FUTURE_YEARS = 3;
+
+// Strict: a non-ok designations response throws, so EntityPicker reports it as a
+// load failure (with Retry) instead of an empty "No matches" list.
+const searchDesignationsStrict = (query: string, signal: AbortSignal) =>
+  searchDesignations(query, signal, { strict: true });
 
 export function PromoteWithApproval() {
   const t = useTranslations("promotionApprove");
@@ -82,6 +96,10 @@ export function PromoteWithApproval() {
   // from step 1 on every retry created a brand-new duplicate promotion
   // request for the same employee each time the eFile step failed.
   const [submittedPromotionId, setSubmittedPromotionId] = useState<string | null>(null);
+  // GAP-HR-PROMOTION-05: true while a required lookup's last search failed.
+  const [employeeLookupFailed, setEmployeeLookupFailed] = useState(false);
+  const [designationLookupFailed, setDesignationLookupFailed] = useState(false);
+  const [approverLookupFailed, setApproverLookupFailed] = useState(false);
 
   const reset = () => {
     setEmployeeId(null); setEmployeeName(""); setCurrentDesignation(null);
@@ -155,6 +173,9 @@ export function PromoteWithApproval() {
   const validateStep1 = (): boolean => {
     const errs: Partial<Record<FieldKey, string>> = {};
     if (!employeeId) errs.employeeId = t("errSelectEmployee");
+    // The employee detail lookup answers "—" when the record's designation
+    // cannot be resolved: promoting "from nothing" is blocked, not guessed.
+    else if (!currentDesignationLoading && currentDesignation === "—") errs.employeeId = t("errNoDesignation");
     if (!toDesigId) errs.toDesigId = t("errSelectDesignation");
     if (!effectiveDate) {
       errs.effectiveDate = t("errEffectiveDateRequired");
@@ -278,15 +299,13 @@ export function PromoteWithApproval() {
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <Field label={t("employeeLabel")} required error={fieldErrors.employeeId}>
-                  <EntityPicker
+                  <EmployeePicker
                     value={employeeId}
-                    onChange={(v) => {
-                      const id = Array.isArray(v) ? (v[0] ?? null) : v;
+                    onChange={(id) => {
                       setEmployeeId(id);
                       if (!id) setEmployeeName("");
                     }}
-                    search={searchEmployees}
-                    resolve={resolveEmployees}
+                    onFailedChange={setEmployeeLookupFailed}
                     placeholder={t("selectEmployeeOption")}
                   />
                 </Field>
@@ -309,8 +328,11 @@ export function PromoteWithApproval() {
                       setToDesigId(id);
                       if (!id) setToDesigName("");
                     }}
-                    search={searchDesignations}
+                    search={searchDesignationsStrict}
                     resolve={resolveDesignations}
+                    searchErrorText={t("lookupFailed")}
+                    retryText={t("retry")}
+                    onFailedChange={setDesignationLookupFailed}
                     placeholder={t("selectDesignationOption")}
                   />
                 </Field>
@@ -339,7 +361,11 @@ export function PromoteWithApproval() {
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
                 <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>{t("cancelBtn")}</Button>
-                <Button style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
+                <Button
+                  style={{ minHeight: 44 }}
+                  disabled={(employeeLookupFailed && !employeeId) || (designationLookupFailed && !toDesigId)}
+                  onClick={() => validateStep1() && setStep(2)}
+                >
                   {t("nextStepBtn")}
                 </Button>
               </div>
@@ -355,7 +381,7 @@ export function PromoteWithApproval() {
               )}
               {employeeId && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--goodbg)", borderRadius: 8, border: "1px solid var(--goodbd)" }}>
-                  <strong>{employeeName || employeeId}</strong>: {currentDesignation ?? "—"} → {toDesigName || toDesigId}
+                  <strong>{employeeName || "—"}</strong>: {currentDesignation ?? "—"} → {toDesigName || "—"}
                   {effectiveDate && <> · {t("effectiveOn", { date: effectiveDate })}</>}
                 </div>
               )}
@@ -370,14 +396,10 @@ export function PromoteWithApproval() {
                 </Field>
 
                 <Field label={t("forwardToLabel")} required error={fieldErrors.currentWith}>
-                  <EntityPicker
+                  <EmployeePicker
                     value={currentWith}
-                    onChange={(v) => {
-                      const id = Array.isArray(v) ? (v[0] ?? null) : v;
-                      setCurrentWith(id);
-                    }}
-                    search={searchEmployees}
-                    resolve={resolveEmployees}
+                    onChange={(id) => setCurrentWith(id)}
+                    onFailedChange={setApproverLookupFailed}
                     placeholder={t("selectApproverOption")}
                   />
                 </Field>
@@ -395,7 +417,7 @@ export function PromoteWithApproval() {
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>
-                <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => validateStep2() && triggerSubmit()}>
+                <Button style={{ minHeight: 44 }} disabled={saving || (approverLookupFailed && !currentWith)} loading={saving} onClick={() => validateStep2() && triggerSubmit()}>
                   {saving ? t("raisingBtn") : t("submitBtn")}
                 </Button>
               </div>

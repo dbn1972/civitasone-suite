@@ -63,9 +63,20 @@ describe("SkillsPage", () => {
     });
     await renderPage();
     // statExpert only counts "expert" now (was expert+advanced, making
-    // "advanced" indistinguishable from "expert" in the stat card).
-    expect(screen.getByText("Expert / Advanced").closest(".stat")).toHaveTextContent("1");
+    // "advanced" indistinguishable from "expert" in the stat card) -- and its
+    // label says so: "Expert", not "Expert / Advanced".
+    const expertTile = screen.getByText("Expert", { selector: ".lab" }).closest(".stat");
+    expect(expertTile).toHaveTextContent("1");
+    expect(screen.queryByText("Expert / Advanced")).not.toBeInTheDocument();
     expect(screen.getByText("Skill Records").closest(".stat")).toHaveTextContent("2");
+  });
+
+  it("names the single baseline every skill is measured against in the legend (GAP-HR-SKILLS-03)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { items: [row()], total: 1, hasMore: false }, source: "api" });
+    await renderPage();
+    expect(screen.getByText("Baseline for all skills: Advanced")).toBeInTheDocument();
+    expect(screen.getByText("At / above baseline")).toBeInTheDocument();
+    expect(screen.queryByText(/At \/ above requirement/)).not.toBeInTheDocument();
   });
 
   // GAP-HR-SKILLS-06: the backend can now report more rows than it returned;

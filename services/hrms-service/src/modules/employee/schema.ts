@@ -173,11 +173,12 @@ export type AddressInsert = typeof hrmsEmployeeAddresses.$inferInsert;
  * GAP-HR-CONFIRMATION-05: probation-extension audit trail. Each row is one
  * recorded extension of an employee's probation end date. An employee's
  * *current* probation end is the newEndDate of their most recent row here,
- * if any, else the unchanged default (dateOfJoining + 2 years, computed in
- * lifecycle/m7-list-routes.ts's confirmations handler and mirrored in this
- * module's repo.findCurrentProbationEnd -- see that function's own comment
- * for why the formula is duplicated rather than shared across the module
- * boundary). Written only via the standard CQRS path: employee/routes.ts
+ * if any, else the unchanged default (dateOfJoining + the probation period
+ * configured for the employee's type, employee/probation-period.ts -- 24
+ * months when the type configures none; computed by both
+ * lifecycle/m7-list-routes.ts's confirmations handler and this module's
+ * repo.findCurrentProbationEnd through that one resolver). Written only via
+ * the standard CQRS path: employee/routes.ts
  * validates + publishes hrms.employee.probation.extend; employee/
  * consumer.ts's subscriber does the actual insert + audit event -- never
  * from a route handler directly (CLAUDE.md: only the consumer/outbox layer

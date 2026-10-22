@@ -147,3 +147,73 @@ describe("WorkSummaryPage — past-the-end offset (GAP-HR-WORK-SUMMARY-05)", () 
     expect(screen.queryByText(/Showing 5001/)).not.toBeInTheDocument();
   });
 });
+
+// GAP-HR-WORK-SUMMARY-02: the "Reviewed"/"Pending" tiles used to count two
+// fixed status lists, so appraisals in any other stage were in Total only.
+function statValue(label: string): number {
+  const lab = screen.getByText(label);
+  const val = lab.parentElement?.querySelector(".val");
+  return Number(val?.textContent);
+}
+
+function row(id: string, status: string, rating: number | null = 4) {
+  return { id, employee: `Emp ${id}`, employeeId: `e-${id}`, department: "Finance", period: "2025-26", overallGrade: 7, rating, status };
+}
+
+describe("WorkSummaryPage — stat tiles add up to Total (GAP-HR-WORK-SUMMARY-02)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReset().mockReturnValue(["hr_admin"]);
+  });
+
+  it("renders a rating of 4 as '4.0 / 5'", async () => {
+    fetchJsonMock.mockResolvedValue(loaderResult([row("a1", "completed", 4)], 1));
+    await renderPage();
+    expect(screen.getByText("4.0 / 5")).toBeInTheDocument();
+  });
+
+  it("Reviewed + Pending + Other equals Total for a mixed real-status fixture", async () => {
+    // every status the appraisal workflow can actually write (migration 0153)
+    const statusCounts = {
+      completed: 2, finalised: 1, // reviewed = 3
+      pending: 1, self_pending: 2, // pending = 3
+      in_review: 1, reporting_officer: 2, reviewing_officer: 1, accepting_authority: 1, disclosed: 1, representation: 1, // other = 7
+    };
+    const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+    const rows = [row("a1", "completed"), row("a2", "self_pending", null), row("a3", "reporting_officer")];
+    fetchJsonMock.mockResolvedValue({ data: { rows, total, offset: 0, statusCounts }, source: "api" });
+    await renderPage();
+    expect(statValue("Total Records")).toBe(13);
+    expect(statValue("Reviewed")).toBe(3);
+    expect(statValue("Pending Review")).toBe(3);
+    expect(statValue("In Other Stages")).toBe(7);
+    expect(statValue("Reviewed") + statValue("Pending Review") + statValue("In Other Stages")).toBe(statValue("Total Records"));
+  });
+
+  it("counts a status the page has never heard of under Other, never drops it", async () => {
+    const statusCounts = { completed: 1, some_future_stage: 2 };
+    fetchJsonMock.mockResolvedValue({ data: { rows: [row("a1", "completed")], total: 3, offset: 0, statusCounts }, source: "api" });
+    await renderPage();
+    expect(statValue("In Other Stages")).toBe(2);
+    expect(statValue("Reviewed") + statValue("Pending Review") + statValue("In Other Stages")).toBe(3);
+  });
+
+  it("uses the server's whole-scope statusCounts, not just the rows on this page", async () => {
+    // 1 row on the page, but the tenant has 620 records: tiles must reflect all 620
+    const statusCounts = { completed: 400, self_pending: 120, reviewing_officer: 100 };
+    fetchJsonMock.mockResolvedValue({ data: { rows: [row("a1", "completed")], total: 620, offset: 0, statusCounts }, source: "api" });
+    await renderPage();
+    expect(statValue("Reviewed")).toBe(400);
+    expect(statValue("Pending Review")).toBe(120);
+    expect(statValue("In Other Stages")).toBe(100);
+  });
+
+  it("falls back to counting the rows it has when an older API sends no statusCounts", async () => {
+    const rows = [row("a1", "completed"), row("a2", "pending"), row("a3", "disclosed")];
+    fetchJsonMock.mockResolvedValue(loaderResult(rows, 3));
+    await renderPage();
+    expect(statValue("Reviewed")).toBe(1);
+    expect(statValue("Pending Review")).toBe(1);
+    expect(statValue("In Other Stages")).toBe(1);
+  });
+});

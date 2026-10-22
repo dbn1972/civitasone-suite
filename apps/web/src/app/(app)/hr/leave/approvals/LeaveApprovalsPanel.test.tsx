@@ -372,3 +372,172 @@ describe("LeaveApprovalsPanel — optimistic decision (GAP-HR-LEAVE-APPROVALS-06
     expect(leaveCallCount).toBe(leaveCallsBeforeResolve);
   });
 });
+
+/**
+ * GAP-HR-LEAVE-APPROVALS-02: the panel used to fetch the first 50 pending
+ * tasks of ALL types once and filter to leave_app client-side, so leave
+ * approvals pushed past that window vanished and the page said "No pending
+ * approvals". It now follows the server's pagination until exhausted (the
+ * server filters by refType in SQL; this is the safety net for one that
+ * does not) and never claims emptiness for an incomplete search.
+ */
+describe("LeaveApprovalsPanel — pending leave tasks beyond the first page (GAP-HR-LEAVE-APPROVALS-02)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const other = (i: number) => ({ id: `other-${i}`, instanceId: `inst-o${i}`, name: "Payroll approval", status: "pending", refType: "payroll_run", refId: `run-${i}` });
+  const leave = (i: number) => ({ id: `lt-${i}`, instanceId: `inst-l${i}`, name: "Leave approval", status: "pending", refType: "leave_app", refId: `leave-${i}` });
+  const leaveDetail = (i: number) => ({ id: `leave-${i}`, employeeName: `Employee ${i}`, leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", days: 1, reason: "r" });
+
+  it("with 60 non-leave tasks ahead of 3 leave tasks (a server that ignores refType), lists the 3 leave tasks and never shows 'No pending approvals'", async () => {
+    const taskUrls: string[] = [];
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) {
+        taskUrls.push(url);
+        const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
+        if (offset === 0) {
+          // page 1: 50 other-module tasks, no leave task at all, but more exist
+          return { ok: true, status: 200, json: async () => ({ data: Array.from({ length: 50 }, (_, i) => other(i)), pagination: { hasMore: true, total: 63, pageSize: 50, cursor: "50" } }) } as Response;
+        }
+        return {
+          ok: true, status: 200,
+          json: async () => ({ data: [...Array.from({ length: 10 }, (_, i) => other(50 + i)), leave(1), leave(2), leave(3)], pagination: { hasMore: false, total: 63, pageSize: 50, cursor: "63" } }),
+        } as Response;
+      }
+      if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: [leaveDetail(1), leaveDetail(2), leaveDetail(3)] }) } as Response;
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    expect(await screen.findByText("Employee 1")).toBeInTheDocument();
+    expect(screen.getByText("Employee 2")).toBeInTheDocument();
+    expect(screen.getByText("Employee 3")).toBeInTheDocument();
+    expect(screen.queryByText(/no pending approvals/i)).not.toBeInTheDocument();
+    // the panel followed the cursor to the second page, and still asks the server to filter
+    expect(taskUrls).toHaveLength(2);
+    expect(taskUrls[0]).toContain("refType=leave_app");
+    expect(taskUrls[1]).toContain("offset=50");
+    // none of the 60 other-module tasks leaked into the table, and the title carries the real count
+    expect(screen.queryByText("Payroll approval")).not.toBeInTheDocument();
+    expect(screen.getByText("Pending Leave Approvals (3)")).toBeInTheDocument();
+  });
+
+  it("when the server honours refType and pages, follows hasMore across leave-only pages", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) {
+        const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
+        return offset === 0
+          ? ({ ok: true, status: 200, json: async () => ({ data: [leave(1)], pagination: { hasMore: true, total: 2, cursor: "1" } }) } as Response)
+          : ({ ok: true, status: 200, json: async () => ({ data: [leave(2)], pagination: { hasMore: false, total: 2, cursor: "2" } }) } as Response);
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [leaveDetail(1), leaveDetail(2)] }) } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    expect(await screen.findByText("Employee 1")).toBeInTheDocument();
+    expect(screen.getByText("Employee 2")).toBeInTheDocument();
+  });
+
+  it("when the paging bound is hit with nothing found, says the search is incomplete instead of 'No pending approvals'", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) {
+        const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
+        return { ok: true, status: 200, json: async () => ({ data: [other(offset)], pagination: { hasMore: true, total: 100000, cursor: String(offset + 1) } }) } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    expect(await screen.findByText(/list may be incomplete/i, {}, { timeout: 4000 })).toBeInTheDocument();
+    expect(screen.queryByText(/no pending approvals/i)).not.toBeInTheDocument();
+    // bounded: 20 pages, then it stops asking
+    expect(fn.mock.calls.filter(([u]) => String(u).includes("/workflow/tasks?"))).toHaveLength(20);
+  });
+
+  it("when some leave tasks were found but more exist beyond the paging bound, shows them with a 'showing the first N' notice", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) {
+        const offset = Number(new URL(url, "http://x").searchParams.get("offset") ?? 0);
+        return { ok: true, status: 200, json: async () => ({ data: offset === 0 ? [leave(1)] : [other(offset)], pagination: { hasMore: true, total: 100000, cursor: String(offset + 1) } }) } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ data: [leaveDetail(1)] }) } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    expect(await screen.findByText("Employee 1")).toBeInTheDocument();
+    expect(await screen.findByText(/showing the first 1 pending leave approvals/i, {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-APPROVALS-06 (multi-task): deciding one of several pending
+ * approvals must not re-request /leave-requests for the ones that remain.
+ */
+describe("LeaveApprovalsPanel — no enrichment refetch after a decision (GAP-HR-LEAVE-APPROVALS-06)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const T1 = { id: "t1", instanceId: "i1", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-a" };
+  const T2 = { id: "t2", instanceId: "i2", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-b" };
+  const LA = { id: "leave-a", employeeName: "Asha Verma", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", days: 2, reason: "Family function" };
+  const LB = { id: "leave-b", employeeName: "Rahul Singh", leaveType: "Earned Leave", fromDate: "2026-09-05", toDate: "2026-09-06", days: 2, reason: "Medical" };
+
+  it("approving one of two rows issues exactly one POST, at most one background tasks GET, and NO second /leave-requests request", async () => {
+    let tasksGets = 0;
+    const leaveUrls: string[] = [];
+    let posts = 0;
+    const fn = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/complete") && init?.method === "POST") { posts++; return { ok: true, status: 202, text: async () => "{}" } as Response; }
+      if (url.includes("/workflow/tasks?")) {
+        tasksGets++;
+        // the background re-sync after the decision: server now only has T2 pending
+        return { ok: true, status: 200, json: async () => ({ data: tasksGets === 1 ? [T1, T2] : [T2] }) } as Response;
+      }
+      if (url.includes("/hrms/leave-requests")) { leaveUrls.push(url); return { ok: true, status: 200, json: async () => ({ data: [LA, LB] }) } as Response; }
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    const row = (await screen.findByText("Asha Verma")).closest("tr");
+    if (!row) throw new Error("expected the first row");
+    fireEvent.click(within(row).getByRole("button", { name: "Approve" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve leave" }));
+
+    await waitFor(() => expect(screen.queryByText("Asha Verma")).not.toBeInTheDocument());
+    // the background re-sync ran (second tasks GET) and the remaining row is still there, fully enriched
+    await waitFor(() => expect(tasksGets).toBe(2));
+    expect(screen.getByText("Rahul Singh")).toBeInTheDocument();
+    expect(posts).toBe(1);
+    expect(leaveUrls).toHaveLength(1); // the initial enrichment only
+    expect(screen.queryByText("Unknown employee")).not.toBeInTheDocument();
+  });
+
+  it("a row whose detail is legitimately absent (scoped out) is not re-requested on every background re-sync", async () => {
+    let tasksGets = 0;
+    const leaveUrls: string[] = [];
+    const fn = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/complete") && init?.method === "POST") return { ok: true, status: 202, text: async () => "{}" } as Response;
+      if (url.includes("/workflow/tasks?")) {
+        tasksGets++;
+        return { ok: true, status: 200, json: async () => ({ data: tasksGets === 1 ? [T1, T2] : [T2] }) } as Response;
+      }
+      if (url.includes("/hrms/leave-requests")) { leaveUrls.push(url); return { ok: true, status: 200, json: async () => ({ data: [LA] }) } as Response; } // leave-b is scoped out
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    const row = (await screen.findByText("Asha Verma")).closest("tr");
+    if (!row) throw new Error("expected the first row");
+    fireEvent.click(within(row).getByRole("button", { name: "Approve" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve leave" }));
+    await waitFor(() => expect(tasksGets).toBe(2));
+    await waitFor(() => expect(screen.queryByText("Asha Verma")).not.toBeInTheDocument());
+
+    expect(leaveUrls).toHaveLength(1);
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+  });
+});

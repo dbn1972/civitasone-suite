@@ -2,9 +2,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
+import { leaveListResponseSchema, LeaveRequestDetailListSchema, LeaveRequestPageSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -17,7 +17,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { fetchOpenTaskRefIds } from "../../shared/workflow-client.js";
-import { assertDayPartAllowed, blockingOverlaps, effectiveBalanceDays, DomainError } from "./domain.js";
+import { assertDayPartAllowed, assertSufficientLeaveBalance, blockingOverlaps, effectiveBalanceDays, DomainError } from "./domain.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -25,21 +25,62 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 const LEAVE_CONFIG_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
 
+/** One reason a leave application cannot be accepted (what a submit answers with 422). */
+interface LeaveViolation {
+  code: string;
+  message: string;
+}
+
 /**
- * Enforce CCS(Leave) Rules synchronously before accepting a leave application.
- * Activates the rules engine for codes it knows (CL/EL/HPL/ML/PL/CCL/...);
- * codes outside the engine (e.g. EOL/MED) fall back to the consumer balance
- * check so nothing breaks. Throws 422 on a rule violation.
- *
- * Returns the rules-engine's computed day count (holiday/sandwich/prefix-suffix
- * aware) when the CCS engine ran, or null when the leave code is outside the
- * engine — callers should fall back to the client-submitted daysApplied in
- * that case, matching the pre-existing "nothing breaks" behavior for EOL/MED.
+ * The outcome of running every synchronous leave rule against an application,
+ * without publishing anything. GAP-HR-LEAVE-APPLY-01: this is the ONE code
+ * path both POST /leave-requests (submit) and POST /leave-requests/preview
+ * run, so what the applicant is shown can never diverge from what is debited.
  */
-async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, req: FastifyRequest): Promise<number | null> {
+interface LeaveEvaluation {
+  /**
+   * The CCS rules engine's holiday/sandwich/prefix-suffix-aware day count when
+   * the engine ran, or null when the leave code is outside the engine (EOL/MED
+   * ...) -- callers then keep the client-submitted daysApplied. Still set
+   * (to what the engine computed) when `violations` is non-empty, so a preview
+   * can show what the request would have cost.
+   */
+  computedDays: number | null;
+  /** Non-blocking engine notices (sandwich / prefix-suffix applied, accumulation lapse). */
+  warnings: string[];
+  /** Blocking reasons; empty means the application is acceptable. */
+  violations: LeaveViolation[];
+  /** Holiday dates (tenant calendar) inside the requested range. */
+  holidaysInRange: string[];
+  /** The allocation balance the request is checked against (0.5 granularity). */
+  balance: number;
+}
+
+/**
+ * Run the CCS(Leave) rules synchronously for an application, returning every
+ * blocking reason instead of throwing for it. Activates the rules engine for
+ * codes it knows (CL/EL/HPL/ML/PL/CCL/...); codes outside the engine (e.g.
+ * EOL/MED) are checked for balance directly (the same check the consumer
+ * would otherwise make asynchronously, after the 202, where a failure was
+ * invisible to the applicant -- GAP-HR-LEAVE-APPLY-04).
+ *
+ * Authorisation / lookup failures (403 IDOR guard, 404 unknown
+ * allocation/type/employee) are NOT rule outcomes and still throw.
+ */
+async function evaluateLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, req: FastifyRequest): Promise<LeaveEvaluation> {
   const tenantId = ctx.tenantId;
   const alloc = await repo.findAllocById(body.allocId);
   if (!alloc) throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found");
+  // The allocation is the balance both this check and the later debit read, so
+  // it must be THIS employee's pool for THIS leave type -- otherwise a request
+  // could be validated against (and, on approval, debited from) another
+  // employee's or another leave type's balance just by passing its id.
+  if (alloc.employeeId !== body.employeeId || alloc.leaveTypeId !== body.leaveTypeId) {
+    throw new HttpError(404, "ALLOC_NOT_FOUND", "leave allocation not found for this employee and leave type");
+  }
+  const balance = effectiveBalanceDays(alloc);
+  const violation = (code: string, message: string): LeaveEvaluation =>
+    ({ computedDays: null, warnings: [], violations: [{ code, message }], holidaysInRange: [], balance });
   const types = await repo.listLeaveTypesByTenant(tenantId);
   const lt = types.find((t) => t.id === body.leaveTypeId);
   if (!lt) throw new HttpError(404, "LEAVE_TYPE_NOT_FOUND", "leave type not found");
@@ -81,8 +122,7 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     return null;
   });
   if (resolver && !leaveEligible(resolver(emp.employeeType ?? ""))) {
-    throw new HttpError(
-      422,
+    return violation(
       "LEAVE_NOT_ELIGIBLE",
       `engagement type '${emp.employeeType ?? "unknown"}' is not eligible for the leave scheme — this workforce category does not accrue leave`,
     );
@@ -97,7 +137,7 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     try {
       assertDayPartAllowed(body.dayPart, code, await repo.getLeaveTenantConfig(tenantId));
     } catch (err) {
-      if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+      if (err instanceof DomainError) return violation(err.code, err.message);
       throw err;
     }
   }
@@ -107,13 +147,24 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   );
   if (overlaps.length > 0) {
     const clash = overlaps[0]!;
-    throw new HttpError(
-      422,
+    return violation(
       "LEAVE_OVERLAP",
       `leave dates ${body.fromDate}..${body.toDate} overlap an existing ${clash.status} application (${clash.fromDate}..${clash.toDate}, id ${clash.id})`,
     );
   }
-  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) return null;
+  if (!LEAVE_POLICIES.some((pol) => pol.code === code)) {
+    // Outside the CCS engine: the client-submitted day count stands, but the
+    // balance is still enforced HERE -- the consumer's identical check runs
+    // after the 202 has already been returned, so a shortfall used to vanish
+    // silently (GAP-HR-LEAVE-APPLY-04).
+    try {
+      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: balance }, body.daysApplied);
+    } catch (err) {
+      if (err instanceof DomainError) return violation(err.code, err.message);
+      throw err;
+    }
+    return { computedDays: null, warnings: [], violations: [], holidaysInRange: [], balance };
+  }
   const allowed: EmployeeType[] = ["permanent", "temporary", "contract", "deputation"];
   const empType = (allowed as string[]).includes(emp.employeeType ?? "")
     ? (emp.employeeType as EmployeeType) : "permanent";
@@ -123,7 +174,7 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     fromDate: body.fromDate,
     toDate: body.toDate,
     daysApplied: body.daysApplied,
-    currentBalance: effectiveBalanceDays(alloc),
+    currentBalance: balance,
     dayPart: body.dayPart,
     totalAccumulated: alloc.totalDays,
     serviceStartDate: (emp.dateOfJoining as unknown as string) ?? body.fromDate,
@@ -135,10 +186,33 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     leaveTypeId: body.leaveTypeId,
     rawEmployeeType: emp.employeeType ?? undefined,
   });
-  if (!result.valid) throw new HttpError(422, "LEAVE_RULE_VIOLATION", result.errors.join("; "));
-  // BUG-1 fix: hand back the rules-engine's validated day count so the caller
-  // persists/debits *this*, not the raw client-submitted daysApplied.
-  return result.computedDays;
+  return {
+    // BUG-1 fix: hand back the rules-engine's validated day count so the caller
+    // persists/debits *this*, not the raw client-submitted daysApplied.
+    computedDays: result.computedDays,
+    warnings: result.warnings,
+    violations: result.valid ? [] : result.errors.map((message) => ({ code: "LEAVE_RULE_VIOLATION", message })),
+    holidaysInRange: result.holidaysInRange,
+    balance,
+  };
+}
+
+/**
+ * Enforce CCS(Leave) Rules synchronously before accepting a leave application.
+ * Throws 422 on a rule violation (the first violation's code; every message
+ * joined, exactly as before this was split out of evaluateLeaveRules).
+ *
+ * Returns the rules-engine's computed day count (holiday/sandwich/prefix-suffix
+ * aware) when the CCS engine ran, or null when the leave code is outside the
+ * engine — callers should fall back to the client-submitted daysApplied in
+ * that case, matching the pre-existing "nothing breaks" behavior for EOL/MED.
+ */
+async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof applyLeaveBody.parse>, req: FastifyRequest): Promise<number | null> {
+  const evaluation = await evaluateLeaveRules(ctx, body, req);
+  if (evaluation.violations.length > 0) {
+    throw new HttpError(422, evaluation.violations[0]!.code, evaluation.violations.map((v) => v.message).join("; "));
+  }
+  return evaluation.computedDays;
 }
 
 export async function leaveRoutes(app: FastifyInstance): Promise<void> {
@@ -232,26 +306,36 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
 
   // GAP-HR-LEAVE-APPLY-01: read-only preview of what a submit would actually
   // debit. ApplyLeaveForm.tsx's calcDays() is a naive inclusive calendar-day
-  // count; the real debit (BUG-1 fix, above) comes from enforceCcsLeaveRules
-  // running the CCS rules engine (holidays/sandwich/prefix-suffix aware) —
-  // the applicant previously never saw that number until after submitting.
-  // Reuses enforceCcsLeaveRules verbatim (same IDOR guard, same engagement-
-  // eligibility gate, same overlap check, same rules-engine call) so preview
-  // and submit can never diverge — this is not a second implementation of
-  // that logic, just the same one without the trailing commands.applyLeave
-  // publish. A rule violation / insufficient balance throws the same
-  // HttpError (422 etc.) submit itself would throw, which the client shows
-  // as a blocking inline error instead of letting a native confirm() past it.
+  // count; the real debit (BUG-1 fix, above) comes from the CCS rules engine
+  // (holidays/sandwich/prefix-suffix aware) -- the applicant previously never
+  // saw that number until after submitting.
+  // Runs evaluateLeaveRules -- the exact function POST /leave-requests runs
+  // (same IDOR guard, engagement-eligibility gate, overlap check, rules
+  // engine and balance check) -- minus the trailing commands.applyLeave
+  // publish, so preview and submit can never diverge. Authorisation/lookup
+  // failures (403/404) throw exactly as submit would. A RULE outcome
+  // (insufficient balance, rule violation, overlap ...) is returned as data
+  // (`valid: false` + `violations`) rather than a bare 422, so the form can
+  // say WHY inline and keep Submit disabled -- the same violations submit
+  // would answer with a 422 (never a window.confirm the user could click
+  // through).
   app.post("/v1/hrms/leave-requests/preview", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = applyLeaveBody.parse(req.body);
-    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
+    const evaluation = await evaluateLeaveRules(ctx, body, req);
+    const computedDays = evaluation.computedDays ?? body.daysApplied;
     return reply.send({
-      computedDays: computedDays ?? body.daysApplied,
-      // false for a leave code outside the CCS engine (e.g. EOL/MED) — the
-      // client already shows the "approximate" framing for those, unchanged.
-      engineApplied: computedDays != null,
+      valid: evaluation.violations.length === 0,
+      computedDays,
+      // false for a leave code outside the CCS engine (e.g. EOL/MED) -- the
+      // day count is then the client-submitted one, shown as approximate.
+      engineApplied: evaluation.computedDays != null,
+      warnings: evaluation.warnings,
+      violations: evaluation.violations,
+      holidaysInRange: evaluation.holidaysInRange,
+      balance: evaluation.balance,
+      balanceAfter: evaluation.balance - computedDays,
     });
   });
 
@@ -389,6 +473,10 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       // as any other row that scope excludes today.
       ids: z.string().optional().transform((v) => (v ? v.split(",").filter(Boolean) : undefined))
         .pipe(z.array(z.string().uuid()).max(50).optional()),
+      // GAP-HR-LEAVE-03: opt in to `{ data, meta }` (real total + per-status
+      // counts over the caller's whole visible set). Absent = the bare array
+      // every existing caller already parses.
+      withMeta: z.enum(["1", "true"]).optional(),
     }).parse(req.query);
     // IDOR fix (GAP-HR-SF-16): this route returned every employee's leave
     // request detail tenant-wide to ANY ALL_ROLES-holding caller (including
@@ -429,6 +517,21 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       }
       const allowed = found.filter((r) => inScope(r) || viaTask.has(r.id));
       sendValidated(reply, LeaveRequestDetailListSchema, allowed);
+      return;
+    }
+    if (q.withMeta) {
+      const result = await queries.getLeaveRequestPage(ctx.tenantId, q.limit, q.offset, employeeIds);
+      sendValidated(reply, LeaveRequestPageSchema, {
+        data: result.data,
+        meta: {
+          page: Math.floor(q.offset / q.limit) + 1,
+          pageSize: q.limit,
+          offset: q.offset,
+          total: result.total,
+          hasMore: q.offset + result.data.length < result.total,
+          statusCounts: result.statusCounts,
+        },
+      });
       return;
     }
     const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset, employeeIds);
