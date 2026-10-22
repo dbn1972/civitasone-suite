@@ -8,6 +8,7 @@ import { createJdTemplateBody, updateJdTemplateBody, idParam } from "./validator
 import * as templateRepo from "./jd-template-repo.js";
 import * as editionPolicyRepo from "./edition-policy-repo.js";
 import { REQUISITION_REQUIRED_MESSAGE } from "./edition-policy.js";
+import { clampLimit } from "../../shared/clamp-limit.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -18,7 +19,7 @@ export async function jdTemplateRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const q = req.query as { vacancyType?: string; limit?: string };
     const opts: { vacancyType?: string; limit?: number } = {
-      limit: q.limit ? Math.min(200, Number(q.limit)) : 100,
+      limit: clampLimit(q.limit, 100, 200),
     };
     if (q.vacancyType) opts.vacancyType = q.vacancyType;
     const rows = await templateRepo.listTemplates(ctx.tenantId, opts);
