@@ -47,12 +47,17 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send(await commands.recordOfflinePayment(ctx, body));
   });
 
-  /** FN-14 — confirm pending online intent (gateway callback or labelled sandbox). */
+  /** FN-14 — confirm pending online intent (staff-relayed gateway callback, or sandbox when CITIZEN_PAYMENTS_SANDBOX_ENABLED=true outside production). */
   app.post("/v1/citizen/payments/:id/confirm", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = confirmPaymentBody.parse(req.body ?? {});
+    // A gateway confirmation asserts that money was captured, and gatewayRef is
+    // caller-supplied/unverified here. Only staff (gateway callback relay or
+    // reconciliation) may assert it; a citizen may only use the sandbox path,
+    // which is itself gated by CITIZEN_PAYMENTS_SANDBOX_ENABLED.
+    if (body.mode === "gateway") requireRole(ctx, OFFICER_ROLES);
     return reply.code(202).send(await commands.confirmPayment(ctx, id, body));
   });
 
