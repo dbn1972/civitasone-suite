@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within, act, cleanup } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -433,6 +433,23 @@ describe("CustomFieldsManager save reflection (GAP-CRM-CUSTOM-FIELDS-03)", () =>
       expect(screen.queryByText(/submitted; it may take a moment/i)).not.toBeInTheDocument();
       // initial load + 3 reload attempts
       expect(vi.mocked(cf.listCustomFields)).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops polling the catalogue once the component is unmounted (no stray list calls into later tests)", async () => {
+    vi.useFakeTimers();
+    try {
+      const stale = field({ id: "f1", fieldName: "Region" });
+      await renderWithRegionField([[stale]]); // every reload stays stale, so the poll would run its full back-off
+      fireEvent.change(screen.getByDisplayValue("Region"), { target: { value: "Zone" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Save$/i }));
+      await tick(0);
+      const callsAtUnmount = vi.mocked(cf.listCustomFields).mock.calls.length; // initial load + first reload
+      cleanup();
+      await tick(5000); // longer than the whole 500 + 1000 + 2000 back-off
+      expect(vi.mocked(cf.listCustomFields)).toHaveBeenCalledTimes(callsAtUnmount);
     } finally {
       vi.useRealTimers();
     }

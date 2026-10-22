@@ -39,6 +39,17 @@ async function openList() {
   return await screen.findByRole("region", { name: "Merit list" });
 }
 
+/**
+ * Opens the list and waits for the ranking editor. Its rows are built only once BOTH the screened pool and
+ * the list detail have loaded (they arrive from separate requests), and each later load rebuilds them -
+ * discarding anything typed - so the editor must be waited for before asserting on or typing into it.
+ */
+async function openEditableList() {
+  const region = await openList();
+  await within(region).findByLabelText("Placement for Asha Verma");
+  return region;
+}
+
 describe("Selection lists page (DETAIL-14)", () => {
   it("creates a draft list for the vacancy", async () => {
     const calls = stub({ session: { userId: "maker-1", roles: ["hr_officer"] } });
@@ -52,7 +63,7 @@ describe("Selection lists page (DETAIL-14)", () => {
   it("offers only the screened pool and saves a ranked list with auto-rank by score", async () => {
     const calls = stub({ session: { userId: "maker-1", roles: ["hr_officer"] } });
     renderPage();
-    const region = await openList();
+    const region = await openEditableList();
     expect(within(region).queryByText("Pending Person")).not.toBeInTheDocument();
     fireEvent.change(within(region).getByLabelText("Placement for Asha Verma"), { target: { value: "selected" } });
     fireEvent.change(within(region).getByLabelText("Placement for Rahul Singh"), { target: { value: "waitlist" } });
@@ -71,7 +82,7 @@ describe("Selection lists page (DETAIL-14)", () => {
   it("blocks a ranking with more selected candidates than posts, before any request", async () => {
     const calls = stub({ session: { userId: "maker-1", roles: ["hr_officer"] } });
     renderPage();
-    const region = await openList();
+    const region = await openEditableList();
     for (const [n, r] of [["Asha Verma", "1"], ["Rahul Singh", "2"]] as const) {
       fireEvent.change(within(region).getByLabelText(`Placement for ${n}`), { target: { value: "selected" } });
       fireEvent.change(within(region).getByLabelText(`Rank for ${n}`), { target: { value: r } });
