@@ -1289,6 +1289,24 @@ describe("service-side PII masking of profile attributes", () => {
     await app.close();
   });
 
+  it("search: non-admin callers are restricted to non-PII keys (no raw attribute probing)", async () => {
+    H.profileListMock.mockResolvedValue({ rows: [], total: 0 });
+    const app = await buildApp();
+    H.profileListMock.mockClear();
+    const ru = await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_user"]) });
+    expect(ru.statusCode).toBe(200);
+    expect(H.profileListMock.mock.calls[0]?.[3]).toMatchObject({ search: "raj", restrictPii: true });
+    // stewards cannot reach the search at all (role gate) — no probing path.
+    H.profileListMock.mockClear();
+    const rs = await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_steward"]) });
+    expect(rs.statusCode).toBe(403);
+    expect(H.profileListMock).not.toHaveBeenCalled();
+    H.profileListMock.mockClear();
+    await app.inject({ method: "GET", url: "/v1/cdp/profiles?search=raj", headers: auth(USER, ["cdp_admin"]) });
+    expect(H.profileListMock.mock.calls[0]?.[3]).toMatchObject({ restrictPii: false });
+    await app.close();
+  });
+
   it("cdp_steward can read profile summary (name for the confirm dialog) with PII masked", async () => {
     H.cacheGetOrLoadMock.mockResolvedValue({
       id: PROFILE_ID, profileType: "individual", attributes: { name: "Rajesh Kumar", email: "raj@example.com", phone: "9876543210" },

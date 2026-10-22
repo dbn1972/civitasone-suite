@@ -3,6 +3,7 @@
  */
 import { eq, and, ilike, sql, desc, type SQL, inArray } from "drizzle-orm";
 import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { classifyValue } from "../../shared/pii.js";
 import { profiles, type ProfileRow, type ProfileInsert } from "./schema.js";
 
 export function toView(r: ProfileRow) {
@@ -32,7 +33,16 @@ export interface ListFilters {
   search?: string;
   profileType?: string;
   segmentId?: string;
+  /**
+   * Caller may not see cleartext PII. Free-text search is then limited to
+   * non-identifier attribute keys (SAFE_SEARCH_KEYS) and a PII-shaped query
+   * matches nothing, so row-count probing cannot recover email/phone/PAN/Aadhaar.
+   */
+  restrictPii?: boolean;
 }
+
+/** Top-level attribute keys a non-PII-cleartext caller may free-text search. */
+export const SAFE_SEARCH_KEYS = ["name", "fullName", "firstName", "lastName", "displayName", "city", "state", "district"];
 
 export async function listByTenant(
   tenantId: string,
@@ -44,7 +54,18 @@ export async function listByTenant(
 
   if (filters.search) {
     const q = `%${filters.search}%`;
-    conditions.push(sql`${profiles.attributes}::text ILIKE ${q}`);
+    if (filters.restrictPii) {
+      if (classifyValue(filters.search) !== null) {
+        conditions.push(sql`false`);
+      } else {
+        const keys = sql.join(SAFE_SEARCH_KEYS.map((k) => sql`${k}`), sql`, `);
+        conditions.push(
+          sql`EXISTS (SELECT 1 FROM jsonb_each_text(${profiles.attributes}) AS e(k, v) WHERE e.k IN (${keys}) AND e.v ILIKE ${q})`,
+        );
+      }
+    } else {
+      conditions.push(sql`${profiles.attributes}::text ILIKE ${q}`);
+    }
   }
   if (filters.profileType) {
     conditions.push(eq(profiles.profileType, filters.profileType));

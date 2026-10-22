@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { maskProfileView } from "../../shared/pii.js";
+import { canSeeCleartextPii, maskProfileView } from "../../shared/pii.js";
 import * as repo from "./repo.js";
 import * as eventsRepo from "../events/repo.js";
 import { validateMerge } from "./domain.js";
@@ -64,6 +64,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
       ...(q.search !== undefined ? { search: q.search } : {}),
       ...(q.profileType !== undefined ? { profileType: q.profileType } : {}),
       ...(q.segmentId !== undefined ? { segmentId: q.segmentId } : {}),
+      restrictPii: !canSeeCleartextPii(ctx),
     });
 
     const page = Math.floor(q.offset / q.limit) + 1;
