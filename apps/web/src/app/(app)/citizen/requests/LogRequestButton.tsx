@@ -47,7 +47,7 @@ export function LogRequestButton() {
       setConsent(false);
       router.refresh();
     } catch (e) {
-      setError(e instanceof UserFacingError ? e.message : "Could not log the request.");
+      setError(e instanceof UserFacingError ? e.message : t("errLogRequest"));
     } finally {
       setBusy(false);
     }

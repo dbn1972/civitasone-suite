@@ -16,7 +16,7 @@ describe("LogRequestButton error rendering (CLOS-S1-11)", () => {
     fireEvent.change(screen.getByLabelText(enMessages.citizenRequests.description), { target: { value: "No supply" } });
     fireEvent.click(screen.getByText(enMessages.citizenRequests.consentLabel));
     fireEvent.click(screen.getByRole("button", { name: enMessages.citizenRequests.submitRequest }));
-    expect(await screen.findByText("Could not log the request.")).toBeInTheDocument();
+    expect(await screen.findByText(enMessages.citizenRequests.errLogRequest)).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });
 });

@@ -79,11 +79,11 @@ export function RequestDetailClient({
       setGrievance((await res.json()) as Grievance);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
-      setLoadError(e instanceof UserFacingError ? e.message : "Failed to load request.");
+      setLoadError(e instanceof UserFacingError ? e.message : t("errLoadRequest"));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     if (skipFirstFetch.current) {
@@ -144,7 +144,7 @@ export function RequestDetailClient({
       setActionForm({ actionType: "comment", note: "" });
       afterMutate("Action submitted. It will appear once processed.");
     } catch (e) {
-      setFormError(e instanceof UserFacingError ? e.message : "Could not record the action.");
+      setFormError(e instanceof UserFacingError ? e.message : t("errRecordAction"));
     } finally {
       setBusy(false);
     }

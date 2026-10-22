@@ -26,7 +26,7 @@ describe("RequestDetailClient (CLOS-S1-06)", () => {
   it("load failure offline shows generic copy, not raw 'Failed to fetch'", async () => {
     vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))) as unknown as typeof fetch);
     render(ui({ initialGrievance: null, initialSource: "error" }));
-    expect(await screen.findByText("Failed to load request.")).toBeInTheDocument();
+    expect(await screen.findByText(enMessages.citizenRequests.errLoadRequest)).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });
 
@@ -35,7 +35,7 @@ describe("RequestDetailClient (CLOS-S1-06)", () => {
     render(ui());
     fireEvent.click(screen.getByRole("button", { name: enMessages.citizenRequests.addAction }));
     fireEvent.submit(screen.getByLabelText(enMessages.citizenRequests.noteLabel).closest("form")!);
-    expect(await screen.findByText("Could not record the action.")).toBeInTheDocument();
+    expect(await screen.findByText(enMessages.citizenRequests.errRecordAction)).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).toBeNull();
   });
 
