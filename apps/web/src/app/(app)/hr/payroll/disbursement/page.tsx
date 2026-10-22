@@ -109,6 +109,7 @@ const SECTION_STYLE = { scrollMarginTop: 80 } as const;
 
 export default async function DisbursementPage() {
   const t = await getTranslations("disbursement");
+  const tCommon = await getTranslations("payrollCommon");
 
   // GAP-PAYROLL-DISBURSEMENT-01/04: hr/layout admits manager/employee/
   // hr_officer to every /hr route; this page holds salary bank details and
@@ -198,7 +199,7 @@ export default async function DisbursementPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
       {anyError && <DataSourceBadge source="error" message={t("loadErrorMessage")} />}
 

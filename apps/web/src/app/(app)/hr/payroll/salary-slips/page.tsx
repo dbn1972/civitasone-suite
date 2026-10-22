@@ -12,6 +12,7 @@ import { ALL_PERIODS, SLIPS_PAGE_LIMIT, distinctPeriods, mayBeTruncated, resolve
 
 export default async function SalarySlipsPage({ searchParams }: { searchParams?: { period?: string } }) {
   const t = await getTranslations("salarySlips");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
   if (!canView) {
@@ -44,7 +45,7 @@ export default async function SalarySlipsPage({ searchParams }: { searchParams?:
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
         help="payroll"
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />

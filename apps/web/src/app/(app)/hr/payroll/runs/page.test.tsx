@@ -50,7 +50,7 @@ describe("PayrollRunsPage", () => {
   it("renders real runs with correctly-formatted rupee amounts and a working detail link", async () => {
     fetchJsonMock.mockResolvedValue({
       data: [
-        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 500000, netAmount: 430000, deductions: 70000, status: "paid" },
+        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 500000, netAmount: 430000, deductions: 70000, grossMinor: "50000000", netMinor: "43000000", deductionsMinor: "7000000", status: "paid" },
       ],
       source: "api",
     });

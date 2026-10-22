@@ -951,6 +951,12 @@ export const PayrollRunDetailSchema = z.object({
   grossMinor: z.string().regex(/^-?\d+$/).optional(),
   netMinor: z.string().regex(/^-?\d+$/).optional(),
   deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+  // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+  // arrears | pensioner). Optional so a payload from an older payroll-service
+  // still validates (the web then treats the run as regular). Deliberately a
+  // plain string, not an enum: sendValidated() throws on an unrecognised enum
+  // member, which would 400 the whole run list because of one row.
+  runType: z.string().min(1).max(16).optional(),
   // payroll-critical fix: 'failed' added as a real, distinct status -- it
   // used to be silently remapped to 'draft' server-side (payroll-service's
   // queries.ts mapRunStatus), making a run whose async processing genuinely
@@ -963,6 +969,11 @@ export const PayrollRunDetailSchema = z.object({
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);
 
 export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
+  // GAP-PAYROLL-DETAIL-02: the run's maker and checker (user ids only). Optional
+  // so a payload from an older payroll-service still validates; approvedBy is
+  // null until the run is approved.
+  createdBy: z.string().nullable().optional(),
+  approvedBy: z.string().nullable().optional(),
   salarySlips: z.array(z.object({
     id: z.string(),
     employeeId: z.string(),
@@ -970,6 +981,10 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
     gross: z.number(),
     deductions: z.number(),
     net: z.number(),
+    // GAP-PAYROLL-HOME-01: integer-paise strings (see PayrollRunDetailSchema).
+    grossMinor: z.string().regex(/^-?\d+$/).optional(),
+    deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+    netMinor: z.string().regex(/^-?\d+$/).optional(),
     status: z.string(),
     // GAP-PAYROLL-DETAIL-05: issue codes (MISSING_PAN, INVALID_PAN,
     // MISSING_BANK_ACCOUNT, INVALID_IFSC) -- never the PAN / account number.

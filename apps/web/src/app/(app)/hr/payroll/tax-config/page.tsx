@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader, Card, RefreshErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import { toHumanError } from "@/lib/messages";
 import { currentFinancialYear, recentFinancialYears, isValidFinancialYearLabel } from "@/lib/fiscalYear";
 import { getTranslations } from "next-intl/server";
@@ -19,10 +20,10 @@ import { getTranslations } from "next-intl/server";
  * This now fetches the tenant's EFFECTIVE config for the selected FY from
  * GET /v1/payroll/tax/slab-config (the same tenant-override-then-platform-
  * default rows getTaxConfig resolves), renders the fetched slabs/limits/
- * surcharge bands via formatRupees, offers an FY selector, and shows a proper
+ * surcharge bands via formatMoney, offers an FY selector, and shows a proper
  * error/empty state when config is missing — no hard-coded ₹ slab literals.
  *
- * GAP2-PAYROLL-TAX-CONFIG-02: amounts are formatted via formatRupees and the
+ * GAP2-PAYROLL-TAX-CONFIG-02: amounts are formatted via formatMoney and the
  * card grid collapses to one column on phones (grid-cols-auto, see below).
  */
 
@@ -52,10 +53,20 @@ async function getConfig(fy: string): Promise<LoaderResult<SlabConfigResponse | 
   );
 }
 
+/**
+ * The slab-config API sends WHOLE-RUPEE thresholds (the TDS engine's slab
+ * from/to). Convert exactly to paise (decimal string, no float rounding of the
+ * value itself) and render with formatMoney; a non-finite value shows "—".
+ */
+function rupees(n: number): string {
+  if (!Number.isFinite(n)) return "—";
+  return formatMoney(rupeesToMinorString(n.toFixed(2), { allowZero: true }));
+}
+
 function slabLabel(s: Slab, t: (k: string, v?: Record<string, string>) => string): string {
-  if (s.to == null) return t("slabAbove", { from: formatRupees(s.from) });
+  if (s.to == null) return t("slabAbove", { from: rupees(s.from) });
   // Lower bound of a mid-slab is one rupee above the previous slab's top.
-  return `${formatRupees(s.from + (s.from > 0 ? 1 : 0))} – ${formatRupees(s.to)}`;
+  return `${rupees(s.from + (s.from > 0 ? 1 : 0))} – ${rupees(s.to)}`;
 }
 
 function RegimeTable({ cfg, title, note, t }: {
@@ -84,8 +95,8 @@ function RegimeTable({ cfg, title, note, t }: {
             </table>
           </div>
           <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>
-            {note} {t("stdDeductionNote", { amount: formatRupees(cfg.stdDeduction) })}{" "}
-            {cfg.rebateMax > 0 && t("rebateNote", { max: formatRupees(cfg.rebateMax), cap: formatRupees(cfg.rebateIncomeCap) })}
+            {note} {t("stdDeductionNote", { amount: rupees(cfg.stdDeduction) })}{" "}
+            {cfg.rebateMax > 0 && t("rebateNote", { max: rupees(cfg.rebateMax), cap: rupees(cfg.rebateIncomeCap) })}
           </p>
         </>
       )}
@@ -157,7 +168,7 @@ export default async function TaxConfigPage({ searchParams }: { searchParams?: {
                     <tbody>
                       {surcharge.map((b, i) => (
                         <tr key={`${b.above}-${i}`}>
-                          <td>{t("surchargeAbove", { amount: formatRupees(b.above) })}</td>
+                          <td>{t("surchargeAbove", { amount: rupees(b.above) })}</td>
                           <td>{b.ratePct}%</td>
                         </tr>
                       ))}

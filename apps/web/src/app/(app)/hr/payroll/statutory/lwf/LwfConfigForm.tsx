@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { nonNegativeRupeesToMinorString } from "@/lib/money";
 
 // GAP-PAYROLL-STATUTORY-LWF-02: mirrors payroll-service LWF_FREQUENCIES
@@ -202,8 +202,9 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
             {t.rich("confirmDescription", {
               strong: (chunks) => <strong>{chunks}</strong>,
               state: stateCode.trim().toUpperCase(),
-              emp: empContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(empContrib) || 0),
-              er: erContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(erContrib) || 0),
+              // Exact decimal -> paise (no parseFloat), shown with formatMoney.
+              emp: empContrib.trim() === "" ? t("unchangedValue") : formatMoney(nonNegativeRupeesToMinorString(empContrib) ?? 0),
+              er: erContrib.trim() === "" ? t("unchangedValue") : formatMoney(nonNegativeRupeesToMinorString(erContrib) ?? 0),
               frequency: frequency ? t(FREQUENCY_LABEL_KEY[frequency]) : t("unchangedValue"),
             })}
             {isOverwrite && (

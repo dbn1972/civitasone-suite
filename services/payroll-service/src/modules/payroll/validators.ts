@@ -45,6 +45,25 @@ export type ListRunsQuery = z.infer<typeof listRunsQuery>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * GAP-PAYROLL-DETAIL-02: the optional body of PATCH /runs/:id/{approve,disburse,revert}.
+ * The web dialog collects a reason (>= 10 chars) for each irreversible step; it is
+ * recorded on the audit event. Absent is fine (older callers); present must be a real
+ * sentence, not a character.
+ *
+ * OWNER DECISION (open): `reason` is optional on the wire, so the 10-character rule
+ * is a web-dialog gate only -- a direct API call (script, other client) can still
+ * approve or disburse without a recorded reason. Maker-checker itself is enforced
+ * server-side regardless. Making `reason` required here (and on the F&F disburse
+ * body, fnf/routes.ts) is a one-line change, but it breaks every client that does not
+ * send one yet (e.g. scripts/dev/test-hr-payroll-flow.mjs), so it waits for the owner
+ * to confirm all API clients are updated.
+ */
+export const runActionBody = z.object({
+  reason: z.string().trim().min(10).max(1000).optional(),
+});
+export type RunActionBody = z.infer<typeof runActionBody>;
+
 // Multi-DDO admin
 export const createDdoBody = z.object({
   ddoCode: z.string().min(1).max(32),

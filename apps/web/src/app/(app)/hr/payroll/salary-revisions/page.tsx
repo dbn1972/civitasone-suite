@@ -75,6 +75,7 @@ function grossChangeLabel(oldMinor: number | string, newMinor: number | string):
 
 export default async function SalaryRevisionsPage() {
   const t = await getTranslations("salaryRevisions");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_REPORT_ROLES.includes(r))) {
     return <PermissionDenied module="salary revisions" requiredRoles={PAYROLL_REPORT_ROLES} />;
@@ -142,7 +143,7 @@ export default async function SalaryRevisionsPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>

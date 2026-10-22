@@ -171,6 +171,12 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
       // from a float. Additive: the rupee fields are unchanged.
       ...minorTotals(agg.grossMinor, agg.netMinor),
       status: mapRunStatus(r.status),
+      // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+      // arrears | pensioner). Supplementary / arrears / pensioner runs coexist
+      // with the regular run of the same month and re-pay (or add) employees, so
+      // a headcount summed over the list must be able to tell them apart.
+      // Additive: nothing else on the row changes.
+      runType: r.runType,
       // payroll-critical fix: surface why, for a failed run, alongside the
       // now-distinct 'failed' status above (migration 0046). null for every
       // other status and for a failed run that predates this column.
@@ -211,17 +217,22 @@ export async function getRunDetail(id: string, tenantId: string) {
     status: mapRunStatus(run.status),
     // payroll-critical fix: see the matching field in listRuns above.
     failureReason: run.status === "failed" ? (run.lastError ?? null) : null,
-    // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
-    // already rupees (/100 of the minor-unit column), and the frontend's
-    // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
-    // slip fields with formatRupees(), not formatMoney() — i.e. it already
-    // expects rupees here too. The old `Number(s.grossMinor)` (raw paise, no
-    // /100) was a 100x mismatch against both the sibling run-level fields in
-    // this same response and what the frontend actually does with the value.
+    // GAP-PAYROLL-DETAIL-02: who made and who checked this run (user ids, no
+    // names/PII), so the web tier can disable Approve for the maker and
+    // Disburse for the approver with an explanation instead of letting them
+    // click into a guaranteed 403. approvedBy is null until the run is approved.
+    createdBy: run.createdBy,
+    approvedBy: run.approvedBy ?? null,
+    // The rupee fields on each slip below (gross/deductions/net) are the legacy
+    // wire shape: RUPEES (/100 of the minor-unit column), consistent with the
+    // sibling run-level grossAmount/netAmount/deductions above (BUG-2 fixed an
+    // earlier raw-paise mismatch). The web tier no longer renders them: the run
+    // detail table reads the integer-paise strings (grossMinor / deductionsMinor /
+    // netMinor, GAP-PAYROLL-HOME-01) and formats them with formatMoney. They stay
+    // on the wire, unchanged, for older clients.
     // NOT touched: listSalarySlips()/GET /v1/payroll/salary-slips below is a
-    // different endpoint, correctly consumed via formatMoney() (paise) by
-    // SalarySlipsTable.tsx's DataTable — that convention is independently
-    // correct and out of scope here.
+    // different endpoint, consumed via formatMoney() (paise) by
+    // SalarySlipsTable.tsx's DataTable.
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,
@@ -229,6 +240,13 @@ export async function getRunDetail(id: string, tenantId: string) {
       gross: Number(s.grossMinor) / 100,
       deductions: Number(s.totalDeductionsMinor) / 100,
       net: Number(s.netPayMinor) / 100,
+      // GAP-PAYROLL-HOME-01: the authoritative integer-paise values (bigint
+      // strings) next to the rupee numbers above, so the run-detail table
+      // renders with formatMoney instead of re-deriving paise from a float.
+      // Additive: the rupee fields are unchanged.
+      grossMinor: s.grossMinor.toString(),
+      deductionsMinor: s.totalDeductionsMinor.toString(),
+      netMinor: s.netPayMinor.toString(),
       status: s.status,
       issues: readiness.get(s.employeeId) ?? [],
     })),

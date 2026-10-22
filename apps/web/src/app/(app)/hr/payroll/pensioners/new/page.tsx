@@ -25,12 +25,13 @@ export default async function NewPensionerPage() {
     return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_ADMIN_ROLES} />;
   }
   const t = await getTranslations("pensionersNew");
+  const tCommon = await getTranslations("payrollCommon");
   return (
     <div className="page-main wrap">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/pensioners" backLabel="Back to Pensioners"
+        back="/hr/payroll/pensioners" backLabel={tCommon("backToPensioners")}
       />
       <CreatePensionerForm />
     </div>

@@ -13,6 +13,9 @@ import { execSync } from "node:child_process";
 const GATEWAY = process.env.GATEWAY_URL ?? "http://localhost:8080";
 const TENANT = process.env.TEST_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
 const ACTOR = "00000000-0000-0000-0000-000000000099";
+// A second, distinct user: payroll-service enforces maker-checker on runs (a run cannot be
+// approved by the person who created it, nor disbursed by the person who approved it).
+const CHECKER = "00000000-0000-0000-0000-00000000009a";
 
 const RAVI = "eeeeeeee-0001-0000-0000-000000000005";
 const RAVI_EL_ALLOC = "eeeeeeee-0001-0000-0000-000000000009";
@@ -22,11 +25,11 @@ const PAY_STRUCTURE = "ffffffff-0001-0000-0000-000000000001";
 
 const results = [];
 
-function mintJwt() {
+function mintJwt(sub = ACTOR) {
   const secret = process.env.JWT_SECRET ?? "civitasone-dev-secret";
   const header = Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url");
   const payload = Buffer.from(JSON.stringify({
-    sub: ACTOR,
+    sub,
     iss: "civitasone-dev",
     aud: "civitasone",
     tid: TENANT,
@@ -41,6 +44,7 @@ function mintJwt() {
 }
 
 const jwt = mintJwt();
+const checkerJwt = mintJwt(CHECKER);
 
 function mintManagerJwt() {
   const secret = process.env.JWT_SECRET ?? "civitasone-dev-secret";
@@ -228,8 +232,8 @@ async function main() {
     return summary(false);
   }
 
-  // ── 7. Approve run ────────────────────────────────────────────────
-  const approve = await api("PATCH", `/api/v1/payroll/runs/${runId}/approve`);
+  // ── 7. Approve run (as the checker: not the user who created it) ───
+  const approve = await api("PATCH", `/api/v1/payroll/runs/${runId}/approve`, undefined, checkerJwt);
   if (!approve.ok) {
     fail("payroll-approve", approve.text || String(approve.status));
     return summary(false);
@@ -237,7 +241,7 @@ async function main() {
   pass("payroll-approve", "accepted");
   await sleep(3000);
 
-  // ── 8. Disburse run ───────────────────────────────────────────────
+  // ── 8. Disburse run (as the maker: not the user who approved it) ──
   const disburse = await api("PATCH", `/api/v1/payroll/runs/${runId}/disburse`);
   if (!disburse.ok) {
     fail("payroll-disburse", disburse.text || String(disburse.status));

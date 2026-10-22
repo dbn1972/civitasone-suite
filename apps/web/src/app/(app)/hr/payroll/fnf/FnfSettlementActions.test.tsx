@@ -81,11 +81,16 @@ describe("FnfSettlementActions (GAP-PAYROLL-FNF-01)", () => {
     expect(lastCall()).toEqual({ path: `v1/payroll/fnf/settlements/${ID}/reject`, body: { version: 3, reason: "gratuity years are wrong" } });
   });
 
-  it("disburse: needs a valid payment reference and a non-future date, posts both", async () => {
+  it("disburse: needs a valid payment reference, a non-future date and a 10+ character reason; posts all three", async () => {
     browserFetchMock.mockResolvedValue(ok());
     renderActions({ status: "finance_approved", submittedBy: OTHER, financeApprovedBy: OTHER });
     fireEvent.click(screen.getByRole("button", { name: /record the payment/i }));
-    const confirm = screen.getByRole("button", { name: "Mark disbursed" });
+    // GAP-PAYROLL-FNF-01: the dialog states what is being closed -- the net payable amount.
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("₹10,300.00");
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("Meera Iyer");
+    // The action is named for what it does: it records a payment made elsewhere.
+    const confirm = screen.getByRole("button", { name: "Record payment" });
+    expect(screen.queryByRole("button", { name: "Mark disbursed" })).not.toBeInTheDocument();
     expect(confirm).toBeDisabled();
     const ref = screen.getByLabelText(/payment reference/i);
     fireEvent.change(ref, { target: { value: "UTR 1; x" } });
@@ -96,13 +101,45 @@ describe("FnfSettlementActions (GAP-PAYROLL-FNF-01)", () => {
     expect(screen.getByText(/cannot be in the future/)).toBeInTheDocument();
     expect(confirm).toBeDisabled();
     fireEvent.change(screen.getByLabelText(/payment date/i), { target: { value: "2026-09-30" } });
+    // reference + date are valid, but there is still no reason: Confirm stays disabled.
+    expect(confirm).toBeDisabled();
+    const reason = screen.getByLabelText(/reason for recording this payment/i);
+    fireEvent.change(reason, { target: { value: "too short" } }); // 9 characters
+    expect(screen.getByText("Enter at least 10 characters.")).toBeInTheDocument();
+    expect(confirm).toBeDisabled();
+    fireEvent.change(reason, { target: { value: "  Paid by RTGS  " } });
     expect(confirm).toBeEnabled();
     fireEvent.click(confirm);
     await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
     expect(lastCall()).toEqual({
       path: `v1/payroll/fnf/settlements/${ID}/disburse`,
-      body: { version: 3, paymentReference: "SBIN-UTR-0001", paymentDate: "2026-09-30" },
+      body: { version: 3, paymentReference: "SBIN-UTR-0001", paymentDate: "2026-09-30", reason: "Paid by RTGS" },
     });
+  });
+
+  it("disburse: whitespace padding does not satisfy the 10-character reason minimum", () => {
+    renderActions({ status: "finance_approved", submittedBy: OTHER, financeApprovedBy: OTHER });
+    fireEvent.click(screen.getByRole("button", { name: /record the payment/i }));
+    fireEvent.change(screen.getByLabelText(/payment reference/i), { target: { value: "SBIN-UTR-0001" } });
+    fireEvent.change(screen.getByLabelText(/payment date/i), { target: { value: "2026-09-30" } });
+    fireEvent.change(screen.getByLabelText(/reason for recording this payment/i), { target: { value: "   ok       " } });
+    expect(screen.getByRole("button", { name: "Record payment" })).toBeDisabled();
+  });
+
+  it("every action is sent with an x-idempotency-key, stable across a retry in the same dialog and fresh on the next opening", async () => {
+    browserFetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValue(ok());
+    renderActions({ status: "computed" });
+    fireEvent.click(screen.getByRole("button", { name: /submit the settlement/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent("Network error. Please try again."));
+    expect(screen.getByRole("alertdialog")).not.toHaveTextContent("Failed to fetch");
+    fireEvent.click(screen.getAllByRole("button", { name: "Submit for approval" }).at(-1)!);
+    await waitFor(() => expect(browserFetchMock).toHaveBeenCalledTimes(2));
+
+    const keys = browserFetchMock.mock.calls.map((c) => (c[1] as { headers?: Record<string, string> }).headers?.["x-idempotency-key"]);
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(keys[1]).toBe(keys[0]);
   });
 
   it.each([
