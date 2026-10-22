@@ -2,7 +2,7 @@
 
 Total: **73 open**, 4415 closed, 163 blocked or obsolete.
 
-Priority queue: 2 open, 210 closed (1 entries ticked by W0-07 to match closed module items).
+Priority queue: 2 open, 210 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
