@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import { computeFileDueBy, mapNoteTypeForUi } from "./domain.js";
+import { mapNoteTypeForUi } from "./domain.js";
 import type { FileRow, NotingRow } from "./schema.js";
 import { getEmployeeDisplayMap, type EmployeeDisplay } from "../../shared/hrms-client.js";
 
@@ -242,14 +242,14 @@ export async function findSimilarOpenFiles(tenantId: string, subject: string, li
   return repo.findSimilarOpenFiles(tenantId, subject, limit);
 }
 
-/** GAP-ESTAB-HANDOVER-03: count files held by a specific officer (non-terminal). */
-export async function countFilesByHolder(tenantId: string, officerId: string): Promise<number> {
+/** GAP-ESTAB-HANDOVER-03: files held by a specific officer: live (non-terminal) and what a handover moves. */
+export async function countFilesByHolder(tenantId: string, officerId: string): Promise<repo.HolderCounts> {
   return repo.countFilesByHolder(tenantId, officerId);
 }
 
-/** GAP-ESTAB-INBOX-01: files held by a specific officer ("My Desk"). */
-export async function listFilesByHolder(tenantId: string, officerId: string, limit = 100, offset = 0): Promise<FileRow[]> {
-  return repo.listFilesByHolder(tenantId, officerId, limit, offset);
+/** GAP-ESTAB-INBOX-01: files held by an officer under any of the ids they are known by ("My Desk"). */
+export async function listFilesByHolder(tenantId: string, holderIds: readonly string[], limit = 100, offset = 0): Promise<FileRow[]> {
+  return repo.listFilesByHolder(tenantId, holderIds, limit, offset);
 }
 
 /**
