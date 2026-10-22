@@ -2004,7 +2004,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (blocked on an owner/backend decision; reason in the W2 note below)
 - **W2 note:** INTERIM, needs owner decision: the deactivate dialog warns with the held-file count and a Handover link; block vs warn vs auto-reassign, listing the files, and a server-side audit are not decided. (#2052)
 - **W0 note:** partly fixed by #1916 — Deactivate confirm warns about held files; no held-file count/block, server audit not visible
 - **First-pass claim:** Deactivate warns that held files "should be handed over first" (OperatorsPanel.tsx:223) but neither checks nor lists the files held; a desk can be deactivated with live files.
@@ -2163,7 +2163,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-DETAIL-02  ·  HIGH  ·  partly  ·  theme PICKER (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (blocked on an owner/backend decision; reason in the W2 note below)
 - **W2 note:** INTERIM, needs owner decision: the confirmation names the employee and the entered designation and pay level (labelled as per service record); locking them to HRMS needs an HRMS endpoint exposing designation and pay level, and the backend ignoring client values. (#2052)
 - **W0 note:** partly fixed by #1916 — EntityPicker replaces UUID input; designation/payLevel still editable, dialog says 'selected employee'
 - **First-pass claim:** Apply for allotment asks the clerk to type an employee UUID (ApplyAllotmentForm.tsx) with designation and pay level typed by hand, so an officer can apply on behalf of anyone with unverified pay level; the confirm dialog then shows only the id prefix.
