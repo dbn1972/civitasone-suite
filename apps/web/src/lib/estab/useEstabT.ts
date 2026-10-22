@@ -12,14 +12,14 @@ type Translate = (key: string, values?: Record<string, string | number>) => stri
  * with no provider (isolated unit tests), it falls back to the English
  * messages instead of throwing, the same pattern DataTable uses.
  */
-export function useEstabT(): Translate {
+export function useEstabT(namespace: string = "estabW2"): Translate {
   try {
-    return useTranslations("estabW2") as unknown as Translate;
+    return useTranslations(namespace as never) as unknown as Translate;
   } catch {
     return createTranslator({
       locale: "en",
       messages: enMessages as unknown as Record<string, never>,
-      namespace: "estabW2" as never,
+      namespace: namespace as never,
     }) as unknown as Translate;
   }
 }

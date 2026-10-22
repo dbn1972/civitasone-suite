@@ -7,8 +7,13 @@ import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 import { nonNegativeRupeesToMinorString } from "@/lib/money";
-import { labelForSourceType, validateBands, parseRoleTokens, type BandInput } from "./bands";
+import {
+  labelForSourceType, labelForRole, validateBands, parseRoleTokens, readApproverCatalogue,
+  rolesOutsideCatalogue, type BandInput,
+} from "./bands";
+import { ApproverChainPicker } from "./ApproverChainPicker";
 import { useEstabT } from "@/lib/estab/useEstabT";
+import { startBoundedPoll } from "@/lib/estab/boundedPoll";
 
 type Step = { role: string; label: string };
 
@@ -25,8 +30,15 @@ type Rule = {
   priority: number;
   active: boolean;
   updatedAt: string;
-  /** Local-only marker for an optimistic "pending" row (GAP-ESTAB-APPROVAL-MATRIX-06). */
+  /** Local-only marker for a row whose write has been accepted but not yet applied (GAP-ESTAB-APPROVAL-MATRIX-06). */
   pending?: boolean;
+};
+
+/** An accepted create the service has not applied yet, shown as a Pending row until the real rule arrives. */
+type PendingCreate = {
+  row: Rule;
+  /** The id the service accepted the command under, which becomes the rule id; null when it was not returned. */
+  matchId: string | null;
 };
 
 const SOURCE_TYPES = [
@@ -55,24 +67,36 @@ const EMPTY_FORM = {
   priority: "100",
 };
 
-const MAX_POLLS = 5;
-const POLL_INTERVAL_MS = 1000;
-
 export function ApprovalMatrixPanel() {
-  const t = useEstabT();
+  const t = useEstabT("estabApprovalMatrix");
+  const tw = useEstabT();
   const [rules, setRules] = useState<Rule[]>([]);
+  const [pendingCreates, setPendingCreates] = useState<PendingCreate[]>([]);
+  /** rule id → the active value an accepted toggle is moving it to (shown as Pending until it lands). */
+  const [pendingToggles, setPendingToggles] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [bandWarning, setBandWarning] = useState("");
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  /** The approver roles the office allows (null = no list configured → format-checked entry). */
+  const [catalogue, setCatalogue] = useState<string[] | null>(null);
+  const [chain, setChain] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const { fromResponse, fromException, clear } = useFormError("approval rule");
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const cancels = useRef<Array<() => void>>([]);
+  const mounted = useRef(true);
 
-  // GAP-ESTAB-APPROVAL-MATRIX-06: clear any pending reload timers on unmount.
-  useEffect(() => () => { timers.current.forEach(clearTimeout); timers.current = []; }, []);
+  // GAP-ESTAB-APPROVAL-MATRIX-06: stop every running poll when the page goes away.
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancels.current.forEach((cancel) => cancel());
+      cancels.current = [];
+    };
+  }, []);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -89,6 +113,7 @@ export function ApprovalMatrixPanel() {
       }
       const body = (await res.json()) as { data?: Rule[] };
       setRules(body.data ?? []);
+      setCatalogue(readApproverCatalogue(body));
       setLoadFailed(false);
       setError("");
     } catch (err) {
@@ -107,42 +132,63 @@ export function ApprovalMatrixPanel() {
     return () => controller.abort();
   }, [load]);
 
+  /**
+   * GAP-ESTAB-APPROVAL-MATRIX-06: re-read the rules WITHOUT the page-level Loading state (the tables
+   * stay on screen) and without turning a hiccup into an error state. Returns the latest rules, or
+   * null when the read failed, so the poll just tries again.
+   */
+  const pollRules = useCallback(async (): Promise<Rule[] | null> => {
+    try {
+      const res = await fetch("/api/proxy/v1/estab/approval-rules");
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: Rule[] };
+      const latest = body.data ?? [];
+      if (mounted.current) setRules(latest);
+      return latest;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /**
+   * After an accepted (202) write, poll a bounded number of times until `isApplied(rules)` holds.
+   * Nothing here runs inside a state updater, so it is not doubled under React StrictMode.
+   */
+  const watchUntilApplied = useCallback(
+    (isApplied: (latest: Rule[]) => boolean, onApplied: () => void, onGiveUp: () => void) => {
+      const cancel = startBoundedPoll<true>({
+        check: async () => {
+          const latest = await pollRules();
+          return latest !== null && isApplied(latest) ? true : null;
+        },
+        onResolved: () => { if (mounted.current) onApplied(); },
+        onExhausted: () => { if (mounted.current) onGiveUp(); },
+      });
+      cancels.current.push(cancel);
+    },
+    [pollRules],
+  );
+
+  // Optimistic creates the service has not applied yet (the real rule replaces them once it appears).
+  const unappliedCreates = useMemo(
+    () => pendingCreates.filter((p) => !rules.some((r) => (p.matchId ? r.id === p.matchId : r.sourceType === p.row.sourceType && r.label === p.row.label))),
+    [pendingCreates, rules],
+  );
+
+  const displayRules = useMemo(
+    () => [...rules.map((r) => (r.id in pendingToggles ? { ...r, pending: true } : r)), ...unappliedCreates.map((p) => p.row)],
+    [rules, pendingToggles, unappliedCreates],
+  );
+
   const grouped = useMemo(() => {
     const map = new Map<string, Rule[]>();
-    for (const r of rules) {
+    for (const r of displayRules) {
       const list = map.get(r.sourceType) ?? [];
       list.push(r);
       map.set(r.sourceType, list);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [rules]);
-
-  /**
-   * GAP-ESTAB-APPROVAL-MATRIX-06: after an async ("queued") write, poll the
-   * list a bounded number of times until `done(rules)` is satisfied, instead
-   * of a single fixed 800ms reload that frequently misses the new state.
-   */
-  const pollUntil = useCallback(
-    (done: (rules: Rule[]) => boolean, attempt = 1) => {
-      const t = setTimeout(() => {
-        void (async () => {
-          await load();
-          setRules((current) => {
-            if (done(current)) {
-              setMessage("");
-            } else if (attempt < MAX_POLLS) {
-              pollUntil(done, attempt + 1);
-            } else {
-              setMessage("Still processing — refresh in a moment to see the change.");
-            }
-            return current;
-          });
-        })();
-      }, POLL_INTERVAL_MS);
-      timers.current.push(t);
-    },
-    [load],
-  );
+  }, [displayRules]);
 
   const submit = useCallback(async () => {
     setSaving(true);
@@ -151,38 +197,43 @@ export function ApprovalMatrixPanel() {
     setBandWarning("");
     clear();
     try {
-      // GAP-ESTAB-APPROVAL-MATRIX-03: roles are validated tokens, not free text.
-      const tokens = parseRoleTokens(form.rolesCsv);
-      if (!tokens) {
-        throw new UserFacingError(
-          "Enter at least one approver role as lowercase codes (letters, digits, underscore), comma-separated.",
-        );
+      // GAP-ESTAB-APPROVAL-MATRIX-03: the chain is either picked from the office's role list
+      // (no free text) or, when no list is configured, parsed as validated role codes.
+      let roleCodes: string[];
+      if (catalogue) {
+        if (chain.length === 0) throw new UserFacingError(t("errRolesRequired"));
+        const unknown = rolesOutsideCatalogue(chain, catalogue);
+        if (unknown.length > 0) throw new UserFacingError(t("errRoleUnknown", { role: labelForRole(unknown[0] ?? "") }));
+        roleCodes = chain;
+      } else {
+        const tokens = parseRoleTokens(form.rolesCsv);
+        if (!tokens) throw new UserFacingError(t("errRolesFormat"));
+        roleCodes = tokens;
       }
-      const steps: Step[] = tokens.map((role) => ({
-        role,
-        label: role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-      }));
+      const steps: Step[] = roleCodes.map((role) => ({ role, label: labelForRole(role) }));
 
-      if (!form.label.trim()) throw new UserFacingError("Enter a rule label.");
+      if (!form.label.trim()) throw new UserFacingError(t("errLabelRequired"));
 
       // GAP-ESTAB-APPROVAL-MATRIX-05: string-based rupee→paise, no float math.
       const minMinorStr = nonNegativeRupeesToMinorString(form.minRupees || "0");
-      if (minMinorStr === null) throw new UserFacingError("Minimum amount must be a number with at most two decimals.");
+      if (minMinorStr === null) throw new UserFacingError(t("errMinAmount"));
       let maxMinorNum: number | null = null;
       if (form.maxRupees.trim() !== "") {
         const maxMinorStr = nonNegativeRupeesToMinorString(form.maxRupees);
-        if (maxMinorStr === null) throw new UserFacingError("Maximum amount must be a number with at most two decimals.");
+        if (maxMinorStr === null) throw new UserFacingError(t("errMaxAmount"));
         maxMinorNum = Number(maxMinorStr);
       }
       const minMinorNum = Number(minMinorStr);
       if (maxMinorNum !== null && maxMinorNum <= minMinorNum) {
-        throw new UserFacingError("Maximum amount must be greater than the minimum amount.");
+        throw new UserFacingError(t("errMaxGtMin"));
       }
 
-      // GAP-ESTAB-APPROVAL-MATRIX-03: overlap is a hard error; gap is a warning.
-      const existing: BandInput[] = rules
-        .filter((r) => r.active && r.sourceType === form.sourceType && !r.pending)
-        .map((r) => ({ minAmountMinor: r.minAmountMinor, maxAmountMinor: r.maxAmountMinor }));
+      // GAP-ESTAB-APPROVAL-MATRIX-03: overlap is a hard error; gap is a warning. Creates the
+      // service has accepted but not applied yet count as bands too.
+      const existing: BandInput[] = [
+        ...rules.filter((r) => r.active && r.sourceType === form.sourceType),
+        ...unappliedCreates.map((p) => p.row).filter((r) => r.sourceType === form.sourceType),
+      ].map((r) => ({ minAmountMinor: r.minAmountMinor, maxAmountMinor: r.maxAmountMinor }));
       const issues = validateBands(existing, { minAmountMinor: minMinorNum, maxAmountMinor: maxMinorNum });
       const overlap = issues.find((i) => i.kind === "overlap");
       if (overlap) throw new UserFacingError(overlap.message);
@@ -209,26 +260,41 @@ export function ApprovalMatrixPanel() {
         return;
       }
 
-      // GAP-ESTAB-APPROVAL-MATRIX-06: show an optimistic Pending row, then poll
-      // until the real rule (same label + sourceType, not pending) appears.
-      const pendingId = `pending-${Date.now()}`;
+      // GAP-ESTAB-APPROVAL-MATRIX-06: the write is accepted, not applied. Show a Pending row that
+      // stays on screen across polls, and replace it when the real rule (the id the service
+      // accepted) appears; give up honestly after the bounded polls.
+      let matchId: string | null = null;
+      try {
+        const accepted = (await res.json()) as { id?: unknown };
+        if (typeof accepted.id === "string") matchId = accepted.id;
+      } catch {
+        /* the body is optional; fall back to matching by label + action */
+      }
       const optimistic: Rule = {
-        id: pendingId, module: payload.module, sourceType: payload.sourceType, label: payload.label,
+        id: `pending-${matchId ?? Date.now()}`, module: payload.module, sourceType: payload.sourceType, label: payload.label,
         minAmountMinor: minMinorNum, maxAmountMinor: maxMinorNum, workflowDefinitionCode: payload.workflowDefinitionCode,
         startNodeKey: "", steps, priority: payload.priority, active: true, updatedAt: new Date().toISOString(), pending: true,
       };
+      const entry: PendingCreate = { row: optimistic, matchId };
       const submittedLabel = payload.label;
-      const submittedSource = payload.sourceType;
-      setRules((cur) => [...cur, optimistic]);
-      setMessage(`Rule "${submittedLabel}" queued.`);
+      setPendingCreates((cur) => [...cur, entry]);
+      setMessage(t("ruleSubmitted", { label: submittedLabel }));
       setForm({ ...EMPTY_FORM });
-      pollUntil((latest) => latest.some((r) => !r.pending && r.sourceType === submittedSource && r.label === submittedLabel));
+      setChain([]);
+      watchUntilApplied(
+        (latest) => latest.some((r) => (matchId ? r.id === matchId : r.sourceType === payload.sourceType && r.label === submittedLabel)),
+        () => {
+          setPendingCreates((cur) => cur.filter((p) => p !== entry));
+          setMessage(t("ruleCreated", { label: submittedLabel }));
+        },
+        () => setMessage(t("stillProcessing")),
+      );
     } catch (err) {
       setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
-  }, [form, rules, fromResponse, fromException, clear, pollUntil]);
+  }, [form, chain, catalogue, rules, unappliedCreates, fromResponse, fromException, clear, watchUntilApplied, t]);
 
   const toggleActive = useCallback(
     async (rule: Rule) => {
@@ -241,10 +307,27 @@ export function ApprovalMatrixPanel() {
         throw UserFacingError.from(await fromResponse(res, "save"));
       }
       const target = !rule.active;
-      setMessage(`Rule "${rule.label}" ${rule.active ? "deactivated" : "activated"}.`);
-      pollUntil((latest) => latest.some((r) => r.id === rule.id && r.active === target));
+      // GAP-ESTAB-APPROVAL-MATRIX-06: until the service applies it the row reads Pending, not the stale flag.
+      setPendingToggles((cur) => ({ ...cur, [rule.id]: target }));
+      setMessage(t("toggleSubmitted", { label: rule.label }));
+      const settle = () => setPendingToggles((cur) => {
+        const rest = { ...cur };
+        delete rest[rule.id];
+        return rest;
+      });
+      watchUntilApplied(
+        (latest) => latest.some((r) => r.id === rule.id && r.active === target),
+        () => {
+          settle();
+          setMessage(t(target ? "ruleActivated" : "ruleDeactivated", { label: rule.label }));
+        },
+        () => {
+          settle();
+          setMessage(t("stillProcessing"));
+        },
+      );
     },
-    [fromResponse, pollUntil],
+    [fromResponse, watchUntilApplied, t],
   );
 
   return (
@@ -252,8 +335,9 @@ export function ApprovalMatrixPanel() {
       <div role="status" aria-live="polite">
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
         {bandWarning ? <p style={{ color: "var(--warn)", fontSize: "0.875rem" }}>{bandWarning}</p> : null}
-        {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
+      {/* A validation or save error is a field-level error: role="alert", outside the polite status region. */}
+      {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>{error}</p> : null}
 
       {/* New rule form */}
       <div className="card">
@@ -281,10 +365,17 @@ export function ApprovalMatrixPanel() {
             <span>Workflow definition code</span>
             <input value={form.workflowDefinitionCode} placeholder="finance.sanction.director_cto" onChange={(e) => setForm((f) => ({ ...f, workflowDefinitionCode: e.target.value }))} />
           </label>
-          <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-            <span>Approver roles (comma-separated)</span>
-            <input value={form.rolesCsv} placeholder="director, cto, ceo" onChange={(e) => setForm((f) => ({ ...f, rolesCsv: e.target.value }))} />
-          </label>
+          {catalogue ? (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <ApproverChainPicker catalogue={catalogue} value={chain} onChange={setChain} />
+            </div>
+          ) : (
+            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+              <span>Approver roles (comma-separated)</span>
+              <input value={form.rolesCsv} placeholder="director, cto, ceo" onChange={(e) => setForm((f) => ({ ...f, rolesCsv: e.target.value }))} />
+              <span className="mut" style={{ fontSize: "0.75rem" }}>{t("rolesFormatHint")}</span>
+            </label>
+          )}
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>Priority (lower wins on tie)</span>
             <input type="number" min={0} value={form.priority} onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value }))} />
@@ -295,14 +386,14 @@ export function ApprovalMatrixPanel() {
               of a matrix that failed to load — the Add control is disabled until
               the current rules are known. */}
           <Button disabled={saving || loadFailed || !form.label || !form.workflowDefinitionCode} onClick={() => void submit()}>
-            {saving ? "Saving…" : "Add rule"}
+            {saving ? tw("saving") : "Add rule"}
           </Button>
         </div>
       </div>
 
       {/* Existing rules grouped by source type */}
       {loading ? (
-        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
+        <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>{tw("loading")}</p>
       ) : loadFailed ? (
         <ErrorState error={toHumanError("load", { area: "approval rules" })} onRetry={() => void load()} />
       ) : grouped.length === 0 ? (
@@ -320,7 +411,7 @@ export function ApprovalMatrixPanel() {
                 { key: "minAmountMinor", label: "From", render: (r) => <span className="mono">{formatMoney(r.minAmountMinor)}</span> },
                 { key: "maxAmountMinor", label: "To", render: (r) => <span className="mono">{r.maxAmountMinor === null ? "∞" : formatMoney(r.maxAmountMinor)}</span> },
                 { key: "steps", label: "Approvers", render: (r) => <>{r.steps.map((s) => s.label).join(" → ")}</> },
-                { key: "workflowDefinitionCode", label: t("matrixWorkflowCode"), render: (r) => <span className="mono">{r.workflowDefinitionCode}</span> },
+                { key: "workflowDefinitionCode", label: tw("matrixWorkflowCode"), render: (r) => <span className="mono">{r.workflowDefinitionCode}</span> },
                 { key: "active", label: "Status", render: (r) => <StatusPill status={r.pending ? "pending" : r.active ? "active" : "inactive"} /> },
                 {
                   key: "id",

@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import { computeFileDueBy, mapNoteTypeForUi } from "./domain.js";
+import { mapNoteTypeForUi } from "./domain.js";
 import type { FileRow, NotingRow } from "./schema.js";
 import { getEmployeeDisplayMap, type EmployeeDisplay } from "../../shared/hrms-client.js";
 
@@ -32,6 +32,8 @@ export type FileDetailDto = {
     noteType: string;
     noteStatus: string;
     eSigned: boolean;
+    /** When the note was e-signed (ISO); null while unsigned (GAP-ESTAB-FILES-DETAIL-05). */
+    signedAt: string | null;
   }>;
   movementHistory: Array<{
     id: string;
@@ -80,6 +82,9 @@ function mapNoting(n: NotingRow, employees: Map<string, EmployeeDisplay>) {
     noteType: n.noteType,
     noteStatus: n.noteStatus,
     eSigned: n.eSigned,
+    // GAP-ESTAB-FILES-DETAIL-05: the legal record shows WHEN a green note was signed. Only the
+    // stored signing time is sent (null while unsigned); no hash is exposed.
+    signedAt: n.signedAt ? iso(n.signedAt) : null,
   };
 }
 
@@ -162,6 +167,26 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
   };
 }
 
+/**
+ * Current register status of a file, read straight from the table (never the read-through
+ * cache: a write guard must not act on a status that a just-processed close/reopen has
+ * already changed). null when the file does not exist in this tenant.
+ */
+export async function getFileStatus(tenantId: string, id: string): Promise<string | null> {
+  const row = await repo.findFileById(id, tenantId);
+  return row?.status ?? null;
+}
+
+/**
+ * The register list is cached per page size under `{service}:{tenant}:file:list:{limit}` (see
+ * listFiles). A consumer that adds a file or changes its status calls this so the next read is
+ * fresh instead of up to 60 s stale. It drops the whole `file:list:` family for the tenant (every
+ * page size) and leaves the per-file detail entries alone.
+ */
+export async function invalidateFileLists(tenantId: string): Promise<void> {
+  await cache.invalidateResource(tenantId, "file:list");
+}
+
 export async function listFiles(tenantId: string, limit: number): Promise<Array<FileRow & { createdByName: string | null }>> {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "file", `list:${limit}`),
@@ -242,14 +267,14 @@ export async function findSimilarOpenFiles(tenantId: string, subject: string, li
   return repo.findSimilarOpenFiles(tenantId, subject, limit);
 }
 
-/** GAP-ESTAB-HANDOVER-03: count files held by a specific officer (non-terminal). */
-export async function countFilesByHolder(tenantId: string, officerId: string): Promise<number> {
+/** GAP-ESTAB-HANDOVER-03: files held by a specific officer: live (non-terminal) and what a handover moves. */
+export async function countFilesByHolder(tenantId: string, officerId: string): Promise<repo.HolderCounts> {
   return repo.countFilesByHolder(tenantId, officerId);
 }
 
-/** GAP-ESTAB-INBOX-01: files held by a specific officer ("My Desk"). */
-export async function listFilesByHolder(tenantId: string, officerId: string, limit = 100, offset = 0): Promise<FileRow[]> {
-  return repo.listFilesByHolder(tenantId, officerId, limit, offset);
+/** GAP-ESTAB-INBOX-01: files held by an officer under any of the ids they are known by ("My Desk"). */
+export async function listFilesByHolder(tenantId: string, holderIds: readonly string[], limit = 100, offset = 0): Promise<FileRow[]> {
+  return repo.listFilesByHolder(tenantId, holderIds, limit, offset);
 }
 
 /**

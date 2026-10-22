@@ -36,8 +36,11 @@ export async function listGuesthouseBookingSummaries(tenantId: string, limit: nu
     bookingNo: row.id.slice(0, 8).toUpperCase(),
     guestName: row.guestName,
     department: row.sponsorDept ?? undefined,
-    checkInDate: new Date(row.checkIn as unknown as string).toISOString().slice(0, 10),
-    checkOutDate: new Date(row.checkOut as unknown as string).toISOString().slice(0, 10),
+    // The full instant, not a date: the booking form collects a time of day (IST) and the register
+    // shows it. Slicing to YYYY-MM-DD dropped the time and, being a UTC date, could name the wrong
+    // calendar day for an early-morning IST booking (GAP-ESTAB-GUESTHOUSE-03).
+    checkInDate: new Date(row.checkIn as unknown as string).toISOString(),
+    checkOutDate: new Date(row.checkOut as unknown as string).toISOString(),
     status: mapBookingStatus(row.status),
   }));
 }

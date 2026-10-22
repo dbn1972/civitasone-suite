@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
+import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
+import { Alert, PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatDays } from "@/lib/formatters";
-import { pendencyDays } from "@/lib/estab/sla";
+import { averagePendencyDays, isClosedStatus } from "@/lib/estab/sla";
+import { MASKED_CLASSIFICATIONS } from "@/lib/estab/classification";
 import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
 
@@ -16,32 +17,52 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
   top_secret: "Top Secret",
 };
 
-// GAP-ESTAB-LIST-01: subjects above 'restricted' are masked for everyone
-// since clearance claims are not available in the web session today.
-// DECISION: mask subject for secret / top_secret; show a generic placeholder.
-// When the backend exposes clearance per-actor (GET /v1/estab/files/classifications),
-// this can be relaxed web-side. For now: safest default is mask.
-const MASKED_CLASSIFICATIONS = new Set(["secret", "top_secret"]);
+// GAP-ESTAB-LIST-01: subjects of secret / top_secret files are masked for everyone (see
+// MASKED_CLASSIFICATIONS in lib/estab/classification.ts, shared with the approvals queue) since
+// clearance claims are not available in the web session today. When the backend exposes clearance
+// per-actor (GET /v1/estab/files/classifications), this can be relaxed web-side.
 
 export default async function EstabFilesListPage() {
   const tFallback = await getTranslations("employeeFallback");
-  const { data: files, source } = await getEstabFiles();
+  const t = await getTranslations("estabW2");
+  // GAP-ESTAB-DASHBOARD-01/02: the office-wide figures (Active Files, Avg Pendency) come from the
+  // same service counts as the dashboard, so a tile with the same name shows the same number. The
+  // register page itself holds only one page of rows, so counting them here would disagree.
+  const [{ data: files, source }, { data: dash, source: dashSource, status: dashStatus }] = await Promise.all([
+    getEstabFiles(),
+    getEstabDashboard(),
+  ]);
   const errored = source === "error";
-  const active = files.filter((f) => f.status === "active").length;
+  const dashErrored = dashSource === "error";
+  // GET /v1/estab/dashboard is gated to estab_officer, estab_admin, section_officer and
+  // super_admin, while the register is also open to the Deputy Secretary and audit_officer, who get
+  // a 403 there. That is an access boundary, not an outage: their tiles say so and count the loaded
+  // rows under a different label, so a figure with the dashboard's name is never a different number.
+  const dashRestricted = dashErrored && dashStatus === 403;
   const pending = files.filter((f) => f.status === "pending").length;
   // GAP-ESTAB-LIST-02: "Closed (MTD)" → "Closed" — we don't have closedAt,
-  // so the count is all-time closed, not month-to-date.
-  const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
+  // so the count is all-time closed, not month-to-date. Closed, archived and disposed are all finished.
+  const closed = files.filter((f) => isClosedStatus(f.status)).length;
+  const loadedActive = files.filter((f) => f.status === "active").length;
+  const loadedPendency = averagePendencyDays(files);
 
-  const pendingFiles = files.filter((f) => f.status === "pending");
-  let avgPendencyDisplay = "—";
-  if (pendingFiles.length > 0) {
-    const totalDays = pendingFiles.reduce((sum, f) => {
-      const d = pendencyDays(f);
-      return d !== null ? sum + d : sum;
-    }, 0);
-    avgPendencyDisplay = `${formatDays(totalDays / pendingFiles.length)} days`;
-  }
+  // Restricted viewers still see figures for the rows they can read, under a label that says so.
+  const countLoaded = dashRestricted && !errored;
+  const noticeKey = dashRestricted ? "listOfficeFiguresRestricted" : "listOfficeFiguresUnavailable";
+  const activeTile = !dashErrored
+    ? { label: "Active Files", value: dash.filesActive.toLocaleString("en-IN"), hint: t("listActiveFilesHint") }
+    : {
+        label: countLoaded ? t("listActiveFilesLoaded") : "Active Files",
+        value: countLoaded ? loadedActive.toLocaleString("en-IN") : "—",
+        hint: t(noticeKey),
+      };
+  const pendencyTile = !dashErrored
+    ? { label: "Avg Pendency", value: `${formatDays(dash.avgPendencyDays)} days`, hint: undefined }
+    : {
+        label: countLoaded ? t("listAvgPendencyLoaded") : "Avg Pendency",
+        value: countLoaded && loadedPendency !== null ? `${formatDays(loadedPendency)} days` : "—",
+        hint: t(noticeKey),
+      };
 
   const rows: FileRow[] = files.map((f) => ({
     id: f.id,
@@ -101,15 +122,20 @@ export default async function EstabFilesListPage() {
       >
         {/* GAP-ESTAB-LIST-03: removed "and SLA on pendency" — dueDate is now
             shown per-file in the table via a Due column with overdue highlight. */}
-        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail — no physical files.
+        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with signed note sheets, full movement trail — no physical files.
       </div>
       <StatGrid>
-        <StatCard icon="📁" tone="good" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
+        <StatCard icon="📁" tone="good" hint={activeTile.hint} label={activeTile.label} value={activeTile.value} />
+        <StatCard icon="⏱" tone="warn" hint={pendencyTile.hint} label={pendencyTile.label} value={pendencyTile.value} />
         <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
         <StatCard icon="✅" tone="info" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
+      {dashErrored && (
+        <Alert variant={dashRestricted ? "info" : "warning"} style={{ marginTop: 12 }}>
+          {t(noticeKey)}
+        </Alert>
+      )}
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (
           <>
