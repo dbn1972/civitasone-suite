@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { resolveEmployeeForActor } from "../modules/employee/actor-link.js";
 import { hrmsEmployees } from "../modules/employee/schema.js";
 import { scopedRead, sqlClient } from "./db.js";
+import { HttpError } from "./context.js";
 
 /** Default HR role set for the helpers below. medical passes its own (it adds finance_officer). */
 export const SELF_SCOPE_HR_ROLES: readonly string[] = ["hr_admin", "hr_officer", "super_admin"];
@@ -62,8 +63,11 @@ export async function resolveOwnEmployeeIdIfNonHr(
  * Read target for the learning "my" endpoints (GAP-LEARNING-MY-LEARNING-01,
  * GAP-LEARNING-HOME-01). Resolves the ONE employee id a read is about:
  *   - bare employee: ALWAYS their own linked record, whatever was requested.
- *   - HR / manager: the `requested` id, or -- when none was requested -- their
- *     own linked record (the normal self-service path).
+ *   - HR: the `requested` id, or -- when none was requested -- their own
+ *     linked record (the normal self-service path).
+ *   - manager: owner decision 2 (2026-10-14) -- direct reports only. A
+ *     `requested` id must be the manager's own record or a direct report's
+ *     (canReadEmployeeRecord), otherwise 403; no `requested` => own record.
  * Returns null when no employee can be resolved (bare employee or privileged
  * caller without a link and without a requested id): callers MUST treat that
  * as "nothing to show" (fail CLOSED), never fall through to a tenant-wide read.
@@ -72,8 +76,15 @@ export async function resolveLearningReadTarget(
   ctx: RequestContext,
   requested: string | undefined,
 ): Promise<string | null> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged && requested) return requested;
+  if (requested) {
+    if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
+    if (ctx.roles.includes("manager")) {
+      if (!(await canReadEmployeeRecord(ctx, requested))) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view learning data of yourself or your direct reports");
+      }
+      return requested;
+    }
+  }
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }

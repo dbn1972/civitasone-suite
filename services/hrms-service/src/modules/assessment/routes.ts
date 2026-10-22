@@ -43,9 +43,13 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ id, status: "active" }) as any;
   });
 
+  // SECURITY: this returns full question rows INCLUDING the `correct` answer
+  // key, so it is restricted to the question-bank author/admin role set (the
+  // same HR_ROLES that may create banks/questions). Learners get the stripped
+  // projection from GET /assessments/:id/questions (toLearnerSafeQuestion).
   app.get("/v1/hrms/assessment/question-banks/:id/questions", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
+    requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     return reply.send(await repo.listQuestions(ctx.tenantId, id));
   });

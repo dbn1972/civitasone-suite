@@ -411,12 +411,18 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     // as the dashboard handler). A non-privileged caller requesting a
     // colleague's enrolment id is 404'd (indistinguishable from not-found, so
     // ids are not enumerable).
-    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
-    if (!isPrivileged) {
+    // Owner decision 2 (2026-10-14): a manager reads only their own or a
+    // direct report's enrolment (403 otherwise, same as PATCH .../progress).
+    if (isHrCtx(ctx)) {
+      await auditEnrolmentsRead(ctx, row.employeeId, "enrollment");
+    } else if (ctx.roles.includes("manager")) {
+      if (!(await canReadEmployeeRecord(ctx, row.employeeId))) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view enrolments of yourself or your direct reports");
+      }
+      await auditEnrolmentsRead(ctx, row.employeeId, "enrollment");
+    } else {
       const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       if (!actorEmp || actorEmp.id !== row.employeeId) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
-    } else {
-      await auditEnrolmentsRead(ctx, row.employeeId, "enrollment");
     }
     return reply.send(row);
   });
