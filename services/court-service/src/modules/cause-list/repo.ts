@@ -1,6 +1,8 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { causeLists, causeListItems } from "./schema.js";
+import { hearings } from "../hearing/schema.js";
+import { pickItemPurpose } from "./domain.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export type CauseListRow        = typeof causeLists.$inferSelect;
@@ -115,4 +117,37 @@ export async function listItems(tenantId: string, causeListId: string): Promise<
   return scopedRead((tx) => tx.select().from(causeListItems)
     .where(and(eq(causeListItems.tenantId, tenantId), eq(causeListItems.causeListId, causeListId)))
     .orderBy(asc(causeListItems.itemNumber)));
+}
+
+export type CauseListItemWithPurpose = CauseListItemRow & { purpose: string | null };
+
+/**
+ * Items of a cause-list, each carrying the `purpose` of the (non-cancelled)
+ * hearing of that case scheduled on the item's list date (IST calendar day), or
+ * null when none exists, it has no purpose, or several different purposes match. Additive over listItems;
+ * tenant-scoped on both reads.
+ */
+export async function listItemsWithPurpose(
+  tenantId: string,
+  causeListId: string,
+): Promise<CauseListItemWithPurpose[]> {
+  return scopedRead(async (tx) => {
+    const items: CauseListItemRow[] = await tx.select().from(causeListItems)
+      .where(and(eq(causeListItems.tenantId, tenantId), eq(causeListItems.causeListId, causeListId)))
+      .orderBy(asc(causeListItems.itemNumber));
+    if (items.length === 0) return [];
+    const caseIds = [...new Set(items.map((i) => i.caseId))];
+    const hs = await tx.select({
+      caseId: hearings.caseId,
+      scheduledDate: hearings.scheduledDate,
+      purpose: hearings.purpose,
+      updatedAt: hearings.updatedAt,
+    }).from(hearings)
+      .where(and(
+        eq(hearings.tenantId, tenantId),
+        inArray(hearings.caseId, caseIds),
+        ne(hearings.status, "cancelled"),
+      ));
+    return items.map((i) => ({ ...i, purpose: pickItemPurpose(i, hs) }));
+  });
 }

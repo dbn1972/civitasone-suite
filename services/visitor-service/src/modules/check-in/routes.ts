@@ -18,7 +18,7 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { verifyPassQr, type PassQrPayload } from "../../shared/qr-crypto.js";
 import { gates, locations } from "../location/schema.js";
@@ -39,13 +39,17 @@ import { getDeviceBoundToGate } from "../device-registry/repo.js";
 import { loadGateSyncSnapshot } from "./gate-sync.js";
 import { getCommandCountForDevice } from "../turnstile-control/repo.js";
 
-// Gate-terminal roles: security personnel operating gates + admin staff.
+// Gate-terminal roles: security personnel operating gates + admin staff. The plain
+// `employee` role is deliberately NOT here (owner decision, HOME-02): gate actions
+// are for dedicated security_admin / gate_terminal operators and tenant admins.
 // The verify endpoint is also accessible by the gate terminal service account
 // (which authenticates as `gate_terminal` role) — Requirement 5.6.
-const GATE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
-const WRITE_ROLES = ["security_admin", "gate_terminal", "employee", "tenant_admin", "super_admin"];
+const GATE_ROLES = ["security_admin", "gate_terminal", "tenant_admin", "super_admin"];
+const WRITE_ROLES = ["security_admin", "gate_terminal", "tenant_admin", "super_admin"];
 // Guard-console live-occupancy roles. NORMAL guard/security roles — deliberately
 // NOT the emergency IP allowlist that fences the break-glass evacuation roster.
+// `employee` stays READ-only here (unchanged by the HOME-02 decision, which covers
+// only the gate write/verify roles); the web guard console list omits it.
 const ACTIVE_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];
 
 export async function checkInRoutes(app: FastifyInstance): Promise<void> {

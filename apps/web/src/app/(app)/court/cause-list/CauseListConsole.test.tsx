@@ -133,6 +133,22 @@ describe("CauseListConsole", () => {
     expect(within(row).getByText("Arguments")).toBeInTheDocument();
   });
 
+  it("CAUSE-LIST-04: Purpose column shows a humanized label, and an em-dash when absent", async () => {
+    fetchCauseListByCourtDateMock.mockResolvedValue({ id: "list-1", courtId: COURT_A, listDate: "2026-02-01" });
+    fetchCauseListItemsMock.mockResolvedValue([
+      { id: "it1", causeListId: "list-1", caseId: CASE_A, itemNumber: 1, slot: "AM-1", courtroom: "A", listDate: "2026-02-01", purpose: "final_hearing", version: 1 },
+      { id: "it2", causeListId: "list-1", caseId: CASE_A, itemNumber: 2, slot: "AM-2", courtroom: "A", listDate: "2026-02-01", purpose: null, version: 1 },
+    ]);
+    renderConsole();
+    fireEvent.change(screen.getByLabelText("Court"), { target: { value: COURT_A } });
+    await waitFor(() => expect(screen.getAllByText("Rao v. State")).toHaveLength(2));
+    expect(screen.getByRole("columnheader", { name: "Purpose" })).toBeInTheDocument();
+    const rows = screen.getAllByText("Rao v. State").map((n) => n.closest("tr") as HTMLElement);
+    expect(within(rows[0]).getByText("Final hearing")).toBeInTheDocument();
+    const purposeCell = rows[1].querySelector('td[data-label="Purpose"]') as HTMLElement;
+    expect(purposeCell.textContent).toBe("—");
+  });
+
   const OTHER = "44444444-4444-4444-8444-444444444444";
   const otherCase: CourtCase = { ...cases[0]!, id: OTHER, title: "Beyond v. Limit", cnrNumber: "RJHC0100000992026" };
   const mkItem = (id: string, caseId: string, n: number) => ({
