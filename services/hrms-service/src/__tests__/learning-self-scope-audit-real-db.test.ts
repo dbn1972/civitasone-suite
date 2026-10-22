@@ -78,8 +78,8 @@ beforeAll(async () => {
   for (const [id, no, name, sub] of [[EMP_A, "SF16-A", "SF16 Emp A", A_SUB], [EMP_B, "SF16-B", "SF16 Emp B", B_SUB], [EMP_M, "SF16-M", "SF16 Manager", M_SUB]] as const) {
     await asTenant((tx) => tx`
       INSERT INTO employee.hrms_employees
-        (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, created_by, updated_by)
-      VALUES (${id}, ${TENANT}, ${no}, ${name}, ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${sub}, ${SEED_ACTOR}, ${SEED_ACTOR})`);
+        (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+      VALUES (${id}, ${TENANT}, ${no}, ${name}, ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${sub}, ${id === EMP_B ? EMP_M : null}, ${SEED_ACTOR}, ${SEED_ACTOR})`);
   }
   for (const [id, code] of [[COURSE_ID, "SF16-1"], [COURSE2_ID, "SF16-2"], [COURSE3_ID, "SF16-3"]] as const) {
     await asTenant((tx) => tx`
@@ -165,7 +165,15 @@ describe("GET /v1/hrms/learning/my-learning — audit on privileged cross-employ
     expect(after[after.length - 1]!.actorId).toBe(HR_SUB);
   });
 
-  it("manager reading B's enrolments is audited too", async () => {
+  // Owner decision 2 (2026-10-14): a manager reads only direct reports. This
+  // test previously had the manager read a NON-report and expect 200; B is now
+  // the manager's direct report (see beforeAll) and a non-report is 403.
+  it("manager reading a non-report's enrolments is refused (403)", async () => {
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/learning/my-learning?employeeId=${EMP_A}`, headers: bearer(["manager"], M_SUB) });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("manager reading a direct report B's enrolments is audited too", async () => {
     const before = (await readsOf(EMP_B, "my-learning")).length;
     const r = await app.inject({ method: "GET", url: `/v1/hrms/learning/my-learning?employeeId=${EMP_B}`, headers: bearer(["manager"], M_SUB) });
     expect(r.statusCode).toBe(200);

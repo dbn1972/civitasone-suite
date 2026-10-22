@@ -5,6 +5,9 @@ import { ZodError, z } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
+import { canReadEmployeeRecord } from "../../shared/self-scope.js";
 import { analyzeGaps, mergeLevel } from "./domain.js";
 import {
   createFrameworkBody, createCompetencyBody, roleRequirementBody, setEmployeeCompetencyBody,
@@ -23,9 +26,8 @@ const idParam = z.object({ id: z.string().uuid() });
  * org-chart/leaderboard endpoints) could pull their competency profile. A
  * bare "employee" caller may only read their OWN resolved employee record
  * (resolveEmployeeForActor -- not ctx.actorId, a different id space); HR
- * and manager roles are unrestricted (no existing "manager scoped to
- * direct reports" precedent in this module -- same judgment call
- * medical/routes.ts's resolveSelfScopedEmployeeId documents). The write
+ * roles are unrestricted (audited); a manager is limited to self + direct
+ * reports, 403 otherwise (owner decision 2, 2026-10-14). The write
  * path (PUT .../employees/:id/competencies) is already correctly
  * HR_ROLES-only and is untouched.
  *
@@ -33,13 +35,42 @@ const idParam = z.object({ id: z.string().uuid() });
  * "exists but isn't yours" from "does not exist" -- matches
  * apar/routes.ts's assertReadable for the same single-record-by-id shape.
  */
-async function assertEmployeeReadable(ctx: RequestContext, req: FastifyRequest, targetEmployeeId: string): Promise<void> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  if (!actorEmp || actorEmp.id !== targetEmployeeId) {
-    throw new HttpError(404, "NOT_FOUND", "employee not found");
+async function assertEmployeeReadable(
+  ctx: RequestContext, req: FastifyRequest, targetEmployeeId: string, view: "profile" | "gap-analysis",
+): Promise<void> {
+  const isHr = HR_ROLES.some((r) => ctx.roles.includes(r));
+  const isManager = ctx.roles.includes("manager");
+  if (!isHr) {
+    // Owner decision 2 (2026-10-14): a manager reads only their own or a
+    // direct report's competency data (403); a bare employee only their own (404).
+    if (isManager) {
+      if (!(await canReadEmployeeRecord(ctx, targetEmployeeId))) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view competency data of yourself or your direct reports");
+      }
+    } else {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      if (!actorEmp || actorEmp.id !== targetEmployeeId) {
+        throw new HttpError(404, "NOT_FOUND", "employee not found");
+      }
+      return;
+    }
   }
+  // DPDP audit-on-read: HR/manager reading ANOTHER employee's record is audited
+  // (own record is not). Published; the audit row is written by the consumer.
+  const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (own?.id === targetEmployeeId) return;
+  await queue.publish(COMMANDS.competencyEmployeeRead, {
+    messageId: randomUUID(),
+    type: COMMANDS.competencyEmployeeRead,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms", action: "read", resourceType: "employee_competency",
+      resourceId: targetEmployeeId, outcome: "success", view,
+    },
+  });
 }
 
 export async function competencyRoutes(app: FastifyInstance): Promise<void> {
@@ -112,7 +143,7 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
-    await assertEmployeeReadable(ctx, req, id);
+    await assertEmployeeReadable(ctx, req, id, "profile");
     return reply.send(await repo.listEmployeeCompetencies(ctx.tenantId, id));
   });
 
@@ -124,7 +155,7 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
       employeeId: z.string().uuid(),
       roleCode:   z.string().min(1).max(64),
     }).parse(req.query);
-    await assertEmployeeReadable(ctx, req, employeeId);
+    await assertEmployeeReadable(ctx, req, employeeId, "gap-analysis");
     const [required, held] = await Promise.all([
       repo.listRoleRequirements(ctx.tenantId, roleCode),
       repo.listEmployeeCompetencies(ctx.tenantId, employeeId),

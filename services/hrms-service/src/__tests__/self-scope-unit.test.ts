@@ -68,11 +68,18 @@ describe("resolveLearningReadTarget", () => {
     expect(await resolveLearningReadTarget(ctxOf("employee"), OTHER)).toBe(ME);
     expect(await resolveLearningReadTarget(ctxOf("employee"), undefined)).toBe(ME);
   });
-  it("HR / manager: requested id, or own id when none requested", async () => {
+  it("HR: requested id, or own id when none requested", async () => {
     expect(await resolveLearningReadTarget(ctxOf("hr_admin"), OTHER)).toBe(OTHER);
-    expect(await resolveLearningReadTarget(ctxOf("manager"), OTHER)).toBe(OTHER);
     expect(await resolveLearningReadTarget(ctxOf("manager"), undefined)).toBe(ME);
     expect(await resolveLearningReadTarget(ctxOf("hr_admin"), undefined)).toBe(ME);
+  });
+  // Owner decision 2 (2026-10-14): previously asserted manager pass-through of ANY id.
+  it("manager: a direct report (or self) passes through; anyone else is 403", async () => {
+    reports.ids = [REPORT];
+    expect(await resolveLearningReadTarget(ctxOf("manager"), REPORT)).toBe(REPORT);
+    expect(await resolveLearningReadTarget(ctxOf("manager"), ME)).toBe(ME);
+    reports.ids = [];
+    await expect(resolveLearningReadTarget(ctxOf("manager"), OTHER)).rejects.toMatchObject({ status: 403 });
   });
   it("fails closed (null) when nothing resolves — never the requested id of a non-privileged caller", async () => {
     linked.emp = undefined;
