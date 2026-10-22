@@ -3374,6 +3374,11 @@ export type ProcurementListQuery = {
   q?: string;
   /** GAP-PROCUREMENT-VENDORS-DETAIL-04: restrict a list to one vendor (server-side). */
   vendorId?: string;
+  /**
+   * GAP-PROCUREMENT-DASHBOARD-02: restrict the indents list to these raw service
+   * statuses (comma-separated, e.g. "draft,pending"), applied before paging.
+   */
+  status?: string;
 };
 
 function buildListPath(base: string, query?: ProcurementListQuery): string {
@@ -3383,6 +3388,7 @@ function buildListPath(base: string, query?: ProcurementListQuery): string {
   if (query.offset != null) params.set("offset", String(query.offset));
   if (query.q?.trim()) params.set("q", query.q.trim());
   if (query.vendorId) params.set("vendorId", query.vendorId);
+  if (query.status) params.set("status", query.status);
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
 }

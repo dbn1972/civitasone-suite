@@ -43,7 +43,7 @@ type RawTask = {
 
 // Set by each test before rendering — read by the mocked useOfflineResource
 // above so `opts.map` (the component's real toTasks) runs against it.
-let rawPayload: RawTask[] = [];
+let rawPayload: RawTask[] | { data: RawTask[]; pagination?: { hasMore?: boolean; total?: number } } = [];
 let mockError: string | null = null;
 
 describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => {
@@ -334,5 +334,136 @@ describe("ProcurementApprovalsPanel — value, requester and amendment link", ()
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     // The bare id is the honest fallback; the amendment is plain text (no parent PO known).
     expect(screen.queryByRole("link", { name: AMD })).not.toBeInTheDocument();
+  });
+});
+
+// ── GAP-PROCUREMENT-APPROVALS-01: server-side filter + paging ───────────────
+describe("ProcurementApprovalsPanel — paging through the workflow queue (GAP-PROCUREMENT-APPROVALS-01)", () => {
+  const other = (n: number): RawTask[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `hr${i}`, instanceId: `ihr${i}`, name: `HR task ${i}`, status: "pending", refType: "leave_app", refId: `leave-${i}`,
+    }));
+  const procurement = (n: number, from = 0): RawTask[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `po${from + i}`, instanceId: `ipo${from + i}`, name: `Approve PO ${from + i}`, status: "pending",
+      roleRef: "procurement_admin", refType: "procurement_po", refId: `po-ref-${from + i}`,
+    }));
+
+  /** Stubs the tasks GET (returns `nextPage`, or a 500 when null) and the ref-summaries POST. */
+  function stubFetch(nextPage: unknown | null) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes("/ref-summaries")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      if (nextPage === null) return new Response(null, { status: 500 });
+      return new Response(JSON.stringify(nextPage), { status: 200 });
+    });
+  }
+
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    mockFetchOrQueue.mockReset();
+    mockRefresh.mockReset();
+    rawPayload = [];
+    mockError = null;
+  });
+
+  it("renders procurement tasks that sit at positions 55-60 of a 60-task page, with no truncation notice", () => {
+    rawPayload = { data: [...other(54), ...procurement(6)], pagination: { hasMore: false, total: 60 } };
+
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+
+    for (let i = 0; i < 6; i += 1) expect(screen.getByText(`Approve PO ${i}`)).toBeInTheDocument();
+    expect(screen.queryByText("HR task 0")).not.toBeInTheDocument();
+    expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
+    expect(screen.queryByText(/more may exist/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("never shows the 'No pending tasks' all-clear when a full page of other tasks is followed by more pages", () => {
+    // The original defect: the first 200 raw tasks hold no procurement task, so the
+    // queue used to read "No pending tasks" while procurement approvals sat on page 2.
+    rawPayload = { data: other(200), pagination: { hasMore: true, total: 260 } };
+
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+
+    expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
+    expect(screen.getByText(/None of the first 200 pending tasks loaded are procurement approvals/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+  });
+
+  it("Load more requests the next page at the right offset and renders the tasks found there", async () => {
+    rawPayload = { data: other(200), pagination: { hasMore: true, total: 206 } };
+    const spy = stubFetch({ data: procurement(6), pagination: { hasMore: false, total: 206 } });
+    try {
+      render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+      expect(await screen.findByText("Approve PO 0")).toBeInTheDocument();
+      expect(screen.getByText("Approve PO 5")).toBeInTheDocument();
+      const taskCalls = spy.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/v1/workflow/tasks"));
+      expect(taskCalls).toHaveLength(1);
+      expect(taskCalls[0]).toContain("offset=200");
+      expect(taskCalls[0]).toContain("status=pending");
+      expect(taskCalls[0]).toContain("refType=procurement_po");
+      // The server says that was the last page: the notice and the button are gone.
+      expect(screen.queryByText(/None of the first/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/more may exist/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("keeps offering Load more while the server reports further pages, counting everything loaded so far", async () => {
+    rawPayload = { data: procurement(200), pagination: { hasMore: true, total: 450 } };
+    const spy = stubFetch({ data: procurement(200, 200), pagination: { hasMore: true, total: 450 } });
+    try {
+      render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+      expect(screen.getByText(/Showing the first 200 pending tasks — more may exist/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+      expect(await screen.findByText(/Showing the first 400 pending tasks — more may exist/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Load more" })).toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("trusts the server's pagination envelope over the page length (a full final page is not 'incomplete')", () => {
+    rawPayload = { data: procurement(200), pagination: { hasMore: false, total: 200 } };
+
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+
+    expect(screen.queryByText(/more may exist/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+  });
+
+  it("reports a failed Load more without dropping the tasks already loaded", async () => {
+    rawPayload = { data: [...other(199), ...procurement(1)], pagination: { hasMore: true, total: 250 } };
+    const spy = stubFetch(null);
+    try {
+      render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+      expect(await screen.findByText(/Couldn’t load more tasks/)).toBeInTheDocument();
+      expect(screen.getByText("Approve PO 0")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Load more" })).toBeEnabled();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("stops offering Load more when a page comes back empty even if the server still says hasMore", async () => {
+    rawPayload = { data: other(200), pagination: { hasMore: true, total: 999 } };
+    const spy = stubFetch({ data: [], pagination: { hasMore: true, total: 999 } });
+    try {
+      render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+
+      expect(await screen.findByText("No pending tasks")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Load more" })).not.toBeInTheDocument();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
