@@ -20,6 +20,11 @@ export interface ProductView {
   activeTo: string | null;
   enabled: boolean;
   version: number;
+  // GAP-CRM-PRODUCTS-01: who last changed the product (identity user uuid) and when. The
+  // columns have existed since 0063_products.sql; the SELECT simply never carried them, so
+  // the catalogue's "Last changed" column was always a dash against the real API.
+  updatedAt: string;
+  updatedBy: string;
 }
 
 const COLS = sql`
@@ -30,8 +35,40 @@ const COLS = sql`
   currency,
   active_from AS "activeFrom",
   active_to AS "activeTo",
-  enabled, version
+  enabled, version,
+  updated_at AS "updatedAt",
+  updated_by AS "updatedBy"
 `;
+
+export interface ProductUsage {
+  /** Distinct quotations that have a line item sourced from this product. */
+  quotations: number;
+  /** Distinct price books that carry a per-product price for it. */
+  priceBooks: number;
+}
+
+/**
+ * GAP-CRM-PRODUCTS-01: how many quotations and price books reference a product, so the admin
+ * sees the blast radius BEFORE retiring it. Both counts are tenant-scoped; null when the
+ * product does not exist in this tenant.
+ */
+export async function usageOf(tenantId: string, id: string): Promise<ProductUsage | null> {
+  return scopedRead(async (tx) => {
+    const exists = await tx.execute(sql`
+      SELECT 1 AS ok FROM crm.products WHERE id = ${id} AND tenant_id = ${tenantId}
+    `) as unknown as Array<{ ok: number }>;
+    if (exists.length === 0) return null;
+    const q = await tx.execute(sql`
+      SELECT count(DISTINCT quotation_id)::int AS n FROM crm.quotation_line_items
+      WHERE tenant_id = ${tenantId} AND product_id = ${id}
+    `) as unknown as Array<{ n: number }>;
+    const b = await tx.execute(sql`
+      SELECT count(DISTINCT price_book_id)::int AS n FROM crm.price_book_items
+      WHERE tenant_id = ${tenantId} AND product_id = ${id}
+    `) as unknown as Array<{ n: number }>;
+    return { quotations: q[0]?.n ?? 0, priceBooks: b[0]?.n ?? 0 };
+  });
+}
 
 export async function findById(tenantId: string, id: string): Promise<ProductView | null> {
   const rows = await scopedRead(async (tx) => tx.execute(sql`

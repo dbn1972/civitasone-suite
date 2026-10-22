@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { EVENTS } from "../../topics.js";
 import {
@@ -67,6 +67,12 @@ const listParams = listQuery.extend({
   category: z.string().max(64).optional(),
   assignedTo: z.string().uuid().optional(),
   search: z.string().max(200).optional(),
+  // GAP-CRM-GRIEVANCES-NEW-01: the create form warns when the contact a clerk is
+  // linking already has an open grievance. `contactId` narrows to that contact and
+  // `open=true` keeps only grievances not yet DISPOSED (the same definition the
+  // /stats openCount uses). Both are additive filters; absent => unchanged list.
+  contactId: z.string().uuid().optional(),
+  open: z.enum(["true"]).optional(),
 });
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -129,6 +135,8 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const priorityF = q.priority   ? sql`AND g.priority  = ${q.priority}`             : sql``;
     const categoryF = q.category   ? sql`AND g.category  = ${q.category}`             : sql``;
     const assignedF = q.assignedTo ? sql`AND g.assigned_to = ${q.assignedTo}::uuid`   : sql``;
+    const contactF  = q.contactId  ? sql`AND g.contact_id  = ${q.contactId}::uuid`    : sql``;
+    const openF     = q.open       ? sql`AND g.status <> 'DISPOSED'`                  : sql``;
     const searchF   = q.search
       ? sql`AND (g.citizen_name ILIKE ${"%" + q.search + "%"}
                  OR g.subject   ILIKE ${"%" + q.search + "%"}
@@ -145,7 +153,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
              g.created_at AS "createdAt", g.updated_at AS "updatedAt", g.version
       FROM crm.grievances g
       WHERE g.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${contactF} ${openF} ${searchF}
       ORDER BY
         CASE g.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
         g.created_at DESC
@@ -155,7 +163,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const [ct] = (await scopedRead((tx) => tx.execute(sql`
       SELECT COUNT(*)::int AS total FROM crm.grievances g
       WHERE g.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${categoryF} ${assignedF} ${contactF} ${openF} ${searchF}
     `))) as unknown as Array<{ total: number }>;
 
     return reply.send(listEnvelope(maskList("grievance", rows, ctx.roles), w, ct?.total ?? 0));
@@ -185,11 +193,17 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GET /v1/crm/grievances/:id — detail (exposes forwarded_to, appeal_reason)
+  // GET /v1/crm/grievances/:id — detail (exposes forwarded_to, appeal_reason, assigned_at)
   app.get("/v1/crm/grievances/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    // GAP-CRM-GRIEVANCES-DETAIL-05: `?pii=masked` -- and, like the service-request and RTI detail reads,
+    // `?maskPii=true` (shared maskPiiQuery; both spellings mean the same) -- asks the detail read to mask
+    // citizen phone/email even for a PII-read role, so a page that offers the audited reveal
+    // (POST /v1/crm/pii/reveal) never receives, nor ships to the browser, the clear value up front.
+    // Absent => unchanged (privileged roles get the clear value).
+    const { maskPii } = maskPiiQuery.parse(req.query ?? {});
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT g.id, g.reference_no AS "referenceNo", g.citizen_name AS "citizenName",
@@ -199,6 +213,7 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
              g.resolution, g.due_at AS "dueAt",
              g.resolved_at AS "resolvedAt", g.closed_at AS "closedAt",
              g.escalated_at AS "escalatedAt",
+             g.assigned_at AS "assignedAt",
              g.forwarded_to AS "forwardedTo", g.forwarded_at AS "forwardedAt",
              g.appeal_reason AS "appealReason",
              g.created_at AS "createdAt", g.updated_at AS "updatedAt",
@@ -208,7 +223,9 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "grievance not found");
-    return reply.send({ data: maskRecord("grievance", rows[0]!, ctx.roles) });
+    // A mask request masks as if the caller held no PII-read role; the clear value is then
+    // only reachable through the audited reveal endpoint.
+    return reply.send({ data: maskRecord("grievance", rows[0]!, rolesForRead(ctx.roles, maskPii)) });
   });
 
   // PATCH /v1/crm/grievances/:id/assign
@@ -224,10 +241,11 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
       const updated = (await tx.execute(sql`
       UPDATE crm.grievances
       SET assigned_to = ${body.assignedTo}::uuid,
+          assigned_at = now(),
           status = CASE WHEN status = 'REGISTERED' THEN 'FORWARDED' ELSE status END,
           updated_by = ${ctx.actorId}, updated_at = now(), version = version + 1
       WHERE id = ${id} AND tenant_id = ${ctx.tenantId} ${versionF}
-      RETURNING id, status, assigned_to AS "assignedTo", version
+      RETURNING id, status, assigned_to AS "assignedTo", assigned_at AS "assignedAt", version
     `)) as unknown as Array<Record<string, unknown>>;
       if (updated.length > 0) {
         await emitWithAudit(tx, ctx, {

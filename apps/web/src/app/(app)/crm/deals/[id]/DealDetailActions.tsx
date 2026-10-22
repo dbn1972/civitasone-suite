@@ -74,7 +74,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
         }),
       });
       if (!res.ok) throw new Error(await errorMessageFromResponse(res));
-      setMessage("Activity logged.");
+      setMessage(t("activityLogged"));
       setShowActivity(false);
       setActivity({ type: "call", subject: "", text: "" });
       router.refresh();
@@ -129,27 +129,27 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={logActivity} noValidate className="pad">
-            <h4 style={{ marginTop: 0 }}>Log activity for {dealName}</h4>
-            <Field label="Type" style={{ marginBottom: 8 }}>
+            <h4 style={{ marginTop: 0 }}>{t("logActivityFor", { name: dealName })}</h4>
+            <Field label={t("fieldType")} style={{ marginBottom: 8 }}>
               <Select value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })}>
-                <option value="call">Call</option>
-                <option value="meeting">Meeting</option>
-                <option value="email">Email</option>
-                <option value="task">Task</option>
-                <option value="note">Note</option>
+                <option value="call">{t("typeCall")}</option>
+                <option value="meeting">{t("typeMeeting")}</option>
+                <option value="email">{t("typeEmail")}</option>
+                <option value="task">{t("typeTask")}</option>
+                <option value="note">{t("typeNote")}</option>
               </Select>
             </Field>
-            <Field label="Subject" error={fieldErrors.subject} style={{ marginBottom: 8 }}>
-              <Input value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" />
+            <Field label={t("fieldSubject")} error={fieldErrors.subject} style={{ marginBottom: 8 }}>
+              <Input value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder={t("subjectPlaceholder")} />
             </Field>
-            <Field label="Notes" required error={fieldErrors.text} style={{ marginBottom: 8 }}>
-              <Textarea value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} />
+            <Field label={t("fieldNotes")} required error={fieldErrors.text} style={{ marginBottom: 8 }}>
+              <Textarea value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder={t("notesPlaceholder")} rows={3} />
             </Field>
             <Button type="submit" disabled={busy} loading={busy}>
-              {busy ? "Saving…" : "Save activity"}
+              {busy ? t("saving") : t("saveActivity")}
             </Button>
             <Button type="button" variant="ghost" style={{ marginLeft: 8 }} onClick={() => setShowActivity(false)}>
-              Cancel
+              {t("cancel")}
             </Button>
           </form>
         </div>

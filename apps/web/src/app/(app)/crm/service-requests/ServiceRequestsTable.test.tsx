@@ -111,6 +111,24 @@ describe("ServiceRequestsTable — GAP-CRM-SERVICE-REQUESTS-03 (owner + overdue)
     expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
   });
 
+  it("shows the owner's NAME when the directory resolved it, and 'Assigned' (never the raw uuid) when it did not", () => {
+    const resolved = "11111111-2222-4333-8444-555566667777";
+    const unresolved = "99999999-2222-4333-8444-555566667777";
+    renderTable({
+      requests: [
+        { ...rows[0], id: "sr-a", assignedTo: resolved },
+        { ...rows[0], id: "sr-b", assignedTo: unresolved },
+        { ...rows[0], id: "sr-c", assignedTo: null },
+      ],
+      assigneeNames: { [resolved]: "Anita Desai" },
+    });
+    expect(screen.getByText("Anita Desai")).toBeInTheDocument();
+    expect(screen.getByText("Assigned")).toBeInTheDocument();
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(screen.queryByText(resolved)).not.toBeInTheDocument();
+    expect(screen.queryByText(unresolved)).not.toBeInTheDocument();
+  });
+
   it("shows ownership status rather than a raw uuid", () => {
     renderTable({
       requests: [

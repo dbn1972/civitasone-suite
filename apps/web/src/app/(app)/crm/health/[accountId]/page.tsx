@@ -87,7 +87,10 @@ export default async function AccountHealthDetailPage({ params, searchParams }: 
         back="/crm/health"
         actions={
           <>
-            <FollowUpModal accountId={breakdown.accountId} accountName={accountName} />
+            {/* GAP-CRM-HEALTH-05: the watchlist row link deep-links with ?followUp=1,
+                so the scored branch must open the prefilled dialog too (it was
+                only honoured when the account had no breakdown). */}
+            <FollowUpModal accountId={breakdown.accountId} accountName={accountName} defaultOpen={openFollowUp} />
             <a className="btn" href={`/crm/accounts/${breakdown.accountId}`}>{t("viewAccount")}</a>
           </>
         }
@@ -145,7 +148,10 @@ export default async function AccountHealthDetailPage({ params, searchParams }: 
               {breakdown.contributingFactors.map((factor) => (
                 <tr key={factor.signal}>
                   <td>{factor.signal in SIGNAL_LABEL ? t(`signal_${factor.signal}`) : signalLabel(factor.signal)}</td>
-                  <td style={{ textAlign: "end" }}>{factor.value}</td>
+                  {/* GAP-CRM-HEALTH-ACCOUNTID-05: signal values are 0-100 (the scoring
+                      domain clamps every signal to that range), so the scale is
+                      stated rather than leaving a bare number. */}
+                  <td style={{ textAlign: "end" }}>{t("valueOutOf", { value: String(factor.value) })}</td>
                   <td style={{ textAlign: "end" }}>{Math.round(factor.weight * 100)}%</td>
                   {/* GAP-CRM-HEALTH-ACCOUNTID-05: contribution is points toward the
                       composite 0-100 score; label the unit so a bare number is not

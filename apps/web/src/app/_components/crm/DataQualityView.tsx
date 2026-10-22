@@ -11,19 +11,32 @@ import { DataSourceBadge } from "../DataSourceBadge";
 import { StatGrid, StatCard, Card, Segmented, Tabs, EmptyState, ProgressBar } from "../ds";
 import {
   getDataQuality,
+  parseDqIssue,
   type DataQualityReport,
   type DqEntity,
   type DqFilter,
   type DqSource,
 } from "@/lib/crm/dataQuality";
 
-const ENTITIES: DqEntity[] = ["contacts", "leads", "accounts"];
+/**
+ * GAP-CRM-DATA-QUALITY-04: a lead is stored as a contact in crm-service and is
+ * scored by the same profile, so a separate "Leads" scope showed the identical
+ * records twice and suggested two datasets. One scope covers both. The API still
+ * accepts `entity=leads` (and DETAIL_BASE keeps it routable) for old callers.
+ */
+const ENTITIES: DqEntity[] = ["contacts", "accounts"];
 const FILTERS: DqFilter[] = ["missing", "invalid", "stale"];
-const ENTITY_LABEL: Record<DqEntity, string> = {
-  contacts: "Contacts",
-  leads: "Leads",
-  accounts: "Accounts",
+const EMPTY_REPORT: DataQualityReport = {
+  distribution: [],
+  counts: { missing: 0, invalid: 0, stale: 0 },
+  records: [],
+  recordsByFilter: { missing: [], invalid: [], stale: [] },
 };
+/** Record fields the report names in an issue; the label comes from messages (fieldLabel.*). */
+const ISSUE_FIELDS = [
+  "name", "email", "phone", "company", "designation", "city", "leadSource",
+  "pincode", "gstin", "pan", "industry", "website",
+] as const;
 const FILTER_LABEL: Record<DqFilter, string> = {
   missing: "Missing data",
   invalid: "Invalid format",
@@ -53,48 +66,52 @@ export function DataQualityView() {
   const [filter, setFilter] = useState<DqFilter>("missing");
   const [report, setReport] = useState<DataQualityReport | null>(null);
   const [source, setSource] = useState<DqSource | "loading">("loading");
-  // GAP-CRM-DATA-QUALITY-03: the counts and completeness distribution are a
-  // per-entity summary and do not change when the filter tab changes (only the
-  // records list does). We cache the per-entity summary and show "records
-  // reloading" ONLY in the records card on a filter switch, so clicking
-  // "Invalid format" never blanks the stat cards or distribution to "…".
-  const summaryEntity = useRef<DqEntity | null>(null);
-  // True only while the records list is reloading for a filter change on an
-  // entity whose summary we already have — keeps stats/distribution mounted.
-  const [recordsReloading, setRecordsReloading] = useState(false);
+  // GAP-CRM-DATA-QUALITY-03: the report is fetched ONCE per entity, with the rows
+  // of every filter in the same response (filter=all), and cached for the life of
+  // the screen. The filter tabs just pick a list client-side, so clicking
+  // "Invalid format" makes no request, never blanks the stat cards or the
+  // distribution, and cannot turn a transient error into a fabricated zero.
+  const cache = useRef(new Map<DqEntity, DataQualityReport>());
 
   useEffect(() => {
     let alive = true;
-    const haveSummary = summaryEntity.current === entity && report !== null;
-    if (haveSummary) {
-      setRecordsReloading(true);
-    } else {
-      setSource("loading");
+    const cached = cache.current.get(entity);
+    if (cached) {
+      setReport(cached);
+      setSource("api");
+      return;
     }
-    void getDataQuality(entity, filter).then(({ data, source: s }) => {
+    setSource("loading");
+    setReport(null);
+    void getDataQuality(entity, "all").then(({ data, source: s }) => {
       if (!alive) return;
-      setReport((prev) =>
-        // On a filter-only reload keep the known-good counts/distribution and
-        // only swap the records, so a transient records error can't wipe stats.
-        haveSummary && prev && s === "api" ? { ...prev, records: data.records } : data,
-      );
-      if (!haveSummary) {
-        setSource(s);
-        if (s === "api") summaryEntity.current = entity;
-      } else if (s === "error") {
-        // keep the cached summary; surface the error only in the records card
-      }
-      setRecordsReloading(false);
+      if (s === "api") cache.current.set(entity, data);
+      setReport(data);
+      setSource(s);
     });
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entity, filter]);
+  }, [entity]);
 
-  const counts = report?.counts ?? { missing: 0, invalid: 0, stale: 0 };
-  const distribution = report?.distribution ?? [];
-  const records = report?.records ?? [];
+  const entityLabel = (e: DqEntity) => t(e === "accounts" ? "entityAccounts" : "entityContacts");
+  const fieldLabel = (field: string) =>
+    (ISSUE_FIELDS as readonly string[]).includes(field) ? t(`fieldLabel.${field}`) : field;
+  const issueText = (raw: string) => {
+    const issue = parseDqIssue(raw);
+    if (issue.kind === "missing") return t("issueMissing", { field: fieldLabel(issue.field) });
+    if (issue.kind === "invalid") return t("issueInvalid", { field: fieldLabel(issue.field) });
+    if (issue.kind === "stale") return t("issueStale");
+    return issue.raw;
+  };
+
+  const shown = report ?? EMPTY_REPORT;
+  const counts = shown.counts;
+  const distribution = shown.distribution;
+  const records = shown.recordsByFilter[filter];
+  // The service caps each list; say so rather than implying the table is complete.
+  const flaggedTotal = counts[filter];
+  const truncated = source === "api" && flaggedTotal > records.length;
   // GAP-CRM-DATA-QUALITY-02: bars are a share of the master (all records), not
   // of the largest bucket, so a dominant bucket no longer flattens the rest to
   // invisibility and each bar reads as a true percentage.
@@ -106,10 +123,10 @@ export function DataQualityView() {
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
         <Segmented
-          options={ENTITIES.map((e) => ENTITY_LABEL[e])}
-          value={ENTITY_LABEL[entity]}
-          onChange={(label) => {
-            const next = ENTITIES.find((e) => ENTITY_LABEL[e] === label);
+          options={ENTITIES.map((e) => ({ value: e, label: entityLabel(e) }))}
+          value={entity}
+          onChange={(value) => {
+            const next = ENTITIES.find((e) => e === value);
             if (next) setEntity(next);
           }}
         />
@@ -124,7 +141,11 @@ export function DataQualityView() {
 
       <Card title="Completeness distribution">
         <div className="pad" style={{ display: "grid", gap: 10 }}>
-          {isError ? (
+          {isLoading ? (
+            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
+              {t("loadingDistribution")}
+            </p>
+          ) : isError ? (
             <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
               — Distribution unavailable. <DataSourceBadge source="error" />
             </p>
@@ -162,7 +183,7 @@ export function DataQualityView() {
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
-        <div className="card-h"><h3>{FILTER_LABEL[filter]} — {ENTITY_LABEL[entity]}</h3></div>
+        <div className="card-h"><h3>{FILTER_LABEL[filter]} — {entityLabel(entity)}</h3></div>
         {/*
           GAP-CRM-DATA-QUALITY-06: the quality score was shown as a bare
           percentage with no explanation of how it is derived or what each
@@ -177,14 +198,14 @@ export function DataQualityView() {
           GSTIN, PAN); <strong>Stale records</strong> = records not updated within the office&apos;s
           freshness window.
         </p>
-        {isLoading || recordsReloading ? (
+        {isLoading ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>Loading records…</p>
         ) : isError ? (
           <p role="alert" style={{ fontSize: 13, color: "var(--muted)", padding: 12 }}>
             — Records unavailable right now. <DataSourceBadge source="error" />
           </p>
         ) : records.length === 0 ? (
-          <EmptyState icon="✅" title="Nothing flagged" message={`No ${ENTITY_LABEL[entity].toLowerCase()} match this data-quality filter.`} />
+          <EmptyState icon="✅" title="Nothing flagged" message={t("nothingFlaggedMessage", { entity: entityLabel(entity).toLowerCase() })} />
         ) : (
           <table className="tbl">
             <thead>
@@ -198,18 +219,24 @@ export function DataQualityView() {
               {records.map((r) => (
                 <tr key={r.id}>
                   <td>
+                    {/* The id is for the hover title only: a steward recognises a record by
+                        name, and a bare UUID in the row is noise (GAP-CRM-DATA-QUALITY-01). */}
                     <a href={`${DETAIL_BASE[entity]}${r.id}`} title={t("openRecord", { kind: t(entity === "accounts" ? "kindAccount" : "kindContact"), id: r.id })}>
                       {r.name ?? t("unnamedRecord")}
                     </a>
-                    <div style={{ fontSize: 11, color: "var(--muted)" }}>{r.id}</div>
                   </td>
                   <td className="num">{Math.round(r.score * 100)}%</td>
-                  <td style={{ fontSize: 13 }}>{r.issues.length > 0 ? r.issues.join(", ") : "—"}</td>
+                  <td style={{ fontSize: 13 }}>{r.issues.length > 0 ? r.issues.map(issueText).join(", ") : "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {truncated && records.length > 0 ? (
+          <p role="note" style={{ fontSize: 12, color: "var(--muted)", padding: "8px 12px", margin: 0 }}>
+            {t("truncatedNote", { shown: records.length.toLocaleString("en-IN"), total: flaggedTotal.toLocaleString("en-IN") })}
+          </p>
+        ) : null}
       </div>
     </>
   );

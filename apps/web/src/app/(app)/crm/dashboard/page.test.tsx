@@ -24,7 +24,9 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     render(await Page());
     expect(screen.getByText("Contacts / Stakeholders")).toBeInTheDocument();
     expect(screen.getByText("Active Engagements")).toBeInTheDocument();
-    expect(screen.getByText("Interactions Today")).toBeInTheDocument();
+    // GAP-CRM-ACTIVITIES-08: the card links to the Activities screen, so it says Activities.
+    expect(screen.getByText("Activities Today")).toBeInTheDocument();
+    expect(screen.queryByText(/Interactions/)).not.toBeInTheDocument();
     expect(screen.getByText("Active Engagement Value")).toBeInTheDocument();
   });
 
@@ -76,7 +78,7 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     expect(screen.queryByText(/सरकारी हितधारक पंजी/)).not.toBeInTheDocument();
   });
 
-  it("GAP-CRM-DASHBOARD-04: stat cards link into their lists, incl. Interactions Today -> activities Today segment", async () => {
+  it("GAP-CRM-DASHBOARD-04: stat cards link into their lists, incl. Activities Today -> activities Today segment", async () => {
     mocked.mockResolvedValue({ data: mockDash, source: "api" });
     const { container } = render(await Page());
     const hrefs = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"));
@@ -91,5 +93,17 @@ describe("CRM Dashboard page (GoI redesign)", () => {
     // the quick-links card uses the same noun as the hub tile
     expect(screen.getAllByText("Engagements").length).toBeGreaterThan(0);
     expect(screen.queryByRole("link", { name: "Deals" })).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-PIPELINE-04 (W2 rescan): the board has ONE name across the CRM hub, this
+  // dashboard and the forecast. The hub tile reads "Engagement Pipeline Board"
+  // (GAP-CRM-HOME-02) and the forecast link reads that same hub key; the dashboard quick link
+  // must too, so it carries exactly that name and never the old hard-coded "Pipeline Board".
+  it("GAP-CRM-PIPELINE-04: the pipeline quick link carries the hub's own name for the board", async () => {
+    mocked.mockResolvedValue({ data: mockDash, source: "api" });
+    render(await Page());
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByRole("link", { name: "Pipeline Board" })).not.toBeInTheDocument();
   });
 });

@@ -2,13 +2,15 @@
 import type { CRMCampaignRoiSummaryRow } from "@civitasone/types";
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoneyIn } from "@/lib/formatters";
 import { formatRoiPercent, roiVerdict, type RoiVerdict } from "./campaigns";
 
 type CampaignRow = {
   campaignId: string;
   name: string;
   verdict: RoiVerdict;
+  /** ISO 4217 code of this campaign's money columns (GAP-CRM-CAMPAIGNS-DETAIL-03). */
+  currency: string;
   costMinor: string;
   revenueMinor: string;
   netMinor: string;
@@ -31,6 +33,7 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
     campaignId: row.campaignId,
     name: row.name ?? t("unnamedCampaign"),
     verdict: roiVerdict(row),
+    currency: row.currency,
     costMinor: row.costMinor,
     revenueMinor: row.revenueMinor,
     netMinor: row.netMinor,
@@ -58,16 +61,16 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
           label: "Outcome",
           render: (row) => <StatusPill status={VERDICT_LABEL[row.verdict]} />,
         },
-        { key: "costMinor", label: "Spend", align: "right", render: (row) => formatMoney(row.costMinor) },
-        { key: "revenueMinor", label: "Revenue", align: "right", render: (row) => formatMoney(row.revenueMinor) },
-        { key: "netMinor", label: "Net", align: "right", render: (row) => formatMoney(row.netMinor) },
+        { key: "costMinor", label: "Spend", align: "right", render: (row) => formatMoneyIn(row.costMinor, row.currency) },
+        { key: "revenueMinor", label: "Revenue", align: "right", render: (row) => formatMoneyIn(row.revenueMinor, row.currency) },
+        { key: "netMinor", label: "Net", align: "right", render: (row) => formatMoneyIn(row.netMinor, row.currency) },
         { key: "roiPercent", label: "ROI", align: "right", render: (row) => formatRoiPercent(row.roiPercent) },
         { key: "responses", label: "Responses", align: "right", render: (row) => row.responses.toLocaleString("en-IN") },
         {
           key: "costPerResponseMinor",
           label: "Cost / Response",
           align: "right",
-          render: (row) => (row.costPerResponseMinor ? formatMoney(row.costPerResponseMinor) : "—"),
+          render: (row) => (row.costPerResponseMinor ? formatMoneyIn(row.costPerResponseMinor, row.currency) : "—"),
         },
         { key: "periods", label: "Periods", align: "right" },
       ]}

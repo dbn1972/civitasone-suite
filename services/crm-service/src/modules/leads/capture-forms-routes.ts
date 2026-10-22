@@ -4,6 +4,7 @@
  * GET    /v1/crm/lead-capture-forms       — the tenant's forms (includes the form key)
  * POST   /v1/crm/lead-capture-forms       — register a form; the KEY is minted here
  * PATCH  /v1/crm/lead-capture-forms/:id   — amend policy (enabled, consent, origins, …)
+ * POST   /v1/crm/lead-capture-forms/:id/rotate-key — mint a new key in place; the OLD key stops working
  * DELETE /v1/crm/lead-capture-forms/:id   — remove the form so its public URL 404s
  *
  * Mutations are CQRS: validate → publish → 202. The writes live in
@@ -76,6 +77,24 @@ export async function leadCaptureFormRoutes(app: FastifyInstance): Promise<void>
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateCaptureForm(ctx, id, body));
   });
+
+  // GAP-CRM-LEAD-FORMS-01: rotate the public key. Authorised (admin) and low-frequency
+  // by nature, so it carries an explicit tight rate limit. The new key is returned
+  // once, like create; it is on the command only, never on an emitted event.
+  app.post(
+    "/v1/crm/lead-capture-forms/:id/rotate-key",
+    { config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, ADMIN_ROLES);
+      const { id } = captureFormIdParam.parse(req.params);
+
+      const existing = await repo.findById(ctx.tenantId, id);
+      if (!existing) throw new HttpError(404, "NOT_FOUND", "lead capture form not found");
+
+      return sendAccepted(reply, acceptedResponseSchema.passthrough(), await commands.rotateCaptureFormKey(ctx, id));
+    },
+  );
 
   app.delete("/v1/crm/lead-capture-forms/:id", async (req, reply) => {
     const ctx = resolveContext(req);

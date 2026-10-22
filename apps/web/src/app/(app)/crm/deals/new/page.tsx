@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { z } from "zod";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button, PageHeader, EntityPicker, type EntityOption } from "@/app/_components/ds";
+import { Alert, Button, PageHeader, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { UserFacingError } from "@/lib/userFacingError";
@@ -159,15 +159,17 @@ export default function NewDealPage() {
   return (
     <>
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/crm/deals" backLabel={t("backLabel")} />
+      {/* GAP-CRM-DEALS-NEW-07: the shared Alert (theme tokens redefined under
+          .dark) replaces the two hand-styled banners. */}
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <Alert variant="success" role="status" aria-live="polite">
           {message}
-        </div>
+        </Alert>
       ) : null}
       {error ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <Alert variant="danger" role="alert" aria-live="assertive">
           {error}
-        </div>
+        </Alert>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad" style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 560 }} noValidate>
@@ -229,6 +231,8 @@ export default function NewDealPage() {
               search={searchContacts}
               initialOptions={form.contactId && contactLabel ? [{ id: form.contactId, label: contactLabel }] : undefined}
               placeholder={t("contactPlaceholder")}
+              searchErrorText={t("contactSearchError")}
+              retryText={t("contactRetry")}
             />
             <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
               {t("contactHint")}

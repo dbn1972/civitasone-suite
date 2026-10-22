@@ -9,13 +9,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { ServerExportButton } from "../../../_components/crm/ServerExportButton";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmGrievanceRow } from "../../../_data/loaders";
-
-const PRIORITY_PILL: Record<string, string> = {
-  urgent: "bad",
-  high: "warn",
-  normal: "mut",
-  low: "mut",
-};
+import { grievancePriorityPillClass, grievanceStatusLabel } from "./grievanceDisplay";
 
 const PRIORITY_KEYS = new Set(["urgent", "high", "normal", "low"]);
 
@@ -144,12 +138,17 @@ export function GrievancesTable({
               // classes (foreground/background token pairs that meet WCAG AA in
               // both themes) instead of the previous var(--bg)-on-var(--ink2)
               // inline span, whose contrast was unverified in dark mode.
-              <span className={`pill ${PRIORITY_PILL[r.priority] ?? "mut"}`}>
+              <span className={grievancePriorityPillClass(r.priority)}>
                 {PRIORITY_KEYS.has(r.priority) ? t(`priority.${r.priority}`) : titleCase(r.priority)}
               </span>
             ),
           },
-          { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} /> },
+          {
+            key: "status",
+            label: t("colStatus"),
+            // GAP-CRM-GRIEVANCES-06: APPEAL reads "First appeal", as on the tile, the action and the detail page.
+            render: (r) => <StatusPill status={r.status} label={grievanceStatusLabel(r.status, t("statusFirstAppeal"))} />,
+          },
           {
             key: "createdAt",
             label: t("colLogged"),

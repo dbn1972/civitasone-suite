@@ -103,6 +103,23 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.getByText("proposal")).toBeInTheDocument();
   });
 
+  // GAP-CRM-OPPORTUNITIES-NEW-06: a deal the service sent no probability for shows a dash, not a
+  // fabricated 0%; a real 0 is still shown as 0%.
+  it("shows a dash for a missing probability and 0% for a real zero", async () => {
+    const { probability: _omit, ...withoutProbability } = RAW_DEAL;
+    void _omit;
+    rawPayload.mockReturnValue(withoutProbability);
+    const first = render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    const probabilityField = () => screen.getByText("Probability").parentElement as HTMLElement;
+    expect(probabilityField()).toHaveTextContent("—");
+    expect(probabilityField()).not.toHaveTextContent("0%");
+    first.unmount();
+
+    rawPayload.mockReturnValue({ ...RAW_DEAL, probability: 0 });
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    expect(probabilityField()).toHaveTextContent("0%");
+  });
+
   // The server close endpoint is admin-only; the UI must not offer Won/Lost to crm_user.
   it("offers Mark Won / Mark Lost to CRM admins", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);
@@ -156,6 +173,35 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.queryByText("This engagement does not exist or has been removed.")).not.toBeInTheDocument();
     // RefreshErrorState offers a "Try again" retry affordance.
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-06: the outage state titles the page with the canonical
+  // noun ("Engagement Detail", from the catalogue) - not the old "Deal Detail".
+  it("titles the outage state 'Engagement Detail', never 'Deal Detail'", async () => {
+    rawPayload.mockReturnValue(undefined);
+    nextStatus = 500;
+
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+
+    expect(screen.getByRole("heading", { name: "Engagement Detail" })).toBeInTheDocument();
+    expect(screen.queryByText(/Deal Detail/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-DEALS-DETAIL-06: field labels, section headings and the subtitle all
+  // come from crmDealDetail (next-intl) and use the one noun.
+  it("renders the labels, headings and subtitle from the catalogue with no 'deal' wording", async () => {
+    rawPayload.mockReturnValue(RAW_DEAL);
+
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+
+    const ns = enMessages.crmDealDetail;
+    expect(screen.getByRole("heading", { name: ns.detailsHeading })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ns.workflowHeading })).toBeInTheDocument();
+    for (const label of [ns.contactOrganisation, ns.labelValue, ns.labelStage, ns.labelStatus, ns.labelOwner, ns.labelCloseDate, ns.labelProbability]) {
+      expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByText(ns.pageSubtitle)).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/\bdeals?\b/i);
   });
 
   // A thrown network failure (no status at all) is likewise an outage, not a

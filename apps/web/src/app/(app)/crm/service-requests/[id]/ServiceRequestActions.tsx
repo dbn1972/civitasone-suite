@@ -1,9 +1,12 @@
 "use client";
 
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ActionButton } from "../../../../_components/ds";
+import { ActionButton, Button, Modal } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { getEscalationUsers, type EscalationUser } from "@/lib/crm/activityAccount";
+import { DirectoryUserSelect } from "../../../../_components/crm/DirectoryUserSelect";
 
 /**
  * Plain-language failure message for a failed service-request status
@@ -35,13 +38,24 @@ export function ServiceRequestActions({
   id,
   status,
   version,
+  assignedTo = null,
+  assignedToName = null,
+  canAssign = false,
 }: {
   id: string;
   status: string;
   version?: number;
+  /** GAP-CRM-SERVICE-REQUESTS-DETAIL-05: the current owner, so Assign can offer "Reassign". */
+  assignedTo?: string | null;
+  assignedToName?: string | null;
+  /** Whether the viewer may assign (managers only; the server enforces the same rule). */
+  canAssign?: boolean;
 }) {
   const t = useTranslations("crmServiceRequestActions");
   const router = useRouter();
+  // GAP-CRM-SERVICE-REQUESTS-DETAIL-04: what the server said happens to the citizen notice
+  // after a resolve/close, so the officer never assumes a citizen was told.
+  const [notice, setNotice] = useState<string | undefined>(undefined);
 
   // GAP-CRM-SERVICE-REQUESTS-DETAIL-05: "cancelled" is a terminal state, so a
   // Cancel action belongs with the other transitions. closed + cancelled are
@@ -82,19 +96,44 @@ export function ServiceRequestActions({
       }
       throw new Error(serviceRequestActionError());
     }
+    // Resolve / close queue a notice to the citizen. The response says whether one is on its
+    // way or there is no phone/email to send to; the delivery RESULT shows later on the page.
+    setNotice(undefined);
+    if (next === "resolved" || next === "closed") {
+      const payload = await res
+        .clone()
+        .json()
+        .then((b: { data?: { notification?: { state?: string; channel?: string | null } } }) => b?.data?.notification)
+        .catch(() => undefined);
+      if (payload?.state === "no_contact") setNotice(t("noticeNoContact"));
+      else if (payload?.state === "queued") {
+        setNotice(payload.channel === "sms" || payload.channel === "email" ? t("noticeQueued", { channel: t(`channel_${payload.channel}`) }) : t("noticeQueuedNoChannel"));
+      }
+    }
     router.refresh();
   }
 
+  const noticeEl = notice ? (
+    <p role="status" aria-live="polite" style={{ margin: 0, fontSize: 13, color: "var(--ink2)", maxWidth: 420 }}>{notice}</p>
+  ) : null;
+
   if (terminal) {
     return (
-      <span style={{ fontSize: 13, color: "var(--ink2)" }}>
-        {t("terminalNote", { status: t(status === "closed" ? "statusClosed" : "statusCancelled") })}
-      </span>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+        <span style={{ fontSize: 13, color: "var(--ink2)" }}>
+          {t("terminalNote", { status: t(status === "closed" ? "statusClosed" : "statusCancelled") })}
+        </span>
+        {noticeEl}
+      </div>
     );
   }
 
   return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {canAssign ? (
+        <AssignOfficer id={id} version={version} assignedTo={assignedTo} assignedToName={assignedToName} />
+      ) : null}
       {status === "open" && (
         <ActionButton
           label={t("startWork")}
@@ -158,5 +197,140 @@ export function ServiceRequestActions({
         onConfirm={(reason) => setStatus("cancelled", reason)}
       />
     </div>
+    {noticeEl}
+    </div>
+  );
+}
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-DETAIL-05: assign or reassign the officer responsible for a request.
+ * Offered to managers only. The picker lists the tenant's staff by NAME (crm-service's directory)
+ * and sends the chosen id with the `version` the page read, so a stale assignment is rejected
+ * (409) rather than silently overwriting someone else's. The server re-checks the role, that the
+ * officer is an active user of this tenant, and audits the change.
+ */
+function AssignOfficer({
+  id,
+  version,
+  assignedTo,
+  assignedToName,
+}: {
+  id: string;
+  version?: number;
+  assignedTo: string | null;
+  assignedToName: string | null;
+}) {
+  const t = useTranslations("crmServiceRequestActions");
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [users, setUsers] = useState<EscalationUser[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  // True = the loaded list is not the whole directory (large tenant): the picker then offers a name search.
+  const [usersTruncated, setUsersTruncated] = useState(false);
+  const officerFieldId = useId();
+  const [choice, setChoice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+
+  async function openDialog() {
+    setError(undefined);
+    setChoice("");
+    setOpen(true);
+    if (users === null) {
+      const res = await getEscalationUsers();
+      setUsers(res.data);
+      setUsersTruncated(res.truncated === true);
+      setLoadFailed(res.source === "error");
+    }
+  }
+
+  async function submit() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const res = await fetch(`/api/proxy/v1/crm/service-requests/${id}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignedTo: choice, ...(typeof version === "number" ? { version } : {}) }),
+      });
+      if (res.ok) {
+        setOpen(false);
+        router.refresh();
+        return;
+      }
+      const code = await res
+        .clone()
+        .json()
+        .then((b: { error?: { code?: string }; code?: string }) => b?.error?.code ?? b?.code)
+        .catch(() => undefined);
+      if (res.status === 409 && code === "VERSION_CONFLICT") {
+        router.refresh();
+        setError(t("conflict"));
+      } else if (res.status === 422 && code === "INVALID_ASSIGNEE") {
+        setError(t("assignInvalid"));
+      } else if (res.status === 503) {
+        setError(t("assignUnavailable"));
+      } else {
+        setError(serviceRequestActionError());
+      }
+    } catch {
+      setError(serviceRequestActionError());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const choices = (users ?? []).filter((u) => u.id !== assignedTo);
+
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => void openDialog()}>
+        {assignedTo ? t("reassign") : t("assign")}
+      </button>
+      <Modal
+        open={open}
+        onClose={() => { if (!busy) setOpen(false); }}
+        closeOnOverlayClick={!busy}
+        size="sm"
+        title={assignedTo ? t("reassignTitle") : t("assignTitle")}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "4px 0" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
+            {assignedTo
+              ? t("reassignDescription", { name: assignedToName ?? t("currentOfficerUnavailable") })
+              : t("assignDescription")}
+          </p>
+          {users === null ? (
+            <p role="status" aria-live="polite" style={{ margin: 0, fontSize: 13 }}>{t("assignLoading")}</p>
+          ) : loadFailed ? (
+            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{t("assignDirectoryUnavailable")}</p>
+          ) : choices.length === 0 ? (
+            <p role="status" style={{ margin: 0, fontSize: 13 }}>{t("assignNoOfficers")}</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+              <label htmlFor={officerFieldId}>{t("assignOfficer")}</label>
+              {/* A truncated directory adds a server-side name search, so nobody is unreachable. */}
+              <DirectoryUserSelect
+                id={officerFieldId}
+                value={choice}
+                onChange={setChoice}
+                users={users ?? []}
+                truncated={usersTruncated}
+                excludeId={assignedTo}
+                leading={<option value="">{t("assignSelect")}</option>}
+                style={{ padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)" }}
+              />
+            </div>
+          )}
+          {error ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{error}</p> : null}
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={busy}>{t("assignCancel")}</Button>
+            <Button type="button" onClick={() => void submit()} disabled={!choice || busy} loading={busy}>
+              {busy ? t("assigning") : assignedTo ? t("reassign") : t("assign")}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   );
 }

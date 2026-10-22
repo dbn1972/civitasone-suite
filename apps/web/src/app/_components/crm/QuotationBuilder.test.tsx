@@ -282,4 +282,53 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     await waitFor(() => expect(screen.getByText("₹999.99")).toBeInTheDocument());
     expect(screen.queryByText("₹354.00")).not.toBeInTheDocument();
   });
+  // GAP-CRM-OPPORTUNITY-AGEING-04 (W2 rescan): a failed version-history load used to claim that
+  // saved data was being shown although nothing is cached. It is one honest message with a
+  // Retry that re-fetches by quote ref.
+  it("version history: a failed load is one message with a working Retry, never 'saved information'", async () => {
+    const v1: qp.Quotation = { ...quote, id: "q1", quoteRef: "QTN/2026/V", version: 1, status: "draft" };
+    vi.mocked(qp.getQuotations).mockResolvedValue({ data: [v1], source: "api" });
+    vi.mocked(qp.getQuotationVersions)
+      .mockResolvedValueOnce({ data: [], source: "error" })
+      .mockResolvedValue({
+        data: [{ id: "q1", version: 1, status: "draft", totalMinor: "35400", createdAt: "2026-03-01T10:00:00.000Z" }],
+        source: "api",
+      });
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/^standard$/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^open$/i }));
+    expect(await screen.findByText(/version history couldn.t be loaded/i)).toBeInTheDocument();
+    expect(screen.queryByText(/saved information/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+    await waitFor(() => expect(qp.getQuotationVersions).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(qp.getQuotationVersions).mock.calls[1][0]).toBe("QTN/2026/V");
+    await waitFor(() => expect(screen.queryByText(/version history couldn.t be loaded/i)).not.toBeInTheDocument());
+    const section = screen.getByRole("heading", { name: /version history/i }).parentElement!;
+    await waitFor(() => expect(section).toHaveTextContent("v1"));
+    expect(section).toHaveTextContent("₹354.00");
+  });
+
+  // GAP-CRM-QUOTATIONS-05: a lower typed price is no longer invisible -- each line shows the
+  // catalogue list price and the discount against it, and the quote shows the overall discount.
+  it("shows list price vs entered price and the discount banner when a line is priced below list", async () => {
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    fireEvent.change(screen.getByLabelText(/product for line 1/i), { target: { value: "pr1" } });
+    // Seeded at list: the list price is shown, but no discount wording and no banner.
+    expect(await screen.findByText(/list price ₹100\.00/i)).toBeInTheDocument();
+    expect(screen.queryByText(/below list/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/below the catalogue list price overall/i)).not.toBeInTheDocument();
+
+    // Typing a lower price (60.00 on a 100.00 list = 40% below) surfaces both.
+    fireEvent.change(screen.getByLabelText(/unit price for line 1/i), { target: { value: "60" } });
+    expect(await screen.findByText(/40% below list/i)).toBeInTheDocument();
+    expect(screen.getByText(/priced 40% below the catalogue list price overall/i)).toBeInTheDocument();
+
+    // A price above list is a premium, not a discount.
+    fireEvent.change(screen.getByLabelText(/unit price for line 1/i), { target: { value: "120" } });
+    await waitFor(() => expect(screen.queryByText(/below list/i)).not.toBeInTheDocument());
+    expect(screen.queryByText(/below the catalogue list price overall/i)).not.toBeInTheDocument();
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -49,6 +49,29 @@ describe("CampaignRoiTable naming (GAP-CRM-CAMPAIGNS-01)", () => {
   });
 });
 
+describe("CampaignRoiTable filter by name (GAP-CRM-CAMPAIGNS-01)", () => {
+  const rows = [
+    row({ campaignId: "11111111-1111-1111-1111-111111111111", name: "Diwali Outreach" }),
+    row({ campaignId: "22222222-2222-2222-2222-222222222222", name: "Monsoon Awareness" }),
+  ];
+
+  it("keeps only the rows whose campaign name matches the filter text", () => {
+    render(<CampaignRoiTable rows={rows} />);
+    fireEvent.change(screen.getByPlaceholderText("Filter by campaign name"), { target: { value: "monsoon" } });
+    expect(screen.getByText("Monsoon Awareness")).toBeInTheDocument();
+    expect(screen.queryByText("Diwali Outreach")).not.toBeInTheDocument();
+  });
+
+  it("shows both campaigns again when the filter is cleared", () => {
+    render(<CampaignRoiTable rows={rows} />);
+    const box = screen.getByPlaceholderText("Filter by campaign name");
+    fireEvent.change(box, { target: { value: "monsoon" } });
+    fireEvent.change(box, { target: { value: "" } });
+    expect(screen.getByText("Diwali Outreach")).toBeInTheDocument();
+    expect(screen.getByText("Monsoon Awareness")).toBeInTheDocument();
+  });
+});
+
 describe("CampaignRoiTable export notice (GAP-CRM-CAMPAIGNS-05)", () => {
   it("shows a policy notice next to the CSV export button", () => {
     render(<CampaignRoiTable rows={[row({ name: "Diwali Outreach" })]} />);
@@ -56,5 +79,28 @@ describe("CampaignRoiTable export notice (GAP-CRM-CAMPAIGNS-05)", () => {
     expect(
       screen.getByText(/Exports leave the system; handle spend and revenue figures per policy\./),
     ).toBeInTheDocument();
+  });
+});
+
+describe("CampaignRoiTable per-row currency (GAP-CRM-CAMPAIGNS-DETAIL-03)", () => {
+  it("formats a USD row in dollars with no rupee symbol, and an INR row in rupees", () => {
+    const { container } = render(
+      <CampaignRoiTable
+        rows={[
+          row({ campaignId: "usd-1", name: "Global Webinar", currency: "USD", costMinor: "12345", revenueMinor: "50000", netMinor: "37655", costPerResponseMinor: "1234" }),
+          row({ campaignId: "inr-1", name: "Diwali Outreach", currency: "INR", costMinor: "100000", revenueMinor: "250000", netMinor: "150000" }),
+        ]}
+      />,
+    );
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    const usdRow = rows.find((r) => r.textContent?.includes("Global Webinar"));
+    const inrRow = rows.find((r) => r.textContent?.includes("Diwali Outreach"));
+    expect(usdRow).toBeTruthy();
+    expect(inrRow).toBeTruthy();
+    expect(usdRow!.textContent).toContain("$123.45");
+    expect(usdRow!.textContent).toContain("$376.55");
+    expect(usdRow!.textContent).toContain("$12.34");
+    expect(usdRow!.textContent).not.toContain("₹");
+    expect(inrRow!.textContent).toContain("₹");
   });
 });

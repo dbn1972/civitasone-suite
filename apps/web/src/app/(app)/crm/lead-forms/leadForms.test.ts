@@ -90,7 +90,7 @@ describe("HEALTH_LABEL", () => {
   it("maps the health enum to human labels and never exposes 'unlawful'", () => {
     expect(HEALTH_LABEL.live).toBe("Live");
     expect(HEALTH_LABEL.paused).toBe("Paused");
-    expect(HEALTH_LABEL.unlawful).toBe("Consent not required");
+    expect(HEALTH_LABEL.unlawful).toBe("Consent gap");
     expect(Object.values(HEALTH_LABEL)).not.toContain("unlawful");
   });
 

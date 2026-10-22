@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
   listContactsQuery, createAccountBody, updateAccountBody, idParam, contactsListSchema, accountsListSchema,
+  listAccountsQuery, accountDetailResponseSchema,
   classificationBody,
   internalBulkImportBody,
   deleteContactBody,
@@ -210,12 +211,35 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    const q = listContactsQuery.parse(req.query);
+    const q = listAccountsQuery.parse(req.query);
     // GAP-CRM-ACCOUNTS-02: return the tenant-wide active-account total alongside
     // the (capped) page so the UI can show "N of M" and flag partial stats.
-    const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset);
+    // GAP-CRM-ACCOUNTS-DETAIL-01: `search` / `excludeSubtreeOf` narrow server-side
+    // (the total then counts the matching set). W2 crm cluster 07: `ids` looks up
+    // specific accounts in one request (the total is then the number of matches).
+    const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset, {
+      ...(q.search ? { search: q.search } : {}),
+      ...(q.excludeSubtreeOf ? { excludeSubtreeOf: q.excludeSubtreeOf } : {}),
+      ...(q.ids !== undefined ? { ids: q.ids } : {}),
+    });
     sendValidated(reply, accountsListSchema, { data, meta: { total } });
   });
+
+  // GAP-CRM-ACCOUNTS-DETAIL-01: resolve ONE account by id (tenant-scoped, active only)
+  // so the detail page never depends on the capped list. 404 for an unknown id, an
+  // id in another tenant, or an account that was merged away / deactivated.
+  app.get(
+    "/v1/crm/accounts/:id",
+    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, CRM_ROLES);
+      const { id } = idParam.parse(req.params);
+      const account = await queries.getAccount(ctx.tenantId, id);
+      if (!account) throw new HttpError(404, "NOT_FOUND", "account not found");
+      sendValidated(reply, accountDetailResponseSchema, { data: account });
+    },
+  );
 
   app.post("/v1/crm/accounts", async (req, reply) => {
     const ctx = resolveContext(req);

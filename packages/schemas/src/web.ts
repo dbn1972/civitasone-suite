@@ -234,6 +234,12 @@ export const crmAccountApiSchema = z.object({
   lastContactAt: z.string().nullable().optional(),
 });
 
+// GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts/:id -- the list row plus the number
+// of active sub-accounts below the account (drives the "moves N sub-accounts" confirm).
+export const crmAccountDetailApiSchema = crmAccountApiSchema.extend({
+  descendantCount: z.number().int().nonnegative().optional(),
+});
+
 export const crmAccountHierarchyNodeSchema = z.object({
   id: z.string().uuid(),
   name: z.string(),
@@ -587,6 +593,7 @@ export const crmAccountsListSchema = z.object({
   // show "Showing N of M". Optional for backward compatibility.
   meta: z.object({ total: z.number().int().nonnegative() }).optional(),
 });
+export const crmAccountDetailSchema = z.object({ data: crmAccountDetailApiSchema });
 export const crmAccountHierarchyListSchema = z.object({ data: z.array(crmAccountHierarchyNodeSchema) });
 export const crmDealsListSchema = paginatedSchema(crmDealApiSchema);
 export const crmActivitiesListSchema = paginatedSchema(crmActivityApiSchema);

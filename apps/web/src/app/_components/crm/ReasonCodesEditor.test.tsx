@@ -38,6 +38,17 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
+  // GAP-CRM-LEAD-REASON-CODES-05 (COPY): the load-error card used its own
+  // "Reason codes" heading, so the same screen carried two names. Every state
+  // now shows the page title "Lead Stage Reasons".
+  it("titles the load-error card Lead Stage Reasons, not Reason codes", async () => {
+    vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "error" });
+    renderWithIntl(<ReasonCodesEditor />);
+    await waitFor(() => expect(screen.getByText(/couldn.t load reason codes/i)).toBeInTheDocument());
+    expect(screen.getByRole("heading", { name: "Lead Stage Reasons" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Reason codes" })).not.toBeInTheDocument();
+  });
+
   it("recovers to the editor when retry succeeds", async () => {
     vi.mocked(lq.getReasonCodes)
       .mockResolvedValueOnce({ data: [], source: "error" })

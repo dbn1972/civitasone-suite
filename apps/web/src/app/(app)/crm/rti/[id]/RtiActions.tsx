@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ActionButton } from "../../../../_components/ds";
+import { ActionButton, ConfirmDialog } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
-import { RTI_PUBLIC_AUTHORITIES, RTI_AUTHORITY_OTHER, normaliseAuthority } from "../rtiAuthorities";
+import { RTI_PUBLIC_AUTHORITIES, RTI_AUTHORITY_OTHER, canonicaliseAuthority } from "../rtiAuthorities";
 
 /**
  * Plain-language failure message for a failed RTI lifecycle action. `patch`
@@ -18,6 +18,104 @@ import { RTI_PUBLIC_AUTHORITIES, RTI_AUTHORITY_OTHER, normaliseAuthority } from 
 function rtiActionError(): string {
   const human = toHumanError("save", { area: "RTI request" });
   return `${human.what} ${human.next}`;
+}
+
+/** A statutory response must be substantive; the cap matches crm-service respondBody (10000). */
+const RESPONSE_MIN = 20;
+const RESPONSE_MAX = 10000;
+
+/**
+ * GAP-CRM-RTI-DETAIL-02: the response to an applicant is a statutory record, so it is a
+ * TWO-step action. Step 1 composes the text (at least RESPONSE_MIN characters); step 2 reads
+ * the exact text back for a final check before it is sent, with "Back to edit" returning to
+ * step 1 with the draft intact. Nothing is sent from step 1.
+ */
+function RespondAction({ onSend }: { onSend: (text: string) => Promise<void> }) {
+  const t = useTranslations("crmRtiActions");
+  const [step, setStep] = useState<"closed" | "compose" | "review">("closed");
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>(undefined);
+  const fieldId = useId();
+  const hintId = useId();
+
+  const trimmed = text.trim();
+  const tooShort = trimmed.length < RESPONSE_MIN;
+  const tooLong = trimmed.length > RESPONSE_MAX;
+
+  function open() {
+    setText("");
+    setError(undefined);
+    setStep("compose");
+  }
+  async function send() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      await onSend(trimmed);
+      setStep("closed");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("sendFailed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button type="button" className="btn primary" onClick={open}>
+        {t("respond")}
+      </button>
+      <ConfirmDialog
+        open={step === "compose"}
+        title={t("respondConfirmTitle")}
+        description={t("respondConfirmBody")}
+        confirmLabel={t("reviewResponse")}
+        confirmDisabled={tooShort || tooLong}
+        onConfirm={() => setStep("review")}
+        onCancel={() => setStep("closed")}
+      >
+        <div className="cd-field">
+          <label htmlFor={fieldId}>{t("respondReasonLabel")}</label>
+          <textarea
+            id={fieldId}
+            rows={6}
+            value={text}
+            maxLength={RESPONSE_MAX}
+            aria-required
+            aria-describedby={hintId}
+            onChange={(e) => setText(e.target.value)}
+          />
+          <p id={hintId} style={{ fontSize: 12, margin: "4px 0 0", color: trimmed.length > 0 && tooShort ? "#b42318" : "var(--muted)" }}>
+            {t("respondCharCount", { count: trimmed.length, min: RESPONSE_MIN, max: RESPONSE_MAX })}
+          </p>
+        </div>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={step === "review"}
+        title={t("reviewTitle")}
+        description={
+          <>
+            <p style={{ margin: "0 0 8px" }}>{t("reviewBody")}</p>
+            <blockquote
+              aria-label={t("reviewTextAria")}
+              style={{ margin: 0, padding: "8px 12px", borderInlineStart: "3px solid var(--line)", whiteSpace: "pre-wrap", maxHeight: 240, overflow: "auto", fontSize: 14 }}
+            >
+              {trimmed}
+            </blockquote>
+          </>
+        }
+        confirmLabel={t("sendResponse")}
+        cancelLabel={t("backToEdit")}
+        busy={busy}
+        errorMessage={error}
+        onConfirm={() => void send()}
+        onCancel={() => {
+          if (!busy) setStep("compose");
+        }}
+      />
+    </>
+  );
 }
 
 /** FAA outcome options (crm-service rti-repo FIRST_APPEAL_OUTCOMES). */
@@ -100,7 +198,9 @@ export function RtiActions({
   const [forwardChoice, setForwardChoice] = useState<string>("");
   const [forwardOther, setForwardOther] = useState<string>("");
 
-  const forwardDept = forwardChoice === RTI_AUTHORITY_OTHER ? normaliseAuthority(forwardOther) : forwardChoice;
+  // "Other" is canonicalised (trim + collapse spaces + fold to a listed authority's casing),
+  // the same rule the New RTI form applies, so "ministry of  finance " cannot fork the register.
+  const forwardDept = forwardChoice === RTI_AUTHORITY_OTHER ? canonicaliseAuthority(forwardOther) : forwardChoice;
 
   // s.6(3): a request must be transferred within 5 days of receipt.
   const transferWindowDays = 5;
@@ -296,18 +396,8 @@ export function RtiActions({
 
           {/* Respond within the 30-day statutory deadline. GAP-CRM-RTI-DETAIL-02:
               the response is a statutory record, so require a substantive reply
-              (not the 1-char default) and show it back for review before send. */}
-          <ActionButton
-            label={t("respond")}
-            className="primary"
-            confirmTitle={t("respondConfirmTitle")}
-            confirmDescription={t("respondConfirmBody")}
-            requireReason
-            reasonLabel={t("respondReasonLabel")}
-            minReasonLength={20}
-            maxReasonLength={10000}
-            onConfirm={(text) => patch(`/api/proxy/v1/crm/rti/${id}/respond`, { responseText: text })}
-          />
+              (not the 1-char default) and READ IT BACK in a separate step before send. */}
+          <RespondAction onSend={(text) => patch(`/api/proxy/v1/crm/rti/${id}/respond`, { responseText: text })} />
         </>
       )}
 

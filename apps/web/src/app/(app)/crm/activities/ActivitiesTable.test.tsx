@@ -34,6 +34,14 @@ describe("ActivitiesTable outage (GAP-CRM-ACTIVITIES-02)", () => {
     expect(screen.queryByText("Overdue")).not.toBeInTheDocument();
   });
 
+  // GAP-CRM-ACTIVITIES-08: the outage card names the screen "Activities" (the hub
+  // tile / nav / URL term), not "Interactions".
+  it("names the screen 'Activities' in the outage card (no 'Interactions' vocabulary)", () => {
+    render(<ActivitiesTable activities={[]} source="error" today="2026-03-11" />);
+    expect(screen.getByRole("heading", { name: "Activities" })).toBeInTheDocument();
+    expect(document.body.textContent ?? "").not.toMatch(/interaction/i);
+  });
+
   it("still shows the empty state for an empty but valid (api) list", () => {
     render(<ActivitiesTable activities={[]} source="api" today="2026-03-11" />);
     expect(screen.getByText("No activities yet")).toBeInTheDocument();
@@ -100,5 +108,19 @@ describe("ActivitiesTable segment-specific empty copy (GAP-CRM-ACTIVITIES-07)", 
     );
     expect(screen.getByText("Nothing due today")).toBeInTheDocument();
     expect(screen.queryByText("No records found")).not.toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-ACTIVITIES-04 acceptance: "a cancelled row is returned and appears in the All segment".
+// (The mapper keeps it - activityTypes.test.ts; the default All view must then list it.)
+describe("ActivitiesTable keeps a cancelled activity in the All segment (GAP-CRM-ACTIVITIES-04)", () => {
+  it("lists a cancelled row in the default All view, but not under Overdue", () => {
+    const rows = [act("1", "2026-03-11", "open"), act("2", "2026-03-10", "cancelled")];
+    const { unmount } = render(<ActivitiesTable activities={rows} source="api" today="2026-03-11" />);
+    expect(screen.getByText("Task 1")).toBeInTheDocument();
+    expect(screen.getByText("Task 2")).toBeInTheDocument();
+    unmount();
+    render(<ActivitiesTable activities={rows} source="api" initialSegment="Overdue" today="2026-03-11" />);
+    expect(screen.queryByText("Task 2")).not.toBeInTheDocument();
   });
 });

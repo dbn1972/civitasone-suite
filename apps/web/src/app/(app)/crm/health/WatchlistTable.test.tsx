@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { WatchlistTable } from "./WatchlistTable";
 import type { NamedAccountHealthEntry } from "./health";
 
@@ -42,6 +44,22 @@ describe("WatchlistTable follow-up action (GAP-CRM-HEALTH-05)", () => {
     render(<WatchlistTable entries={[entry("acc-1", "Bharat Steel")]} />);
     const link = screen.getByRole("link", { name: /Log follow-up/i });
     expect(link).toHaveAttribute("href", "/crm/health/acc-1?followUp=1");
+  });
+});
+
+describe("WatchlistTable follow-up label under the live message catalogue (GAP-CRM-HEALTH-05)", () => {
+  // Without a provider the table falls back to English literals, which hid that
+  // crm.health.logFollowUp was missing from the live src/messages catalogue --
+  // inside a real provider the button rendered the raw key path.
+  it("renders the translated 'Log follow-up' label, not the raw key path", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <WatchlistTable entries={[entry("acc-1", "Bharat Steel")]} />
+      </NextIntlClientProvider>,
+    );
+    const link = screen.getByRole("link", { name: "Log follow-up" });
+    expect(link).toHaveAttribute("href", "/crm/health/acc-1?followUp=1");
+    expect(screen.queryByText(/logFollowUp/)).not.toBeInTheDocument();
   });
 });
 

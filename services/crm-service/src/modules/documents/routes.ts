@@ -41,6 +41,12 @@ import {
 } from "./storage.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
+// GAP-CRM-ACCOUNTS-DETAIL-02: verify / reject is an APPROVAL control. A plain
+// crm_user may upload and read documents but must not approve them, so the verify
+// route is limited to the admin subset of CRM_ROLES -- the same set the web offers
+// the Verify/Reject buttons to (CRM_VERIFY_ROLES in apps/web lib/auth/roleGuard.ts,
+// restricted to the roles this service admits at all).
+const VERIFY_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 const SELECT_COLS = sql`
   id, subject_type AS "subjectType", subject_id AS "subjectId", doc_type AS "docType",
@@ -269,7 +275,7 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
   // ── DM-002 verify / reject ──
   app.post("/v1/crm/documents/:id/verify", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, VERIFY_ROLES);
     const { id } = idParam.parse(req.params);
     const b = verifyBody.parse(req.body);
     if (!(await findDocument(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "document not found");

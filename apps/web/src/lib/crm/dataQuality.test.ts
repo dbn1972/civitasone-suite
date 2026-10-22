@@ -1,7 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   parseFieldError,
+  parseFieldErrors,
+  parseMissingMandatoryFields,
+  parseDqIssue,
   normaliseCandidates,
+  toMatchPercent,
+  DuplicateCheckError,
   normaliseRules,
   normaliseReport,
   duplicateCheck,
@@ -52,9 +57,81 @@ describe("normaliseCandidates", () => {
     expect(out.map((c) => c.id)).toEqual(["b", "a"]);
     expect(out[0].matchedFields).toEqual(["email"]);
   });
+  it("reads the { data: [...] } envelope crm-service really answers (it parsed to 'no duplicates' before)", () => {
+    // Exactly what POST /v1/crm/contacts/duplicate-check sends: ids, matched field NAMES and a score - no values.
+    const raw = { data: [{ id: "c-1", matchedFields: ["phone"], score: 30 }, { id: "c-2", matchedFields: ["email", "phone"], score: 70 }] };
+    const out = normaliseCandidates(raw);
+    expect(out.map((c) => c.id)).toEqual(["c-2", "c-1"]);
+    expect(out[0]).toMatchObject({ matchedFields: ["email", "phone"], score: 70 });
+    expect(out[1]!.phone).toBeUndefined();
+    expect(out[1]!.email).toBeUndefined();
+  });
   it("drops entries without an id and handles junk", () => {
     expect(normaliseCandidates([{ score: 1 }, null, "x"])).toEqual([]);
+    expect(normaliseCandidates({ data: "nope" })).toEqual([]);
     expect(normaliseCandidates(undefined)).toEqual([]);
+  });
+});
+
+// crm-service scores a duplicate as the whole-number SUM of the matched rules' weights, capped at 100 (30 = phone,
+// 70 = email + phone). The web keeps ONE scale, a whole percent 0-100, and maps whatever arrives onto it once; the
+// panel then prints the number as it is. (It used to multiply by 100 and print "Match 7000%".)
+describe("duplicate score scale (toMatchPercent / normaliseCandidates)", () => {
+  it("keeps crm-service's whole 0-100 scores as they are", () => {
+    expect([0, 1, 15, 30, 70, 100].map(toMatchPercent)).toEqual([0, 1, 15, 30, 70, 100]);
+    const out = normaliseCandidates({ data: [{ id: "a", score: 30 }, { id: "b", score: 70 }, { id: "c", score: 100 }] });
+    expect(out.map((c) => c.score)).toEqual([100, 70, 30]);
+  });
+
+  it("reads a legacy 0-1 share (older callers and mocks) as the same percent", () => {
+    expect(toMatchPercent(0.92)).toBe(92);
+    expect(toMatchPercent(0.4)).toBe(40);
+    expect(toMatchPercent(0.005)).toBe(1);
+    const out = normaliseCandidates([{ id: "a", score: 0.4 }, { id: "b", score: 0.92 }]);
+    expect(out.map((c) => [c.id, c.score])).toEqual([["b", 92], ["a", 40]]);
+  });
+
+  it("ranks identically on either scale", () => {
+    const server = normaliseCandidates({ data: [{ id: "x", score: 30 }, { id: "y", score: 70 }] });
+    const legacy = normaliseCandidates([{ id: "x", score: 0.3 }, { id: "y", score: 0.7 }]);
+    expect(server.map((c) => [c.id, c.score])).toEqual(legacy.map((c) => [c.id, c.score]));
+  });
+
+  it("rounds, clamps to 0-100 and treats junk as 0", () => {
+    expect(toMatchPercent(69.6)).toBe(70);
+    expect(toMatchPercent(150)).toBe(100);
+    expect(toMatchPercent(-3)).toBe(0);
+    expect(toMatchPercent("70")).toBe(70);
+    expect(toMatchPercent("abc")).toBe(0);
+    expect(toMatchPercent(undefined)).toBe(0);
+    expect(toMatchPercent(Number.NaN)).toBe(0);
+  });
+
+  it("a bare 1 is a server score of 1 (a one-point rule), not 100%", () => {
+    expect(toMatchPercent(1)).toBe(1);
+  });
+
+  it("keeps the server's name (trimmed) and leaves it absent when blank - never the id", () => {
+    const out = normaliseCandidates({ data: [{ id: "a", name: "  Asha Rao ", score: 30 }, { id: "b", name: "  ", score: 20 }, { id: "c", score: 10 }] });
+    expect(out.map((c) => c.name)).toEqual(["Asha Rao", undefined, undefined]);
+  });
+});
+
+describe("duplicateCheck failure carries the HTTP status", () => {
+  it("throws a DuplicateCheckError with status 403 for a refused role, so a caller can tell 'not allowed' from 'broken'", async () => {
+    fetchMock.mockResolvedValueOnce(fail(403, { code: "FORBIDDEN", message: "requires one of: crm_user, crm_admin, super_admin" }));
+    const err = await duplicateCheck({ phone: "9876543210" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DuplicateCheckError);
+    expect((err as DuplicateCheckError).status).toBe(403);
+    // the server's own text is still never shown
+    expect((err as Error).message).not.toMatch(/requires one of|crm_user/);
+  });
+
+  it("carries 500 and 429 the same way", async () => {
+    fetchMock.mockResolvedValueOnce(fail(500, { code: "INTERNAL" }));
+    expect(await duplicateCheck({}).catch((e: unknown) => (e as DuplicateCheckError).status)).toBe(500);
+    fetchMock.mockResolvedValueOnce(fail(429, { error: "TOO_MANY_REQUESTS" }));
+    expect(await duplicateCheck({}).catch((e: unknown) => (e as DuplicateCheckError).status)).toBe(429);
   });
 });
 
@@ -88,6 +165,135 @@ describe("normaliseReport", () => {
   it("omits name (not empty string) when the backend does not send one", () => {
     const r = normaliseReport({ records: [{ id: "u-2", score: 0.4, issues: [] }] });
     expect(r.records[0].name).toBeUndefined();
+  });
+});
+
+describe("parseFieldErrors (real crm-service 400 body)", () => {
+  // Exact shape produced by services/crm-service/src/modules/contacts/routes.ts
+  // setErrorHandler for a ZodError: the format code is the zod issue MESSAGE.
+  const realBody = {
+    code: "VALIDATION_FAILED",
+    message: "invalid request",
+    correlationId: "c-1",
+    retryable: false,
+    fieldErrors: [{ field: "phone", message: "INVALID_MOBILE" }],
+  };
+
+  it("lands INVALID_MOBILE under phone when it only appears in fieldErrors", () => {
+    // The top-level code is VALIDATION_FAILED, so parseFieldError alone sees nothing.
+    expect(parseFieldError({ code: realBody.code, message: realBody.message })).toBeNull();
+    expect(parseFieldErrors(realBody)).toEqual({ phone: "Enter a valid 10-digit Indian mobile number." });
+  });
+
+  it("maps every format code to its field in one pass", () => {
+    const out = parseFieldErrors({
+      code: "VALIDATION_FAILED",
+      fieldErrors: [
+        { field: "phone", message: "INVALID_MOBILE" },
+        { field: "pincode", message: "INVALID_PINCODE" },
+        { field: "gstin", message: "INVALID_GSTIN" },
+        { field: "pan", message: "INVALID_PAN" },
+      ],
+    });
+    expect(Object.keys(out).sort()).toEqual(["gstin", "pan", "phone", "pincode"]);
+  });
+
+  it("still reads the legacy top-level { code, message } shape", () => {
+    expect(parseFieldErrors({ code: "INVALID_PAN", message: "bad pan" })).toEqual({ pan: "bad pan" });
+  });
+
+  it("ignores unrelated validation messages and malformed entries", () => {
+    expect(parseFieldErrors({ code: "VALIDATION_FAILED", fieldErrors: [{ field: "email", message: "Invalid email" }, null, 7, {}] })).toEqual({});
+    expect(parseFieldErrors(null)).toEqual({});
+    expect(parseFieldErrors("INVALID_MOBILE")).toEqual({});
+  });
+
+  it("does not treat Object.prototype keys as format codes", () => {
+    expect(parseFieldError({ code: "toString" })).toBeNull();
+    expect(parseFieldErrors({ fieldErrors: [{ field: "x", message: "constructor" }] })).toEqual({});
+  });
+});
+
+describe("parseMissingMandatoryFields (GAP-CRM-CONTACTS-NEW-01)", () => {
+  it("returns the named fields from a 422 MANDATORY_FIELDS_MISSING message", () => {
+    expect(
+      parseMissingMandatoryFields({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city, phone" }),
+    ).toEqual(["city", "phone"]);
+  });
+
+  it("only ever returns known field names, never raw server text", () => {
+    expect(
+      parseMissingMandatoryFields({
+        code: "MANDATORY_FIELDS_MISSING",
+        message: "missing mandatory field(s): city, <script>alert(1)</script>, leadSource, city",
+      }),
+    ).toEqual(["city", "leadSource"]);
+  });
+
+  it("returns nothing for another code or a message without field names", () => {
+    expect(parseMissingMandatoryFields({ code: "OTHER", message: "missing mandatory field(s): city" })).toEqual([]);
+    expect(parseMissingMandatoryFields({ code: "MANDATORY_FIELDS_MISSING", message: "no names here" })).toEqual([]);
+    expect(parseMissingMandatoryFields(undefined)).toEqual([]);
+  });
+});
+
+describe("parseDqIssue", () => {
+  it("splits machine-readable issue codes", () => {
+    expect(parseDqIssue("missing:email")).toEqual({ kind: "missing", field: "email" });
+    expect(parseDqIssue("invalid:gstin")).toEqual({ kind: "invalid", field: "gstin" });
+    expect(parseDqIssue("stale")).toEqual({ kind: "stale" });
+  });
+  it("passes free text through untouched", () => {
+    expect(parseDqIssue("no email")).toEqual({ kind: "other", raw: "no email" });
+    expect(parseDqIssue("missing:")).toEqual({ kind: "other", raw: "missing:" });
+  });
+});
+
+describe("normaliseReport against the real crm-service envelope (GAP-CRM-DATA-QUALITY-01/03)", () => {
+  // Shape of GET /v1/crm/data-quality?filter=all from data-quality-routes.ts.
+  const wire = {
+    data: {
+      entity: "contacts",
+      total: 3,
+      distribution: { "0-20": 1, "21-40": 0, "41-60": 0, "61-80": 1, "81-100": 1 },
+      counts: { missing: 1, invalid: 1, stale: 0 },
+      filter: "all",
+      filteredIds: [],
+      records: [],
+      recordsByFilter: {
+        missing: [{ id: "m1", name: "Asha Verma", score: 0.2, issues: ["missing:email"] }],
+        invalid: [{ id: "i1", name: null, score: 1, issues: ["invalid:phone"] }],
+        stale: [],
+      },
+    },
+  };
+
+  it("unwraps { data }, reads the record-shaped distribution and every filter's rows", () => {
+    const r = normaliseReport(wire);
+    expect(r.counts).toEqual({ missing: 1, invalid: 1, stale: 0 });
+    expect(r.distribution.map((b) => b.count)).toEqual([1, 0, 0, 1, 1]);
+    expect(r.distribution[0]).toEqual({ label: "0-20%", count: 1 });
+    expect(r.recordsByFilter.missing).toEqual([{ id: "m1", name: "Asha Verma", score: 0.2, issues: ["missing:email"] }]);
+    // a null name from the service is omitted, not rendered as "null"
+    expect(r.recordsByFilter.invalid[0]).toEqual({ id: "i1", score: 1, issues: ["invalid:phone"] });
+    expect(r.recordsByFilter.stale).toEqual([]);
+  });
+
+  it("files a single-filter response under that filter's tab", () => {
+    const r = normaliseReport({
+      data: { filter: "invalid", counts: { invalid: 1 }, records: [{ id: "i1", name: "Ira", score: 0.9, issues: ["invalid:pan"] }] },
+    });
+    expect(r.recordsByFilter.invalid.map((x) => x.id)).toEqual(["i1"]);
+    expect(r.recordsByFilter.missing).toEqual([]);
+  });
+
+  it("getDataQuality asks for filter=all by default and normalises the wrapped body", async () => {
+    fetchMock.mockResolvedValueOnce(ok(wire));
+    const res = await getDataQuality("contacts");
+    expect(fetchMock.mock.calls[0][0]).toContain("v1/crm/data-quality?entity=contacts&filter=all");
+    expect(res.source).toBe("api");
+    expect(res.data.counts.missing).toBe(1);
+    expect(res.data.recordsByFilter.missing[0]?.name).toBe("Asha Verma");
   });
 });
 

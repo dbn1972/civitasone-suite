@@ -21,6 +21,20 @@ import type { QualificationQuestion } from "./qualification-domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/**
+ * GAP-CRM-QUALIFICATION-FRAMEWORKS-04: business line is an OPEN vocabulary (no
+ * canonical list exists), so the only defence against "Government " vs
+ * "government" silently never matching is to compare one canonical form. Writes
+ * store it trimmed + lowercased (blank -> NULL); reads compare
+ * lower(btrim(business_line)) so framework rows saved before this change in a
+ * non-canonical form still match without a data migration.
+ */
+export function normaliseBusinessLine(value: string | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const n = value.trim().toLowerCase();
+  return n.length > 0 ? n : null;
+}
+
 export interface QuestionView {
   id: string;
   prompt: string;
@@ -68,7 +82,8 @@ export async function listFrameworks(
   filters: { businessLine?: string; active?: boolean } = {},
 ): Promise<FrameworkView[]> {
   const conds = [eq(qualificationFrameworks.tenantId, tenantId)];
-  if (filters.businessLine) conds.push(eq(qualificationFrameworks.businessLine, filters.businessLine));
+  const wantedLine = normaliseBusinessLine(filters.businessLine);
+  if (wantedLine) conds.push(sql`lower(btrim(${qualificationFrameworks.businessLine})) = ${wantedLine}`);
   if (filters.active !== undefined) conds.push(eq(qualificationFrameworks.active, filters.active));
 
   return scopedRead(async (tx) => {
@@ -176,7 +191,7 @@ export async function createFramework(
     const inserted = await tx.insert(qualificationFrameworks).values({
       tenantId,
       name: body.name,
-      businessLine: body.businessLine ?? null,
+      businessLine: normaliseBusinessLine(body.businessLine),
       active: body.active ?? true,
       createdBy: actorId,
       updatedBy: actorId,
@@ -215,7 +230,7 @@ export async function updateFramework(
 
     const set: Record<string, unknown> = { updatedAt: new Date(), updatedBy: actorId, version: sql`${qualificationFrameworks.version} + 1` };
     if (body.name !== undefined) set.name = body.name;
-    if (body.businessLine !== undefined) set.businessLine = body.businessLine;
+    if (body.businessLine !== undefined) set.businessLine = normaliseBusinessLine(body.businessLine);
     if (body.active !== undefined) set.active = body.active;
     const updated = await tx.update(qualificationFrameworks)
       .set(set)

@@ -5,7 +5,9 @@
  *   - GET  /v1/crm/contacts/dedup-candidates          — computes near-duplicate
  *       PAIRS live from the tenant's active contacts under the configured dedup
  *       rules, excluding pairs the tenant has dismissed. Returns
- *       `{ data: DedupPair[] }`. On any non-2xx this still fails closed to
+ *       `{ data: DedupPair[] }` with email/phone ALREADY MASKED by the server
+ *       (GAP-CRM-DEDUP-CANDIDATES-01); the clear value is reachable only through
+ *       the audited POST /v1/crm/pii/reveal. On any non-2xx this still fails closed to
  *       `{source:"error"}` so the page shows the honest DataSourceBadge error
  *       rather than a fabricated "0 duplicates" empty state.
  *   - PATCH /v1/crm/contacts/dedup-candidates/:pairId/dismiss — persists +
@@ -33,6 +35,18 @@ export interface DedupPair {
   confidence: number;
   left: DedupContactSnapshot;
   right: DedupContactSnapshot;
+  /**
+   * GAP-CRM-DEDUP-CANDIDATES-01: the dedup fields (name/email/phone/company/gstin/
+   * pan) the two contacts matched on - the match reasons. Optional: older servers
+   * omit it.
+   */
+  matchedFields?: string[];
+  /**
+   * Display fields whose values differ, computed by the server on the CLEAR values
+   * before email/phone are masked (two different numbers can mask identically).
+   * Optional: when absent the screen compares the displayed values instead.
+   */
+  diffFields?: string[];
 }
 
 export type DedupSource = "api" | "error";
@@ -54,10 +68,9 @@ export async function getDedupCandidates(): Promise<{ data: DedupPair[]; source:
  * and its children reassigned — see contacts/merge-consumer.ts's
  * buildContactMergePatch for exactly what gets carried over.
  *
- * GAP-CRM-DEDUP-CANDIDATES-02: an optional reviewer `reason` is forwarded when
- * supplied. The merge is irreversible, so capturing why it was approved aids the
- * audit trail; the field is additive and ignored by a backend that does not yet
- * read it.
+ * GAP-CRM-DEDUP-CANDIDATES-02: the reviewer's `reason` is forwarded when supplied.
+ * The merge is irreversible, so crm-service records why it was approved - and
+ * both contact ids - in the merge audit trail (contacts/consumer.ts).
  */
 export async function mergeDedupPair(leftId: string, rightId: string, reason?: string): Promise<void> {
   const res = await browserFetch("v1/crm/contacts/merge", {

@@ -38,6 +38,11 @@ const EXPORT_CAP = 5000;
 const exportQuery = z.object({
   purpose: z.string().trim().min(10).max(500),
   limit: z.coerce.number().int().min(1).max(EXPORT_CAP).default(EXPORT_CAP),
+  // GAP-CRM-CONTACTS-01: the list's saved-view mode (all/mine/recent). The web
+  // forwards it, so the export must honour it - otherwise a "Mine" or "Recent"
+  // view exported every matching contact in the tenant, not what the operator
+  // was looking at. Same name and values as GET /v1/crm/contacts.
+  segment: z.enum(["all", "mine", "recent"]).default("all"),
   search: z.string().max(200).optional(),
   leadStatus: z.string().max(64).optional(),
   ownerId: z.string().uuid().optional(),
@@ -80,6 +85,7 @@ export async function contactExportRoutes(app: FastifyInstance): Promise<void> {
     const reveal = ctx.roles.some((r) => PII_READ_ROLES.includes(r));
 
     const filters: ListFilters = {
+      ...(q.segment !== "all" ? { segment: q.segment, actorId: ctx.actorId } : {}),
       ...(q.search ? { search: q.search } : {}),
       ...(q.leadStatus ? { leadStatus: q.leadStatus } : {}),
       ...(q.ownerId ? { ownerId: q.ownerId } : {}),
@@ -101,8 +107,9 @@ export async function contactExportRoutes(app: FastifyInstance): Promise<void> {
       action: "contacts_bulk_export",
       rowCount: rows.length,
       purpose: q.purpose,
+      // actorId is the caller (already on the audit envelope), not a filter.
       filters: Object.fromEntries(
-        Object.entries({ ...filters, search: q.search ? true : undefined }).filter(([, v]) => v !== undefined),
+        Object.entries({ ...filters, actorId: undefined, search: q.search ? true : undefined }).filter(([, v]) => v !== undefined),
       ),
       masked: !reveal,
     });

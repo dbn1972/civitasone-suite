@@ -358,14 +358,42 @@ describe("DM-002 document types + verify", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("records a verification decision (202) that lands on the document", async () => {
+  it("records a verification decision (202) from an admin that lands on the document", async () => {
     const id = await upload();
-    const res = await inject("POST", `/v1/crm/documents/${id}/verify`, { headers: headers(), payload: { status: "verified" } });
+    const res = await inject("POST", `/v1/crm/documents/${id}/verify`, { headers: adminHeaders(), payload: { status: "verified" } });
     expect(res.statusCode).toBe(202);
     await drainQueue();
     const row = (await listDocs()).find((r) => r.id === id)!;
     expect(row.verificationStatus).toBe("verified");
     expect(row.verifiedBy).toBe(ACTOR);
+  });
+
+  // GAP-CRM-ACCOUNTS-DETAIL-02: verify / reject is an approval control. A plain
+  // crm_user (who may upload and read documents) is refused with 403 -- the web hides
+  // the buttons from them, but the service is the authority.
+  it("refuses a plain crm_user verifying or rejecting a document (403) and leaves it unverified", async () => {
+    const id = await upload();
+    for (const status of ["verified", "rejected"] as const) {
+      const res = await inject("POST", `/v1/crm/documents/${id}/verify`, {
+        headers: headers(TENANT, ["crm_user"]),
+        payload: status === "rejected" ? { status, reason: "illegible scan" } : { status },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe("FORBIDDEN");
+    }
+    await drainQueue();
+    const row = (await listDocs()).find((r) => r.id === id)!;
+    expect(row.verificationStatus).toBe("pending"); // the initial status: nobody has decided
+    expect(row.verifiedBy ?? null).toBeNull();
+  });
+
+  it.each([["crm_admin"], ["super_admin"], ["tenant_admin"]])("allows %s to verify a document", async (role) => {
+    const id = await upload();
+    const res = await inject("POST", `/v1/crm/documents/${id}/verify`, {
+      headers: headers(TENANT, [role]),
+      payload: { status: "verified" },
+    });
+    expect(res.statusCode).toBe(202);
   });
 });
 

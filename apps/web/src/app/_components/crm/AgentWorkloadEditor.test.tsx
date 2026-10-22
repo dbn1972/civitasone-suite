@@ -236,3 +236,19 @@ describe("AgentWorkloadEditor loading + retry (WORKLOAD-07)", () => {
     expect(as.getAgents).toHaveBeenCalledTimes(2);
   });
 });
+
+// GAP-CRM-AGENT-WORKLOAD-06 acceptance: "axe check on the table has no violations". The row controls
+// are labelled by the agent's name (not by position) and the name is a row header.
+describe("AgentWorkloadEditor accessibility (WORKLOAD-06)", () => {
+  it("has no axe violations on the loaded table (colour contrast needs a real browser)", async () => {
+    vi.mocked(as.getAgents).mockResolvedValue({
+      data: [agent, { ...agent, agentId: "a2", name: "Ravi", activeLeads: 2, maxLeads: 20 }],
+      source: "api",
+    });
+    const { container } = render(<AgentWorkloadEditor />);
+    await waitFor(() => expect(screen.getByText("Ravi")).toBeInTheDocument());
+    const axe = (await import("axe-core")).default;
+    const out = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
+    expect(out.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  });
+});

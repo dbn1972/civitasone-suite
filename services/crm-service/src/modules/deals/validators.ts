@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas/money";
 
 // OP-002: pipelines (pipelines/validators.ts's pipelineStageSchema) let admins define
 // 3-10 arbitrary, per-pipeline stage names (each up to 100 chars) — "Lead"/"Proposal"/
@@ -28,6 +29,30 @@ const opportunityFields = {
   expectedCloseDate: isoDate.optional(),
 };
 
+/** Largest value the bigint (int8) value_minor column can hold. */
+const MAX_VALUE_MINOR = 9_223_372_036_854_775_807n;
+
+/**
+ * GAP-CRM-DEALS-NEW-03: deal value on create, in paise. Money is carried as an exact
+ * base-10 string end to end (@civitasone/schemas/money's codec), so the web form posts
+ * `"123456789"` rather than a lossy JS number; a legacy safe-integer JSON number is
+ * still accepted. Either form is normalised to the canonical digit string, and a value
+ * beyond int8 is a clean 400 here instead of an async insert failure in the consumer.
+ */
+const valueMinorField = zMoneyMinorStringNonNeg
+  // superRefine, not refine: when the codec rejects the input (a JSON number past 2^53,
+  // e.g. 1e20) its transform reports the issue and returns z.NEVER, and zod STILL runs
+  // this check on that placeholder. BigInt(z.NEVER) throws a SyntaxError that surfaces as
+  // a 500; so only compare when the value is genuinely the canonical digit string (the
+  // codec has already reported every other case as a 400).
+  .superRefine((v, ctx) => {
+    if (typeof v !== "string" || !/^\d+$/.test(v)) return;
+    if (BigInt(v) > MAX_VALUE_MINOR) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "valueMinor exceeds the maximum storable amount" });
+    }
+  })
+  .default("0");
+
 export const createDealBody = z.object({
   name: z.string().min(1).max(200),
   pipelineId: z.string().uuid().optional(),
@@ -37,15 +62,41 @@ export const createDealBody = z.object({
   // routes.ts resolves the effective stage (pipeline's own entry stage, or "Lead" when
   // pipeline-less) before this reaches commands.createDeal.
   stage: dealStage.optional(),
-  valueMinor: z.number().int().nonnegative().default(0),
+  valueMinor: valueMinorField,
   currency: z.string().length(3).default("INR"),
   contactId: z.string().uuid().optional(),
+  // GAP-CRM-OPPORTUNITIES-NEW-02: optional direct account link (validated against the
+  // caller's tenant in routes.ts). Whether it becomes mandatory is a product decision.
+  accountId: z.string().uuid().optional(),
   ownerId: z.string().uuid().optional(),
   closeDate: isoDate.optional(),
-  probability: z.number().int().min(0).max(100).default(0),
+  // GAP-CRM-OPPORTUNITIES-NEW-06: deliberately NO `.default(0)`. An omitted probability is
+  // resolved in routes.ts to the chosen pipeline stage's own configured probability (and
+  // only falls back to 0 for a pipeline-less deal), so a blank form no longer silently
+  // stores a real-looking 0% that zeroes the deal's forecast weighting.
+  probability: z.number().int().min(0).max(100).optional(),
   ...opportunityFields,
 });
 export type CreateDealBody = z.infer<typeof createDealBody>;
+
+/** Most deal ids one `?ids=` lookup may carry. */
+export const MAX_DEAL_LOOKUP_IDS = 50;
+
+/**
+ * GET /v1/crm/deals `ids` (comma-separated uuids): look specific deals up in ONE request, the
+ * same as GET /v1/crm/accounts?ids=. The onboarding pages name a page of cases by deal id; they
+ * used to page the whole deals list for it, and one deal that no longer exists (deleted or
+ * cancelled deals are never listed) made them read it to the end. A deal that is not live is
+ * simply absent from the answer, so absence is definitive.
+ */
+export const dealIdsQuery = z.object({
+  ids: z
+    .string()
+    .max(MAX_DEAL_LOOKUP_IDS * 37)
+    .transform((v) => v.split(",").map((s) => s.trim()).filter((s) => s.length > 0))
+    .pipe(z.array(z.string().uuid()).min(1).max(MAX_DEAL_LOOKUP_IDS))
+    .optional(),
+});
 
 export const updateDealStageBody = z.object({
   stage: dealStage,
@@ -61,6 +112,7 @@ export const updateDealBody = z.object({
   ownerId: z.string().uuid().nullable().optional(),
   closeDate: isoDate.nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
   product: z.string().min(1).max(160).nullable().optional(),
   quantity: z.number().int().min(0).max(MAX_QUANTITY).nullable().optional(),
   competitors: competitors.optional(),
@@ -83,6 +135,7 @@ export const dealViewSchema = z.object({
   valueDisplay: z.string(),
   contactId: z.string().uuid().nullable().optional(),
   contactName: z.string().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
   ownerId: z.string().uuid().nullable().optional(),
   closeDate: z.string().nullable().optional(),
   closedAt: z.string().nullable().optional(),

@@ -26,6 +26,17 @@ describe("PostPeriodForm", () => {
     expect(screen.getByLabelText("Responses")).toHaveAttribute("max", "100000000");
   });
 
+  it("sends the campaign name with the period so the campaign can be shown by name (GAP-CRM-CAMPAIGNS-01)", async () => {
+    vi.mocked(cp.postCampaignPeriod).mockResolvedValue(undefined as never);
+    renderWithIntl(<PostPeriodForm campaignId="c1" currency="INR" campaignName="Diwali Push" />);
+    expect(screen.getByLabelText("Campaign name (optional)")).toHaveValue("Diwali Push");
+    fireEvent.change(screen.getByLabelText("Campaign name (optional)"), { target: { value: "Diwali Outreach" } });
+    fill();
+    await waitFor(() =>
+      expect(cp.postCampaignPeriod).toHaveBeenCalledWith("c1", expect.objectContaining({ campaignName: "Diwali Outreach" })),
+    );
+  });
+
   it("renders in Hindi when the locale is hi", () => {
     render(
       <NextIntlClientProvider locale="hi" messages={hiMessages}>

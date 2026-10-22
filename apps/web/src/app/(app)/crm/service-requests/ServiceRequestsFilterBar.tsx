@@ -8,6 +8,11 @@
  * status/priority/serviceType/search into the URL (resetting to page 1), which
  * re-runs the server page's loader with those params so filtering/searching
  * happens server-side over the whole register, not a client-held page.
+ *
+ * GAP-CRM-SERVICE-REQUESTS-03: three desk controls ride the same mechanism --
+ * "Overdue only" (overdue=true: past-due AND still workable), "Assigned to me"
+ * (assignedTo=<the viewer's own user id>, offered only when that id is known) and
+ * a sort by due date (sort=dueAt, soonest first).
  */
 import { useState } from "react";
 import { useTranslations } from "next-intl";
@@ -30,12 +35,21 @@ export function ServiceRequestsFilterBar({
   priority,
   serviceType,
   search,
+  assignedTo,
+  overdue = false,
+  sort,
+  currentUserId,
   serviceTypes,
 }: {
   status?: string;
   priority?: string;
   serviceType?: string;
   search?: string;
+  assignedTo?: string | undefined;
+  overdue?: boolean;
+  sort?: string | undefined;
+  /** The signed-in user's id; enables the "Assigned to me" toggle. */
+  currentUserId?: string | null;
   serviceTypes: string[];
 }) {
   const t = useTranslations("crmServiceRequestsFilterBar");
@@ -94,6 +108,30 @@ export function ServiceRequestsFilterBar({
         <select aria-label={t("filterServiceTypeAria")} value={serviceType ?? ""} onChange={(e) => setParam("serviceType", e.target.value)} style={SELECT}>
           <option value="">{t("all")}</option>
           {serviceTypes.map((st) => <option key={st} value={st}>{st}</option>)}
+        </select>
+      </label>
+
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink2)" }}>
+        <input type="checkbox" checked={overdue} onChange={(e) => setParam("overdue", e.target.checked ? "true" : "")} />
+        {t("overdueOnly")}
+      </label>
+
+      {currentUserId ? (
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink2)" }}>
+          <input
+            type="checkbox"
+            checked={assignedTo === currentUserId}
+            onChange={(e) => setParam("assignedTo", e.target.checked ? currentUserId : "")}
+          />
+          {t("assignedToMe")}
+        </label>
+      ) : null}
+
+      <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink2)" }}>
+        {t("sortBy")}
+        <select aria-label={t("sortAria")} value={sort ?? ""} onChange={(e) => setParam("sort", e.target.value)} style={SELECT}>
+          <option value="">{t("sortDefault")}</option>
+          <option value="dueAt">{t("sortDueAt")}</option>
         </select>
       </label>
     </div>

@@ -28,6 +28,7 @@ import {
   getOnboardingCases,
   getOnboardingLookups,
   resolveCaseNames,
+  shortRef,
   ONBOARDING_STAGES,
   KYC_STATUSES,
   isOnboardingStage,
@@ -47,10 +48,6 @@ function fmtDate(iso: string): string {
   // GAP-CRM-ONBOARDING-05: shared IST date-time formatter ("dd Mon yyyy,
   // hh:mm") instead of toLocaleString('en-IN') (browser timezone, with seconds).
   return formatIndianDateTime(iso);
-}
-
-function shortId(id: string): string {
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id || "—";
 }
 
 /** Whole days since `iso` (never negative), or null when the date is unusable. */
@@ -95,10 +92,11 @@ export function OnboardingList() {
     // row is identified by its customer, not an 8-char UUID fragment.
     // GAP-CRM-ONBOARDING-02: ask the backend for a full page (its 200-row cap)
     // so client-side sort/search/paging operate over the whole set, not just 50.
-    void Promise.all([
-      getOnboardingCases({ ...(stage ? { stage } : {}), limit: 200 }),
-      getOnboardingLookups(),
-    ]).then(([{ data, source: s }, lookups]) => {
+    // GAP-CRM-ONBOARDING-01: the lookup is told WHICH cases it is labelling, so it pages
+    // the accounts/deals lists (200 rows a page - the real server cap) only until it has
+    // found those, instead of one oversized request the server answers with a 400.
+    void getOnboardingCases({ ...(stage ? { stage } : {}), limit: 200 }).then(async ({ data, source: s }) => {
+      const lookups = s === "error" ? { dealNames: {}, accountNames: {} } : await getOnboardingLookups(data);
       if (!alive) return;
       setCases(resolveCaseNames(data, lookups));
       setSource(s);
@@ -125,12 +123,13 @@ export function OnboardingList() {
       return {
         id: c.id,
         customer: c.dealName ?? c.accountName ?? t("unnamedCase"),
-        ref: shortId(c.id),
+        ref: shortRef(c.id),
         stage: c.stage,
         stageSort: stageText(c.stage),
         kyc: c.kycStatus,
         kycSort: kycText(c.kycStatus),
-        account: c.accountName ?? (c.accountId ? shortId(c.accountId) : "—"),
+        // Never an id fragment: an unresolved name is a dash, not "3fa85f64…".
+        account: c.accountName ?? "—",
         updated: c.updatedAt,
         updatedSort: new Date(c.updatedAt).getTime() || 0,
         ageDays: age,

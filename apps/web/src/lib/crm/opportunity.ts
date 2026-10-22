@@ -13,6 +13,7 @@
  * and displays with formatMoney. Never do rupee/paise arithmetic with Number.
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { buildCreateDealBody, buildUpdateDealBody } from "./opportunityBody";
 
 export type OpSource = "api" | "error";
 
@@ -28,6 +29,12 @@ function str(v: unknown): string {
 }
 function num(v: unknown): number {
   return typeof v === "number" ? v : Number(v) || 0;
+}
+/** A finite number, or undefined when the value is absent/blank/not numeric - never a fabricated 0. */
+function optNum(v: unknown): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+  return undefined;
 }
 function bool(v: unknown, dflt = false): boolean {
   return typeof v === "boolean" ? v : dflt;
@@ -226,7 +233,10 @@ export interface Opportunity {
   id?: string;
   name: string;
   pipelineId: string;
+  /** The stage NAME as configured on the pipeline (what crm-service stores and matches by). */
   stage: string;
+  /** The pipeline stage's own uuid, when known. */
+  stageId?: string;
   /** Minor units (paise), as a string — never a float. */
   valueMinor: string;
   /**
@@ -266,9 +276,11 @@ export function normaliseOpportunity(raw: unknown): Opportunity | null {
     stage: str(r.stage),
     // Tolerate value | valueMinor | valueDisplay-less payloads.
     valueMinor: minorStr(r.valueMinor ?? r.value),
-    probability: num(r.probability),
+    // GAP-CRM-OPPORTUNITIES-NEW-06: an absent probability/quantity stays absent (shown as a dash),
+    // never coerced to a real-looking 0%.
+    ...(optNum(r.probability) !== undefined ? { probability: optNum(r.probability) as number } : {}),
     product: str(r.product),
-    quantity: num(r.quantity),
+    ...(optNum(r.quantity) !== undefined ? { quantity: optNum(r.quantity) as number } : {}),
     competitors: strArray(r.competitors),
     nextStep: str(r.nextStep),
     expectedCloseDate: str(r.expectedCloseDate ?? r.closeDate),
@@ -330,7 +342,9 @@ async function throwStageError(res: Response): Promise<never> {
 }
 
 export async function createOpportunity(opp: Opportunity): Promise<string | null> {
-  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(opp) });
+  // The wire body is built, not `JSON.stringify(opp)`: crm-service rejects the form's blank "" fields
+  // (see opportunityBody.ts).
+  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(buildCreateDealBody(opp)) });
   if (!res.ok) await throwStageError(res);
   // The command path returns 202 { id, status, correlationId }. Surface the id so the
   // caller can navigate to the new record (and so a second Create click can be blocked
@@ -345,7 +359,7 @@ export async function createOpportunity(opp: Opportunity): Promise<string | null
 
 export async function updateOpportunity(id: string, opp: Opportunity): Promise<void> {
   // PATCH, not PUT: the service registers `app.patch("/v1/crm/deals/:id")`.
-  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(opp) });
+  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(buildUpdateDealBody(opp)) });
   if (!res.ok) await throwStageError(res);
 }
 

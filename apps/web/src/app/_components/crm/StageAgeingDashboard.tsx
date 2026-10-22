@@ -3,8 +3,9 @@
  * StageAgeingDashboard — OP-005. Shows opportunities that have sat in a stage
  * longer than its configured limit (days-in-stage vs limit, worst first) and,
  * below, a CRUD editor for the per-stage day limits that drive the alert. Every
- * count/age is gated on source === "error": a failed fetch renders "—" + the
- * saved-info badge, never a fabricated "0 breaches" as fact.
+ * count/age is gated on source === "error": a failed fetch renders ONE message with
+ * a Retry (no "0 breaches" fabricated as fact, no badge stacked on top of it, and no
+ * claim of "saved information" — nothing is cached here).
  */
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -36,6 +37,7 @@ function toRow(l: StageLimit): LimitRow {
 
 export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean } = {}) {
   const t = useTranslations("crmStageAgeingDashboard");
+  const tOwner = useTranslations("crmOwner");
   const [rows, setRows] = useState<StageAgeingRow[]>([]);
   const [ageingSource, setAgeingSource] = useState<OpSource | "loading">("loading");
   const [limits, setLimits] = useState<LimitRow[]>([]);
@@ -52,14 +54,29 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
     const p = pipelines.find((pp) => pp.id === pipelineId);
     return p?.stages ?? [];
   }
-  /** A saved limit whose stage key is not in its pipeline's stage list is an orphan. */
+  /**
+   * GAP-CRM-OPPORTUNITY-AGEING-01: a limit matches deals by the stage NAME - crm-service stores
+   * `deals.stage` as the stage name and the ageing join is exact equality - so the stage value
+   * the dashboard offers, validates and saves is the stage's NAME, not the slug key the web
+   * derives for it (a saved "proposal" matched no deal named "Proposal").
+   */
+  function stageNamesFor(row: LimitRow): string[] {
+    if (row.pipelineId) return stagesFor(row.pipelineId).map((s) => s.name);
+    // A legacy limit with no pipeline applies to every pipeline: its stage is real if ANY pipeline has it.
+    return pipelines.flatMap((p) => p.stages.map((s) => s.name));
+  }
+  /** A saved limit whose stage matches no stage NAME in its pipeline(s) is an orphan. */
   function isOrphan(row: LimitRow): boolean {
     if (!row.stage.trim()) return false;
-    const stages = stagesFor(row.pipelineId);
-    // Only flag as orphan once we actually know the pipeline's stages — a limit with no
-    // pipeline scope at all (legacy rows) can't be validated against a stage list.
-    if (!row.pipelineId || stages.length === 0) return false;
-    return !stages.some((s) => s.key === row.stage);
+    const names = stageNamesFor(row);
+    // Only flag once we actually know the stages (pipelines not loaded yet / none exist).
+    if (names.length === 0) return false;
+    return !names.includes(row.stage);
+  }
+  /** The stage whose slug KEY equals this limit's value - i.e. a limit saved by the old key-based UI. */
+  function legacyKeyStage(row: LimitRow): Pipeline["stages"][number] | undefined {
+    const pool = row.pipelineId ? stagesFor(row.pipelineId) : pipelines.flatMap((p) => p.stages);
+    return pool.find((s) => s.key === row.stage && s.name !== row.stage);
   }
 
   async function loadAgeing(isLive: () => boolean = () => true) {
@@ -109,11 +126,11 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
   function rowValid(r: LimitRow): boolean {
     if (!(Number.isInteger(r.maxDays) && r.maxDays > 0)) return false;
     if (!r.stage.trim()) return false;
-    // A stage is only valid when it belongs to the row's chosen pipeline — a free-typed
+    // A stage is only valid when its NAME belongs to the row's chosen pipeline — a free-typed
     // key (the old behaviour) that matches no stage silently disabled the alert.
     const stages = stagesFor(r.pipelineId);
     if (!r.pipelineId || stages.length === 0) return false;
-    return stages.some((s) => s.key === r.stage);
+    return stages.some((s) => s.name === r.stage);
   }
 
   async function saveLimit(row: LimitRow) {
@@ -172,7 +189,9 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
       <div className="card">
         <div className="card-h">
           <h3 id={headingId}>Opportunities exceeding their stage limit</h3>
-          {ageingSource === "error" ? <DataSourceBadge source="error" /> : null}
+          {/* GAP-CRM-OPPORTUNITY-AGEING-04: no DataSourceBadge here. A failed ageing load
+              renders the single EmptyState + Retry below; the badge ("Couldn't load —
+              showing nothing") said the same thing a second time in the same card. */}
         </div>
         {ageingSource === "loading" ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px" }}>
@@ -215,7 +234,10 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
                           /crm/deals/:id (as used by DealCard). */}
                       {r.id ? <Link href={`/crm/deals/${r.id}`}>{r.name}</Link> : r.name}
                     </td>
-                    <td>{r.ownerName ?? "—"}</td>
+                    {/* GAP-CRM-OPPORTUNITY-AGEING-03: the owner to chase. The server resolves the
+                        owner's NAME; a deal with no owner says so, and an owner id that could
+                        not be resolved says "Unknown user" — never a raw id and never a dash. */}
+                    <td>{r.ownerName ?? (r.ownerId ? tOwner("unknownUser") : tOwner("unassigned"))}</td>
                     <td>{r.stageName}</td>
                     <td className="num">{r.daysInStage}</td>
                     <td className="num">{r.limitDays}</td>
@@ -275,6 +297,10 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
                 const busy = busyKey === row.key;
                 const stages = stagesFor(row.pipelineId);
                 const orphan = isOrphan(row);
+                const legacyKey = orphan ? legacyKeyStage(row) : undefined;
+                // A saved limit with no pipeline scope (legacy) applies to every pipeline.
+                const global = !row.pipelineId && row.stage.trim().length > 0;
+                const stageInList = stages.some((s) => s.name === row.stage);
                 return (
                   <tr key={row.key}>
                     <td>
@@ -303,7 +329,7 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
                       <select
                         id={`${headingId}-stage-${row.key}`}
                         value={row.stage}
-                        aria-invalid={row.stage.trim() && !orphan && stages.some((s) => s.key === row.stage) ? undefined : true}
+                        aria-invalid={row.stage.trim() && !orphan && stageInList ? undefined : true}
                         disabled={!row.pipelineId || stages.length === 0}
                         onChange={(e) => update(row.key, { stage: e.target.value })}
                         style={inputStyle}
@@ -312,21 +338,23 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
                         {/* A saved limit whose stage no longer exists in the pipeline is
                             kept visible as a disabled, flagged option so it can still be
                             seen and deleted — it is never silently dropped. */}
-                        {orphan ? (
+                        {row.stage.trim() && !stageInList ? (
                           <option value={row.stage} disabled>
-                            {t("orphanOption", { stage: row.stage })}
+                            {orphan ? t("orphanOption", { stage: row.stage }) : t("allPipelinesOption", { stage: row.stage })}
                           </option>
                         ) : null}
                         {stages.map((s) => (
-                          <option key={s.key} value={s.key}>
+                          <option key={s.key} value={s.name}>
                             {s.name}
                           </option>
                         ))}
                       </select>
                       {orphan ? (
                         <p role="alert" style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}>
-                          {t("orphanAlert")}
+                          {legacyKey ? t("legacyKeyAlert", { key: row.stage, name: legacyKey.name }) : t("orphanAlert")}
                         </p>
+                      ) : global ? (
+                        <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0" }}>{t("globalLimitNote")}</p>
                       ) : null}
                     </td>
                     <td>

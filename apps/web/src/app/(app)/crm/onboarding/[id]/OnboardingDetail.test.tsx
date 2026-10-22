@@ -20,7 +20,7 @@ vi.mock("@/lib/crm/onboarding", async (orig) => {
   return {
     ...actual,
     getOnboardingCase: vi.fn(),
-    getOnboardingLookups: vi.fn(),
+    getOnboardingCaseLookups: vi.fn(),
     advanceStage: vi.fn(),
     recordKyc: vi.fn(),
   };
@@ -47,8 +47,8 @@ function caseAt(stage: onb.OnboardingStage, kycStatus: onb.KycStatus): onb.Onboa
 
 beforeEach(() => {
   vi.mocked(onb.getOnboardingCase).mockReset();
-  vi.mocked(onb.getOnboardingLookups).mockReset();
-  vi.mocked(onb.getOnboardingLookups).mockResolvedValue({ dealNames: {}, accountNames: {} });
+  vi.mocked(onb.getOnboardingCaseLookups).mockReset();
+  vi.mocked(onb.getOnboardingCaseLookups).mockResolvedValue({ lookups: { dealNames: {}, accountNames: {} }, complete: true });
   vi.mocked(onb.advanceStage).mockReset();
   vi.mocked(onb.recordKyc).mockReset();
 });
@@ -171,9 +171,9 @@ describe("OnboardingDetail (P1-9)", () => {
       data: caseAt("verification", "submitted"),
       source: "api",
     });
-    vi.mocked(onb.getOnboardingLookups).mockResolvedValue({
-      dealNames: { d1: "Acme renewal" },
-      accountNames: { a1: "Acme Corp" },
+    vi.mocked(onb.getOnboardingCaseLookups).mockResolvedValue({
+      lookups: { dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } },
+      complete: true,
     });
     render(<OnboardingDetail id="c1" />);
     await waitFor(() => expect(screen.getByText(/Onboarding — Acme renewal/)).toBeInTheDocument());
@@ -296,5 +296,125 @@ describe("OnboardingDetail (P1-9)", () => {
     expect(screen.getByText(/Case moved to "Documents submitted"/i)).toBeInTheDocument();
     // Three getOnboardingCase calls: initial + 2 polls.
     expect(vi.mocked(onb.getOnboardingCase).mock.calls.length).toBeGreaterThanOrEqual(3);
+    // ... but the deal/account were named ONCE: the poll retries reuse the resolved names.
+    expect(onb.getOnboardingCaseLookups).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-asks for the names on the next poll only while the lookup was incomplete, keeping what it already found", { timeout: 20000 }, async () => {
+    vi.mocked(onb.getOnboardingCase)
+      .mockResolvedValueOnce({ data: caseAt("initiated", "pending"), source: "api" })
+      .mockResolvedValue({ data: { ...caseAt("documents_submitted", "pending"), version: 3 }, source: "api" });
+    vi.mocked(onb.advanceStage).mockResolvedValue({ accepted: true });
+    vi.mocked(onb.getOnboardingCaseLookups)
+      // first try: the account resolved, the deal request failed
+      .mockResolvedValueOnce({ lookups: { dealNames: {}, accountNames: { a1: "Acme Corp" } }, complete: false })
+      // retry: the deal resolved, the account request failed this time
+      .mockResolvedValueOnce({ lookups: { dealNames: { d1: "Acme renewal" }, accountNames: {} }, complete: true });
+
+    render(<OnboardingDetail id="c1" />);
+    // Named after the account until the deal name arrives.
+    await waitFor(() => expect(screen.getByRole("link", { name: "Acme Corp" })).toBeInTheDocument());
+    fireEvent.change(await screen.findByLabelText(/move to/i), { target: { value: "documents_submitted" } });
+    fireEvent.click(screen.getByRole("button", { name: /apply stage change/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /confirm change/i }));
+    // The poll is under way (2s), then the change lands and the banner goes.
+    expect(await screen.findByText(/Pending update/i)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/Pending update/i)).not.toBeInTheDocument(), { timeout: 15000 });
+    await waitFor(() => expect(screen.getByText(/Onboarding — Acme renewal/)).toBeInTheDocument());
+    // The account name found on the first try is not lost when the retry did not return it.
+    expect(screen.getByRole("link", { name: "Acme Corp" })).toBeInTheDocument();
+    // Asked twice (the incomplete first try, then the retry); the complete answer ends the asking.
+    expect(onb.getOnboardingCaseLookups).toHaveBeenCalledTimes(2);
+  });
+});
+
+// W2 crm cluster 07 -- GAP-CRM-ONBOARDING-DETAIL-01 / -05.
+describe("OnboardingDetail naming + reveal (W2 crm cluster 07)", () => {
+  const FULL_ID = "3fa85f64-5717-4562-b3fc-2c963f66afa6";
+  const header = { title: "Onboarding case", backHref: "/crm/onboarding", backLabel: "Back to onboarding" };
+
+  it("prints only a short Ref - the full record UUID appears nowhere on the page", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "submitted"), id: FULL_ID }, source: "api" });
+    const { container } = render(<OnboardingDetail id={FULL_ID} />);
+    await waitFor(() => expect(screen.getByText("3fa85f64")).toBeInTheDocument());
+    expect(container.textContent).not.toContain(FULL_ID);
+    expect(container.textContent).not.toContain("5717-4562");
+  });
+
+  it("asks the lookup to name THIS case's deal and account", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(onb.getOnboardingCaseLookups).toHaveBeenCalled());
+    expect(vi.mocked(onb.getOnboardingCaseLookups).mock.calls[0]![0]).toEqual(expect.objectContaining({ dealId: "d1", accountId: "a1" }));
+  });
+
+  it("the page h1 names the customer once the case has loaded, with the generic title as subtitle", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    vi.mocked(onb.getOnboardingCaseLookups).mockResolvedValue({ lookups: { dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } }, complete: true });
+    render(<OnboardingDetail id="c1" header={header} />);
+    // Until the name resolves the generic title stands in.
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Onboarding case");
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Acme renewal"));
+    expect(screen.getByText("Onboarding case", { selector: ".sub" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to onboarding" })).toHaveAttribute("href", "/crm/onboarding");
+    expect(document.title).toContain("Acme renewal");
+  });
+
+  it("falls back to the account name, and keeps the generic title when the case cannot be loaded", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    vi.mocked(onb.getOnboardingCaseLookups).mockResolvedValue({ lookups: { dealNames: {}, accountNames: { a1: "Acme Corp" } }, complete: true });
+    const first = render(<OnboardingDetail id="c1" header={header} />);
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Acme Corp"));
+    first.unmount();
+
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: null, source: "error" });
+    render(<OnboardingDetail id="c1" header={header} />);
+    await waitFor(() => expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument());
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Onboarding case");
+  });
+
+  it("renders no page header of its own when none is supplied (the existing callers)", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: caseAt("verification", "submitted"), source: "api" });
+    render(<OnboardingDetail id="c1" />);
+    await waitFor(() => expect(screen.getByText(/Onboarding —/)).toBeInTheDocument());
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  });
+
+  // The audited reveal control is wired for a server-masked reference an approver may reveal.
+  it("offers the audited reveal for a masked reference to a KYC approver, and calls the audited endpoint with a reason", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "••••7890" }, source: "api" });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "KYC-REF-1234567890" } }), { status: 200 }));
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    expect(await screen.findByText("••••7890")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "re-checking before approval" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    expect(await screen.findByText("KYC-REF-1234567890")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/crm/pii/reveal");
+    expect(JSON.parse(init.body as string)).toEqual({
+      resourceType: "onboarding",
+      resourceId: "c1",
+      field: "kycReference",
+      reason: "re-checking before approval",
+    });
+    fetchMock.mockRestore();
+  });
+
+  it("offers no reveal to a non-approver (who could not use it) or when the value is already clear", async () => {
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "••••7890" }, source: "api" });
+    const nonApprover = render(<OnboardingDetail id="c1" canApproveKyc={false} />);
+    expect(await screen.findByText("••••7890")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    nonApprover.unmount();
+
+    vi.mocked(onb.getOnboardingCase).mockResolvedValue({ data: { ...caseAt("verification", "verified"), kycReference: "KYC-REF-1234567890" }, source: "api" });
+    render(<OnboardingDetail id="c1" canApproveKyc />);
+    expect(await screen.findByText("KYC-REF-1234567890")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 });

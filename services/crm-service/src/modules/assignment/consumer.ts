@@ -377,7 +377,7 @@ function registerTargetConsumers(queue: Queue): void {
   });
   queue.subscribe(COMMANDS.deleteTerritory, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
-    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.territories"), p), "territory", p.id, "territory_delete", true);
+    await simpleInsert(msg, () => guardedDelete(sql.raw("crm.territories"), p, true), "territory", p.id, "territory_delete", true);
   });
 
   queue.subscribe(COMMANDS.createPartner, async (msg) => {
@@ -431,12 +431,21 @@ function registerTargetConsumers(queue: Queue): void {
  * rule created between that check and this consumer would be orphaned. Re-check atomically
  * here: the DELETE only matches when no assignment rule references the target id.
  */
-function guardedDelete(table: ReturnType<typeof sql.raw>, p: { id: string; tenantId: string }): ReturnType<typeof sql> {
+function guardedDelete(
+  table: ReturnType<typeof sql.raw>,
+  p: { id: string; tenantId: string },
+  checkBranches = false,
+): ReturnType<typeof sql> {
+  // A territory is also referenced by the branches filed under it (branches.territory_id).
+  const branchGuard = checkBranches
+    ? sql`AND NOT EXISTS (SELECT 1 FROM crm.branches b WHERE b.tenant_id = ${p.tenantId} AND b.territory_id = ${p.id})`
+    : sql``;
   return sql`DELETE FROM ${table} t WHERE t.id = ${p.id} AND t.tenant_id = ${p.tenantId}
     AND NOT EXISTS (
       SELECT 1 FROM crm.assignment_rules r
       WHERE r.tenant_id = ${p.tenantId} AND r.criteria::text LIKE ${"%" + p.id + "%"}
     )
+    ${branchGuard}
     RETURNING t.id`;
 }
 

@@ -256,14 +256,54 @@ export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin"
  * Roles that may reach the CRM platform-wide admin-config routes (Custom
  * Fields, Matching/Dedup Rules, Lead Scoring, Qualification Frameworks, Lead
  * Stage Reasons, Assignment Rules, Assignment Directory, Agent Workload,
- * Escalation Rules, Task Escalation, Document Types). Every one of those route
- * layouts gates on this same set, and the CRM hub (page.tsx) hides the whole
- * Configuration section from anyone outside it, so the tiles and the route
- * guards agree (GAP-CRM-HOME-01 / GAP-CRM-AGENT-WORKLOAD-01). The server
- * remains the authority; this is defence-in-depth + UX. A plain crm_user is
- * deliberately excluded.
+ * Escalation Rules, Task Escalation, Document Types, Grievance Categories,
+ * Pipelines, Website Lead Forms). Every one of those route layouts gates on this
+ * same exported set (no per-layout copies), and the CRM hub filters each tile
+ * through crm/hubTiles.ts against it, so the tiles and the route guards agree
+ * (GAP-CRM-HOME-01 / GAP-CRM-AGENT-WORKLOAD-01). The server remains the
+ * authority; this is defence-in-depth + UX. A plain crm_user is deliberately
+ * excluded.
  */
 export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles that can actually USE the Matching (dedup) Rules editor: the
+ * intersection of the parent CRM layout gate (crm_user, crm_admin, super_admin,
+ * tenant_admin) and crm-service's ADMIN_ROLES on GET/PUT /v1/crm/dedup-rules
+ * (modules/contacts/dedup-routes.ts: crm_admin, super_admin). Narrower than
+ * CRM_ADMIN_ROLES on purpose: tenant_admin passes both web layouts but the
+ * server answers 403, and admin / platform_admin never pass the parent layout,
+ * so listing them only produced a page that cannot load (GAP-CRM-DEDUP-RULES-05).
+ * A drift guard (dedup-rules/layout.test.tsx) reads the server constant and
+ * fails if the two disagree. The server stays the authority.
+ */
+export const CRM_DEDUP_RULES_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * Roles that can actually USE the Pipelines editor (/crm/pipelines): crm-service
+ * admits ONLY [crm_admin, super_admin] on POST/PATCH/DELETE /v1/crm/pipelines
+ * (modules/pipelines/routes.ts PIPELINE_WRITE_ROLES), and tenant_admin is not even
+ * in its read set, so a tenant_admin who cleared the broader CRM_ADMIN_ROLES gate
+ * got a fully wired editor whose every call answered 403. admin / platform_admin
+ * never clear the parent CRM layout. The /crm/pipelines layout and its hub tile
+ * gate on this set; pipelines/layout.test.tsx reads the server constant and fails
+ * if the two drift. The server stays the authority. Widening this (letting
+ * tenant_admin configure pipelines) is an access-control change that needs the
+ * backend lists changed first and security sign-off.
+ */
+export const CRM_PIPELINE_WRITE_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * The route-accurate subset for the three admin screens whose crm-service
+ * routes accept ONLY [crm_admin, super_admin, tenant_admin]: Product Catalogue
+ * (products/routes.ts), Service Types (service-requests/routes.ts) and Agent
+ * Workload (teams/routes.ts). `admin` and `platform_admin` are accepted by none
+ * of those routes, so admitting them to the screen would give a wired editor
+ * whose every mutation 403s (GAP2-CRM-PRODUCTS-07 / GAP2-CRM-SERVICE-TYPES-03 /
+ * GAP2-CRM-AGENT-WORKLOAD-05). Those three layouts and their hub tiles gate on
+ * this set.
+ */
+export const CRM_STRICT_ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /**
  * Roles crm-service admits on GET /v1/crm/contacts/:id (its CRM_ROLES in
@@ -299,16 +339,9 @@ export const CRM_QUOTATION_APPROVE_ROLES = ["crm_admin", "super_admin", "tenant_
  */
 export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
-/**
- * Roles permitted to read full contact PII (phone/email in the clear) rather
- * than the masked form (GAP-CRM-CONTACTS-02 / GAP-CRM-CONTACTS-DETAIL-02).
- * DPDP: the base crm_user sees masked values; only privileged/admin roles see
- * the clear value. The server remains the authority — this only decides what
- * the UI renders. NOTE (HUMAN REVIEW): true redaction requires the contacts
- * API to omit the clear value for roles outside this set; UI masking alone is
- * cosmetic until that backend change lands.
- */
-export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+// CRM_PII_READ_ROLES lives in ./crmRoles (client-safe) and is re-exported here so
+// existing server-side imports keep working with a single source of truth.
+export { CRM_PII_READ_ROLES, CRM_MERGE_ROLES } from "./crmRoles";
 
 /**
  * Roles permitted to bulk-export contacts (name/phone/email egress)
@@ -318,14 +351,52 @@ export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platfor
 export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
+ * Roles offered the Contacts-list bulk-export button (GAP-CRM-CONTACTS-01).
+ * crm-service's GET /v1/crm/contacts/export (modules/contacts/export-routes.ts)
+ * admits crm_user / crm_admin / super_admin and sessions are matched by EXACT
+ * role string, so "admin", "platform_admin" and "tenant_admin" - present in
+ * CRM_CONTACTS_EXPORT_ROLES - were shown a button that always 403'd. This set is
+ * the intersection of what the server admits and the registry-egress policy
+ * (admin-class only; a plain crm_user is not offered the whole-registry
+ * download): crm_admin and super_admin. The server stays the authority.
+ */
+export const CRM_CONTACTS_BULK_EXPORT_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * Roles offered the "Post a reporting period" form on the campaign detail page
+ * (GAP-CRM-CAMPAIGNS-DETAIL-04). crm-service's PUT /v1/crm/campaigns/:id/performance
+ * (modules/dashboard/campaign-roi-routes.ts, its ADMIN_ROLES) admits exactly
+ * crm_admin / super_admin / tenant_admin, matched by EXACT role string, so
+ * "admin" and "platform_admin" (both in CRM_ADMIN_ROLES) would be shown a form
+ * that always 403s. The server stays the authority; this only decides whether
+ * the form is rendered.
+ */
+export const CRM_CAMPAIGN_PERFORMANCE_POST_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
  * Roles permitted to verify/reject uploaded account & contact documents
  * (GAP-CRM-ACCOUNTS-DETAIL-02). Document verification is an approval control,
  * so it is restricted to CRM admins rather than every crm_user — the detail
  * pages previously passed canVerify unconditionally, showing Verify/Reject to
- * every crm_user. The server remains the authority (the verify endpoint must
- * 403 others); this only decides whether the UI offers the control.
+ * every crm_user. EXACTLY the set crm-service's verify route admits
+ * (modules/documents/routes.ts VERIFY_ROLES: crm_admin, super_admin, tenant_admin),
+ * matched by exact role string: "admin" and "platform_admin" (both in
+ * CRM_ADMIN_ROLES) are accepted by no document route, so offering them Verify/Reject
+ * gave a button that always 403'd. crmRoles.test.ts reads the server constant and
+ * fails if the two drift. The server remains the authority; this only decides
+ * whether the UI offers the control.
  */
-export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+export const CRM_VERIFY_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Who may assign / reassign a service request (GAP-CRM-SERVICE-REQUESTS-DETAIL-05).
+ * Mirrors crm-service's ADMIN_ROLES for PATCH /v1/crm/service-requests/:id/assign
+ * (modules/service-requests/routes.ts, the same tier that may close or cancel); the
+ * server is the authority and refuses anyone else, this only decides whether the
+ * detail page offers the button. One exported copy (it used to be a local constant in
+ * the page); crmRoles.test.ts reads the server constant and fails if the two drift.
+ */
+export const CRM_SERVICE_REQUEST_ASSIGN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /**
  * Roles permitted to close (won/lost/cancelled/on_hold) an opportunity

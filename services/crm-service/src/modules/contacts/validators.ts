@@ -70,16 +70,64 @@ export const createContactBody = createContactObject
   .superRefine(consentRefiner);
 export type CreateContactBody = z.infer<typeof createContactBody>;
 
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-01: fields a PATCH may CLEAR by sending `null`.
+ * `name`, `country`, ownership and lifecycle fields stay non-nullable. Before
+ * this, every one of these was `z.string()...optional()`, so the edit form's
+ * "clear this field" (explicit null, since JSON drops undefined) was rejected
+ * with 400 for the whole PATCH - a DPDP correction/erasure of email, phone or
+ * the business identifiers could not be recorded. null = clear; absent = leave.
+ *
+ * `accountId` is clearable too: the edit form sends `accountId: null` when the
+ * Organisation link is cleared (unlink the contact from its account). The update
+ * consumer already guards the cross-tenant FK check with `p.accountId &&` and
+ * then writes `patch.accountId = p.accountId`, so null unlinks the row.
+ */
+const clearableContactFields = {
+  accountId: z.string().uuid().nullable().optional(),
+  email: z.string().email().max(320).nullable().optional(),
+  phone: z.string().min(3).max(32).nullable().optional(),
+  company: z.string().min(1).max(200).nullable().optional(),
+  designation: z.string().max(120).nullable().optional(),
+  city: z.string().max(100).nullable().optional(),
+  gstin: z.string().max(15).nullable().optional(),
+  pan: z.string().max(10).nullable().optional(),
+  pincode: z.string().max(6).nullable().optional(),
+  leadSource: z.string().max(64).nullable().optional(),
+};
+
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-02: a lead's status moves only through the
+ * governed transition (POST /v1/crm/leads/:id/transition), which enforces the
+ * state machine, the reason code for disqualify/nurture/recycle/re-open and the
+ * transition audit. The generic PATCH used to write `leadStatus` straight
+ * through, so a crm_user could disqualify a lead with no reason or audit trail
+ * by calling it directly. It is now refused at the boundary (400
+ * LEAD_STATUS_VIA_TRANSITION) rather than silently dropped, so a caller still
+ * sending it learns it was not applied.
+ */
+export const LEAD_STATUS_VIA_TRANSITION = "LEAD_STATUS_VIA_TRANSITION";
+function leadStatusRefiner(val: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  if (val.leadStatus !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: LEAD_STATUS_VIA_TRANSITION, path: ["leadStatus"] });
+  }
+}
+
 export const updateContactBody = createContactObject
   .partial()
-  .extend({ status: z.enum(["active", "inactive"]).optional() })
+  .extend({ status: z.enum(["active", "inactive"]).optional(), ...clearableContactFields })
   .superRefine(formatRefiner(CONTACT_FORMAT_SPECS))
-  .superRefine(consentRefiner);
+  .superRefine(consentRefiner)
+  .superRefine(leadStatusRefiner);
 export type UpdateContactBody = z.infer<typeof updateContactBody>;
 
 export const mergeContactsBody = z.object({
   primaryId: z.string().uuid(),
   duplicateId: z.string().uuid(),
+  // GAP-CRM-DEDUP-CANDIDATES-02: a merge is irreversible, so the reviewer's reason rides
+  // the command into the audit trail. Optional on the wire (older callers send none);
+  // the review screen requires >= 10 characters before it will submit.
+  reason: z.string().trim().min(10).max(2000).optional(),
 });
 export type MergeContactsBody = z.infer<typeof mergeContactsBody>;
 
@@ -137,6 +185,9 @@ export const listContactsQuery = z.object({
   expectedValueMin: z.coerce.number().int().nonnegative().optional(),
   expectedValueMax: z.coerce.number().int().nonnegative().optional(),
 });
+
+/** Most account ids one `?ids=` lookup may carry. */
+export const MAX_ACCOUNT_LOOKUP_IDS = 50;
 
 // LQ-003: PATCH /v1/crm/contacts/:id/classification body. All fields optional so a
 // caller can set just one; expected_value is a non-negative integer of paise.
@@ -236,6 +287,31 @@ export const accountsListSchema = z.object({
   data: z.array(accountViewSchema),
   meta: z.object({ total: z.number().int().nonnegative() }).optional(),
 });
+
+// GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts query. `search` (name substring)
+// and `excludeSubtreeOf` (hide an account and all its descendants) let a picker ask
+// the server for matches instead of loading the capped list and filtering it.
+export const listAccountsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  search: z.string().trim().max(100).optional(),
+  excludeSubtreeOf: z.string().uuid().optional(),
+  // W2 crm cluster 07: comma-separated ids - look specific accounts up in one request, so a
+  // picker or a name lookup never has to page the whole list.
+  ids: z
+    .string()
+    .max(MAX_ACCOUNT_LOOKUP_IDS * 37)
+    .transform((v) => v.split(",").map((x) => x.trim()).filter((x) => x.length > 0))
+    .pipe(z.array(z.string().uuid()).min(1).max(MAX_ACCOUNT_LOOKUP_IDS))
+    .optional(),
+});
+
+// GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts/:id -- the list row shape plus the
+// number of ACTIVE sub-accounts below it (drives the "moves N sub-accounts" confirm).
+export const accountDetailSchema = accountViewSchema.extend({
+  descendantCount: z.number().int().nonnegative(),
+});
+export const accountDetailResponseSchema = z.object({ data: accountDetailSchema });
 
 export const contactViewSchema = z.object({
   id: z.string().uuid(),

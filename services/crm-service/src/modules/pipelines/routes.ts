@@ -9,11 +9,20 @@ import * as repo from "./repo.js";
 import * as dealsRepo from "../deals/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// GAP-CRM-HOME-01 (step 4) / GAP-CRM-PIPELINES-03: pipelines and their stage gates, mandatory
+// fields and scope are tenant-wide CONFIGURATION -- an admin control. The web admin screen
+// (/crm/pipelines, crm/pipelines/layout.tsx) is gated to CRM admins, so the server must
+// refuse the same writes from a plain crm_user (hiding the tile and the route is UX only).
+// Reads stay on CRM_ROLES because the deals Kanban board, the opportunity views, the
+// stage-limit editor and the quotation builder all read pipelines as a plain crm_user.
+// Strictly narrower than the previous write set (CRM_ROLES minus crm_user): no role is
+// granted anything new here.
+const PIPELINE_WRITE_ROLES = ["crm_admin", "super_admin"];
 
 export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/pipelines", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, PIPELINE_WRITE_ROLES);
     const body = createPipelineBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPipeline(ctx, body));
   });
@@ -41,7 +50,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch("/v1/crm/pipelines/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, PIPELINE_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updatePipelineBody.parse(req.body);
 
@@ -75,7 +84,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete("/v1/crm/pipelines/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, PIPELINE_WRITE_ROLES);
     const { id } = idParam.parse(req.params);
 
     // GAP-CRM-PIPELINES-01: deleting a pipeline that still holds open deals would orphan

@@ -7,7 +7,13 @@
  * fact. Normalisers tolerate a bare array OR an { items | data | rules }
  * wrapper (the backend is being built concurrently — see AS-001..004 contract).
  */
-import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse, errorCodeFromResponse } from "@/lib/api/browserClient";
+import {
+  normaliseEscalationRoles,
+  normaliseEscalationUsers,
+  type EscalationRole,
+  type EscalationUser,
+} from "./directory";
 
 export type AsSource = "api" | "error";
 
@@ -101,9 +107,24 @@ export function normaliseRule(raw: unknown): AssignmentRule | null {
     ordinal: num(r.ordinal),
     enabled: bool(r.enabled, true),
     fallbackOwnerId: str(r.fallbackOwnerId),
-    ...(typeof r.updatedBy === "string" && r.updatedBy ? { updatedBy: r.updatedBy } : {}),
+    ...(updatedByLabel(r) ? { updatedBy: updatedByLabel(r) } : {}),
     ...(typeof r.updatedAt === "string" && r.updatedAt ? { updatedAt: r.updatedAt } : {}),
   };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Who last changed a rule, as a DISPLAY name (GAP-CRM-ASSIGNMENT-RULES-05). The
+ * service sends `updatedByName` (resolved from the identity directory) alongside
+ * the raw `updatedBy` user id; prefer the name, and never surface a bare id -- an
+ * unresolved actor is simply omitted rather than shown as a UUID.
+ */
+function updatedByLabel(r: Record<string, unknown>): string {
+  const name = str(r.updatedByName).trim();
+  if (name) return name;
+  const by = str(r.updatedBy).trim();
+  return by && !UUID_RE.test(by) ? by : "";
 }
 
 export function normaliseRules(raw: unknown): AssignmentRule[] {
@@ -318,9 +339,65 @@ export async function updateResource(
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
 
+/**
+ * What still points at a queue / territory / partner / branch that a delete was
+ * refused for (GAP-CRM-ASSIGNMENT-DIRECTORY-04). Names are a bounded sample; the
+ * counts are exact.
+ */
+export interface ResourceReferences {
+  assignmentRules: string[];
+  assignmentRuleCount: number;
+  branches: string[];
+  branchCount: number;
+}
+
+/** DELETE refused with 409 IN_USE: other records still reference the target. */
+export class ResourceInUseError extends Error {
+  readonly references: ResourceReferences;
+  constructor(references: ResourceReferences) {
+    super("IN_USE");
+    this.name = "ResourceInUseError";
+    this.references = references;
+  }
+}
+
+function namesOf(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((r) => (r && typeof r === "object" ? str((r as Record<string, unknown>).name) : ""))
+    .filter((n) => n.length > 0);
+}
+
+/** Parse the `references` of a 409 IN_USE body; null when the body is not an IN_USE refusal. */
+async function readInUseReferences(res: Response): Promise<ResourceReferences | null> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown; references?: Record<string, unknown> } | null;
+    if (!body || body.code !== "IN_USE") return null;
+    const refs = body.references ?? {};
+    const assignmentRules = namesOf(refs.assignmentRules);
+    const branches = namesOf(refs.branches);
+    return {
+      assignmentRules,
+      assignmentRuleCount: num(refs.assignmentRuleCount) || assignmentRules.length,
+      branches,
+      branchCount: num(refs.branchCount) || branches.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteResource(resource: OwnershipResource, id: string): Promise<void> {
   const res = await browserFetch(`v1/crm/${resource}/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (res.ok) return;
+  // A 409 IN_USE is a business refusal the admin can act on, not a generic
+  // "changed by someone else" conflict: carry the reason so the UI can say what
+  // still uses the entry.
+  if (res.status === 409) {
+    const references = await readInUseReferences(res);
+    if (references) throw new ResourceInUseError(references);
+  }
+  throw new Error(await errorMessageFromResponse(res));
 }
 
 /**
@@ -429,6 +506,12 @@ export const ESCALATION_TRIGGER_LABELS: Record<EscalationTrigger, string> = {
 
 export interface EscalationRule {
   id?: string;
+  /**
+   * Display name of the rule. crm-service REQUIRES one (upsertEscalationRuleBody.name);
+   * the editor derives it from trigger + threshold + recipient, and a persisted
+   * rule's own name round-trips so editing never renames it.
+   */
+  name?: string;
   trigger: EscalationTrigger;
   thresholdMinutes: number;
   /** Escalate to a role OR a specific user — exactly one is used at a time. */
@@ -445,6 +528,7 @@ export function normaliseEscalationRule(raw: unknown): EscalationRule | null {
   const t = str(r.trigger);
   return {
     ...(typeof r.id === "string" ? { id: r.id } : {}),
+    ...(str(r.name).trim() ? { name: str(r.name).trim() } : {}),
     trigger: (ESCALATION_TRIGGERS as readonly string[]).includes(t) ? (t as EscalationTrigger) : "unaccepted",
     thresholdMinutes: num(r.thresholdMinutes),
     recipientRole: str(r.recipientRole),
@@ -470,14 +554,111 @@ export async function getEscalationRules(): Promise<LoaderResult<EscalationRule[
   }
 }
 
+/**
+ * The wire body crm-service's upsertEscalationRuleBody accepts. Two things the raw
+ * editor row got wrong: the schema REQUIRES `name`, and `recipientId` must be a
+ * UUID when present, so an unset (empty-string) recipient must be OMITTED rather
+ * than sent as "" -- both made every save a 400.
+ */
+export function escalationRuleBody(rule: EscalationRule): Record<string, unknown> {
+  const role = rule.recipientRole.trim();
+  const user = rule.recipientId.trim();
+  const name = rule.name?.trim() || `${ESCALATION_TRIGGER_LABELS[rule.trigger]} · ${rule.thresholdMinutes} min`;
+  return {
+    name: name.slice(0, 200),
+    trigger: rule.trigger,
+    thresholdMinutes: rule.thresholdMinutes,
+    ...(role ? { recipientRole: role } : {}),
+    ...(user ? { recipientId: user } : {}),
+    reassign: rule.reassign,
+    enabled: rule.enabled,
+  };
+}
+
+/**
+ * The server refused the rule's RECIPIENT (GAP-CRM-ESCALATION-RULES-01):
+ * "invalid" = 422 INVALID_RECIPIENT (not a role of this tenant / not an active
+ * user), "unavailable" = 503 DIRECTORY_UNAVAILABLE (it could not verify and so
+ * did not save). A distinct type so the editor can show its own translated
+ * explanation instead of the generic status text.
+ */
+export class EscalationRecipientError extends Error {
+  constructor(readonly kind: "invalid" | "unavailable", message: string) {
+    super(message);
+    this.name = "EscalationRecipientError";
+  }
+}
+
+async function escalationWriteError(res: Response): Promise<Error> {
+  const code = await errorCodeFromResponse(res);
+  const message = await errorMessageFromResponse(res);
+  if (code === "INVALID_RECIPIENT") return new EscalationRecipientError("invalid", message);
+  if (code === "DIRECTORY_UNAVAILABLE") return new EscalationRecipientError("unavailable", message);
+  return new Error(message);
+}
+
 export async function createEscalationRule(rule: EscalationRule): Promise<void> {
-  const res = await browserFetch("v1/crm/escalation-rules", { method: "POST", body: JSON.stringify(rule) });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  const res = await browserFetch("v1/crm/escalation-rules", { method: "POST", body: JSON.stringify(escalationRuleBody(rule)) });
+  if (!res.ok) throw await escalationWriteError(res);
 }
 
 export async function updateEscalationRule(id: string, rule: EscalationRule): Promise<void> {
-  const res = await browserFetch(`v1/crm/escalation-rules/${id}`, { method: "PUT", body: JSON.stringify(rule) });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  const res = await browserFetch(`v1/crm/escalation-rules/${id}`, { method: "PUT", body: JSON.stringify(escalationRuleBody(rule)) });
+  if (!res.ok) throw await escalationWriteError(res);
+}
+
+/**
+ * A role the escalation editor may offer as a recipient (key = the role name stored on the
+ * rule) and an ACTIVE user it may offer (the id is stored; the name is shown). The SAME shapes,
+ * parsed by the SAME normalisers (./directory), as the task-escalation editor's pickers: crm-service
+ * serves both from one tenant directory.
+ */
+export type EscalationRecipientRole = EscalationRole;
+export type EscalationRecipientUser = EscalationUser;
+export interface EscalationRecipientDirectory {
+  roles: EscalationRecipientRole[];
+  users: EscalationRecipientUser[];
+  /** False = the role directory could not be read (NOT "no roles exist"). */
+  rolesAvailable: boolean;
+  /** False = the user directory could not be read (NOT "no users exist"). */
+  usersAvailable: boolean;
+  /** True = more users exist than were returned, so absence from `users` proves nothing. */
+  usersTruncated: boolean;
+}
+
+/**
+ * GAP-CRM-ESCALATION-RULES-01: the role + user pickers for the escalation editor,
+ * from crm-service (GET /v1/crm/escalation-rules/recipients) -- readable by a
+ * CRM administrator, unlike the tenant-admin-only policy/identity list endpoints
+ * the editor used to call (which left a crm_admin with empty pickers and a
+ * free-text box that accepts a typo). Failure -> source "error" with both
+ * directories marked unavailable, never an empty directory presented as fact.
+ */
+export async function getEscalationRecipients(): Promise<LoaderResult<EscalationRecipientDirectory>> {
+  const unavailable: EscalationRecipientDirectory = {
+    roles: [], users: [], rolesAvailable: false, usersAvailable: false, usersTruncated: false,
+  };
+  try {
+    const res = await browserFetch("v1/crm/escalation-rules/recipients");
+    if (!res.ok) return { data: unavailable, source: "error" };
+    const body = (await res.json()) as { data?: { roles?: unknown; users?: unknown }; meta?: Record<string, unknown> };
+    const roles = normaliseEscalationRoles(body.data?.roles);
+    const users = normaliseEscalationUsers(body.data?.users);
+    const meta = body.meta ?? {};
+    return {
+      data: {
+        roles,
+        users,
+        // Only an explicit `true` counts: a missing flag must not read as "available".
+        rolesAvailable: meta.rolesAvailable === true,
+        usersAvailable: meta.usersAvailable === true,
+        usersTruncated: meta.usersTruncated === true,
+      },
+      source: "api",
+    };
+  } catch {
+    return { data: unavailable, source: "error" };
+  }
 }
 
 export async function deleteEscalationRule(id: string): Promise<void> {

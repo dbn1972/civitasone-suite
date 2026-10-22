@@ -92,6 +92,20 @@ describe("ForecastPage — GoI redesign", () => {
     expect(screen.queryByTestId("stage-table")).not.toBeInTheDocument();
   });
 
+  // GAP-CRM-FORECAST-01 acceptance: "healthy empty forecast still renders zeros" - a forecast that LOADED
+  // with nothing in it is a real zero, not an outage: the zero tiles stay and no error state replaces them.
+  it("still renders the zero tiles (no error state) for a healthy, empty forecast", async () => {
+    mockedForecast.mockResolvedValue({
+      data: { totalForecastMinor: "0", dealCount: 0, stages: [] },
+      source: "api" as const,
+    } as never);
+    render(await ForecastPage({}));
+    expect(screen.getByText("Weighted Forecast")).toBeInTheDocument();
+    expect(screen.getAllByText("₹0.00").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("stage-table")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-FORECAST-03: a chosen FY quarter is resolved to a close-date window
   // passed to the loader, and named in the subtitle.
   it("passes the period's close-date window to the loader and names it in the subtitle", async () => {
@@ -106,5 +120,46 @@ describe("ForecastPage — GoI redesign", () => {
   it("renders the period filter", async () => {
     render(await ForecastPage({}));
     expect(screen.getByTestId("period-filter")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-FORECAST-06: the four stat tiles must use icons the ds StatIcon set maps to a
+  // vector glyph. A bare "▣" / "◉" / "◈" / "△" is not in the map, so StatIcon fell back to
+  // printing it as raw text.
+  it("renders every stat icon as a vector glyph, never as raw text", async () => {
+    const { container } = render(await ForecastPage({}));
+    const tiles = container.querySelectorAll(".stat .ic");
+    expect(tiles.length).toBe(4);
+    for (const ic of tiles) {
+      expect(ic.querySelector("svg"), "stat icon should be an svg").not.toBeNull();
+      expect((ic.textContent ?? "").trim()).toBe("");
+    }
+  });
+
+  // The link to /crm/pipeline carries the CRM hub's own label for that route, not a one-off
+  // "Engagement Board". The hub tile now reads "Engagement Pipeline Board" (it was renamed to
+  // match the destination page title, GAP-CRM-HOME-02); the link reads the same hub key.
+  it("labels the link to /crm/pipeline exactly like the CRM hub tile", async () => {
+    render(await ForecastPage({}));
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByRole("link", { name: /engagement board/i })).not.toBeInTheDocument();
+  });
+
+  it("speaks of engagements, not deals, in the default horizon wording", async () => {
+    render(await ForecastPage({}));
+    expect(screen.getByText(/all open engagements/i)).toBeInTheDocument();
+    expect(screen.queryByText(/open deals/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-PIPELINE-04 (W2 rescan): the board has ONE name across the CRM hub and the
+  // forecast. The forecast header used to call it "Engagement Board" while the hub tile
+  // said something else. The hub tile reads "Engagement Pipeline Board" (GAP-CRM-HOME-02)
+  // and the forecast link reads that same hub key, so it carries exactly that name and
+  // never the stray "Engagement Board".
+  it("links to the pipeline board under the same name the CRM hub uses", async () => {
+    render(await ForecastPage({}));
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByText("Engagement Board")).not.toBeInTheDocument();
   });
 });

@@ -27,7 +27,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       const p = msg.payload;
       // P0-1 cross-tenant FK guard: a referenced account must live in this tenant.
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "create", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "create", p.id, await repo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       // LM-006: allocate gapless lead reference number inside the same transaction.
@@ -61,7 +61,7 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // P0-1 cross-tenant FK guard: a (re)assigned account must live in this tenant.
       if (p.accountId && !(await repo.accountExistsTx(tx, p.tenantId, p.accountId))) {
-        await emitAudit(tx, msg, "update", p.id, "rejected_cross_tenant_account");
+        await emitAudit(tx, msg, "update", p.id, await repo.rejectedAccountOutcomeTx(tx, p.tenantId, p.accountId));
         return;
       }
       const patch: Parameters<typeof repo.update>[3] = {};
@@ -75,7 +75,10 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (p.gstin !== undefined) patch.gstin = p.gstin;
       if (p.pan !== undefined) patch.pan = p.pan;
       if (p.pincode !== undefined) patch.pincode = p.pincode;
-      if (p.leadStatus !== undefined) patch.leadStatus = p.leadStatus;
+      // leadStatus is deliberately NOT applied here (GAP-CRM-CONTACTS-DETAIL-EDIT-02):
+      // status changes go through the governed lead-transition command, which
+      // carries the reason code and transition audit. An updateContact message
+      // queued before the PATCH route started refusing leadStatus is ignored too.
       if (p.leadSource !== undefined) patch.leadSource = p.leadSource;
       if (p.ownerId !== undefined) patch.ownerId = p.ownerId;
       if (p.accountId !== undefined) patch.accountId = p.accountId;
@@ -124,19 +127,25 @@ export function registerContactConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.mergeContacts, async (msg) => {
-    const p = msg.payload as { primaryId: string; duplicateId: string; tenantId: string };
+    const p = msg.payload as { primaryId: string; duplicateId: string; tenantId: string; reason?: string };
+    // GAP-CRM-DEDUP-CANDIDATES-02: every merge audit record names BOTH contacts (the
+    // surviving primary and the absorbed duplicate) and carries the reviewer's reason.
+    const mergeAudit = {
+      metadata: { primaryId: p.primaryId, duplicateId: p.duplicateId },
+      ...(p.reason ? { reason: p.reason } : {}),
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       if (p.primaryId === p.duplicateId) {
-        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_same_id");
+        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_same_id", mergeAudit);
         return;
       }
       // Both contacts must exist, be active, and belong to the caller's tenant.
       const primary = await repo.findActiveRowTx(tx, p.primaryId, p.tenantId);
       const duplicate = await repo.findActiveRowTx(tx, p.duplicateId, p.tenantId);
       if (!primary || !duplicate) {
-        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_not_found_or_cross_tenant");
+        await emitAudit(tx, msg, "merge", p.primaryId, "rejected_not_found_or_cross_tenant", mergeAudit);
         return;
       }
 
@@ -163,13 +172,24 @@ export function registerContactConsumers(rawQueue: Queue): void {
         if (duplicate.consentDate) patch.consentDate = duplicate.consentDate;
       }
 
+      // GAP-CRM-DEDUP-CANDIDATES-02: the unique index on (tenant_id, email_idx) still covers
+      // the duplicate until it is soft-deleted below, so handing its email to the primary
+      // first collides with itself ("duplicate key ... uq_contacts_tenant_email_idx"), the
+      // transaction rolls back and the merge silently never happens. Release the email from
+      // the duplicate before the primary takes it over.
+      if (typeof patch.email === "string" && patch.email.length > 0) {
+        await repo.update(tx, p.duplicateId, p.tenantId, { email: null }, msg.actorId);
+      }
       if (Object.keys(patch).length > 0) {
         await repo.update(tx, p.primaryId, p.tenantId, patch, msg.actorId);
       }
       await repo.reassignDeals(tx, p.duplicateId, p.primaryId, p.tenantId);
       await repo.reassignActivities(tx, p.duplicateId, p.primaryId, p.tenantId);
       await repo.softDelete(tx, p.duplicateId, p.tenantId, msg.actorId);
-      await emit(tx, msg, EVENTS.contactUpdated, { contactId: p.primaryId, mergedFrom: p.duplicateId }, "merge", p.primaryId);
+      await emit(tx, msg, EVENTS.contactUpdated, { contactId: p.primaryId, mergedFrom: p.duplicateId }, "merge", p.primaryId, mergeAudit);
+      // The absorbed duplicate is soft-deleted; give its own history a record of where it
+      // went (resourceId = the duplicate), so an audit lookup by either id finds the merge.
+      await emitAudit(tx, msg, "merge_into", p.duplicateId, "success", mergeAudit);
     });
     await cache.invalidate(keyFor(msg.tenantId, p.primaryId));
     await cache.invalidate(keyFor(msg.tenantId, p.duplicateId));
@@ -319,11 +339,12 @@ async function emitAudit(
   action: string,
   resourceId: string,
   outcome: string,
+  auditExtra?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "crm", action, resourceType: "contact", resourceId, outcome },
+    payload: { service: "crm", action, resourceType: "contact", resourceId, outcome, ...auditExtra },
   });
 }

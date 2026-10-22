@@ -33,7 +33,6 @@ const ALLOWED: Record<string, number> = {
   "app/(app)/projects/[id]/ProjectDetailTables.tsx": 1,
   "app/(app)/tenant-admin/activation/ActivationView.tsx": 2,
   "app/_components/crm/DataQualityView.tsx": 1,
-  "app/_components/crm/DuplicateCheckPanel.tsx": 1,
   "app/_components/ds/ConfidenceBar.tsx": 1,
   "app/_components/ds/PredictionBadge.tsx": 1,
   "app/_components/ds/PredictionHistory.tsx": 3,

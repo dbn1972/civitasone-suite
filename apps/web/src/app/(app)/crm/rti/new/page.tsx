@@ -8,11 +8,7 @@ import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { todayIST } from "@/lib/formatters";
 import { RTI_PUBLIC_AUTHORITIES, canonicaliseAuthority } from "../rtiAuthorities"; // GAP-CRM-RTI-NEW-04: use canonical folding
-
-const RTI_SECTIONS = [
-  { value: "s.6",  labelKey: "section6" },
-  { value: "s.11", labelKey: "section11" },
-] as const;
+import { RTI_SECTIONS, localisedSectionLabel } from "@/lib/crm/rti"; // GAP-CRM-RTI-06: one section list + label for every RTI screen
 
 // GAP-CRM-RTI-NEW-02: mode-of-receipt vocabulary mirrors crm-service's
 // rti_requests_mode_check constraint (migration 0096).
@@ -45,6 +41,7 @@ function contactError(raw: string, t: (key: string) => string): string | null {
 
 export default function NewRtiPage() {
   const t = useTranslations("crmRtiNew");
+  const tSection = useTranslations("crmRtiSections");
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const formError = useFormError("RTI request");
@@ -210,7 +207,7 @@ export default function NewRtiPage() {
                     <option value="">{t("selectSection")}</option>
                     {RTI_SECTIONS.map((s) => (
                       <option key={s.value} value={s.value}>
-                        {t(s.labelKey)}
+                        {localisedSectionLabel(tSection, s.value)}
                       </option>
                     ))}
                   </select>
