@@ -1,6 +1,7 @@
 import { eq, and } from "drizzle-orm";
 import { scopedRead, db } from "../../shared/db.js";
 import { hrmsEmployees, type EmployeeRow } from "./schema.js";
+import { HttpError } from "../../shared/context.js";
 import { fetchVerifiedActorEmail } from "../../shared/identity-client.js";
 
 /**
@@ -55,8 +56,18 @@ export async function resolveEmployeeForActor(
   tenantId: string,
   actorId: string,
 ): Promise<EmployeeRow | undefined> {
+  // Issue #1780: nothing in the schema enforces (tenant_id, user_ref) uniqueness, and
+  // an unordered rows[0] picked an ARBITRARY row when an actor was linked twice
+  // (duplicate onboarding / re-link / bad import) -- self-service routes then
+  // served another employee's data or a false 404. Fetch every match (no
+  // arbitrary rows[0]) and fail CLOSED on ambiguity: never guess whose record
+  // the caller is, so the outcome no longer depends on row order.
   let rows = await scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.userRef, actorId))));
+  if (rows.length > 1) {
+    throw new HttpError(409, "AMBIGUOUS_EMPLOYEE_LINK",
+      "Your account is linked to more than one employee record. Please contact HR.");
+  }
   let emp = rows[0];
 
   if (!emp) {
