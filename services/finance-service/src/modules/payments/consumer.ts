@@ -525,7 +525,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
 
   sub(COMMANDS.advanceCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string;
+      id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string; payeeId?: string;
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
       sanctionAuthority?: string; reason?: string;
     };
@@ -540,6 +540,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         await repo.insertAdvance(tx, {
           id: p.id, tenantId: p.tenantId, advanceNo: p.advanceNo,
           beneficiary,
+          payeeId: p.payeeId ?? null,
           type: p.type ?? "employee",
           amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
           disbursedDate: today,

@@ -1,4 +1,4 @@
-import { eq, and, ne, gte, lte, sql, asc } from "drizzle-orm";
+import { eq, and, ne, gte, lte, sql, asc, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { financeJournals, financeLedger, financeJournalLines, type JournalRow, type JournalInsert, type LedgerInsert, type JournalLineInsert } from "./schema.js";
@@ -24,6 +24,16 @@ export async function findJournalById(id: string): Promise<JournalRow | null> {
 }
 
 /** Idempotency check inside a tx: has this journal id already been posted? */
+/**
+ * GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: the journal (any status, including a pending_approval draft, which holds its
+ * typed number against UNIQUE(tenant_id, voucher_no)) already using this exact voucher number, or null.
+ */
+export async function findJournalByVoucherNo(tenantId: string, voucherNo: string): Promise<{ id: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: financeJournals.id }).from(financeJournals)
+    .where(and(eq(financeJournals.tenantId, tenantId), eq(financeJournals.voucherNo, voucherNo))).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function findJournalByIdTx(tx: Writer, id: string): Promise<JournalRow | null> {
   const rows = await (tx as typeof db).select().from(financeJournals).where(eq(financeJournals.id, id)).limit(1);
   return rows[0] ?? null;
@@ -171,36 +181,58 @@ export type JournalLineRow = {
  * drafts excluded). Stable order: posting date, voucher no, journal id, line position.
  */
 export async function pageJournalLines(f: JournalLinePageFilter) {
-  const conds = [
+  // The scope every figure shares: this tenant's visible journals inside the requested fiscal year.
+  const ledgerConds: SQL[] = [
     sql`j.tenant_id = ${f.tenantId}::uuid`,
     sql`j.status <> 'pending_approval'`,
   ];
-  if (f.from) conds.push(sql`j.posting_date >= ${f.from}::date`);
-  if (f.to) conds.push(sql`j.posting_date <= ${f.to}::date`);
+  if (f.from) ledgerConds.push(sql`j.posting_date >= ${f.from}::date`);
+  if (f.to) ledgerConds.push(sql`j.posting_date <= ${f.to}::date`);
+  // The voucher-type tab and the search narrow it further. Only that narrowed set is paged and totalled as
+  // `totals`; the fiscal-year ledger as a whole is totalled separately as `ledgerTotals`.
+  const conds: SQL[] = [...ledgerConds];
   if (f.type) conds.push(sql`j.type = ${f.type}`);
   const q = f.q?.trim();
   if (q) {
     const like = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     conds.push(sql`(j.voucher_no ILIKE ${like} OR coalesce(ln.elem->>'accountCode', ln.elem->>'account', '') ILIKE ${like} OR coalesce(ln.elem->>'narration', '') ILIKE ${like})`);
   }
-  const where = sql.join(conds, sql` AND `);
-  const base = sql`
+  const narrowed = conds.length > ledgerConds.length;
+  const baseOf = (cs: SQL[]) => sql`
     FROM gl.finance_journals j
     CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(j.lines) = 'array' THEN j.lines ELSE '[]'::jsonb END)
       WITH ORDINALITY AS ln(elem, pos)
-    WHERE ${where} AND coalesce(ln.elem->>'accountCode', ln.elem->>'account', '') <> ''`;
+    WHERE ${sql.join(cs, sql` AND `)} AND coalesce(ln.elem->>'accountCode', ln.elem->>'account', '') <> ''`;
+  const base = baseOf(conds);
+  const ledgerBase = narrowed ? baseOf(ledgerConds) : base;
   return scopedRead(async (tx) => {
     // Stored amounts must be non-negative integer strings (paise). A malformed row (a decimal, text, a negative) is
     // reported as a clear data error naming the voucher: never cast (which would 500 or silently round).
-    const bad = await tx.execute(sql`
-      SELECT j.voucher_no,
-             coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') AS debit,
-             coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') AS credit
-      ${base}
-        AND (coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') !~ '^[0-9]{1,38}$'
-          OR coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') !~ '^[0-9]{1,38}$')
-      ORDER BY j.posting_date, j.voucher_no LIMIT 1`);
-    const badRow = (bad as unknown as Array<{ voucher_no: string }>)[0];
+    const firstBadRow = async (b: SQL) => {
+      const bad = await tx.execute(sql`
+        SELECT j.voucher_no,
+               coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') AS debit,
+               coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') AS credit
+        ${b}
+          AND (coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0') !~ '^[0-9]{1,38}$'
+            OR coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0') !~ '^[0-9]{1,38}$')
+        ORDER BY j.posting_date, j.voucher_no LIMIT 1`);
+      return (bad as unknown as Array<{ voucher_no: string }>)[0];
+    };
+    const totalsOf = async (b: SQL) => {
+      const tot = await tx.execute(sql`
+        SELECT count(*)::int AS lines, count(DISTINCT j.id)::int AS vouchers,
+               count(DISTINCT coalesce(ln.elem->>'accountCode', ln.elem->>'account'))::int AS accounts,
+               coalesce(sum(coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)), 0)::text AS debit,
+               coalesce(sum(coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0')::numeric(40,0)), 0)::text AS credit
+        ${b}`);
+      const t = (tot as unknown as Array<{ lines: number; vouchers: number; accounts: number; debit: string; credit: string }>)[0];
+      return {
+        entryLines: t?.lines ?? 0, vouchers: t?.vouchers ?? 0, accountsActive: t?.accounts ?? 0,
+        debitMinor: t?.debit ?? "0", creditMinor: t?.credit ?? "0",
+      };
+    };
+    const badRow = await firstBadRow(base);
     if (badRow) {
       throw new HttpError(422, "LEDGER_AMOUNT_INVALID", `voucher ${badRow.voucher_no} has a debit or credit that is not a whole number of paise; fix the journal line before this view can total it`);
     }
@@ -213,19 +245,17 @@ export async function pageJournalLines(f: JournalLinePageFilter) {
       ${base}
       ORDER BY j.posting_date, j.voucher_no, j.id, ln.pos
       LIMIT ${f.limit} OFFSET ${f.offset}`);
-    const tot = await tx.execute(sql`
-      SELECT count(*)::int AS lines, count(DISTINCT j.id)::int AS vouchers,
-             count(DISTINCT coalesce(ln.elem->>'accountCode', ln.elem->>'account'))::int AS accounts,
-             coalesce(sum(coalesce(nullif(ln.elem->>'debitMinor', ''), nullif(ln.elem->>'debit', ''), '0')::numeric(40,0)), 0)::text AS debit,
-             coalesce(sum(coalesce(nullif(ln.elem->>'creditMinor', ''), nullif(ln.elem->>'credit', ''), '0')::numeric(40,0)), 0)::text AS credit
-      ${base}`);
-    const t = (tot as unknown as Array<{ lines: number; vouchers: number; accounts: number; debit: string; credit: string }>)[0];
-    return {
-      rows: rows as unknown as JournalLineRow[],
-      totals: {
-        entryLines: t?.lines ?? 0, vouchers: t?.vouchers ?? 0, accountsActive: t?.accounts ?? 0,
-        debitMinor: t?.debit ?? "0", creditMinor: t?.credit ?? "0",
-      },
-    };
+    const totals = await totalsOf(base);
+    // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04: the whole fiscal-year ledger, ignoring the tab and the search, so
+    // the page can show a ledger-wide balance check next to the filtered footer. Equal to `totals` when nothing
+    // narrows the set. `null` (unknown, never a made-up zero) if a stored amount OUTSIDE the filtered set is
+    // malformed: the filtered view still works, only the ledger-wide figure is withheld.
+    // Cost: when a tab or search is active this is two extra whole-fiscal-year jsonb scans (firstBadRow + totalsOf) per
+    // page request. Deliberately NOT cached: this is the ledger-wide balance verdict, and a TTL-only cache (the GL has no
+    // post-time invalidation of it, unlike the invalidateResource calls the budget/approvals reads rely on) would let a
+    // just-posted journal leave the Balanced / Unbalanced card stale. If a large ledger shows latency, cache per
+    // (tenant, fiscal year) AND invalidate it from the post / approve consumers, or serve it from a maintained summary.
+    const ledgerTotals = !narrowed ? totals : (await firstBadRow(ledgerBase)) ? null : await totalsOf(ledgerBase);
+    return { rows: rows as unknown as JournalLineRow[], totals, ledgerTotals };
   });
 }

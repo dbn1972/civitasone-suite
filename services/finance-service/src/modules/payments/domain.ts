@@ -40,13 +40,14 @@ export function maskPersonName(name: string): string {
 }
 
 /** Mask the beneficiary of personal (employee) advances for roles not entitled to see it. */
-export function maskAdvanceBeneficiaries<T extends { type: string; beneficiary: string; purpose?: string }>(rows: T[], roles: readonly string[]): T[] {
+export function maskAdvanceBeneficiaries<T extends { type: string; beneficiary: string; purpose?: string; reason?: string }>(rows: T[], roles: readonly string[]): T[] {
   if (roles.some((r) => ADVANCE_OFFICER_NAME_ROLES.includes(r))) return rows;
-  // The free-text purpose can name the person ("Tour advance for Asha Verma"),
-  // so it is masked on the same rows as the beneficiary.
+  // The free-text purpose and the free-text reason for the advance ("Sanctioned
+  // for Asha Verma's tour") can name the person, so both are masked on the same
+  // rows as the beneficiary (GAP-FINANCE-EXPENDITURE-ADVANCES-03).
   return rows.map((r) =>
     r.type === "employee"
-      ? { ...r, beneficiary: maskPersonName(r.beneficiary), ...(r.purpose ? { purpose: "***" } : {}) }
+      ? { ...r, beneficiary: maskPersonName(r.beneficiary), ...(r.purpose ? { purpose: "***" } : {}), ...(r.reason ? { reason: "***" } : {}) }
       : r,
   );
 }

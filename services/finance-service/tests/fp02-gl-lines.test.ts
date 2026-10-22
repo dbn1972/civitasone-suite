@@ -118,3 +118,53 @@ describe("stored amounts must be integer paise strings", () => {
     expect(neg.statusCode).toBe(422);
   });
 });
+
+// GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04: `totals` follows the tab and the search; `ledgerTotals` is the whole fiscal-year
+// ledger, the only set a debit = credit check is meaningful on.
+describe("ledgerTotals (ledger-wide) next to the filtered totals", () => {
+  it("equals totals when nothing narrows the set", async () => {
+    const body = (await get("")).json();
+    expect(body.ledgerTotals).toEqual(body.totals);
+    expect(body.ledgerTotals.debitMinor).toBe(body.ledgerTotals.creditMinor);
+  });
+
+  it("a search on one account narrows totals (and no longer balances) but leaves the ledger-wide total balanced", async () => {
+    const body = (await get("q=5200")).json();
+    // only the 5200 debit leg of V-003 matches: a single leg can never balance
+    expect(body.totals).toMatchObject({ entryLines: 1, debitMinor: "7000000000000000000", creditMinor: "0" });
+    // the ledger as a whole is unchanged by the search and still balances to the paisa
+    expect(body.ledgerTotals).toMatchObject({ entryLines: 8, vouchers: 4, debitMinor: "7000000000000175000", creditMinor: "7000000000000175000" });
+  });
+
+  it("a voucher-type tab narrows totals; ledgerTotals ignores it", async () => {
+    const body = (await get("type=receipt")).json();
+    expect(body.totals).toMatchObject({ vouchers: 1, debitMinor: "50000", creditMinor: "50000" });
+    expect(body.ledgerTotals.vouchers).toBe(4);
+    expect(body.ledgerTotals.debitMinor).toBe("7000000000000175000");
+  });
+
+  it("ledgerTotals stays inside the requested fiscal year", async () => {
+    const body = (await get("fy=2025-26&q=5100")).json();
+    expect(body.totals).toMatchObject({ entryLines: 1, debitMinor: "100000", creditMinor: "0" });
+    expect(body.ledgerTotals).toMatchObject({ entryLines: 4, vouchers: 2, debitMinor: "150000", creditMinor: "150000" });
+  });
+
+  it("is tenant-scoped", async () => {
+    const body = (await get("q=5100", OTHER)).json();
+    expect(body.ledgerTotals).toMatchObject({ entryLines: 0, debitMinor: "0", creditMinor: "0" });
+  });
+
+  it("is null (unknown, not zero) when a malformed amount sits outside the filtered view", async () => {
+    const bad = randomUUID();
+    const put = (voucherNo: string, debit: string) => scoped(bad, (tx) => tx.insert(financeJournals).values({
+      id: randomUUID(), tenantId: bad, voucherNo, type: "journal", postingDate: "2026-06-01", status: "posted",
+      lines: [{ accountCode: "5100", debitMinor: debit, creditMinor: "0" }, { accountCode: "1100", debitMinor: "0", creditMinor: debit }], createdBy: ACTOR, updatedBy: ACTOR,
+    }));
+    await put("V-OK2", "1000");
+    await put("V-DECIMAL2", "12.5");
+    const res = await app.inject({ method: "GET", url: "/v1/finance/journals/lines?q=V-OK2", headers: bearer(bad, ACTOR, ["finance_officer"]) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().totals.debitMinor).toBe("1000");
+    expect(res.json().ledgerTotals).toBeNull();
+  });
+});

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "./common.js";
-import { zMoneyMinorString } from "./money.js";
+import { zMoneyMinorString, zMoneyMinorStrict } from "./money.js";
 
 export const auditRowSchema = z.object({
   actor: z.string(),
@@ -614,6 +614,14 @@ export const FinanceDashboardSchema = z.object({
   // Total budget estimate (BE only, no RE) in minor units, as a bigint-safe decimal
   // string (GAP-FINANCE-DASHBOARD-04). Optional so an older API still parses.
   sanctionedMinor: z.string().regex(/^\d+$/).optional(),
+  // GAP-FINANCE-DASHBOARD-01: expenditure split by category, AS REPORTED by finance-service (never derived or
+  // estimated on the client). Each amount is minor units (paise) as a base-10 string. Optional: finance-service does
+  // not send it yet (what a "category" is, and which spend counts as expenditure, is an owner decision), and the
+  // dashboard says "Category breakdown not available" until it does.
+  categoryBreakdown: z.array(z.object({
+    label: z.string().trim().min(1).max(120),
+    amountMinor: z.string().regex(/^\d+$/),
+  })).max(50).optional(),
 });
 
 // Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
@@ -797,10 +805,16 @@ export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 export const FinancialStatementSummarySchema = z.object({
   id: z.string(),
   head: z.string(),
-  openingBalance: z.number(),
-  receipts: z.number(),
-  payments: z.number(),
-  closingBalance: z.number(),
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03: every balance is MINOR
+  // units (paise) as a bigint-safe decimal string, e.g. "150050" for
+  // Rs 1,500.50 -- NOT rupees and NOT a JSON number (a double loses precision
+  // above 2^53 and a rupee float read as paise is 100x off). Strict on
+  // purpose: a number or a non-numeric string fails the schema.
+  openingBalance: zMoneyMinorStrict,
+  receipts: zMoneyMinorStrict,
+  payments: zMoneyMinorStrict,
+  // credits - debits; negative for a debit-normal head.
+  closingBalance: zMoneyMinorStrict,
   type: z.enum(["asset", "liability", "income", "expenditure"]),
 });
 export const FinancialStatementSummaryListSchema = z.array(FinancialStatementSummarySchema);

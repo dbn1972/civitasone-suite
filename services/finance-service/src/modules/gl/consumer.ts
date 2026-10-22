@@ -9,6 +9,7 @@ import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
 import { assertJournalBalances, assertJournalHasAmount, assertNoControlAccounts, DomainError as GlDomainError } from "./domain.js";
+import { periodPostingRefusal, voucherNeedsAllocation } from "./posting-rules.js";
 import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -111,21 +112,13 @@ async function postJournal(
   }
   const period = journal.postingDate.slice(0, 7);
   const periodStatus = await getPeriodStatusTx(tx, journal.tenantId, period);
-  if (periodStatus === "unknown") {
-    // DOM-010: fail CLOSED on a period the system does not even recognise
-    // (e.g. a malformed/garbled YYYY-MM sliced from a bad postingDate)
-    // instead of silently treating it as open. getPeriodStatusTx only
-    // returns "unknown" for a period string that isn't shaped like a real
-    // period at all — a well-formed period with simply no close record yet
-    // is still correctly "open" and unaffected by this check.
-    throw new Error(`PERIOD_UNKNOWN: cannot post to unrecognized period '${period}'`);
-  }
-  if (periodStatus === "hard_close") {
-    throw new Error(`PERIOD_CLOSED: cannot post to hard-closed period ${period}`);
-  }
-  if (periodStatus === "soft_close" && !(["adjustment", "closing"].includes(journal.type))) {
-    throw new Error(`PERIOD_SOFT_CLOSED: only adjustment/closing journals allowed in soft-closed period ${period}`);
-  }
+  // DOM-010: fail CLOSED on a period the system does not even recognise (e.g. a malformed/garbled YYYY-MM sliced from a
+  // bad postingDate) instead of silently treating it as open. getPeriodStatusTx only returns "unknown" for a period
+  // string that isn't shaped like a real period at all — a well-formed period with simply no close record yet is still
+  // correctly "open". The rule itself lives in periodPostingRefusal (gl/posting-rules.ts), shared with the synchronous
+  // pre-checks in gl/routes.ts so the HTTP caller is told the same thing this authoritative check would say.
+  const refusal = periodPostingRefusal(periodStatus, journal.type, period);
+  if (refusal) throw new Error(`${refusal.code}: ${refusal.message}`);
   // Idempotency: a journal id is deterministic for GL-spine postings (keyed off
   // the source doc). If it already exists and is already posted/reversed, this
   // is a redelivery — skip silently so bills/payments/receipts never double-post.
@@ -509,7 +502,7 @@ export function registerGlConsumers(queue: Queue): void {
       // per row (journal.id is the primary key) and is itself recognised as
       // "needs allocation" by postJournal(), same as "AUTO".
       const rawVoucherNo = p.voucherNo;
-      const needsAllocation = !rawVoucherNo || rawVoucherNo.trim() === "" || rawVoucherNo.toUpperCase() === "AUTO";
+      const needsAllocation = voucherNeedsAllocation(rawVoucherNo);
       const draftVoucherNo = needsAllocation ? `DRAFT-${p.id}` : rawVoucherNo;
       await repo.insertJournal(tx, {
         id: p.id, tenantId: p.tenantId, voucherNo: draftVoucherNo,
@@ -580,16 +573,28 @@ export function registerGlConsumers(queue: Queue): void {
           `[finance/gl] JOURNAL_ZERO_AMOUNT: id=${p.id} has a zero net amount and cannot be approved — reject or correct the draft instead`,
         );
       }
-      await postJournal(tx, msg, {
-        id: existing.id, tenantId: existing.tenantId, voucherNo: existing.voucherNo,
-        type: existing.type, postingDate: existing.postingDate, lines,
-        budgetOverride: existing.budgetOverride,
-        ...(existing.overrideReason ? { overrideReason: existing.overrideReason } : {}),
-        ...(existing.legalEntityId ? { legalEntityId: existing.legalEntityId } : {}),
-        ...(existing.costCenterId ? { costCenterId: existing.costCenterId } : {}),
-        ...(existing.profitCenterId ? { profitCenterId: existing.profitCenterId } : {}),
-        ...(existing.operatingUnitId ? { operatingUnitId: existing.operatingUnitId } : {}),
-      });
+      try {
+        await postJournal(tx, msg, {
+          id: existing.id, tenantId: existing.tenantId, voucherNo: existing.voucherNo,
+          type: existing.type, postingDate: existing.postingDate, lines,
+          budgetOverride: existing.budgetOverride,
+          ...(existing.overrideReason ? { overrideReason: existing.overrideReason } : {}),
+          ...(existing.legalEntityId ? { legalEntityId: existing.legalEntityId } : {}),
+          ...(existing.costCenterId ? { costCenterId: existing.costCenterId } : {}),
+          ...(existing.profitCenterId ? { profitCenterId: existing.profitCenterId } : {}),
+          ...(existing.operatingUnitId ? { operatingUnitId: existing.operatingUnitId } : {}),
+        });
+      } catch (err) {
+        // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: the period closed after the draft was made (or after the route's
+        // synchronous check). That is a deterministic refusal: a retry cannot change it until somebody reopens the
+        // period, so dead-letter it at once instead of retrying a plain Error for minutes. The transaction rolls
+        // back, so nothing posts and the draft stays pending_approval; gl/routes.ts refuses the next approval attempt
+        // with 422 PERIOD_CLOSED until the period is reopened.
+        if (refusalCode(err)?.startsWith("PERIOD_") && !(err instanceof NonRetryableError)) {
+          throw new NonRetryableError(String((err as Error).message));
+        }
+        throw err;
+      }
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
     // BUG FIX (review follow-up): see the matching comment above

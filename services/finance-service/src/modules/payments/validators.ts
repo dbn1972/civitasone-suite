@@ -82,6 +82,10 @@ export const createAdvanceBody = z.object({
   // Required: the beneficiary column is NOT NULL and must never be back-filled
   // from the free-text purpose (which can name a person; DPDP masking).
   payee:       z.string().trim().min(1).max(200),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: id of the payee picked from a master list (employee id, or a finance vendor
+  // id). Optional so existing callers keep working; not allowed for type "other" (no master record), and for a vendor
+  // it must be an active vendor of this tenant -- see POST /v1/finance/advances.
+  payeeId:     z.string().uuid().optional(),
   type:        z.enum(["employee", "vendor", "other"]).default("employee"),
   amountMinor: moneyMinorField,
   currency:    z.string().length(3).default("INR"),

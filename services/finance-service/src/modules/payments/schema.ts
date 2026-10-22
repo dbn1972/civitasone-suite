@@ -142,6 +142,11 @@ export const financeAdvances = paymentsSchema.table("finance_advances", {
   tenantId:       uuid("tenant_id").notNull(),
   advanceNo:      text("advance_no").notNull(),
   beneficiary:    text("beneficiary").notNull(),
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03 (migration 0150): opaque id of the payee picked from a master list
+  // (employee id / finance_vendors.id); NULL when typed. No FK (cross-service for employees). Never returned by the list.
+  // For type=employee it is UNVERIFIED (any uuid the route accepted, not checked against the employee master or the
+  // tenant): a consumer that acts on it (e.g. payroll recovery) must resolve it and tenant-check it first.
+  payeeId:        uuid("payee_id"),
   type:           varchar("type", { length: 16 }).notNull().default("employee"),
   amountMinor:    bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
   currency:       char("currency", { length: 3 }).notNull().default("INR"),

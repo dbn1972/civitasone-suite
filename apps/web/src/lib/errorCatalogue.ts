@@ -387,6 +387,54 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: finance-service POST /v1/finance/journals answers 409
+  // DUPLICATE_VOUCHER_NO (with a voucherNo field error) when a typed voucher number is already used.
+  DUPLICATE_VOUCHER_NO: {
+    en: {
+      what: "This voucher number is already in use.",
+      next: "Enter a different number, or leave it blank to number it automatically.",
+    },
+    hi: {
+      what: "यह वाउचर नंबर पहले से इस्तेमाल में है।",
+      next: "कोई दूसरा नंबर डालें, या खाली छोड़ें ताकि अपने आप नंबर बन जाए।",
+    },
+    actions: ["retry", "help"],
+  },
+  // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: the same endpoint (and journal approval) answers 422 when the posting
+  // date falls in an accounting period that cannot take the entry. Nothing was posted.
+  PERIOD_CLOSED: {
+    en: {
+      what: "This accounting period is closed, so nothing was posted.",
+      next: "Choose a posting date in an open period.",
+    },
+    hi: {
+      what: "यह लेखा अवधि बंद है, इसलिए कुछ भी पोस्ट नहीं हुआ।",
+      next: "खुली अवधि की कोई पोस्टिंग तिथि चुनें।",
+    },
+    actions: ["back", "help"],
+  },
+  PERIOD_SOFT_CLOSED: {
+    en: {
+      what: "This accounting period is only open for adjustment and closing entries, so nothing was posted.",
+      next: "Choose a posting date in an open period.",
+    },
+    hi: {
+      what: "यह लेखा अवधि केवल समायोजन और समापन प्रविष्टियों के लिए खुली है, इसलिए कुछ भी पोस्ट नहीं हुआ।",
+      next: "खुली अवधि की कोई पोस्टिंग तिथि चुनें।",
+    },
+    actions: ["back", "help"],
+  },
+  PERIOD_UNKNOWN: {
+    en: {
+      what: "The posting date is not a date we can post to.",
+      next: "Choose a real calendar date and try again.",
+    },
+    hi: {
+      what: "पोस्टिंग तिथि ऐसी तिथि नहीं है जिस पर पोस्ट किया जा सके।",
+      next: "कैलेंडर की कोई वास्तविक तिथि चुनें और फिर प्रयास करें।",
+    },
+    actions: ["retry", "help"],
+  },
   // GAP-TENANT-ADMIN-USERS-07: identity-service POST /identity/users answers
   // 409 DUPLICATE_EMAIL when the email is already in the tenant's directory.
   DUPLICATE_EMAIL: {

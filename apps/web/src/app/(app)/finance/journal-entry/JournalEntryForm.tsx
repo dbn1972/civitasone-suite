@@ -1,7 +1,7 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
@@ -136,6 +136,14 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   // between viewing the GL and posting another voucher.
   const [posted, setPosted] = useState<{ voucherNo: string | null; queued: boolean } | null>(null);
   const formError = useFormError("journal entry");
+  // Which input to focus after the server refuses the entry because of that field's value.
+  const [focusField, setFocusField] = useState<string | null>(null);
+  useEffect(() => {
+    if (focusField) {
+      document.getElementById(focusField)?.focus();
+      setFocusField(null);
+    }
+  }, [focusField]);
   // EVT-4 (accounting-high-findings): one idempotency key per logical
   // submission attempt. The backend mechanism (idempotentId() in
   // @civitasone/auth, tenant-scoped as of PR #1565) and the full header path
@@ -289,7 +297,17 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     const resolved = await formError.fromResponse(res, "save");
     setStatus("error");
     setMessage(resolved.message);
-    // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06: a refusal tied to a field of THIS form (the voucher number is
+    // already used, the posting date is in a closed period) is fixed in that field. Close the confirm dialog so the
+    // message under the field is visible, keep everything the officer typed, and move focus there. Nothing was
+    // queued or posted, so there is no redirect and no success panel.
+    const fieldToFix = resolved.fieldErrors.voucherNo ? "jv-voucher" : resolved.fieldErrors.postingDate ? "jv-date" : null;
+    if (fieldToFix) {
+      setConfirmOpen(false);
+      setFocusField(fieldToFix);
+      return;
+    }
+    // Any other failure is shown inside the dialog by throwing for ConfirmDialog's busy/error flow.
     throw UserFacingError.from(resolved);
   }
 
@@ -361,14 +379,14 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             maxLength={VOUCHER_NO_MAX}
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
-            aria-invalid={errors.voucherNo ? true : undefined}
-            aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
+            aria-invalid={errors.voucherNo || formError.fieldError("voucherNo") ? true : undefined}
+            aria-describedby={errors.voucherNo ? "jv-voucher-err" : formError.fieldError("voucherNo") ? "jv-voucher-srv-err" : undefined}
           />
           <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block", marginTop: 2 }}>
             Optional. If left blank, a gapless voucher number is allocated when the entry is approved.
           </span>
           {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
-          {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
+          {formError.fieldError("voucherNo") && <span id="jv-voucher-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
         </div>
         <div className="field">
           <label className="label" htmlFor="jv-date">Posting Date</label>
@@ -378,8 +396,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             type="date"
             value={postingDate}
             onChange={(e) => setPostingDate(e.target.value)}
-            aria-invalid={errors.postingDate ? true : undefined}
-            aria-describedby={errors.postingDate ? "jv-date-err" : undefined}
+            aria-invalid={errors.postingDate || formError.fieldError("postingDate") ? true : undefined}
+            aria-describedby={errors.postingDate ? "jv-date-err" : formError.fieldError("postingDate") ? "jv-date-srv-err" : undefined}
           />
           {dateCheck && !errors.postingDate && (
             <span
@@ -397,7 +415,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             </span>
           )}
           {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
-          {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
+          {formError.fieldError("postingDate") && <span id="jv-date-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
         </div>
       </div>
 

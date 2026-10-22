@@ -640,6 +640,8 @@ export interface AccountSummary {
   id?: string;
   /** Parent head id, or null/absent for a top-level head. A head that is some other head's parent is a non-postable group head. */
   parentId?: string | null;
+  /** Position in the chart: 0 = major head, 1 = minor head, 2 = sub-minor head (absent on older feeds). */
+  level?: 0 | 1 | 2;
   /** Sub-ledger-controlled account: not postable from a manual journal (GAP-FINANCE-JOURNAL-ENTRY-04). */
   isControl?: boolean;
   code: string;
@@ -757,6 +759,11 @@ export type FinanceDashboard = {
   totalExpenditure: number;
   /** Total budget estimate (BE only), minor units (paise) as a decimal string; absent from an older API. */
   sanctionedMinor?: string;
+  /**
+   * Expenditure by category exactly as finance-service reports it (GAP-FINANCE-DASHBOARD-01); absent until the
+   * service sends one. `amountMinor` is paise as a base-10 string.
+   */
+  categoryBreakdown?: Array<{ label: string; amountMinor: string }>;
 };
 
 export type BudgetSummary = {
@@ -880,10 +887,15 @@ export type GLEntrySummary = {
 export type FinancialStatementSummary = {
   id: string;
   head: string;
-  openingBalance: number;
-  receipts: number;
-  payments: number;
-  closingBalance: number;
+  /**
+   * The four balances are MINOR units (paise) as base-10 integer strings
+   * (bigint-safe; see FinancialStatementSummarySchema), never rupee numbers.
+   * `closingBalance` = credits - debits and may be negative.
+   */
+  openingBalance: string;
+  receipts: string;
+  payments: string;
+  closingBalance: string;
   type: "asset" | "liability" | "income" | "expenditure";
 };
 
