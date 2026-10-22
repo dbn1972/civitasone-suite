@@ -1,9 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { decryptPii } from "../../shared/pii-crypto.js";
 import { escapeHtml } from "../recruitment/application-pdf.js";
 
 /**
@@ -27,20 +29,16 @@ import { escapeHtml } from "../recruitment/application-pdf.js";
  * this service's DB, so photo_url/branch/org_name are NULL and orgName falls
  * back to the department name, which was already the route's fallback.
  *
- * GET /visiting-card/public/:code is, on top of the above, ALSO not wrapped
- * in withTenantGuc: it has no auth and no ctx.tenantId at all (that is the
- * point -- a QR scan has to resolve an employee_code to a card without
- * knowing the tenant up front), so even setting the column issue aside this
- * isn't the "swap in the right tenant-scoping call" shape -- it is the same
- * cross-tenant-discovery problem PR #1626 hit in scheduler/tick.ts, which
- * that fix resolved via scopedPlatformRead (migration 0133's
- * app.platform_bypass SELECT policy) for the Drizzle surface. Nothing here
- * builds a raw-sqlClient equivalent of that policy read, so the route is
- * left exactly as-is rather than bolting on a new, unreviewed cross-tenant
- * bypass for a public/no-auth endpoint. Flagged in the PR description as a
- * recommended follow-up -- tracked in issue #1776 (needs an unguessable
- * per-card share token + a reviewed cross-tenant read; must NOT be fixed by
- * keying a bypass on the guessable employee number).
+ * GET /visiting-card/public/:token (issue #1776) is unauthenticated by design
+ * (QR scan). It is keyed ONLY on an unguessable per-card share token
+ * (hrms.visiting_cards.share_token, 256-bit, migration 0251), never on the
+ * guessable employee number. The cross-tenant read is the narrow, reviewed
+ * SELECT-only policy `public_share_read` (migration 0251): it exposes exactly
+ * the one card whose token equals the transaction-local GUC
+ * app.visiting_card_token, nothing else, and is false when the GUC is unset.
+ * The response carries only the minimal public vCard fields, is rate-limited
+ * per client IP, and answers every miss (malformed / unknown / revoked token)
+ * with the same 404 so the endpoint cannot be used to probe.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -80,6 +78,13 @@ function withTenantGuc<T>(
 
 const HTTP_URL = /^https?:\/\//i;
 
+/** 32 random bytes as base64url = 43 chars = 256 bits of entropy. */
+const SHARE_TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
+const newShareToken = (): string => randomBytes(32).toString("base64url");
+/** Public route budget: per client IP, per route (QR scans are human-paced). */
+const PUBLIC_CARD_RATE_LIMIT = { max: 20, timeWindow: "1 minute" } as const;
+const SHARE_URL_BASE = process.env.VISITING_CARD_PUBLIC_BASE_URL ?? "https://cards.civitasone.gov.in/v";
+
 const updateCardSchema = z.object({
   displayName: z.string().min(2).max(100).optional(),
   suffix: z.string().max(50).optional(), // e.g. "IAS", "PhD", "MBBS"
@@ -109,6 +114,25 @@ const EMP_CARD_COLUMNS = `e.id, e.full_name, dsg.name AS designation, dep.name A
 const EMP_CARD_JOINS = `LEFT JOIN employee.hrms_designations dsg ON dsg.id = e.designation_id AND dsg.tenant_id = e.tenant_id
        LEFT JOIN employee.hrms_departments dep ON dep.id = e.department_id AND dep.tenant_id = e.tenant_id`;
 
+/**
+ * Lazily create the card row + first share token (idempotent). A token the
+ * owner has REVOKED (token NULL but share_token_rotated_at set) is NOT
+ * silently re-issued here -- only the explicit POST .../share-token does that.
+ */
+async function ensureShareToken(tenantId: string, employeeId: string): Promise<string | null> {
+  const r = await withTenantGuc(tenantId, (pool) => pool.query<{ share_token: string | null }>(
+    `INSERT INTO hrms.visiting_cards (id, tenant_id, employee_id, share_token, share_token_rotated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (tenant_id, employee_id) DO UPDATE SET
+       share_token = CASE WHEN hrms.visiting_cards.share_token IS NULL AND hrms.visiting_cards.share_token_rotated_at IS NULL
+                          THEN EXCLUDED.share_token ELSE hrms.visiting_cards.share_token END,
+       share_token_rotated_at = COALESCE(hrms.visiting_cards.share_token_rotated_at, EXCLUDED.share_token_rotated_at)
+     RETURNING share_token`,
+    [randomUUID(), tenantId, employeeId, newShareToken()],
+  ));
+  return r.rows[0]?.share_token ?? null;
+}
+
 export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
   // ─── GET MY VISITING CARD ─────────────────────────────────────────────
@@ -133,6 +157,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
     if (emp.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const e = emp.rows[0];
+    const shareToken = await ensureShareToken(ctx.tenantId, e.id);
 
     const name = e.display_name || e.full_name;
     const tier = e.card_tier || inferTier(e.designation ?? "");
@@ -154,8 +179,9 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
       photoUrl: e.photo_url,
     });
 
-    // QR payload — URL to download vCard
-    const qrUrl = `https://cards.civitasone.gov.in/v/${e.employee_code}`;
+    // QR payload -- URL keyed on the unguessable share token (never the
+    // employee number). null when the owner has revoked sharing.
+    const qrUrl = shareToken ? `${SHARE_URL_BASE}/${shareToken}` : null;
 
     return reply.send({
       data: {
@@ -246,52 +272,115 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ status: "updated" });
   });
 
+  // ─── SHARE TOKEN: ROTATE / REVOKE (owner) ─────────────────────────────
+
+  /** POST /v1/hrms/visiting-card/me/share-token — issue or rotate my share token (old link stops working) */
+  app.post("/v1/hrms/visiting-card/me/share-token", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "Employee not found");
+    const token = newShareToken();
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      await pool.query(
+        `INSERT INTO hrms.visiting_cards (id, tenant_id, employee_id) VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, employee_id) DO NOTHING`,
+        [randomUUID(), ctx.tenantId, emp.id],
+      );
+      await pool.query(
+        `UPDATE hrms.visiting_cards SET share_token = $3, share_token_rotated_at = NOW(), updated_at = NOW()
+         WHERE tenant_id = $1 AND employee_id = $2`,
+        [ctx.tenantId, emp.id, token],
+      );
+    });
+    return reply.send({ data: { qrUrl: `${SHARE_URL_BASE}/${token}` } });
+  });
+
+  /** DELETE /v1/hrms/visiting-card/me/share-token — revoke sharing (public link 404s until re-issued) */
+  app.delete("/v1/hrms/visiting-card/me/share-token", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "Employee not found");
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `UPDATE hrms.visiting_cards SET share_token = NULL, share_token_rotated_at = NOW(), updated_at = NOW()
+       WHERE tenant_id = $1 AND employee_id = $2`,
+      [ctx.tenantId, emp.id],
+    ));
+    return reply.send({ status: "revoked" });
+  });
+
   // ─── PUBLIC vCard DOWNLOAD (no auth — shared via QR/link) ─────────────
 
-  /** GET /v1/hrms/visiting-card/public/:code — download vCard by employee code */
-  app.get("/v1/hrms/visiting-card/public/:code", async (req, reply) => {
-    const { code } = req.params as { code: string };
+  /**
+   * GET /v1/hrms/visiting-card/public/:token — download vCard by SHARE TOKEN.
+   * Unauthenticated; only the minimal public fields are exposed; rate-limited
+   * per IP (route-level config -- the global limiter would key all anonymous
+   * callers on one "anonymous" actor bucket); every miss is the same 404.
+   */
+  app.get("/v1/hrms/visiting-card/public/:token", {
+    config: {
+      public: true,
+      rateLimit: { ...PUBLIC_CARD_RATE_LIMIT, keyGenerator: (req: { ip: string }) => `vcard-public:${req.ip}` },
+    },
+  }, async (req, reply) => {
+    const { token } = req.params as { token: string };
+    const notFound = () => reply.code(404).header("Cache-Control", "no-store").send({ error: "Card not found" });
+    if (typeof token !== "string" || !SHARE_TOKEN_RE.test(token)) return notFound();
 
-    const emp = await sqlClient.query(
-      `SELECT e.first_name, e.last_name, e.designation, e.department, e.email, e.phone, e.photo_url,
-              vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.alt_email,
-              vc.website, vc.address, vc.tagline, vc.show_personal_phone, e.id AS emp_id, e.tenant_id
-       FROM employee.hrms_employees e
-       LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
-       WHERE e.employee_code = $1 AND e.status = 'active'`,
-      [code],
-    );
+    // Narrow cross-tenant read: the policy `public_share_read` (migration 0251)
+    // makes visible only the row(s) matching this transaction-local token.
+    const found = await rawSqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.visiting_card_token', ${token}, true)`;
+      return tx.unsafe(
+        `SELECT e.full_name, e.email, e.mobile, dsg.name AS designation, dep.name AS department,
+                vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.website, vc.tagline,
+                vc.show_personal_phone, vc.tenant_id, vc.employee_id
+           FROM hrms.visiting_cards vc
+           JOIN employee.hrms_employees e ON e.id = vc.employee_id AND e.tenant_id = vc.tenant_id
+           LEFT JOIN employee.hrms_designations dsg ON dsg.id = e.designation_id AND dsg.tenant_id = e.tenant_id
+           LEFT JOIN employee.hrms_departments dep ON dep.id = e.department_id AND dep.tenant_id = e.tenant_id
+          WHERE vc.share_token = $1`,
+        [token],
+      );
+    });
+    const e = (found as unknown as Array<Record<string, any>>)[0];
+    if (!e) return notFound();
 
-    if (emp.rowCount === 0) {
-      return reply.code(404).send({ error: "Card not found" });
-    }
-
-    const e = emp.rows[0];
-    const name = e.display_name || `${e.first_name} ${e.last_name}`.trim();
-
-    // Increment scan count
-    await sqlClient.query(
+    // Scan counter: a plain tenant-scoped write (no bypass for writes exists).
+    await withTenantGuc(e.tenant_id, (pool) => pool.query(
       `UPDATE hrms.visiting_cards SET scan_count = COALESCE(scan_count, 0) + 1 WHERE employee_id = $1 AND tenant_id = $2`,
-      [e.emp_id, e.tenant_id],
-    );
+      [e.employee_id, e.tenant_id],
+    )).catch((err) => req.log.warn({ err }, "visiting-card scan_count increment failed"));
 
+    const name = String(e.display_name || e.full_name || "").trim();
+    // employee.hrms_employees.mobile is an encryptedText column and this raw-SQL read bypasses
+    // drizzle's decrypt: decrypt here, and omit the phone line (fail closed) if that fails, so an
+    // anonymous caller can never receive an `enc:v*:` envelope as TEL.
+    let mobile: string | undefined;
+    if (e.show_personal_phone && e.mobile) {
+      try { mobile = decryptPii(String(e.mobile)); } catch (err) {
+        req.log.warn({ err }, "visiting-card public: mobile decrypt failed; omitting TEL");
+      }
+    }
+    // Minimal public projection: identity, role, org, work email, website,
+    // tagline. NO address, alt email, photo, employee code or ids. Phone
+    // numbers only when the owner opted in via show_personal_phone.
     const vcard = generateVCard({
       name,
       suffix: e.suffix,
       title: e.title_override || e.designation,
       org: e.department,
-      phone: e.phone,
+      ...(mobile ? { phone: mobile } : {}),
       altPhone: e.show_personal_phone ? e.alt_phone : undefined,
       email: e.email,
-      altEmail: e.alt_email,
       website: e.website,
-      address: e.address,
-      photoUrl: e.photo_url,
     });
 
-    // Return as downloadable .vcf file
+    const asciiName = name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "contact";
     reply.header("Content-Type", "text/vcard; charset=utf-8");
-    reply.header("Content-Disposition", `attachment; filename="${name.replace(/\s+/g, '_')}.vcf"`);
+    reply.header("Content-Disposition", `attachment; filename="${asciiName}.vcf"; filename*=UTF-8''${encodeURIComponent(name || "contact").replace(/'/g, "%27")}.vcf`);
+    reply.header("Cache-Control", "no-store");
+    reply.header("X-Robots-Tag", "noindex, nofollow");
+    reply.header("X-Content-Type-Options", "nosniff");
     return reply.send(vcard);
   });
 
@@ -373,6 +462,16 @@ function inferTier(designation: string): string {
   return "indigo";
 }
 
+/** vCard 3.0 TEXT escaping (RFC 2426 s4): backslash, comma, semicolon, newline; control chars dropped (no line injection). */
+function vEsc(v: string): string {
+  return String(v)
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\r\n|\r|\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
 function generateVCard(opts: {
   name: string;
   suffix?: string;
@@ -390,25 +489,25 @@ function generateVCard(opts: {
   const lines = [
     "BEGIN:VCARD",
     "VERSION:3.0",
-    `FN:${opts.name}${opts.suffix ? `, ${opts.suffix}` : ""}`,
-    `N:${opts.name.split(" ").reverse().join(";")};;;${opts.suffix ?? ""}`,
+    `FN:${vEsc(opts.name)}${opts.suffix ? `, ${vEsc(opts.suffix)}` : ""}`,
+    `N:${opts.name.split(" ").reverse().map(vEsc).join(";")};;;${vEsc(opts.suffix ?? "")}`,
   ];
 
-  if (opts.title) lines.push(`TITLE:${opts.title}`);
+  if (opts.title) lines.push(`TITLE:${vEsc(opts.title)}`);
   if (opts.org) {
     // ORG format: Company;Department
     const orgLine = opts.department && opts.department !== opts.org
-      ? `${opts.org};${opts.department}`
-      : opts.org;
+      ? `${vEsc(opts.org)};${vEsc(opts.department)}`
+      : vEsc(opts.org);
     lines.push(`ORG:${orgLine}`);
   }
-  if (opts.phone) lines.push(`TEL;TYPE=WORK:${opts.phone}`);
-  if (opts.altPhone) lines.push(`TEL;TYPE=CELL:${opts.altPhone}`);
-  if (opts.email) lines.push(`EMAIL;TYPE=WORK:${opts.email}`);
-  if (opts.altEmail) lines.push(`EMAIL;TYPE=HOME:${opts.altEmail}`);
-  if (opts.website) lines.push(`URL:${opts.website}`);
-  if (opts.address) lines.push(`ADR;TYPE=WORK:;;${opts.address.replace(/\n/g, ";")}`);
-  if (opts.photoUrl) lines.push(`PHOTO;TYPE=JPEG;VALUE=URI:${opts.photoUrl}`);
+  if (opts.phone) lines.push(`TEL;TYPE=WORK:${vEsc(opts.phone)}`);
+  if (opts.altPhone) lines.push(`TEL;TYPE=CELL:${vEsc(opts.altPhone)}`);
+  if (opts.email) lines.push(`EMAIL;TYPE=WORK:${vEsc(opts.email)}`);
+  if (opts.altEmail) lines.push(`EMAIL;TYPE=HOME:${vEsc(opts.altEmail)}`);
+  if (opts.website && HTTP_URL.test(opts.website)) lines.push(`URL:${vEsc(opts.website)}`);
+  if (opts.address) lines.push(`ADR;TYPE=WORK:;;${vEsc(opts.address)}`);
+  if (opts.photoUrl && HTTP_URL.test(opts.photoUrl)) lines.push(`PHOTO;TYPE=JPEG;VALUE=URI:${vEsc(opts.photoUrl)}`);
 
   lines.push("END:VCARD");
   return lines.join("\r\n");
