@@ -22,10 +22,12 @@ export async function findTicketByIdTx(tx: Writer, id: string, tenantId: string)
   return rows[0] ?? null;
 }
 
-export async function listNotes(ticketId: string) {
+export async function listNotes(ticketId: string, includeInternal = false) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
-  return db.transaction((tx) => tx.select().from(citizenTicketNotes).where(eq(citizenTicketNotes.ticketId, ticketId)));
+  return db.transaction((tx) => tx.select().from(citizenTicketNotes).where(
+    includeInternal ? eq(citizenTicketNotes.ticketId, ticketId) : and(eq(citizenTicketNotes.ticketId, ticketId), eq(citizenTicketNotes.isInternal, false)),
+  ));
 }
 
 /**
@@ -35,10 +37,12 @@ export async function listNotes(ticketId: string) {
  * ticketId; a ticket with no notes is simply absent — callers should
  * default to [] on a miss.
  */
-export async function listNotesByTicketIds(ticketIds: string[]): Promise<Map<string, Awaited<ReturnType<typeof listNotes>>>> {
+export async function listNotesByTicketIds(ticketIds: string[], includeInternal = false): Promise<Map<string, Awaited<ReturnType<typeof listNotes>>>> {
   const byTicket = new Map<string, Awaited<ReturnType<typeof listNotes>>>();
   if (ticketIds.length === 0) return byTicket;
-  const rows = await db.transaction((tx) => tx.select().from(citizenTicketNotes).where(inArray(citizenTicketNotes.ticketId, ticketIds)));
+  const rows = await db.transaction((tx) => tx.select().from(citizenTicketNotes).where(
+    includeInternal ? inArray(citizenTicketNotes.ticketId, ticketIds) : and(inArray(citizenTicketNotes.ticketId, ticketIds), eq(citizenTicketNotes.isInternal, false)),
+  ));
   for (const row of rows) {
     const list = byTicket.get(row.ticketId);
     if (list) list.push(row);

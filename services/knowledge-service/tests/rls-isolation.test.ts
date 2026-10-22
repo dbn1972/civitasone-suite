@@ -19,6 +19,8 @@ const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
 const ACTOR_A = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 const ACTOR_B = "bbbbbbbb-0000-4000-8000-bbbbbbbbbbbb";
+// A second Tenant A admin: publishing is maker-checker, so the approver must differ from the author (ACTOR_A).
+const ACTOR_A_APPROVER = "aaaaaaaa-0000-4000-8000-cccccccccccc";
 
 function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["super_admin", "knowledge_admin"]) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-rls" }, SECRET, 3600);
@@ -27,11 +29,13 @@ function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["s
 let app: FastifyInstance;
 let tokenA: string;
 let tokenB: string;
+let tokenApproverA: string;
 
 beforeAll(async () => {
   app = await buildApp();
   tokenA = tokenForTenant(TENANT_A, ACTOR_A);
   tokenB = tokenForTenant(TENANT_B, ACTOR_B);
+  tokenApproverA = tokenForTenant(TENANT_A, ACTOR_A_APPROVER);
   // buildApp() (src/app.ts) registers HTTP routes only -- the document
   // consumer that actually performs the INSERT for POST /v1/knowledge/documents
   // (an async CQRS command) is otherwise only registered by src/worker.ts, a
@@ -164,11 +168,13 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
     // longer depends on this -- see repo.ts -- but the read paths below,
     // via scopedRead(), still do.)
     const headersA = { authorization: `Bearer ${tokenA}`, "x-tenant-id": TENANT_A, "content-type": "application/json" };
+    // Publish/unpublish is done by a different approver than the author (maker-checker).
+    const approverA = { authorization: `Bearer ${tokenApproverA}`, "x-tenant-id": TENANT_A, "content-type": "application/json" };
 
     const publishRes = await app.inject({
       method: "PATCH",
       url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
-      headers: headersA,
+      headers: approverA,
       payload: { published: true },
     });
     expect(publishRes.statusCode).toBe(200);
@@ -186,7 +192,7 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
     const unpublishRes = await app.inject({
       method: "PATCH",
       url: `/v1/knowledge/articles/${createdDocumentId}/publish`,
-      headers: headersA,
+      headers: approverA,
       payload: { published: false },
     });
     expect(unpublishRes.statusCode).toBe(200);

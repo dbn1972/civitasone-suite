@@ -103,3 +103,43 @@ describe("GAP2-HELPDESK-CATALOGUE-REQUEST-IDOR-01", () => {
     expect((res.json() as { data: { requestedBy: string } }).data.requestedBy).toBe(OWNER);
   });
 });
+
+// Tenant-wide request list + breach report: a plain helpdesk_user must never see
+// other requesters' requests (formData PII); breaches are manager-only.
+describe("catalogue tenant-wide list + breach report access", () => {
+  const adminTok = token(randomUUID(), ["helpdesk_admin"]);
+  const list = (tok: string, qs = "") =>
+    app.inject({ method: "GET", url: `/v1/helpdesk/catalogue/requests${qs}`, headers: { authorization: `Bearer ${tok}` } });
+  const breaches = (tok: string) =>
+    app.inject({ method: "GET", url: "/v1/helpdesk/catalogue/requests/breaches", headers: { authorization: `Bearer ${tok}` } });
+
+  it("a non-owning helpdesk_user listing without mine gets none of another user's requests", async () => {
+    const res = await list(otherTok);
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { data: unknown[] }).data).toEqual([]);
+    expect(res.body).not.toContain("sensitive personal note");
+  });
+
+  it("a helpdesk_user listing without mine is scoped to their own requests only", async () => {
+    const res = await list(ownerTok);
+    expect(res.statusCode).toBe(200);
+    const rows = (res.json() as { data: Array<{ id: string; requestedBy: string }> }).data;
+    expect(rows.map((r) => r.id)).toEqual([REQUEST_ID]);
+    expect(rows.every((r) => r.requestedBy === OWNER)).toBe(true);
+  });
+
+  it("an agent still gets the tenant-wide list", async () => {
+    const res = await list(agentTok);
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as { data: Array<{ id: string }> }).data.map((r) => r.id)).toContain(REQUEST_ID);
+  });
+
+  it("breach report is 403 for a plain helpdesk_user and for an agent, 200 for an admin", async () => {
+    expect((await breaches(ownerTok)).statusCode).toBe(403);
+    expect((await breaches(otherTok)).statusCode).toBe(403);
+    expect((await breaches(agentTok)).statusCode).toBe(403);
+    const ok = await breaches(adminTok);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toHaveProperty("summary");
+  });
+});

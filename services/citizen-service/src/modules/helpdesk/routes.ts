@@ -44,7 +44,7 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     // P0-3: a bare citizen only sees their own tickets; staff see the tenant view.
     const ownCitizenId = hasAnyRole(ctx, STAFF_ROLES) ? undefined : ctx.actorId;
     if (q.slaStatus) {
-      const data = await queries.listTicketDetails(ctx.tenantId, q.limit, q.slaStatus, ownCitizenId);
+      const data = await queries.listTicketDetails(ctx.tenantId, q.limit, q.slaStatus, ownCitizenId, hasAnyRole(ctx, STAFF_ROLES));
       return reply.send({ data, pagination: { hasMore: data.length === q.limit, pageSize: q.limit } });
     }
     sendValidated(reply, ticketsListSchema, await queries.listTickets(ctx.tenantId, q.limit, q.slaStatus, ownCitizenId));
@@ -82,6 +82,10 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, STAFF_ROLES);
     const { id } = idParam.parse(req.params);
     const body = ticketNoteBody.parse(req.body);
+    // Defence in depth: only staff may author an internal note.
+    if (body.isInternal && !hasAnyRole(ctx, STAFF_ROLES)) {
+      throw new HttpError(403, "FORBIDDEN", "only staff may add internal notes");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNote(ctx, id, body));
   });
 
@@ -113,7 +117,7 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { id } = idParam.parse(req.params);
-    const ticket = await queries.getTicketWithOwner(ctx.tenantId, id);
+    const ticket = await queries.getTicketWithOwner(ctx.tenantId, id, hasAnyRole(ctx, STAFF_ROLES));
     if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
     // P0-1: staff (officer-tier) may read any ticket; a bare citizen only their own.
     if (!hasAnyRole(ctx, STAFF_ROLES)) assertOwnership(ctx, ticket.citizenId);

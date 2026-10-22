@@ -4,6 +4,7 @@ import { getCatalogueOfferings, getRequestBreachReport } from "../../../../_data
 import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { slaLabel } from "@/lib/slaLabels";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles, hasAnyRole, HELPDESK_MANAGER_ROLES } from "@/lib/auth/roleGuard";
 
 type Row = {
@@ -18,11 +19,20 @@ type Row = {
 };
 
 export default async function Page() {
-  // GAP-HELPDESK-CATALOGUE-BREACHES-03: role-gate this tenant-wide breach data
-  // to helpdesk managers — requestedBy and stage data should not be visible to
-  // every user. DECISION (safest default): restrict to helpdesk_admin / super_admin.
+  // GAP-HELPDESK-CATALOGUE-BREACHES-03: tenant-wide breach data (requestedBy,
+  // stage) is manager-only. helpdesk-service now answers 403 to a plain user, so
+  // render PermissionDenied up front and never fetch or render any rows.
   const sessionRoles = getSessionRoles();
-  const isManager = hasAnyRole(sessionRoles, HELPDESK_MANAGER_ROLES);
+  if (!hasAnyRole(sessionRoles, HELPDESK_MANAGER_ROLES)) {
+    return (
+      <PermissionDenied
+        module="SLA breach report"
+        requiredRoles={HELPDESK_MANAGER_ROLES}
+        backHref="/helpdesk/catalogue"
+        backLabel="Catalogue"
+      />
+    );
+  }
 
   const [{ data: report, source }, { data: offerings }] = await Promise.all([
     getRequestBreachReport(),
@@ -58,11 +68,6 @@ export default async function Page() {
         backLabel="Catalogue"
       />
       {source === "error" && <DataSourceBadge source={source} />}
-      {!isManager && (
-        <div className="card pad" style={{ marginBottom: 12, color: "var(--mut)", fontSize: "0.875rem" }}>
-          This report shows only summary data. Contact a helpdesk administrator for details.
-        </div>
-      )}
       <StatGrid>
         <StatCard icon="🚨" label="Breached" value={errored ? "—" : report.summary.breached.toLocaleString("en-IN")} />
         <StatCard icon="⚠️" label="At Risk" value={errored ? "—" : report.summary.atRisk.toLocaleString("en-IN")} />

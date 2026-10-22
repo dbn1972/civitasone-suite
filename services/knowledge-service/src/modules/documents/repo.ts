@@ -2,6 +2,7 @@ import { eq, desc, ilike, and, inArray, type SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { tenantTransaction } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
+import { enqueue, type DrizzleTx } from "../../shared/outbox.js";
 import { documents, type DocumentRow, type DocumentInsert, type DocumentView } from "./schema.js";
 
 export function toView(r: DocumentRow): DocumentView {
@@ -275,4 +276,49 @@ export async function updateStatus(tx: Writer, tenantId: string, id: string, sta
 // id must not silently "succeed" either (the caller turns `false` into 404).
 export async function updateStatusDirect(tenantId: string, id: string, status: string): Promise<boolean> {
   return tenantTransaction(db, tenantId, (tx) => updateStatus(tx as Writer, tenantId, id, status));
+}
+
+export type PublishOutcome = "ok" | "not_found" | "self_publish";
+
+/**
+ * Publish/unpublish with maker-checker and an audit event, in ONE tenant-scoped
+ * transaction. Publishing (-> approved) a document the caller authored is refused
+ * (`self_publish`, nothing written); the audit row is enqueued in the same
+ * transaction as the status change so the two can never diverge.
+ */
+export async function setStatusAudited(
+  tenantId: string,
+  id: string,
+  actor: { actorId: string; correlationId: string },
+  published: boolean,
+): Promise<PublishOutcome> {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const w = tx as unknown as Writer;
+    const rows = await w.select().from(documents)
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)))
+      .for("update");
+    const row = rows[0];
+    if (!row) return "not_found" as const;
+    // Maker-checker: the author of a document may not be the one who approves it.
+    if (published && row.createdBy === actor.actorId) return "self_publish" as const;
+    const status = published ? "approved" : "draft";
+    await updateStatus(w, tenantId, id, status);
+    await enqueue(tx as unknown as DrizzleTx, {
+      topic: "audit.event.record",
+      eventType: "audit.event.record",
+      tenantId,
+      actorId: actor.actorId,
+      correlationId: actor.correlationId,
+      payload: {
+        service: "knowledge",
+        action: published ? "publish" : "unpublish",
+        resourceType: "document",
+        resourceId: id,
+        outcome: "success",
+        previousStatus: row.status,
+        newStatus: status,
+      },
+    });
+    return "ok" as const;
+  });
 }
