@@ -35,7 +35,7 @@ type Action = "send" | "cancel";
 
 /**
  * CampaignDetail. `canManage` reflects whether the signed-in user holds a
- * notification campaign-admin role (NOTIFICATION_SEND_ROLES, resolved server-
+ * notification campaign-admin role (NOTIFICATION_CAMPAIGN_MANAGE_ROLES, resolved server-
  * side in the page wrapper). It mirrors the service's own gate — campaign
  * send/cancel is restricted to platform_admin/super_admin/tenant_admin
  * (bulk/routes.ts requireRole(ADMIN)); the server stays the authority and

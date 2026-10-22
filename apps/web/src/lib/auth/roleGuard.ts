@@ -680,6 +680,12 @@ export const BILLING_PLAN_ADMIN_ROLES = ["super_admin"];
 export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin", "tenant_admin"];
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
+/**
+ * Mirrors notification-service bulk/routes.ts `ADMIN`: the ONLY roles allowed to
+ * create / send / cancel a campaign. Deliberately NOT NOTIFICATION_SEND_ROLES -
+ * notification_admin may send single notifications but the campaign routes 403 it.
+ */
+export const NOTIFICATION_CAMPAIGN_MANAGE_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 
 /**

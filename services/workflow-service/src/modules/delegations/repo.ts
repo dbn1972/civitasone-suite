@@ -1,5 +1,6 @@
 import { and, eq, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { fetchUserRoleKeys } from "../../shared/identity-client.js";
 import { delegations, type DelegationRow, type DelegationView } from "./schema.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -17,6 +18,7 @@ export function toView(r: DelegationRow): DelegationView {
     fromDate: r.fromDate,
     toDate: r.toDate ?? null,
     reason: r.reason ?? null,
+    roles: r.roles ?? [],
     isActive: r.isActive,
     createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
   };
@@ -29,6 +31,7 @@ export async function create(input: {
   fromDate: string;
   toDate: string | null;
   reason: string | null;
+  roles: string[];
   id?: string;
 }, outer?: Tx): Promise<DelegationView> {
   const rows = await withTx(outer, async (tx) => {
@@ -40,6 +43,7 @@ export async function create(input: {
       fromDate: input.fromDate,
       toDate: input.toDate,
       reason: input.reason,
+      roles: input.roles,
       isActive: true,
     }).returning();
   });
@@ -94,4 +98,49 @@ export async function activeForDelegate(
       sql`(${delegations.toDate} IS NULL OR ${delegations.toDate} >= ${onDate})`,
     )));
   return rows.map(toView);
+}
+
+/**
+ * True when at least one of the (already active, delegate-matched) delegations
+ * explicitly conveys `roleRef`. The delegator's possession of that role was
+ * validated when the delegation was created.
+ */
+export function delegationsCoverRole(delegations: readonly DelegationView[], roleRef: string): DelegationView[] {
+  return delegations.filter((d) => d.roles.includes(roleRef));
+}
+
+/**
+ * USE-TIME check: of the delegations that convey `roleRef`, keep only those whose
+ * delegator STILL holds `roleRef` in identity-service right now (live data, not
+ * the roles recorded at creation). One lookup per distinct delegator. Fails
+ * closed: a delegator whose roles cannot be fetched satisfies nothing.
+ */
+export async function liveRoleDelegations(
+  tenantId: string,
+  delegations: readonly DelegationView[],
+  roleRef: string,
+): Promise<DelegationView[]> {
+  const covering = delegationsCoverRole(delegations, roleRef);
+  const holds = new Map<string, boolean>();
+  for (const id of new Set(covering.map((d) => d.delegatorId))) {
+    const keys = await fetchUserRoleKeys(tenantId, id);
+    holds.set(id, keys !== undefined && keys.includes(roleRef));
+  }
+  return covering.filter((d) => holds.get(d.delegatorId) === true);
+}
+
+/** Active delegations created by (delegator = creator) `delegatorId`. */
+export async function activeByDelegator(tenantId: string, delegatorId: string): Promise<DelegationView[]> {
+  const rows = await scopedRead((tx) => tx.select().from(delegations)
+    .where(and(eq(delegations.tenantId, tenantId), eq(delegations.delegatorId, delegatorId), eq(delegations.isActive, true))));
+  return rows.map(toView);
+}
+
+/** Active legacy delegations (created before role scoping: empty roles) for the re-issue report. */
+export async function listLegacy(tenantId: string, limit: number, offset: number): Promise<{ rows: DelegationView[]; total: number }> {
+  const where = and(eq(delegations.tenantId, tenantId), eq(delegations.isActive, true), sql`cardinality(${delegations.roles}) = 0`);
+  const rows = await scopedRead((tx) => tx.select().from(delegations).where(where)
+    .orderBy(desc(delegations.createdAt)).limit(limit).offset(offset));
+  const totalRes = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(delegations).where(where));
+  return { rows: rows.map(toView), total: totalRes[0]?.n ?? 0 };
 }
