@@ -117,6 +117,17 @@ export function registerBoqConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      // A work has ONE recapitulation. Two commands for the same work (a double submit publishes two, each with its own
+      // messageId, so markProcessed cannot dedupe them) are serialised on a per-work transaction lock: the second
+      // one waits for the first to commit and then sees its row, instead of both inserting and leaving two Grand
+      // Totals for the same work.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`boq-recapitulate:${msg.tenantId}:${String(p.workId)}`}, 0))`);
+      const already = await tx.select({ id: recapitulation.id }).from(recapitulation)
+        .where(and(eq(recapitulation.tenantId, msg.tenantId), eq(recapitulation.workId, p.workId as string)))
+        .limit(1);
+      if (already.length > 0) {
+        throw new NonRetryableError("RECAP_EXISTS: a recapitulation has already been computed for this work");
+      }
       // GAP-WORKS-BOQ-WORKID-05: the work amount is the sum of the work's stored BoQ line amounts (paise, summed in
       // SQL as bigint), read in this transaction. The command carries only the percentages and other charges; the
       // recapitulation API schema has never had a workAmount field, so the old `BigInt(p.workAmount)` threw for every

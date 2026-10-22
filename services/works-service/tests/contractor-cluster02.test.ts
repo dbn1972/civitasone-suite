@@ -7,6 +7,7 @@
  *  GAP-WORKS-CONTRACTORS-DETAIL-03  rating history carries a server-resolved ratedByName (null when unresolved)
  *  GAP-WORKS-CONTRACTORS-DETAIL-04  a configured cooling-off period turns a repeat rating into 409 RATING_COOLDOWN
  */
+import { randomBytes } from "node:crypto";
 import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
 
@@ -88,7 +89,8 @@ function authHeader(roles: string[]) {
 
 let app: FastifyInstance;
 beforeAll(async () => {
-  process.env.PII_ENC_KEY = process.env.PII_ENC_KEY ?? "test_pii_encryption_key_32chars!!";
+  // Generated per run, never committed (the PAN column is encrypted at rest and the suite needs a key).
+  process.env.PII_ENC_KEY ??= randomBytes(32).toString("hex");
   const { buildApp } = await import("../src/app.js");
   app = await buildApp();
 });
@@ -123,6 +125,26 @@ describe("GET /v1/works/contractors -- pagination contract (CONTRACTORS-03 / -06
   it("?page=3&pageSize=50 is rows 101-150 (offset 100)", async () => {
     await list("?page=3&pageSize=50");
     expect(listContractors).toHaveBeenCalledWith(TENANT, { limit: 50, offset: 100 });
+  });
+
+  it("?page=N with no pageSize pages by the default limit (it is not silently ignored): ?page=3 is rows 101-150", async () => {
+    const res = await list("?page=3");
+    expect(res.statusCode).toBe(200);
+    expect(listContractors).toHaveBeenCalledWith(TENANT, { limit: 50, offset: 100 });
+    expect(res.json().meta).toMatchObject({ limit: 50, offset: 100, page: 3, pageSize: 50 });
+  });
+
+  it("?page=N uses an explicit ?limit as its page length, and wins over a stray ?offset", async () => {
+    const res = await list("?page=2&limit=20&offset=7");
+    expect(listContractors).toHaveBeenCalledWith(TENANT, { limit: 20, offset: 20 });
+    expect(res.json().meta).toMatchObject({ limit: 20, offset: 20, page: 2, pageSize: 20 });
+  });
+
+  it("?page=0 is a 400 with a field error naming page, never a silent page 1", async () => {
+    const res = await list("?page=0");
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors.some((f: { field: string }) => f.field === "page")).toBe(true);
+    expect(listContractors).not.toHaveBeenCalled();
   });
 
   it("the picker's ?pageSize=200 is honoured up to the 200 cap", async () => {

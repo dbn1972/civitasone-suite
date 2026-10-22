@@ -60,10 +60,18 @@ export async function boqWorkTotals(tenantId: string, workId: string): Promise<{
   });
 }
 
+/**
+ * The recapitulation of a work. A work has at most one (POST /boq/recapitulate answers 409 RECAP_EXISTS for a second;
+ * the consumer re-checks under a per-work lock), so this is a single-row read. It still orders explicitly: `version`
+ * is the only recency signal the table carries, and the id breaks a tie so the read is stable rather than whatever
+ * order the planner happened to return, should a duplicate ever be present.
+ */
 export async function getRecapitulation(tenantId: string, workId: string) {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(recapitulation)
-      .where(and(eq(recapitulation.tenantId, tenantId), eq(recapitulation.workId, workId)));
+      .where(and(eq(recapitulation.tenantId, tenantId), eq(recapitulation.workId, workId)))
+      .orderBy(desc(recapitulation.version), desc(recapitulation.id))
+      .limit(1);
     return rows[0] ?? null;
   });
 }

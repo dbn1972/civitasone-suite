@@ -43,7 +43,8 @@ export const listQuerySchema = z.object({
 /**
  * GAP-WORKS-CONTRACTORS-03 / -06: the register list accepts BOTH conventions in use in this service family: the
  * limit/offset pair (default 50) and the page/pageSize pair the web register and the contractor picker send
- * (?pageSize=100 / ?pageSize=200). pageSize/page win when given; a page is 1-based. The resolved window is what
+ * (?pageSize=100 / ?pageSize=200). page/pageSize win over offset/limit when given; a page is 1-based. `page` on its
+ * own pages by the default limit ((page - 1) * limit); `pageSize` on its own is page 1. The resolved window is what
  * the route queries and echoes back in meta, together with the true total.
  */
 export const contractorListQuerySchema = z
@@ -55,7 +56,7 @@ export const contractorListQuerySchema = z
   })
   .transform((q) => {
     const limit = q.pageSize ?? q.limit;
-    const offset = q.pageSize !== undefined ? ((q.page ?? 1) - 1) * q.pageSize : q.offset;
+    const offset = q.pageSize !== undefined || q.page !== undefined ? ((q.page ?? 1) - 1) * limit : q.offset;
     return { limit, offset, page: Math.floor(offset / limit) + 1, pageSize: limit };
   });
 

@@ -52,15 +52,8 @@ vi.mock("@civitasone/outbox", () => ({
   outboxMessages: {}, processed: {}, outboxSchema: {},
   enqueue: vi.fn(), markProcessed: vi.fn(), startRelay: vi.fn(() => setInterval(() => {}, 999999)),
 }));
-vi.mock("@civitasone/schemas/plugin", () => ({
-  registerSchemaErrorHandler: (app: any, HttpError: any) => {
-    app.setErrorHandler((err: any, _req: any, reply: any) => {
-      if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code } });
-      if (err?.name === "ZodError") return reply.status(400).send({ error: { code: "VALIDATION_ERROR" } });
-      return reply.status(500).send({ error: { code: "INTERNAL" } });
-    });
-  },
-}));
+// NOTE: @civitasone/schemas/plugin is intentionally NOT mocked -- the real createFastifyErrorHandler runs, so every
+// `.json().code` below is read from the FLAT { code, message, correlationId, retryable } body the service really sends.
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: Object.assign(async (app: any) => {
     app.decorateRequest("ctx", undefined);
@@ -143,7 +136,7 @@ describe("billing finalize authority + maker-checker", () => {
     getBill.mockResolvedValue({ id: BILL_ID, status: "draft", createdBy: ACTOR_A });
     const res = await finalizeBill(roleAuth(["works_admin"], ACTOR_A), "so_finalized");
     expect(res.statusCode).toBe(422);
-    expect(res.json().error.code).toBe("SELF_APPROVAL_FORBIDDEN");
+    expect(res.json().code).toBe("SELF_APPROVAL_FORBIDDEN");
   });
 
   it("the MB issuer cannot finalize their own MB (422)", async () => {
@@ -166,7 +159,7 @@ describe("billing finalize authority + maker-checker", () => {
       payload: { workId: WORK_ID, awardId: AWARD_ID, mbNumber: "MB/001" },
     });
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.code).toBe("DUPLICATE_MB_NUMBER");
+    expect(res.json().code).toBe("DUPLICATE_MB_NUMBER");
   });
 
   it("a fresh MB number is accepted (202)", async () => {
@@ -213,14 +206,14 @@ describe("billing finalize authority + maker-checker", () => {
       expect((await finalizeBill(roleAuth(["estimator"]), "dao_finalized")).statusCode).toBe(403);
       const self = await finalizeBill(roleAuth(["works_admin"], ACTOR_A), "dao_finalized");
       expect(self.statusCode).toBe(422);
-      expect(self.json().error.code).toBe("SELF_APPROVAL_FORBIDDEN");
+      expect(self.json().code).toBe("SELF_APPROVAL_FORBIDDEN");
     });
 
     it("a step that is neither the current one nor the next one is still 422 INVALID_STEP", async () => {
       getBill.mockResolvedValue({ id: BILL_ID, status: "so_finalized", createdBy: ACTOR_A });
       const res = await finalizeBill(roleAuth(["dao"]), "dao_finalized");
       expect(res.statusCode).toBe(422);
-      expect(res.json().error.code).toBe("INVALID_STEP");
+      expect(res.json().code).toBe("INVALID_STEP");
     });
   });
 

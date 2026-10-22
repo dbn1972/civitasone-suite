@@ -126,6 +126,19 @@ export async function insertRatingHistory(
 }
 
 /**
+ * GAP-WORKS-CONTRACTORS-DETAIL-04: take the contractor row lock for the rest of the caller's transaction. Concurrent
+ * rate commands for one contractor queue up behind it, so a cooling-off check made after this call reads every
+ * rating committed by the commands that went first. False when the contractor does not exist in this tenant.
+ */
+export async function lockContractorTx(tx: ScopedTx, tenantId: string, contractorId: string): Promise<boolean> {
+  const rows = await tx.select({ id: contractors.id }).from(contractors)
+    .where(and(eq(contractors.tenantId, tenantId), eq(contractors.id, contractorId)))
+    .for("update")
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
  * GAP-WORKS-CONTRACTORS-DETAIL-04: the most recent rating of a contractor recorded by one officer, for the
  * cooling-off check. Null when that officer has never rated it.
  */

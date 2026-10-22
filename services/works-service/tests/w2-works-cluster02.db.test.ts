@@ -4,7 +4,9 @@
  *  GAP-WORKS-BILLING-WORKID-07     a repeated finalize (new messageId, same step) applies ONCE: one status write, one
  *                                  event, and for the DO step ONE finance hand-off; an out-of-order step is refused
  *  GAP-WORKS-BOQ-NEW-05            BR-015: a line cannot be added once a pre-tender exists; a non-positive rate is refused
- *  GAP-WORKS-BOQ-WORKID-05         a recapitulation is computed on the stored BoQ lines, to the exact paisa
+ *  GAP-WORKS-BOQ-WORKID-05         a recapitulation is computed on the stored BoQ lines, to the exact paisa; a work has
+ *                                  ONE of them: a repeat or a racing double submit is refused (RECAP_EXISTS) and the
+ *                                  stored figures never move
  *  GAP-WORKS-CONTRACTORS-03/-06    the register count and page window come from the database
  *  GAP-WORKS-CONTRACTORS-DETAIL-04 a configured cooling-off period is enforced in the writing transaction; the audit
  *                                  event carries the stated reason; a rating can name the work it is about
@@ -250,6 +252,82 @@ describe("recapitulation is computed on the stored lines (real DB, BOQ-WORKID-05
   });
 });
 
+describe("a work has ONE recapitulation (real DB, BOQ-WORKID-05 repeat semantics)", () => {
+  const PCT = { contingencyPercent: 3, turnoverTaxPercent: 1, workChargePercent: 2, qualityControlPercent: 1, centagePercent: 12.5 };
+  const recap = (workId: string, over: Record<string, unknown> = {}) =>
+    deliver(COMMANDS.boqRecapitulate, msg(MAKER, { id: randomUUID(), workId, ...PCT, otherCharges: "5000", ...over }));
+  const recapsOf = (workId: string) => inTx((tx) => tx.select().from(recapitulation).where(eq(recapitulation.workId, workId)));
+  async function seedTwoLines(): Promise<string> {
+    const workId = await seedWorkWithTs();
+    await addLine(workId, { itemCode: "S-1", rate: "12500", quantity: 3 });     // 37500
+    await addLine(workId, { itemCode: "S-2", rate: "99999", quantity: 2.5 });   // 249997  -> work amount 287497
+    return workId;
+  }
+
+  it("a second recapitulation of the same work is refused, the first stays to the paisa, no second event is raised", async () => {
+    const workId = await seedTwoLines();
+    await recap(workId);
+    // The BoQ then changes and different percentages are asked for. Whether that may REPLACE the recapitulation is an
+    // undecided product question, so today it is refused and the stored figures do not move.
+    await addLine(workId, { itemCode: "S-3", rate: "10000", quantity: 1 });      // work amount would now be 297497
+    const again = { centagePercent: 0, contingencyPercent: 0, otherCharges: "0" };
+    await expect(recap(workId, again)).rejects.toBeInstanceOf(NonRetryableError);
+    await expect(recap(workId, again)).rejects.toThrow(/RECAP_EXISTS/);
+    const rows = await recapsOf(workId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.workAmount).toBe(287497n);
+    expect(rows[0]!.grandTotal).toBe(348555n);
+    expect(rows[0]!.centagePercent).toBe("12.50");
+    const read = await runWithTenant(TENANT, () => boqRepo.getRecapitulation(TENANT, workId));
+    expect(read!.id).toBe(rows[0]!.id);
+    expect(read!.grandTotal).toBe(348555n);
+    expect(await outbox(EVENTS.boqRecapitulated, { workId })).toHaveLength(1);
+  });
+
+  it("two recapitulate commands racing at the same instant (a double submit): exactly one applies, one row, one event", async () => {
+    const workId = await seedTwoLines();
+    const results = await Promise.allSettled([recap(workId), recap(workId)]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(NonRetryableError);
+    expect(String(rejected[0]!.reason)).toMatch(/RECAP_EXISTS/);
+    const rows = await recapsOf(workId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.grandTotal).toBe(348555n);
+    expect(await outbox(EVENTS.boqRecapitulated, { workId })).toHaveLength(1);
+  });
+
+  it("another work is unaffected: each work gets its own recapitulation", async () => {
+    const a = await seedTwoLines();
+    const b = await seedWorkWithTs();
+    await addLine(b, { itemCode: "B-1", rate: "100000", quantity: 4 });          // 400000
+    await recap(a);
+    await recap(b, { contingencyPercent: 0, turnoverTaxPercent: 0, workChargePercent: 0, qualityControlPercent: 0, centagePercent: 0, otherCharges: "0" });
+    expect((await recapsOf(a))[0]!.grandTotal).toBe(348555n);
+    expect((await recapsOf(b))[0]!.grandTotal).toBe(400000n);
+  });
+
+  it("the read returns the highest version when rows from before this rule hold more than one, whatever their insert order", async () => {
+    const zero = { contingencyPercent: "0", turnoverTaxPercent: "0", workChargePercent: "0", qualityControlPercent: "0", centagePercent: "0" };
+    const newer = { workAmount: 287497n, ...zero, grandTotal: 348555n, version: 2 };
+    const older = { workAmount: 100000n, ...zero, grandTotal: 120000n, version: 1 };
+    // one work whose older row was stored first, one whose newer row was stored first: a plain scan returns the first
+    // stored row, so only an ORDER BY version DESC gets both right
+    for (const [label, rows] of [["older-first", [older, newer]], ["newer-first", [newer, older]]] as const) {
+      const workId = await seedWorkWithTs();
+      await inTx(async (tx) => {
+        for (const r of rows) await tx.insert(recapitulation).values({ id: randomUUID(), tenantId: TENANT, workId, ...r });
+      });
+      const read = await runWithTenant(TENANT, () => boqRepo.getRecapitulation(TENANT, workId));
+      expect(read!.version, label).toBe(2);
+      expect(read!.grandTotal, label).toBe(348555n);
+      // and a new command still refuses: the work already has a recapitulation
+      await expect(recap(workId)).rejects.toThrow(/RECAP_EXISTS/);
+    }
+  });
+});
+
 // ── Contractors ──────────────────────────────────────────────────────────────
 async function seedContractor(name: string): Promise<string> {
   const id = randomUUID();
@@ -312,6 +390,36 @@ describe("contractor rating (real DB, DETAIL-04)", () => {
     const last = await runWithTenant(TENANT, () => contractorRepo.latestRatingByActor(TENANT, id, MAKER));
     expect(last).not.toBeNull();
     expect(await runWithTenant(TENANT, () => contractorRepo.latestRatingByActor(TENANT, id, OTHER_OFFICER))).toBeNull();
+  });
+
+  it("two rate commands from the same officer racing at the same instant: the row lock serialises them, only one is stored", async () => {
+    process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "30";
+    const id = await seedContractor("Race Co");
+    const results = await Promise.allSettled([rate(MAKER, id, { rating: 4 }), rate(MAKER, id, { rating: 2 })]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]!.reason).toBeInstanceOf(NonRetryableError);
+    expect(String(rejected[0]!.reason)).toMatch(/RATING_COOLDOWN/);
+    expect(await ratingsOf(id)).toHaveLength(1);
+    const [c] = await inTx((tx) => tx.select().from(contractors).where(eq(contractors.id, id)));
+    expect(c!.ratingCount).toBe(1);
+    expect(await outbox("audit.event.record", { resourceId: id, action: "rate" })).toHaveLength(1);
+  });
+
+  it("two officers rating at the same instant both succeed: the lock serialises them, it does not refuse them", async () => {
+    process.env.WORKS_CONTRACTOR_RATING_COOLDOWN_DAYS = "30";
+    const id = await seedContractor("Two Officers Co");
+    await Promise.all([rate(MAKER, id, { rating: 4 }), rate(CHECKER, id, { rating: 2 })]);
+    expect(await ratingsOf(id)).toHaveLength(2);
+    const [c] = await inTx((tx) => tx.select().from(contractors).where(eq(contractors.id, id)));
+    expect(c!.ratingCount).toBe(2);
+    expect(c!.performanceRating).toBe(3);
+  });
+
+  it("rating a contractor that does not exist in this tenant is refused as CONTRACTOR_NOT_FOUND, nothing written", async () => {
+    await expect(rate(MAKER, randomUUID())).rejects.toBeInstanceOf(NonRetryableError);
+    await expect(rate(MAKER, randomUUID())).rejects.toThrow(/CONTRACTOR_NOT_FOUND/);
   });
 
   it("once the window has passed the same officer may rate again", async () => {

@@ -50,14 +50,8 @@ vi.mock("@civitasone/outbox", () => ({
   outboxMessages: {}, processed: {}, outboxSchema: {},
   enqueue: vi.fn(), markProcessed: vi.fn(), startRelay: vi.fn(() => setInterval(() => {}, 999999)),
 }));
-vi.mock("@civitasone/schemas/plugin", () => ({
-  registerSchemaErrorHandler: (app: any, HttpError: any) => {
-    app.setErrorHandler((err: any, _req: any, reply: any) => {
-      if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code } });
-      return reply.status(500).send({ error: { code: "INTERNAL" } });
-    });
-  },
-}));
+// NOTE: @civitasone/schemas/plugin is intentionally NOT mocked -- the real createFastifyErrorHandler runs, so every
+// `.json().code` below is read from the FLAT { code, message, correlationId, retryable } body the service really sends.
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: Object.assign(async (app: any) => {
     app.decorateRequest("ctx", undefined);
@@ -171,7 +165,7 @@ describe("billing list endpoints — MBs / awards by work (GAP-WORKS-BILLING-WOR
       getProposal.mockClear();
       const res = await get("not-a-uuid", reader());
       expect(res.statusCode).toBe(400);
-      expect(res.json().error.code).toBe("INVALID_ID");
+      expect(res.json().code).toBe("INVALID_ID");
       expect(getProposal).not.toHaveBeenCalled();
       expect(listBillsForWork).not.toHaveBeenCalled();
     });

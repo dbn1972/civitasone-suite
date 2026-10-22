@@ -13,7 +13,7 @@ vi.mock("@civitasone/db", () => ({
     sqlClient: { end: vi.fn() },
     db: {
       transaction: vi.fn((fn: Function) => fn({
-        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), groupBy: () => Promise.resolve([]), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
+        select: () => ({ from: () => ({ where: () => ({ limit: () => ({ offset: () => Promise.resolve([]) }), orderBy: () => ({ limit: () => Promise.resolve([]) }), groupBy: () => Promise.resolve([]), then: (r: Function) => Promise.resolve([]).then(r) }), then: (r: Function) => Promise.resolve([]).then(r) }) }),
         insert: () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ messageId: "x" }]) }) }) }),
         update: () => ({ set: () => ({ where: () => Promise.resolve() }) }),
       })),

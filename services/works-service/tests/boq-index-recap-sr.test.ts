@@ -57,15 +57,8 @@ vi.mock("@civitasone/outbox", () => ({
   outboxMessages: {}, processed: {}, outboxSchema: {},
   enqueue: vi.fn(), markProcessed: vi.fn(), startRelay: vi.fn(() => setInterval(() => {}, 999999)),
 }));
-vi.mock("@civitasone/schemas/plugin", () => ({
-  registerSchemaErrorHandler: (app: any, HttpError: any) => {
-    app.setErrorHandler((err: any, _req: any, reply: any) => {
-      if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code } });
-      if (err?.name === "ZodError" || err?.issues) return reply.status(400).send({ error: { code: "VALIDATION_ERROR" } });
-      return reply.status(500).send({ error: { code: "INTERNAL" } });
-    });
-  },
-}));
+// NOTE: @civitasone/schemas/plugin is intentionally NOT mocked -- the real createFastifyErrorHandler runs, so every
+// `.json().code` below is read from the FLAT { code, message, correlationId, retryable } body the service really sends.
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: Object.assign(async (app: any) => {
     app.decorateRequest("ctx", undefined);
@@ -146,12 +139,12 @@ describe("works BoQ index / recap / SR search", () => {
     getProposal.mockResolvedValueOnce(null as never);
     const unknown = await app.inject({ method: "GET", url: `/v1/works/boq/${WORK_ID}/recapitulation`, headers: auth(["works_viewer"]) });
     expect(unknown.statusCode).toBe(404);
-    expect(unknown.json().error.code).toBe("NOT_FOUND");
+    expect(unknown.json().code).toBe("NOT_FOUND");
 
     getRecapitulation.mockResolvedValueOnce(null);
     const notComputed = await app.inject({ method: "GET", url: `/v1/works/boq/${WORK_ID}/recapitulation`, headers: auth(["works_viewer"]) });
     expect(notComputed.statusCode).toBe(404);
-    expect(notComputed.json().error.code).toBe("RECAPITULATION_NOT_COMPUTED");
+    expect(notComputed.json().code).toBe("RECAPITULATION_NOT_COMPUTED");
   });
 
   it("both per-work BoQ reads reject a non-UUID work id with 400 and never query", async () => {

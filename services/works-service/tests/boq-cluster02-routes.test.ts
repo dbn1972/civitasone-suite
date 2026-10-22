@@ -4,7 +4,8 @@
  *  GAP-WORKS-BOQ-NEW-04   a duplicate line is a synchronous 409 DUPLICATE_BOQ_LINE (was: 202, then silently dropped by the consumer)
  *  GAP-WORKS-BOQ-NEW-05   BR-015 freeze also applies when ADDING a line; a zero/negative rate or quantity is a 400;
  *                         a role without BoQ author rights gets 403 on POST
- *  GAP-WORKS-BOQ-WORKID-05 a recapitulation needs BoQ lines (work amount is read from them, never from the client)
+ *  GAP-WORKS-BOQ-WORKID-05 a recapitulation needs BoQ lines (work amount is read from them, never from the client);
+ *                         a work has ONE recapitulation: a second request is a 409 RECAP_EXISTS, not a second row
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
@@ -17,6 +18,7 @@ const hasPreTenderForWork = vi.fn();
 const getProposal = vi.fn();
 const listBoqLineRefs = vi.fn();
 const boqWorkTotals = vi.fn();
+const getRecapitulation = vi.fn();
 
 vi.mock("../src/modules/approval/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/approval/repo.js")>();
@@ -32,7 +34,7 @@ vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
 });
 vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
-  return { ...orig, listBoqLineRefs, boqWorkTotals };
+  return { ...orig, listBoqLineRefs, boqWorkTotals, getRecapitulation };
 });
 
 vi.mock("@civitasone/db", () => ({
@@ -100,6 +102,7 @@ describe("BoQ author routes (cluster 02)", () => {
     getProposal.mockReset().mockImplementation(async (_t: string, id: string) => ({ id, status: "dao_finalized" }));
     listBoqLineRefs.mockReset().mockResolvedValue([]);
     boqWorkTotals.mockReset().mockResolvedValue({ lines: 2, totalMinor: 900000n });
+    getRecapitulation.mockReset().mockResolvedValue(null);
   });
 
   const post = (roles: string[], payload: unknown, url = "/v1/works/boq") =>
@@ -210,6 +213,24 @@ describe("BoQ author routes (cluster 02)", () => {
       const res = await post(["estimator"], body, "/v1/works/boq/recapitulate");
       expect(res.statusCode).toBe(422);
       expect(res.json().code).toBe("BOQ_EMPTY");
+      expect(publishMock).not.toHaveBeenCalled();
+    });
+
+    it("409 RECAP_EXISTS when the work already has a recapitulation: refused before the 202, nothing published", async () => {
+      getRecapitulation.mockResolvedValue({ id: "00000000-7777-4000-8000-000000000001", workId: WORK_ID, grandTotal: 348555n });
+      const res = await post(["estimator"], body, "/v1/works/boq/recapitulate");
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe("RECAP_EXISTS");
+      expect(res.json().error).toBeUndefined();
+      expect(getRecapitulation).toHaveBeenCalledWith(TENANT_A, WORK_ID);
+      expect(publishMock).not.toHaveBeenCalled();
+    });
+
+    it("a malformed work id is a 400 with the flat code, before any lookup", async () => {
+      const res = await post(["estimator"], { ...body, workId: "not-a-uuid" }, "/v1/works/boq/recapitulate");
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe("VALIDATION_FAILED");
+      expect(getRecapitulation).not.toHaveBeenCalled();
       expect(publishMock).not.toHaveBeenCalled();
     });
 

@@ -148,6 +148,12 @@ export async function boqRoutes(app: FastifyInstance): Promise<void> {
     // GAP-WORKS-BOQ-WORKID-05: the work amount is the sum of the work's stored BoQ lines (the consumer reads it again
     // under its own transaction); the client never supplies it. A work with no lines has nothing to recapitulate.
     if (!(await getProposal(ctx.tenantId, body.workId))) throw new HttpError(404, "NOT_FOUND", "work not found");
+    // A work has ONE recapitulation. Whether a changed BoQ may replace it is a product decision that has not been made,
+    // so a second request is refused rather than appended (appending left two Grand Totals and the read returned an
+    // arbitrary one). The consumer re-checks under a per-work lock.
+    if (await getRecapitulation(ctx.tenantId, body.workId)) {
+      throw new HttpError(409, "RECAP_EXISTS", "A recapitulation has already been computed for this work");
+    }
     const { lines } = await boqWorkTotals(ctx.tenantId, body.workId);
     if (lines === 0) {
       throw new HttpError(422, "BOQ_EMPTY", "Add BoQ items to this work before computing the recapitulation");

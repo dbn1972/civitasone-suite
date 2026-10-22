@@ -96,8 +96,15 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; rating: number; comment?: string; workId?: string };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        // GAP-WORKS-CONTRACTORS-DETAIL-04: the cooling-off period is re-asserted in the writing transaction (two quick
-        // submits can both pass the route check). Skipped entirely while no cooldown is configured.
+        // GAP-WORKS-CONTRACTORS-DETAIL-04: lock the contractor row BEFORE reading the rating history. Two rate commands
+        // from one officer (each with its own messageId) are then serialised: the second one waits for the first to
+        // commit and its cooling-off check below sees the first one's rating, instead of both reading an empty
+        // history, both passing and both inserting.
+        if (!(await repo.lockContractorTx(tx, msg.tenantId, p.id))) {
+          throw new NonRetryableError("CONTRACTOR_NOT_FOUND: contractor not found for rating");
+        }
+        // The cooling-off period is re-asserted in the writing transaction (two quick submits can both pass the route
+        // check). Skipped entirely while no cooldown is configured.
         const cooldownDays = ratingCooldownDays();
         if (cooldownDays > 0) {
           const last = await repo.latestRatingByActorTx(tx, msg.tenantId, p.id, msg.actorId);

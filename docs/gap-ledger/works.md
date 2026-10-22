@@ -3111,7 +3111,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-BOQ-WORKID-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq routes: all-routes.test.ts GET boq 401/403/200 + boq-workid-existence.test.ts; closed by #1867; W2 works rescan: completed by #PRNUM)
-- **W2 rescan note:** workId is UUID-validated on both GETs (400); recap GET tells unknown work (NOT_FOUND) from not computed (RECAPITULATION_NOT_COMPUTED); a recapitulation is computed from the stored BoQ line amounts (paise, summed in SQL) instead of the nonexistent client workAmount, so recap rows can now be produced; a work with no lines is 422 BOQ_EMPTY. Exact-paise real-DB test: work amount 287497, grand total 348555
+- **W2 rescan note:** workId is UUID-validated on both GETs (400); recap GET tells unknown work (NOT_FOUND) from not computed (RECAPITULATION_NOT_COMPUTED); a recapitulation is computed from the stored BoQ line amounts (paise, summed in SQL) instead of the nonexistent client workAmount, so recap rows can now be produced; a work with no lines is 422 BOQ_EMPTY. Exact-paise real-DB test: work amount 287497, grand total 348555; a work has ONE recapitulation: a repeat or a racing double submit is refused (route 409 RECAP_EXISTS, consumer re-check under a per-work lock) and the stored figures never move, the read orders by version DESC. OPEN QUESTION FOR THE OWNER: may a changed BoQ REPLACE the work recapitulation (recompute in place, version bumped), or is it computed once? Until decided a recapitulation cannot be recomputed after the BoQ changes
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/boq/:workId', 'GET /api/v1/works/boq/:workId/recapitulation']`
 - **Question:** Do GET /api/v1/works/boq/:workId, GET /api/v1/works/boq/:workId/recapitulation enforce BoQ reader role checks, input validation, canonical status enums and the documented response shape and is money returned in one consistent unit?
@@ -3123,7 +3123,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-BOQ-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq create: all-routes.test.ts 202/400 + boq-quantity-string.test.ts; closed by main; W2 works rescan: completed by #PRNUM)
-- **W2 rescan note:** BR-015 freeze now also refuses ADDING a line (route 409 BOQ_FROZEN + consumer); rate must be > 0 and PATCH quantity must be > 0 (400); duplicates answered synchronously; 403 on POST boq tested (boq-cluster02-routes.test.ts, w2-works-cluster02.db.test.ts)
+- **W2 rescan note:** BR-015 freeze now also refuses ADDING a line (route 409 BOQ_FROZEN + consumer); rate must be > 0 and PATCH quantity must be > 0 (400); duplicates answered synchronously; 403 on POST boq tested (boq-cluster02-routes.test.ts, w2-works-cluster02.db.test.ts). Owner to confirm: a zero rate is now refused (the finding asked for rate > 0, no statutory value was invented); if provisional or free-issue lines with a zero rate occur in practice that is a policy call
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/boq']`
 - **Question:** Do POST /v1/works/boq enforce BoQ author role checks, input validation, canonical status enums and the documented response shape?
@@ -3146,7 +3146,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-CONTRACTORS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: contractor-routes.test.ts roles + validation + duplicate registration number; closed by main; W2 works rescan: completed by #PRNUM)
-- **W2 rescan note:** pageSize/page contract fixed with meta.total; list rows never carry a clear PAN; detail returns the clear PAN only to PII_REVEAL_ROLES; contractor validation errors now carry fieldErrors. Not covered: phone and email are still returned unmasked by the API to READ_ROLES (the web masks them); the finding named PAN only
+- **W2 rescan note:** pageSize/page contract fixed with meta.total; list rows never carry a clear PAN; detail returns the clear PAN only to PII_REVEAL_ROLES; contractor validation errors now carry fieldErrors. Not covered: phone and email are still returned unmasked by the API to READ_ROLES (the web masks them); the finding named PAN only; tracked separately as GAP-WORKS-CONTRACTORS-API-PII-01 (open)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/contractors']`
 - **Question:** Do GET /api/v1/works/contractors enforce contractor reader role checks, input validation, canonical status enums and the documented response shape?
@@ -3154,6 +3154,21 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 - **Test to add:** Given a user lacking contractor reader, when calling GET /api/v1/works/contractors, then 403 and no audit-visible change; given a valid user, then 200 with {data:[...]} matching types.ts.
 - **Impact if wrong:** Unauthorised access or malformed data in works records; page renders blank/incorrect values.
 - **Web change if wrong:** If shape/roles differ: adjust types.ts mapping and hide actions the role cannot use; otherwise none.
+
+### GAP-WORKS-CONTRACTORS-API-PII-01  ·  MEDIUM  ·  confirmed  ·  theme PRIVACY
+
+- [ ] **Status** (raised by the W2 works cluster-02 review; split out of GAP-WORKS-CONTRACTORS-06, which named PAN only)
+- **Claim:** works-service returns contractor phone and email in clear from GET /v1/works/contractors (list) and GET /v1/works/contractors/:id to every READ_ROLES holder. The house rule masks phone, email, PAN, Aadhaar and bank account; only the web currently masks phone and email, so any other client of the API (or a browser network tab) reads them. PAN is already handled server-side (list never carries it; detail only for PII_REVEAL_ROLES).
+- **Service:** `works-service`  ·  **Endpoint(s):** `[GET /v1/works/contractors, GET /v1/works/contractors/:id]`
+- **Files to change:** `services/works-service/src/modules/contractor/mask.ts`, `services/works-service/src/modules/contractor/routes.ts`, `apps/web/src/app/(app)/works/contractors/**`
+- **Fix steps:**
+  1. Extend the server-side masking (withMaskedPan in mask.ts) to phone and email: the list rows never carry them in clear, the detail carries them in clear only to the roles that may reveal them.
+  2. The contractor edit form must keep working for the write roles: either give the edit toggle the audited reveal path (as PAN has) or let the PATCH treat an untouched masked value as unchanged, so a masked value is never written back over the real one.
+  3. Keep the web masking as defence in depth.
+- **Acceptance:**
+  - Test: a works_viewer list and detail response contains neither the full phone nor the full email.
+  - Test: an editor can change the phone/email and an unrelated edit does not overwrite them with a masked value.
+- **Needs:** web+backend  ·  **Effort:** S ~half day  ·  **Risk:** Medium (edit-form round trip).
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 

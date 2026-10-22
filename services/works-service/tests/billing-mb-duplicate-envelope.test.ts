@@ -1,9 +1,10 @@
 /**
  * GAP-WORKS-BILLING-NEW-MB-03 (W2 works rescan): the duplicate-MB-number rejection must reach the browser in the
- * envelope the REAL error handler produces. Every other billing route test mocks @civitasone/schemas/plugin with a
- * handler that emits a nested `{ error: { code } }`, which is not what the service sends, so a client that read the
- * nested shape passed its tests and silently missed the code in production. This suite deliberately does NOT mock the
- * schema plugin: it asserts the flat `{ code, message, correlationId, retryable }` body the web must parse.
+ * envelope the REAL error handler produces. The billing and BoQ route tests used to mock @civitasone/schemas/plugin with
+ * a handler that emitted a nested `{ error: { code } }`, which is not what the service sends, so a client that read
+ * the nested shape passed its tests and silently missed the code in production. Those suites now run the real handler
+ * too; this one stays as the focused contract: it asserts the flat `{ code, message, correlationId, retryable }` body
+ * the web must parse, and that no nested `error` key exists.
  */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
