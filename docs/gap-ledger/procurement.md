@@ -85,7 +85,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9) (W2 procurement rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9) (W2 procurement rescan, cluster 01: workflow-service now filters /v1/workflow/tasks by refType before paging, and the panel walks the result with Load more until pagination.hasMore is false and says so whenever more pages exist, even when none of the rows loaded so far is a procurement task; tested in ProcurementApprovalsPanel.test.tsx and tasks-list-reftype.test.ts)
 - **First-pass claim:** Approvals can be missed: the queue fetches /v1/workflow/tasks?status=pending&limit=50 across all modules, then filters client-side to four procurement refTypes (Panel:60, toTasks:36-41). With >50 pending tasks tenant-wide, procurement tasks past the cut-off never render and "No pending tasks" reads as all clear.
 - **Verified evidence:** ProcurementApprovalsPanel.tsx:58-61 fetches /v1/workflow/tasks?status=pending&limit=50 with no refType filter; toTasks (l.36-41) filters client-side to four refTypes. Any procurement tasks beyond the first 50 tenant-wide pending tasks are never shown, and the empty state (l.197-198) says 'No pending procurement workflow tasks'. Server-side refType filter/cursor support is unverifiable (workflow-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`
@@ -3117,7 +3117,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 procurement: closed by #2041) (W2 procurement rescan: completed by #PRNUM)
+- [x] **Status** (W2 procurement: closed by #2041; W2 procurement rescan, cluster 01: the contracts list and the contract detail now show the linked PO, and contract-list-poref.test.ts asserts poRef in the tenant-scoped GET /v1/contract/contracts response)
 - **W0 note:** partly fixed by main — contract-service list is tenant-scoped, role-limited and returns poRef (full row). Remaining: web contracts page has no PO column/link.
 - **First-pass claim:** Data comes from /api/v1/contract/contracts (contract service), not /procurement — contract-to-PO linkage (poRef) and audit are undeterminable; contract service is not in the snapshot.
 - **Service:** `contract-service`  ·  **Endpoint(s):** `['GET /api/v1/contract/contracts']`
@@ -3142,7 +3142,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-02  ·  MEDIUM  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (closed by #1866; W2 procurement rescan: the drill-throughs now select exactly what each counter counts. Pending Indents opens ?status=draft,pending_approval (the service counts draft and pending, the list matches on the mapped status), Active POs opens ?status=approved and the orders page now reads it, Contract Renewals Due opens /contracts/list because /procurement/contracts only redirects and drops the query. The earlier note that the contracts page honoured ?status=renewal_due was wrong. The renewals counter value stays with DASHBOARD-05.) (W2 procurement rescan: completed by #PRNUM)
+- [x] **Status** (closed by #1866; W2 procurement rescan, cluster 01: the drill-throughs now select exactly what each counter counts. Pending Indents opens ?status=draft,pending_approval (the service counts draft and pending). The indents page sends that filter to the service as raw statuses (draft,pending, matched with SQL IN) so it is applied before paging: the matching indents are listed even when none of them is on the first page, and the empty state keeps its pager. The first version filtered one fetched page in the browser and could read 'No indents in this status' for a tenant with more than one page of indents (reviewer finding). Tested with a real DB in gap-procurement-dashboard-02-indent-status-set.test.ts and in indents/page.test.tsx. Active POs opens ?status=approved and the orders page now reads it; the orders page loads the 500 most recent POs and filters inside them, the same bound as its own stat tiles. Contract Renewals Due opens /contracts/list because /procurement/contracts only redirects and drops the query. The earlier note that the contracts page honoured ?status=renewal_due was wrong. The renewals counter value stays with DASHBOARD-05.)
 - **First-pass claim:** Counters are not actionable: "Pending Indents" and "Contract Renewals Due" are not links, and the dashboard has no value or aging figures — a "snapshot of pending actions" that cannot be acted on (page.tsx:42-45).
 - **Service:** ``  ·  **Endpoint(s):** `['GET /api/v1/procurement/dashboard']`
 - **Question:** Web-only: counters are plain StatCards and the API returns no value/aging.
