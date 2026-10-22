@@ -88,9 +88,11 @@ describe("MilestoneActions", () => {
     expect(screen.getByText(/due 01 Sep 2026/)).toBeInTheDocument();
   });
 
-  it("GAP-CONTRACTS-DETAIL-06: shows a Pending pill after 202 and schedules follow-up refreshes", async () => {
-    // Spy on setTimeout to verify the two follow-up polls are scheduled
-    // without fake timers (which deadlock waitFor's own polling).
+  it("GAP-CONTRACTS-DETAIL-06: shows a Pending pill after 202 and offers a manual Refresh (no timer-based refresh, SF-15)", async () => {
+    // SF-15: a fixed timer + router.refresh() only guesses the write landed, so
+    // none must be scheduled; the user gets an honest "received" notice with a
+    // manual Refresh instead. (Spy rather than fake timers, which deadlock
+    // waitFor's own polling.)
     const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
@@ -111,12 +113,14 @@ describe("MilestoneActions", () => {
     expect(screen.queryByText(/marked complete/i)).not.toBeInTheDocument();
     // Immediate router.refresh() was called once.
     expect(refreshMock).toHaveBeenCalledTimes(1);
-    // Two scheduled polls exist (5 s, 10 s).
+    // No 5 s / 10 s follow-up refresh timers are scheduled.
     const pollDelays = setTimeoutSpy.mock.calls
       .filter(([, d]) => typeof d === "number" && (d === 5_000 || d === 10_000))
-      .map(([, d]) => d)
-      .sort((a, b) => (a as number) - (b as number));
-    expect(pollDelays).toEqual([5_000, 10_000]);
+      .map(([, d]) => d);
+    expect(pollDelays).toEqual([]);
+    // Instead the accepted notice offers a manual Refresh, which re-reads the page.
+    fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(2);
   });
 
   it("GAP-CONTRACTS-DETAIL-06: clears the Pending pill when milestone status changes in props", async () => {

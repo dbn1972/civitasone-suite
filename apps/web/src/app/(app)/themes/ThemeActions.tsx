@@ -75,7 +75,7 @@ export function ThemeActions({ disabled = false, tokens = [] }: { disabled?: boo
               {failingPairs.length > 0 && (
                 <span
                   role="alert"
-                  style={{ display: "block", marginTop: 8, color: "var(--bad, #dc2626)", fontWeight: 600, fontSize: 13 }}
+                  style={{ display: "block", marginTop: 8, color: "var(--bad)", fontWeight: 600, fontSize: 13 }}
                 >
                   ⚠ {failingPairs.length} colour pair{failingPairs.length > 1 ? "s" : ""} fail WCAG AA
                   contrast ({failingPairs.map((p) => p.label).join(", ")}). Review before publishing.

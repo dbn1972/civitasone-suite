@@ -256,7 +256,7 @@ export function NewPlanForm() {
           id={statusMsgId}
           role={status === "error" ? "alert" : "status"}
           aria-live={status === "error" ? "assertive" : "polite"}
-          style={{ fontSize: 13, color: status === "error" ? "var(--bad, #b42318)" : "var(--good, #065f46)" }}
+          style={{ fontSize: 13, color: status === "error" ? "var(--bad)" : "var(--good)" }}
         >
           <span style={{ fontWeight: 600 }}>{status === "error" ? "Error: " : "Success: "}</span>
           {message}

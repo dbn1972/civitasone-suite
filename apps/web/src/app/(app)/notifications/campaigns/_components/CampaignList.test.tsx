@@ -114,9 +114,9 @@ describe("CampaignList (MK-001)", () => {
     await openDialog();
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     expect(api.createCampaign).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Name")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Template")).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText("Recipients")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/^Name(\s*\*)?$/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/^Template(\s*\*)?$/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/^Recipients(\s*\*)?$/)).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText(/a campaign name is required/i)).toBeInTheDocument();
     expect(screen.getByText(/select a template to send/i)).toBeInTheDocument();
   });
@@ -126,12 +126,12 @@ describe("CampaignList (MK-001)", () => {
     render(<CampaignList />);
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     await openDialog();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bad list" } });
-    fireEvent.change(screen.getByLabelText("Template"), { target: { value: "t1" } });
-    fireEvent.change(screen.getByLabelText("Recipients"), { target: { value: "abc, nope" } });
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Bad list" } });
+    fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: "abc, nope" } });
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     expect(api.createCampaign).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Recipients")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/^Recipients(\s*\*)?$/)).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText(/must be a valid email, indian mobile number, or user handle/i)).toBeInTheDocument();
   });
 
@@ -147,9 +147,9 @@ describe("CampaignList (MK-001)", () => {
     render(<CampaignList />);
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     await openDialog();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Spring blast" } });
-    fireEvent.change(screen.getByLabelText("Template"), { target: { value: "t1" } });
-    fireEvent.change(screen.getByLabelText("Recipients"), { target: { value: "a@x.in, b@x.in" } });
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Spring blast" } });
+    fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: "a@x.in, b@x.in" } });
     fireEvent.change(screen.getByLabelText(/budget/i), { target: { value: "1234.56" } });
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     await waitFor(() =>
@@ -169,8 +169,8 @@ describe("CampaignList (MK-001)", () => {
     render(<CampaignList />);
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     await openDialog();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Bad budget" } });
-    fireEvent.change(screen.getByLabelText("Template"), { target: { value: "t1" } });
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Bad budget" } });
+    fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
     fireEvent.change(screen.getByLabelText(/budget/i), { target: { value: "1.005" } });
     expect(screen.getByLabelText(/budget/i)).toHaveAttribute("aria-invalid", "true");
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
@@ -182,9 +182,9 @@ describe("CampaignList (MK-001)", () => {
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     expect(api.getCampaigns).toHaveBeenCalledTimes(1);
     await openDialog();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Reload me" } });
-    fireEvent.change(screen.getByLabelText("Template"), { target: { value: "t1" } });
-    fireEvent.change(screen.getByLabelText("Recipients"), { target: { value: "one@x.in" } });
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Reload me" } });
+    fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: "one@x.in" } });
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     await waitFor(() => expect(api.getCampaigns).toHaveBeenCalledTimes(2));
   });
@@ -194,13 +194,13 @@ describe("CampaignList (MK-001)", () => {
     render(<CampaignList />);
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     await openDialog();
-    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Half typed" } });
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Half typed" } });
     fireEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
     expect(await screen.findByText(/discard this campaign\?/i)).toBeInTheDocument();
     // keep editing retains the form
     fireEvent.click(screen.getByRole("button", { name: /keep editing/i }));
     await waitFor(() => expect(screen.queryByText(/discard this campaign\?/i)).not.toBeInTheDocument());
-    expect(screen.getByLabelText("Name")).toHaveValue("Half typed");
+    expect(screen.getByLabelText(/^Name(\s*\*)?$/)).toHaveValue("Half typed");
   });
 
   it("falls back to a free-text segment id when segments cannot be loaded", async () => {

@@ -51,10 +51,10 @@ export default async function FundReleasesPage() {
         back="/projects"
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : releases.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Disbursed" value={totalDisbursed === null ? "—" : formatMoney(Number(totalDisbursed))} />
-        <StatCard icon="📄" iconBg="#fffaeb" label="Sanctioned" value={totalSanctioned === null ? "—" : formatMoney(Number(totalSanctioned))} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Utilized" value={totalUtilized === null ? "—" : formatMoney(Number(totalUtilized))} />
+        <StatCard icon="📋" tone="neutral" label="Total" value={errored ? "—" : releases.length} />
+        <StatCard icon="✅" tone="good" label="Disbursed" value={totalDisbursed === null ? "—" : formatMoney(Number(totalDisbursed))} />
+        <StatCard icon="📄" tone="warn" label="Sanctioned" value={totalSanctioned === null ? "—" : formatMoney(Number(totalSanctioned))} />
+        <StatCard icon="💰" tone="info" label="Utilized" value={totalUtilized === null ? "—" : formatMoney(Number(totalUtilized))} />
       </StatGrid>
       <Card title="Fund Releases">
         {errored ? (

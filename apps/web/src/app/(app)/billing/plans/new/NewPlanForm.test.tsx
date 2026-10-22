@@ -118,7 +118,7 @@ describe("NewPlanForm (GAP-BILLING-PLANS-NEW-01..06)", () => {
       fireEvent.click(screen.getByRole("button", { name: /confirm & create/i }));
       await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
       const msg = screen.getByRole("alert");
-      expect(msg).toHaveStyle("color: var(--bad, #b42318)");
+      expect(msg).toHaveStyle("color: var(--bad)");
     });
   });
 

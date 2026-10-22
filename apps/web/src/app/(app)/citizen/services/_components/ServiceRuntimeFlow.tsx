@@ -27,8 +27,11 @@ export interface ServiceRuntimeFlowProps {
   service: PublishedServiceRuntime;
   counterMode?: boolean;
   assistedBy?: string | null;
-  /** GAP-...-APPLY-02: server-provided payment mode. 'sandbox' shows a TEST
-   *  MODE badge and the sandbox note; 'gateway' hides test wording. */
+  /** GAP-...-APPLY-02: payment mode. 'sandbox' (test capture, opt-in only — see
+   *  resolveCitizenPaymentMode) shows a TEST MODE badge and the sandbox note.
+   *  'gateway' (the default) hides test wording; no online checkout is wired in
+   *  this flow yet, so it never fakes a payment: the applicant is told online
+   *  payment is unavailable and pays at the counter. */
   paymentMode?: "sandbox" | "gateway";
 }
 
@@ -88,7 +91,7 @@ function JourneyRail({
   );
 }
 
-export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null, paymentMode = "sandbox" }: ServiceRuntimeFlowProps) {
+export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = null, paymentMode = "gateway" }: ServiceRuntimeFlowProps) {
   const t = useTranslations("citizenServices");
   const design = service.formDesign;
   const hasFee = service.feeFromMinor != null;
@@ -224,7 +227,10 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
       // and surface it on the submitted screen so a citizen is never told
       // "submitted" (implying paid) when payment did not complete.
       if (service.feeFromMinor != null) {
-        if (ack.applicationId) {
+        if (paymentMode !== "sandbox") {
+          // No online gateway checkout is available: never fake a capture.
+          setPaymentState("skipped");
+        } else if (ack.applicationId) {
           try {
             const paymentId = await createPaymentIntent({
               applicationId: ack.applicationId,
@@ -254,7 +260,7 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
   // GAP-...-APPLY-01: retry payment for an already-submitted fee-bearing application.
   const payNow = async () => {
-    if (!applicationId) return;
+    if (!applicationId || paymentMode !== "sandbox") return;
     setPaymentState("retrying");
     try {
       const paymentId = await createPaymentIntent({ applicationId, serviceId: service.id, subject: values });
@@ -465,11 +471,12 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
             <strong>{t("howYouCanPay")}</strong>
             <span>{t("payCounter")}</span>
             <span>{t("payOnline")}</span>
+            {paymentMode !== "sandbox" ? <span role="note">{t("onlinePaymentUnavailable")}</span> : null}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setStep("review")}>{t("back")}</Button>
             <Button type="button" variant="primary" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onSubmit()}>
-              {busy ? t("submitting") : paymentMode === "sandbox" ? t("paySandboxAndSubmit") : t("payAndSubmit")}
+              {busy ? t("submitting") : paymentMode === "sandbox" ? t("paySandboxAndSubmit") : t("submitPayAtCounter")}
             </Button>
           </div>
           {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
@@ -526,17 +533,25 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
                 fontSize: 13,
               }}
             >
-              <span>{paymentState === "retrying" ? t("paymentRetrying") : t("paymentNotCompleted")}</span>
+              <span>
+                {paymentState === "retrying"
+                  ? t("paymentRetrying")
+                  : paymentMode === "sandbox"
+                    ? t("paymentNotCompleted")
+                    : t("paymentOnlineUnavailableSubmitted")}
+              </span>
               <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
-                <Button
-                  type="button"
-                  variant="primary"
-                  style={{ minHeight: 44 }}
-                  disabled={paymentState === "retrying" || !applicationId}
-                  onClick={() => void payNow()}
-                >
-                  {t("payNow")}
-                </Button>
+                {paymentMode === "sandbox" ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    style={{ minHeight: 44 }}
+                    disabled={paymentState === "retrying" || !applicationId}
+                    onClick={() => void payNow()}
+                  >
+                    {t("payNow")}
+                  </Button>
+                ) : null}
                 <span style={{ fontSize: 12, color: "var(--mut)", alignSelf: "center" }}>{t("payCounter")}</span>
               </div>
             </div>

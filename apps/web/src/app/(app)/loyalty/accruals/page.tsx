@@ -29,7 +29,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
         backLabel="Loyalty Programs"
       />
       {showCount && (
-        <p role="status" style={{ fontSize: 13, color: "var(--mut, #64748b)", margin: "4px 0 4px" }}>
+        <p role="status" style={{ fontSize: 13, color: "var(--mut)", margin: "4px 0 4px" }}>
           Showing {(page - 1) * PAGE_SIZE + 1}–{loadedUpTo} of {total}.
         </p>
       )}
@@ -46,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
           ) : (
             <span />
           )}
-          <span style={{ fontSize: 13, color: "var(--mut, #64748b)" }}>Page {page}</span>
+          <span style={{ fontSize: 13, color: "var(--mut)" }}>Page {page}</span>
           {hasNext ? (
             <Link href={`/loyalty/accruals?page=${page + 1}`} className="btn ghost">
               Next →

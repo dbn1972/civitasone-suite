@@ -2,8 +2,9 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
-import { ActionButton } from "@/app/_components/ds";
+import { useState, useEffect } from "react";
+import { AcceptedNotice, ActionButton } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { formatShortId } from "@/lib/formatters";
 
@@ -84,52 +85,34 @@ export function InspectionRowAction({ id, status }: RowProps) {
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("inspection action");
 
-  // GAP-INSPECTION-INSPECTIONS-02: track the status at the time of a 202
-  // action so a follow-up refresh can detect whether the async consumer
-  // applied the command. The row action is kept disabled while pending.
-  const priorStatusRef = useRef<string | null>(null);
-  const [pollDue, setPollDue] = useState(false);
+  // SF-15: a 202 means "received", not "done". Remember the status at the time of
+  // the 202 and show the shared AcceptedNotice (with a manual Refresh) instead of a
+  // timer that guesses the write has landed (GAP-INSPECTION-CAPA-04 /
+  // GAP-INSPECTION-INSPECTIONS-02 asked for an honest "still processing" state).
+  const accepted = useAcceptedWrite();
+  const [priorStatus, setPriorStatus] = useState<string | null>(null);
 
-  // When the follow-up refresh completes and pollDue is set, compare status.
+  // The server data caught up (status changed): drop the notice.
   useEffect(() => {
-    if (!pollDue) return;
-    setPollDue(false);
-    if (priorStatusRef.current === null) return;
-    if (status === priorStatusRef.current) {
-      setMessage(
-        "Status unchanged — the request may still be processing. Refresh to check again.",
-      );
-    } else {
-      setMessage("");
-    }
-    priorStatusRef.current = null;
-  }, [pollDue, status]);
+    if (priorStatus === null || status === priorStatus) return;
+    setMessage("");
+    setPriorStatus(null);
+    accepted.reset();
+  }, [status, priorStatus, accepted]);
 
-  // If status changes while a poll is pending (fast consumer), clear immediately.
-  useEffect(() => {
-    if (priorStatusRef.current === null) return;
-    if (status !== priorStatusRef.current) {
-      setMessage("");
-      priorStatusRef.current = null;
-      setPollDue(false);
-    }
-  }, [status]);
-
-  function scheduleFollowUp(priorStatus: string): void {
-    priorStatusRef.current = priorStatus;
-    setTimeout(() => {
-      router.refresh();
-      setPollDue(true);
-    }, 5000);
+  function markAccepted(prior: string): void {
+    setPriorStatus(prior);
+    accepted.accept();
   }
 
   const action = actionForStatus(status);
   if (!action) return <span style={{ color: "var(--ink2)", fontSize: 12 }}>—</span>;
 
-  // The row action stays disabled while a poll is in flight (priorStatusRef
-  // is non-null) to prevent the user from queuing a duplicate command before
-  // the first one is confirmed as applied.
-  const pending = priorStatusRef.current !== null;
+  // The row action stays disabled after a 202 until the status changes, or the
+  // user has pressed Refresh once and it is still unchanged (outcome then
+  // visible to them), to prevent queuing a duplicate command before the first
+  // one is confirmed as applied.
+  const pending = priorStatus !== null && !accepted.noticeProps.refreshed;
 
   async function callApi(spec: ActionSpec, reason?: string) {
     const body = spec.body
@@ -154,12 +137,14 @@ export function InspectionRowAction({ id, status }: RowProps) {
     setBusy(true);
     setError(undefined);
     setMessage("");
+    setPriorStatus(null);
+    accepted.reset();
     try {
       await callApi(action);
       setMessage(QUEUED_MESSAGE);
       router.refresh();
       // GAP-INSPECTION-INSPECTIONS-02: follow-up refresh to surface a stale row.
-      scheduleFollowUp(status);
+      markAccepted(status);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -181,14 +166,16 @@ export function InspectionRowAction({ id, status }: RowProps) {
           onSuccess={() => {
             setMessage(QUEUED_MESSAGE);
             router.refresh();
-            scheduleFollowUp(status);
+            markAccepted(status);
           }}
         />
-        {message ? (
-          <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
-            {message}
-          </span>
-        ) : null}
+        {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
+        <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
+          {message}
+        </span>
+      ) : null}
       </div>
     );
   }
@@ -208,14 +195,16 @@ export function InspectionRowAction({ id, status }: RowProps) {
           onSuccess={() => {
             setMessage(QUEUED_MESSAGE);
             router.refresh();
-            scheduleFollowUp(status);
+            markAccepted(status);
           }}
         />
-        {message ? (
-          <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
-            {message}
-          </span>
-        ) : null}
+        {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
+        <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
+          {message}
+        </span>
+      ) : null}
       </div>
     );
   }
@@ -232,7 +221,9 @@ export function InspectionRowAction({ id, status }: RowProps) {
       >
         {action.label}
       </button>
-      {message ? (
+      {accepted.phase !== "idle" ? (
+        <AcceptedNotice {...accepted.noticeProps} message={message} />
+      ) : message ? (
         <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
           {message}
         </span>

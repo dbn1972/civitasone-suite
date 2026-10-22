@@ -33,7 +33,7 @@ describe("ComposeNotificationPage", () => {
       new Response("notification-service: recipient address rejected by provider", { status: 422 }),
     );
 
-    fireEvent.change(screen.getByLabelText(/^template$/i), { target: { value: "tmpl-1" } });
+    fireEvent.change(screen.getByLabelText(/^template(\s*\*)?$/i), { target: { value: "tmpl-1" } });
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: "clerk@example.gov.in" } });
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
     await waitFor(() => expect(screen.getByText("Send this notification?")).toBeInTheDocument());
@@ -47,7 +47,7 @@ describe("ComposeNotificationPage", () => {
     await renderWithTemplates();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
-    fireEvent.change(screen.getByLabelText(/^template$/i), { target: { value: "tmpl-1" } });
+    fireEvent.change(screen.getByLabelText(/^template(\s*\*)?$/i), { target: { value: "tmpl-1" } });
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: "clerk@example.gov.in" } });
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
     await waitFor(() => expect(screen.getByText("Send this notification?")).toBeInTheDocument());
@@ -67,7 +67,7 @@ describe("ComposeNotificationPage", () => {
   // client-side and blocks submit.
   it("rejects a recipient that doesn't match the effective channel", async () => {
     await renderWithTemplates();
-    fireEvent.change(screen.getByLabelText(/^template$/i), { target: { value: "tmpl-1" } }); // email default
+    fireEvent.change(screen.getByLabelText(/^template(\s*\*)?$/i), { target: { value: "tmpl-1" } }); // email default
     const recipient = screen.getByLabelText(/recipient/i);
     fireEvent.change(recipient, { target: { value: "9876543210" } });
     fireEvent.blur(recipient);
@@ -80,26 +80,26 @@ describe("ComposeNotificationPage", () => {
   // and blocks submit until all are filled.
   it("requires all template variables to be filled before sending", async () => {
     await renderWithTemplates();
-    fireEvent.change(screen.getByLabelText(/^template$/i), { target: { value: "tmpl-2" } }); // sms, {{code}} {{minutes}}
+    fireEvent.change(screen.getByLabelText(/^template(\s*\*)?$/i), { target: { value: "tmpl-2" } }); // sms, {{code}} {{minutes}}
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: "9876543210" } });
 
-    expect(screen.getByLabelText("Code")).toBeInTheDocument();
-    expect(screen.getByLabelText("Minutes")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Code(\s*\*)?$/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Minutes(\s*\*)?$/)).toBeInTheDocument();
     // Not all variables filled yet -> submit disabled.
     expect(screen.getByRole("button", { name: /review & send/i })).toBeDisabled();
 
-    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "123456" } });
-    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/^Code(\s*\*)?$/), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText(/^Minutes(\s*\*)?$/), { target: { value: "10" } });
     expect(screen.getByRole("button", { name: /review & send/i })).toBeEnabled();
   });
 
   // COMPOSE-03: the filled variables are sent in the request body.
   it("sends the filled variables in the request body", async () => {
     await renderWithTemplates();
-    fireEvent.change(screen.getByLabelText(/^template$/i), { target: { value: "tmpl-2" } });
+    fireEvent.change(screen.getByLabelText(/^template(\s*\*)?$/i), { target: { value: "tmpl-2" } });
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: "9876543210" } });
-    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "123456" } });
-    fireEvent.change(screen.getByLabelText("Minutes"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/^Code(\s*\*)?$/), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText(/^Minutes(\s*\*)?$/), { target: { value: "10" } });
 
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
@@ -125,7 +125,7 @@ describe("ComposeNotificationPage", () => {
     await renderWithTemplates();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
-    const templateSelect = screen.getByLabelText(/^template$/i) as HTMLSelectElement;
+    const templateSelect = screen.getByLabelText(/^template(\s*\*)?$/i) as HTMLSelectElement;
     fireEvent.change(templateSelect, { target: { value: "tmpl-1" } });
     fireEvent.change(screen.getByLabelText(/recipient/i), { target: { value: "clerk@example.gov.in" } });
     fireEvent.click(screen.getByRole("button", { name: /review & send/i }));
@@ -133,7 +133,7 @@ describe("ComposeNotificationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
     await screen.findByText(/notification queued/i);
-    expect((screen.getByLabelText(/^template$/i) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText(/^template(\s*\*)?$/i) as HTMLSelectElement).value).toBe("");
     expect((screen.getByLabelText(/recipient/i) as HTMLInputElement).value).toBe("");
   });
 });

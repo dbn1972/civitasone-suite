@@ -28,7 +28,7 @@ describe("ComposeNotificationPage preselect (GAP-NOTIFICATIONS-TEMPLATES-DETAIL-
 
     render(<ComposeNotificationPage />);
 
-    const select = (await screen.findByLabelText(/^template$/i)) as HTMLSelectElement;
+    const select = (await screen.findByLabelText(/^template(\s*\*)?$/i)) as HTMLSelectElement;
     await waitFor(() => expect(select.value).toBe("tmpl-9"));
     // Superseded template is not offered as an option.
     expect(screen.queryByRole("option", { name: /Retired/ })).not.toBeInTheDocument();

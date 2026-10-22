@@ -33,10 +33,10 @@ export default async function StockListPage({ searchParams }: { searchParams?: {
         }
       />
       <StatGrid>
-        <StatCard icon="🏬" iconBg="#e6f7f5" label={isTruncated ? "SKUs (this page)" : "SKUs"} value={errored ? "—" : items.length.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#eff6ff" label={isTruncated ? "Stock Value (this page)" : "Stock Value"} value={totalValue === null ? "—" : formatMoney(totalValue)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label={isTruncated ? "Low Stock (this page)" : "Low Stock"} value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#ecfdf3" label={isTruncated ? "Categories (this page)" : "Categories"} value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
+        <StatCard icon="🏬" tone="neutral" label={isTruncated ? "SKUs (this page)" : "SKUs"} value={errored ? "—" : items.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" tone="info" label={isTruncated ? "Stock Value (this page)" : "Stock Value"} value={totalValue === null ? "—" : formatMoney(totalValue)} />
+        <StatCard icon="⚠️" tone="warn" label={isTruncated ? "Low Stock (this page)" : "Low Stock"} value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
+        <StatCard icon="📦" tone="good" label={isTruncated ? "Categories (this page)" : "Categories"} value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

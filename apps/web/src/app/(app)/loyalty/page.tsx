@@ -40,7 +40,7 @@ export default async function Page() {
 			{allStatsFailed && (
 				<p
 					role="status"
-					style={{ fontSize: 13, color: "var(--mut, #64748b)", margin: "4px 0 12px" }}
+					style={{ fontSize: 13, color: "var(--mut)", margin: "4px 0 12px" }}
 				>
 					Stats unavailable.{" "}
 					<Link href="/loyalty" aria-label="Retry loading loyalty stats">
