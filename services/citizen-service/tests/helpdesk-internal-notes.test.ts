@@ -7,6 +7,8 @@
  * through the staff-gated notes route, and filtered out of every citizen-facing read
  * (detail and the slaStatus detail list).
  */
+import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -128,5 +130,50 @@ describe("internal notes are staff-only", () => {
   it("a non-boolean isInternal is rejected (400)", async () => {
     const r = await app.inject({ method: "POST", url: `/v1/citizen/tickets/${ticketId}/notes`, headers: agentH, payload: { body: "x", isInternal: "yes" } });
     expect(r.statusCode).toBe(400);
+  });
+});
+
+describe("migration 0038 backfills legacy [INTERNAL] -prefixed notes", () => {
+  const legacyId = randomUUID();
+  const LEGACY_BODY = "legacy staff aside from before the flag existed";
+
+  it("flags the legacy note internal, strips the prefix, and hides it from the citizen", async () => {
+    // Seed exactly what the old web convention stored: a public note with an "[INTERNAL] " prefix.
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`INSERT INTO helpdesk.citizen_ticket_notes (id, tenant_id, ticket_id, author_id, body, is_internal, created_by, updated_by)
+                VALUES (${legacyId}, ${TENANT}, ${ticketId}, ${AGENT}, ${"[INTERNAL] " + LEGACY_BODY}, false, ${AGENT}, ${AGENT})`;
+    });
+
+    // Before the migration the citizen can read it (the leak being fixed).
+    const before = await app.inject({ method: "GET", url: `/v1/citizen/tickets/${ticketId}`, headers: ownerH });
+    expect(before.body).toContain(LEGACY_BODY);
+
+    // Run the real migration file as the service role (citizen_svc, NOBYPASSRLS, table owner), on a
+    // dedicated connection so its session-level SET lock_timeout does not leak into the pool.
+    const sql = readFileSync(new URL("../migrations/0038_helpdesk_note_is_internal.sql", import.meta.url), "utf8");
+    const conn = await sqlClient.reserve();
+    try { await conn.unsafe(sql); } finally { conn.release(); }
+
+    const row = await sqlClient.begin(async (tx) => {
+      await tx`select set_config('app.tenant_id', ${TENANT}, true)`;
+      return ((await tx`SELECT body, is_internal FROM helpdesk.citizen_ticket_notes WHERE id = ${legacyId}`) as unknown as Array<{ body: string; is_internal: boolean }>)[0];
+    });
+    expect(row).toEqual({ body: LEGACY_BODY, is_internal: true });
+
+    const after = await app.inject({ method: "GET", url: `/v1/citizen/tickets/${ticketId}`, headers: ownerH });
+    expect(after.body).not.toContain(LEGACY_BODY);
+    expect(after.body).not.toContain("[INTERNAL]");
+
+    const staff = (await comments(`/v1/citizen/tickets/${ticketId}`, agentH)).find((c) => c.content === LEGACY_BODY);
+    expect(staff?.isInternal).toBe(true);
+  });
+
+  it("is idempotent and keeps FORCE ROW LEVEL SECURITY on the table", async () => {
+    const sql = readFileSync(new URL("../migrations/0038_helpdesk_note_is_internal.sql", import.meta.url), "utf8");
+    const conn = await sqlClient.reserve();
+    try { await conn.unsafe(sql); } finally { conn.release(); }
+    const [t] = (await sqlClient`SELECT relforcerowsecurity AS forced, relrowsecurity AS enabled FROM pg_class WHERE oid = 'helpdesk.citizen_ticket_notes'::regclass`) as unknown as Array<{ forced: boolean; enabled: boolean }>;
+    expect(t).toEqual({ forced: true, enabled: true });
   });
 });
