@@ -48,7 +48,9 @@ async function newVendor(by = MAKER): Promise<string> {
 /** POST a decision with the version the checker is looking at, then wait for the consumer. */
 async function decide(id: string, action: "approve" | "reject", who: string, extra: Record<string, unknown> = {}, version?: number) {
   const v = version ?? (await row(id)).version;
-  const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/${action}`, headers: admin(who), payload: { version: v, ...extra } });
+  // Approve states a reason by default (GAP-FINANCE-VENDORS-DETAIL-04: it is mandatory); reject is left bare so the
+  // "reject needs a reason" test can prove it. A test overrides either through `extra`.
+  const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/${action}`, headers: admin(who), payload: { version: v, ...(action === "approve" ? { reason: "Documents verified" } : {}), ...extra } });
   await drain();
   return res;
 }
@@ -111,8 +113,8 @@ describe("vendor approval workflow (maker != checker)", () => {
     const id = await newVendor();
     const version = (await row(id)).version;
     const [a, b] = await Promise.all([
-      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER), payload: { version } }),
-      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER2), payload: { version } }),
+      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER), payload: { version, reason: "Documents verified" } }),
+      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER2), payload: { version, reason: "Documents verified" } }),
     ]);
     // both are accepted unless the first consumer already committed before the second pre-check ran (then 409)
     const codes = [a.statusCode, b.statusCode];
@@ -209,8 +211,103 @@ describe("vendor approval workflow (maker != checker)", () => {
 
   it("approving a vendor from another tenant is a 404", async () => {
     const id = await newVendor();
-    const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER, OTHER), payload: { version: 1 } });
+    const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER, OTHER), payload: { version: 1, reason: "Documents verified" } });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+// GAP-FINANCE-VENDORS-DETAIL-04: approving a vendor / a bank-detail change is an authorising act -> a stated reason.
+describe("approving requires a stated reason", () => {
+  it("a vendor approval without a reason (or with a too-short one) is a 400 naming the field, and the vendor stays pending", async () => {
+    const id = await newVendor();
+    const version = (await row(id)).version;
+    for (const payload of [{ version }, { version, reason: "ok" }, { version, reason: "     " }]) {
+      const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/approve`, headers: admin(CHECKER), payload });
+      expect(res.statusCode, JSON.stringify(payload)).toBe(400);
+      expect(res.json().fieldErrors).toEqual([expect.objectContaining({ field: "reason" })]);
+    }
+    await drain();
+    expect((await row(id)).status).toBe("pending");
+    expect(await auditRows(T, "vendor_approve", id)).toHaveLength(0);
+  });
+
+  it("the stated reason is written to the vendor_approve audit event", async () => {
+    const id = await newVendor();
+    expect((await decide(id, "approve", CHECKER, { reason: "GST and PAN verified on portal" })).statusCode).toBe(202);
+    const rows = await auditRows(T, "vendor_approve", id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.actorId).toBe(CHECKER);
+    expect(JSON.stringify(rows[0]!.payload)).toContain("GST and PAN verified on portal");
+  });
+
+  it("a bank-change approval without a reason is a 400 and the request stays open", async () => {
+    const id = await newVendor();
+    await approveVendor(id);
+    const prop = await app.inject({
+      method: "POST", url: `/v1/finance/vendors/${id}/bank-change`, headers: admin(MAKER),
+      payload: { bankName: "New Bank", bankAccount: "998877665544", ifsc: "NEWB0654321", reason: "Vendor moved banks (letter 12/09)" },
+    });
+    expect(prop.statusCode).toBe(202);
+    await drain();
+    const d = await app.inject({ method: "GET", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER) });
+    const changeId = d.json().pendingBankChange.id as string;
+    const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${changeId}/approve`, headers: admin(CHECKER), payload: {} });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors).toEqual([expect.objectContaining({ field: "reason" })]);
+    await drain();
+    expect((await row(id)).bankAccountNo).toBe("123456789012");
+    expect(await auditRows(T, "bank_change_approve", id)).toHaveLength(0);
+  });
+});
+
+// GAP-FINANCE-VENDORS-DETAIL-04: every vendor mutation is audited, including the direct PATCH.
+describe("PATCH /v1/finance/vendors/:id is audited", () => {
+  it("a field edit writes one vendor_update event naming the changed fields, never their values", async () => {
+    const id = await newVendor();
+    await approveVendor(id);
+    const v = await row(id);
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER),
+      payload: { version: v.version, contactPerson: "Sunita Rao", phone: "9123456780", address: "7 Audit Lane" },
+    });
+    expect(res.statusCode).toBe(200);
+    const rows = await auditRows(T, "vendor_update", id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.actorId).toBe(CHECKER);
+    const p = rows[0]!.payload as { outcome: string; details: { changedFields: string[]; fromStatus: string; toStatus: string; version: number } };
+    expect(p.outcome).toBe("success");
+    expect([...p.details.changedFields].sort()).toEqual(["address", "contactPerson", "phone"]);
+    expect(p.details).toMatchObject({ fromStatus: "active", toStatus: "active", version: v.version + 1 });
+    const serialised = JSON.stringify(rows[0]!.payload);
+    for (const secret of ["Sunita Rao", "9123456780", "7 Audit Lane"]) expect(serialised).not.toContain(secret);
+  });
+
+  it("deactivate and reactivate are each audited with the status transition", async () => {
+    const id = await newVendor();
+    await approveVendor(id);
+    const off = await app.inject({ method: "PATCH", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER), payload: { version: (await row(id)).version, isActive: false } });
+    expect(off.statusCode).toBe(200);
+    const on = await app.inject({ method: "PATCH", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER), payload: { version: (await row(id)).version, isActive: true } });
+    expect(on.statusCode).toBe(200);
+    const deact = await auditRows(T, "vendor_deactivate", id);
+    const react = await auditRows(T, "vendor_reactivate", id);
+    expect(deact).toHaveLength(1);
+    expect(react).toHaveLength(1);
+    expect((deact[0]!.payload as { details: { fromStatus: string; toStatus: string } }).details).toMatchObject({ fromStatus: "active", toStatus: "inactive" });
+    expect((react[0]!.payload as { details: { fromStatus: string; toStatus: string } }).details).toMatchObject({ fromStatus: "inactive", toStatus: "active" });
+  });
+
+  it("a stale-version PATCH (409) and a refused one write no audit event", async () => {
+    const id = await newVendor();
+    await approveVendor(id);
+    const v = await row(id);
+    const stale = await app.inject({ method: "PATCH", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER), payload: { version: v.version + 7, address: "Stale Lane" } });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().code).toBe("VERSION_CONFLICT");
+    const bank = await app.inject({ method: "PATCH", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER), payload: { version: v.version, bankAccount: "111122223333" } });
+    expect(bank.statusCode).toBe(409);
+    expect(await auditRows(T, "vendor_update", id)).toHaveLength(0);
+    expect((await row(id)).version).toBe(v.version);
   });
 });
 
@@ -294,7 +391,8 @@ describe("bank-detail change request (maker != checker)", () => {
     return d.json().pendingBankChange as { id: string; proposedBy: string; accountMasked: string; ifsc: string } | null;
   };
   const decideChange = async (id: string, changeId: string, action: "approve" | "reject", who: string, payload: object = {}) => {
-    const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${changeId}/${action}`, headers: admin(who), payload });
+    // Approve and reject both state a reason (GAP-FINANCE-VENDORS-DETAIL-04); a test overrides it through `payload`.
+    const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${changeId}/${action}`, headers: admin(who), payload: { reason: "Request letter checked", ...payload } });
     await drain();
     return res;
   };
@@ -397,8 +495,8 @@ describe("bank-detail change request (maker != checker)", () => {
     await propose(id);
     const pending = (await pendingId(id))!;
     const [a, b] = await Promise.all([
-      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${pending.id}/approve`, headers: admin(CHECKER), payload: {} }),
-      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${pending.id}/approve`, headers: admin(CHECKER2), payload: {} }),
+      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${pending.id}/approve`, headers: admin(CHECKER), payload: { reason: "Request letter checked" } }),
+      app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${pending.id}/approve`, headers: admin(CHECKER2), payload: { reason: "Request letter checked" } }),
     ]);
     const codes = [a.statusCode, b.statusCode];
     expect(codes).toContain(202);

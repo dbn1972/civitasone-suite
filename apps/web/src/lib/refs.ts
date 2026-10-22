@@ -30,12 +30,19 @@ export function parseOpaqueRef(ref: string | null | undefined): OpaqueRef | null
 /**
  * The in-app detail route for a known opaque ref type, or null when the type
  * is one the UI has no route for (so the caller renders plain text, never a
- * dead link). Only `procurement_indent` is wired today — add more as routes
- * exist.
+ * dead link). `procurement_indent` and `procurement_po` are wired today — add
+ * more as routes exist.
+ *
+ * A purchase order is addressed by its UUID (`/procurement/orders/[id]`), so a
+ * `procurement_po` ref whose id is not a UUID (a hand-typed reference) has no
+ * page to open and gets no link.
  */
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function opaqueRefHref(ref: string | null | undefined): string | null {
   const parsed = parseOpaqueRef(ref);
   if (!parsed) return null;
   if (parsed.type === "procurement_indent") return `/procurement/indents/${parsed.id}`;
+  if (parsed.type === "procurement_po" && UUID_ID.test(parsed.id)) return `/procurement/orders/${parsed.id}`;
   return null;
 }

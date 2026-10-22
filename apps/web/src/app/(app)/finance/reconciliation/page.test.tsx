@@ -16,6 +16,10 @@ vi.mock("./SubledgerSection", () => ({ SubledgerSection: () => <p>subledger stub
 const rolesMock = vi.fn<() => string[]>(() => []);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 
+// The actor-name lookup is a display enrichment with its own loader tests (loaders.fpFinance02.test.ts).
+const actorNamesMock = vi.fn(async (_ids: readonly (string | null | undefined)[]): Promise<Record<string, string>> => ({}));
+vi.mock("@/app/_data/loaders", () => ({ getFinanceActorNames: (ids: readonly (string | null | undefined)[]) => actorNamesMock(ids) }));
+
 import ReconciliationWorkbenchPage from "./page";
 
 const RUN = {
@@ -90,6 +94,7 @@ function mockAllSuccess() {
 
 describe("ReconciliationWorkbenchPage", () => {
   beforeEach(() => {
+    actorNamesMock.mockClear();
     fetchJsonMock.mockReset();
     rolesMock.mockReset().mockReturnValue([]);
   });
@@ -102,6 +107,23 @@ describe("ReconciliationWorkbenchPage", () => {
     expect(screen.getAllByText("book-vs-bank").length).toBeGreaterThan(0);
     expect(screen.getByText("UTR12345")).toBeInTheDocument();
     expect(screen.getByText("subledger stub")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-01: a written-off row says WHO, by name.
+  it("shows the resolver's name on a written-off row (names resolved from the resolver ids)", async () => {
+    const closed = { ...EXCEPTION, status: "written_off", resolutionNote: "Bank charge, not recoverable", resolvedBy: "11111111-aaaa-4000-8000-000000000001", resolvedAt: "2026-07-02T00:00:00.000Z" };
+    mockAllSuccess();
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/recon/runs")) return Promise.resolve({ data: [RUN], source: "api" });
+      if (path.includes("/recon/exceptions")) return Promise.resolve({ data: [closed], source: "api" });
+      if (path.includes("/recon/providers")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: null, source: "api" });
+    });
+    actorNamesMock.mockResolvedValue({ "11111111-aaaa-4000-8000-000000000001": "Asha Rao" });
+    render(await ReconciliationWorkbenchPage());
+    expect(actorNamesMock).toHaveBeenCalledWith(["11111111-aaaa-4000-8000-000000000001"]);
+    expect(screen.getByText("Bank charge, not recoverable")).toBeInTheDocument();
+    expect(screen.getByText(/Asha Rao · /)).toBeInTheDocument();
   });
 
   it("renders empty states when there is no data", async () => {

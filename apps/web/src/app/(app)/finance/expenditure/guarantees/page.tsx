@@ -19,9 +19,11 @@ export default async function GuaranteesPage() {
         subtitle={t("subtitle")}
         back="/finance"
         actions={
-          // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: this register is read-only (no
-          // create/release/invoke endpoint exists); EMD / bank-guarantee
-          // instruments are lodged and managed under Procurement, so point there.
+          // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: this register is read-only on the web -- no screen records, releases
+          // or invokes a guarantee. finance-service does have POST /v1/finance/guarantees (the only way a row gets here;
+          // nothing is mirrored in from Procurement), and Procurement keeps its own EMD / PBG register, also read-only.
+          // WHO should own recording / releasing / invoking guarantees is an owner decision (see the gap ledger), so
+          // this stays a link to the separate Procurement register, worded as that, and the copy no longer claims a mirror.
           <Link href="/procurement/emd-bg" className="btn ghost">{t("manageInProcurementLink")}</Link>
         }
       />
@@ -32,8 +34,8 @@ export default async function GuaranteesPage() {
         <StatCard icon="⏳" tone="warn" label={t("statExpiringSoon", { days: GUARANTEE_EXPIRY_WINDOW_DAYS })} value={failed ? null : stats.expiringSoon} />
         <StatCard icon="⚠️" tone="bad" label={t("statLapsed")} value={failed ? null : stats.lapsed} />
       </StatGrid>
-      {/* GAP2-FINANCE-GUARANTEES-COPY-08: make the read-only, Procurement-managed
-          nature unambiguous — no guarantee lifecycle action happens in Finance. */}
+      {/* GAP2-FINANCE-GUARANTEES-COPY-08: make the read-only nature unambiguous -- no guarantee lifecycle action
+          happens on this screen -- without claiming the rows are a copy of Procurement's register (they are not). */}
       <p className="muted" style={{ margin: "4px 0 12px", fontSize: 13, color: "var(--ink2)" }}>
         {t("reportingOnlyNote")}
       </p>

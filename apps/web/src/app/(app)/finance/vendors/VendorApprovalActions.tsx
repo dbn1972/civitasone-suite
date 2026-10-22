@@ -45,7 +45,11 @@ export function VendorApprovalActions({ id, name, createdByMe, version }: { id: 
           confirmTitle={t("approveTitle", { name })}
           confirmDescription={t("approveDescription")}
           confirmLabel={t("approveConfirm")}
-          onConfirm={() => decide("approve")}
+          requireReason
+          reasonLabel={t("approveReasonLabel")}
+          minReasonLength={5}
+          maxReasonLength={500}
+          onConfirm={(reason) => decide("approve", reason)}
           onSuccess={() => { setNote(t("approvalSubmitted")); settle(); }}
         />
       )}

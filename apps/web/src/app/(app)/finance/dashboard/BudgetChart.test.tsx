@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen, type RenderOptions } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement, ReactNode } from "react";
+import enMessages from "@/messages/en.json";
 import { BudgetChart } from "./BudgetChart";
+
+// BudgetChart reads the category chart title through next-intl (financeDashboard namespace).
+const withIntl = ({ children }: { children: ReactNode }) => (
+  <NextIntlClientProvider locale="en" messages={enMessages}>{children}</NextIntlClientProvider>
+);
+const render = (ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) => rtlRender(ui, { wrapper: withIntl, ...options });
 
 // Issue #5 + the donut-vs-legend formatting bug shared one root cause:
 // `expenditure` arrives from finance-service's dashboard summary in MINOR
@@ -114,5 +123,57 @@ describe("BudgetChart old-API fallback (D1)", () => {
   it("50% without sanctionedMinor shows Remaining as a dash, not an invented amount", () => {
     render(<BudgetChart utilisationPct={50} expenditure={10000} />);
     expect(screen.getByText(/^Remaining \(—\)$/)).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-DASHBOARD-01 (bullet 2): with a breakdown from the service the bars are the supplied amounts.
+describe("BudgetChart category breakdown (supplied by the service)", () => {
+  const BREAKDOWN = [
+    { label: "Works", amountMinor: "123456" },
+    { label: "Salaries", amountMinor: "7000" },
+    { label: "Grants", amountMinor: "0" },
+  ];
+
+  it("draws a bar per supplied category and labels each with exactly the supplied amount", () => {
+    render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={BREAKDOWN} />);
+    expect(screen.getByText("Expenditure by Category")).toBeInTheDocument();
+    // the visually-hidden data table carries label + exact amount for assistive tech and for this test
+    expect(screen.getByText("Works: ₹1,234.56", { selector: "td" })).toBeInTheDocument();
+    expect(screen.getByText("Salaries: ₹70.00", { selector: "td" })).toBeInTheDocument();
+    expect(screen.getByText("Grants: ₹0.00", { selector: "td" })).toBeInTheDocument();
+    expect(screen.queryByText("Category breakdown not available")).not.toBeInTheDocument();
+  });
+
+  it("the amounts are the supplied ones, not fixed shares of total spend", () => {
+    // total spend Rs 10,000 (1000000 paise): the old fabricated shares would have shown 3,500 / 2,500 / 2,000 / 1,200 / 800
+    render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={BREAKDOWN} />);
+    for (const fabricated of ["₹3,500.00", "₹2,500.00", "₹2,000.00", "₹1,200.00", "₹800.00"]) {
+      expect(screen.queryByText(new RegExp(fabricated.replace(/[.₹]/g, "\\$&")))).not.toBeInTheDocument();
+    }
+    for (const invented of ["Infra", "Programs", "Other"]) expect(screen.queryByText(invented)).not.toBeInTheDocument();
+  });
+
+  it("the bar heights follow the supplied amounts (the largest category is the tallest)", () => {
+    const { container } = render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={BREAKDOWN} />);
+    const bars = Array.from(container.querySelectorAll("svg[aria-label='Expenditure by Category'] rect")).map((r) => Number(r.getAttribute("height")));
+    expect(bars).toHaveLength(3);
+    expect(bars[0]!).toBeGreaterThan(bars[1]!);
+    expect(bars[1]!).toBeGreaterThan(bars[2]!);
+    // 7000 / 123456 of the tallest bar
+    expect(bars[1]! / bars[0]!).toBeCloseTo(7000 / 123456, 3);
+    expect(bars[2]).toBe(0);
+  });
+
+  it("an empty breakdown is the same as none: the honest empty state, no bars", () => {
+    const { container } = render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={[]} />);
+    expect(screen.getByText("Category breakdown not available")).toBeInTheDocument();
+    expect(container.querySelector("svg[aria-label='Expenditure by Category']")).toBeNull();
+  });
+
+  it("an amount beyond 2^53 paise is listed exactly instead of being drawn through a double", () => {
+    render(<BudgetChart utilisationPct={45} expenditure={1000000} categoryBreakdown={[{ label: "Mega", amountMinor: "9007199254740993" }, { label: "Small", amountMinor: "100" }]} />);
+    const li = screen.getByText(/^Mega:/);
+    expect(li.textContent!.replace(/\D/g, "")).toBe("9007199254740993");
+    expect(screen.getByText("Small: ₹1.00")).toBeInTheDocument();
   });
 });

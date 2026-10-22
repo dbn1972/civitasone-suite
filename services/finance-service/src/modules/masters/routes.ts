@@ -9,6 +9,7 @@ import type { VendorRow } from "./schema.js";
 import type { BillRow } from "../payments/schema.js";
 import * as workflow from "./vendor-workflow.js";
 import { getPolicy } from "./policy.js";
+import { recordAudit } from "../../shared/audit-event.js";
 import { maskPan, maskAccountNo, maskPhone, maskEmail } from "./vendor-mask.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
@@ -259,11 +260,22 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     if (touchesBank && existing.status !== "pending" && (await getPolicy(ctx.tenantId)).vendorMakerChecker) {
       throw new HttpError(409, "BANK_CHANGE_REQUIRES_APPROVAL", "bank details are changed through POST /v1/finance/vendors/:id/bank-change and approved by a different user");
     }
+    // GAP-FINANCE-VENDORS-DETAIL-04: every vendor mutation is audited. The event names WHICH fields changed and the
+    // status transition, never the values (PAN, bank account, phone and email are PII).
+    const { isActive, ...fieldEdits } = rest;
+    const changedFields = [
+      ...Object.entries(fieldEdits).filter(([, v]) => v !== undefined).map(([k]) => k),
+      ...(bankAccount !== undefined ? ["bankAccount"] : []),
+    ];
     const updated = await repo.updateVendor(ctx.tenantId, id, version, {
       ...rest,
       ...(bankAccount !== undefined ? { bankAccountNo: bankAccount } : {}),
       ...(rest.isActive !== undefined ? { status: rest.isActive ? "active" : "inactive" } : {}),
-    }, ctx.actorId);
+    }, ctx.actorId, (tx, row) => recordAudit(tx, ctx, {
+      action: isActive === undefined ? "vendor_update" : isActive ? "vendor_reactivate" : "vendor_deactivate",
+      resourceType: "vendor", resourceId: id,
+      details: { changedFields, fromStatus: existing.status, toStatus: row.status, version: row.version },
+    }));
     if (!updated) throw new HttpError(409, "VERSION_CONFLICT", "vendor was modified by another request; reload and retry");
     // Masked like every read: the clear values are available only through the audited reveal endpoint.
     return reply.send(toVendorDetail(updated, true, "read"));

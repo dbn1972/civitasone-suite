@@ -5,10 +5,17 @@
  * page of ledger lines for the chosen fiscal year / voucher type / search (finance-service
  * GET /v1/finance/journals/lines) plus totals over the WHOLE filtered set; this component only renders it and
  * moves between pages by changing the URL (fy / type / q / page), so a tenant with a very large ledger never
- * loads it into the browser, and the cards and footer totals are filter-wide, not "this page".
+ * loads it into the browser, and the footer totals are filter-wide, not "this page".
+ *
+ * GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04: two different figures are never presented as one.
+ *   - The CARDS are the whole fiscal-year ledger (`ledgerTotals`, tab and search ignored). Only these carry the
+ *     Balanced / Unbalanced check, because only a complete ledger must satisfy debit = credit.
+ *   - The FOOTER is the filtered set (`totals`), labelled "Filtered total (n entries)" whenever a tab or a search
+ *     is active. It never gets a balance verdict: one account's lines do not balance on their own.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DataTable, Segmented, EmptyState, StatGrid, StatCard, Card, Button } from "../../../../_components/ds";
 import { journalIdOf } from "./glStats";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
@@ -22,11 +29,15 @@ type GLRow = GLEntrySummary & Record<string, unknown>;
 export interface GLTableProps {
   entries: GLEntrySummary[];
   pagination: GlLinesPagination;
+  /** Totals over the FILTERED set (fiscal year + tab + search). */
   totals: GlLinesTotals | null;
+  /** Totals over the whole fiscal-year ledger; omitted/null = unknown (shown as a dash when a filter is active). */
+  ledgerTotals?: GlLinesTotals | null;
   view: GlView;
 }
 
-export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
+export function GLTable({ entries, pagination, totals, ledgerTotals, view }: GLTableProps) {
+  const t = useTranslations("financeGeneralLedger");
   const router = useRouter();
   const [query, setQuery] = useState(view.q);
 
@@ -36,17 +47,23 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
     router.push(qs ? `/finance/accounting/general-ledger${qs}` : "/finance/accounting/general-ledger");
   };
   const range = glRange(view.page, GL_PAGE_SIZE, pagination.total);
-  const debit = totals ? BigInt(totals.debitMinor) : null;
-  const credit = totals ? BigInt(totals.creditMinor) : null;
-  const balance = totals === null || totals.entryLines === 0 ? null : debit === credit ? "balanced" : "unbalanced";
   const filtered = view.tab !== "All" || view.q !== "";
+  // Cards = the whole fiscal-year ledger. With nothing filtered the server's `totals` ARE the ledger; with a tab or a
+  // search active only `ledgerTotals` is (a filtered `totals` must never feed the cards or the balance check).
+  const ledger = filtered ? (ledgerTotals ?? null) : (ledgerTotals ?? totals);
+  const debit = ledger ? BigInt(ledger.debitMinor) : null;
+  const credit = ledger ? BigInt(ledger.creditMinor) : null;
+  const balance = ledger === null || ledger.entryLines === 0 ? null : debit === credit ? "balanced" : "unbalanced";
+  // Footer = the filtered set.
+  const filteredDebit = totals ? BigInt(totals.debitMinor) : null;
+  const filteredCredit = totals ? BigInt(totals.creditMinor) : null;
 
   return (
     <>
       <StatGrid>
-        <StatCard icon="📒" tone="info" label="Vouchers" value={totals ? totals.vouchers : "—"} />
-        <StatCard icon="🧾" tone="neutral" label="Entry lines" value={totals ? totals.entryLines : "—"} />
-        <StatCard icon="🏛️" tone="info" label="Accounts Active" value={totals ? totals.accountsActive : "—"} />
+        <StatCard icon="📒" tone="info" label="Vouchers" value={ledger ? ledger.vouchers : "—"} />
+        <StatCard icon="🧾" tone="neutral" label="Entry lines" value={ledger ? ledger.entryLines : "—"} />
+        <StatCard icon="🏛️" tone="info" label="Accounts Active" value={ledger ? ledger.accountsActive : "—"} />
         <StatCard icon="📤" tone="bad" label="Ledger Total Debit" value={debit !== null ? formatMoney(debit) : "—"} />
         <StatCard
           icon="📥"
@@ -56,6 +73,11 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
           {...(balance === null ? {} : { delta: balance === "balanced" ? "Balanced" : "Unbalanced", up: balance === "balanced" })}
         />
       </StatGrid>
+      {filtered ? (
+        <p role="note" style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink2)" }}>
+          {ledger ? t("cardsNoteFiltered", { fy: view.fy }) : t("cardsNoteUnavailable")}
+        </p>
+      ) : null}
       <Card title={`General ledger · FY ${view.fy}`}>
         <div>
           <div className="dt-toolbar">
@@ -122,7 +144,7 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
           <nav className="dt-toolbar" aria-label="General ledger pages" style={{ justifyContent: "space-between", borderTop: "1px solid var(--line)" }}>
             <span style={{ fontSize: 13, color: "var(--ink2)" }}>
               {pagination.total > 0 ? `${range.from}–${range.to} of ${pagination.total} entries` : "0 entries"}
-              {totals ? <> — {filtered ? "Filtered total" : "Total"} Debit: <strong>{formatMoney(debit ?? 0n)}</strong> · Credit: <strong>{formatMoney(credit ?? 0n)}</strong></> : null}
+              {totals ? <> — {filtered ? t("filteredTotal", { count: pagination.total }) : t("total")} Debit: <strong>{formatMoney(filteredDebit ?? 0n)}</strong> · Credit: <strong>{formatMoney(filteredCredit ?? 0n)}</strong></> : null}
             </span>
             <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
               <Button variant="ghost" size="sm" disabled={view.page <= 1} onClick={() => go({ page: view.page - 1 })}>Previous</Button>

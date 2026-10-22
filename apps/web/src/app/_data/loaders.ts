@@ -780,10 +780,12 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
     if (status !== "active" && status !== "inactive") continue;
     const id = toText(row.id);
     const parentId = toText(row.parentId);
+    const level = row.level === 0 || row.level === 1 || row.level === 2 ? row.level : undefined;
     mapped.push({
       code, name, type, currency, balanceDisplay, status,
       ...(id ? { id } : {}),
       ...(parentId ? { parentId } : {}),
+      ...(level !== undefined ? { level } : {}),
       ...(row.isControl === true ? { isControl: true } : {}),
     });
   }
@@ -2383,8 +2385,25 @@ export const getWorkflowInstances = moduleLoader("/api/v1/workflow/instances", "
 
 // Finance loaders
 
+/**
+ * GAP-FINANCE-DASHBOARD-01: the category split is all-or-nothing. One malformed entry (no label, an amount that is not
+ * a base-10 paise string) drops the whole breakdown rather than drawing a partial split that looks complete.
+ */
+function mapCategoryBreakdown(raw: unknown): FinanceDashboard["categoryBreakdown"] {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: NonNullable<FinanceDashboard["categoryBreakdown"]> = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return undefined;
+    const label = toText(entry.label)?.trim();
+    if (!label || typeof entry.amountMinor !== "string" || !/^\d+$/.test(entry.amountMinor)) return undefined;
+    out.push({ label, amountMinor: entry.amountMinor });
+  }
+  return out;
+}
+
 function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
   if (!isRecord(payload)) return null;
+  const categoryBreakdown = mapCategoryBreakdown(payload.categoryBreakdown);
   return {
     // Preserve null (no sanctioned budget on record, UX-006) distinctly from
     // a malformed/missing field defaulting to 0 — collapsing both to 0 would
@@ -2397,6 +2416,7 @@ function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
     ...(typeof payload.sanctionedMinor === "string" && /^\d+$/.test(payload.sanctionedMinor)
       ? { sanctionedMinor: payload.sanctionedMinor }
       : {}),
+    ...(categoryBreakdown ? { categoryBreakdown } : {}),
   };
 }
 
@@ -2895,7 +2915,18 @@ export async function getFinanceActorNames(ids: readonly (string | null | undefi
 }
 
 export type GlPageParams = { fy?: string | undefined; type?: string | undefined; q?: string | undefined; page: number; pageSize: number };
-export type GlPageData = { entries: GLEntrySummary[]; pagination: GlLinesPagination; totals: GlLinesTotals | null };
+export type GlPageData = {
+  entries: GLEntrySummary[];
+  pagination: GlLinesPagination;
+  /** Totals over the FILTERED set (fiscal year + type tab + search). */
+  totals: GlLinesTotals | null;
+  /**
+   * Totals over the whole fiscal-year ledger, ignoring the tab and the search
+   * (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04). `null` = unknown (older server, or
+   * a malformed amount outside the filtered view): shown as a dash, never as zero.
+   */
+  ledgerTotals: GlLinesTotals | null;
+};
 
 /** GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: one server-filtered page of ledger lines with whole-set totals. */
 export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<GlPageData>> {
@@ -2903,7 +2934,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
   if (p.fy) qs.set("fy", p.fy);
   if (p.type) qs.set("type", p.type);
   if (p.q) qs.set("q", p.q);
-  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null };
+  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null, ledgerTotals: null };
   return fetchJson<unknown, GlPageData>(`/api/v1/finance/journals/lines?${qs.toString()}`, empty, {
     telemetryKey: "finance.gl.page",
     mapResponse: (raw) => {
@@ -2914,6 +2945,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
         entries: parsed.data as GLEntrySummary[],
         pagination: raw.pagination as unknown as GlLinesPagination,
         totals: isRecord(raw.totals) ? (raw.totals as unknown as GlLinesTotals) : null,
+        ledgerTotals: isRecord(raw.ledgerTotals) ? (raw.ledgerTotals as unknown as GlLinesTotals) : null,
       };
     },
   });

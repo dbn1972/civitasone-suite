@@ -33,6 +33,17 @@ const FY_ERROR = "Enter a valid financial year, e.g. 2026-27 (the second year mu
 const HEADS_LIMIT = 50;
 /** How long the success message stays up before the automatic return to the list. */
 const REDIRECT_DELAY_MS = 2500;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The list for the estimate's FY. With the new estimate's id (the 202 body carries it; it is the budget row's id)
+ * the list opens on the tab that row is listed under and announces it (GAP-FINANCE-BUDGET-FORMULATION-05). The id is
+ * only used if it is a UUID, and is encoded, so nothing from the response can reshape the link.
+ */
+function listHrefFor(fy: string, createdId: string | null): string {
+  const base = `/finance/budget/formulation?fy=${encodeURIComponent(fy)}`;
+  return createdId && UUID_RE.test(createdId) ? `${base}&highlight=${encodeURIComponent(createdId)}` : base;
+}
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -60,6 +71,7 @@ export default function NewBudgetEstimatePage() {
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [savedHref, setSavedHref] = useState<string | null>(null);
   const [amountError, setAmountError] = useState("");
   const formError = useFormError("budget estimate");
   const previewMinor = rupeesToMinorString(amount);
@@ -133,13 +145,16 @@ export default function NewBudgetEstimatePage() {
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
+      const created = (await res.json().catch(() => null)) as { id?: unknown } | null;
+      const href = listHrefFor(fy, typeof created?.id === "string" ? created.id : null);
       setSaved(true);
+      setSavedHref(href);
       setMessage("Budget estimate submitted.");
       setAmount("");
       setIdempotencyKey(crypto.randomUUID());
       router.refresh();
       // Long enough to read; the link below goes there immediately.
-      redirectTimer.current = setTimeout(() => router.push(listHref), REDIRECT_DELAY_MS);
+      redirectTimer.current = setTimeout(() => router.push(href), REDIRECT_DELAY_MS);
     } catch (caught) {
       setConfirmMinor(null);
       setIsError(true);
@@ -152,7 +167,7 @@ export default function NewBudgetEstimatePage() {
 
   const selectedHeadLabel = knownHeads.current.get(headId)?.label;
   // The new estimate is for `fy`, which may not be the list's default FY.
-  const listHref = `/finance/budget/formulation?fy=${encodeURIComponent(fy)}`;
+  const listHref = savedHref ?? listHrefFor(fy, null);
 
   return (
     <>
