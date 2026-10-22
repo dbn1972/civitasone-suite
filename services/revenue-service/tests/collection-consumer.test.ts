@@ -74,6 +74,9 @@ vi.mock("../src/modules/collection/domain.js", () => ({
   validateReceipt: vi.fn(),
   validateRefund: vi.fn(),
   validateAdjustment: vi.fn(),
+  DomainError: class DomainError extends Error {
+    constructor(public code: string, message: string) { super(message); }
+  },
   assertMakerChecker: (maker: string, checker: string) => {
     if (maker === checker) {
       const err = new Error("MAKER_CHECKER_VIOLATION");
@@ -179,6 +182,7 @@ describe("Collection Consumer", () => {
       // Return a refund with makerUserId = actor-1
       mockSelectLimit.mockResolvedValueOnce([{
         id: "refund-1",
+        status: "pending",
         makerUserId: "actor-1",
         assesseeId: "assessee-1",
         amountMinor: 50000n,

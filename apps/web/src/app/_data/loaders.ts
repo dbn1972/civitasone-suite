@@ -5568,7 +5568,7 @@ const LEGAL_DASHBOARD_EMPTY: LegalDashboard = {
   activeCases: 0,
   hearingsThisWeek: 0,
   ordersPending: 0,
-  opinionsDue: 0,
+  opinionsDue: null,
   disposedCases: 0,
   totalCases: 0,
 };

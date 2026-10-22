@@ -220,11 +220,21 @@ describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABL
 
   beforeEach(() => {
     process.env.BBPS_ENABLED = "true";
+    process.env.BBPS_MANUAL_PAYBILL_ENABLED = "true";
     publishSpy.mockClear();
   });
 
   afterEach(() => {
     delete process.env.BBPS_ENABLED;
+    delete process.env.BBPS_MANUAL_PAYBILL_ENABLED;
+  });
+
+  it("is GATED by default: BBPS enabled + revenue role but no manual-paybill opt-in is 403 BBPS_PAYBILL_DISABLED, nothing published", async () => {
+    delete process.env.BBPS_MANUAL_PAYBILL_ENABLED;
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/bbps/pay-bill", headers: AUTH, payload });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error.code).toBe("BBPS_PAYBILL_DISABLED");
+    expect(publishSpy).not.toHaveBeenCalled();
   });
 
   it("rejects a caller with no revenue/collection role — no command published", async () => {

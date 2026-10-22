@@ -89,6 +89,20 @@ export function isBbpsEnabled(): boolean {
 }
 
 /**
+ * Whether the MANUAL pay-bill entry route may post a collection.
+ *
+ * POST /v1/revenue/bbps/pay-bill takes a caller-supplied bbpsTxnId + amount and
+ * books a real receipt, DCB entry and GL event with no proof any BBPS payment
+ * happened (there is no gateway integration yet — see STUB NOTE above). It is
+ * therefore a non-production test aid only, gated like citizen sandbox
+ * payments: opt in with BBPS_MANUAL_PAYBILL_ENABLED=true, and it is never
+ * available when NODE_ENV=production, whatever the flag says.
+ */
+export function isBbpsManualPayBillEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.BBPS_MANUAL_PAYBILL_ENABLED === "true" && env.NODE_ENV !== "production";
+}
+
+/**
  * Format bigint paise to rupee string (for BBPS response).
  */
 function formatRupees(paise: bigint): string {

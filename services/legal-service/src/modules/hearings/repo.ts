@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalHearings, legalOrders, legalOpinions, type HearingRow } from "./schema.js";
 
@@ -24,6 +24,22 @@ export async function insertOrder(tx: Writer, row: typeof legalOrders.$inferInse
 export async function listHearingsByTenant(tenantId: string, limit: number): Promise<HearingRow[]> {
   return db.transaction(async (tx) =>
     tx.select().from(legalHearings).where(eq(legalHearings.tenantId, tenantId)).limit(limit));
+}
+
+/** Hearings of one case, tenant-scoped, soonest first. */
+export async function listHearingsByCase(tenantId: string, caseId: string): Promise<HearingRow[]> {
+  return db.transaction(async (tx) =>
+    tx.select().from(legalHearings)
+      .where(and(eq(legalHearings.tenantId, tenantId), eq(legalHearings.caseId, caseId)))
+      .orderBy(asc(legalHearings.hearingDate)));
+}
+
+/** Court orders of one case, tenant-scoped, oldest first. */
+export async function listOrdersByCase(tenantId: string, caseId: string) {
+  return db.transaction(async (tx) =>
+    tx.select().from(legalOrders)
+      .where(and(eq(legalOrders.tenantId, tenantId), eq(legalOrders.caseId, caseId)))
+      .orderBy(asc(legalOrders.orderDate)));
 }
 
 export async function listOrdersByTenant(tenantId: string, limit: number) {

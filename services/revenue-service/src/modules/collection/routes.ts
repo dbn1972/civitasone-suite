@@ -97,6 +97,17 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = refundDecideBody.parse(req.body);
+    // Pre-check synchronously so a self-approval / already-decided refund is a
+    // visible 409 instead of a 202 followed by a silent consumer no-op. The
+    // consumer re-checks both inside its transaction (defence in depth).
+    const refund = await repo.findRefundById(ctx.tenantId, id);
+    if (!refund) throw new HttpError(404, "NOT_FOUND", "refund not found");
+    if (refund.status !== "pending") {
+      throw new HttpError(409, "REFUND_NOT_PENDING", `refund is already ${refund.status}`);
+    }
+    if (refund.makerUserId === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the maker of a refund cannot decide it (separation of duties)");
+    }
     const result = await commands.decideRefund(ctx, id, body);
     return reply.code(202).send({ data: result });
   });

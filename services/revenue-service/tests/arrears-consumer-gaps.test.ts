@@ -26,7 +26,13 @@ const mockInsertReturning = vi.fn().mockResolvedValue([{ id: "new-1" }]);
 const mockInsertValues = vi.fn().mockReturnValue({ returning: mockInsertReturning });
 const mockInsert = vi.fn().mockReturnValue({ values: mockInsertValues });
 
-const mockSetWhere = vi.fn().mockResolvedValue(undefined);
+// update().set().where() is awaited directly by some handlers and chained with
+// .returning() by the decide handlers (conditional status = 'pending' claim).
+const mockSetWhere = vi.fn().mockImplementation(() => {
+  const p: any = Promise.resolve(undefined);
+  p.returning = vi.fn().mockResolvedValue([{ id: "claimed" }]);
+  return p;
+});
 const mockSet = vi.fn().mockReturnValue({ where: mockSetWhere });
 const mockUpdate = vi.fn().mockReturnValue({ set: mockSet });
 
@@ -36,6 +42,7 @@ vi.mock("../src/shared/db.js", () => ({
       insert: (...a: any[]) => mockInsert(...a),
       select: () => chainableSelect(),
       update: (...a: any[]) => mockUpdate(...a),
+      execute: vi.fn().mockResolvedValue(undefined), // advisory lock
     })),
     select: () => chainableSelect(),
   },
@@ -104,7 +111,8 @@ describe("Arrears Consumer — writeOffCreate/writeOffDecide gaps", () => {
 
   it("writeOffDecide approve: inserts DCB entry and enqueues events", async () => {
     txSelectResults = [
-      [{ id: "wo-1", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 100000n, reason: "Bad" }],
+      [{ id: "wo-1", status: "pending", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 100000n, reason: "Bad" }],
+      [{ total: 300000n }], // outstanding re-check (inside the decide transaction)
       [{ total: 200000n }], // balance for DCB
     ];
     await handlers["revenue.write_off.decide"]!(msg({ actorId: "checker-1", payload: { writeOffId: "wo-1", approve: true, reason: "OK" } }));
@@ -116,7 +124,8 @@ describe("Arrears Consumer — writeOffCreate/writeOffDecide gaps", () => {
 
   it("writeOffDecide approve: chains the write-off onto the written-off DEMAND's own running balance", async () => {
     txSelectResults = [
-      [{ id: "wo-3", makerUserId: "maker-1", assesseeId: "ae-1", demandId: "dem-9", amountMinor: 30000n, reason: "Bad" }],
+      [{ id: "wo-3", status: "pending", makerUserId: "maker-1", assesseeId: "ae-1", demandId: "dem-9", amountMinor: 30000n, reason: "Bad" }],
+      [{ total: 100000n }], // outstanding re-check (inside the decide transaction)
       [{ balanceMinor: 100000n }], // latest balance of dem-9
     ];
     await handlers["revenue.write_off.decide"]!(msg({ actorId: "checker-1", payload: { writeOffId: "wo-3", approve: true } }));
@@ -127,7 +136,7 @@ describe("Arrears Consumer — writeOffCreate/writeOffDecide gaps", () => {
   });
 
   it("writeOffDecide reject: no DCB, only audit", async () => {
-    txSelectResults = [[{ id: "wo-2", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 50000n, reason: "X" }]];
+    txSelectResults = [[{ id: "wo-2", status: "pending", makerUserId: "maker-1", assesseeId: "ae-1", amountMinor: 50000n, reason: "X" }]];
     await handlers["revenue.write_off.decide"]!(msg({ actorId: "checker-1", payload: { writeOffId: "wo-2", approve: false } }));
     expect(mockInsert).not.toHaveBeenCalled();
     expect(mockEnqueue).toHaveBeenCalledTimes(1);

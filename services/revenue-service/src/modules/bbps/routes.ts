@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
-import { isBbpsEnabled } from "./domain.js";
+import { isBbpsEnabled, isBbpsManualPayBillEnabled } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { fetchBillBody, payBillBody } from "./validators.js";
@@ -94,6 +94,18 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
     }
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
+    // The route books a real collection from an unverified, caller-supplied
+    // bbpsTxnId/amount. Until a signature-verified BBPS gateway callback exists
+    // it is only available as an explicit, non-production opt-in (see
+    // isBbpsManualPayBillEnabled) — a role check alone proves nothing about the
+    // payment itself.
+    if (!isBbpsManualPayBillEnabled()) {
+      throw new HttpError(
+        403,
+        "BBPS_PAYBILL_DISABLED",
+        "Manual BBPS pay-bill entry is disabled: payments must be confirmed by the BBPS gateway",
+      );
+    }
 
     const body = payBillBody.parse(req.body);
     const result = await commands.payBill(ctx, body);

@@ -8,6 +8,12 @@ import { legalOrders } from "../hearings/schema.js";
 const ACTIVE_STATUSES = ["pending", "appealed", "stayed"] as const;
 
 export async function getDashboard(tenantId: string) {
+  // Bare `db.select()` outside a transaction does not carry the RLS tenant
+  // GUC (every count came back 0 under RLS); read inside one transaction.
+  return db.transaction((db) => getDashboardTx(db, tenantId));
+}
+
+async function getDashboardTx(db: Pick<typeof import("../../shared/db.js").db, "select">, tenantId: string) {
   const [active] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(legalCases)
@@ -37,6 +43,9 @@ export async function getDashboard(tenantId: string) {
     .from(legalOrders)
     .where(and(
       eq(legalOrders.tenantId, tenantId),
+      // Orders still requiring compliance action (matches the court-orders
+      // KPI in hearings/repo.ts::aggregateOrderStats) — not every order.
+      eq(legalOrders.complianceRequired, true),
     ));
 
   // GAP-LEGAL-DASHBOARD-01: expose real disposed/total counts so the web
@@ -58,7 +67,9 @@ export async function getDashboard(tenantId: string) {
     activeCases: active?.count ?? 0,
     hearingsThisWeek: hearingsThisWeek?.count ?? 0,
     ordersPending: ordersPending?.count ?? 0,
-    opinionsDue: 0,
+    // No due-date column exists on opinions.legal_opinions, so "due" cannot be
+    // computed. Return null (web shows a dash) rather than a fabricated 0.
+    opinionsDue: null as number | null,
     disposedCases: disposed?.count ?? 0,
     totalCases: total?.count ?? 0,
   };

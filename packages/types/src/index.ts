@@ -2317,7 +2317,8 @@ export type LegalDashboard = {
   activeCases: number;
   hearingsThisWeek: number;
   ordersPending: number;
-  opinionsDue: number;
+  /** null when not computable from recorded data (UI shows a dash). */
+  opinionsDue: number | null;
   disposedCases: number;
   totalCases: number;
 };
