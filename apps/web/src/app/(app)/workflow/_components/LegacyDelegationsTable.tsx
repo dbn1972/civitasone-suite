@@ -12,7 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState, ErrorState, PageHeader, SkeletonTable } from "@/app/_components/ds";
-import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime, formatShortId } from "@/lib/formatters";
 import { resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 import { parseLegacyReport, type LegacyDelegation } from "../_data/delegations";
 
@@ -54,7 +54,7 @@ export function LegacyDelegationsTable() {
     return () => { live = false; };
   }, [state]);
 
-  const nameOf = (id: string) => names.get(id) ?? t("unknownPerson", { id: id.slice(0, 8) });
+  const nameOf = (id: string) => names.get(id) ?? t("unknownPerson", { id: formatShortId(id) });
 
   return (
     <>

@@ -18,7 +18,7 @@ import {
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { humaniseCode } from "@/lib/labels";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { formatIndianDate, formatShortId, todayIST } from "@/lib/formatters";
 import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 import {
   MAX_DELEGATION_DAYS, MAX_REASON_LENGTH, addDays, delegationState, heldRoleList, isDelegationErrorCode, parseDelegationList,
@@ -89,7 +89,7 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   }, [mine]);
 
   const nameOf = useCallback(
-    (id: string) => names.get(id) ?? t("unknownPerson", { id: id.slice(0, 8) }),
+    (id: string) => names.get(id) ?? t("unknownPerson", { id: formatShortId(id) }),
     [names, t],
   );
 
