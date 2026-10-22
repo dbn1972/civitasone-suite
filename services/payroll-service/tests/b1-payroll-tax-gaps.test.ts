@@ -288,7 +288,10 @@ describe("GAP-PAYROLL-RETURNS-06: 24Q money is exact paise", () => {
     expect(body.totalTdsDeductedMinor).toBe(10000);
     expect(body.totalTdsDepositedMinor).toBe(10000);
     expect(body.challanSummary.map((c: { tdsDepositedMinor: number }) => c.tdsDepositedMinor)).toEqual([3333, 3334, 3333]);
-    // Whole-rupee fields for the TRACES file are unchanged in meaning.
-    expect(body.totalTdsDeducted).toBe(100);
+    // The whole-rupee twins of these amounts (tdsDeducted, totalTdsDeducted, ...)
+    // are no longer on the wire -- they now exist only inside the TRACES flat
+    // file, whose whole-rupee content is pinned in returns-money-units.test.ts.
+    expect(body).not.toHaveProperty("totalTdsDeducted");
+    expect(body.deductees[0]).not.toHaveProperty("tdsDeducted");
   });
 });

@@ -193,6 +193,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       const identity = identityById.get(employeeId);
       data.push({
         id: dec?.id ?? employeeId,
+        // GAP-PAYROLL-INCOME-TAX-03: `id` above is the declaration id when one
+        // exists but the employee id when none does (a mixed id space), so it
+        // cannot name a drill-in target. The employee id is always the
+        // hrms_employees.id the row was keyed on -- the same id every other
+        // payroll list links to /hr/employees/{id} with. Additive field.
+        employeeId,
         employee: identity?.fullName ?? employeeId,
         department: identity?.departmentId ?? "-",
         grossIncome: String(grossIncome),
