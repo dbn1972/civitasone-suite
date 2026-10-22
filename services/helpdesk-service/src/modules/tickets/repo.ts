@@ -12,7 +12,9 @@ function mapStatus(status: string): TicketView["status"] {
   const s = status.toLowerCase();
   if (s === "closed") return "Closed";
   if (s === "resolved") return "Resolved";
-  if (s === "in_progress" || s === "assigned") return "In Progress";
+  // "investigating" is the incident workflow's active-work stage; surface it as
+  // "In Progress" so clients can tell it apart from a not-yet-started "open".
+  if (s === "in_progress" || s === "assigned" || s === "investigating") return "In Progress";
   return "Open";
 }
 
@@ -110,6 +112,8 @@ export function toView(r: TicketRow): TicketView {
     dueDate: sla.dueDate,
     slaStatus: sla.slaStatus,
     ...(r.assigneeId ? { assignee: r.assigneeId } : {}),
+    ...(r.ticketNo ? { ticketNo: r.ticketNo } : {}),
+    createdAt: r.createdAt.toISOString(),
   };
 }
 
@@ -119,7 +123,9 @@ export async function findById(id: string, tenantId: string): Promise<TicketView
   const rows = await db.transaction((tx) => tx.select().from(tickets).where(eq(tickets.id, id)).limit(1));
   const row = rows[0];
   if (!row || row.tenantId !== tenantId) return null;
-  return toView(row);
+  // The detail view additionally carries the description typed at intake; the
+  // list view omits it (can be large).
+  return { ...toView(row), ...(row.description ? { description: row.description } : {}) };
 }
 
 /** Raw row fetch (tenant-scoped) — used by consumers that need full columns. */

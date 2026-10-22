@@ -24,6 +24,9 @@ export const helpdeskTicketSchema = z.object({
   escalatedAt: z.string().optional(),
   slaStatus: z.enum(["within_sla", "at_risk", "breached"]).optional(),
   assignee: z.string().optional(),
+  ticketNo: z.string().optional(),
+  createdAt: z.string().optional(),
+  description: z.string().optional(),
 });
 
 export const slaQueueSchema = z.object({

@@ -21,10 +21,33 @@ describe("InternalTicketActions (GAP-HELPDESK-INTERNAL-DETAIL-02)", () => {
     vi.clearAllMocks();
   });
 
-  it("Resolve POSTs to the service /transition route with { status: resolved }", async () => {
+  // The service state machine is open -> investigating -> resolved -> closed, and
+  // the view shows investigating as "In Progress": only the legal next step is offered.
+  it("Open offers only Start investigation (resolving from open would 422)", () => {
+    render(<InternalTicketActions ticketId="t-1" currentStatus="Open" />);
+    expect(screen.getByRole("button", { name: /start investigation/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^resolve$/i })).not.toBeInTheDocument();
+  });
+
+  it("Start investigation sends { status: investigating }", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 202 }));
     vi.stubGlobal("fetch", fetchMock);
     render(<InternalTicketActions ticketId="t-1" currentStatus="Open" />);
+    await runAction(/start investigation/i);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual({ status: "investigating" });
+  });
+
+  it("In Progress offers Resolve (not Start investigation)", () => {
+    render(<InternalTicketActions ticketId="t-1" currentStatus="In Progress" />);
+    expect(screen.getByRole("button", { name: /^resolve$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /start investigation/i })).not.toBeInTheDocument();
+  });
+
+  it("Resolve POSTs to the service /transition route with { status: resolved }", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<InternalTicketActions ticketId="t-1" currentStatus="In Progress" />);
     await runAction(/^resolve$/i);
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
@@ -48,7 +71,7 @@ describe("InternalTicketActions (GAP-HELPDESK-INTERNAL-DETAIL-02)", () => {
       "fetch",
       vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "INVALID_TRANSITION" } }), { status: 422 })),
     );
-    render(<InternalTicketActions ticketId="t-1" currentStatus="Open" />);
+    render(<InternalTicketActions ticketId="t-1" currentStatus="In Progress" />);
     await runAction(/^resolve$/i);
     await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
     expect(toastMock.success).not.toHaveBeenCalled();

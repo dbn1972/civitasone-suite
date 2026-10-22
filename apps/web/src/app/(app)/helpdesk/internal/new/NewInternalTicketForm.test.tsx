@@ -28,7 +28,8 @@ describe("NewInternalTicketForm (staff-facing)", () => {
 
   it("submits to helpdesk-service with a Capitalized priority", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "t1" } }), { status: 202 }),
+      // REAL helpdesk-service ack: flat { id, status, correlationId }.
+      new Response(JSON.stringify({ id: "t1", status: "accepted", correlationId: "c-1" }), { status: 202 }),
     );
 
     render(<NewInternalTicketForm />);
@@ -50,7 +51,7 @@ describe("NewInternalTicketForm (staff-facing)", () => {
   // reference derived from the response, and navigate to the detail page.
   it("includes a ticket reference in the toast and navigates to the detail page", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "aaaabbbb-cccc-dddd-eeee-ffff00001111" } }), { status: 201 }),
+      new Response(JSON.stringify({ id: "aaaabbbb-cccc-dddd-eeee-ffff00001111", status: "accepted", correlationId: "c-2" }), { status: 202 }),
     );
     render(<NewInternalTicketForm />);
     fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Door lock jammed" } });

@@ -64,12 +64,13 @@ export function TicketActions({ ticketId, status, canAct = true }: Props) {
   const resolveNoteId = useId();
 
   // GAP-HELPDESK-TICKETS-DETAIL-04: gate actions by status. Closed tickets
-  // offer nothing; resolved tickets offer only Close; otherwise all four.
+  // offer nothing; resolved tickets offer only Close (no Reply / Assign /
+  // Resolve on a resolved ticket); otherwise all four.
   const normalizedStatus = (status ?? "").toLowerCase();
   const isClosed = normalizedStatus === "closed";
   const isResolved = normalizedStatus === "resolved";
-  const showReply = canAct && !isClosed;
-  const showAssign = canAct && !isClosed;
+  const showReply = canAct && !isClosed && !isResolved;
+  const showAssign = canAct && !isClosed && !isResolved;
   const showResolve = canAct && !isClosed && !isResolved;
   const showClose = canAct && !isClosed;
 

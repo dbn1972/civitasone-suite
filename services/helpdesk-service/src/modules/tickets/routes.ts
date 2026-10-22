@@ -9,7 +9,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createTicketBody, assignTicketBody, transitionTicketBody, idParam, ticketsListSchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
-import type { TicketType } from "./itil-domain.js";
+import { isValidStatusForType, type TicketType } from "./itil-domain.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"];
 const HELPDESK_ADMIN_ROLES = ["helpdesk_admin", "super_admin"];
@@ -57,14 +57,25 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
     // Fetch ticket to determine its type and current status
     const ticket = await queries.getTicketRaw(id, ctx.tenantId);
     if (!ticket) throw new HttpError(404, "NOT_FOUND", "ticket not found");
-    if (!ticket.ticketType) {
-      throw new HttpError(422, "NO_TICKET_TYPE", "Cannot transition a ticket without a defined ticket type");
+    // Tickets raised without an explicit ITIL type (the internal intake form,
+    // inbox/CRM conversions, pre-ITIL rows) are plain incidents. The legacy
+    // working statuses "assigned" (set by assign) and "in_progress" are the
+    // incident workflow's "investigating" stage. A typeless ticket whose status
+    // still is not part of the incident workflow stays a 422.
+    let effectiveType = ticket.ticketType as TicketType | null;
+    let currentStatus = ticket.status;
+    if (!effectiveType) {
+      if (currentStatus === "assigned" || currentStatus === "in_progress") currentStatus = "investigating";
+      if (!isValidStatusForType("incident", currentStatus)) {
+        throw new HttpError(422, "NO_TICKET_TYPE", "Cannot transition a ticket without a defined ticket type");
+      }
+      effectiveType = "incident";
     }
 
     sendAccepted(
       reply,
       acceptedResponseSchema,
-      await commands.transitionTicket(ctx, id, ticket.ticketType as TicketType, ticket.status, body),
+      await commands.transitionTicket(ctx, id, effectiveType, currentStatus, body),
     );
   });
 

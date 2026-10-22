@@ -7656,16 +7656,26 @@ export async function getServiceRequest(id: string): Promise<LoaderResult<Servic
         const r = raw as Record<string, unknown>;
         if (typeof r.id !== "string") return null;
         const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-        const history = Array.isArray(r.stageHistory)
-          ? r.stageHistory
-              .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+        const objs = (v: unknown): Record<string, unknown>[] =>
+          Array.isArray(v) ? v.filter((e): e is Record<string, unknown> => !!e && typeof e === "object") : [];
+        // helpdesk-service sends `stageEvents` ({toStage, at, note}) and `approvals`
+        // ({decision, comment, decidedAt}); the rejection reason is the comment of
+        // the (latest) rejected approval.
+        const history = Array.isArray(r.stageEvents)
+          ? objs(r.stageEvents)
               .map((e) => ({
-                stage: typeof e.stage === "string" ? e.stage : "",
-                enteredAt: typeof e.enteredAt === "string" ? e.enteredAt : "",
+                stage: typeof e.toStage === "string" ? e.toStage : "",
+                enteredAt: typeof e.at === "string" ? e.at : "",
                 note: typeof e.note === "string" ? e.note : null,
               }))
               .filter((e) => e.stage !== "")
           : undefined;
+        const rejected = objs(r.approvals).filter((a) => a.decision === "rejected");
+        const lastRejected = rejected[rejected.length - 1];
+        const rejectionReason =
+          lastRejected && typeof lastRejected.comment === "string" && lastRejected.comment.trim() !== ""
+            ? lastRejected.comment
+            : null;
         return {
           id: r.id,
           offeringId: str(r.offeringId) ?? "",
@@ -7677,7 +7687,7 @@ export async function getServiceRequest(id: string): Promise<LoaderResult<Servic
           resolutionDeadline: str(r.resolutionDeadline),
           breachEscalatedAt: str(r.breachEscalatedAt),
           createdAt: str(r.createdAt) ?? "",
-          rejectionReason: str(r.rejectionReason),
+          rejectionReason,
           stageHistory: history,
         } satisfies ServiceRequestDetail;
       },

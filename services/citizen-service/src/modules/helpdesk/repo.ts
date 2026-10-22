@@ -1,4 +1,4 @@
-import { eq, and, lt, sql, or, isNull, inArray } from "drizzle-orm";
+import { eq, and, lt, gt, lte, gte, sql, or, isNull, isNotNull, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenTickets, citizenTicketNotes, ticketEscalations,
@@ -65,16 +65,23 @@ export async function listTicketsByTenant(
   } else if (slaStatus === "due_soon") {
     const soon = new Date(now.getTime() + 4 * 60 * 60 * 1000);
     conditions.push(or(eq(citizenTickets.status, "open"), eq(citizenTickets.status, "in_progress"))!);
-    conditions.push(sql`${citizenTickets.slaDueAt} IS NOT NULL AND ${citizenTickets.slaDueAt} > ${now} AND ${citizenTickets.slaDueAt} <= ${soon}`);
+    // Typed drizzle operators (not a raw sql`` template): a raw template binds
+    // the JS Date unserialised and postgres.js rejects it -> 500.
+    conditions.push(and(isNotNull(citizenTickets.slaDueAt), gt(citizenTickets.slaDueAt, now), lte(citizenTickets.slaDueAt, soon))!);
   } else if (slaStatus === "within_sla") {
-    conditions.push(or(eq(citizenTickets.status, "closed"), eq(citizenTickets.status, "resolved"), sql`${citizenTickets.slaDueAt} IS NULL OR ${citizenTickets.slaDueAt} > ${new Date(now.getTime() + 4 * 60 * 60 * 1000)}`)!);
+    conditions.push(or(
+      eq(citizenTickets.status, "closed"),
+      eq(citizenTickets.status, "resolved"),
+      isNull(citizenTickets.slaDueAt),
+      gt(citizenTickets.slaDueAt, new Date(now.getTime() + 4 * 60 * 60 * 1000)),
+    )!);
   }
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(citizenTickets).where(and(...conditions)).limit(limit));
 }
 
-export async function countBreachedTickets(tenantId: string): Promise<number> {
+export async function countBreachedTickets(tenantId: string, since?: Date): Promise<number> {
   const now = new Date();
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
@@ -84,6 +91,7 @@ export async function countBreachedTickets(tenantId: string): Promise<number> {
     .where(
       and(
         eq(citizenTickets.tenantId, tenantId),
+        ...(since ? [gte(citizenTickets.createdAt, since)] : []),
         or(eq(citizenTickets.status, "open"), eq(citizenTickets.status, "in_progress")),
         or(lt(citizenTickets.slaDueAt, now), and(isNull(citizenTickets.slaDueAt), lt(citizenTickets.createdAt, new Date(now.getTime() - 24 * 60 * 60 * 1000)))),
       ),
@@ -91,13 +99,15 @@ export async function countBreachedTickets(tenantId: string): Promise<number> {
   return row?.count ?? 0;
 }
 
-export async function countTicketsByStatus(tenantId: string): Promise<Array<{ status: string; count: number }>> {
+export async function countTicketsByStatus(tenantId: string, since?: Date): Promise<Array<{ status: string; count: number }>> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   const rows = await db.transaction((tx) => tx.select({
     status: citizenTickets.status,
     count: sql<number>`count(*)::int`,
-  }).from(citizenTickets).where(eq(citizenTickets.tenantId, tenantId)).groupBy(citizenTickets.status));
+  }).from(citizenTickets)
+    .where(since ? and(eq(citizenTickets.tenantId, tenantId), gte(citizenTickets.createdAt, since)) : eq(citizenTickets.tenantId, tenantId))
+    .groupBy(citizenTickets.status));
   return rows;
 }
 
