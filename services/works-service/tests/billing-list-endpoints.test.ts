@@ -8,7 +8,7 @@
  * bills list. These assert role gating (403 without a read role), tenant
  * scoping (repo called with the caller's tenant), and the response envelope.
  */
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { TENANT_A, WORK_ID, AWARD_ID, MB_ID, bearerToken, jwtPayload } from "./fixtures/works-fixtures.js";
 
@@ -16,6 +16,12 @@ const listMbsForWork = vi.fn();
 const listAwardsForWork = vi.fn();
 const listBillsForWork = vi.fn();
 const listAccountCompilations = vi.fn();
+// WORKID-07: the per-work lists answer 404 for a work that does not exist. Default: the work exists.
+const getProposal = vi.fn();
+vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/proposal/repo.js")>();
+  return { ...orig, getProposal };
+});
 
 vi.mock("../src/modules/billing/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/billing/repo.js")>();
@@ -44,14 +50,8 @@ vi.mock("@civitasone/outbox", () => ({
   outboxMessages: {}, processed: {}, outboxSchema: {},
   enqueue: vi.fn(), markProcessed: vi.fn(), startRelay: vi.fn(() => setInterval(() => {}, 999999)),
 }));
-vi.mock("@civitasone/schemas/plugin", () => ({
-  registerSchemaErrorHandler: (app: any, HttpError: any) => {
-    app.setErrorHandler((err: any, _req: any, reply: any) => {
-      if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code } });
-      return reply.status(500).send({ error: { code: "INTERNAL" } });
-    });
-  },
-}));
+// NOTE: @civitasone/schemas/plugin is intentionally NOT mocked -- the real createFastifyErrorHandler runs, so every
+// `.json().code` below is read from the FLAT { code, message, correlationId, retryable } body the service really sends.
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: Object.assign(async (app: any) => {
     app.decorateRequest("ctx", undefined);
@@ -83,6 +83,11 @@ describe("billing list endpoints — MBs / awards by work (GAP-WORKS-BILLING-WOR
     app = await buildApp();
   });
   afterAll(async () => { await app.close(); });
+
+  beforeEach(() => {
+    getProposal.mockReset();
+    getProposal.mockImplementation(async (_t: string, id: string) => ({ id, status: "dao_finalized" }));
+  });
 
   const reader = () => `Bearer ${bearerToken(jwtPayload(TENANT_A, ["works_viewer"]))}`;
   const noRole = () => `Bearer ${bearerToken(jwtPayload(TENANT_A, ["citizen"]))}`;
@@ -135,6 +140,59 @@ describe("billing list endpoints — MBs / awards by work (GAP-WORKS-BILLING-WOR
     expect(res.statusCode).toBe(200);
     expect(res.json().data[0]).toMatchObject({ month: 5, year: 2026, status: "submitted" });
     expect(listAccountCompilations).toHaveBeenCalledWith(TENANT_A, 5, 2026);
+  });
+
+  // GAP-WORKS-BILLING-WORKID-07: GET :workId/bills is role-gated, UUID-validated and existence-checked.
+  describe("GET /:workId/bills guards (WORKID-07)", () => {
+    const get = (workId: string, auth?: string) =>
+      app.inject({ method: "GET", url: `/v1/works/billing/${workId}/bills`, headers: auth ? { authorization: auth } : {} });
+
+    it("401 without a token", async () => {
+      expect((await get(WORK_ID)).statusCode).toBe(401);
+    });
+
+    it("403 for a caller without a billing read role, with no lookup and no data read", async () => {
+      listBillsForWork.mockClear();
+      getProposal.mockClear();
+      const res = await get(WORK_ID, noRole());
+      expect(res.statusCode).toBe(403);
+      expect(getProposal).not.toHaveBeenCalled();
+      expect(listBillsForWork).not.toHaveBeenCalled();
+    });
+
+    it("400 INVALID_ID for a malformed work id, before any database read", async () => {
+      listBillsForWork.mockClear();
+      getProposal.mockClear();
+      const res = await get("not-a-uuid", reader());
+      expect(res.statusCode).toBe(400);
+      expect(res.json().code).toBe("INVALID_ID");
+      expect(getProposal).not.toHaveBeenCalled();
+      expect(listBillsForWork).not.toHaveBeenCalled();
+    });
+
+    it("404 for a work that does not exist (not an empty 200), tenant-scoped lookup", async () => {
+      getProposal.mockResolvedValueOnce(null);
+      listBillsForWork.mockClear();
+      const res = await get(WORK_ID, reader());
+      expect(res.statusCode).toBe(404);
+      expect(getProposal).toHaveBeenLastCalledWith(TENANT_A, WORK_ID);
+      expect(listBillsForWork).not.toHaveBeenCalled();
+    });
+
+    it("an existing work with nothing billed is a genuine empty 200", async () => {
+      listBillsForWork.mockResolvedValueOnce([]);
+      const res = await get(WORK_ID, reader());
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ data: [] });
+    });
+
+    it("the sibling per-work lists (mbs, awards) validate and existence-check the same way", async () => {
+      for (const leaf of ["mbs", "awards"]) {
+        expect((await app.inject({ method: "GET", url: `/v1/works/billing/nope/${leaf}`, headers: { authorization: reader() } })).statusCode).toBe(400);
+        getProposal.mockResolvedValueOnce(null);
+        expect((await app.inject({ method: "GET", url: `/v1/works/billing/${WORK_ID}/${leaf}`, headers: { authorization: reader() } })).statusCode).toBe(404);
+      }
+    });
   });
 
   it("GET /account-compile is 403 for a caller outside the DAO/DO/admin set", async () => {

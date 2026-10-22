@@ -232,6 +232,18 @@ const MAKER_CHECKER_MESSAGE: DomainMessage = {
 };
 
 export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
+  // works-service: a measurement can only be recorded while its measurement book is a draft (billing MB_NOT_OPEN).
+  MB_NOT_OPEN: {
+    en: {
+      what: "This measurement book is no longer open for new measurements.",
+      next: "Measurements can only be recorded while a measurement book is a draft. Choose a draft measurement book.",
+    },
+    hi: {
+      what: "यह माप पुस्तिका अब नई माप दर्ज करने के लिए खुली नहीं है।",
+      next: "माप तभी दर्ज की जा सकती है जब माप पुस्तिका ड्राफ़्ट अवस्था में हो। कोई ड्राफ़्ट माप पुस्तिका चुनें।",
+    },
+    actions: ["back", "help"],
+  },
   // Every "you cannot decide your own request" code the services emit (verified in services/*).
   SELF_APPROVAL_FORBIDDEN: SELF_APPROVAL_MESSAGE,
   SELF_APPROVAL: SELF_APPROVAL_MESSAGE,
@@ -436,6 +448,31 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     hi: {
       what: "यह मॉड्यूल आपके कार्यालय की व्यवस्था में शामिल नहीं है।",
       next: "अपने प्लेटफ़ॉर्म प्रशासक से इसे जुड़वाएँ, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: works-service answers 409 RATING_COOLDOWN when the same officer rates the same
+  // contractor again inside the configured waiting period.
+  RATING_COOLDOWN: {
+    en: {
+      what: "You rated this contractor recently.",
+      next: "You can rate it again once the waiting period after your last rating has ended.",
+    },
+    hi: {
+      what: "आपने हाल ही में इस ठेकेदार को रेटिंग दी है।",
+      next: "आपकी पिछली रेटिंग के बाद की प्रतीक्षा अवधि समाप्त होने पर आप दोबारा रेटिंग दे सकते हैं।",
+    },
+    actions: ["back", "help"],
+  },
+  // BR-015 (works-service): once tender details exist for a work its BoQ is frozen against add, edit and delete.
+  BOQ_FROZEN: {
+    en: {
+      what: "The bill of quantities for this work can't be changed any more.",
+      next: "Tender details already exist for it. Ask your administrator if a correction is needed.",
+    },
+    hi: {
+      what: "इस कार्य की मात्रा-सूची (BoQ) अब बदली नहीं जा सकती।",
+      next: "इसके लिए निविदा विवरण पहले से मौजूद हैं। सुधार की ज़रूरत हो तो अपने प्रशासक से पूछें।",
     },
     actions: ["back", "help"],
   },

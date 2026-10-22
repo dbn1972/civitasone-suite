@@ -18,6 +18,12 @@ const listAllBoqItems = vi.fn();
 const boqIndexSummary = vi.fn();
 const getRecapitulation = vi.fn();
 const searchSrItems = vi.fn();
+// The recapitulation read first checks the work exists (WORKID-05); default: it does.
+const getProposal = vi.fn(async (_t: string, id: string) => ({ id, status: "dao_finalized" }));
+vi.mock("../src/modules/proposal/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/proposal/repo.js")>();
+  return { ...orig, getProposal };
+});
 
 vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
@@ -51,15 +57,8 @@ vi.mock("@civitasone/outbox", () => ({
   outboxMessages: {}, processed: {}, outboxSchema: {},
   enqueue: vi.fn(), markProcessed: vi.fn(), startRelay: vi.fn(() => setInterval(() => {}, 999999)),
 }));
-vi.mock("@civitasone/schemas/plugin", () => ({
-  registerSchemaErrorHandler: (app: any, HttpError: any) => {
-    app.setErrorHandler((err: any, _req: any, reply: any) => {
-      if (err instanceof HttpError) return reply.status(err.status).send({ error: { code: err.code } });
-      if (err?.name === "ZodError" || err?.issues) return reply.status(400).send({ error: { code: "VALIDATION_ERROR" } });
-      return reply.status(500).send({ error: { code: "INTERNAL" } });
-    });
-  },
-}));
+// NOTE: @civitasone/schemas/plugin is intentionally NOT mocked -- the real createFastifyErrorHandler runs, so every
+// `.json().code` below is read from the FLAT { code, message, correlationId, retryable } body the service really sends.
 vi.mock("@civitasone/auth/plugin", () => ({
   authPlugin: Object.assign(async (app: any) => {
     app.decorateRequest("ctx", undefined);
@@ -132,6 +131,31 @@ describe("works BoQ index / recap / SR search", () => {
     expect(contingency.basis).toBe("work_amount");
     expect(contingency.ratePercent).toBe(3);
     expect(contingency.amountMinor).toBe("300000"); // 3% of ₹1,00,000 = ₹3,000
+  });
+
+  // GAP-WORKS-BOQ-WORKID-05: the recapitulation read tells "no such work" from "not computed yet", and rejects a
+  // malformed work id before any query reaches the uuid column.
+  it("recapitulation: 404 NOT_FOUND for an unknown work, 404 RECAPITULATION_NOT_COMPUTED for a real work with no recap", async () => {
+    getProposal.mockResolvedValueOnce(null as never);
+    const unknown = await app.inject({ method: "GET", url: `/v1/works/boq/${WORK_ID}/recapitulation`, headers: auth(["works_viewer"]) });
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json().code).toBe("NOT_FOUND");
+
+    getRecapitulation.mockResolvedValueOnce(null);
+    const notComputed = await app.inject({ method: "GET", url: `/v1/works/boq/${WORK_ID}/recapitulation`, headers: auth(["works_viewer"]) });
+    expect(notComputed.statusCode).toBe(404);
+    expect(notComputed.json().code).toBe("RECAPITULATION_NOT_COMPUTED");
+  });
+
+  it("both per-work BoQ reads reject a non-UUID work id with 400 and never query", async () => {
+    getRecapitulation.mockClear();
+    getProposal.mockClear();
+    for (const leaf of ["", "/recapitulation"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/works/boq/not-a-uuid${leaf}`, headers: auth(["works_viewer"]) });
+      expect(res.statusCode).toBe(400);
+    }
+    expect(getProposal).not.toHaveBeenCalled();
+    expect(getRecapitulation).not.toHaveBeenCalled();
   });
 
   it("GET /v1/works/masters/sr-items/search is forbidden without a reader role", async () => {

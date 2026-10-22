@@ -39,3 +39,14 @@ describe("change domain error codes (GAP-CHANGE-DETAIL-05)", () => {
     expect(r.what).toContain("फ़्रीज़");
   });
 });
+
+describe("works billing domain error codes (GAP-WORKS-BILLING-MEASUREMENTS-NEW-05)", () => {
+  it("maps MB_NOT_OPEN to specific copy in English and Hindi, not the generic conflict text", () => {
+    const en = resolveHumanError({ status: 409, code: "MB_NOT_OPEN", ctx: { locale: "en" } });
+    expect(en.kind).toBe("domain");
+    expect(en.what).toBe("This measurement book is no longer open for new measurements.");
+    expect(en.what.toLowerCase()).not.toContain("changed by someone else");
+    const hi = resolveHumanError({ status: 409, code: "MB_NOT_OPEN", ctx: { locale: "hi" } });
+    expect(hi.what).toContain("माप पुस्तिका");
+  });
+});

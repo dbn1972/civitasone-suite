@@ -7,7 +7,7 @@ import { measurements } from "../billing/schema.js";
 import { awards, tenders, preTenders } from "../tender/schema.js";
 import { technicalSanctions } from "../approval/schema.js";
 import { calculateBoqAmount, calculateRecapitulation, isDuplicateBoqLine, canEnterBoq, canModifyBoq } from "./domain.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 /** BR-015 (defense-in-depth — also enforced pre-enqueue in boq/routes.ts):
  * does a tender or pre-tender already exist for this work? works.tenders
@@ -55,6 +55,12 @@ export function registerBoqConsumers(q: Queue): void {
         throw new NonRetryableError("TS_REQUIRED: BoQ entry requires a finalized technical sanction for this work");
       }
 
+      // BR-015 (also enforced pre-enqueue in boq/routes.ts): adding a line is a modification, so it is refused once
+      // tender details exist for the work.
+      if (!canModifyBoq(await hasTenderDetailsForWorkTx(tx, msg.tenantId, workId))) {
+        throw new NonRetryableError("BOQ_FROZEN: BoQ cannot be modified once tender details exist for this work");
+      }
+
       const existingRows = await tx.select({
         workId: boqItems.workId,
         itemCode: boqItems.itemCode,
@@ -67,6 +73,10 @@ export function registerBoqConsumers(q: Queue): void {
 
       const rate = BigInt(p.rate as string | number);
       const quantity = p.quantity as number;
+      // Defense-in-depth for the route validator: a non-positive rate or quantity would store a zero/negative amount.
+      if (rate <= 0n || !(quantity > 0)) {
+        throw new NonRetryableError("INVALID_AMOUNT: BoQ rate and quantity must be greater than zero");
+      }
       const amountMinor = calculateBoqAmount(rate, quantity);
 
       await tx.insert(boqItems).values({
@@ -107,7 +117,30 @@ export function registerBoqConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
-      const workAmount = BigInt(p.workAmount as string | number);
+      // A work has ONE recapitulation. Two commands for the same work (a double submit publishes two, each with its own
+      // messageId, so markProcessed cannot dedupe them) are serialised on a per-work transaction lock: the second
+      // one waits for the first to commit and then sees its row, instead of both inserting and leaving two Grand
+      // Totals for the same work.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`boq-recapitulate:${msg.tenantId}:${String(p.workId)}`}, 0))`);
+      const already = await tx.select({ id: recapitulation.id }).from(recapitulation)
+        .where(and(eq(recapitulation.tenantId, msg.tenantId), eq(recapitulation.workId, p.workId as string)))
+        .limit(1);
+      if (already.length > 0) {
+        throw new NonRetryableError("RECAP_EXISTS: a recapitulation has already been computed for this work");
+      }
+      // GAP-WORKS-BOQ-WORKID-05: the work amount is the sum of the work's stored BoQ line amounts (paise, summed in
+      // SQL as bigint), read in this transaction. The command carries only the percentages and other charges; the
+      // recapitulation API schema has never had a workAmount field, so the old `BigInt(p.workAmount)` threw for every
+      // command the API could publish and no recapitulation could be produced.
+      const totals = await tx.select({
+        lines: sql<number>`cast(count(*) as int)`,
+        totalMinor: sql<string>`coalesce(sum(${boqItems.amountMinor}), 0)::text`,
+      }).from(boqItems)
+        .where(and(eq(boqItems.tenantId, msg.tenantId), eq(boqItems.workId, p.workId as string)));
+      if ((totals[0]?.lines ?? 0) === 0) {
+        throw new NonRetryableError("BOQ_EMPTY: the work has no BoQ lines to recapitulate");
+      }
+      const workAmount = BigInt(totals[0]?.totalMinor ?? "0");
       const charges = {
         contingencyPercent: p.contingencyPercent as number,
         turnoverTaxPercent: p.turnoverTaxPercent as number,

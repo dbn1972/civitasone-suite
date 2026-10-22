@@ -15,6 +15,7 @@
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
+import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { billBucket, deriveTenderStatus, fmtDate, humanize, modeLabel, shortId } from "./format";
 import type { BillStatus, WorksStatusCount, WorksSummary } from "./types";
 import { normalizeClosureType } from "./types";
@@ -329,9 +330,13 @@ export interface AaRow extends Record<string, unknown> {
   workId: string | null;
   authorityId: string | null;
   workNumber: string;
+  /** False when `workNumber` is only a short id (no real work number was available for this row). */
+  workNumberResolved: boolean;
   approvalNumber: string;
   date: string;
   authority: string;
+  /** False when `authority` is only a short id (the officer could not be resolved to a name). */
+  authorityResolved: boolean;
   amount: string;
   type: string;
   status: string;
@@ -343,29 +348,42 @@ export interface TsRow extends Record<string, unknown> {
   workId: string | null;
   authorityId: string | null;
   workNumber: string;
+  workNumberResolved: boolean;
   approvalNumber: string;
   date: string;
   authority: string;
+  authorityResolved: boolean;
   amount: string;
   type: string;
   status: string;
 }
 
+/**
+ * Work number and authority name for a register row. works-service now returns `workNumber` on every row (joined in
+ * application code from the proposal module); the authority NAME lives in identity-service, so the row starts with a
+ * short id and resolveApprovalNames() upgrades it from the tenant user directory. A row that is still on a short id
+ * after that is flagged (`*Resolved: false`) so the table can label it as an ID with the full id as a tooltip rather
+ * than let a bare hash pass for a number or a name.
+ */
+function nameFields(workId: string | null, workNumber: string, authorityId: string | null, authorityName: string) {
+  return {
+    workNumber: workNumber || shortId(workId),
+    workNumberResolved: workNumber !== "" || !workId,
+    authority: authorityName || shortId(authorityId),
+    authorityResolved: authorityName !== "" || !authorityId,
+  };
+}
+
 function mapAaRow(r: Row): AaRow {
+  const workId = strOrNull(r.workId);
+  const authorityId = strOrNull(r.approvingAuthorityId);
   return {
     id: str(r.id),
-    workId: strOrNull(r.workId),
-    authorityId: strOrNull(r.approvingAuthorityId),
-    // Prefer a real work number / authority name if the list API ever supplies
-    // one; today the approvals list (works-service approval/repo.ts listAa)
-    // returns only the opaque ids (no cross-module join to work_proposals /
-    // the authority master), so this falls back to a short id, surfaced in the
-    // UI under an "(ID)" column header rather than masquerading as a number
-    // (GAP-WORKS-APPROVALS-01).
-    workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
+    workId,
+    authorityId,
+    ...nameFields(workId, str(r.workNumber), authorityId, str(r.authorityName)),
     approvalNumber: str(r.aaNumber),
     date: fmtDate(strOrNull(r.aaDate)),
-    authority: str(r.authorityName) || shortId(strOrNull(r.approvingAuthorityId)),
     amount: str(r.approvedAmountMinor, "0"),
     type: humanize(str(r.approvalType, "original")),
     status: str(r.status, "draft"),
@@ -373,14 +391,15 @@ function mapAaRow(r: Row): AaRow {
 }
 
 function mapTsRow(r: Row): TsRow {
+  const workId = strOrNull(r.workId);
+  const authorityId = strOrNull(r.tsAuthorityId);
   return {
     id: str(r.id),
-    workId: strOrNull(r.workId),
-    authorityId: strOrNull(r.tsAuthorityId),
-    workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
+    workId,
+    authorityId,
+    ...nameFields(workId, str(r.workNumber), authorityId, str(r.authorityName)),
     approvalNumber: str(r.tsNumber),
     date: fmtDate(strOrNull(r.tsDate)),
-    authority: str(r.authorityName) || shortId(strOrNull(r.tsAuthorityId)),
     amount: str(r.tsAmountMinor, "0"),
     type: humanize(str(r.sanctionType, "original")),
     status: str(r.status, "draft"),
@@ -388,10 +407,11 @@ function mapTsRow(r: Row): TsRow {
 }
 
 /**
- * GAP-WORKS-APPROVALS-01 / AA-DETAIL-03 / TS-DETAIL-03: the approvals API returns only opaque ids (modules may not
- * join each other's schemas), so the readable work number and the officer name are resolved web-side, like the
- * tender masters. The "authority" on an AA/TS is chosen from the identity user picker, so it resolves against the
- * identity directory. Both lookups degrade to {} on any failure (the row then shows a short id, never an error).
+ * GAP-WORKS-APPROVALS-01 / AA-DETAIL-03 / TS-DETAIL-03: the approvals API joins the work number itself (workNumber on
+ * every row) but cannot join the officer: identity is another service. The officer name is resolved web-side from the
+ * tenant user directory, in batches of ids (no 200-user cap). The work number lookup below is only the fallback for a
+ * row the API could not resolve. Both lookups degrade to "not found" on any failure (the row then shows a labelled
+ * short id, never an error).
  */
 export async function getWorkNumberMap(ids: string[]): Promise<LoaderResult<Record<string, string>>> {
   const unique = Array.from(new Set(ids.filter(Boolean)));
@@ -425,32 +445,30 @@ export async function getWorkNumberMap(ids: string[]): Promise<LoaderResult<Reco
   };
 }
 
-export function getOfficerNameMap(): Promise<LoaderResult<Record<string, string>>> {
-  return fetchJson<unknown, Record<string, string>>("/api/v1/identity/users?limit=200", {}, {
-    telemetryKey: "works.approvals.officerNames",
-    mapResponse: (p) => {
-      const map: Record<string, string> = {};
-      for (const row of pickItems(p)) {
-        const id = strOrNull(row.id);
-        const name = strOrNull(row.name);
-        if (id && name) map[id] = name;
-      }
-      return map;
-    },
-  });
+/**
+ * Officer display names for a set of user ids, from the shared tenant user directory (the non-PII {id, displayName}
+ * endpoint open to every member of the tenant, resolved in batches). This replaces a call to the admin-gated
+ * /identity/users list that no works user could reach. An id the directory does not return is simply absent.
+ */
+export async function getOfficerNameMap(ids: string[]): Promise<LoaderResult<Record<string, string>>> {
+  const names = await resolveUsers(ids);
+  return { data: Object.fromEntries(names), source: "api" };
 }
 
 async function resolveApprovalNames<T extends AaRow | TsRow>(rows: T[]): Promise<T[]> {
   if (rows.length === 0) return rows;
-  const [works, officers] = await Promise.all([
-    getWorkNumberMap(rows.map((r) => r.workId ?? "")),
-    getOfficerNameMap(),
-  ]);
-  return rows.map((r) => ({
-    ...r,
-    workNumber: (r.workId && works.data[r.workId]) || r.workNumber,
-    authority: (r.authorityId && officers.data[r.authorityId]) || r.authority,
-  }));
+  const unresolvedWorkIds = rows.filter((r) => !r.workNumberResolved && r.workId).map((r) => r.workId as string);
+  const authorityIds = rows.filter((r) => !r.authorityResolved && r.authorityId).map((r) => r.authorityId as string);
+  const [works, officers] = await Promise.all([getWorkNumberMap(unresolvedWorkIds), getOfficerNameMap(authorityIds)]);
+  return rows.map((r) => {
+    const workNumber = !r.workNumberResolved && r.workId ? works.data[r.workId] : undefined;
+    const authority = !r.authorityResolved && r.authorityId ? officers.data[r.authorityId] : undefined;
+    return {
+      ...r,
+      ...(workNumber ? { workNumber, workNumberResolved: true } : {}),
+      ...(authority ? { authority, authorityResolved: true } : {}),
+    };
+  });
 }
 
 /** Tenant-wide AA register — backs the /works/approvals list page. */

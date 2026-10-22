@@ -34,13 +34,19 @@ type RatingHistoryRow = {
   ratedBy?: string;
   ratedByName?: string;
   note?: string;
+  /** Human number of the work this rating is linked to, when it is linked to one. */
+  workNumber?: string;
 };
+
+/** Rating history rows plus the server's configured cooling-off period (days; 0 = none) between two ratings by one officer. */
+type RatingHistory = { rows: RatingHistoryRow[]; cooldownDays: number };
 
 type RatingDisplayRow = {
   id: string;
   rating: string;
   ratedAt: string;
   ratedBy: string;
+  work: string;
   note: string;
 };
 
@@ -85,9 +91,24 @@ function mapRatingHistory(payload: unknown): RatingHistoryRow[] | null {
         ratedBy: rr.ratedBy ? String(rr.ratedBy) : undefined,
         ratedByName: rr.ratedByName ? String(rr.ratedByName) : undefined,
         note: rr.note ? String(rr.note) : undefined,
+        workNumber: rr.workNumber ? String(rr.workNumber) : undefined,
       },
     ];
   });
+}
+
+/** meta.cooldownDays from the rating-history envelope; anything that is not a positive whole number means "none". */
+function readCooldownDays(payload: unknown): number {
+  if (!isRecord(payload)) return 0;
+  const meta = (payload as { meta?: unknown }).meta;
+  if (!isRecord(meta)) return 0;
+  const days = (meta as { cooldownDays?: unknown }).cooldownDays;
+  return typeof days === "number" && Number.isInteger(days) && days > 0 ? days : 0;
+}
+
+function mapRatingHistoryResponse(payload: unknown): RatingHistory | null {
+  const rows = mapRatingHistory(payload);
+  return rows ? { rows, cooldownDays: readCooldownDays(payload) } : null;
 }
 
 /**
@@ -125,18 +146,22 @@ export default async function ContractorDetailPage({
         },
       }
     ),
-    fetchJson<unknown, RatingHistoryRow[]>(
+    fetchJson<unknown, RatingHistory>(
       `/api/v1/works/contractors/${params.id}/rating-history`,
-      [],
+      { rows: [], cooldownDays: 0 },
       {
         telemetryKey: "works.contractor.rating-history",
-        mapResponse: mapRatingHistory,
+        mapResponse: mapRatingHistoryResponse,
       }
     ),
   ]);
 
   const { data: contractor, source, status, errorMessage } = contractorResult;
-  const { data: ratingHistory, source: ratingSource } = ratingResult;
+  const { data: ratingData, source: ratingSource } = ratingResult;
+  const ratingHistory = ratingData.rows;
+  // The viewer's OWN most recent rating of this contractor (history is newest first): that is what the server's
+  // cooling-off rule is measured from, not the latest rating by anyone.
+  const ownLastRating = viewerId ? ratingHistory.find((r) => r.ratedBy === viewerId) : undefined;
 
   // GAP-WORKS-CONTRACTORS-DETAIL-01 (FAILMASK): a real missing id (API 404)
   // is a genuine not-found; every OTHER failure (403/5xx/network/invalid
@@ -189,6 +214,7 @@ export default async function ContractorDetailPage({
     // GAP-WORKS-CONTRACTORS-DETAIL-03: show a resolved rater NAME when the
     // backend supplies one; never an opaque 8-char UUID slice.
     ratedBy: r.ratedByName && r.ratedByName.trim() ? r.ratedByName : "—",
+    work: r.workNumber && r.workNumber.trim() ? r.workNumber : "—",
     note: r.note && r.note.trim() ? r.note : "—",
   }));
 
@@ -336,9 +362,10 @@ export default async function ContractorDetailPage({
               currentRating={contractor.performanceRating ?? 0}
               ratingCount={contractor.ratingCount}
               canRate={canRate}
-              lastRatedAt={ratingHistory[0]?.ratedAt ?? null}
-              lastRatedBy={ratingHistory[0]?.ratedBy ?? null}
+              lastRatedAt={ownLastRating?.ratedAt ?? null}
+              lastRatedBy={ownLastRating?.ratedBy ?? null}
               viewerId={viewerId}
+              cooldownDays={ratingData.cooldownDays}
             />
           </div>
         </Card>
@@ -368,6 +395,7 @@ export default async function ContractorDetailPage({
               { key: "ratedAt", label: "Date" },
               { key: "rating", label: "Rating (1–5)" },
               { key: "ratedBy", label: "Rated By" },
+              { key: "work", label: "Work" },
               { key: "note", label: "Comment" },
             ]}
             rows={ratingDisplayRows}

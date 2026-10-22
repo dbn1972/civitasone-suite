@@ -5,7 +5,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import {
-  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill,
+  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill, canRecordMeasurement,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
   finalizeStepRoles, isSelfFinalization,
@@ -15,6 +15,7 @@ import {
   listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations,
 } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
+import { getProposal } from "../proposal/repo.js";
 import { getBoqItemById, listBoqItemsByIds } from "../boq/repo.js";
 import { parseMinor } from "@civitasone/schemas";
 import { paginationSchema } from "../masters/validators.js";
@@ -25,6 +26,22 @@ const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"
 // The per-step check (finalizeStepRoles) then narrows each step. "auditor" gets no other write route.
 const FINALIZE_ROLES = ["works_admin", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A path id that reaches a uuid column must be a UUID: otherwise Postgres raises 22P02 and the caller sees a 500. */
+function uuidParam(value: string, name: string): string {
+  if (!UUID_RE.test(value)) throw new HttpError(400, "INVALID_ID", `${name} must be a UUID`);
+  return value;
+}
+
+/**
+ * GAP-WORKS-BILLING-WORKID-07: the per-work billing lists answer 404 for a work that does not exist instead of a
+ * 200 with an empty array that is indistinguishable from "a real work with nothing billed yet".
+ */
+async function assertWorkExists(tenantId: string, workId: string): Promise<void> {
+  if (!(await getProposal(tenantId, workId))) throw new HttpError(404, "NOT_FOUND", "work not found");
+}
 
 /**
  * The value of work measured against an MB and how much of it earlier bills have already consumed (all bigint minor
@@ -47,10 +64,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/billing/mb/:mbId/measured-value", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { mbId } = req.params as { mbId: string };
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mbId)) {
-      throw new HttpError(400, "INVALID_ID", "mbId must be a UUID");
-    }
+    const mbId = uuidParam((req.params as { mbId: string }).mbId, "mbId");
     const mb = await getMb(ctx.tenantId, mbId);
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
     const { measuredValueMinor, priorBilledAgainstMb } = await mbBillingPosition(ctx.tenantId, mbId);
@@ -69,7 +83,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/billing/:workId/bills", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const workId = uuidParam((req.params as { workId: string }).workId, "workId");
+    await assertWorkExists(ctx.tenantId, workId);
     const data = await listBillsForWork(ctx.tenantId, workId);
     return reply.send({ data });
   });
@@ -80,7 +95,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/billing/:workId/mbs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const workId = uuidParam((req.params as { workId: string }).workId, "workId");
+    await assertWorkExists(ctx.tenantId, workId);
     const data = await listMbsForWork(ctx.tenantId, workId);
     return reply.send({ data });
   });
@@ -91,7 +107,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/billing/:workId/awards", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const workId = uuidParam((req.params as { workId: string }).workId, "workId");
+    await assertWorkExists(ctx.tenantId, workId);
     const data = await listAwardsForWork(ctx.tenantId, workId);
     return reply.send({ data });
   });
@@ -147,6 +164,18 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
 
     const seq = eMbFinalizationSequence();
+
+    // GAP-WORKS-BILLING-WORKID-07: finalizing the step the MB is ALREADY at is a replay (double click, retry after a
+    // timeout), not an error. It is answered 200 with the current state and publishes nothing, so no second event
+    // or audit row is produced. The authority checks run first: a caller who could not take this step is refused
+    // exactly as before, whatever the current state is.
+    if (mb.status === body.nextStatus) {
+      requireRole(ctx, finalizeStepRoles(body.nextStatus));
+      if (isSelfFinalization(ctx.actorId, { createdBy: mb.createdBy, issuedBy: mb.issuedBy })) {
+        throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The issuer of a measurement book cannot finalize it (maker-checker rule)");
+      }
+      return reply.send({ data: { id: mb.id, status: mb.status, alreadyApplied: true } });
+    }
     if (!isValidNextStep(mb.status, body.nextStatus, seq)) {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${mb.status}' to '${body.nextStatus}'`);
     }
@@ -217,6 +246,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const priorBills = await listBillsForWork(ctx.tenantId, body.workId);
+    // A bill number is unique within a work (case-insensitive, like the MB number above). The consumer re-checks
+    // inside its transaction, under a per-work lock, because this pre-check can race.
+    const wantedNumber = body.billNumber.toLowerCase();
+    if (priorBills.some((row) => (row.billNumber ?? "").trim().toLowerCase() === wantedNumber)) {
+      throw new HttpError(409, "DUPLICATE_BILL_NUMBER", "Bill number already used for this work");
+    }
     const priorBilledGross = priorBills.reduce(
       (sum, row) => sum + (row.grossAmountMinor ?? 0n),
       0n,
@@ -241,6 +276,16 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
 
     const seq = billFinalizationSequence();
+
+    // GAP-WORKS-BILLING-WORKID-07: replay of a step the bill is already at -> 200, nothing published (see the MB
+    // route above). This is what stops a double click on the DO step from raising a second finance hand-off.
+    if (bill.status === body.nextStatus) {
+      requireRole(ctx, finalizeStepRoles(body.nextStatus));
+      if (isSelfFinalization(ctx.actorId, { createdBy: bill.createdBy })) {
+        throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of a bill cannot finalize it (maker-checker rule)");
+      }
+      return reply.send({ data: { id: bill.id, status: bill.status, alreadyApplied: true } });
+    }
     if (!isValidNextStep(bill.status, body.nextStatus, seq)) {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${bill.status}' to '${body.nextStatus}'`);
     }
@@ -260,7 +305,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/billing/mb/:mbId/measurements", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { mbId } = req.params as { mbId: string };
+    const mbId = uuidParam((req.params as { mbId: string }).mbId, "mbId");
     const data = await listMeasurementsByMb(ctx.tenantId, mbId);
     return reply.send({ data });
   });
@@ -273,6 +318,13 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
 
     const mb = await getMb(ctx.tenantId, body.mbId);
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
+    if (!canRecordMeasurement(mb.status)) {
+      throw new HttpError(
+        409,
+        "MB_NOT_OPEN",
+        `Cannot record a measurement: measurement book status is '${mb.status}'; measurements can only be recorded while it is 'draft'`,
+      );
+    }
 
     // FR-BIL-011 gate (bug #3): the cumulative-vs-BoQ-approved-quantity
     // ceiling was previously enforced only inside the async consumer, so
