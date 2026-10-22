@@ -3,7 +3,8 @@
  * capped page therefore keeps the most urgent items, and the response carries the
  * true total independent of limit/offset.
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../src/shared/db.js";
@@ -34,6 +35,17 @@ beforeAll(async () => {
       await tx.insert(items).values({ id, tenantId: TENANT, name, reorderLevel: level, reorderQty: level * 2, createdBy: ACTOR, updatedBy: ACTOR });
       await tx.insert(stockBalances).values({ tenantId: TENANT, itemId: id, storeId: STORE, onHandQty: onHand });
     }
+  }));
+});
+
+// Remove everything this suite seeded. The stock_balances rows deliberately have no
+// matching stock_ledger entries, so leaving them behind makes the cross-tenant
+// DQ-INV-01 balance/ledger reconciliation (data-quality.test.ts) report them.
+afterAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(stockBalances).where(eq(stockBalances.tenantId, TENANT));
+    await tx.delete(items).where(eq(items.tenantId, TENANT));
+    await tx.delete(stores).where(eq(stores.tenantId, TENANT));
   }));
 });
 
