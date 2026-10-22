@@ -190,7 +190,17 @@ export function registerCollectionConsumers(queue: Queue): void {
       // a reject followed by an approve, re-applied the DCB entry (double
       // refund). A decided refund is a no-op here (defence in depth; the route
       // also answers 409 synchronously).
-      if (refund.status !== "pending") return;
+      if (refund.status !== "pending") {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "refund", outcome: "already_decided", refundId },
+        });
+        return;
+      }
 
       // Maker-checker enforcement
       assertMakerChecker(refund.makerUserId, msg.actorId);
@@ -203,7 +213,17 @@ export function registerCollectionConsumers(queue: Queue): void {
         .set({ status: newStatus, checkerUserId: msg.actorId, decidedAt: new Date() })
         .where(and(eq(refunds.id, refundId), eq(refunds.tenantId, msg.tenantId), eq(refunds.status, "pending")))
         .returning({ id: refunds.id });
-      if (claimed.length === 0) return;
+      if (claimed.length === 0) {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "refund", outcome: "already_decided", refundId },
+        });
+        return;
+      }
 
       if (approve) {
         // Insert DCB entry (type: refund) — balance increases by refund amount.

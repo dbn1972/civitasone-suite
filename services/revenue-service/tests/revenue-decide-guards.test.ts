@@ -113,6 +113,15 @@ const refundRow = (id: string) =>
 const writeOffRow = (id: string) =>
   inTenant((tx) => tx.select().from(writeOffs).where(eq(writeOffs.id, id))).then((r) => r[0]!);
 
+/** Audited decide refusals recorded in the outbox for a resource type. */
+const refusals = (resourceType: string, outcome: string) =>
+  inTenant((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))
+    .then((rows) => rows.filter((r) => {
+      const p = r.payload as Record<string, unknown>;
+      return r.topic === "audit.event.record" && p.action === "decide" &&
+        p.resourceType === resourceType && p.outcome === outcome;
+    }));
+
 async function startConsumers(): Promise<MemoryQueue> {
   const q = wireTenantAwareQueue(new MemoryQueue()) as MemoryQueue;
   registerCollectionConsumers(q);
@@ -242,8 +251,9 @@ describe("write-off decide consumer — no re-apply, outstanding re-checked (rea
     expect(rows).toHaveLength(1); // only the first applied
     expect(rows[0]!.balanceMinor).toBe(30_000n); // never negative
     expect((await writeOffRow(first)).status).toBe("approved");
-    expect((await writeOffRow(second)).status).toBe("pending"); // rolled back, not applied
-    expect(q.dlq.length).toBeGreaterThan(0); // the over-outstanding approve surfaced as a failure
+    expect((await writeOffRow(second)).status).toBe("pending"); // refused, not applied
+    expect(q.dlq.length).toBe(0); // consumed (markProcessed kept), not redelivered forever
+    expect(await refusals("write_off", "exceeds_outstanding")).toHaveLength(1); // audited
     await q.stop();
   });
 
@@ -255,7 +265,48 @@ describe("write-off decide consumer — no re-apply, outstanding re-checked (rea
 
     expect(await entries("write_off")).toHaveLength(0);
     expect((await writeOffRow(id)).status).toBe("pending");
-    expect(q.dlq.length).toBeGreaterThan(0);
+    expect(q.dlq.length).toBe(0);
+    expect(await refusals("write_off", "exceeds_outstanding")).toHaveLength(1);
+    await q.stop();
+  });
+
+  it("an over-outstanding approve is consumed once: redelivery of the same message does nothing", async () => {
+    const id = await seedWriteOff(OUTSTANDING + 1n);
+    const q = await startConsumers();
+    const msg = makeMsg(COMMANDS.writeOffDecide, CHECKER, { writeOffId: id, approve: true });
+    await q.publish(COMMANDS.writeOffDecide, msg);
+    await q.drain();
+    await q.publish(COMMANDS.writeOffDecide, msg);
+    await q.drain();
+    expect(await refusals("write_off", "exceeds_outstanding")).toHaveLength(1);
+    await q.stop();
+  });
+});
+
+describe("decide consumers audit refusals instead of silently no-oping (real DB)", () => {
+  it("refund: deciding an already-decided refund records an already_decided audit event", async () => {
+    const id = await seedRefund();
+    const q = await startConsumers();
+    await q.publish(COMMANDS.refundDecide, makeMsg(COMMANDS.refundDecide, CHECKER, { refundId: id, approve: false }));
+    await q.drain();
+    expect(await refusals("refund", "already_decided")).toHaveLength(0);
+    await q.publish(COMMANDS.refundDecide, makeMsg(COMMANDS.refundDecide, CHECKER, { refundId: id, approve: true }));
+    await q.drain();
+    expect(await refusals("refund", "already_decided")).toHaveLength(1);
+    expect(await entries("refund")).toHaveLength(0);
+    await q.stop();
+  });
+
+  it("write-off: deciding an already-decided write-off records an already_decided audit event", async () => {
+    const id = await seedWriteOff(10_000n);
+    const q = await startConsumers();
+    await q.publish(COMMANDS.writeOffDecide, makeMsg(COMMANDS.writeOffDecide, CHECKER, { writeOffId: id, approve: false }));
+    await q.drain();
+    expect(await refusals("write_off", "already_decided")).toHaveLength(0);
+    await q.publish(COMMANDS.writeOffDecide, makeMsg(COMMANDS.writeOffDecide, CHECKER, { writeOffId: id, approve: true }));
+    await q.drain();
+    expect(await refusals("write_off", "already_decided")).toHaveLength(1);
+    expect(await entries("write_off")).toHaveLength(0);
     await q.stop();
   });
 });

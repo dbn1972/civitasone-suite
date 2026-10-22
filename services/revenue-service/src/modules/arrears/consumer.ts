@@ -149,7 +149,17 @@ export function registerArrearsConsumers(queue: Queue): void {
 
       // Only a PENDING write-off can be decided: a second decide, or a reject
       // followed by an approve, used to re-apply the DCB reduction.
-      if (writeOff.status !== "pending") return;
+      if (writeOff.status !== "pending") {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "already_decided", writeOffId },
+        });
+        return;
+      }
 
       // Maker-checker enforcement
       assertMakerChecker(writeOff.makerUserId, msg.actorId);
@@ -158,10 +168,26 @@ export function registerArrearsConsumers(queue: Queue): void {
         // Serialise approvals per assessee and RE-CHECK the outstanding balance
         // inside this transaction: several pending write-offs were each valid
         // against the balance at request time, but together they may exceed it.
-        // A throw rolls the whole transaction back, leaving the write-off pending.
+        // An over-outstanding approval is refused (audited), leaving the write-off pending.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`writeoff:${msg.tenantId}:${writeOff.assesseeId}`}, 0))`);
         const outstandingNow = await getAssesseeOutstanding(tx, msg.tenantId, writeOff.assesseeId);
-        validateWriteOff(writeOff.amountMinor, outstandingNow);
+        try {
+          validateWriteOff(writeOff.amountMinor, outstandingNow);
+        } catch (err) {
+          if (!(err instanceof DomainError)) throw err;
+          // Do not throw: that would roll back markProcessed too, so the command
+          // would be redelivered and fail again with nothing recorded. Leave the
+          // write-off pending and record the refusal in the audit trail.
+          await enqueue(tx, {
+            topic: "audit.event.record",
+            eventType: "audit.event.record",
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "exceeds_outstanding", writeOffId },
+          });
+          return;
+        }
       }
 
       const newStatus = approve ? "approved" : "rejected";
@@ -175,7 +201,17 @@ export function registerArrearsConsumers(queue: Queue): void {
         })
         .where(and(eq(writeOffs.id, writeOffId), eq(writeOffs.tenantId, msg.tenantId), eq(writeOffs.status, "pending")))
         .returning({ id: writeOffs.id });
-      if (claimed.length === 0) return;
+      if (claimed.length === 0) {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "write_off", outcome: "already_decided", writeOffId },
+        });
+        return;
+      }
 
       if (approve) {
         // Insert DCB entry (type: write_off) — reduces balance. dcb balances are
