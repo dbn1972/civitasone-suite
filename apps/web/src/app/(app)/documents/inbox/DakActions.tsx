@@ -1,7 +1,8 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ActionButton } from "../../../_components/ds";
+import { useTranslations } from "next-intl";
+import { ActionButton, Field, Input } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 /**
@@ -10,15 +11,21 @@ import { useFormError } from "@/lib/useFormError";
  * refreshes the server component so the new status is read back from the DB;
  * the audit trail is written server-side in the workflow consumer.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function DakActions({ dakId, status }: { dakId: string; status: string }) {
+  const t = useTranslations("documentsDak");
   const router = useRouter();
   const formError = useFormError("dak");
   const [error, setError] = useState<string | null>(null);
+  const [assignee, setAssignee] = useState("");
   const alreadyAcknowledged = status === "acknowledged";
+  const assigneeId = assignee.trim();
+  const assigneeInvalid = assigneeId !== "" && !UUID_RE.test(assigneeId);
 
   async function post(path: string, body?: unknown): Promise<void> {
     setError(null);
-    const res = await fetch(`/api/v1/documents/daks/${encodeURIComponent(dakId)}/${path}`, {
+    const res = await fetch(`/api/proxy/v1/documents/daks/${encodeURIComponent(dakId)}/${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -32,24 +39,33 @@ export function DakActions({ dakId, status }: { dakId: string; status: string })
   }
 
   return (
-    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
       <ActionButton
-        label={alreadyAcknowledged ? "Acknowledged" : "Acknowledge"}
+        label={alreadyAcknowledged ? t("acknowledged") : t("acknowledge")}
         disabled={alreadyAcknowledged}
-        confirmTitle="Acknowledge this dak?"
-        confirmDescription="This records that you have received and seen this dak. It cannot be undone."
-        confirmLabel="Acknowledge"
+        confirmTitle={t("ackTitle")}
+        confirmDescription={t("ackDescription")}
+        confirmLabel={t("acknowledge")}
         onConfirm={() => post("acknowledge")}
       />
+      <Field label={t("assigneeLabel")} error={assigneeInvalid ? t("assigneeInvalid") : undefined}>
+        <Input
+          value={assignee}
+          onChange={(e) => setAssignee(e.target.value)}
+          placeholder={t("assigneeHint")}
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={36}
+        />
+      </Field>
       <ActionButton
-        label="Forward"
+        label={t("forward")}
         className="btn"
-        confirmTitle="Forward this dak"
-        confirmDescription="Enter the user ID of the person to assign this dak to."
-        confirmLabel="Forward"
-        requireReason
-        reasonLabel="Assign to (user ID)"
-        onConfirm={(reason?: string) => post("forward", { assignedTo: (reason ?? "").trim() })}
+        disabled={assigneeId === "" || assigneeInvalid}
+        confirmTitle={t("forwardTitle")}
+        confirmDescription={t("forwardDescription")}
+        confirmLabel={t("forward")}
+        onConfirm={() => post("forward", { assignedTo: assigneeId })}
       />
       {error && (
         <span role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</span>

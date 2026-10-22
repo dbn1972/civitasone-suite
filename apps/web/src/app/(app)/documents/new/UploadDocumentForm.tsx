@@ -43,14 +43,16 @@ export function UploadDocumentForm({
   const [tags, setTags] = useState("");
   const [folderId, setFolderId] = useState(defaultFolderId ?? "");
   const [uploaded, setUploaded] = useState<UploadedFileMeta | null>(null);
+  const [storageKey, setStorageKey] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const formError = useFormError("document");
 
-  function handleUploaded(_key: string, meta: UploadedFileMeta) {
+  function handleUploaded(key: string, meta: UploadedFileMeta) {
     setUploaded(meta);
+    setStorageKey(key);
     setFileError(null);
     if (!name.trim()) setName(meta.fileName);
   }
@@ -67,13 +69,14 @@ export function UploadDocumentForm({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/v1/documents/files", {
+      const res = await fetch("/api/proxy/v1/documents/files", {
         method: "POST",
         headers: { "content-type": "application/json" },
         // uploadFileBody declares these optional (not nullable): omit empties.
         body: JSON.stringify({
           name: name.trim(),
           ...(folderId ? { folderId } : {}),
+          ...(storageKey ? { storageKey } : {}),
           ...(uploaded?.mimeType ? { mimeType: uploaded.mimeType } : {}),
           ...(typeof uploaded?.size === "number" ? { sizeBytes: uploaded.size } : {}),
           tags: tags.split(",").map((t) => t.trim()).filter(Boolean),

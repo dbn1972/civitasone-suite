@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { HttpError } from "../../shared/context.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { UploadFileBody } from "./validators.js";
@@ -8,6 +9,13 @@ import type { FileView } from "./schema.js";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function uploadFile(ctx: RequestContext, body: UploadFileBody): Promise<Accepted> {
+  // A client-supplied key may only reference an object this caller uploaded themselves via the presign flow.
+  if (body.storageKey !== undefined) {
+    const own = `uploads/${ctx.tenantId}/document/${ctx.actorId}/`;
+    if (!body.storageKey.startsWith(own) || body.storageKey.includes("..")) {
+      throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey does not reference an upload made by this user");
+    }
+  }
   const id = randomUUID();
   const projected: FileView = {
     id,
@@ -16,7 +24,7 @@ export async function uploadFile(ctx: RequestContext, body: UploadFileBody): Pro
     name:       body.name,
     mimeType:   body.mimeType ?? null,
     sizeBytes:  body.sizeBytes ?? null,
-    storageKey: null,
+    storageKey: body.storageKey ?? null,
     tags:       body.tags,
     status:     "active",
     version:    1,

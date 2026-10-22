@@ -6,7 +6,7 @@ import type { Db } from "../../shared/db.js";
 export function toView(r: DakRow): DakView {
   return {
     id: r.id, tenantId: r.tenantId, fileId: r.fileId, subject: r.subject, body: r.body,
-    priority: r.priority, status: r.status, assignedTo: r.assignedTo, dueDate: r.dueDate,
+    priority: r.priority, status: r.status, assignedTo: r.assignedTo, createdBy: r.createdBy, dueDate: r.dueDate,
     createdAt: r.createdAt, updatedAt: r.updatedAt,
   };
 }
@@ -21,9 +21,13 @@ export async function listInbox(tenantId: string, userId: string, limit: number,
   return rows.map(toView);
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DakView[]> {
+/** `actorId` set => only daks the actor created or is assigned (non-admin callers); omitted => tenant-wide (admin roles). */
+export async function listByTenant(tenantId: string, limit: number, offset: number, actorId?: string): Promise<DakView[]> {
+  const where = actorId
+    ? and(eq(daks.tenantId, tenantId), or(eq(daks.createdBy, actorId), eq(daks.assignedTo, actorId)))
+    : eq(daks.tenantId, tenantId);
   const rows = await scopedRead((tx) =>
-    tx.select().from(daks).where(eq(daks.tenantId, tenantId)).orderBy(desc(daks.updatedAt)).limit(limit).offset(offset)
+    tx.select().from(daks).where(where).orderBy(desc(daks.updatedAt)).limit(limit).offset(offset)
   );
   return rows.map(toView);
 }
