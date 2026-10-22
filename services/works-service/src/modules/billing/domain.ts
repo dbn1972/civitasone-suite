@@ -85,6 +85,23 @@ export function canCreateBill(mbStatus: string): boolean {
 }
 
 /**
+ * Advisory-lock key that serialises bill creation per (tenant, work): the bill number is unique within a work, and the
+ * duplicate check in the billCreate consumer is only race-free if concurrent creates for the same work queue up.
+ */
+export function billNumberLockKey(tenantId: string, workId: string): string {
+  return `works:bill-number:${tenantId}:${workId}`;
+}
+
+/**
+ * A measurement may only be recorded while the MB is still a draft. Once the finalization chain starts (SO, SDO,
+ * estimator, DO) the MB content is what those officers are approving, and once it is do_finalized it is the measured
+ * value a bill is checked against; recording into it afterwards would silently change the billing ceiling.
+ */
+export function canRecordMeasurement(mbStatus: string): boolean {
+  return mbStatus === "draft";
+}
+
+/**
  * FR-BIL-011: Check if billed quantity exceeds BoQ approved quantity.
  */
 export function billedQuantityExceedsBoq(billed: number, boqApproved: number): boolean {

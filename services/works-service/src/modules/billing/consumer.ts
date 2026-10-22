@@ -6,14 +6,14 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
 import { measurementBooks, measurements, bills, billItems, accountCompilations } from "./schema.js";
 import {
-  calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward,
+  calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, canRecordMeasurement, billAmountExceedsAward, billNumberLockKey,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
   computeMeasuredValueMinor, boqItemBelongsToMbWork, isSelfFinalization,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
 import { awards } from "../tender/schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -117,6 +117,18 @@ export function registerBillingConsumers(q: Queue): void {
       const awardId = p.awardId as string;
       const mbId = p.mbId as string | undefined;
 
+      // The route validates the amounts (shared/validators.ts); re-checked here so a directly published command cannot
+      // book a zero or negative gross, or a negative deduction, as a bill.
+      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
+      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
+      if (gross <= 0n) throw new NonRetryableError("INVALID_AMOUNT: bill gross amount must be greater than zero");
+      if (deductions < 0n) throw new NonRetryableError("INVALID_AMOUNT: bill deductions cannot be negative");
+
+      // A bill number is unique within a work. Serialise bill creation per (tenant, work) for the rest of this
+      // transaction (released at commit/rollback) so two concurrent creates cannot both pass the duplicate check below,
+      // including when they cite different MBs (the MB row lock further down only serialises bills on the SAME MB).
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${billNumberLockKey(msg.tenantId, workId)}, 0))`);
+
       // FR-BIL-012 + bug #2 (defense-in-depth — also enforced pre-enqueue in
       // billing/routes.ts): the cited award must exist AND actually belong
       // to the work being billed.
@@ -169,8 +181,6 @@ export function registerBillingConsumers(q: Queue): void {
       const rateByBoqItem = new Map(boqRows.map((b) => [b.id, b.rate]));
       const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
 
-      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
-      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);
 
       // Code-review fix (double-billing gap): cumulative gross ALREADY
@@ -192,6 +202,10 @@ export function registerBillingConsumers(q: Queue): void {
       // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.
       const priorBillRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.workId, workId)));
+      const wantedNumber = String(p.billNumber ?? "").trim().toLowerCase();
+      if (priorBillRows.some((row) => String(row.billNumber ?? "").trim().toLowerCase() === wantedNumber)) {
+        throw new NonRetryableError("DUPLICATE_BILL_NUMBER: bill number already used for this work");
+      }
       const priorBilledGross = priorBillRows.reduce(
         (sum, row) => sum + (row.grossAmountMinor ?? 0n),
         0n,
@@ -331,12 +345,17 @@ export function registerBillingConsumers(q: Queue): void {
       const boqItemId = p.boqItemId as string;
       const quantity = Number(p.quantity as number);
 
+      // Lock the MB row so a concurrent finalize cannot move it past draft between this check and the insert below.
       const mbRows = await tx.select().from(measurementBooks)
         .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+        .for("update")
         .limit(1);
       const mb = mbRows[0];
       if (!mb) {
         throw new NonRetryableError("MB_NOT_FOUND: measurement references non-existent measurement book");
+      }
+      if (!canRecordMeasurement(mb.status)) {
+        throw new NonRetryableError(`MB_NOT_OPEN: measurement book status is '${mb.status}'; measurements can only be recorded while it is 'draft'`);
       }
 
       const boqRows = await tx.select().from(boqItems)
