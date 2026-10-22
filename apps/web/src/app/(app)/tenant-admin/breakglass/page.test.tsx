@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen } from "@/test-utils/intl-render";
 
 const getBreakglassLogMock = vi.fn();
@@ -43,5 +43,22 @@ describe("BreakglassPage — FABRICATED (01) + FAILMASK (02)", () => {
     getBreakglassLogMock.mockResolvedValue({ data: [activeEvent], source: "api" });
     render(await BreakglassPage());
     expect(screen.getByText("Active Now").closest(".stat")).toHaveTextContent("1");
+  });
+});
+
+describe("BreakglassPage — This Month uses the IST calendar month (CLOS-S3-02)", () => {
+  beforeEach(() => getBreakglassLogMock.mockReset());
+  afterEach(() => vi.useRealTimers());
+
+  it("counts a session started 01:00 IST on the 1st (still the previous UTC month) in the current month", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-01T10:00:00Z"));
+    getBreakglassLogMock.mockResolvedValue({
+      data: [{ ...activeEvent, status: "ended" as const, startedAt: "2026-11-01T01:00:00+05:30", endedAt: "2026-11-01T02:00:00+05:30" }],
+      source: "api",
+    });
+    render(await BreakglassPage());
+    const label = screen.getByText("This Month");
+    expect(label.nextElementSibling?.textContent).toBe("1");
   });
 });

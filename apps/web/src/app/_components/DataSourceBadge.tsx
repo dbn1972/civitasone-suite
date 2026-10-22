@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { DataProvenance } from "@/lib/sync/resource";
+import { formatDateTimeIST } from "@/lib/formatters";
 
 export type DataSource = "api" | "error";
 export type { DataProvenance };
@@ -63,7 +64,7 @@ export function DataSourceBadge(props: DataSourceBadgeProps) {
     const { provenance, cachedAt, offline, message } = props;
     if (provenance === "live") return null;
     if (provenance === "cached") {
-      const when = cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : "";
+      const when = cachedAt ? ` from ${formatDateTimeIST(cachedAt)}` : "";
       const offlineNote = offline ? " — you're offline" : "";
       return <Badge>{message ?? `Showing saved data${when} — could not refresh${offlineNote}.`}</Badge>;
     }
