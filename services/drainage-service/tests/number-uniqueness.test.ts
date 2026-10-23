@@ -167,10 +167,28 @@ describe("migration 0003 seeding survives FORCE RLS (runs as the owner with no t
     "utf8",
   );
   const hotspotId = randomUUID();
+  const consumerHotspotIds: string[] = [];
+
+  // The migration file carries its own BEGIN/COMMIT. postgres.js refuses a
+  // transaction-control statement on its POOLED client (UNSAFE_TRANSACTION),
+  // because the pool could split BEGIN and COMMIT across connections. Run it
+  // on ONE reserved connection -- the same single-session shape as the
+  // migration runner -- and release it afterwards.
+  async function runMigrationFile() {
+    const conn = await sqlClient.reserve();
+    try {
+      await conn.unsafe(migrationSql);
+    } finally {
+      conn.release();
+    }
+  }
 
   afterAll(async () => {
+    const ids = [hotspotId, ...consumerHotspotIds];
     await runWithTenant(TENANT_A, () =>
-      db.transaction((tx) => tx.execute(sql`DELETE FROM civitas_drainage.drainage_hotspots WHERE id = ${hotspotId}`)),
+      db.transaction(async (tx) => {
+        for (const id of ids) await tx.execute(sql`DELETE FROM civitas_drainage.drainage_hotspots WHERE id = ${id}`);
+      }),
     );
   });
 
@@ -187,10 +205,24 @@ describe("migration 0003 seeding survives FORCE RLS (runs as the owner with no t
     // Rewind the sequence to 1 (as a fresh/unseeded one would be), then re-run the migration
     // through the raw client: owner role, NO tenant GUC -- exactly how the migration runner connects.
     await sqlClient.unsafe(`SELECT setval('civitas_drainage.hotspot_code_seq', 1, false)`);
-    await sqlClient.unsafe(migrationSql);
+    await runMigrationFile();
 
     const next = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.hotspot_code_seq')::bigint AS n`);
     expect(Number((next[0] as { n: string }).n)).toBeGreaterThan(900);
+
+    // End to end: the next hotspot code the REAL consumer allocates must land
+    // above the seeded DRNH-2026-000900, i.e. it can never re-issue it.
+    const res = await app.inject({
+      method: "POST", url: "/v1/drainage/hotspots", headers: hdr(randomUUID(), TENANT_A, ADMIN_ROLES), payload: hotspotBody,
+    });
+    expect(res.statusCode).toBe(202);
+    const newId = (res.json() as { id: string }).id;
+    consumerHotspotIds.push(newId);
+    await waitFor(async () => (await findHotspotAsTenantA(newId)) != null, 15000);
+    const code = (await findHotspotAsTenantA(newId))?.hotspotCode;
+    expect(code).toMatch(/^DRNH-\d{4}-\d{6}$/);
+    expect(code).not.toBe(SEEDED);
+    expect(Number(/(\d+)$/.exec(code as string)![1])).toBeGreaterThan(900);
 
     const force = await sqlClient.unsafe(
       `SELECT relname, relforcerowsecurity FROM pg_class WHERE oid IN ('civitas_drainage.drainage_complaints'::regclass, 'civitas_drainage.drainage_hotspots'::regclass)`,
@@ -201,7 +233,7 @@ describe("migration 0003 seeding survives FORCE RLS (runs as the owner with no t
 
   it("a second run never rewinds the sequence", async () => {
     const before = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.complaint_number_seq')::bigint AS n`);
-    await sqlClient.unsafe(migrationSql);
+    await runMigrationFile();
     const after = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.complaint_number_seq')::bigint AS n`);
     expect(Number((after[0] as { n: string }).n)).toBeGreaterThan(Number((before[0] as { n: string }).n));
   });
