@@ -11,7 +11,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
-vi.mock("pino", () => ({ default: () => ({ warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() }) }));
+vi.mock("pino", () => {
+  const pino = () => ({ warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() });
+  return { default: pino, pino };
+});
 import {
   addToRoster,
   getFullRoster,
