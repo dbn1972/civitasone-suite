@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { createShareBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -20,7 +21,7 @@ export async function sharingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/shares/document/:documentId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { documentId } = req.params as { documentId: string };
+    const documentId = pathUuid(req.params, "documentId");
     const data = await repo.listByDocument(ctx.tenantId, documentId);
     return reply.send(data);
   });
@@ -28,7 +29,7 @@ export async function sharingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/shares/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const share = await repo.getById(ctx.tenantId, id);
     if (!share) throw new HttpError(404, "NOT_FOUND", "share not found");
     return reply.send(share);
@@ -44,7 +45,7 @@ export async function sharingRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/knowledge/shares/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.shareRevoke(ctx, id));
   });
 }

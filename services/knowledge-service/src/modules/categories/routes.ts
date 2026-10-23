@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { createCategoryBody, updateCategoryBody, reorderCategoryBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -20,7 +21,7 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/categories/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const category = await repo.getById(ctx.tenantId, id);
     if (!category) throw new HttpError(404, "NOT_FOUND", "category not found");
     return reply.send(category);
@@ -29,7 +30,7 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/categories/:id/children", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const children = await repo.getChildren(ctx.tenantId, id);
     return reply.send(children);
   });
@@ -37,7 +38,7 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/categories/:id/ancestors", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const ancestors = await repo.getAncestors(ctx.tenantId, id);
     return reply.send(ancestors);
   });
@@ -52,7 +53,7 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
   app.put("/v1/knowledge/categories/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = updateCategoryBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateCategory(ctx, id, body));
   });
@@ -60,7 +61,7 @@ export async function categoryRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/knowledge/categories/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteCategory(ctx, id));
   });
 
