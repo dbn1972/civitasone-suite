@@ -75,6 +75,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "shift", // GAP-HR-SHIFTS-01
   "manpower_requisition",
   "medical_claim",
+  "medical_employee_record", // #2150 hrms medical audit
   "nomination",
   "onboarding",
   "orgchart",
