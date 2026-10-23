@@ -10,7 +10,7 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { maskPhone } from "../../shared/pii-crypto.js";
 import type { CallView, CallSummary } from "./schema.js";
-import type { ListFilters, CallMetrics } from "./repo.js";
+import type { ListFilters, CallMetrics, MetricsWindow } from "./repo.js";
 
 export type CallDetail = CallView;
 
@@ -43,24 +43,29 @@ export async function listCalls(
   limit: number,
   offset: number,
   filters: ListFilters = {},
-): Promise<{ data: CallSummary[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+): Promise<{ data: CallSummary[]; pagination: { hasMore: boolean; pageSize: number; total: number; cursor?: string } }> {
   return cache.listOrLoad(tenantId, RESOURCE, filterKey(limit, offset, filters), async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset, filters);
+    const [rows, total] = await Promise.all([
+      repo.listByTenant(tenantId, limit, offset, filters),
+      repo.countByTenant(tenantId, filters),
+    ]);
     return {
       data: rows,
       pagination: {
-        hasMore: rows.length === limit,
+        // total is the TRUE filtered count; hasMore no longer guesses from a full page.
+        hasMore: offset + rows.length < total,
         pageSize: limit,
+        total,
         ...(rows.length ? { cursor: String(offset + rows.length) } : {}),
       },
     };
   });
 }
 
-export async function callMetrics(tenantId: string, queueId?: string): Promise<CallMetrics> {
+export async function callMetrics(tenantId: string, win: MetricsWindow = {}): Promise<CallMetrics> {
   const cached = await cache.getOrLoad<CallMetrics>(
-    cache.makeKey(tenantId, RESOURCE, `metrics:${queueId ?? "all"}`),
-    () => repo.metricsByTenant(tenantId, queueId),
+    cache.makeKey(tenantId, RESOURCE, `metrics:${win.queueId ?? "all"}:${win.from ?? "-"}:${win.to ?? "-"}`),
+    () => repo.metricsByTenant(tenantId, win),
   );
-  return cached ?? repo.metricsByTenant(tenantId, queueId);
+  return cached ?? repo.metricsByTenant(tenantId, win);
 }

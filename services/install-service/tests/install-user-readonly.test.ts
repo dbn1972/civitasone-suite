@@ -35,9 +35,13 @@ describe("install_user is read-only on install mutations", () => {
     });
   }
 
-  it("install_admin is allowed to PATCH a step", async () => {
+  it("install_admin is allowed to PATCH a step (passes the role gate)", async () => {
+    // #2161 step transition contract: an unknown step id is 404 NOT_FOUND from the
+    // command (previously a blind 202). The intent here is the role gate: an
+    // admin must get past 403, so assert the request reaches the command layer.
     const res = await app.inject({ method: "PATCH", url: `/v1/install/steps/${ID}/run`, headers: auth(["install_admin"]) });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).not.toBe(403);
+    expect(res.statusCode).toBe(404);
   });
 
   it("install_user can still read stages", async () => {

@@ -85,8 +85,20 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const contracts = await queries.listContracts(ctx.tenantId, q.limit);
-    return reply.send({ data: contracts, pagination: { hasMore: contracts.length === q.limit, pageSize: q.limit } });
+    const [contracts, summary] = await Promise.all([
+      queries.listContracts(ctx.tenantId, q.limit),
+      queries.getExpirySummary(ctx.tenantId),
+    ]);
+    return reply.send({
+      data: contracts,
+      // total / expiry are whole-tenant server aggregates, so a hub or KPI never
+      // has to count the (capped) page it was handed.
+      pagination: { hasMore: contracts.length < summary.total, pageSize: q.limit, total: summary.total },
+      meta: {
+        total: summary.total,
+        expiry: { in30: summary.in30, in60: summary.in60, in90: summary.in90, expiredOpen: summary.expiredOpen },
+      },
+    });
   });
 
   app.get("/v1/contract/contracts/active", async (req, reply) => {

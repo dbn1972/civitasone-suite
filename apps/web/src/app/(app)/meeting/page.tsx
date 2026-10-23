@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatCard, StatGrid, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getSessionRoles, hasAnyRole, MEETING_CONFIG_ADMIN_ROLES, MEETING_CREATE_ROLES } from "@/lib/auth/roleGuard";
-import { getMeetings, getMeetingsPage } from "./_data/loaders";
+import { getMeetingsPage } from "./_data/loaders";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +31,19 @@ export default async function MeetingHomePage() {
   // GAP-MEETING-HOME-02: use getMeetingsPage so meta.total reflects the true
   // server-side count rather than the default page size (50). pageSize:1 means
   // only one row is fetched; total comes from the COUNT query the repo always runs.
-  const [allPage, inProgressPage, allData] = await Promise.all([
-    getMeetingsPage({ page: 1, pageSize: 1 }),
-    getMeetingsPage({ status: "in_progress", page: 1, pageSize: 1 }),
-    getMeetings(), // used for status-filter breakdown counts (all << 500)
-  ]);
+  // The per-status breakdown (scheduled / adjourned / minutes pending) used to be
+  // counted from getMeetings() — ONE default page of 50 — so any tenant with more
+  // meetings saw silently capped figures. Every number now comes from the server
+  // total of a status-filtered one-row page.
+  const [allPage, inProgressPage, scheduledPage, agendaLockedPage, adjournedPage, minutesPendingPage] =
+    await Promise.all([
+      getMeetingsPage({ page: 1, pageSize: 1 }),
+      getMeetingsPage({ status: "in_progress", page: 1, pageSize: 1 }),
+      getMeetingsPage({ status: "scheduled", page: 1, pageSize: 1 }),
+      getMeetingsPage({ status: "agenda_locked", page: 1, pageSize: 1 }),
+      getMeetingsPage({ status: "adjourned", page: 1, pageSize: 1 }),
+      getMeetingsPage({ status: "minutes_pending", page: 1, pageSize: 1 }),
+    ]);
 
   // GAP-MEETING-HOME-04: hide the Admin Configuration tile for non-admins (the
   // /meeting/admin page itself also enforces the role — hiding alone is not the
@@ -48,15 +56,17 @@ export default async function MeetingHomePage() {
 
   // GAP-MEETING-HOME-03: adjourned (minutes not started) and minutes_pending
   // are distinct chase-states — keep them apart so the number is actionable.
-  const scheduled = allData.data.filter(
-    (m) => m.status === "scheduled" || m.status === "agenda_locked",
-  ).length;
-  const adjourned = allData.data.filter((m) => m.status === "adjourned").length;
-  const minutesPending = allData.data.filter((m) => m.status === "minutes_pending").length;
+  const scheduled = scheduledPage.data.total + agendaLockedPage.data.total;
+  const adjourned = adjournedPage.data.total;
+  const minutesPending = minutesPendingPage.data.total;
 
-  // Both queries must succeed for the stats to be trustworthy — if either
-  // fails we must not render a fabricated "0" (GAP-MEETING-HOME-01).
-  const source = allPage.source === "error" || inProgressPage.source === "error" || allData.source === "error" ? "error" : "api";
+  // Every query must succeed for the stats to be trustworthy — if any fails
+  // we must not render a fabricated "0" (GAP-MEETING-HOME-01).
+  const source = [allPage, inProgressPage, scheduledPage, agendaLockedPage, adjournedPage, minutesPendingPage].some(
+    (p) => p.source === "error",
+  )
+    ? "error"
+    : "api";
   const errored = source === "error";
   // When errored, show "—" (unknown via StatCard's null handling), never a fabricated zero.
   const stat = (n: number): string | null => (errored ? null : n.toLocaleString("en-IN"));

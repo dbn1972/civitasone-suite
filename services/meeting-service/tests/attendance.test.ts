@@ -15,7 +15,8 @@
  * _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7_
  */
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { clearIdentityNameCache } from "../src/shared/identity-client.js";
 import { and, eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -334,6 +335,51 @@ describe("GET /v1/meetings/:id/attendance/live", () => {
     expect(d.counts.present).toBe(1); // P1 present
     expect(d.counts.absent).toBe(1); // P2 no record
     expect(d.participants).toHaveLength(2);
+  });
+
+  it("returns participant display names resolved from identity-service (null when unresolved)", async () => {
+    clearIdentityNameCache();
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify([{ id: P1, name: "Asha Verma" }]), { status: 200, headers: { "content-type": "application/json" } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const app = await buildApp();
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/meetings/${MEETING}/attendance/live`,
+        headers: auth(["committee_chairperson"]),
+      });
+      expect(res.statusCode).toBe(200);
+      const byEmployee = new Map<string, { displayName: string | null }>(
+        res.json().data.participants.map((p: { employeeId: string; displayName: string | null }) => [p.employeeId, p]),
+      );
+      expect(byEmployee.get(P1)?.displayName).toBe("Asha Verma");
+      expect(byEmployee.get(P2)?.displayName).toBeNull(); // unresolved -> UI falls back to the id
+    } finally {
+      vi.unstubAllGlobals();
+      clearIdentityNameCache();
+      await app.close();
+    }
+  });
+
+  it("still returns the dashboard (names null) when identity-service is unreachable", async () => {
+    clearIdentityNameCache();
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("connect ECONNREFUSED"); }));
+    const app = await buildApp();
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/meetings/${MEETING}/attendance/live`,
+        headers: auth(["committee_chairperson"]),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.participants.every((p: { displayName: unknown }) => p.displayName === null)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      clearIdentityNameCache();
+      await app.close();
+    }
   });
 
   it("returns 404 for an unknown meeting", async () => {

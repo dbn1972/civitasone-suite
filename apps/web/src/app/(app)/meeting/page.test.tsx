@@ -5,10 +5,8 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-const getMeetingsMock = vi.fn();
 const getMeetingsPageMock = vi.fn();
 vi.mock("./_data/loaders", () => ({
-  getMeetings: (...args: unknown[]) => getMeetingsMock(...args),
   getMeetingsPage: (...args: unknown[]) => getMeetingsPageMock(...args),
 }));
 
@@ -32,23 +30,27 @@ const meeting = (id: string, status: string): Row => ({ id, status });
 const ok = (rows: Row[]): Result => ({ data: rows, source: "api" });
 const err = (): Result => ({ data: [], source: "error" });
 
-// The page reads the true totals from getMeetingsPage (GAP-MEETING-HOME-02) and
-// the status breakdown from getMeetings. Both mocks are driven from the same
-// fixtures; the page mock reports total = fixture length (or an explicit total).
-function mockLists(all: Result, inProgress: Result = ok([]), totals?: { all: number; inProgress: number }) {
-  getMeetingsMock.mockImplementation((status?: string) =>
-    Promise.resolve(status === "in_progress" ? inProgress : all),
-  );
+// The page reads EVERY figure — the grand total and each status bucket — from the
+// server total (meta.total) of getMeetingsPage, never from the length of a fetched
+// page (GAP-MEETING-HOME-02). The mock reports total = number of fixture rows with
+// that status, unless an explicit total is given (to prove the page length is not used).
+function mockLists(
+  all: Result,
+  inProgress: Result = ok([]),
+  totals?: { all?: number; inProgress?: number; byStatus?: Record<string, number> },
+) {
   getMeetingsPageMock.mockImplementation((q?: { status?: string }) => {
     const src = q?.status === "in_progress" ? inProgress : all;
-    const total = totals ? (q?.status === "in_progress" ? totals.inProgress : totals.all) : src.data.length;
+    let total: number;
+    if (!q?.status) total = totals?.all ?? all.data.length;
+    else if (q.status === "in_progress") total = totals?.inProgress ?? inProgress.data.length;
+    else total = totals?.byStatus?.[q.status] ?? all.data.filter((m) => m.status === q.status).length;
     return Promise.resolve({ data: { rows: [], page: 1, pageSize: 1, total }, source: src.source });
   });
 }
 
 describe("MeetingHomePage", () => {
   beforeEach(() => {
-    getMeetingsMock.mockReset();
     getMeetingsPageMock.mockReset();
     getSessionRolesMock.mockReset();
     getSessionRolesMock.mockReturnValue(MEETING_CONFIG_ADMIN_ROLES);
@@ -91,6 +93,19 @@ describe("MeetingHomePage", () => {
     render(await MeetingHomePage());
     expect(screen.getByText("1,234")).toBeInTheDocument();
     expect(screen.getByText("56")).toBeInTheDocument();
+  });
+
+  it("status buckets are server totals: a tenant with far more than one page shows the true counts", async () => {
+    // Only a handful of rows are "fetched"; the server says there are hundreds.
+    mockLists(ok([meeting("m1", "scheduled")]), ok([]), {
+      all: 900,
+      byStatus: { scheduled: 300, agenda_locked: 21, adjourned: 77, minutes_pending: 142 },
+    });
+    render(await MeetingHomePage());
+    expect(screen.getByText("900")).toBeInTheDocument();
+    expect(screen.getByText("321")).toBeInTheDocument(); // scheduled + agenda_locked
+    expect(screen.getByText("77")).toBeInTheDocument();
+    expect(screen.getByText("142")).toBeInTheDocument();
   });
 
   it("GAP-MEETING-HOME-04: a plain member does not see the Admin Configuration tile", async () => {

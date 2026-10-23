@@ -26,6 +26,7 @@ import { NonRetryableError, type CommandEnvelope } from "@civitasone/queue";
 import { sqlClient } from "../src/shared/db.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { computeHash } from "../src/modules/minutes/domain.js";
+import * as minutesRepo from "../src/modules/minutes/repo.js";
 import { registerMinutesConsumers } from "../src/modules/minutes/consumer.js";
 
 const TENANT = "a5a5a5a5-0000-4000-8000-0000000009d4";
@@ -113,7 +114,8 @@ async function readMinutes(id: string): Promise<any | null> {
       await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
       return sql`select id, meeting_id, status, template_type, content, current_version, version,
                         approved_by, approved_at, hash_previous, hash_current,
-                        dsc_signature, dsc_signer_name, dsc_signed_at, submission_deadline
+                        dsc_signature, dsc_signer_name, dsc_signed_at, submission_deadline,
+                        rejection_comments, rejected_at, rejected_by
                  from meeting.minutes where id = ${id}`;
     });
     return rows[0] ?? null;
@@ -365,6 +367,30 @@ describe("minutes.reject (Req 7.6)", () => {
     expect(after.current_version).toBe(beforeVersion + 1); // Req 7.6 version increment
     expect(await versionCount(id)).toBeGreaterThanOrEqual(1);
     expect(await outboxCount(EVENTS.minutesRejected)).toBeGreaterThan(0);
+  });
+
+  it("persists the rejection reason / time / actor so GET minutes can return them", async () => {
+    const meetingId = await seedMeeting({ roster: true });
+    const id = randomUUID();
+    await run(msg(COMMANDS.minutesCreate, { minutesId: id, meetingId, tenantId: TENANT }));
+    let row = await readMinutes(id);
+    // Not rejected yet: columns are empty.
+    expect(row.rejection_comments).toBeNull();
+    await run(msg(COMMANDS.minutesSubmit, { minutesId: id, tenantId: TENANT, version: row.version }));
+    row = await readMinutes(id);
+    const before = Date.now();
+    await run(msg(COMMANDS.minutesReject, { minutesId: id, tenantId: TENANT, version: row.version, rejectionComments: "attendance table is wrong" }));
+
+    const after = await readMinutes(id);
+    expect(after.rejection_comments).toBe("attendance table is wrong");
+    expect(after.rejected_by).toBe(ACTOR);
+    expect(new Date(after.rejected_at as string).getTime()).toBeGreaterThanOrEqual(before - 1000);
+
+    // The read model the route serialises exposes them under the names the web already reads.
+    const view = await runWithTenant(TENANT, () => minutesRepo.getMinutesByMeeting(TENANT, meetingId));
+    expect(view?.rejectionComments).toBe("attendance table is wrong");
+    expect(view?.rejectedBy).toBe(ACTOR);
+    expect(view?.rejectedAt).toBeInstanceOf(Date);
   });
 });
 

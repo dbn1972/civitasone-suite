@@ -156,12 +156,13 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02: resolve creator and approver
     // display names from the identity-service (best-effort; falls back to null
     // so the web shows the raw UUID rather than breaking the read).
-    const names = await resolveUserNames(ctx.tenantId, [row.createdBy, row.approvedBy]);
+    const names = await resolveUserNames(ctx.tenantId, [row.createdBy, row.approvedBy, row.rejectedBy]);
     return reply.send({
       data: {
         ...row,
         createdByName: names.get(row.createdBy) ?? null,
         approvedByName: row.approvedBy ? (names.get(row.approvedBy) ?? null) : null,
+        rejectedByName: row.rejectedBy ? (names.get(row.rejectedBy) ?? null) : null,
       },
     });
   });

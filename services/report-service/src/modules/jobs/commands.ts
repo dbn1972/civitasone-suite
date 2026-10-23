@@ -28,6 +28,7 @@ export async function createJob(ctx: RequestContext, body: CreateJobBody): Promi
     // before the DB row is read back.
     createdAt: new Date(),
     downloadUrl: null,
+    ...(body.parameters ? { parameters: body.parameters } : {}),
     version: 1,
   };
 

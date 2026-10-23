@@ -1,5 +1,7 @@
 export const COMMANDS = {
   createStage: "install.stage.create",
+  /** payload: { id, verb } — run | skip | retry on an install stage (the row behind /v1/install/steps). */
+  transitionStage: "install.stage.transition",
   wizardCreate: "install.wizard.create",
   stepStart: "install.step.start",
   stepComplete: "install.step.complete",

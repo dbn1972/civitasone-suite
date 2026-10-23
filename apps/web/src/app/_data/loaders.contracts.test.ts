@@ -3,6 +3,7 @@ import {
   mapContractsListRows,
   mapCitizenPortalMetrics,
   computeContractExpirySummary,
+  mapContractExpirySummary,
   mapVendorOptions,
   type ContractListRow,
 } from "./loaders";
@@ -203,6 +204,38 @@ describe("computeContractExpirySummary (HOME-04)", () => {
   it("ignores rows without a parseable expiry", () => {
     const s = computeContractExpirySummary([row(undefined), row("not-a-date")], TODAY);
     expect(s).toEqual({ in30: 0, in60: 0, in90: 0, expired: 0 });
+  });
+});
+
+// The hub figures come from the server's whole-tenant aggregate (meta.expiry), not
+// from counting the rows of the one page the list returned.
+describe("mapContractExpirySummary (server totals)", () => {
+  it("uses meta.expiry even when the page only carries a handful of rows", () => {
+    const payload = {
+      data: [{ id: "c1", title: "one", expiry: "2099-01-01", status: "active" }],
+      pagination: { hasMore: true, pageSize: 1, total: 400 },
+      meta: { total: 400, expiry: { in30: 37, in60: 80, in90: 120, expiredOpen: 9 } },
+    };
+    expect(mapContractExpirySummary(payload)).toEqual({ in30: 37, in60: 80, in90: 120, expired: 9 });
+  });
+
+  it("falls back to bucketing the returned rows when the server sends no meta.expiry", () => {
+    const today = new Date();
+    const iso = (d: number) => new Date(today.getTime() + d * 86_400_000).toISOString().slice(0, 10);
+    const s = mapContractExpirySummary({ data: [{ id: "a", title: "A", expiry: iso(5), status: "active" }] });
+    expect(s?.in30).toBe(1);
+  });
+
+  it("ignores a malformed meta.expiry rather than trusting partial numbers", () => {
+    const s = mapContractExpirySummary({
+      data: [],
+      meta: { expiry: { in30: 1, in60: "x", in90: 3, expiredOpen: 0 } },
+    });
+    expect(s).toEqual({ in30: 0, in60: 0, in90: 0, expired: 0 });
+  });
+
+  it("returns null for a payload that is not a contract list", () => {
+    expect(mapContractExpirySummary("nope")).toBeNull();
   });
 });
 
