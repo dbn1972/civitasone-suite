@@ -11,6 +11,7 @@ import {
   computeDcbSummary,
   assertPaymentNotExceedBalance,
   computeNewBalance,
+  dcbBalanceEffect,
   assertCanRevise,
   assertMakerChecker,
   ageIntoBuckets,
@@ -67,9 +68,69 @@ describe("Assessment Domain — M2 SVC-131", () => {
         { entryType: "write_off" as const, amountMinor: 200000n },
       ];
       const result = computeDcbSummary(entries);
-      // total collection = 400000 + 50000 + 100000 + 200000 = 750000
+      // A refund RAISES the balance (collected is net: 400000 - 50000 + 100000
+      // (adjustment debit leg) + 200000 = 650000).
+      expect(result.totalCollection).toBe(650000n);
       expect(result.totalDemand - result.totalCollection).toBe(result.balance);
-      expect(result.balance).toBe(250000n);
+      expect(result.balance).toBe(350000n);
+    });
+
+    describe("classification by entry type (refund / adjustment / waiver)", () => {
+      const base = [{ entryType: "demand" as const, amountMinor: 1000000n }];
+
+      it("collection reduces the balance", () => {
+        const r = computeDcbSummary([...base, { entryType: "collection" as const, amountMinor: 300000n }]);
+        expect(r).toEqual({ totalDemand: 1000000n, totalCollection: 300000n, balance: 700000n });
+      });
+
+      it("refund RAISES the balance and nets down collected", () => {
+        const r = computeDcbSummary([
+          ...base,
+          { entryType: "collection" as const, amountMinor: 300000n },
+          { entryType: "refund" as const, amountMinor: 100000n },
+        ]);
+        expect(r.totalCollection).toBe(200000n);
+        expect(r.balance).toBe(800000n);
+      });
+
+      it("write_off and waiver reduce the balance", () => {
+        const r = computeDcbSummary([
+          ...base,
+          { entryType: "write_off" as const, amountMinor: 100000n },
+          { entryType: "waiver" as const, amountMinor: 50000n },
+        ]);
+        expect(r.balance).toBe(850000n);
+      });
+
+      it("an adjustment's two equal legs net to zero (debit reduces, credit raises)", () => {
+        const r = computeDcbSummary([
+          ...base,
+          { entryType: "adjustment" as const, amountMinor: 200000n, narration: "Adjustment debit: move" },
+          { entryType: "adjustment" as const, amountMinor: 200000n, narration: "Adjustment credit: move" },
+        ]);
+        expect(r.totalCollection).toBe(0n);
+        expect(r.balance).toBe(1000000n);
+      });
+
+      it("a lone adjustment with no narration is treated as the debit leg", () => {
+        const r = computeDcbSummary([...base, { entryType: "adjustment" as const, amountMinor: 200000n }]);
+        expect(r.balance).toBe(800000n);
+      });
+    });
+
+    describe("dcbBalanceEffect", () => {
+      it("signs each entry type", () => {
+        expect(dcbBalanceEffect({ entryType: "demand", amountMinor: 5n })).toBe(5n);
+        expect(dcbBalanceEffect({ entryType: "refund", amountMinor: 5n })).toBe(5n);
+        expect(dcbBalanceEffect({ entryType: "refund", amountMinor: -5n })).toBe(5n);
+        expect(dcbBalanceEffect({ entryType: "collection", amountMinor: 5n })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "write_off", amountMinor: 5n })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "waiver", amountMinor: 5n })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: "Adjustment credit: x" })).toBe(5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: "Adjustment debit: x" })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: null })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "mystery", amountMinor: 5n })).toBe(-5n);
+      });
     });
   });
 
@@ -103,6 +164,15 @@ describe("Assessment Domain — M2 SVC-131", () => {
 
     it("adjustment decreases balance", () => {
       expect(computeNewBalance(100000n, "adjustment", 20000n)).toBe(80000n);
+    });
+
+    it("refund and an adjustment credit leg increase the balance", () => {
+      expect(computeNewBalance(100000n, "refund", 20000n)).toBe(120000n);
+      expect(computeNewBalance(100000n, "adjustment", 20000n, "Adjustment credit: x")).toBe(120000n);
+    });
+
+    it("waiver decreases balance", () => {
+      expect(computeNewBalance(100000n, "waiver", 20000n)).toBe(80000n);
     });
   });
 

@@ -12,6 +12,7 @@ import {
   recoveryReferralListQuery,
   createWaiverBody,
   waiverDecideBody,
+    listWaiversQuery,
   listWriteOffsQuery,
 } from "./validators.js";
 
@@ -171,6 +172,30 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     const body = createWaiverBody.parse(req.body);
     return reply.code(202).send({ data: await commands.createWaiver(ctx, body as unknown as Record<string, unknown>) });
   });
+
+  // ── GET /v1/revenue/waivers ─────────────────────────────────────────────────
+  // Tenant-scoped, paginated list so a checker can DISCOVER pending waivers
+  // (?status=pending) instead of pasting a UUID from the maker. Role-guarded
+  // like every other arrears route. Declared before /waivers/:id.
+
+  app.get(
+    "/v1/revenue/waivers",
+    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, REVENUE_ROLES);
+      const q = listWaiversQuery.parse(req.query);
+      const { rows, total } = await repo.listWaivers(ctx.tenantId, {
+        ...(q.status ? { status: q.status } : {}),
+        limit: q.limit,
+        offset: q.offset,
+      });
+      return reply.send({
+        data: rows,
+        meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+      });
+    },
+  );
 
   // ── GET /v1/revenue/waivers/:id ─────────────────────────────────────────────
   // GAP-REVENUE-WAIVERS-03: tenant-scoped single-record fetch so the
