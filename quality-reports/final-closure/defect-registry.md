@@ -1,5 +1,87 @@
 # Defect registry (CLOS-*)
 
+## Refresh 2026-10-24 (final defect-closure run)
+
+Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.
+
+**Release decision: FAIL.** This is the independent verifier's decision, reproduced exactly. Nothing in this refresh overrides it.
+
+### Run 1 status update (as of this refresh)
+
+All Run 1 FIXED PRs are now MERGED: #2154 (`76c8cada9def1be751025b3fed76ca2c36a5303b`), #2165 (`1ef24f6b3a4fbebea5c8bff365b18033b8539b2d`), #2169 (`6058ae9673ce77bcdf2c9346cb8e55d52ed6f486`), #2170 (`ade86e9b58b36e67ee46fa07c7f5c1be46e92511`), #2167 (`4302a45ff3b3d3d3710427430d2a59fabcf5131f`), in addition to #2155 and #2157. Run 1 BLOCKED/UNRESOLVED items: CLOS-CVE-NEXT closed (#2175); DELEG-REVOKE-OWNERSHIP closed (#2174); DELEG-UTC closed (#2181); CLOS-FLAKY-DRAINAGE closed (#2182); P3-BASE-1 closed (#2173); P3-NEW-1 closed (no `res.status` in the file on current main); P3-NEW-3 closed in source (`/api/v1/plugins` mocked in `global-setup.ts`); P3-NEW-2 payroll snapshots accepted as stale (owner decision); P3-NEW-4 closed because #2161 merged 2026-10-23 08:43Z; CLOS-S6-07 closed (`todayIST()` in `resolver.ts`). Still BLOCKED: CLOS-S1-17, S4-04, S4-05, S5-05, S6-02, S6-06 (verified still present in code). No Run 1 defect is promoted to VERIFIED by me; the verifier's spot-checks are listed in `release-readiness.md`.
+
+### Run 2 registry (IDs `CLOS2-S<n>-NN`; 53 discovered; sources `run2-discover-*.json`, `run2-pass2-*.json`, `run2-blocked-approved.json`)
+
+Counts by status: FIXED low-risk 42; owner-approved BLOCKED then FIXED 9; still BLOCKED 1 (CLOS2-S2-09); LOW with no PASS 2 record 1 (CLOS2-S1-14). Slice 4 produced no findings. Evidence per row is the fixer's before/after recorded in the `run2-pass2-*.json` file for that slice (see `autonomous-fixes.md`); the approved nine were additionally spot-checked by the verifier on `9d93535`.
+
+| ID | Sev | Risk at discovery | File:line | Status | Regression test / note |
+|---|---|---|---|---|---|
+| CLOS2-S1-01 | Medium | LOW | `apps/web/src/app/(app)/admin/users/AdminUsersManager.tsx:115` | BLOCKED then owner-approved; FIXED in #2186 (via #2193) | see PR #2186 |
+| CLOS2-S1-02 | Low | LOW | `apps/web/src/app/(app)/estab/files/[id]/FileAttachments.tsx:138` | FIXED in #2179 -> #2193 | FileAttachments.test.tsx (IST rollover) |
+| CLOS2-S1-03 | Low | LOW | `apps/web/src/app/(app)/estab/library/issues/IssuesTable.tsx:49` | FIXED in #2179 -> #2193 | IssuesTable.test.tsx (20:30Z / 19:00Z / 20:00Z) |
+| CLOS2-S1-04 | Low | LOW | `apps/web/src/app/(app)/estab/library/[id]/CurrentLoansCard.tsx:51` | FIXED in #2179 -> #2193 | CurrentLoansCard.test.tsx (due 19:00Z -> 05 Nov) |
+| CLOS2-S1-05 | Low | LOW | `apps/web/src/app/(app)/estab/quarters/QuarterCreateForm.tsx:65` | FIXED in #2179 -> #2193 | QuarterCreateForm.test.tsx (3 reject cases, 0, and 450 posts 450) |
+| CLOS2-S1-06 | Low | LOW | `apps/web/src/app/(app)/estab/quarters/[id]/ApplyAllotmentForm.tsx:43` | FIXED in #2179 -> #2193 | ApplyAllotmentForm.test.tsx (reject cases + 12 submits 12) |
+| CLOS2-S1-07 | Medium | LOW | `apps/web/src/app/(app)/crm/contacts/new/page.tsx:42` | FIXED in #2179 -> #2193 | page.accountSearchError.test.tsx, EditContactForm.accountSearchError.test.tsx |
+| CLOS2-S1-08 | Low | LOW | `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx:69` | FIXED in #2179 -> #2193 | DfaPanel.test.tsx (500 shows error; empty ok shows No matches) |
+| CLOS2-S1-09 | Medium | LOW | `apps/web/src/app/(app)/designer/[id]/test/page.tsx:37` | FIXED in #2179 -> #2193 | designer/[id]/test/page.test.tsx (new) |
+| CLOS2-S1-10 | Medium | LOW | `apps/web/src/app/(app)/designer/_data/designerApi.ts:171` | FIXED in #2179 -> #2193 | designerApi.test.ts (3 offline cases) |
+| CLOS2-S1-11 | Low | LOW | `apps/web/src/app/(app)/contracts/[id]/ObligationsPanel.tsx:96` | FIXED in #2179 -> #2193 | BondActions.test.tsx, ObligationsPanel.test.tsx (offline) |
+| CLOS2-S1-12 | Low | LOW | `apps/web/src/app/(app)/assets/[id]/AssetDetailActions.tsx:180` | FIXED in #2179 -> #2193 | AssetDetailActions.test.tsx (Tag offline) |
+| CLOS2-S1-13 | Low | LOW | `apps/web/src/app/(app)/estab/files/[id]/FileDetailActions.tsx:132` | FIXED in #2179 -> #2193 | FileDetailActions.test.tsx (note offline) |
+| CLOS2-S1-14 | Low | LOW | `apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx:118` | UNRESOLVED (LOW, no PASS 2 record) | see PR - |
+| CLOS2-S1-15 | Low | LOW | `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx:94` | FIXED in #2179 -> #2193 | RTIDetailClient.test.tsx (load + appeal offline) |
+| CLOS2-S1-16 | Low | LOW | `apps/web/src/app/(app)/crm/forecast/period.ts:39` | FIXED in #2179 -> #2193 | period.test.ts (3 boundary asserts) |
+| CLOS2-S2-01 | Medium | LOW | `apps/web/src/app/(app)/hr/payroll/returns/page.tsx:101` | FIXED in #2177 (merged) | payroll/returns/page.istClock.test.tsx |
+| CLOS2-S2-02 | Medium | LOW | `apps/web/src/app/(app)/hr/payroll/form16/page.tsx:37` | FIXED in #2177 (merged) | payroll/form16/page.istClock.test.tsx |
+| CLOS2-S2-03 | Low | LOW | `apps/web/src/app/(app)/hr/payroll/statutory/challans/page.tsx:52` | FIXED in #2177 (merged) | payroll/statutory/challans/page.istClock.test.tsx |
+| CLOS2-S2-04 | Low | LOW | `apps/web/src/app/(app)/hr/dashboard/page.tsx:87` | FIXED in #2177 (merged) | dashboard/payrollDaysLeft.test.ts |
+| CLOS2-S2-05 | Low | LOW | `apps/web/src/app/(app)/hr/holidays/page.tsx:73` | FIXED in #2177 (merged) | holidays/page.istClock.test.tsx |
+| CLOS2-S2-06 | Low | LOW | `apps/web/src/app/(app)/hr/_components/ShiftChangeRequestForm.tsx:236` | FIXED in #2177 (merged) | _components/ShiftChangeRequestForm.istClock.test.tsx |
+| CLOS2-S2-07 | Low | LOW | `apps/web/src/app/(app)/hr/promotion/PromoteWithApproval.tsx:185` | FIXED in #2177 (merged) | promotion/PromoteWithApproval.istClock.test.tsx |
+| CLOS2-S2-08 | Low | LOW | `apps/web/src/app/(app)/hr/transfer/_components/TransferListFilters.tsx:134` | FIXED in #2177 (merged) | transfer/_components/TransferListFilters.istClock.test.tsx |
+| CLOS2-S2-09 | Medium | BLOCKED_FOR_APPROVAL | `apps/web/src/app/(app)/hr/leave-policies/LeavePoliciesClient.tsx:491` | BLOCKED (pending owner decision) | see PR - |
+| CLOS2-S3-01 | High | BLOCKED_FOR_APPROVAL | `apps/web/src/app/_components/AskCivitasOnePanel.tsx:36` | BLOCKED then owner-approved; FIXED in #2186 (via #2193) | see PR #2186 |
+| CLOS2-S3-02 | Medium | LOW | `apps/web/src/app/_components/DarkModeToggle.tsx:11` | FIXED in #2180 -> #2193 | DarkModeToggle.test.tsx (+2) |
+| CLOS2-S3-03 | Medium | BLOCKED_FOR_APPROVAL | `apps/web/src/lib/api/browserClient.ts:20` | BLOCKED then owner-approved; FIXED in #2186 (via #2193) | see PR #2186 |
+| CLOS2-S3-04 | Low | LOW | `apps/web/src/app/_components/ds/ActionButton.tsx:49` | FIXED in #2180 -> #2193 | ActionButton.test.tsx (+2), useAsyncMutation.test.ts (+2) |
+| CLOS2-S3-05 | Low | LOW | `apps/web/src/app/(app)/procurement/vendors/[id]/VendorActions.tsx:79` | FIXED in #2180 -> #2193 | VendorActions.test.tsx (new) |
+| CLOS2-S3-06 | Low | LOW | `apps/web/src/app/(app)/tenant-admin/users/UsersTable.tsx:268` | FIXED in #2180 -> #2193 | UsersTable.test.tsx (+1) |
+| CLOS2-S3-07 | Low | LOW | `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:330` | FIXED in #2180 -> #2193 | MasterCreateForm.test.tsx (+1) |
+| CLOS2-S3-08 | Low | LOW | `apps/web/src/app/_components/AskCivitasOnePanel.tsx:33` | FIXED in #2180 -> #2193 | AskCivitasOnePanel.test.ts (new, 5) |
+| CLOS2-S3-09 | Low | LOW | `apps/web/src/app/_components/NotificationBell.tsx:75` | FIXED in #2180 -> #2193 | NotificationBell.relativeTime.test.ts (3), loaders.formatTimeAgo.test.ts (3) |
+| CLOS2-S3-10 | Low | LOW | `apps/web/src/app/(app)/telephony/calls/page.tsx:177` | FIXED in #2180 -> #2193 | TelephonyLiveSummary.test.tsx (TZ=UTC), istDisplayGuard.test.ts (9 files) |
+| CLOS2-S3-11 | Medium | BLOCKED_FOR_APPROVAL | `apps/web/src/app/_data/apiMappers.ts:740` | BLOCKED then owner-approved; FIXED in #2187 (via #2193) | see PR #2187 |
+| CLOS2-S3-12 | Low | LOW | `apps/web/src/lib/crm/crmExport.ts:38` | FIXED in #2180 -> #2193 | crmExport.test.ts (new) |
+| CLOS2-S5-01 | Medium | LOW | `services/knowledge-service/src/modules/categories/routes.ts:23` | FIXED in #2176 (merged) | knowledge-service/tests/closure2-s5-01-uuid-params.test.ts |
+| CLOS2-S5-02 | Medium | LOW | `services/knowledge-service/src/modules/versions/routes.ts:43` | FIXED in #2176 (merged) | knowledge-service/tests/closure2-s5-02-versions-uuid.test.ts |
+| CLOS2-S5-03 | Medium | LOW | `services/notification-service/src/modules/dlt/routes.ts:52` | FIXED in #2176 (merged) | notification-service/tests/closure2-s5-03-uuid-params.test.ts |
+| CLOS2-S6-01 | Medium | BLOCKED_FOR_APPROVAL | `packages/rate-limit/src/index.ts:21` | BLOCKED then owner-approved; FIXED in #2188 (via #2193) | see PR #2188 |
+| CLOS2-S6-02 | Medium | BLOCKED_FOR_APPROVAL | `packages/numbering/src/format.ts:150` | BLOCKED then owner-approved; FIXED in #2187 (via #2193) | see PR #2187 |
+| CLOS2-S6-03 | Low | LOW | `packages/circuit-breaker/src/index.ts:74` | FIXED in #2178 -> #2193 | packages/circuit-breaker/tests/circuit-breaker.test.ts (4 cases) |
+| CLOS2-S6-04 | Medium | LOW | `packages/search/src/meilisearch.ts:152` | FIXED in #2178 -> #2193 | packages/search/tests/search.test.ts (12 cases: 401/500 reject, 202 resolves) |
+| CLOS2-S6-05 | Low | LOW | `packages/search/src/opensearch.ts:120` | FIXED in #2178 -> #2193 | packages/search/tests/search.test.ts (2 cases) |
+| CLOS2-S6-06 | Low | BLOCKED_FOR_APPROVAL | `packages/storage/src/index.ts:207` | BLOCKED then owner-approved; FIXED in #2188 (via #2193) | see PR #2188 |
+| CLOS2-S6-07 | Medium | LOW | `packages/db/src/quota-check.ts:110` | FIXED in #2178 -> #2193 | packages/db/src/quota-check.test.ts (4 cases: {bad, {}, null, valid) |
+| CLOS2-S6-08 | Medium | LOW | `services/visitor-service/src/modules/evacuation/roster.ts:221` | FIXED in #2178 -> #2193 | services/visitor-service/tests/evacuation-roster.test.ts |
+| CLOS2-S6-09 | Low | LOW | `services/visitor-service/src/modules/turnstile-control/command-queue.ts:117` | FIXED in #2178 -> #2193 | services/visitor-service/tests/turnstile-command-queue-corrupt.test.ts (2 cases) |
+| CLOS2-S6-10 | Medium | LOW | `services/telephony-service/src/shared/carrier-adapter.ts:101` | FIXED in #2178 -> #2193 | services/telephony-service/tests/carrier-adapter-timeout.test.ts (3 cases) |
+| CLOS2-S6-11 | Low | LOW | `packages/client-core/src/pkce.ts:80` | FIXED in #2178 -> #2193 | packages/client-core/tests/pkce-fetch.test.ts (5 cases) |
+| CLOS2-S6-12 | Medium | BLOCKED_FOR_APPROVAL | `packages/gov-adapters/src/pfms.ts:122` | BLOCKED then owner-approved; FIXED in #2188 (via #2193) | see PR #2188 |
+| CLOS2-S6-13 | Medium | BLOCKED_FOR_APPROVAL | `services/revenue-service/src/modules/billing/consumer.ts:61` | BLOCKED then owner-approved; FIXED in #2187 (via #2193) | see PR #2187 |
+
+### Newly found by the verifier / final checks (not previously registered)
+
+- **FINAL-E2E-01 (High, app defect, UNRESOLVED):** duplicate `<h1 id="page-heading">` across `(app)/**/loading.tsx` and pages; 76 Playwright strict-mode violations. Source: verifier, CI E2E on `9d93535`.
+- **FINAL-GATE-01 (High, UNRESOLVED):** Live Stack Verification "Contract score must be 10/10" fails; cause unknown.
+- **FINAL-GATE-02 (High, UNRESOLVED):** Release Gate evidence audit, 11 gates UNMEASURED.
+- **FINAL-TEST-01 (Low, UNRESOLVED):** workflow delegations-routes "returns empty list for a fresh tenant" non-idempotent.
+- **FINAL-FLAKY-01 (Low, known-flaky):** CreateContractForm GAP-CONTRACTS-NEW-02 failed in CI on `9d93535`; passed locally.
+
+---
+
+**Below: the Run 1 record as written on 2026-10-23 (PASS 4). Where the refresh above contradicts it, the refresh wins; the older text is kept as history, not rewritten.**
+
 Baseline: frozen SHA `f82d57053f55237ace2515c8b84398923f3df5f7`. Source of record: `~/orch-logs/closure/pass1-result.json` (PASS 1), `pass2-*.json` (PASS 2), `pass3-regression.json` (PASS 3). Release decision for this run is the PASS 4 verifier's: **FAIL**.
 
 ## Status vocabulary and how it was applied

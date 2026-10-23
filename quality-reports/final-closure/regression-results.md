@@ -1,5 +1,37 @@
 # Regression results (PASS 3)
 
+## Refresh 2026-10-24 (final defect-closure run)
+
+Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.
+
+**Release decision: FAIL.** This is the independent verifier's decision, reproduced exactly. Nothing in this refresh overrides it.
+
+### Executed in the final-check pass (main `9d93535`)
+
+Source: `~/orch-logs/closure/final-checks.json`; logs `~/orch-logs/closure/final/results.txt`, `rerun-results.txt`, `vitest.log`, `typecheck.log`, `lint.log`, `webbuild.log`, `contract.log`, `guard-*.log`, `db2-*.log`, `rerun-*.log`.
+
+| Item | Result |
+|---|---|
+| install, typecheck 126/126, lint 67/67 (0 errors), web build, contract 148 passed / 1 skipped | pass |
+| web vitest, `--maxWorkers=2` | 2401 files, 19859 tests, 0 failed |
+| 31 CI guards | 28 pass first pass; bundle-size, schema-drift, tenant-index re-run with proper inputs and pass; money-precision, sql-injection, secret-scanner, package-exports now pass (failed at baseline) |
+| 67 DB-backed service suites, one disposable PG, non-superuser roles, sequential | 62 green first pass; rerun on fresh PG + redis sidecar: helpdesk, inventory, visitor green; workflow 1 failing test; gateway 2 failing tests (spawn tsx) |
+| The PG listened on 5435 inside its own container network namespace, so tests hard-coding localhost:5435 never touched the shared dev DB | stated by the run; container and volume removal is part of the rules |
+
+Classification of the remaining local reds (analysis): workflow `delegations-routes.test.ts` "returns empty list for a fresh tenant" is non-idempotent (fixed tenant id; passes on fresh DB 1116/1116, fails on a reused DB); gateway tsx-subprocess tests fail with ENOENT in the container (harness artifact per the verifier, not re-run by it).
+
+### Executed: CI
+
+See the table in `release-readiness.md`. Net: main `9d93535` has Tests (1 known-flaky web test), E2E, Live Stack Verification, and Release Gate red; Coverage Gate, Integration Tests, Schema Integrity L3, Docker skipped; Security Scan green.
+
+### Executed: Run 2 PASS 2 targeted evidence (per fixer, before/after tests)
+
+Slice records: `~/orch-logs/closure/run2-pass2-s1.json` (S1), `~/orch-logs/closure/run2-pass2-s2.json` (S2), `~/orch-logs/closure/run2-pass2-s3.json` (S3), `~/orch-logs/closure/run2-pass2-s5.json` (S5), `~/orch-logs/closure/run2-pass2-s6.json` (S6). Examples recorded by the fixers: S5-01 knowledge uuid params 28/30 before, 30/30 after; S5-03 notification 10/11 before, 11/11 after; S6-04 Meilisearch 8 reject cases failed before, 41/41 after; S6-03 circuit breaker called fn 3x instead of 1 before, 13/13 after. S3 slice verification: web typecheck 8/8 tasks, eslint 0 errors on touched files, vitest groups all passing. S6 services ran on a disposable postgis:16 (port 55601), `--maxWorkers=2`, container and volume removed.
+
+---
+
+**Below: the Run 1 record as written on 2026-10-23 (PASS 4). Where the refresh above contradicts it, the refresh wins; the older text is kept as history, not rewritten.**
+
 Integration branch: `closure/pass3-integration`, head `cca1ae6461f162b636bdc4321969c5e9419e530d`, worktree `~/worktrees/closure-p3` on EC2, draft PR #2171 ("DO NOT MERGE, regression evidence only"). Comparison baseline: origin/main `cdeb2b09ced7340623f6508936a744d99971c91f` (merge-base equals origin/main).
 
 Included PRs (16): #2158 #2159 #2147 #2151 #2152 #2153 #2156 #2160 #2164 #2166 #2154 #2165 #2169 #2170 #2167 #2163. Excluded: #2161 (conflicts in `services/install-service/src/modules/stages/routes.ts`, `services/report-service/src/modules/jobs/consumer.ts`, `services/report-service/src/modules/jobs/routes.ts`, `services/report-service/src/modules/scheduled/repo.ts`). Migration collisions: none. Services touched: 26.

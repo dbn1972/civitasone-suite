@@ -1,5 +1,44 @@
 # Autonomous fixes
 
+## Refresh 2026-10-24 (final defect-closure run)
+
+Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.
+
+**Release decision: FAIL.** This is the independent verifier's decision, reproduced exactly. Nothing in this refresh overrides it.
+
+### Executed: PRs delivering fixes (states from `gh pr view` at refresh time)
+
+| PR | State | What | Notes |
+|---|---|---|---|
+| #2154, #2155, #2157, #2165, #2169, #2170 | MERGED (2026-10-22/23) | Run 1 LOW fixes (CLOS-S1..S6) | merge SHAs in `defect-registry.md` |
+| #2167 | MERGED | deflake 9 of 11 CI-flaky tests (2 needed a decision) | |
+| #2176 (S5), #2177 (S2) | MERGED | Run 2 slices 5 and 2 | |
+| #2178 (S6), #2179 (S1), #2180 (S3) | CLOSED, content delivered via #2193 | Run 2 slices 6, 1, 3 | |
+| #2181 | CLOSED, delivered via #2193 | delegation validity decided on IST date | owner-approved |
+| #2182 | CLOSED, delivered via #2193 | drainage complaint/hotspot numbers from Postgres sequences (DB change) | owner-approved; resolves CLOS-FLAKY-DRAINAGE |
+| #2183, #2185, #2189 | CLOSED, delivered via #2193 | E2E spec/mocks fixes (HR leave/transfer; locations, CRM, tenant-admin; curly apostrophe) | no skips per bundle body |
+| #2184 | CLOSED, delivered via #2193 | payroll bigint-paise money precision | owner-approved |
+| #2186 | CLOSED, delivered via #2193 | CLOS2-S3-01 (XSS), CLOS2-S1-01, CLOS2-S3-03 | security |
+| #2187 | CLOSED, delivered via #2193 | CLOS2-S6-02, S6-13, S3-11 (IST dates, no fabricated timestamps) | |
+| #2188 | CLOSED, delivered via #2193 | CLOS2-S6-01, S6-06, S6-12 (rate-limit key, storage errors, gov-adapter timeouts) | |
+| #2190 | CLOSED, delivered via #2193 | 24 sql-injection-guard findings cleared by code changes | |
+| #2191 | CLOSED, delivered via #2193 | money precision outside payroll | |
+| #2192 | CLOSED, delivered via #2193 | 71 secret-scanner findings cleared without touching the scanner | see credential-rotation notice |
+| **#2193** | **MERGED** 2026-10-23 16:06Z, merge commit `db755f379ffa46e5ba41685f8299701bb6b15e9a` | final release bundle combining the above; each constituent reviewed CLEAN at the merged head (per the PR body) | |
+
+Bundle-level orchestrator fixes in #2193 (from its PR body): #2186 x #2180 conflict in the AI assistant markdown renderer resolved by hand keeping both fixes; the missing `--accent` design token (11 components rendered transparent accents); Next 15 Promise searchParams in 6 new IST tests; a lint-safe sentinel; no raw HTTP status in a thrown message; an awaited race in the OverdueTaskAlerts i18n test. Local checks quoted in that PR body: web vitest 19,853/19,853, tsc clean, lint 0 errors, next build ok, test:contract pass.
+
+Run 2 low-risk fixes (from run2-pass2 records): S1 02-13, 15, 16 (dates via IST helpers, integer parsing, error-vs-empty states, designer error handling); S2 01-08 (HR payroll/holiday/shift/promotion IST clocks, filters); S3 02, 04-10, 12 (blocked storage, network-error copy, notification bell, telephony, CRM export); S5 01-03 (uuid path params to 400/404 instead of 500); S6 03-05, 07-11 (circuit-breaker half-open, search res.ok, quota cache parse, roster parse, turnstile, carrier timeout, pkce). Not fixed with evidence: **CLOS2-S1-14** (NotificationsPanel raw "Failed to fetch"; LOW, no PASS 2 record found); **CLOS2-S2-09** (leave policy empty field saved as 0; BLOCKED_FOR_APPROVAL).
+
+### Not executed / analysis
+
+- I did not re-run each fix's regression test in this refresh; the evidence is the fixer's recorded before/after and the verifier's spot-checks listed in `release-readiness.md`.
+- Nothing is marked VERIFIED except what the verifier itself re-ran.
+
+---
+
+**Below: the Run 1 record as written on 2026-10-23 (PASS 4). Where the refresh above contradicts it, the refresh wins; the older text is kept as history, not rewritten.**
+
 Scope rule (`~/orch/closure-brief.md`): LOW-RISK defects only; everything else goes to `deferred-approval-items.md`. Agents never merged and never pushed to main; merging was done by the orchestrator.
 
 ## Executed: what was fixed, by PR

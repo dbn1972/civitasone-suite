@@ -1,5 +1,49 @@
 # Deferred approval items
 
+## Refresh 2026-10-24 (final defect-closure run)
+
+Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.
+
+**Release decision: FAIL.** This is the independent verifier's decision, reproduced exactly. Nothing in this refresh overrides it.
+
+### Accepted deferrals (decided; not pending)
+
+- **Payroll visual-regression snapshots**: ACCEPTED as known-stale for this release (owner, 2026-10-23 22:10 IST), like the 27 coverage services. Regenerating them via a CI x86 job is a follow-up. They do not block PASS.
+- 27 services under the coverage threshold: accepted known-stale per the same owner decision (list not reproduced here; source: the owner decision text in `~/orch/closure-brief.md`).
+
+### Resolved since the Run 1 list (previously pending, now approved and merged)
+
+| Item | Resolution |
+|---|---|
+| CLOS-CVE-NEXT (High) | #2175 merged, Next 15.5.28 |
+| DELEG-REVOKE-OWNERSHIP (High) | #2174 merged |
+| DELEG-UTC (Medium) | #2181 (via #2193) |
+| CLOS-FLAKY-DRAINAGE (Medium) | #2182 (via #2193), DB sequences |
+| CLOS2-S1-01, S3-01, S3-03, S3-11, S6-01, S6-02, S6-06, S6-12, S6-13 | owner-approved (`~/orch-logs/closure/run2-blocked-approved.json`), fixed in #2186/#2187/#2188 (via #2193) |
+| Run 1 CLOS-S6-07 (workflow substitute lookup UTC) | `resolver.ts` now uses `todayIST()` (read on current main) |
+
+### Still PENDING owner decision (checked against current main on 2026-10-24)
+
+| ID | Severity | Where | Status on current main |
+|---|---|---|---|
+| CLOS-S1-17 | Medium | `apps/web/src/app/(app)/audit/exports/ExportConsole.tsx:46,49` | UTC `T00:00:00.000Z` / `T23:59:59.999Z` boundaries still present; audit-evidence scope decision |
+| CLOS-S4-04 | Medium | `services/billing-service/src/modules/payments/razorpay.ts` | no `AbortSignal`/timeout (grep count 0); payment path |
+| CLOS-S4-05 | High | `services/finance-service/src/modules/simplified/commands.ts:45,76` and ~30 finance sites | UTC date defaults still present; posting-period impact |
+| CLOS-S5-05 | Medium | `services/hrms-service/src/modules/seniority/routes.ts:126,147` etc. | UTC default still present |
+| CLOS-S6-02 (Run 1) | Low | revenue-service validation 400 bodies (`arrears/routes.ts:24` etc.) | raw ZodError JSON message still present; API body shape change |
+| CLOS-S6-06 (Run 1) | Medium | `revenue-service/src/modules/bbps/consumer.ts:26` and the other listed UTC-date sites | still present (CLOS2-S6-13 fixed a different site, `billing/consumer.ts`) |
+| CLOS2-S2-09 | Medium | `hr/leave-policies/LeavePoliciesClient.tsx:491` | empty numeric field saved as 0; leave-policy input rule; not fixed |
+| CLOS2-S1-14 | Low | `estab/notifications/NotificationsPanel.tsx:118` | LOW-risk, no PASS 2 record found; unfixed by this run |
+| Test hygiene | Low | workflow-service `delegations-routes.test.ts` fixed tenant | needs unique tenant or cleanup (verifier) |
+| Known-flaky list additions | Low | helpdesk tests, inventory DQ-FIN-03 | verifier recommends adding; not done by me |
+| Release gates without evidence | High | Live Stack contract score, Release Gate (11 UNMEASURED), Coverage, Integration, Schema L3 | decide fix plan or explicit waiver; the FAIL decision stands |
+
+The older sections A-E below are the Run 1 list; items A and the rows in B that appear in the resolved table above are superseded.
+
+---
+
+**Below: the Run 1 record as written on 2026-10-23 (PASS 4). Where the refresh above contradicts it, the refresh wins; the older text is kept as history, not rewritten.**
+
 Everything here needs an owner decision and was NOT fixed silently. Sources: `~/orch-logs/closure/deferred-approval.md`, `pass1-result.json` (blockedForApproval), and `~/orch-logs/closure/owner-questions-lanes.md` (questions collected from the open PRs).
 
 ## A. From `deferred-approval.md`

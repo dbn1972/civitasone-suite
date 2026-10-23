@@ -1662,5 +1662,227 @@
   "notes": [
     "Exit codes come from results.txt files written by the PASS 1/3 drivers; the PASS 4 verifier's own command exit codes were not recorded in the sources, so none are invented.",
     "Disposable Postgres containers closure-p3-pg and closure-p3-pg2 were removed with volumes; shared :5435 was not used for evidence."
-  ]
+  ],
+  "refresh_2026_10_24": {
+    "generated": "2026-10-24",
+    "releaseDecision": {
+      "decision": "FAIL",
+      "source": "independent verifier, reproduced exactly"
+    },
+    "mergedInto": "docs/final-closure-reports (PR #2172) from origin/main 9d93535e57b686e557cb36d998008a5f9687e1a6",
+    "mainSha": "9d93535e57b686e557cb36d998008a5f9687e1a6",
+    "bundle": {
+      "pr": 2193,
+      "mergeCommit": "db755f379ffa46e5ba41685f8299701bb6b15e9a",
+      "constituents": [
+        2178,
+        2179,
+        2180,
+        2181,
+        2182,
+        2183,
+        2184,
+        2185,
+        2186,
+        2187,
+        2188,
+        2189,
+        2190,
+        2191,
+        2192
+      ]
+    },
+    "approvedReleaseBlockerFixes": [
+      2181,
+      2182,
+      2184,
+      2186,
+      2187,
+      2188,
+      2190,
+      2191,
+      2192
+    ],
+    "e2eFixes": [
+      2183,
+      2185,
+      2189
+    ],
+    "mergedPrsSince_2026_10_22": [
+      2128,
+      2131,
+      2138,
+      2140,
+      2139,
+      2144,
+      2143,
+      2146,
+      2145,
+      2150,
+      2148,
+      2149,
+      2142,
+      2155,
+      2157,
+      2160,
+      2151,
+      2153,
+      2173,
+      2174,
+      2154,
+      2156,
+      2170,
+      2165,
+      2169,
+      2152,
+      2164,
+      2167,
+      2158,
+      2166,
+      2159,
+      2161,
+      2163,
+      2175,
+      2177,
+      2176,
+      2193,
+      2147
+    ],
+    "finalChecks": {
+      "mainSha": "9d93535e57b686e557cb36d998008a5f9687e1a6",
+      "pr2147": "MERGED (poll 13 at 23:02, ~1h after start)",
+      "checks": [
+        {
+          "name": "pnpm install --frozen-lockfile",
+          "exit": 0
+        },
+        {
+          "name": "pnpm turbo typecheck --force --concurrency=4",
+          "exit": 0,
+          "tasks": "126/126"
+        },
+        {
+          "name": "pnpm turbo lint --concurrency=4",
+          "exit": 0,
+          "errors": 0,
+          "tasks": "67/67"
+        },
+        {
+          "name": "web vitest --maxWorkers=2",
+          "exit": 0,
+          "files": 2401,
+          "pass": 19859,
+          "fail": 0
+        },
+        {
+          "name": "web build (flock)",
+          "exit": 0
+        },
+        {
+          "name": "pnpm test:contract",
+          "exit": 0,
+          "pass": 148,
+          "skip": 1
+        },
+        {
+          "name": "guards/scanners (31)",
+          "note": "28 exit 0 first pass; bundle-size, schema-drift, tenant-index failed only for missing inputs (no build log / ran against shared :5435 by default); re-run with build log and with disposable PG -> all exit 0"
+        },
+        {
+          "name": "DB-backed service suites, disposable PG (non-superuser roles, --maxWorkers=2, sequential, 67 services)",
+          "note": "PG ran in own netns on port 5435 inside container so hardcoded localhost:5435 never reached shared dev DB; 62 services green first pass; 5 red (gateway, helpdesk, inventory, visitor, workflow); on rerun w/ fresh PG+redis helpdesk, inventory, visitor green; workflow delegations-routes fresh-tenant fails twice; gateway fails only 2 subprocess-spawn tests (tsx ENOENT in harness)"
+        }
+      ],
+      "ciLatestCompletedMain": {
+        "9d93535 (#2147)": {
+          "Web Build": "success",
+          "Typecheck & Lint": "success",
+          "Secret Scan": "success",
+          "Architecture Guard": "success",
+          "Tests": "failure (web CreateContractForm GAP-CONTRACTS-NEW-02; 122/123 tasks ok)",
+          "Mobile": "success",
+          "A11y": "success",
+          "Procurement E2E Gate": "success",
+          "E2E Playwright": "failure",
+          "Screen Verification": "success",
+          "Live Stack Verification": "failure (Contract score must be 10/10)",
+          "Quality Gates L10/L11": "success",
+          "QA Readiness": "success",
+          "Mutation": "success",
+          "Contract Tests": "success",
+          "Release Gate": "failure",
+          "Schema Integrity L3": "skipped",
+          "Integration Tests": "skipped",
+          "Coverage Gate": "skipped",
+          "Security Scan": "success"
+        },
+        "db755f3": {
+          "Tests": "success",
+          "E2E Playwright": "failure",
+          "Live Stack Verification": "failure",
+          "Coverage Gate": "failure",
+          "Release Gate": "failure",
+          "Integration Tests": "success",
+          "everything else": "success",
+          "Security Scan": "success"
+        }
+      }
+    },
+    "evidenceFiles": {
+      "base": "~/orch-logs/closure/",
+      "paths": [
+        "pass1-result.json",
+        "pass3-regression.json",
+        "final-checks.json",
+        "run2-blocked-approved.json",
+        "deferred-approval.md",
+        "owner-questions-lanes.md",
+        "pass2-citizen-web.json",
+        "pass2-designer.json",
+        "pass2-flaky.json",
+        "pass2-services-a.json",
+        "pass2-services-b.json",
+        "pass2-web-modules.json",
+        "pass2-web-shared.json",
+        "run2-discover-1.json",
+        "run2-discover-2.json",
+        "run2-discover-3.json",
+        "run2-discover-4.json",
+        "run2-discover-5.json",
+        "run2-discover-6.json",
+        "run2-pass2-s1.json",
+        "run2-pass2-s2.json",
+        "run2-pass2-s3.json",
+        "run2-pass2-s5.json",
+        "run2-pass2-s6.json",
+        "final/results.txt",
+        "final/rerun-results.txt",
+        "final/vitest.log",
+        "final/typecheck.log",
+        "final/lint.log",
+        "final/webbuild.log",
+        "final/contract.log",
+        "final/db-results.txt"
+      ]
+    },
+    "separation": "executed evidence = final-checks, CI results, verifier re-runs, fixer before/after records; analysis = classifications and recommendations in each report",
+    "pendingOwnerDecisions": [
+      "CLOS-S1-17",
+      "CLOS-S4-04",
+      "CLOS-S4-05",
+      "CLOS-S5-05",
+      "CLOS-S6-02",
+      "CLOS-S6-06",
+      "CLOS2-S2-09"
+    ],
+    "acceptedDeferrals": [
+      "payroll visual-regression snapshots (owner 2026-10-23 22:10 IST)",
+      "27 coverage services"
+    ],
+    "credentialRotationRequired": [
+      "Keycloak admin-cli secret",
+      "dev-superadmin password",
+      "UAT demo password"
+    ]
+  }
 }
