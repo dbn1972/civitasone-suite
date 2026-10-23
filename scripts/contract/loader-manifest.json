@@ -1802,10 +1802,6 @@
       "screen": "/citizen/services/[serviceKey]"
     },
     {
-      "module": "contracts",
-      "screen": "/contracts"
-    },
-    {
       "module": "court",
       "screen": "/court/cases/[caseId]"
     },
