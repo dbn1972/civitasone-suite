@@ -40,11 +40,30 @@ describe("EnrolButton (GAP-LEARNING-COURSES-DETAIL-01/05)", () => {
   it("surfaces a 409 PREREQUISITES_NOT_MET message with missing names", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: false, status: 409,
-      json: async () => ({ code: "PREREQUISITES_NOT_MET", missing: ["Intro Course"] }),
+      // Real service shape: `missing` carries raw course ids, `missingCourses` carries the titles.
+      json: async () => ({
+        code: "PREREQUISITES_NOT_MET",
+        missing: ["11111111-2222-4333-8444-555555555555"],
+        missingCourses: [{ id: "11111111-2222-4333-8444-555555555555", title: "Intro Course" }],
+      }),
     });
     render(<EnrolButton courseId="c1" employeeId="e1" unmetPrereqs={[]} />);
     fireEvent.click(screen.getByRole("button", { name: /enrol now/i }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/Prerequisites not met.*Intro Course/);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Prerequisites not met.*Intro Course/);
+    expect(alert).not.toHaveTextContent(/11111111-2222/);
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  it("never prints raw ids when the service sends none of the titles", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false, status: 409,
+      json: async () => ({ code: "PREREQUISITES_NOT_MET", missing: ["11111111-2222-4333-8444-555555555555"] }),
+    });
+    render(<EnrolButton courseId="c1" employeeId="e1" unmetPrereqs={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: /enrol now/i }));
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(/Complete required courses first/);
+    expect(alert).not.toHaveTextContent(/11111111-2222/);
   });
 });

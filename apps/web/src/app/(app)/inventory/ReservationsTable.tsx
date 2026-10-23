@@ -18,7 +18,7 @@ type Col = {
 
 const columns: Col[] = [
   // GAP-INVENTORY-RESERVATIONS-03: item by name/SKU (short id only as a fallback), linked to its detail page.
-  { key: "itemId", label: "Item", render: (r) => <Link href={`/inventory/${r.itemId}`} title={r.itemId}>{itemLabel(r)}</Link> },
+  { key: "itemId", label: "Item", render: (r) => <Link href={`/inventory/items/${r.itemId}`} title={r.itemId}>{itemLabel(r)}</Link> },
   { key: "storeId", label: "Store", render: (r) => (r.storeName ? <span title={r.storeId}>{r.storeName}</span> : <code title={r.storeId}>{r.storeId.slice(0, 8)}</code>) },
   { key: "qty", label: "Qty", align: "right" },
   { key: "refType", label: "Ref Type" },

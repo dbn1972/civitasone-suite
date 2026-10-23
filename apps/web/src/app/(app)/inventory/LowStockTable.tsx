@@ -6,6 +6,7 @@ import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_componen
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryLowStockRow } from "./_data";
+import { LOW_STOCK_LIMIT, capNote } from "./_limits";
 import { lowStockSeverity, nameOrDash, raiseIndentHref } from "./_labels";
 
 /** The row plus a render-only `action` column, which has no data of its own. */
@@ -24,7 +25,7 @@ const columns: Col[] = [
     key: "name",
     label: "Item Name",
     // GAP-INVENTORY-LOW-STOCK-03: the item detail page is one click away.
-    render: (r) => <Link href={`/inventory/${r.itemId}`}>{r.name}</Link>,
+    render: (r) => <Link href={`/inventory/items/${r.itemId}`}>{r.name}</Link>,
   },
   { key: "storeName", label: "Store", render: (r) => <span title={r.storeId}>{nameOrDash(r.storeName)}</span> },
   { key: "onHandQty", label: "On Hand", align: "right" },
@@ -63,7 +64,7 @@ export function LowStockTable({ rows: initial, source = "api" }: { rows: Invento
           <StatCard icon="🛒" tone="warn" label="Total Suggested Reorder" value={statValue(provenance, totalSuggested)} />
       </StatGrid>
       <Card title="Low Stock Items">
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts" capNote={capNote(rows.length, LOW_STOCK_LIMIT, "low-stock items (most urgent first)")}>
           <DataTable<Row>
             columns={columns}
             rows={rows}

@@ -1,6 +1,7 @@
 "use client";
 
 import { DataTable } from "../../../_components/ds";
+import { INVENTORY_LEDGER_EXPORT_ROLES } from "@/lib/auth/adminRoles";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 type LedgerEntry = {
@@ -81,6 +82,11 @@ export function StockLedgerTable({ rows }: { rows: LedgerEntry[] }) {
       filterPlaceholder="Search by item name or code…"
       pageSize={50}
       sortable
+      // A real CSV download (audited, fail-closed); the page header offers a separate Print.
+      exportable
+      exportAudit="inventory/reconcile"
+      exportRoles={INVENTORY_LEDGER_EXPORT_ROLES}
+      exportFilename="stock-movements-summary"
     />
   );
 }

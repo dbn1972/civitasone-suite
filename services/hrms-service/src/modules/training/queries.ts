@@ -54,7 +54,9 @@ export async function listTrainingPrograms(
   // read (or poison) the unbounded list's cache entry.
   const key = `list:${limit}:${from ?? ""}:${to ?? ""}`;
   return cache.listOrLoad(tenantId, "training", key, async () => {
-    const rows = await repo.listTrainingsByTenant(tenantId, limit);
+    // The window is filtered in SQL before the LIMIT (so in-window programmes are never
+    // cut off by the row cap); the in-memory overlap check below is a cheap belt-and-braces.
+    const rows = await repo.listTrainingsByTenant(tenantId, limit, window);
     const windowed = (from || to)
       ? rows.filter((r) => overlapsWindow(r.fromDate, r.toDate, from, to))
       : rows;

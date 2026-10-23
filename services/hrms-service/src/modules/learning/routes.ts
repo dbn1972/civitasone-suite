@@ -191,7 +191,10 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     ]);
     const check = checkPrerequisites(prereqIds, doneCourses);
     if (!check.met) {
-      return reply.code(409).send({ code: "PREREQUISITES_NOT_MET", message: "prerequisite courses not completed", missing: check.missing });
+      // `missing` stays the id list (existing contract); `missingCourses` adds the titles so the UI
+      // can name what to complete instead of printing UUIDs.
+      const missingCourses = await repo.getCourseTitles(ctx.tenantId, check.missing);
+      return reply.code(409).send({ code: "PREREQUISITES_NOT_MET", message: "prerequisite courses not completed", missing: check.missing, missingCourses });
     }
     const existing = await repo.getEnrollment(ctx.tenantId, id, effectiveEmployeeId);
     if (existing) return reply.code(200).send({ id: existing.id, status: existing.status, progressPct: existing.progressPct });

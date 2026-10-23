@@ -103,7 +103,7 @@ export default async function InventoryReconcilePage({
       <PageHeader
         title="Stock Movements Summary"
         subtitle="Totals of receipts, issues and adjustments from the stock ledger. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : <PrintExportButton label="Export / Print" documentTitle="Stock Movements Summary" />}
+        actions={source === "error" ? <DataSourceBadge source={source} /> : <PrintExportButton label="Print" documentTitle="Stock Movements Summary" />}
       />
 
       <form method="get" aria-label="Filter by posting date" style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", margin: "0 0 12px" }}>

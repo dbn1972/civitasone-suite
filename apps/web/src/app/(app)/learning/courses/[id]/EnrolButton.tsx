@@ -44,7 +44,14 @@ export function EnrolButton({ courseId, employeeId, unmetPrereqs, disabled }: En
       }
       const body = await res.json().catch(() => ({})) as Record<string, unknown>;
       if (body.code === "PREREQUISITES_NOT_MET") {
-        const missing = Array.isArray(body.missing) ? (body.missing as string[]).join(", ") : "";
+        // The service sends `missingCourses: [{ id, title }]` (and `missing` as raw ids, which are
+        // never shown to the user). Only titles are printed.
+        const missing = Array.isArray(body.missingCourses)
+          ? (body.missingCourses as unknown[])
+              .map((c) => (typeof c === "object" && c !== null && typeof (c as { title?: unknown }).title === "string" ? (c as { title: string }).title : ""))
+              .filter((t) => t.length > 0)
+              .join(", ")
+          : "";
         setError(`Prerequisites not met${missing ? ": " + missing : ". Complete required courses first."}`);
       } else if (res.status === 409) {
         setError((({ what, next }) => `${what} ${next}`)(toHumanError("conflict", { area: "enrolment" })));

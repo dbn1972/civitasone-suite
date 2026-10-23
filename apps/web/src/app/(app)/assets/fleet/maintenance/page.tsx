@@ -15,8 +15,9 @@ import { canWriteFleet } from "@/lib/auth/workRoles";
  * /api/v1/assets). Field names are inferred from the schedule payload
  * (vehicleId, type, scheduledDate, odometerThresholdKm, status) and match the
  * DB-backed list in the asset-service fleet routes module (GAP-ASSETS-FLEET-MAINTENANCE-07:
- * verified -- scheduledDate is a bare calendar date; only the date drives
- * "overdue", the odometer threshold is stored but not evaluated).
+ * verified -- scheduledDate is a bare calendar date; a job is "overdue" once its
+ * date has passed or the vehicle's odometer has reached odometerThresholdKm, which
+ * the service reports as odometerExceeded).
  */
 type RawRow = {
   id: string;
@@ -24,6 +25,7 @@ type RawRow = {
   type: string;
   scheduledDate: string;
   odometerThresholdKm?: number;
+  odometerExceeded?: boolean;
   status?: string;
 } & Record<string, unknown>;
 
@@ -34,6 +36,8 @@ export type MaintenanceRow = {
   scheduledDate: string;
   scheduledLabel: string;
   odometerThresholdKm: string;
+  /** The vehicle's odometer has reached this job's threshold (service-evaluated). */
+  odometerExceeded: boolean;
   /** Raw service status (scheduled | completed | cancelled). */
   status: string;
 };
@@ -64,6 +68,7 @@ function mapMaintenance(payload: unknown): MaintenanceRow[] | null {
       scheduledLabel: formatIndianDate(row.scheduledDate ? String(row.scheduledDate) : null),
       odometerThresholdKm:
         typeof row.odometerThresholdKm === "number" ? `${row.odometerThresholdKm.toLocaleString("en-IN")} km` : "—",
+      odometerExceeded: row.odometerExceeded === true,
       status: String(row.status ?? "scheduled"),
     });
   }
@@ -83,7 +88,7 @@ export default async function FleetMaintenancePage() {
   // GAP-ASSETS-FLEET-MAINTENANCE-02: show the registration number, never the raw UUID.
   const byId = new Map(vehicles.map((v) => [v.id, vehicleLabel(v)]));
   const rows: MaintenanceTableRow[] = jobs.map((j) => {
-    const statusLabel = displayStatus(j.status, j.scheduledDate);
+    const statusLabel = displayStatus(j.status, j.scheduledDate, j.odometerExceeded);
     return {
       id: j.id,
       vehicle: byId.get(j.vehicleId) ?? "Unknown vehicle",

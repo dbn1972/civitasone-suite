@@ -43,4 +43,12 @@ describe("displayStatus (GAP-ASSETS-FLEET-MAINTENANCE-05)", () => {
     expect(displayStatus("cancelled", "2020-01-01")).toBe("cancelled");
     expect(displayStatus("scheduled", "")).toBe("scheduled");
   });
+
+  it("flags a future-dated scheduled job overdue once the odometer threshold is reached", () => {
+    expect(displayStatus("scheduled", "2099-01-01", true)).toBe("overdue");
+    expect(displayStatus("scheduled", "2099-01-01", false)).toBe("scheduled");
+    // odometer never revives or changes a non-scheduled job
+    expect(displayStatus("completed", "2099-01-01", true)).toBe("completed");
+    expect(displayStatus("cancelled", "2099-01-01", true)).toBe("cancelled");
+  });
 });

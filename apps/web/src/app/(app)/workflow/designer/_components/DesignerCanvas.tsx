@@ -126,6 +126,8 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
   const [hasValidated, setHasValidated] = useState(false);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const [definitionId, setDefinitionId] = useState<string | null>(null);
+  // Optimistic-locking version of the opened/created draft; PATCH must send it back.
+  const [definitionVersion, setDefinitionVersion] = useState<number | null>(null);
   const [definitionName, setDefinitionName] = useState(seedGraph?.name ?? "Untitled Process");
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "ok" | "err"; text?: string }>({ kind: "idle" });
 
@@ -165,8 +167,10 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
 
   /**
    * GAP-WORKFLOW-DESIGNER-01 - map reactflow nodes/edges to the designer API
-   * shape and Save as a NEW draft (POST; never overwrites a live definition —
-   * see Risk note). The service create endpoint is ADMIN_ROLES + audited.
+   * shape. A brand-new graph is saved as a NEW draft (POST); once a draft is
+   * opened (or has just been created) Save PATCHes THAT draft with its optimistic-
+   * locking version instead of minting a duplicate. Never overwrites a live
+   * definition. The service create/update endpoints are ADMIN_ROLES + audited.
    */
   const onSave = useCallback(async () => {
     setSaveState({ kind: "saving" });
@@ -188,22 +192,43 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
         ...(e.label ? { label: String(e.label) } : {}),
       })),
     };
+    const editing = definitionId !== null && definitionVersion !== null;
     try {
-      const res = await fetch(`/api/proxy/v1/workflow/designer/definitions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        editing
+          ? `/api/proxy/v1/workflow/designer/definitions/${encodeURIComponent(definitionId)}`
+          : `/api/proxy/v1/workflow/designer/definitions`,
+        {
+          method: editing ? "PATCH" : "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(editing ? { ...payload, version: definitionVersion } : payload),
+        },
+      );
+      if (res.status === 409 && editing) {
+        setSaveState({ kind: "err", text: "This draft was changed elsewhere or is still saving. Re-open it, then try again." });
+        return;
+      }
       if (!(res.ok || res.status === 202)) {
         setSaveState({ kind: "err", text: "Could not save. Please try again." });
         return;
       }
+      if (editing) {
+        // The update is applied asynchronously and bumps the version by one.
+        setDefinitionVersion(definitionVersion + 1);
+      } else {
+        const created = (await res.json().catch(() => null)) as { id?: unknown } | null;
+        if (created && typeof created.id === "string") {
+          // Later saves update this draft instead of creating another one.
+          setDefinitionId(created.id);
+          setDefinitionVersion(1);
+        }
+      }
       setBaseline(signature);
-      setSaveState({ kind: "ok", text: "Saved as a new draft." });
+      setSaveState({ kind: "ok", text: editing ? "Draft updated." : "Saved as a new draft." });
     } catch {
       setSaveState({ kind: "err", text: "Could not save. Please try again." });
     }
-  }, [definitionName, nodes, edges, signature]);
+  }, [definitionName, nodes, edges, signature, definitionId, definitionVersion]);
 
   /** GAP-WORKFLOW-DESIGNER-01 — load a draft's full graph into the canvas. */
   const onOpen = useCallback(
@@ -215,13 +240,14 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
           setSaveState({ kind: "err", text: "Could not open that workflow." });
           return;
         }
-        const body = (await res.json()) as { data?: { name?: string; elements?: DesignerCanvasSeedGraph["elements"]; edges?: DesignerCanvasSeedGraph["edges"] } };
+        const body = (await res.json()) as { data?: { name?: string; version?: number; elements?: DesignerCanvasSeedGraph["elements"]; edges?: DesignerCanvasSeedGraph["edges"] } };
         const d = body.data;
         if (!d) return;
         const flow = seedToFlow({ name: d.name, elements: d.elements ?? [], edges: d.edges ?? [] });
         setNodes(flow.nodes);
         setEdges(flow.edges);
         setDefinitionId(id);
+        setDefinitionVersion(typeof d.version === "number" ? d.version : null);
         setDefinitionName(d.name ?? "Untitled Process");
         setHasValidated(false);
         setLoadSeq((n) => n + 1);

@@ -36,6 +36,14 @@ describe("AssetsTable stats (GAP-ASSETS-LIST-02)", () => {
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
   });
 
+  it("an empty register shows — for the percentage and block values, not 0% / ₹0.00", () => {
+    seeded.mockReturnValue({ data: [], provenance: "live", offline: false, cachedAt: null });
+    render(<AssetsTable assets={[]} typeFilter="fixed" />);
+    expect(screen.queryByText("0%")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+  });
+
   // GAP-ASSETS-LIST-04: tabs filter on the typed status, not a regex over the display text
   it("the Active / In maintenance tabs use the typed status", () => {
     seeded.mockReturnValue({
