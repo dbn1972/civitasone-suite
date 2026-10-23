@@ -27,8 +27,7 @@ function decodeJwtPayload(token: string): JwtPayload {
 }
 
 export function getSessionRoles(): string[] {
-  const token = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedCookies cast after repairing the migration. */
-  cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return [];
   const payload = decodeJwtPayload(token);
   return Array.isArray(payload.roles) ? payload.roles : [];
@@ -36,8 +35,7 @@ export function getSessionRoles(): string[] {
 
 /** The current office (tenant) id from the session, or null when not signed in. */
 export function getSessionTenantId(): string | null {
-  const token = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedCookies cast after repairing the migration. */
-  cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.tid === "string" && payload.tid.length > 0 ? payload.tid : null;
@@ -45,8 +43,7 @@ export function getSessionTenantId(): string | null {
 
 /** Display name from the session token, or null when not signed in. */
 export function getSessionName(): string | null {
-  const token = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedCookies cast after repairing the migration. */
-  cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.name === "string" && payload.name.length > 0 ? payload.name : null;
@@ -59,8 +56,7 @@ export function getSessionName(): string | null {
  * the server remains the authority. Null when not signed in.
  */
 export function getSessionUserId(): string | null {
-  const token = (/* @next-codemod-error Await this API and update its callers; remove the temporary UnsafeUnwrappedCookies cast after repairing the migration. */
-  cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
