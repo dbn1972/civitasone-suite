@@ -1,3 +1,4 @@
+import { minorFromDb, minorToWireNumber, toSafeInt, roundMinorToRupees, formatRupees } from "../../shared/money.js";
 import { loadLatestFilings } from "../return-filings/routes.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
@@ -96,11 +97,11 @@ const pipeSafe = (v: unknown): string => String(v ?? "").replace(/[|\r\n]/g, " "
  * Rs 9e13), but if one ever did this fails loudly instead of rounding.
  */
 function minorToNumber(minor: bigint): number {
-  const n = Number(minor);
-  if (!Number.isSafeInteger(n)) {
+  try {
+    return minorToWireNumber(minor); // range-checked: throws instead of rounding
+  } catch {
     throw new HttpError(500, "AMOUNT_OUT_OF_RANGE", "a statutory-return amount exceeds the exact-integer range of a JSON number");
   }
-  return n;
 }
 
 /**
@@ -464,7 +465,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
       .limit(1));
     const dec = decRows[0] ?? null;
-    const perqMinor = dec ? Number(dec.perquisitesMinor) : 0;
+    const perqMinor = dec ? minorFromDb(dec.perquisitesMinor) : 0n;
 
     let pan = ""; let name = "";
     try {
@@ -490,7 +491,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       )));
 
     let perquisites: Array<Record<string, unknown>>;
-    let totalPerqMinor: number;
+    let totalPerqMinor: bigint;
     let sourceNote: string;
     if (comps.length > 0) {
       perquisites = comps
@@ -500,17 +501,17 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
           id: c.id,
           nature: c.nature,
           description: c.description,
-          valueByEmployerMinor: Number(c.valueByEmployerMinor),
-          amountRecoveredMinor: Number(c.amountRecoveredMinor),
-          taxableValueMinor: Number(c.taxableValueMinor),
-          value: Math.round(Number(c.taxableValueMinor) / 100),
+          valueByEmployerMinor: minorToWireNumber(minorFromDb(c.valueByEmployerMinor)),
+          amountRecoveredMinor: minorToWireNumber(minorFromDb(c.amountRecoveredMinor)),
+          taxableValueMinor: minorToWireNumber(minorFromDb(c.taxableValueMinor)),
+          value: toSafeInt(roundMinorToRupees(minorFromDb(c.taxableValueMinor))),
         }));
-      totalPerqMinor = comps.reduce((s, c) => s + Number(c.taxableValueMinor), 0);
+      totalPerqMinor = comps.reduce((s, c) => s + minorFromDb(c.taxableValueMinor), 0n);
       sourceNote = "Per-component perquisite values (Sec 17(2)) from perquisite_components.";
     } else {
       // Fall back to the declaration aggregate when no itemised components exist.
       perquisites = [
-        { sl: 1, nature: "Aggregate value of perquisites u/s 17(2)", description: "", taxableValueMinor: perqMinor, value: Math.round(perqMinor / 100) },
+        { sl: 1, nature: "Aggregate value of perquisites u/s 17(2)", description: "", taxableValueMinor: minorToWireNumber(perqMinor), value: toSafeInt(roundMinorToRupees(perqMinor)) },
       ];
       totalPerqMinor = perqMinor;
       sourceNote = "Aggregate perquisite from tax declaration (no itemised components ingested).";
@@ -551,8 +552,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       // employee master (POST /v1/hrms/pii/reveal, reason required, audit first).
       employee: { employeeId, pan: maskPan(pan), name, panFlag: pan ? "" : "PANNOTAVBL" },
       perquisites,
-      totalPerquisitesMinor: totalPerqMinor,
-      totalPerquisites: Math.round(totalPerqMinor / 100),
+      totalPerquisitesMinor: minorToWireNumber(totalPerqMinor),
+      totalPerquisites: toSafeInt(roundMinorToRupees(totalPerqMinor)),
       note: sourceNote,
     });
   });
@@ -598,18 +599,18 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       .map((r) => {
         const emp = master.get(r.employeeId);
         const pran = emp?.pran ?? null;
-        const empContrib = Number(r.empContribMinor) / 100;
-        const erContrib = Number(r.erContribMinor) / 100;
+        const empContrib = minorFromDb(r.empContribMinor);
+        const erContrib = minorFromDb(r.erContribMinor);
         return {
           employeeId: r.employeeId,
           pran: pran ?? "",
           pranFlag: pran ? "" : "PRANNOTAVBL",
           name: emp?.fullName ?? "",
-          employeeContributionMinor: Number(r.empContribMinor),
-          employerContributionMinor: Number(r.erContribMinor),
-          employeeContribution: Math.round(empContrib),
-          employerContribution: Math.round(erContrib),
-          totalContribution: Math.round(empContrib + erContrib),
+          employeeContributionMinor: minorToWireNumber(empContrib),
+          employerContributionMinor: minorToWireNumber(erContrib),
+          employeeContribution: toSafeInt(roundMinorToRupees(empContrib)),
+          employerContribution: toSafeInt(roundMinorToRupees(erContrib)),
+          totalContribution: toSafeInt(roundMinorToRupees(empContrib + erContrib)),
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -758,9 +759,9 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     lines.push(["FH", "26Q", fy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     deductees.forEach((d, i) => {
       lines.push(["DD", i + 1, pipeSafe(d.pan || d.panFlag), pipeSafe(d.name), pipeSafe(d.section),
-        (Number(d.amountPaidMinor) / 100).toFixed(2), (Number(d.tdsDeductedMinor) / 100).toFixed(2)].join("|"));
+        formatRupees(minorFromDb(d.amountPaidMinor)), formatRupees(minorFromDb(d.tdsDeductedMinor))].join("|"));
     });
-    lines.push(["FT", lines.length + 1, (Number(totalTdsMinor) / 100).toFixed(2)].join("|"));
+    lines.push(["FT", lines.length + 1, formatRupees(totalTdsMinor)].join("|"));
     const filename = `26Q_${fy.replace("-", "")}_${q}.txt`;
     return reply
       .header("content-type", "text/plain; charset=utf-8")
