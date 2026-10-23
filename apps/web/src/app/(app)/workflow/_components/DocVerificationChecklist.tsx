@@ -8,6 +8,7 @@
  * (one per visible inbox row) shares ONE request rather than one GET each.
  */
 import { useEffect, useState } from "react";
+import { toHumanError } from "@/lib/messages";
 
 interface ChecklistItem {
   docType: string;
@@ -62,7 +63,7 @@ async function flushLaneQueue(): Promise<void> {
         cache: "no-store",
         body: JSON.stringify({ lanes: chunk.map((w) => w.req) }),
       });
-      if (!res.ok) throw new Error(`verification-lane batch ${res.status}`);
+      if (!res.ok) throw new Error(toHumanError("load", { area: "the document checklist" }).what);
       const body = (await res.json()) as {
         data?: Array<{ laneKey?: string; serviceId?: string | null; applicationId?: string | null; ok?: boolean; items?: ChecklistItem[] }>;
       };
