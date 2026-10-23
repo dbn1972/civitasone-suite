@@ -23,13 +23,13 @@ describe("ChallansPage default period (IST)", () => {
 
   it("01:00 IST on 1 Apr 2026 defaults to 2026-04", async () => {
     vi.setSystemTime(new Date("2026-03-31T19:30:00Z"));
-    await ChallansPage({ searchParams: {} });
+    await ChallansPage({ searchParams: Promise.resolve({}) });
     expect(String(fetchJsonMock.mock.calls[0]?.[0])).toContain("period=2026-04");
   });
 
   it("23:30 IST on 31 Mar 2026 still defaults to 2026-03", async () => {
     vi.setSystemTime(new Date("2026-03-31T18:00:00Z"));
-    await ChallansPage({ searchParams: {} });
+    await ChallansPage({ searchParams: Promise.resolve({}) });
     expect(String(fetchJsonMock.mock.calls[0]?.[0])).toContain("period=2026-03");
   });
 });

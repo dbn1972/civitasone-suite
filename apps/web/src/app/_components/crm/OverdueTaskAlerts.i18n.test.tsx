@@ -31,7 +31,8 @@ describe("OverdueTaskAlerts is translated (GAP-CRM-TASK-ESCALATION)", () => {
     );
     expect(await screen.findByText("विलंबित खुले कार्य")).toBeInTheDocument();
     expect(screen.getByText("विलंबित कार्य")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "पुनः सौंपें" })).toBeInTheDocument();
+    // The rows render only after the mocked task fetch resolves; wait for them (the heading is static).
+    expect(await screen.findByRole("button", { name: "पुनः सौंपें" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "स्थगित करें" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Snooze" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "स्थगित करें" }));

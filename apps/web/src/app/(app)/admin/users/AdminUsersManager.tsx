@@ -119,7 +119,7 @@ function EditRolesSheet({
     // gap/routes.ts's comment on the admin-service handler for this).
     fetch(`/api/proxy/v1/admin/user-roles/${userId}`)
       .then((res) => {
-        if (!res.ok) throw new Error(String(res.status));
+        if (!res.ok) throw new Error("roles-load-failed");
         return res.json();
       })
       .then((body: { data?: Array<{ key: string }> }) => {
