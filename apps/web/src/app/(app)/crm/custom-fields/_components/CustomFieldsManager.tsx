@@ -208,6 +208,10 @@ export function CustomFieldsManager() {
   async function reloadUntilReflected(row: Row, gen: number): Promise<boolean> {
     const delays = [500, 1000, 2000];
     for (let attempt = 0; attempt <= delays.length; attempt++) {
+      // Stop polling as soon as the entity was switched or the component unmounted: a poll
+      // that wakes from its back-off sleep after that must not keep calling the API (it
+      // leaked into later tests and consumed their queued responses).
+      if (gen !== genRef.current || !mountedRef.current) return false;
       const { data, source } = await listCustomFields(entity);
       if (gen !== genRef.current || !mountedRef.current) return false;
       if (source === "error") return false;

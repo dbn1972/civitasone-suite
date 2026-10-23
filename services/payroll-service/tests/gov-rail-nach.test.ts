@@ -308,10 +308,14 @@ describe("Gov Rail Contract: NACH/APBS", () => {
         new adapter.NachAdapterError("NACH API returned 400", "NACH_API_ERROR", 400),
       );
 
+      // The service echoes the request id as `correlationId`, and by default that is a random UUID whose
+      // last group is 12 hex chars -- all digits about 1 run in 285, which the Aadhaar-shaped scan below
+      // then misreads as PII. Pin the id (a header the service honours) so the scan is deterministic.
+      const CORRELATION_ID = "c0ffee00-0000-4000-8000-00000000abcd";
       const res = await app.inject({
         method: "POST",
         url: "/v1/payroll/nach/mandates",
-        headers: { authorization: `Bearer ${makeToken()}` },
+        headers: { authorization: `Bearer ${makeToken()}`, "x-correlation-id": CORRELATION_ID },
         payload: {
           employeeRef: "550e8400-e29b-41d4-a716-446655440001",
           amountMinor: "5000000",
@@ -327,7 +331,7 @@ describe("Gov Rail Contract: NACH/APBS", () => {
       expect(body.error.code).toBe("EXTERNAL_FAILURE");
       // Error message must not expose upstream detail
       expect(body.error.message).toBe("NACH/APBS service returned an error");
-      expect(body.error.correlationId).toBeDefined();
+      expect(body.error.correlationId).toBe(CORRELATION_ID);
       // Verify no PII patterns in the response
       const responseText = JSON.stringify(body);
       expect(responseText).not.toMatch(/\b[A-Z]{5}\d{4}[A-Z]\b/); // PAN
