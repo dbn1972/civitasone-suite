@@ -27,7 +27,10 @@ export function lifecycleOf(status: string): PluginLifecycle {
     case "enabled":
     case "active":
       return "enabled";
+    // Registry state `installed` = provisioned but not yet enabled: Enable is its only
+    // valid next transition (registry consumer VALID_TRANSITIONS), same as `disabled`.
     case "disabled":
+    case "installed":
       return "disabled";
     default:
       return "other";

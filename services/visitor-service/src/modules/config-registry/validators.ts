@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { NAMESPACE_PATTERN, KEY_PATTERN } from "./domain.js";
+import { NAMESPACE_PATTERN, KEY_PATTERN, policyValueError } from "./domain.js";
 
 export const configIdParam = z.object({ id: z.string().uuid() });
 export const namespaceParam = z.object({ namespace: z.string() });
@@ -24,6 +24,11 @@ export const setConfigBody = z.object({
   // change (why this value was set). Carried into the config.changed audit
   // event so retention/approval/anti-passback changes are traceable.
   reason:          z.string().trim().max(2000).optional(),
+}).superRefine((b, ctx) => {
+  // visitor_policy scalar knobs are type- and bounds-checked per key.
+  if (b.namespace !== "visitor_policy") return;
+  const msg = policyValueError(b.configKey, b.value);
+  if (msg) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["value"], message: msg });
 });
 export type SetConfigBody = z.infer<typeof setConfigBody>;
 
