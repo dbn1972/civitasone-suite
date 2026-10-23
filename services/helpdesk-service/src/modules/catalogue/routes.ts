@@ -107,8 +107,14 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
     const status = typeof rq.status === "string" ? String(rq.status) : "active";
     const category = typeof rq.category === "string" ? String(rq.category) : undefined;
     const rows = await repo.listOfferings(ctx.tenantId, { status, category, limit: q.limit, offset: q.offset });
+    // The catalogue list shows an "Expected turnaround" column derived from the
+    // OLA targets, so each row must carry its OLAs (one batched query, no N+1).
+    const olas = await repo.listOlasForOfferings(
+      ctx.tenantId,
+      rows.map((o) => o.id),
+    );
     return reply.send({
-      data: rows.map(offeringView),
+      data: rows.map((o) => ({ ...offeringView(o), olas: olas.filter((l) => l.offeringId === o.id) })),
       pagination: { hasMore: rows.length === q.limit, pageSize: q.limit },
     });
   });

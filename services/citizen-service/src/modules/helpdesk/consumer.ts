@@ -17,6 +17,7 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; subject: string; description: string;
       ticketNo?: string; priority?: string; category?: string; channel?: string;
+      requesterName?: string;
     };
     const priority = p.priority ?? "medium";
     const createdAt = new Date();
@@ -27,6 +28,7 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
         ticketNo: p.ticketNo ?? `HD-${p.id.slice(0, 8).toUpperCase()}`,
         subject: p.subject, description: p.description, status: "open",
         priority, category: p.category ?? "general", channel: p.channel ?? "web",
+        requesterName: p.requesterName ?? null,
         slaDueAt: computeSlaDueAt(priority, createdAt),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
