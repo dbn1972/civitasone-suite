@@ -23,7 +23,7 @@ async function renderPage(roles: string[], employee: Record<string, unknown>) {
   mockRoles = roles;
   getEmployeeByIdMock.mockResolvedValue({ data: employee, source: "api" });
   fetchJsonMock.mockImplementation(async (_url: string, fallback: unknown) => ({ data: fallback, source: "api" }));
-  const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+  const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

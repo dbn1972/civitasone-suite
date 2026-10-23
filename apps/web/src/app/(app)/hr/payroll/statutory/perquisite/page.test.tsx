@@ -44,14 +44,14 @@ describe("PerquisitePage", () => {
 
   it("denies a role with no payroll/HR privilege before fetching anything", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.getByText(/don.t have permission/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
   it("prompts for employee and FY when none is selected", async () => {
-    const ui = await PerquisitePage({ searchParams: {} });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({}) });
     renderPage(ui);
     expect(screen.getByText("Select an employee and financial year")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ describe("PerquisitePage", () => {
       },
       source: "api",
     });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.getByText("Test Employee")).toBeInTheDocument();
     // GAP-PAYROLL-STATUTORY-PERQUISITE-04: the full PAN must never appear.
@@ -81,7 +81,7 @@ describe("PerquisitePage", () => {
 
   it("renders an empty state on a genuine 404 (no perquisites on file)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.getByText("No Form 12BA data")).toBeInTheDocument();
   });
@@ -93,7 +93,7 @@ describe("PerquisitePage", () => {
   // affordance with a retry, not the empty-state copy.
   it("renders the error affordance (not the empty-state copy) when the lookup fails", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.queryByText("No Form 12BA data")).not.toBeInTheDocument();
     expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();

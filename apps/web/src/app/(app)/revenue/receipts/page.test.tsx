@@ -24,7 +24,7 @@ describe("ReceiptsPage", () => {
   it("prompts to choose an assessee when none is selected", async () => {
     fetchJsonMock.mockResolvedValueOnce(assesseesPage);
 
-    const ui = await ReceiptsPage({ searchParams: {} });
+    const ui = await ReceiptsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("ReceiptsPage", () => {
         source: "api",
       });
 
-    const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await ReceiptsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("RCPT-0001")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("ReceiptsPage", () => {
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await ReceiptsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("No receipts recorded")).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("ReceiptsPage", () => {
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "error" });
 
-    const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await ReceiptsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("ReceiptsPage", () => {
         source: "api",
       });
 
-    const ui = await ReceiptsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await ReceiptsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     // Only the ₹100.00 captured receipt counts, not the ₹50.00 reversed one.

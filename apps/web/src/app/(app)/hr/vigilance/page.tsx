@@ -93,11 +93,12 @@ async function getData(offset: number, filters: Filters): Promise<LoaderResult<L
   );
 }
 
-export default async function VigilancePage({
-  searchParams,
-}: {
-  searchParams?: { page?: string; status?: string; q?: string };
-}) {
+export default async function VigilancePage(
+  props: {
+    searchParams?: Promise<{ page?: string; status?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => VIGILANCE_ROLES.includes(r));

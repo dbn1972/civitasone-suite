@@ -1,4 +1,6 @@
-import { cookies } from "next/headers";
+// Next 15: cookies() is async. This synchronous helper has many callers, so it uses the
+// supported transitional UnsafeUnwrappedCookies cast (sync access is removed in Next 16).
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import type { ZodType, ZodTypeDef } from "zod";
 import { COOKIE } from "@/lib/auth/config";
 import { recordLoaderFallback, type LoaderFallbackReason } from "./loaderTelemetry";
@@ -76,7 +78,7 @@ function emitError(
 }
 
 function serverAuthHeaders(): Record<string, string> {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return {};
   return { authorization: `Bearer ${token}` };
 }

@@ -146,11 +146,12 @@ async function getPendingAdjustments(): Promise<LoaderResult<AdjustmentRegisterR
   );
 }
 
-export default async function AdjustmentsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function AdjustmentsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

@@ -66,11 +66,12 @@ async function getEmployeeOption(empId: string): Promise<EntityOption | null> {
   };
 }
 
-export default async function LoansPage({
-  searchParams,
-}: {
-  searchParams: { empId?: string; loanId?: string };
-}) {
+export default async function LoansPage(
+  props: {
+    searchParams: Promise<{ empId?: string; loanId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollLoans");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_HR_READER_ROLES.includes(r))) {

@@ -62,7 +62,8 @@ async function getData(offset: number): Promise<LoaderResult<ListPage>> {
   });
 }
 
-export default async function IccPage({ searchParams }: { searchParams?: Record<string, string> }) {
+export default async function IccPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  const searchParams = await props.searchParams;
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => ICC_ROLES.includes(r));

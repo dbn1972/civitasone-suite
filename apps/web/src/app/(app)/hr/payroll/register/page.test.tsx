@@ -43,7 +43,7 @@ describe("PayrollRegisterPage", () => {
 
   it("renders register lines with an 'Other deductions' remainder (REGISTER-04)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [line({})], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-06" }) }));
     expect(screen.getByText("Revenue")).toBeInTheDocument();
     expect(screen.getAllByText("2025-06").length).toBeGreaterThan(0);
     // 5000000 - (1000000+200000+800000+100000) = 2900000 paise
@@ -55,7 +55,7 @@ describe("PayrollRegisterPage", () => {
       data: [line({ id: "a", total_gross_minor: "9007199254740993" }), line({ id: "b", department_name: "Health", total_gross_minor: "9007199254740993" })],
       source: "api",
     });
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-06" }) }));
     // Exact bigint sum; Number() addition would print a different (rounded) figure.
     expect(screen.getByText(formatMoney(18014398509481986n))).toBeInTheDocument();
     expect(formatMoney(18014398509481986n)).not.toBe(formatMoney(Number("9007199254740993") * 2));
@@ -66,7 +66,7 @@ describe("PayrollRegisterPage", () => {
       data: [line({ id: "a", period: "2026-06", employee_count: 10 }), line({ id: "b", period: "2026-07", employee_count: 12 })],
       source: "api",
     });
-    render(await PayrollRegisterPage({ searchParams: {} }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Totals above are for 2026-07/)).toBeInTheDocument();
     // Employees stat is the latest period only (12), never 10+12=22.
     const statValues = Array.from(document.querySelectorAll(".val")).map((n) => n.textContent);
@@ -78,19 +78,19 @@ describe("PayrollRegisterPage", () => {
 
   it("shows 'Unassigned' for a null department (REGISTER-06)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [line({ department_name: null })], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-06" }) }));
     expect(screen.getByText("Unassigned")).toBeInTheDocument();
   });
 
   it("rejects an invalid period without querying the register (REGISTER-03)", async () => {
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-13" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-13" }) }));
     expect(screen.getByText(/"2025-13" is not a valid period/)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
   it("offers a run picker and an active-filter chip with a clear link (REGISTER-03)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [line({})], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: { runId: "11111111-1111-4111-8111-111111111111" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ runId: "11111111-1111-4111-8111-111111111111" }) }));
     expect(screen.getByRole("option", { name: "2025-06 · 42 employees" })).toBeInTheDocument();
     expect(screen.getByText("Run: 2025-06")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clear filters" })).toHaveAttribute("href", "/hr/payroll/register");
@@ -98,20 +98,20 @@ describe("PayrollRegisterPage", () => {
 
   it("renders an empty state when there are no register lines", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: {} }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("No register lines")).toBeInTheDocument();
   });
 
   it("shows a single error message (no duplicate badge) on failure (REGISTER-06)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
-    render(await PayrollRegisterPage({ searchParams: {} }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("We couldn't load register.")).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
   it("denies employee/manager sessions without fetching (REGISTER-05)", async () => {
     rolesMock.mockReturnValue(["employee", "manager"]);
-    render(await PayrollRegisterPage({ searchParams: {} }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(runsMock).not.toHaveBeenCalled();
@@ -120,7 +120,7 @@ describe("PayrollRegisterPage", () => {
   // fin-payroll-03 (GAP-PAYROLL-REGISTER-04): GPF / NPS columns.
   it("shows GPF and NPS columns for a Govt-edition register and nets them out of 'Other deductions'", async () => {
     fetchJsonMock.mockResolvedValue({ data: [line({ total_gpf_minor: "300000", total_nps_minor: "150000" })], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-06" }) }));
     expect(screen.getByRole("columnheader", { name: /GPF/ })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /NPS/ })).toBeInTheDocument();
     expect(screen.getByText("₹3,000.00")).toBeInTheDocument();
@@ -132,7 +132,7 @@ describe("PayrollRegisterPage", () => {
 
   it("hides the GPF / NPS columns when nothing is deducted (private edition / older rows)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [line({ total_gpf_minor: "0", total_nps_minor: "0" })], source: "api" });
-    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    render(await PayrollRegisterPage({ searchParams: Promise.resolve({ period: "2025-06" }) }));
     expect(screen.queryByRole("columnheader", { name: /GPF/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /NPS/ })).not.toBeInTheDocument();
   });

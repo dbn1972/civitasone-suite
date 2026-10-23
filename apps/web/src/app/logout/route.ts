@@ -14,7 +14,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-
 // Redirect through Keycloak's RP-initiated logout endpoint instead, with
 // post_logout_redirect_uri pointing back at our own public login page.
 export async function GET(request: NextRequest) {
-  const cookieStore = cookies();
+  const cookieStore = await cookies();
   cookieStore.delete(COOKIE.ACCESS);
   cookieStore.delete(COOKIE.REFRESH);
   cookieStore.delete(COOKIE.DEVICE_TRUST);

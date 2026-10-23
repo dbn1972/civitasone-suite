@@ -52,7 +52,9 @@ export function portfolioTotals(rows: CRMCampaignRoiSummaryRow[]): PortfolioTota
   // Measured = campaigns with recorded spend. ROI is computed only from these so
   // a campaign that has revenue but no cost entered yet (roiVerdict 'unmeasured')
   // cannot lift the portfolio return above what the costed campaigns actually earned.
-  let measuredCost = 0n;
+  // BigInt(0), not a 0n literal: Next's build-time file tracer (@vercel/nft) statically evaluates a
+  // `let x = 0n` divisor in the minified chunk and throws "Division by zero" on the (guarded) ROI division below.
+  let measuredCost = BigInt(0);
   let measuredRevenue = 0n;
   let unmeasuredCampaigns = 0;
   let unmeasuredRevenue = 0n;

@@ -58,7 +58,7 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
 
   it("DETAIL-05: shows EMD in rupees and the document count", async () => {
     route({ emdAmountMinor: 5000000, documentCount: 3, hasNit: true });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.getByText("EMD")).toBeInTheDocument();
     expect(screen.getByText("₹50,000.00")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Documents \(3\)/ })).toBeInTheDocument();
@@ -66,13 +66,13 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
 
   it("DETAIL-05: a draft tender with no NIT shows the 'Attach NIT' cue", async () => {
     route({ status: "draft", hasNit: false, documentCount: 0 });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.getByText(/No NIT attached/)).toBeInTheDocument();
   });
 
   it("DETAIL-05: a draft tender WITH a NIT shows no cue", async () => {
     route({ status: "draft", hasNit: true, documentCount: 1 });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.queryByText(/No NIT attached/)).not.toBeInTheDocument();
   });
 
@@ -84,7 +84,7 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
         { vendorId: "v2", vendorName: "Bharat Supplies", status: "submitted" },
       ],
     });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.getByText("Bidder 1")).toBeInTheDocument();
     expect(screen.getByText("Bidder 2")).toBeInTheDocument();
     expect(screen.queryByText("Acme Traders")).not.toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
       status: "technical_evaluation",
       bids: [{ vendorId: "v1", vendorName: "Acme Traders", status: "technically_qualified" }],
     });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.getByText("Acme Traders")).toBeInTheDocument();
     expect(screen.queryByText("Bidder 1")).not.toBeInTheDocument();
   });
@@ -108,7 +108,7 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
       createdBy: "creator-1",
       bids: [{ vendorId: "v1", vendorName: "Acme", status: "technically_qualified", financialOpened: true, bidAmount: 450000 }],
     });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.getByText(/approver must differ from the creator/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Award tender" })).toBeDisabled();
   });
@@ -121,7 +121,7 @@ describe("TenderDetailPage (GAP-PROCUREMENT-TENDERS-DETAIL-03/04/05)", () => {
       techEvaluatedBy: "evaluator-2",
       bids: [{ vendorId: "v1", vendorName: "Acme", status: "technically_qualified", financialOpened: true, bidAmount: 450000 }],
     });
-    render(await TenderDetailPage({ params: { id: TENDER_ID } }));
+    render(await TenderDetailPage({ params: Promise.resolve({ id: TENDER_ID }) }));
     expect(screen.queryByText(/approver must differ/)).not.toBeInTheDocument();
   });
 });

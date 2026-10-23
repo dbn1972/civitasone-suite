@@ -5,7 +5,8 @@ import { getChangeRequest } from "../_data/loaders";
 import { ChangeActions } from "./ChangeActions";
 import { formatIndianDateTime, formatShortId } from "@/lib/formatters";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: detail, source, status } = await getChangeRequest(params.id);
   // SF-02: only a real 404 is "not found"; other failures are load errors.
   if (source === "error" && status === 404) notFound();
@@ -30,7 +31,6 @@ export default async function Page({ params }: { params: { id: string } }) {
   return (
     <>
       <PageHeader title={c.title} subtitle={`Change ${formatShortId(c.id)} · ${c.type} · ${c.risk} risk`} back="/change" />
-
       <div className="card">
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Overview</h3>
@@ -81,9 +81,7 @@ export default async function Page({ params }: { params: { id: string } }) {
           </div>
         )}
       </div>
-
       <ChangeActions id={c.id} status={c.status} hasRollbackPlan={Boolean(c.rollbackPlan)} />
-
       <div className="card">
         <div className="card-h"><h3>Audit trail</h3></div>
         {detail.audit.length === 0 ? (

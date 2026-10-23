@@ -18,7 +18,7 @@ describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
   beforeEach(() => { getPage.mockReset(); getPage.mockResolvedValue(OK); });
 
   it("fetches one bounded page for the chosen fy / type / search / page, never the whole ledger", async () => {
-    render(await GeneralLedgerPage({ searchParams: { fy: "2025-26", type: "receipt", q: "V-1", page: "3" } }));
+    render(await GeneralLedgerPage({ searchParams: Promise.resolve({ fy: "2025-26", type: "receipt", q: "V-1", page: "3" }) }));
     expect(getPage).toHaveBeenCalledTimes(1);
     expect(getPage).toHaveBeenCalledWith({ fy: "2025-26", type: "receipt", q: "V-1", page: 3, pageSize: 25 });
     expect(screen.getByText("fy-filter")).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
   });
 
   it("announces a just-posted voucher", async () => {
-    render(await GeneralLedgerPage({ searchParams: { posted: "JV-9", state: "queued" } }));
+    render(await GeneralLedgerPage({ searchParams: Promise.resolve({ posted: "JV-9", state: "queued" }) }));
     expect(screen.getByRole("status")).toHaveTextContent(/JV-9 accepted for processing/);
   });
 });

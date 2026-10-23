@@ -18,20 +18,20 @@ describe("LegalOpinionDetailPage (GAP-LEGAL-OPINIONS-DETAIL-02 / 04 / 05)", () =
   // DETAIL-02: an outage must NOT read as "removed".
   it("500 outage -> retryable error state, not 'Opinion not found'", async () => {
     getByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     expect(screen.queryByText("Opinion not found")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
   it("404 -> not-found state", async () => {
     getByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     expect(screen.getByText("Opinion not found")).toBeInTheDocument();
   });
 
   it("successful null -> not-found state", async () => {
     getByIdMock.mockResolvedValue({ data: null, source: "api", status: 200 });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     expect(screen.getByText("Opinion not found")).toBeInTheDocument();
   });
 
@@ -41,7 +41,7 @@ describe("LegalOpinionDetailPage (GAP-LEGAL-OPINIONS-DETAIL-02 / 04 / 05)", () =
       data: { opinionNo: "OPN/2026/1", subject: "Dispute", status: "issued", advisorName: "Adv. Rao", requestedBy: "Jane", question: "May we appeal?" },
       source: "api", status: 200,
     });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     expect(screen.getAllByText("Adv. Rao").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("Jane").length).toBeGreaterThanOrEqual(1);
   });
@@ -52,7 +52,7 @@ describe("LegalOpinionDetailPage (GAP-LEGAL-OPINIONS-DETAIL-02 / 04 / 05)", () =
       data: { opinionNo: "OPN/2026/1", subject: "Dispute", status: "issued", counselName: "C", soughtBy: "S", question: "advice text" },
       source: "api", status: 200,
     });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     // "Issued" appears once (the header pill), not three times
     expect(screen.getAllByText("Issued")).toHaveLength(1);
     expect(screen.getByText(/Privileged/i)).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("LegalOpinionDetailPage (GAP-LEGAL-OPINIONS-DETAIL-02 / 04 / 05)", () =
       data: { opinionNo: "OPN/2026/1", subject: "Dispute", status: "issued" },
       source: "api", status: 200,
     });
-    render(await LegalOpinionDetailPage({ params }));
+    render(await LegalOpinionDetailPage({ params: Promise.resolve(params) }));
     expect(screen.getByRole("link", { name: "Legal" })).toHaveAttribute("href", "/legal");
     expect(screen.getByRole("link", { name: "Opinions" })).toHaveAttribute("href", "/legal/opinions");
   });

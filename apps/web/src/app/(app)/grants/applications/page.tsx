@@ -9,11 +9,12 @@ import { FilterButton, APPLICATION_FILTERS } from "./FilterButton";
 // is ignored so a stray/forged query never silently filters to nothing.
 const statusParam = z.enum(APPLICATION_FILTERS);
 
-export default async function GrantApplicationsPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string };
-}) {
+export default async function GrantApplicationsPage(
+  props: {
+    searchParams?: Promise<{ status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: applications, source } = await getGrantApplications();
 
   const parsedStatus = statusParam.safeParse(searchParams?.status);

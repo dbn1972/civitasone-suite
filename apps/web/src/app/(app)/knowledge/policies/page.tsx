@@ -43,7 +43,8 @@ function toRow(p: PolicySummary): Row {
   };
 }
 
-export default async function Page({ searchParams }: { searchParams?: { filter?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ filter?: string }> }) {
+  const searchParams = await props.searchParams;
   const [{ data: policies, source }, { data: reviewDue, source: reviewDueSource }] = await Promise.all([
     getKnowledgePolicies(),
     getReviewDuePolicies(),

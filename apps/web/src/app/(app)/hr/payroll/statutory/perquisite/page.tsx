@@ -45,7 +45,10 @@ async function getForm12BA(employeeId: string, fy: string): Promise<LoaderResult
   );
 }
 
-export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string; edit?: string } }) {
+export default async function PerquisitePage(
+  props: { searchParams?: Promise<{ employeeId?: string; fy?: string; edit?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("perquisite");
   const tFallback = await getTranslations("employeeFallback");
 

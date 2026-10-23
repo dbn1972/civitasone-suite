@@ -56,7 +56,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText("Revenue Analytics")).toBeInTheDocument();
     // GAP-REVENUE-ANALYTICS-05: monthly period renders as "Jun 2026", not "2026-06".
@@ -96,7 +96,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     // ₹2,500.00 (the max), not ₹700.00 (index 0).
     expect(screen.getByText("₹2,500.00")).toBeInTheDocument();
@@ -109,7 +109,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText("No trend data")).toBeInTheDocument();
   });
@@ -121,7 +121,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
@@ -139,7 +139,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     fireEvent.click(screen.getByText("Top Defaulters"));
     expect(screen.queryByText("No defaulters")).not.toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.queryByText("No trend data")).not.toBeInTheDocument();
     expect(screen.getByText("We couldn't load trend data.")).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe("RevenueAnalyticsPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RevenueAnalyticsPage({ searchParams: {} });
+    const ui = await RevenueAnalyticsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // The three efficiency-derived stat cards must render "—", never a fabricated

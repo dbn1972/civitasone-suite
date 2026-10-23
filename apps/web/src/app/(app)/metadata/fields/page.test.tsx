@@ -37,7 +37,7 @@ describe("MetadataFieldsPage (GAP-METADATA-FIELDS-01/-02/-03/-04)", () => {
   // and never expose an /api/ path.
   it("prompts the user to choose an entity when none is selected", async () => {
     routeImpl();
-    const { container } = render(await MetadataFieldsPage({ searchParams: {} }));
+    const { container } = render(await MetadataFieldsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Choose an entity to see its fields/i)).toBeInTheDocument();
     expect(screen.getByText("Select an entity…")).toBeInTheDocument();
     expect(container.textContent ?? "").not.toContain("/api/");
@@ -48,7 +48,7 @@ describe("MetadataFieldsPage (GAP-METADATA-FIELDS-01/-02/-03/-04)", () => {
   it("loads fields from the entity-scoped route and renders them in a table", async () => {
     routeImpl();
     const entityId = ENTITIES[0].id;
-    const { container } = render(await MetadataFieldsPage({ searchParams: { entity: entityId } }));
+    const { container } = render(await MetadataFieldsPage({ searchParams: Promise.resolve({ entity: entityId }) }));
     expect(screen.getByText("Subject")).toBeInTheDocument();
     expect(screen.getByText("Priority")).toBeInTheDocument();
     expect(container.querySelector("table")).not.toBeNull();
@@ -62,7 +62,7 @@ describe("MetadataFieldsPage (GAP-METADATA-FIELDS-01/-02/-03/-04)", () => {
   // FIELDS-01: a selected entity with no fields shows an honest empty state.
   it("shows an honest empty state when the selected entity has no fields", async () => {
     routeImpl({ fields: [] });
-    const { container } = render(await MetadataFieldsPage({ searchParams: { entity: ENTITIES[0].id } }));
+    const { container } = render(await MetadataFieldsPage({ searchParams: Promise.resolve({ entity: ENTITIES[0].id }) }));
     expect(screen.getByText("No fields defined")).toBeInTheDocument();
     expect(container.querySelector("pre")).toBeNull();
   });

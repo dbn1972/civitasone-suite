@@ -23,7 +23,8 @@ const BAND_PRESENTATION = {
   critical: { className: "pill bad", icon: "⛔" },
 } as const;
 
-export default async function Page({ searchParams }: { searchParams?: { blocked?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ blocked?: string }> }) {
+  const searchParams = await props.searchParams;
   const blockedOnly = searchParams?.blocked === "true";
 
   const [counters, audit, agents] = await Promise.all([

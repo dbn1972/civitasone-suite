@@ -16,11 +16,12 @@ function todayIST(): string {
   return parts; // en-CA format is YYYY-MM-DD
 }
 
-export default async function MeetingsPage({
-  searchParams,
-}: {
-  searchParams?: { view?: string };
-}) {
+export default async function MeetingsPage(
+  props: {
+    searchParams?: Promise<{ view?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("estabW2");
   const { data: meetings, source } = await getMeetings();
   const calendarView = searchParams?.view === "calendar";

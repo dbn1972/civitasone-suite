@@ -7,7 +7,8 @@ import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 import { StockListClient } from "./StockListClient";
 
-export default async function StockListPage({ searchParams }: { searchParams?: { status?: string; page?: string } }) {
+export default async function StockListPage(props: { searchParams?: Promise<{ status?: string; page?: string }> }) {
+  const searchParams = await props.searchParams;
   // GAP-STOCK-LIST-05: pass status filter from searchParams so the server
   // can pre-filter; the KPIs are labelled "on this page" to avoid presenting
   // a page-count as a global total.

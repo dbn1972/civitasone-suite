@@ -2,11 +2,12 @@ import { PageHeader } from "../../../_components/ds";
 import { getProcurementGem } from "../../../_data/loaders";
 import { GemTable } from "./GemTable";
 
-export default async function GemPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function GemPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP2-PROCUREMENT-GEM-ITEMS-08: the search term is driven from the URL (?q=)
   // so a server render reflects the operator's query and the loader can hit the
   // live GeM catalog.

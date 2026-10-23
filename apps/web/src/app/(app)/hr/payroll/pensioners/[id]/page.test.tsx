@@ -31,7 +31,7 @@ const DETAIL = {
 
 async function renderPage(data: unknown = DETAIL, extra: Record<string, unknown> = {}) {
   fetchJsonMock.mockResolvedValue({ data, source: "api", ...extra });
-  const ui = await PensionerDetailPage({ params: { id: DETAIL.id } });
+  const ui = await PensionerDetailPage({ params: Promise.resolve({ id: DETAIL.id }) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 
@@ -121,7 +121,7 @@ describe("PensionerDetailPage (GAP-PAYROLL-PENSIONERS-03/04)", () => {
 
   it("denies roles outside the payroll readers without fetching", async () => {
     rolesMock.mockReturnValue(["employee"]);
-    const ui = await PensionerDetailPage({ params: { id: DETAIL.id } });
+    const ui = await PensionerDetailPage({ params: Promise.resolve({ id: DETAIL.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
@@ -129,6 +129,6 @@ describe("PensionerDetailPage (GAP-PAYROLL-PENSIONERS-03/04)", () => {
 
   it("a 404 from the API is a real not-found, not a generic load error", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(PensionerDetailPage({ params: { id: DETAIL.id } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(PensionerDetailPage({ params: Promise.resolve({ id: DETAIL.id }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

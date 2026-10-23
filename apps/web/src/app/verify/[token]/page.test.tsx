@@ -12,7 +12,7 @@ describe("Public certificate verify page (GAP-CITIZEN-CERTIFICATES-01)", () => {
     );
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
-    render(await PublicVerifyPage({ params: { token: "abc" } }));
+    render(await PublicVerifyPage({ params: Promise.resolve({ token: "abc" }) }));
 
     // It must hit the gateway's public verify route, never the session-gated proxy.
     const firstCall = fetchMock.mock.calls[0] as unknown[] | undefined;
@@ -27,13 +27,13 @@ describe("Public certificate verify page (GAP-CITIZEN-CERTIFICATES-01)", () => {
 
   it("shows a not-found verdict for an unknown token (404)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 404 })) as unknown as typeof fetch);
-    render(await PublicVerifyPage({ params: { token: "nope" } }));
+    render(await PublicVerifyPage({ params: Promise.resolve({ token: "nope" }) }));
     expect(screen.getByText("Certificate not found")).toBeInTheDocument();
   });
 
   it("shows a graceful error (not a crash) when the gateway is unreachable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("network"); }) as unknown as typeof fetch);
-    render(await PublicVerifyPage({ params: { token: "x" } }));
+    render(await PublicVerifyPage({ params: Promise.resolve({ token: "x" }) }));
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
@@ -47,7 +47,7 @@ describe("Public certificate verify page (GAP-CITIZEN-CERTIFICATES-01)", () => {
         new Response(JSON.stringify({ found: true, validity: "valid", certNo: "CERT-1" }), { status: 200 }),
       ) as unknown as typeof fetch,
     );
-    const { container } = render(await PublicVerifyPage({ params: { token: "abc" } }));
+    const { container } = render(await PublicVerifyPage({ params: Promise.resolve({ token: "abc" }) }));
     const html = container.innerHTML;
     // valid verdict -> --good* tokens; no literal hex, no forced system-ui.
     expect(html).toContain("var(--good");
@@ -63,7 +63,7 @@ describe("Public certificate verify page (GAP-CITIZEN-CERTIFICATES-01)", () => {
         new Response(JSON.stringify({ found: true, validity: "expired", certNo: "CERT-2" }), { status: 200 }),
       ) as unknown as typeof fetch,
     );
-    const { container } = render(await PublicVerifyPage({ params: { token: "abc" } }));
+    const { container } = render(await PublicVerifyPage({ params: Promise.resolve({ token: "abc" }) }));
     expect(container.innerHTML).toContain("var(--warn");
   });
 });

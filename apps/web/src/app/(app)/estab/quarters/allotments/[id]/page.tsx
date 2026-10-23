@@ -53,7 +53,8 @@ async function getLicenceFeeRates(): Promise<LoaderResult<LicenceFeeRate[]>> {
   });
 }
 
-export default async function AllotmentDetailPage({ params }: { params: { id: string } }) {
+export default async function AllotmentDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tFallback = await getTranslations("employeeFallback");
   const { data: allotment, source: allotmentSource } = await getAllotment(params.id);
 

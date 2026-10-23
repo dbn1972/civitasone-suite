@@ -12,11 +12,12 @@ type Row = {
   designations: string;
 } & Record<string, unknown>;
 
-export default async function PayMatrixPage({
-  searchParams,
-}: {
-  searchParams?: { level?: string };
-}) {
+export default async function PayMatrixPage(
+  props: {
+    searchParams?: Promise<{ level?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payMatrix");
   // GAP-HR-PAY-MATRIX-04 fix step 3: an optional level filter, reusing the
   // API's own `?level=` param (already supported server-side) instead of
@@ -102,7 +103,7 @@ export default async function PayMatrixPage({
         // needed -- the level filter is entirely server-driven via
         // searchParams) so a level can be picked directly instead of
         // scrolling/filtering through all 541 rows.
-        <form method="get" style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
+        (<form method="get" style={{ display: "flex", alignItems: "center", gap: 8, margin: "12px 0" }}>
           <label htmlFor="pay-matrix-level" style={{ fontSize: 13, color: "var(--mut)" }}>
             {t("levelFilterLabel")}
           </label>
@@ -113,7 +114,7 @@ export default async function PayMatrixPage({
             ))}
           </select>
           <button type="submit" className="btn ghost" style={{ minHeight: 36 }}>{t("levelFilterApply")}</button>
-        </form>
+        </form>)
       ) : null}
       <StatGrid>
         <StatCard icon="📊" iconBg="var(--infobg)" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
@@ -130,9 +131,9 @@ export default async function PayMatrixPage({
           // "couldn't load, try again" with a Retry button that could never
           // succeed. LoadErrorState renders the same access-restricted
           // message (no retry) the rest of the app already uses for a 403.
-          <div className="pad">
+          (<div className="pad">
             <LoadErrorState result={{ status, errorMessage }} area="pay matrix" backHref="/hr" />
-          </div>
+          </div>)
         ) : (
           <DataTable<Row>
             columns={columns}

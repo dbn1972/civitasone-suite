@@ -15,20 +15,20 @@ describe("SanctionDetailPage error states (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-0
 
   it("500 -> load error with retry, never 'not found'", async () => {
     getById.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await SanctionDetailPage({ params: { id: "x" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("We couldn't load the sanction because of a problem on our side.")).toBeInTheDocument();
     expect(screen.queryByText("Sanction not found")).not.toBeInTheDocument();
   });
 
   it("404 -> 'Sanction not found'", async () => {
     getById.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await SanctionDetailPage({ params: { id: "x" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("Sanction not found")).toBeInTheDocument();
   });
 
   it("403 -> permission copy, not 'not found'", async () => {
     getById.mockResolvedValue({ data: null, source: "error", status: 403 });
-    render(await SanctionDetailPage({ params: { id: "x" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByText("Sanction not found")).not.toBeInTheDocument();
     expect(screen.queryByText("We couldn't load the sanction because of a problem on our side.")).not.toBeInTheDocument();
   });
@@ -43,7 +43,7 @@ describe("SanctionDetailPage approval trail timestamps (GAP-FINANCE-BUDGET-SANCT
 
   it("a cancelled (eOffice-rejected) sanction is not treated as pending: no approval guidance", async () => {
     getById.mockResolvedValue({ data: { ...base, status: "cancelled", approvalTrail: [] }, source: "api" });
-    render(await SanctionDetailPage({ params: { id: "s1" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText(/Approve directly|Only a finance administrator/)).not.toBeInTheDocument();
   });
 
@@ -52,7 +52,7 @@ describe("SanctionDetailPage approval trail timestamps (GAP-FINANCE-BUDGET-SANCT
       data: { ...base, approvalTrail: [{ actor: "B", action: "approved", timestamp: "2026-03-05T09:00:00.000Z" }] },
       source: "api",
     });
-    render(await SanctionDetailPage({ params: { id: "s1" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getByText(/05 Mar 2026, 02:30/i)).toBeInTheDocument();
     expect(screen.queryByText("2026-03-05T09:00:00.000Z")).not.toBeInTheDocument();
   });
@@ -62,7 +62,7 @@ describe("SanctionDetailPage approval trail timestamps (GAP-FINANCE-BUDGET-SANCT
       data: { ...base, approvalTrail: [{ actor: "B", action: "approved", timestamp: "not-a-date" }, { actor: "C", action: "noted", timestamp: "" }] },
       source: "api",
     });
-    render(await SanctionDetailPage({ params: { id: "s1" } }));
+    render(await SanctionDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
     expect(screen.queryByText("not-a-date")).not.toBeInTheDocument();
   });

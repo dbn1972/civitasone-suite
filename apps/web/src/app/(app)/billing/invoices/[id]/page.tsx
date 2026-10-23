@@ -84,7 +84,8 @@ function actorLabel(id: string | null): string {
   return id.replace(/-/g, "").slice(0, 8);
 }
 
-export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+export default async function InvoiceDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [
     { data: invoice, source: invoiceSource, status: invoiceStatus, errorMessage: invoiceErrorMessage },
     { data: einvoice, source: einvoiceSource, status: einvoiceStatus },
@@ -143,21 +144,18 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <AutoBreadcrumb />
       </nav>
-
       {/* GAP-BILLING-INVOICES-DETAIL-08: back prop removed; AutoBreadcrumb (above)
           is the single back affordance so we don't show two parallel ← links. */}
       <PageHeader
         title={`Invoice ${invoice.id.replace(/-/g, "").slice(0, 8)}`}
         subtitle={`Period ${invoice.periodMonth} · ${cur}`}
       />
-
       <StatGrid>
         <StatCard icon="🧾" label="Status" value={humanizeStatus(invoice.status)} />
         <StatCard icon="💰" label="Total" value={formatMoneyIn(invoice.totalMinor, cur)} />
         <StatCard icon="✅" label="Paid" value={formatMoneyIn(invoice.paidMinor, cur)} />
         <StatCard icon="⚠️" label="Outstanding" value={formatMoneyIn(invoice.outstandingMinor, cur)} />
       </StatGrid>
-
       <Card title="Invoice details" padding>
         <div className="fields">
           <div className="field"><span className="label">Invoice ID</span><span className="mono" title={invoice.id}>{invoice.id}</span></div>
@@ -177,7 +175,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           )}
         </div>
       </Card>
-
       <Card title="Line items" padding>
         {invoice.items.length === 0 ? (
           <EmptyState icon="📄" title="No line items" message="This invoice has no recorded line items." />
@@ -194,7 +191,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           />
         )}
       </Card>
-
       {invoice.approvals.length > 0 && (
         <Card title="Approvals" padding>
           <DataTable<InvoiceApprovalRow & { requestedByShort: string; decidedByShort: string; currency: string }>
@@ -216,7 +212,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
           />
         </Card>
       )}
-
       <Card title="GST e-invoice (IRN)" padding>
         <InvoiceActions invoiceId={invoice.id} einvoice={einvoice} einvoiceUnknown={einvoiceUnknown} canIrn={canIrn} />
       </Card>

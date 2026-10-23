@@ -21,7 +21,8 @@ function isOverdue(dueDate: string | undefined, status: string): boolean {
   return ms < Date.now() - DAY_MS; // strictly before today (UTC day)
 }
 
-export default async function ContractDetailPage({ params }: { params: { id: string } }) {
+export default async function ContractDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [{ data: contract, source, status }, milestonesRes, bondsRes, obligationsRes, vendorsRes] =
     await Promise.all([
       getContractById(params.id),

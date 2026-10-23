@@ -144,7 +144,14 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleResult> 
   return { events, unavailable };
 }
 
-export default async function EmployeeDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: Record<string, string | string[] | undefined> }) {
+type EmployeeDetailProps = {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function EmployeeDetailPage(props: EmployeeDetailProps) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the edit form sends the user here with
   // ?updated=1 once a save was accepted (202). That one navigation reads the
   // record fresh (skipping the 60 s data cache -- the no-store is scoped to

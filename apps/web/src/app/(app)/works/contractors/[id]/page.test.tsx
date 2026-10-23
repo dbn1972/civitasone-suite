@@ -75,7 +75,7 @@ describe("ContractorDetailPage", () => {
   // GAP-WORKS-CONTRACTORS-DETAIL-01: a 500 renders a retryable error, NOT notFound.
   it("renders a retryable error state (not notFound) on a 500", async () => {
     nextResults.contractor = { source: "error", status: 500 };
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getAllByRole("button", { name: /try again|retry/i }).length).toBeGreaterThan(0);
   });
@@ -83,7 +83,7 @@ describe("ContractorDetailPage", () => {
   // GAP-WORKS-CONTRACTORS-DETAIL-01: a 404 is still a genuine not-found.
   it("calls notFound() on a 404", async () => {
     nextResults.contractor = { source: "error", status: 404 };
-    await expect(ContractorDetailPage({ params: { id: ID } })).rejects.toThrow(/NOT_FOUND/);
+    await expect(ContractorDetailPage({ params: Promise.resolve({ id: ID }) })).rejects.toThrow(/NOT_FOUND/);
     expect(notFoundMock).toHaveBeenCalled();
   });
 
@@ -91,7 +91,7 @@ describe("ContractorDetailPage", () => {
   // appears exactly once (not duplicated in a KPI tile), phone/email masked.
   it("masks PAN/phone/email and shows PAN once for a non-reveal viewer", async () => {
     session.roles = ["works_viewer"];
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("AAAPZ****C")).toBeInTheDocument();
     // No clear PAN anywhere, and no Reveal control for a read-only viewer.
     expect(document.body.textContent).not.toContain("AAAPZ1234C");
@@ -102,7 +102,7 @@ describe("ContractorDetailPage", () => {
   // GAP-WORKS-CONTRACTORS-DETAIL-02: a write-tier viewer gets a Reveal control.
   it("offers a Reveal control for a write-tier role", async () => {
     session.roles = ["works_admin"];
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByRole("button", { name: /reveal/i })).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("AAAPZ1234C");
   });
@@ -116,7 +116,7 @@ describe("ContractorDetailPage", () => {
       ],
       source: "api",
     };
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("J. Rao")).toBeInTheDocument();
     expect(screen.getByText("Good work")).toBeInTheDocument();
     // The 8-char UUID slice "abc12345" / "ffffffff" must never appear.
@@ -127,20 +127,20 @@ describe("ContractorDetailPage", () => {
   // GAP-WORKS-CONTRACTORS-DETAIL-01: history fetch error shows an error, not "No ratings recorded yet."
   it("shows an error (not an empty state) when the rating-history fetch fails", async () => {
     nextResults.rating = { source: "error", status: 500 };
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.queryByText("No ratings recorded yet.")).not.toBeInTheDocument();
   });
 
   // GAP-WORKS-CONTRACTORS-DETAIL-05: the "Rate Contractor" card is hidden for a read-only viewer.
   it("hides the Rate Contractor card for a role that cannot rate", async () => {
     session.roles = ["works_viewer"];
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.queryByText("Rate Contractor")).not.toBeInTheDocument();
   });
 
   it("shows the Rate Contractor card for a rate-capable role", async () => {
     session.roles = ["works_admin"];
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("Rate Contractor")).toBeInTheDocument();
   });
 
@@ -148,7 +148,7 @@ describe("ContractorDetailPage", () => {
   it("floors the star glyphs so they never exceed the printed rating", async () => {
     nextResults.contractor = contractor({ detail: { performanceRating: 4 } });
     // performanceRating is integer in the backend; verify 4 filled stars for 4.0.
-    render(await ContractorDetailPage({ params: { id: ID } }));
+    render(await ContractorDetailPage({ params: Promise.resolve({ id: ID }) }));
     const banner = screen.getByLabelText(/Rating: 4\.0 out of 5/i);
     const filled = (banner.textContent?.match(/★/g) ?? []).length;
     expect(filled).toBe(4);

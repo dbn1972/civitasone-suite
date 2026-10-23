@@ -10,13 +10,14 @@ import { getDesignerServiceById } from "../_data/designerLoader";
  * for editable states. If the status cannot be determined (loader error), we
  * fail closed to the draft wizard — the existing, safe default.
  */
-export default async function DesignerServiceEntry({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function DesignerServiceEntry(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const qs = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (typeof value === "string") {

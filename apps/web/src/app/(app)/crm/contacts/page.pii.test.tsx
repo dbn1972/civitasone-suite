@@ -26,7 +26,7 @@ beforeEach(() => {
 describe("Contacts list server-side PII masking (DPDP)", () => {
   it("passes MASKED phone/email into the client table for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const props = tableProps.mock.calls[0]![0] as { contacts: Array<{ phone: string; email: string }> };
     expect(JSON.stringify(props)).not.toContain("9876543210");
     expect(JSON.stringify(props)).not.toContain("asha@example.com");
@@ -38,7 +38,7 @@ describe("Contacts list server-side PII masking (DPDP)", () => {
   // in the list payload.
   it("masks phone/email for a CRM_PII_READ_ROLES role too, and enables the audited reveal", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const props = tableProps.mock.calls[0]![0] as { contacts: Array<{ phone: string; email: string }>; canReveal: boolean };
     expect(JSON.stringify(props)).not.toContain("9876543210");
     expect(JSON.stringify(props)).not.toContain("asha@example.com");
@@ -48,7 +48,7 @@ describe("Contacts list server-side PII masking (DPDP)", () => {
 
   it("gives a plain crm_user no reveal control", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const props = tableProps.mock.calls[0]![0] as { canReveal: boolean };
     expect(props.canReveal).toBe(false);
   });
@@ -59,7 +59,7 @@ describe("Contacts list server-side PII masking (DPDP)", () => {
       source: "api",
     });
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const props = tableProps.mock.calls[0]![0] as { contacts: Array<{ phone: string; email: string }> };
     expect(props.contacts[0]!.phone).toBe("******3210");
     expect(props.contacts[0]!.email).toBe("r***@example.com");
@@ -67,14 +67,14 @@ describe("Contacts list server-side PII masking (DPDP)", () => {
 
   it("states the truth in the banner: masked, and reveal is recorded - never the old 'logged' claim for clear lists", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    const { container } = render(await Page({ searchParams: {} }));
+    const { container } = render(await Page({ searchParams: Promise.resolve({}) }));
     const note = container.querySelector('[role="note"]')!;
     expect(note.textContent).toMatch(/masked/i);
     expect(note.textContent).toMatch(/recorded in the audit trail/i);
     expect(note.textContent).not.toMatch(/Access is role-scoped and logged/);
 
     mockRoles.mockReturnValue(["crm_user"]);
-    const second = render(await Page({ searchParams: {} }));
+    const second = render(await Page({ searchParams: Promise.resolve({}) }));
     const note2 = second.container.querySelector('[role="note"]')!;
     expect(note2.textContent).toMatch(/masked for your role/i);
   });

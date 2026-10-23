@@ -146,13 +146,13 @@ describe("Pipeline Page", () => {
 
     it("an explicit ?pipelineId=<valid> fetches that pipeline", async () => {
       vi.mocked(getPipelines).mockResolvedValue({ data: TWO, source: "api" });
-      render(await PipelinePage({ searchParams: { pipelineId: "p2" } }));
+      render(await PipelinePage({ searchParams: Promise.resolve({ pipelineId: "p2" }) }));
       expect(getPipelineDeals).toHaveBeenCalledWith("p2");
     });
 
     it("an unknown ?pipelineId falls back to the default pipeline instead of querying a bogus id", async () => {
       vi.mocked(getPipelines).mockResolvedValue({ data: TWO, source: "api" });
-      render(await PipelinePage({ searchParams: { pipelineId: "does-not-exist" } }));
+      render(await PipelinePage({ searchParams: Promise.resolve({ pipelineId: "does-not-exist" }) }));
       expect(getPipelineDeals).toHaveBeenCalledWith("p1");
     });
 

@@ -34,7 +34,7 @@ describe("EstabFileDetailPage — not-found vs error (L3)", () => {
     // file was lost during a backend blip.
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     expect(screen.queryByText("File not found")).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("EstabFileDetailPage — note sheet when/officer/signedAt (FILES-DETAIL
       },
     });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     // When column header is present (date/time now shown per row).
@@ -136,7 +136,7 @@ describe("EstabFileDetailPage - service-resolved officer names (SF-17b)", () => 
       },
     });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     expect(screen.getByText("Anita Desai")).toBeInTheDocument();

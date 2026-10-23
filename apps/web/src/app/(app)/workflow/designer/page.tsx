@@ -4,11 +4,12 @@ import { getDesignerDefinitions } from "./_data/designerData";
 import { DesignerCanvas } from "./_components/DesignerCanvasClient";
 import { getSessionRoles, WORKFLOW_DESIGNER_AUTHOR_ROLES } from "@/lib/auth/roleGuard";
 
-export default async function WorkflowDesignerPage({
-  searchParams,
-}: {
-  searchParams?: { definitionId?: string };
-}) {
+export default async function WorkflowDesignerPage(
+  props: {
+    searchParams?: Promise<{ definitionId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: definitions, source } = await getDesignerDefinitions();
   const initialDefinitionId = searchParams?.definitionId;
 

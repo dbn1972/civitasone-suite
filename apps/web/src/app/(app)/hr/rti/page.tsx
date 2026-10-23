@@ -49,7 +49,8 @@ async function getSummary(): Promise<LoaderResult<Summary>> {
   });
 }
 
-export default async function RtiPage({ searchParams }: { searchParams?: Record<string, string> }) {
+export default async function RtiPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  const searchParams = await props.searchParams;
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => RTI_ROLES.includes(r));

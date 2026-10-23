@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * GAP-CRM-CAMPAIGNS-DETAIL-01: the browser tab names the campaign (its name when the
  * service has one, otherwise the neutral "Campaign"), never the raw id.
  */
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const t = await getTranslations("crmCampaignDetail");
   const { data: campaign } = await getCrmCampaignRoi(params.id);
   return { title: `${campaign?.name ?? t("fallbackTitle")} — CivitasOne CRM` };
@@ -38,7 +39,8 @@ function shortId(id: string): string {
   return id.includes("-") ? id.split("-")[0] : id.slice(0, 8);
 }
 
-export default async function CampaignRoiPage({ params }: { params: { id: string } }) {
+export default async function CampaignRoiPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("crmCampaignDetail");
   const { data: campaign, source, status, errorMessage } = await getCrmCampaignRoi(params.id);
   // The write behind the "post a reporting period" form is admin-gated in

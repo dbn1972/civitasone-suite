@@ -16,13 +16,13 @@ const mockGetItems = vi.mocked(getStockItems);
 describe("GAP-STOCK-LIST-05: status filter param is forwarded to the loader", () => {
   it("passes status=low from searchParams to getStockItems", async () => {
     mockGetItems.mockResolvedValueOnce({ data: [], source: "api" });
-    await StockListPage({ searchParams: { status: "low" } });
+    await StockListPage({ searchParams: Promise.resolve({ status: "low" }) });
     expect(mockGetItems).toHaveBeenCalledWith(expect.objectContaining({ status: "low" }));
   });
 
   it("calls without status when searchParams is empty", async () => {
     mockGetItems.mockResolvedValueOnce({ data: [], source: "api" });
-    await StockListPage({ searchParams: {} });
+    await StockListPage({ searchParams: Promise.resolve({}) });
     expect(mockGetItems).toHaveBeenCalledWith({});
   });
 });
@@ -35,7 +35,7 @@ describe("GAP-STOCK-LIST-05: KPI label includes (this page) when result is at se
       stockStatus: "ok" as const, totalValue: 0,
     }));
     mockGetItems.mockResolvedValueOnce({ data: items as never, source: "api" });
-    const page = await StockListPage({ searchParams: {} });
+    const page = await StockListPage({ searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(page as never);
     expect(html).toContain("this page");
   });

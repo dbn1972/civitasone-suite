@@ -68,13 +68,14 @@ async function getMembers(id: string, history: boolean, offset: number) {
   });
 }
 
-export default async function PayGroupDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { tab?: string; history?: string; offset?: string };
-}) {
+export default async function PayGroupDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ tab?: string; history?: string; offset?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("payGroupMembers");
   const tc = await getTranslations("payGroupCard");
   const locale = await getLocale();

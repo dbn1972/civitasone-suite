@@ -13,7 +13,8 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function BreakglassDetailPage({ params }: { params: { id: string } }) {
+export default async function BreakglassDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getBreakglassEvent(params.id);
 
   // GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-02: a real 404 is a not-found page, not

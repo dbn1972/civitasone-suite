@@ -6,7 +6,8 @@ import { toHumanError } from "@/lib/messages";
 
 const PAGE_SIZE = 10;
 
-export default async function Page({ searchParams }: { searchParams?: { page?: string; q?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ page?: string; q?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data: changes, source } = await getChangeRequests();
   const errored = source === "error";
 

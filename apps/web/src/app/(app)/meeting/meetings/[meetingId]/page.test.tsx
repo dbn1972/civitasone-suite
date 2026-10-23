@@ -32,21 +32,21 @@ describe("MeetingConsolePage — status-aware error states (GAP-MEETING-MEETINGS
 
   it("404 shows not-found copy with NO retry", async () => {
     getMeetingMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await MeetingConsolePage({ params: { meetingId: "x" } }));
+    render(await MeetingConsolePage({ params: Promise.resolve({ meetingId: "x" }) }));
     expect(screen.getByText("Meeting not found")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
 
   it("403 shows access-denied copy with NO retry", async () => {
     getMeetingMock.mockResolvedValue({ data: null, source: "error", status: 403 });
-    render(await MeetingConsolePage({ params: { meetingId: "x" } }));
+    render(await MeetingConsolePage({ params: Promise.resolve({ meetingId: "x" }) }));
     expect(screen.getByText("You don't have access to this meeting")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
 
   it("a transient failure (503) shows a retry control", async () => {
     getMeetingMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await MeetingConsolePage({ params: { meetingId: "x" } }));
+    render(await MeetingConsolePage({ params: Promise.resolve({ meetingId: "x" }) }));
     expect(screen.getByText("This meeting couldn't be loaded.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
@@ -56,7 +56,7 @@ describe("MeetingConsolePage — status-aware error states (GAP-MEETING-MEETINGS
       data: { id: "m1", title: "Budget", status: "in_progress", type: "committee" },
       source: "api",
     });
-    render(await MeetingConsolePage({ params: { meetingId: "m1" } }));
+    render(await MeetingConsolePage({ params: Promise.resolve({ meetingId: "m1" }) }));
     expect(screen.getByTestId("console")).toBeInTheDocument();
   });
 });

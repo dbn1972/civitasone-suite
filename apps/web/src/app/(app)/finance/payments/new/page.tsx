@@ -3,7 +3,8 @@ import { PageHeader, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceBills, getFinanceDdos } from "@/app/_data/loaders";
 import { NewPaymentForm } from "./NewPaymentForm";
 
-export default async function NewPaymentPage({ searchParams }: { searchParams?: { billId?: string } }) {
+export default async function NewPaymentPage(props: { searchParams?: Promise<{ billId?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("financePaymentForm");
   const [bills, ddos] = await Promise.all([getFinanceBills(), getFinanceDdos()]);
   const failed = [bills, ddos].find((r) => r.source === "error" && r.data.length === 0);

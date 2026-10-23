@@ -13,7 +13,7 @@ vi.mock("@/lib/sync/resource", () => ({
 import RevisedEstimatesPage from "./page";
 
 const FY = "2026-27";
-const props = { searchParams: { fy: FY } };
+const props = { searchParams: Promise.resolve({ fy: FY }) };
 const budget = (o: Record<string, unknown>) => ({ id: "b", majorHead: "2210", subHead: "Health", financialYear: FY, beMinor: "10000000", reMinor: "12000000", ...o });
 const MOCK_BUDGETS = [budget({ id: "b1" })];
 
@@ -62,19 +62,19 @@ describe("RevisedEstimatesPage", () => {
       budget({ id: "old", majorHead: "2210", financialYear: "2025-26", beMinor: "7000000", reMinor: "7000000" }),
     ];
     fetchJsonMock.mockResolvedValue({ data, source: "api" });
-    const { unmount } = render(await RevisedEstimatesPage({ searchParams: { fy: "2026-27" } }));
+    const { unmount } = render(await RevisedEstimatesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("₹1,00,000.00")).toBeInTheDocument();
     expect(screen.queryByText("₹70,000.00")).not.toBeInTheDocument();
     expect(screen.getByText(/FY 2026-27/)).toBeInTheDocument();
     unmount();
-    render(await RevisedEstimatesPage({ searchParams: { fy: "2025-26" } }));
+    render(await RevisedEstimatesPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(screen.getAllByText("₹70,000.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("₹1,00,000.00")).not.toBeInTheDocument();
   });
 
   it("falls back to the current FY for a malformed ?fy=", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    render(await RevisedEstimatesPage({ searchParams: { fy: "2026-99" } }));
+    render(await RevisedEstimatesPage({ searchParams: Promise.resolve({ fy: "2026-99" }) }));
     expect(screen.queryByText(/FY 2026-99/)).not.toBeInTheDocument();
   });
 

@@ -64,8 +64,9 @@ async function fetchApplications(token: string, page: number): Promise<FetchResu
 
 export const metadata = { title: "My Applications — Careers Portal" };
 
-export default async function PortalPage({ searchParams }: { searchParams?: { page?: string } }) {
-  const token = cookies().get("cand_token")?.value;
+export default async function PortalPage(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
+  const token = (await cookies()).get("cand_token")?.value;
   if (!token) redirect("/careers/portal/login");
 
   const page = clampPage(searchParams?.page);

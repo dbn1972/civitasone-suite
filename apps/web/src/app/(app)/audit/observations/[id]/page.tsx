@@ -12,7 +12,8 @@ import { RepliesTable, StepsTable, type ReplyRow, type StepRow } from "./Observa
 import { ArrowLeft } from "lucide-react";
 import { AuditBreadcrumb } from "../../_components/AuditBreadcrumb";
 
-export default async function AuditObservationDetailPage({ params }: { params: { id: string } }) {
+export default async function AuditObservationDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: obs, source, status } = await getAuditObservationById(params.id);
 
   // GAP-AUDIT-OBSERVATIONS-DETAIL-03: tell "not found" apart from an outage.

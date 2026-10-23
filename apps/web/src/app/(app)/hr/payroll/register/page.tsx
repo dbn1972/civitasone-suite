@@ -79,11 +79,12 @@ function anyNonZero(rows: readonly Row[], key: "total_gpf_minor" | "total_nps_mi
   });
 }
 
-export default async function PayrollRegisterPage({
-  searchParams,
-}: {
-  searchParams?: { period?: string; runId?: string };
-}) {
+export default async function PayrollRegisterPage(
+  props: {
+    searchParams?: Promise<{ period?: string; runId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollRegister");
 
   // GAP-PAYROLL-REGISTER-05: department-wise salary totals were reachable by

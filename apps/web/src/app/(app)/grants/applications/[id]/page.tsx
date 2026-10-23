@@ -36,7 +36,8 @@ function displayActorRef(ref: string | null | undefined): string {
   return ref;
 }
 
-export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
+export default async function ApplicationDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getApplicationById(params.id);
   const { data: application, source, status } = result;
 
@@ -86,7 +87,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         subtitle={application.purpose.slice(0, 80)}
         actions={<StatusPill status={application.status} />}
       />
-
       <StatGrid>
         <StatCard icon="💰" tone="good" label="Requested" value={amountLabel(application.amountRequestedMinor)} />
         <StatCard
@@ -98,7 +98,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <StatCard icon="📋" tone="warn" label="Status" value={application.status.replace(/_/g, " ")} />
         <StatCard icon="📅" tone="neutral" label="Submitted" value={application.submittedAt ? formatIndianDate(application.submittedAt) : "—"} />
       </StatGrid>
-
       <Card title="Application Details" padding>
         <dl className="fields">
           {/* GAP-GRANTS-APPLICATIONS-DETAIL-06: scheme + grantee NAMES, not uuids. */}
@@ -159,7 +158,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           )}
         </dl>
       </Card>
-
       {/* GAP-GRANTS-APPLICATIONS-DETAIL-05: show the evaluation after scoring. */}
       {hasEvaluation && (
         <Card title="Evaluation" padding>
@@ -176,7 +174,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           </dl>
         </Card>
       )}
-
       {actions.length > 0 ? (
         <Card title="Actions" padding>
           <ApplicationActions
@@ -193,13 +190,12 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
       ) : !TERMINAL_STATUSES.has(application.status) ? (
         // GAP-GRANTS-APPLICATIONS-DETAIL-07: a non-terminal status with no
         // mapped actions gets an explanatory note instead of silent emptiness.
-        <Card title="Actions" padding>
+        (<Card title="Actions" padding>
           <p style={{ color: "var(--ink2)", margin: 0 }}>
             No actions are available for this application in status “{application.status.replace(/_/g, " ")}”.
           </p>
-        </Card>
+        </Card>)
       ) : null}
-
       {application.status === "approved" && (
         <Card title="Next Steps" padding>
           <p style={{ color: "var(--ink2)", marginBottom: 12 }}>

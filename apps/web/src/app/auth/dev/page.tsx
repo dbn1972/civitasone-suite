@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  * GAP-AUTH-FORGOT-05 / GAP-AUTH-LOGIN-05: wrapped in the shared AuthShell so login, forgot and dev
  * share one centred-card layout.
  */
-export default function DevLoginPage({ searchParams }: { searchParams: { error?: string; next?: string } }) {
+export default async function DevLoginPage(props: { searchParams: Promise<{ error?: string; next?: string }> }) {
+  const searchParams = await props.searchParams;
   if (!isDevLoginEnabled()) notFound();
   const next = searchParams?.next ?? "";
   return (

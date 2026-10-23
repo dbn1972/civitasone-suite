@@ -7,7 +7,8 @@ import { formatMoney } from "@/lib/formatters";
 import { ucStats } from "@/lib/finance/expenditureStats";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 
-export default async function UCsPage({ searchParams }: { searchParams?: { scheme?: string } }) {
+export default async function UCsPage(props: { searchParams?: Promise<{ scheme?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("expenditureUtilizationCertificates");
   const result = await getFinanceUCs();
   const { data: ucs, source } = result;

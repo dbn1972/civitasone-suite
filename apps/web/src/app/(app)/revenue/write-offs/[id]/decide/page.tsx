@@ -74,7 +74,8 @@ async function getDcb(id: string): Promise<LoaderResult<DcbSummary | null>> {
   });
 }
 
-export default async function WriteOffDecidePage({ params }: { params: { id: string } }) {
+export default async function WriteOffDecidePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const writeOffId = params.id;
   const { data: writeOff, source, status } = await getWriteOff(writeOffId);
 

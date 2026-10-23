@@ -11,23 +11,23 @@ const deposit = { id: "d1", pdNo: "PD-1", type: "emd", administrator: "Collector
 describe("DepositDetailPage (GAP-FINANCE-TREASURY-DEPOSITS-03)", () => {
   it("shows the balances and the ledger, with a voucher link where the event has a journal", async () => {
     getFinanceDepositById.mockResolvedValue({ data: deposit, source: "api" });
-    render(await DepositDetailPage({ params: { id: "d1" } }));
+    render(await DepositDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("Deposit PD-1")).toBeInTheDocument();
     expect(screen.getByText("REF-1")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open voucher" }).getAttribute("href")).toBe("/api/proxy/v1/finance/journals/j1/pdf");
   });
   it("an empty ledger is its own empty state", async () => {
     getFinanceDepositById.mockResolvedValue({ data: { ...deposit, events: [] }, source: "api" });
-    render(await DepositDetailPage({ params: { id: "d1" } }));
+    render(await DepositDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("No ledger events")).toBeInTheDocument();
   });
   it("a real 404 is 'not found'; any other failure is a retryable error, never 'not found'", async () => {
     getFinanceDepositById.mockResolvedValue({ data: null, source: "error", status: 404 });
-    const { unmount } = render(await DepositDetailPage({ params: { id: "x" } }));
+    const { unmount } = render(await DepositDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("Deposit not found")).toBeInTheDocument();
     unmount();
     getFinanceDepositById.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await DepositDetailPage({ params: { id: "x" } }));
+    render(await DepositDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByText("Deposit not found")).not.toBeInTheDocument();
   });
 });

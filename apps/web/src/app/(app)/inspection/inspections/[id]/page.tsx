@@ -17,7 +17,8 @@ function text(v: unknown): string {
  * read (GET /v1/inspection/inspections/:id); a 404 is shown as not-found and
  * any other failure as a retryable load error, never as an empty record.
  */
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: insp, source, status } = await getInspectionById(params.id);
   if (status === 404 || (source === "api" && !insp)) notFound();
   if (source === "error" || !insp) {

@@ -6,13 +6,14 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { SignSrnAction } from "./SignSrnAction";
 
-export default async function SrnDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { signFailed?: string };
-}) {
+export default async function SrnDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ signFailed?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("procurement.srn");
   const [{ data: srn, source: srnSource, status: srnStatus }, { data: grn }] = await Promise.all([
     getSrnByGrn(params.id),

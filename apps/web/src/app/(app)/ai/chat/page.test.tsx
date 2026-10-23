@@ -35,7 +35,7 @@ vi.mock("next-intl", async (orig) => {
 import Page from "./page";
 
 async function renderPage() {
-  const el = await Page({ searchParams: {} });
+  const el = await Page({ searchParams: Promise.resolve({}) });
   render(el as React.ReactElement);
 }
 

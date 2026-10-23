@@ -13,7 +13,8 @@ const DEMAND_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] a
  * (per major head) lines. Only a real 404 means "not found"; any other failed load is an outage
  * the user can retry, and a 403 is a permission decision.
  */
-export default async function DemandGrantDetailPage({ params }: { params: { id: string } }) {
+export default async function DemandGrantDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getDemandGrantById(params.id);
   const { data: demand, source, status } = result;
 

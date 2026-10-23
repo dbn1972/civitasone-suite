@@ -17,7 +17,7 @@ beforeEach(() => mocked.mockReset());
 describe("Contacts list page stat gating (LQ-003)", () => {
   it("shows '—' for every stat card (not fabricated 0s) when the load failed", async () => {
     mocked.mockResolvedValue({ data: [], source: "error" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     // All four stat values render em dashes, not fabricated 0s.
     // UX-002: the data-source badge itself now lives inside ContactsTable
     // (driven by the same useSeededResource call as the table's rows), not
@@ -34,7 +34,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
       ] as never,
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     // Total Contacts = 2. Scoped to that stat card specifically: "With Priority
     // Tag" (any priority set, not just "high") is also 2 for this fixture since
     // both contacts have a priority, so a bare getByText("2") is ambiguous now
@@ -54,7 +54,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
       ] as never,
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     // 2 of the 3 contacts have a priority set (high, low); 1 is "high" only.
     // These used to be the same expression and always rendered the same
     // number regardless of fixture.
@@ -66,7 +66,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
 
   it("renders DPDP data protection notice", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const notice = screen.getByRole("note");
     expect(notice).toBeInTheDocument();
     expect(notice.textContent).toMatch(/digital personal data protection/i);
@@ -74,7 +74,7 @@ describe("Contacts list page stat gating (LQ-003)", () => {
 
   it("renders 'Priority Contacts' label (not 'High Priority Leads')", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Priority Contacts")).toBeInTheDocument();
     expect(screen.queryByText("High Priority Leads")).not.toBeInTheDocument();
   });
@@ -85,7 +85,7 @@ describe("Contacts account filter (GAP-CRM-ACCOUNTS-DETAIL-06)", () => {
 
   it("forwards accountId to getCrmContacts and shows a clearable filter chip", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
-    render(await Page({ searchParams: { accountId: "acc-1", accountName: "NDMA" } }));
+    render(await Page({ searchParams: Promise.resolve({ accountId: "acc-1", accountName: "NDMA" }) }));
     expect(mocked).toHaveBeenCalledWith(expect.objectContaining({ accountId: "acc-1" }));
     expect(screen.getByText(/Filtered to one account: NDMA/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clear account filter" })).toHaveAttribute("href", "/crm/contacts");
@@ -93,7 +93,7 @@ describe("Contacts account filter (GAP-CRM-ACCOUNTS-DETAIL-06)", () => {
 
   it("shows no account chip without an accountId", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText(/Filtered to one account/)).not.toBeInTheDocument();
   });
 });
@@ -101,7 +101,7 @@ describe("Contacts account filter (GAP-CRM-ACCOUNTS-DETAIL-06)", () => {
 describe("GAP-CRM-ACCOUNTS-07: subtitle uses i18n key, no hard-coded Devanagari", () => {
   it("renders a subtitle that contains no Devanagari characters in English locale", async () => {
     mocked.mockResolvedValue({ data: [], source: "api" });
-    const { container } = render(await Page({ searchParams: {} }));
+    const { container } = render(await Page({ searchParams: Promise.resolve({}) }));
     // Devanagari Unicode range: U+0900–U+097F
     const devanagariRe = /[ऀ-ॿ]/;
     const text = container.textContent ?? "";

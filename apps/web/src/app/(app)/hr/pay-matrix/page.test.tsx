@@ -13,7 +13,7 @@ import PayMatrixPage from "./page";
 async function renderPage(searchParams?: { level?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await PayMatrixPage({ searchParams })}
+      {await PayMatrixPage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

@@ -20,7 +20,8 @@ type CommentRow = {
   authorLabel: string;
 };
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: ticket, source, status } = await getHelpdeskTicketById(params.id);
 
   // GAP-HELPDESK-TICKETS-DETAIL-02: a failed fetch must not read as "ticket

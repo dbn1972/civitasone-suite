@@ -90,13 +90,14 @@ interface Props {
   // HR detail page's Next 14 convention (e.g. disciplinary/[id]/page.tsx) --
   // Promise<{id}> is a Next 15 convention; awaiting a non-Promise value is
   // legal JS and happened to work, but was needlessly inconsistent here.
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 // WCAG 2.4.2 (Page Titled): without this the tab title fell back to the generic app name.
 export const metadata = { title: "Joinee Onboarding — CivitasOne HRMS" };
 
-export default async function OnboardingDetailPage({ params }: Props) {
+export default async function OnboardingDetailPage(props: Props) {
+  const params = await props.params;
   const t = await getTranslations("onboardingDetail");
   const { id } = params;
 
@@ -202,7 +203,6 @@ export default async function OnboardingDetailPage({ params }: Props) {
         backLabel="Onboarding Tracker"
       />
       <DataSourceBadge source={source} />
-
       {/* Welcome banner */}
       <JoineeWelcomeHeader
         name={emp.name}
@@ -217,7 +217,6 @@ export default async function OnboardingDetailPage({ params }: Props) {
         officeLocation={emp.postingLocation ?? "Not specified"}
         overallProgress={pct}
       />
-
       {/* Two-column: checklist | task calendar */}
       {source === "error" ? (
         <Card style={{ padding: 20, marginBottom: 24 }}>
@@ -242,16 +241,15 @@ export default async function OnboardingDetailPage({ params }: Props) {
       ) : (
         // GAP-HR-ONBOARDING-DETAIL-07: Tailwind responsive utilities instead
         // of a bespoke inline style + a raw <style> tag for one media query.
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+        (<div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
           <Card style={{ padding: 20 }}>
             <ChecklistWithActions steps={checklist} />
           </Card>
           <Card style={{ padding: 20 }}>
             <TaskCalendar tasks={calendarTasks} joiningDate={emp.joiningDate} />
           </Card>
-        </div>
+        </div>)
       )}
-
       {/* GAP-HR-ONBOARDING-02: top up an existing checklist from a template
           (idempotent: only steps the joinee does not already have are added). */}
       {checklist.length > 0 && source !== "error" ? (
@@ -259,7 +257,6 @@ export default async function OnboardingDetailPage({ params }: Props) {
           <ApplyTemplateCard employeeId={id} hasTasks />
         </Card>
       ) : null}
-
       {/* Document upload section */}
       <Card style={{ padding: 20 }}>
         <DocumentsPanel employeeId={id} documents={documents} dpdpNotice={t("dpdpNoticeText")} />

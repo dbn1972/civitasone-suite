@@ -7,7 +7,8 @@ export const metadata = { title: "Sign In — Careers Portal" };
 
 // The same office name as the vacancy board (GAP-RECRUITMENT-PORTAL-LOGIN-02): no hard-coded body or
 // sovereign claim; an office that has configured nothing gets a neutral header.
-export default async function LoginPage({ searchParams }: { searchParams?: { expired?: string } }) {
+export default async function LoginPage(props: { searchParams?: Promise<{ expired?: string }> }) {
+  const searchParams = await props.searchParams;
   const org = await getCareersOrg();
   return (
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>

@@ -49,7 +49,8 @@ function prevPeriodIso(pp: string): string | null {
   return `${prevYear}-${String(prevMonth).padStart(2, "0")}`;
 }
 
-export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
+export default async function PayrollRunDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("payrollDetail");
   // GAP-PAYROLL-DETAIL-08: reuses payrollRunsTable's existing status.*
   // translations instead of adding a parallel, independently-drifting copy

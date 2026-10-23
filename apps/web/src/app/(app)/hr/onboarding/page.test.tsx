@@ -49,7 +49,7 @@ describe("OnboardingPage", () => {
   it("renders a joinee card using the real /onboarding response field names", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([row({})]));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Priya Sharma")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("OnboardingPage", () => {
   it("GAP-HR-ONBOARDING-02: offers a way to start onboarding for an existing employee, not just create a new one", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([row({})]));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByLabelText("Find an employee to start onboarding")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("OnboardingPage", () => {
   it("GAP-HR-ONBOARDING-03: shows honest empty-state copy that matches how onboarding is actually started", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([]));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText("No joiners this month")).not.toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("OnboardingPage", () => {
   it("GAP-HR-ONBOARDING-01: parses the real '<completed>/<total>' string shape instead of showing NaN", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([row({ stepsCompleted: "2/6", totalSteps: "6" })]));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("2/6")).toBeInTheDocument();
@@ -102,7 +102,7 @@ describe("OnboardingPage", () => {
       apiResult([row({ department: null, joiningDate: null })]),
     );
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText(/Invalid Date/)).not.toBeInTheDocument();
@@ -123,7 +123,7 @@ describe("OnboardingPage", () => {
       ]),
     );
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Two joinees are overdue -- the stat tile must read 2, not 5.
@@ -144,7 +144,7 @@ describe("OnboardingPage", () => {
       ], { status: "all" } as never),
     );
 
-    const ui = await OnboardingPage({ searchParams: { status: "all" } });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({ status: "all" }) });
     render(ui);
 
     const cards = screen.getAllByTestId(/^joinee-card-/);
@@ -156,7 +156,7 @@ describe("OnboardingPage", () => {
   it("shows the empty state when there are no onboarding records", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([]));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText("No joiners this month")).not.toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("OnboardingPage", () => {
   it("shows the generic retry-suggesting error state when the fetch fails for a reason other than a permission denial", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([], { source: "error" }));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("OnboardingPage", () => {
   it("shows an honest access-restricted state, not the generic retry-suggesting error, when the fetch 403s", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([], { source: "error", status: 403 }));
 
-    const ui = await OnboardingPage({ searchParams: {} });
+    const ui = await OnboardingPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
@@ -196,7 +196,7 @@ describe("OnboardingPage", () => {
   it("requests the 'active' status by default so a fresh visit doesn't need a manual filter to hide completed joinees", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([row({})]));
 
-    await OnboardingPage({ searchParams: {} });
+    await OnboardingPage({ searchParams: Promise.resolve({}) });
 
     const [calledPath] = fetchJsonMock.mock.calls[0] as [string];
     expect(calledPath).toContain("status=active");
@@ -205,7 +205,7 @@ describe("OnboardingPage", () => {
   it("requests the status named in searchParams instead of the default", async () => {
     fetchJsonMock.mockResolvedValueOnce(apiResult([row({ status: "completed" })]));
 
-    await OnboardingPage({ searchParams: { status: "completed" } });
+    await OnboardingPage({ searchParams: Promise.resolve({ status: "completed" }) });
 
     const [calledPath] = fetchJsonMock.mock.calls[0] as [string];
     expect(calledPath).toContain("status=completed");

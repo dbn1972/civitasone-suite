@@ -38,11 +38,12 @@ function readParam(searchParams: Record<string, string | string[] | undefined> |
   return Array.isArray(v) ? v[0] : v;
 }
 
-export default async function IndentsPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function IndentsPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const pageParam = Number(readParam(searchParams, "page") ?? "1");
   const pageNo = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
   const q = readParam(searchParams, "q")?.trim() || undefined;
@@ -102,7 +103,6 @@ export default async function IndentsPage({
           </>
         }
       />
-
       <StatGrid>
         <StatCard icon="📋" tone="info" label="On this page" value={stat(indents.length)} hint="Indents in the current page of results" />
         <StatCard icon="⏳" tone="warn" label="Pending Approval" value={stat(countOf("pending_approval"))} href={statusHref("pending_approval")} />
@@ -113,13 +113,12 @@ export default async function IndentsPage({
         <StatCard icon="📝" tone="neutral" label="Draft" value={stat(countOf("draft"))} href={statusHref("draft")} />
         <StatCard icon="🚫" tone="bad" label="Rejected" value={stat(countOf("rejected"))} href={statusHref("rejected")} />
       </StatGrid>
-
       <Card title={statusFilter ? `Indents — ${STATUS_LABELS[statusFilter] ?? statusFilter}` : "All indents"}>
         {errored ? (
           // GAP-PROCUREMENT-INDENTS-02: a real retry (RefreshErrorState re-runs
           // the server fetch) instead of a dead ErrorState, and no 0-valued
           // stats masquerading as data above.
-          <RefreshErrorState error={toHumanError("load", { area: "indents" })} backHref="/procurement/indents" />
+          (<RefreshErrorState error={toHumanError("load", { area: "indents" })} backHref="/procurement/indents" />)
         ) : rows.length === 0 ? (
           <EmptyState
             icon="📋"

@@ -24,7 +24,7 @@ describe("InstalmentsPage", () => {
   it("prompts to choose an assessee when none is selected", async () => {
     fetchJsonMock.mockResolvedValueOnce(assesseesPage);
 
-    const ui = await InstalmentsPage({ searchParams: {} });
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe("InstalmentsPage", () => {
       return Promise.resolve(assesseesPage);
     });
 
-    const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("6")).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("InstalmentsPage", () => {
       return Promise.resolve(assesseesPage);
     });
 
-    const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("No instalment plans yet")).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("InstalmentsPage", () => {
       return Promise.resolve(assesseesPage);
     });
 
-    const ui = await InstalmentsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);

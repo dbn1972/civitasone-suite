@@ -26,7 +26,7 @@ const MOCK_EMPLOYEE = {
 };
 
 async function renderPage(id = "emp-1") {
-  const page = await EditEmployeePage({ params: { id } });
+  const page = await EditEmployeePage({ params: Promise.resolve({ id }) });
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{page}</NextIntlClientProvider>);
 }
 

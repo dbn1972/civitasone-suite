@@ -61,7 +61,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("renders the FETCHED top-slab threshold (₹30,00,000), not the old hard-coded ₹24,00,000 literal", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     // The seeded open-ended top slab (₹30,00,000) is rendered via formatRupees.
     expect(screen.getByText("Above ₹30,00,000.00")).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("requests the slab-config endpoint for the selected FY", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     expect(fetchJsonMock).toHaveBeenCalled();
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("/api/v1/payroll/tax/slab-config?fy=2025-26");
@@ -80,7 +80,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("renders the fetched surcharge bands and standard deduction", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     expect(screen.getByText("Above ₹50,00,000.00")).toBeInTheDocument();
     expect(screen.getByText(/Standard deduction: ₹75,000\.00/)).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("shows an error state when the loader reports an error", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     // No slab tables render on error.
     expect(screen.queryByText(/Above ₹/)).not.toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("shows a 'not configured' message for a regime with no config", async () => {
     fetchJsonMock.mockResolvedValue({ data: { fy: "2099-00", new: null, old: null }, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2099-00" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2099-00" }) });
     renderPage(ui);
     expect(screen.getAllByText(/No configuration on file/i).length).toBeGreaterThan(0);
   });

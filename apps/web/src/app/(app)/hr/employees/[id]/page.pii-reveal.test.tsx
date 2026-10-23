@@ -27,7 +27,7 @@ async function renderPage(roles: string[]) {
   getEmployeeByIdMock.mockResolvedValue({ data: EMP, source: "api" });
   payGroupMock.mockResolvedValue({ source: "api", data: { current: null, history: [] } });
   fetchJsonMock.mockImplementation(async (_u: string, fallback: unknown) => ({ data: fallback, source: "api" }));
-  const ui = await EmployeeDetailPage({ params: { id: EMP_ID } });
+  const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: EMP_ID }) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 const revealButtons = () => screen.queryAllByRole("button", { name: "Reveal" });

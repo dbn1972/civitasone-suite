@@ -45,7 +45,7 @@ function render(ui: React.ReactElement) {
 
 describe("/finance/payments/new with real finance-service payloads (HIGH: passed / on_hold bills)", () => {
   it("lists the passed bill (and only it) as payable", async () => {
-    render(await NewPaymentPage({ searchParams: {} }));
+    render(await NewPaymentPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("option", { name: /INV-PASSED — Acme Supplies — ₹47,500\.00/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-HOLD/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-PENDING/ })).not.toBeInTheDocument();

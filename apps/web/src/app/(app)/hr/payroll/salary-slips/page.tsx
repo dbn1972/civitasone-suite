@@ -10,7 +10,8 @@ import { getTranslations } from "next-intl/server";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 import { ALL_PERIODS, SLIPS_PAGE_LIMIT, distinctPeriods, mayBeTruncated, resolvePeriod, sumSlips } from "./slipPeriods";
 
-export default async function SalarySlipsPage({ searchParams }: { searchParams?: { period?: string } }) {
+export default async function SalarySlipsPage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("salarySlips");
   const roles = getSessionRoles();
   const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));

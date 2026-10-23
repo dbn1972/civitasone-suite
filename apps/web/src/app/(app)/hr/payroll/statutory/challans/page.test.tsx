@@ -58,7 +58,7 @@ describe("ChallansPage", () => {
       });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("C1")).toBeInTheDocument();
   });
@@ -71,7 +71,7 @@ describe("ChallansPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("No challans ingested for this period")).toBeInTheDocument();
   });
@@ -83,7 +83,7 @@ describe("ChallansPage", () => {
     // of the RefreshErrorState contract (retry/back/help).
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
 
     expect(screen.getByText("We couldn't load TDS challans.")).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("ChallansPage", () => {
 
   it("GAP-PAYROLL-STATUTORY-CHALLANS-01: shows Access restricted to employee/manager without calling the API", async () => {
     getSessionRolesMock.mockReturnValue(["employee", "manager"]);
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("ChallansPage", () => {
         source: "api",
       });
     });
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("No challan")).toBeInTheDocument();
     expect(screen.queryByText("no_challan")).not.toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("ChallansPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06", formType: "26Q" }) });
     renderPage(ui);
     expect(screen.getByText("Filing of 26Q is blocked until challans match")).toBeInTheDocument();
     expect(screen.getByText("TDS deducted for 2026-06 does not match the 26Q challans deposited. Resolve the difference before filing 26Q.")).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("ChallansPage", () => {
       }
       return Promise.resolve({ data: [], source: "api" });
     });
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("Filing of 24Q is blocked until challans match")).toBeInTheDocument();
     expect(screen.getByText(/TDS for 2026-06 is not finalised yet/)).toBeInTheDocument();

@@ -23,8 +23,8 @@ function hasLiveSession(token: string | undefined): boolean {
   }
 }
 
-export default function AuthLayout({ children }: { children: ReactNode }) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+export default async function AuthLayout({ children }: { children: ReactNode }) {
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (hasLiveSession(token)) {
     redirect("/dashboard");
   }

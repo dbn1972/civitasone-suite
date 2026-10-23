@@ -36,7 +36,8 @@ async function getDetail(id: string): Promise<LoaderResult<Detail | null>> {
   });
 }
 
-export default async function RtiDetailPage({ params }: { params: { id: string } }) {
+export default async function RtiDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => RTI_ROLES.includes(r));
   if (!canAccess) {

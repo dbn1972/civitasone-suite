@@ -72,7 +72,7 @@ describe("ReturnsPage", () => {
       },
     });
 
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Asha Verma")).toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("ReturnsPage", () => {
       body: { code: "TDS_RECONCILIATION_FAILED", message: "24Q blocked: TDS deducted does not match deposited challans for 2025-04." },
     });
 
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Form-24Q blocked for FY 2025-26 Q1")).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("ReturnsPage", () => {
   it("shows the error affordance (not the empty-state or force-file copy) on a real failure like 403", async () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 403, body: { code: "FORBIDDEN" } });
 
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
@@ -122,7 +122,7 @@ describe("ReturnsPage", () => {
     });
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
 
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Could not load Form-26Q for FY 2025-26 Q1")).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("ReturnsPage", () => {
 
   it("GAP-PAYROLL-RETURNS-04: shows Access restricted to employee/manager without calling the API", async () => {
     getSessionRolesMock.mockReturnValue(["employee", "manager"]);
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -151,7 +151,7 @@ describe("ReturnsPage", () => {
     },
   });
   const renderPage = async (searchParams: { fy?: string; quarter?: string }) => {
-    const ui = await ReturnsPage({ searchParams });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve(searchParams) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
   };
 
@@ -169,14 +169,14 @@ describe("ReturnsPage", () => {
       reconciliation: { matched: true }, note: "reconciled", ...extra,
     });
     statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: body({}) });
-    let ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    let ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     const first = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText(/Not filed yet/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Record the filing" })).toBeInTheDocument();
     first.unmount();
 
     statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: body({ filedAt: "2025-07-28", filingReceiptNo: "123456789012345", filingRevision: 0 }) });
-    ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText(/Filed on 28 Jul 2025 — provisional receipt no\. 123456789012345\./)).toBeInTheDocument();
     expect(screen.queryByText(/Not filed yet/)).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("ReturnsPage", () => {
   it("RETURNS-01: hr_admin (read-only for filings) is not offered the record form", async () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     statusAwareGetMock.mockResolvedValue({ kind: "ok", status: 200, body: { formType: "24Q", fy: "2025-26", quarter: "Q1", deducteeCount: 0, deductees: [], reconciliation: { matched: true }, note: "n" } });
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText(/Not filed yet/)).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Record the filing" })).not.toBeInTheDocument();

@@ -4,7 +4,7 @@ import { COOKIE } from "@/lib/auth/config";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://civitasone.65-2-205-201.nip.io";
 
-function clearAuthCookies(jar: ReturnType<typeof cookies>) {
+function clearAuthCookies(jar: Awaited<ReturnType<typeof cookies>>) {
   jar.delete(COOKIE.ACCESS);
   jar.delete(COOKIE.REFRESH);
   jar.delete(COOKIE.DEVICE_TRUST);
@@ -13,7 +13,7 @@ function clearAuthCookies(jar: ReturnType<typeof cookies>) {
 }
 
 export async function POST() {
-  clearAuthCookies(cookies());
+  clearAuthCookies(await cookies());
   return NextResponse.json({ ok: true });
 }
 
@@ -30,7 +30,7 @@ export async function POST() {
 // /logout, which already does that correctly — see its comment for why
 // just clearing app cookies and redirecting to /auth/login isn't enough.
 export async function GET() {
-  const jar = cookies();
+  const jar = await cookies();
   jar.delete(COOKIE.PKCE_VERIFIER);
   jar.delete(COOKIE.OAUTH_STATE);
   return NextResponse.redirect(new URL("/logout", APP_URL));

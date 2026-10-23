@@ -56,7 +56,7 @@ describe("LibraryIssuesPage", () => {
   it("renders the loans list", async () => {
     fetchJsonMock.mockResolvedValueOnce(issuesPage).mockResolvedValueOnce(booksPage);
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getAllByText("Manual of Office Procedure").length).toBeGreaterThan(0);
@@ -65,7 +65,7 @@ describe("LibraryIssuesPage", () => {
   it("renders an empty state when there are genuinely no loans", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" }).mockResolvedValueOnce(booksPage);
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("No loans yet")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("LibraryIssuesPage", () => {
   it("shows the data-source badge (not an empty state) when the loans loader falls back on error", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" }).mockResolvedValueOnce(booksPage);
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText("No loans yet")).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("LibraryIssuesPage", () => {
     };
     fetchJsonMock.mockResolvedValueOnce(mixed).mockResolvedValueOnce(booksPage);
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     // On Loan = 2 (issued + overdue). Read the stat value from the StatCard.
@@ -105,7 +105,7 @@ describe("LibraryIssuesPage", () => {
   it("GAP-ESTAB-LIBRARY-ISSUES-04: a failed loans fetch shows a retry state (not a bare badge)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" }).mockResolvedValueOnce(booksPage);
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("LibraryIssuesPage", () => {
   it("GAP-ESTAB-LIBRARY-ISSUES-05: a catalogue failure does not blank loan stats when issues loaded ok", async () => {
     fetchJsonMock.mockResolvedValueOnce(issuesPage).mockResolvedValueOnce({ data: [], source: "error" });
 
-    const ui = await LibraryIssuesPage({ searchParams: {} });
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     // issues loaded fine → On Loan should show the real count (1), not "—".

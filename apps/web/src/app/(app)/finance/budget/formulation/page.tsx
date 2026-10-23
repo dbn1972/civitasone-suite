@@ -8,11 +8,12 @@ import { FormulationTable } from "./FormulationTable";
 import { formatMoney } from "@/lib/formatters";
 import { BUDGET_STATUS_LABEL, priorYearBeByHead } from "../_lib/budgetColumns";
 
-export default async function BudgetFormulationPage({
-  searchParams,
-}: {
-  searchParams?: { fy?: string };
-}) {
+export default async function BudgetFormulationPage(
+  props: {
+    searchParams?: Promise<{ fy?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-FINANCE-BUDGET-FORMULATION-02: the headline is THIS fiscal year's
   // proposed Budget Estimate. It used to sum sanctionedAmount (the live RE)
   // across EVERY fiscal year and label that "Proposed Outlay". The FY comes
@@ -54,14 +55,12 @@ export default async function BudgetFormulationPage({
           </>
         }
       />
-
       <StatGrid>
         <StatCard icon="📝" tone="info" label={`Budget Heads (FY ${fy})`} value={errored ? "—" : budgets.length} />
         <StatCard icon="🏢" tone="info" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `${BUDGET_STATUS_LABEL.approved.toLowerCase()} ${approved}`} up={true} />
         <StatCard icon="💰" tone="warn" label={`Proposed Outlay (BE, FY ${fy})`} value={errored ? "—" : formatMoney(totalBe)} up={false} />
         <StatCard icon="⏳" tone="bad" label={BUDGET_STATUS_LABEL.pending} value={errored ? "—" : pending} />
       </StatGrid>
-
       <Card title={`Budget estimates (BE) — FY ${fy}`}>
         {errored ? (
           <div className="pad">
@@ -69,7 +68,7 @@ export default async function BudgetFormulationPage({
           </div>
         ) : (
           /* UX-012: the data-source badge lives inside FormulationTable. */
-          <FormulationTable budgets={budgets} source="api" priorBe={priorBe} />
+          (<FormulationTable budgets={budgets} source="api" priorBe={priorBe} />)
         )}
       </Card>
     </>

@@ -20,7 +20,7 @@ import HrAuditLogPage from "./page";
 async function renderPage(searchParams?: { page?: string; from?: string; to?: string; resourceType?: string; actor?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await HrAuditLogPage({ searchParams })}
+      {await HrAuditLogPage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

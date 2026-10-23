@@ -23,20 +23,20 @@ describe("NewSrnPage officer label", () => {
   it("renders the session display name", async () => {
     sessionName = "A. Officer";
     sessionUserId = "11111111-2222-4333-8444-555555555555";
-    render(await NewSrnPage({ params: { id: "g1" } }));
+    render(await NewSrnPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.getByText("A. Officer")).toBeInTheDocument();
     expect(screen.queryByText(sessionUserId)).toBeNull();
   });
 
   it("falls back to a short hint, never the full UUID, when only the id is known", async () => {
     sessionUserId = "11111111-2222-4333-8444-555555555555";
-    render(await NewSrnPage({ params: { id: "g1" } }));
+    render(await NewSrnPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.getByText("Officer (…555555)")).toBeInTheDocument();
     expect(screen.queryByText(sessionUserId)).toBeNull();
   });
 
   it("shows 'You' with no session identity at all (the server still sets the officer)", async () => {
-    render(await NewSrnPage({ params: { id: "g1" } }));
+    render(await NewSrnPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.getByText("You")).toBeInTheDocument();
   });
 });

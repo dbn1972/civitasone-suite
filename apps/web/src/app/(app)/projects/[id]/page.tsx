@@ -7,7 +7,8 @@ import { ProjectGantt } from "./ProjectGantt";
 import { ProjectDetailActions } from "./ProjectDetailActions";
 import { MilestonesDetailTable, FundReleasesDetailTable } from "./ProjectDetailTables";
 
-export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
+export default async function ProjectDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: project, source, status } = await getProjectById(params.id);
 
   // GAP-PROJECTS-DETAIL-01: an outage/401/5xx returns {data:null, source:"error"}.

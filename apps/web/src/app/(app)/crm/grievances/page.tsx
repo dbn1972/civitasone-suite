@@ -11,7 +11,8 @@ type SP = { status?: string; priority?: string; search?: string; page?: string }
 // Matches the loader default so the server pager and the API page size agree.
 const PAGE_SIZE = 50;
 
-export default async function GrievancesPage({ searchParams }: { searchParams?: SP }) {
+export default async function GrievancesPage(props: { searchParams?: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   // The status/priority/search params used to be declared and then dropped on the
   // floor — the loader was called with no arguments, so a filtered URL returned
   // the unfiltered register. Filtering happens server-side because the API

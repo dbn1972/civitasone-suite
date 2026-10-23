@@ -19,7 +19,8 @@ const TYPE_STYLES: Record<string, { color: string; bg: string }> = {
   deputation:    { color: "#475569", bg: "#e2e8f0" },
 };
 
-export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const t = await getTranslations("careersDetail");
   const r = await getVacancy(params.id);
   return { title: r.status === "ok" ? t("metaTitle", { title: r.vacancy.title }) : t("metaFallback") };
@@ -27,7 +28,8 @@ export async function generateMetadata({ params }: { params: { id: string } }): 
 
 export const dynamic = "force-dynamic";
 
-export default async function VacancyPage({ params }: { params: { id: string } }) {
+export default async function VacancyPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("careersDetail");
   const result = await getVacancy(params.id);
   if (result.status === "notfound") notFound();

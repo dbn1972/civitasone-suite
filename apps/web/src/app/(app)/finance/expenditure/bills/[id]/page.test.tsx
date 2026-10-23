@@ -30,14 +30,14 @@ describe("BillDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-05: AppShell already renders the breadcrumb.
   it("renders no hand-rolled breadcrumb of its own", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
-    const { container } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { container } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(container.querySelector("nav.crumbs")).toBeNull();
   });
 
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-06: each datum appears once.
   it("shows vendor, amount, bill number and status once each", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getAllByText("Acme Traders")).toHaveLength(1);
     expect(screen.getAllByText("₹2,500.00")).toHaveLength(1);
     expect(screen.getAllByText("BILL-77")).toHaveLength(1);
@@ -48,11 +48,11 @@ describe("BillDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: Pass bill is APPROVER_ROLES-only on the server.
   it("offers Pass bill to an approver but not to a plain finance_officer", async () => {
     rolesMock.mockReturnValue(["finance_officer"]);
-    const { unmount } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { unmount } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("button", { name: /pass bill/i })).not.toBeInTheDocument();
     unmount();
     rolesMock.mockReturnValue(["accounts_officer"]);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("button", { name: /pass bill/i })).toBeInTheDocument();
   });
 });

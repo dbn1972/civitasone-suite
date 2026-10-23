@@ -10,8 +10,8 @@ import { ServiceRuntimeFlow } from "../../_components/ServiceRuntimeFlow";
 import { resolveCitizenPaymentMode } from "../../_data/paymentMode";
 
 interface Props {
-  params: { serviceKey: string };
-  searchParams: { counter?: string };
+  params: Promise<{ serviceKey: string }>;
+  searchParams: Promise<{ counter?: string }>;
 }
 
 // GAP-...-SERVICES-SERVICEKEY-APPLY-04: counter (assisted) mode must be an
@@ -21,7 +21,9 @@ interface Props {
 const OFFICER_TIER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 /** FN-13 — pack-driven apply flow (FormRenderer stepped → review → fee → submitted). */
-export default async function ServiceApplyPage({ params, searchParams }: Props) {
+export default async function ServiceApplyPage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("citizenServices");
   const outcome = classifyServiceLoad(
     await loadService(params.serviceKey, { revalidateSeconds: 0, telemetryKey: "citizen.runtime.apply" }),

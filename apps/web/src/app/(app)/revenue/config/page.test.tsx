@@ -27,7 +27,7 @@ describe("RateConfigPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RateConfigPage({ searchParams: {} });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Rate Configuration")).toBeInTheDocument();
@@ -42,7 +42,7 @@ describe("RateConfigPage", () => {
   it("renders an empty state when there are no rate heads yet, without fabricating data", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
-    const ui = await RateConfigPage({ searchParams: {} });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("No rate heads configured")).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("RateConfigPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RateConfigPage({ searchParams: {} });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Default active tab is "Rate Heads"; switch is exercised in RateConfigConsole.test.tsx.
@@ -70,7 +70,7 @@ describe("RateConfigPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await RateConfigPage({ searchParams: {} });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();

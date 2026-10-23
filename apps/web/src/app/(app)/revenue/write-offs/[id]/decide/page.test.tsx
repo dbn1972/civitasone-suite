@@ -64,7 +64,7 @@ describe("WriteOffDecidePage", () => {
       assessee: { data: { ownerName: "Ravi Kumar", identifierNo: "PT-900" }, source: "api" },
       dcb: { data: { totalDemand: "500000", totalCollected: "100000", balance: "400000" }, source: "api" },
     });
-    const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
     render(ui);
 
     expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
@@ -82,7 +82,7 @@ describe("WriteOffDecidePage", () => {
       assessee: { data: { ownerName: "Ravi Kumar", identifierNo: "PT-900" }, source: "api" },
       dcb: { data: { totalDemand: "500000", totalCollected: "100000", balance: "400000" }, source: "api" },
     });
-    const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: /Approve write-off/ })).toBeDisabled();
@@ -97,7 +97,7 @@ describe("WriteOffDecidePage", () => {
       assessee: { data: { ownerName: "Ravi Kumar", identifierNo: "PT-900" }, source: "api" },
       dcb: { data: { balance: "400000", totalDemand: "500000", totalCollected: "100000" }, source: "api" },
     });
-    const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
     render(ui);
     expect(screen.getByRole("button", { name: /Approve write-off/ })).toBeEnabled();
   });
@@ -108,7 +108,7 @@ describe("WriteOffDecidePage", () => {
       assessee: { data: { ownerName: "Ravi Kumar", identifierNo: "PT-900" }, source: "api" },
       dcb: { data: { balance: "400000", totalDemand: "500000", totalCollected: "100000" }, source: "api" },
     });
-    const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
     render(ui);
     expect(screen.queryByRole("button", { name: /Approve write-off/ })).not.toBeInTheDocument();
     expect(screen.getByText(/Already decided/)).toBeInTheDocument();
@@ -116,12 +116,12 @@ describe("WriteOffDecidePage", () => {
 
   it("calls notFound() on a 404 (unknown id) (DECIDE-04)", async () => {
     routeFetchJson({ writeOff: { data: null, source: "error", status: 404 } });
-    await expect(WriteOffDecidePage({ params: { id: WRITE_OFF_ID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("shows a retry state (not not-found) on a server error, with buttons disabled (DECIDE-04 + fail-closed)", async () => {
     routeFetchJson({ writeOff: { data: null, source: "error", status: 500 } });
-    const ui = await WriteOffDecidePage({ params: { id: WRITE_OFF_ID } });
+    const ui = await WriteOffDecidePage({ params: Promise.resolve({ id: WRITE_OFF_ID }) });
     render(ui);
     expect(screen.getByRole("button", { name: /Approve write-off/ })).toBeDisabled();
     expect(screen.queryByText(/₹/)).not.toBeInTheDocument();

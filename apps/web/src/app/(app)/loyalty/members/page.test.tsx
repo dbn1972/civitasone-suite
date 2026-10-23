@@ -60,7 +60,7 @@ describe("loyalty members page (GAP-LOYALTY-MEMBERS-04)", () => {
     fetchJsonMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
     mockedHook.mockReturnValue({ data: rows, provenance: "live", offline: false, cachedAt: null } as never);
 
-    render(await Page({ searchParams: { page: "2" } }));
+    render(await Page({ searchParams: Promise.resolve({ page: "2" }) }));
 
     expect(screen.getByText(/Showing 51–100 of 120/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/loyalty/members?page=3");
@@ -72,7 +72,7 @@ describe("loyalty members page (GAP-LOYALTY-MEMBERS-04)", () => {
     fetchJsonMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
     mockedHook.mockReturnValue({ data: rows, provenance: "live", offline: false, cachedAt: null } as never);
 
-    render(await Page({ searchParams: { page: "3" } }));
+    render(await Page({ searchParams: Promise.resolve({ page: "3" }) }));
 
     expect(screen.getByText(/Showing 101–120 of 120/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Next/ })).not.toBeInTheDocument();
@@ -93,7 +93,7 @@ describe("loyalty members page (GAP-LOYALTY-MEMBERS-04)", () => {
     fetchJsonMock.mockResolvedValue({ data: { rows: makeRows(10), total: 60 }, source: "api" });
     mockedHook.mockReturnValue({ data: makeRows(10), provenance: "live", offline: false, cachedAt: null } as never);
 
-    render(await Page({ searchParams: { page: "2" } }));
+    render(await Page({ searchParams: Promise.resolve({ page: "2" }) }));
 
     // fetchJson was called; its first arg should contain offset=50 and limit=50
     const url = String(fetchJsonMock.mock.calls[0]![0]);

@@ -22,7 +22,8 @@ const TYPE_LABELS: Record<string, string> = {
  * grants/UCs section honestly says it is not available rather than inventing
  * numbers (flagged as a backend follow-up).
  */
-export default async function GranteeDetailPage({ params }: { params: { id: string } }) {
+export default async function GranteeDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: grantee, source, status } = await getGranteeById(params.id);
 
   // SF-02: only a real 404 is "not found"; other failures render the error badge below.

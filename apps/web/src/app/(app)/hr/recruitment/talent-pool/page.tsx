@@ -56,11 +56,12 @@ async function getCandidates(params: TalentPoolParams): Promise<LoaderResult<Poo
   return res;
 }
 
-export default async function TalentPoolPage({
-  searchParams,
-}: {
-  searchParams: TalentPoolParams;
-}) {
+export default async function TalentPoolPage(
+  props: {
+    searchParams: Promise<TalentPoolParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("recruitmentTalentPool");
   const page = parsePage(searchParams.page);
   const { data: pool, source, status } = await getCandidates(searchParams);

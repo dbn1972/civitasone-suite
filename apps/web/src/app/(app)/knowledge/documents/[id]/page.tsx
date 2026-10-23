@@ -29,7 +29,8 @@ function accessLevelPill(level: string) {
   return <StatusPill status={lc === "public" ? "active" : "info"} label={label} />;
 }
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: doc, source, status } = await getKnowledgeDocument(params.id);
   // SF-02: only a real 404 is "not found"; other failures render the error state below.
   if (source === "error" && status === 404) notFound();

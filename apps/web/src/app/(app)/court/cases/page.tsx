@@ -40,11 +40,12 @@ function toPositiveInt(value: string | undefined, fallback: number): number {
   return Number.isInteger(n) && n >= 0 ? n : fallback;
 }
 
-export default async function CasesListPage({
-  searchParams,
-}: {
-  searchParams: { page?: string; status?: string; q?: string };
-}) {
+export default async function CasesListPage(
+  props: {
+    searchParams: Promise<{ page?: string; status?: string; q?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const statusParam =
     searchParams.status && (CASE_STATUSES as readonly string[]).includes(searchParams.status)
       ? searchParams.status

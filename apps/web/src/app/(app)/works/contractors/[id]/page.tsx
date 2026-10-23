@@ -100,11 +100,12 @@ function starDisplay(rating: number): string {
   return "★".repeat(filled) + "☆".repeat(5 - filled);
 }
 
-export default async function ContractorDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ContractorDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const roles = getSessionRoles();
   const canRate = roles.some((r) => CONTRACTOR_RATE_ROLES.includes(r));
   const canRevealPii = canRevealContractorPii(roles);
@@ -200,7 +201,6 @@ export default async function ContractorDetailPage({
         back="/works/contractors"
         backLabel="Contractors"
       />
-
       {/* Rating banner */}
       <div
         style={{
@@ -237,7 +237,6 @@ export default async function ContractorDetailPage({
           </span>
         )}
       </div>
-
       {/* KPI grid */}
       <div
         style={{
@@ -269,7 +268,6 @@ export default async function ContractorDetailPage({
           </div>
         ))}
       </div>
-
       {/* Contact Details card — PII masked by default (DPDP); PAN has an
           audited reveal for authorised roles. */}
       <Card title="Contact Details">
@@ -325,7 +323,6 @@ export default async function ContractorDetailPage({
           </div>
         </dl>
       </Card>
-
       {/* Rate Contractor card — only rendered for roles that can rate
           (GAP-WORKS-CONTRACTORS-DETAIL-05). */}
       {canRate && (
@@ -343,13 +340,12 @@ export default async function ContractorDetailPage({
           </div>
         </Card>
       )}
-
       {/* Rating History card */}
       <Card title={`Rating History (${ratingHistory.length})`}>
         {ratingSource === "error" ? (
           // GAP-WORKS-CONTRACTORS-DETAIL-01: a failed history fetch must not
           // masquerade as "No ratings recorded yet."
-          <div style={{ padding: "12px 0" }}>
+          (<div style={{ padding: "12px 0" }}>
             <RefreshErrorState
               error={{
                 what: "Couldn't load the rating history.",
@@ -357,7 +353,7 @@ export default async function ContractorDetailPage({
                 actions: ["retry"],
               }}
             />
-          </div>
+          </div>)
         ) : ratingHistory.length === 0 ? (
           <p style={{ fontSize: 13, color: "var(--muted)", padding: "12px 0" }}>
             No ratings recorded yet.
@@ -378,7 +374,6 @@ export default async function ContractorDetailPage({
           />
         )}
       </Card>
-
       {/* Contractor Status card */}
       <Card title="Contractor Status">
         <div style={{ padding: "16px" }}>
@@ -388,7 +383,6 @@ export default async function ContractorDetailPage({
           />
         </div>
       </Card>
-
       {/* Footer */}
       <div
         style={{

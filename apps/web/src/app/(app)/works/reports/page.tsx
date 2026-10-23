@@ -55,10 +55,11 @@ function buildQuery(sp: {
 }
 
 interface PageProps {
-  searchParams?: { fromDate?: string; toDate?: string; divisionId?: string };
+  searchParams?: Promise<{ fromDate?: string; toDate?: string; divisionId?: string }>;
 }
 
-export default async function WorksReportsPage({ searchParams }: PageProps) {
+export default async function WorksReportsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const sp = searchParams ?? {};
   const qs = buildQuery(sp);
   const t = await getTranslations("works.reports");

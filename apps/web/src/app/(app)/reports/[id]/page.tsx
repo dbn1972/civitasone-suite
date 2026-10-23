@@ -36,7 +36,8 @@ function classifyColumn(name: string): { kind: ColKind; maskKind?: "pan" | "acco
   return { kind: "text" };
 }
 
-export default async function ReportDetailPage({ params }: { params: { id: string } }) {
+export default async function ReportDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: job, source, status } = await getReportJobById(params.id);
 
   // GAP-REPORTS-DETAIL-01: a transient fetch failure (500/outage) must NOT be
@@ -105,7 +106,6 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           ) : undefined
         }
       />
-
       <div className="grid g-4" style={{ marginBottom: "18px" }}>
         <div className="card" style={{ padding: "16px" }}>
           <div className="lab">Status</div>
@@ -128,7 +128,6 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           <div className="val" style={{ marginTop: "6px", fontSize: "14px" }}>{job.completedAt ? formatIndianDate(job.completedAt) : "—"}</div>
         </div>
       </div>
-
       {job.parameters && Object.keys(job.parameters).length > 0 && (
         <div className="card" style={{ marginBottom: "18px" }}>
           <div className="card-h"><h3>Parameters</h3></div>
@@ -144,7 +143,6 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
           </div>
         </div>
       )}
-
       <div className="card">
         <div className="card-h">
           <h3>Report data</h3>
@@ -182,7 +180,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
             // available once the report completes". report-service does not
             // expose a per-job error reason, so the copy is honest-generic, and
             // a "Queue again" link re-opens the create form as a retry path.
-            <EmptyState
+            (<EmptyState
               icon="⚠️"
               title="Report failed"
               message="This report job did not complete, so there is no data to show. You can queue it again."
@@ -194,7 +192,7 @@ export default async function ReportDetailPage({ params }: { params: { id: strin
                   Queue again
                 </Link>
               }
-            />
+            />)
           ) : (
             <EmptyState
               icon="📋"

@@ -65,7 +65,8 @@ async function getPlan(id: string): Promise<LoaderResult<PlanDetail | null>> {
   });
 }
 
-export default async function InstalmentPlanDetailPage({ params }: { params: { id: string } }) {
+export default async function InstalmentPlanDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: plan, source, status } = await getPlan(params.id);
 
   if (status === 404 || (!plan && source !== "error")) {

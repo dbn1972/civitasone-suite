@@ -6,7 +6,8 @@ import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/rol
 import { scoreBand, riskScoreVariant, riskStatusVariant, RISK_SCORE_LEGEND } from "./riskBands";
 import { AddRiskForm } from "./AddRiskForm";
 
-export default async function ProjectRisksPage({ params }: { params: { id: string } }) {
+export default async function ProjectRisksPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: risks, source } = await getProjectRisks(params.id);
   const errored = source === "error";
 

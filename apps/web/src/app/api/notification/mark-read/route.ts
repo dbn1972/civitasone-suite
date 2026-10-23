@@ -12,7 +12,7 @@ const GATEWAY = (
  * Proxy POST /api/notification/mark-read to notification-service.
  */
 export async function POST(req: Request) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) {
     return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
   }

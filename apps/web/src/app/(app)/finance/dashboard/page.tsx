@@ -23,7 +23,8 @@ const QUICK_LINKS = [
   { label: "Payments", href: "/finance/payments", icon: "💳" },
 ];
 
-export default async function FinanceDashboardPage({ searchParams }: { searchParams?: { fy?: string } }) {
+export default async function FinanceDashboardPage(props: { searchParams?: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("financeDashboard");
   // GAP-FINANCE-DASHBOARD-02: ?fy= is validated against the selectable list
   // (never forwarded raw) and drives the loader, so the FyFilter really changes

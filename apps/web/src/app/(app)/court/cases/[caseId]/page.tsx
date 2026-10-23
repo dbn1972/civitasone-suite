@@ -6,11 +6,12 @@ import { CaseConsole } from "./CaseConsole";
 
 export const dynamic = "force-dynamic";
 
-export default async function CaseDetailPage({
-  params,
-}: {
-  params: { caseId: string };
-}) {
+export default async function CaseDetailPage(
+  props: {
+    params: Promise<{ caseId: string }>;
+  }
+) {
+  const params = await props.params;
   const { caseId } = params;
   const [detail, orders, hearings, certifiedCopies] = await Promise.all([
     getCase(caseId),

@@ -38,7 +38,7 @@ describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
   it("header equals the CRM hub tile title, in en and hi", async () => {
     const hubTitle = enMessages.crm.hub.tiles.activities.title;
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("heading", { name: hubTitle })).toBeInTheDocument();
     expect(enMessages.crmActivitiesTable.heading).toBe(hubTitle);
     expect(hiMessages.crmActivitiesTable.heading).toBe(hiMessages.crm.hub.tiles.activities.title);
@@ -46,28 +46,28 @@ describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
 
   it("renders heading 'Activities' (matching the hub/nav/URL, not 'Stakeholder Interactions')", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("heading", { name: "Activities" })).toBeInTheDocument();
     expect(screen.queryByText("Stakeholder Interactions")).not.toBeInTheDocument();
   });
 
   it("labels the total stat 'Total Activities', not 'Total Interactions'", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Total Activities")).toBeInTheDocument();
     expect(screen.queryByText("Total Interactions")).not.toBeInTheDocument();
   });
 
   it("renders an en subtitle with no hard-coded Devanagari (GAP-CRM-ACCOUNTS-07)", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const subtitle = screen.getByText(/Calls, meetings/);
     expect(/[\u0900-\u097F]/.test(subtitle.textContent ?? "")).toBe(false);
   });
 
   it("shows overdue count (3) when activities have status overdue", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Overdue")).toBeInTheDocument();
     // 3 activities are overdue — the value "3" must appear in the stat grid
     expect(screen.getByText("3")).toBeInTheDocument();
@@ -75,14 +75,14 @@ describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
 
   it("shows completed count (2) correctly", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Completed")).toBeInTheDocument();
     expect(screen.getByText("2")).toBeInTheDocument();
   });
 
   it("renders ActivitiesTable component", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("act-table")).toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
     // every count (total/due-today/overdue/completed) used to render a
     // confident "0" instead of signalling the load actually failed.
     mocked.mockResolvedValue({ data: [], source: "error" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
@@ -100,13 +100,13 @@ describe("Activities page (GAP-CRM-ACTIVITIES-08 vocabulary)", () => {
     // e.g. the Control Tower's "Overdue follow-ups" exception links to
     // /crm/activities?segment=Overdue.
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: { segment: "Overdue" } }));
+    render(await Page({ searchParams: Promise.resolve({ segment: "Overdue" }) }));
     expect(screen.getByTestId("act-table").dataset.initialSegment).toBe("Overdue");
   });
 
   it("omits initialSegment when no ?segment= is present", async () => {
     mocked.mockResolvedValue({ data: mockActivities, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("act-table").dataset.initialSegment).toBe("");
   });
 });

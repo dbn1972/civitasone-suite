@@ -51,7 +51,7 @@ describe("VendorDetailPage", () => {
 
   it("DETAIL-01: PAN, email, phone and bank account are masked (raw value absent from DOM)", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    const { container } = render(await VendorDetailPage({ params: { id: "v1" } }));
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     const html = container.innerHTML;
     expect(html).not.toContain("ABCDE1234F"); // raw PAN
     expect(html).not.toContain("accounts@acme.example"); // raw email
@@ -64,48 +64,48 @@ describe("VendorDetailPage", () => {
 
   it("DETAIL-01: GSTIN and IFSC remain visible (public business identifiers)", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    const { container } = render(await VendorDetailPage({ params: { id: "v1" } }));
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(container.innerHTML).toContain("22AAAAA0000A1Z5");
     expect(container.innerHTML).toContain("SBIN0001234");
   });
 
   it("DETAIL-03: KYC 'Verified At' uses the Indian date format, not raw ISO", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("06 Mar 2026")).toBeInTheDocument(); // 18:40Z -> IST next day
     expect(screen.queryByText("2026-03-05")).toBeNull();
   });
 
   it("DETAIL-03: KYC status 'in_progress' renders as 'In progress'", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("In progress")).toBeInTheDocument();
     expect(screen.queryByText("In_progress")).toBeNull();
   });
 
   it("DETAIL-05: empanelment appears once (header pill only, not duplicated in the details card)", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByText("Empanelment")).toBeNull(); // the details-card field label is gone
     expect(screen.getAllByText("Empanelled").length).toBe(1);
   });
 
   it("DETAIL-05: the buyer rating pill is labelled to disambiguate from the /100 scorecard", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText(/Buyer rating/)).toBeInTheDocument();
   });
 
   it("NEW-03: ?registered=1 shows a confirmation banner with the honest initial status", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentStatus: "not_empanelled" }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" }, searchParams: { registered: "1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }), searchParams: Promise.resolve({ registered: "1" }) }));
     expect(screen.getByText(/Vendor registered/)).toBeInTheDocument();
     expect(screen.getByText(/complete KYC and empanelment before ordering/)).toBeInTheDocument();
   });
   // GAP-PROCUREMENT-VENDORS-DETAIL-02: role-gated lifecycle actions.
   it("DETAIL-02: a procurement writer sees Suspend and Blacklist on an empanelled vendor (no Empanel)", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByRole("button", { name: "Suspend" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Blacklist" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Empanel" })).toBeNull();
@@ -113,14 +113,14 @@ describe("VendorDetailPage", () => {
 
   it("DETAIL-02: a registered (not empanelled) vendor offers Empanel, not Suspend", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentStatus: "not_empanelled" }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByRole("button", { name: "Empanel" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
   });
 
   it("DETAIL-02: a lapsed empanelment offers Re-empanel instead of Suspend", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentLapsed: true }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByRole("button", { name: "Re-empanel" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Suspend" })).toBeNull();
   });
@@ -128,14 +128,14 @@ describe("VendorDetailPage", () => {
   it("DETAIL-02: a viewer role sees no lifecycle controls", async () => {
     sessionRoles = ["audit_officer"];
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByTestId("vendor-actions")).toBeNull();
     expect(screen.queryByRole("button", { name: "Blacklist" })).toBeNull();
   });
 
   it("DETAIL-02: a blacklisted vendor shows no action buttons, only the register note", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentStatus: "blacklisted" }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByRole("button", { name: "Blacklist" })).toBeNull();
     expect(screen.getByText(/Reinstate it from the vendor blacklist register/)).toBeInTheDocument();
   });
@@ -143,14 +143,14 @@ describe("VendorDetailPage", () => {
   // GAP-PROCUREMENT-VENDORS-DETAIL-04: validity + orders history.
   it("DETAIL-04: shows the empanelment validity and an Expired pill when lapsed", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentValidTill: "2026-01-31", empanelmentLapsed: true }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Empanelment valid till")).toBeInTheDocument();
     expect(screen.getByText("Expired")).toBeInTheDocument();
   });
 
   it("DETAIL-04: warns when the empanelment expires within 30 days", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentValidTill: "2026-06-30" }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Expires in 15 days")).toBeInTheDocument();
     expect(screen.queryByText("Expired")).toBeNull();
   });
@@ -164,7 +164,7 @@ describe("VendorDetailPage", () => {
       ],
       source: "api",
     });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(ordersMock).toHaveBeenCalledWith({ vendorId: "v1", limit: 50 });
     expect(screen.getByRole("link", { name: "PO-2026-001" })).toHaveAttribute("href", "/procurement/orders/po-1");
     expect(screen.getByText("₹12,500.00")).toBeInTheDocument();
@@ -173,14 +173,14 @@ describe("VendorDetailPage", () => {
   it("DETAIL-04: a failed orders fetch shows an error state, not 'No purchase orders'", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
     ordersMock.mockResolvedValue({ data: [], source: "error" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByText("No purchase orders")).toBeNull();
     expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
   });
 
   it("DETAIL-04: no orders is an honest empty state", async () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("No purchase orders")).toBeInTheDocument();
   });
 });

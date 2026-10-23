@@ -17,7 +17,8 @@ import { AuditLogTable } from "./AuditLogTable";
 // correct, honest behaviour for a resource this platform deliberately
 // restricts, not a bug in this fix (see gap/routes.ts's GET /v1/admin/audit-
 // logs comment).
-export default async function AuditLogPage({ searchParams }: { searchParams?: { offset?: string } }) {
+export default async function AuditLogPage(props: { searchParams?: Promise<{ offset?: string }> }) {
+  const searchParams = await props.searchParams;
   const requested = Number(searchParams?.offset ?? 0);
   const offset = Number.isFinite(requested) && requested > 0 ? Math.floor(requested) : 0;
   const res = await getAdminAuditLogEntries(offset);

@@ -115,11 +115,12 @@ async function getDemands(assesseeId: string): Promise<LoaderResult<DemandLite[]
   );
 }
 
-export default async function InstalmentsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function InstalmentsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

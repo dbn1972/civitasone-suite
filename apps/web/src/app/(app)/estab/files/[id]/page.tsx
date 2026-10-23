@@ -25,7 +25,8 @@ type DispatchRow = {
   mode: string;
 };
 
-export default async function EstabFileDetailPage({ params }: { params: { id: string } }) {
+export default async function EstabFileDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: file, source } = await getEstabFileById(params.id);
 
   // The loader collapses 404, 5xx and network errors all into source:"error",
@@ -101,7 +102,6 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
           </>
         }
       />
-
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">

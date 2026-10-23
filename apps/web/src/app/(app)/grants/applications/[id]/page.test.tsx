@@ -65,7 +65,7 @@ describe("ApplicationDetailPage", () => {
   });
 
   it("renders exactly one breadcrumb back-link to /grants/applications", async () => {
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     const backLinks = screen.getAllByRole("link", { name: "Applications" });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/grants/applications");
@@ -73,7 +73,7 @@ describe("ApplicationDetailPage", () => {
 
   // GAP-GRANTS-APPLICATIONS-DETAIL-06: scheme + grantee NAMES, not uuids.
   it("shows the scheme name and grantee name instead of uuids", async () => {
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     expect(screen.getByText(/Rural Water Scheme/)).toBeInTheDocument();
     expect(screen.getByText("Gram Panchayat Alpha")).toBeInTheDocument();
     // the raw application uuid is NOT shown as a monospace field anymore
@@ -82,7 +82,7 @@ describe("ApplicationDetailPage", () => {
 
   // GAP-GRANTS-APPLICATIONS-DETAIL-05: evaluation card shows the scores.
   it("shows the evaluation scores and recommendation", async () => {
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     expect(screen.getByText("Evaluation")).toBeInTheDocument();
     expect(screen.getByText("82")).toBeInTheDocument();
     expect(screen.getByText("Recommended with conditions")).toBeInTheDocument();
@@ -91,7 +91,7 @@ describe("ApplicationDetailPage", () => {
   // GAP-GRANTS-APPLICATIONS-DETAIL-02: the submitter sees the maker-checker note.
   it("blocks maker actions for the submitter (maker-checker)", async () => {
     userIdMock.mockReturnValue("clerk-1"); // same as submittedBy
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     expect(screen.getByText(/separation of duties/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve Application" })).not.toBeInTheDocument();
   });
@@ -100,21 +100,21 @@ describe("ApplicationDetailPage", () => {
   // state, NOT notFound().
   it("renders a load-error state on a non-404 failure instead of notFound", async () => {
     getApplicationByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const page = await ApplicationDetailPage({ params: { id: "app-1" } });
+    const page = await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) });
     render(page);
     expect(screen.getAllByText(/try again|couldn't load|couldn’t load|access restricted|retry/i).length).toBeGreaterThan(0);
   });
 
   it("calls notFound for a genuine 404", async () => {
     getApplicationByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(ApplicationDetailPage({ params: { id: "app-1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   // GAP-GRANTS-APPLICATIONS-DETAIL-06: submittedBy shown when it is a display
   // name (non-UUID); raw UUIDs are hidden as '\u2014' (em dash rendered as "—").
   it("shows submittedBy when it is a non-UUID display name (clerk-1)", async () => {
     // clerk-1 is a non-UUID actor code so displayActorRef returns it as-is.
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     expect(screen.getByText("Submitted By")).toBeInTheDocument();
     expect(screen.getByText("clerk-1")).toBeInTheDocument();
   });
@@ -126,7 +126,7 @@ describe("ApplicationDetailPage", () => {
       approvedBy: "d4e5f6a7-b8c9-0123-def0-456789abcdef",
     };
     getApplicationByIdMock.mockResolvedValue({ data: APP_UUID_SUBMITTER, source: "api" });
-    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    render(await ApplicationDetailPage({ params: Promise.resolve({ id: "app-1" }) }));
     // Raw UUID must NOT appear in the rendered page.
     expect(screen.queryByText("a1b2c3d4-e5f6-7890-abcd-ef1234567890")).not.toBeInTheDocument();
     // Submitted By row must be present.

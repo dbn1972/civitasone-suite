@@ -22,11 +22,12 @@ const mono: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
-export default async function HearingsListPage({
-  searchParams,
-}: {
-  searchParams: { caseId?: string };
-}) {
+export default async function HearingsListPage(
+  props: {
+    searchParams: Promise<{ caseId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const caseId = (searchParams.caseId ?? "").trim();
   const casesResult = await getCases();
 

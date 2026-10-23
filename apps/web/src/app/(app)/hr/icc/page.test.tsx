@@ -136,7 +136,7 @@ describe("/hr/icc stat cards and paging (GAP-HR-ICC-05)", () => {
 
   it("120 complaints: page 2 asks for offset 100 and links back; page 1 links forward", async () => {
     respond([RAW_ROW], 120);
-    render(await IccPage({ searchParams: { page: "2" } }));
+    render(await IccPage({ searchParams: Promise.resolve({ page: "2" }) }));
     expect(fetchJsonMock.mock.calls[0]![0]).toContain("limit=100&offset=100");
     expect(screen.getByRole("link", { name: /Previous/ })).toHaveAttribute("href", "/hr/icc?page=1");
     expect(screen.queryByRole("link", { name: /Next/ })).not.toBeInTheDocument();

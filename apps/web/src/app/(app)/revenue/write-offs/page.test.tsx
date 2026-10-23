@@ -52,28 +52,28 @@ describe("WriteOffsPage", () => {
 
   it("prompts for an assessee when none is selected", async () => {
     route({});
-    const ui = await WriteOffsPage({ searchParams: {} });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
   });
 
   it("renders the write-off form once an assessee is selected", async () => {
     route({});
-    const ui = await WriteOffsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
     expect(screen.getByRole("heading", { name: "Raise Write-off" })).toBeInTheDocument();
   });
 
   it("shows the data-source badge instead of fabricating data on assessee load error", async () => {
     route({ assessees: { data: [], source: "error" } });
-    const ui = await WriteOffsPage({ searchParams: {} });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
 
   it("no longer shows developer 'BACKEND FOLLOW-UPS' text to end users (GAP-REVENUE-WRITE-OFFS-04)", async () => {
     route({});
-    const ui = await WriteOffsPage({ searchParams: {} });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();
     expect(screen.queryByText(/does not yet expose a list endpoint/)).not.toBeInTheDocument();
@@ -88,7 +88,7 @@ describe("WriteOffsPage", () => {
         source: "api",
       },
     });
-    const ui = await WriteOffsPage({ searchParams: {} });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText("Pending write-offs")).toBeInTheDocument();
     expect(screen.getByText("₹1,000.00")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("WriteOffsPage", () => {
 
   it("shows a retry state (not an empty 'none pending') when the pending list fails to load (GAP-REVENUE-WRITE-OFFS-02)", async () => {
     route({ pending: { data: [], source: "error" } });
-    const ui = await WriteOffsPage({ searchParams: {} });
+    const ui = await WriteOffsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.queryByText("No pending write-offs")).not.toBeInTheDocument();
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();

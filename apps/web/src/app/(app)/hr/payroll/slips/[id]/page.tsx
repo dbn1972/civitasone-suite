@@ -10,7 +10,8 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { salarySlipStatusLabel, isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 
-export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
+export default async function PayslipDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("salarySlipDashboard");
   const roles = getSessionRoles();
   // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an

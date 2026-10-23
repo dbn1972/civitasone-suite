@@ -172,11 +172,12 @@ const valueStyle: React.CSSProperties = {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function WorkProposalDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function WorkProposalDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const { data: proposal, source, status } = await getProposal(params.id);
 
   // GAP-WORKS-PROPOSALS-DETAIL-01 (FAILMASK): a failed fetch used to call

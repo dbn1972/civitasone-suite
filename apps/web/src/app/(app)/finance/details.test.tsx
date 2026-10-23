@@ -45,10 +45,10 @@ describe("detail pages: a failed load is not 'not found' (FAILMASK)", () => {
   });
 
   const cases: [string, keyof typeof loaders, () => Promise<React.ReactElement>, RegExp][] = [
-    ["bill", "getFinanceBillById", () => BillDetailPage({ params: { id: "b1" } }), /emptyTitleNotFound/],
-    ["payment", "getFinancePaymentById", () => PaymentDetailPage({ params: { id: "p1" } }), /Payment not found/],
-    ["vendor", "getFinanceVendorById", () => VendorDetailPage({ params: { id: "v1" } }), /Vendor not found/],
-    ["scheme", "getFinanceSchemeById", () => SchemeDetailPage({ params: { id: "s1" } }), /emptyTitleNotAvailable/],
+    ["bill", "getFinanceBillById", () => BillDetailPage({ params: Promise.resolve({ id: "b1" }) }), /emptyTitleNotFound/],
+    ["payment", "getFinancePaymentById", () => PaymentDetailPage({ params: Promise.resolve({ id: "p1" }) }), /Payment not found/],
+    ["vendor", "getFinanceVendorById", () => VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }), /Vendor not found/],
+    ["scheme", "getFinanceSchemeById", () => SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }), /emptyTitleNotAvailable/],
   ];
 
   for (const [name, loader, page, notFound] of cases) {
@@ -83,7 +83,7 @@ describe("vendor detail masks PAN and account number (GAP-FINANCE-VENDORS-DETAIL
       data: { name: "Acme", pan: "ABCDE1234F", bankAccount: "123456789012", ifsc: "HDFC0001", bankName: "HDFC", status: "active", bills: [] },
       source: "api",
     });
-    const { container } = render(await VendorDetailPage({ params: { id: "v1" } }));
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(container.textContent).not.toContain("ABCDE1234F");
     expect(container.textContent).not.toContain("123456789012");
     expect(container.textContent).toContain("ABCDE****F");

@@ -25,11 +25,12 @@ type PlanRow = {
   status: string;
 } & Record<string, unknown>;
 
-export default async function AnnualProcurementPlanPage({
-  searchParams,
-}: {
-  searchParams?: { year?: string; department?: string };
-}) {
+export default async function AnnualProcurementPlanPage(
+  props: {
+    searchParams?: Promise<{ year?: string; department?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const yearParam = searchParams?.year ? Number(searchParams.year) : undefined;
   const year = Number.isFinite(yearParam) ? yearParam : undefined;
   const department = searchParams?.department?.trim() || undefined;

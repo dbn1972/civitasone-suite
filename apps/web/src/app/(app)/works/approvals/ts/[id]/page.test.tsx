@@ -47,7 +47,7 @@ describe("TsDetailPage", () => {
 
   it("fetches by id and renders the record", async () => {
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/works/approvals/ts/ts-1",
@@ -65,7 +65,7 @@ describe("TsDetailPage", () => {
       if (url.includes("/identity/users")) return { data: { [RECORD.tsAuthorityId]: "Superintending Engineer" }, source: "api" };
       return { data: RECORD, source: "api" };
     });
-    const ui = await TsDetailPage({ params: { id: "x-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "x-1" }) });
     renderUI(ui);
     const workLink = screen.getByRole("link", { name: "WK-2026-0042" });
     expect(workLink).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
@@ -76,12 +76,12 @@ describe("TsDetailPage", () => {
 
   it("calls notFound() only for a definitive 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(TsDetailPage({ params: { id: "missing" } })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(TsDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("shows a retryable load-error state (NOT a 404) when the fetch fails for a non-404 reason", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     expect(screen.getByText(/could not load this record/i)).toBeInTheDocument();
   });
@@ -89,7 +89,7 @@ describe("TsDetailPage", () => {
   it("disables Finalize for a user without an approver role", async () => {
     rolesMock.mockReturnValue(["works_viewer"]);
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     const btn = screen.getByRole("button", { name: "Finalize TS" }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);

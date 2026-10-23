@@ -31,11 +31,12 @@ function LoginFallback() {
   );
 }
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: { error?: string; next?: string };
-}) {
+export default async function LoginPage(
+  props: {
+    searchParams: Promise<{ error?: string; next?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const next = safeNext(searchParams.next);
 
   // If there's an error, show the error page with retry button

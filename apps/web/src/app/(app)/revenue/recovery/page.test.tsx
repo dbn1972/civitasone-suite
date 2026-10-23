@@ -25,7 +25,7 @@ describe("RecoveryPage", () => {
 
   it("prompts for an assessee when none is selected", async () => {
     fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
-    const ui = await RecoveryPage({ searchParams: {} });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe("RecoveryPage", () => {
 
   it("renders the recovery referral form once an assessee is selected", async () => {
     fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
-    const ui = await RecoveryPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByRole("heading", { name: "Refer for Recovery" })).toBeInTheDocument();
@@ -55,7 +55,7 @@ describe("RecoveryPage", () => {
         source: "api",
       }); // referrals
 
-    const ui = await RecoveryPage({ searchParams: {} });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Assessee name (not the UUID) and the reason are shown in the register.
@@ -68,7 +68,7 @@ describe("RecoveryPage", () => {
       .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" }) // assessees ok
       .mockResolvedValueOnce({ data: [], source: "error" }); // referrals error
 
-    const ui = await RecoveryPage({ searchParams: {} });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("RecoveryPage", () => {
       .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await RecoveryPage({ searchParams: {} });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();

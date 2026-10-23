@@ -8,7 +8,8 @@ import { BillPassPayActions } from "../../../_components/FinanceActions";
 import { ScannedDocumentsSection } from "../../../_components/scanned/ScannedDocumentsSection";
 import { BillLineItemsTable } from "./BillLineItemsTable";
 
-export default async function BillDetailPage({ params }: { params: { id: string } }) {
+export default async function BillDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("expenditureBillDetail");
   const result = await getFinanceBillById(params.id);
   const { data: bill } = result;

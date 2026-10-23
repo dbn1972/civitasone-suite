@@ -22,7 +22,7 @@ import AparListPage from "./page";
 // here needs a real provider in the tree, same pattern as
 // dpc/page.test.tsx and SeniorityListActions.test.tsx.
 async function renderPage(searchParams: { status?: string; period?: string; q?: string; page?: string }) {
-  const ui = await AparListPage({ searchParams });
+  const ui = await AparListPage({ searchParams: Promise.resolve(searchParams) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

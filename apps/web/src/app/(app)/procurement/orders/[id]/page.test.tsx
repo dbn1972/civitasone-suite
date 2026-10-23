@@ -47,7 +47,7 @@ describe("PODetailPage — DETAIL-01 single approval path", () => {
 
   it("does NOT render the eOffice 'Raise for approval' control for an approved PO", async () => {
     mockLoad.mockResolvedValue({ data: po({ status: "approved" }), source: "api" });
-    render(await PODetailPage({ params: { id: "x" } }));
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByTestId("raise-eoffice")).not.toBeInTheDocument();
     // The Approval card explains the single release path + state.
     expect(screen.getByText("Approval")).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("PODetailPage — DETAIL-01 single approval path", () => {
 
   it("DOES render the approval-raise control for a draft PO", async () => {
     mockLoad.mockResolvedValue({ data: po({ status: "draft" }), source: "api" });
-    render(await PODetailPage({ params: { id: "x" } }));
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByTestId("raise-eoffice")).toBeInTheDocument();
   });
 });
@@ -66,7 +66,7 @@ describe("PODetailPage — DETAIL-04 single status pill", () => {
 
   it("renders the PO lifecycle status pill once in the header (details card no longer duplicates it)", async () => {
     mockLoad.mockResolvedValue({ data: po({ status: "approved" }), source: "api" });
-    render(await PODetailPage({ params: { id: "x" } }));
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     // "Approved" appears in the header pill AND the Approval-card state pill
     // reads "Approved — ready to dispatch" (a different string), so the exact
     // "Approved" label appears exactly once.
@@ -79,7 +79,7 @@ describe("PODetailPage — DETAIL-05 shared labels + honest unit", () => {
 
   it("renders 'GeM Placed' for a gem_placed PO (shared label map)", async () => {
     mockLoad.mockResolvedValue({ data: po({ status: "gem_placed" }), source: "api" });
-    render(await PODetailPage({ params: { id: "x" } }));
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("GeM Placed")).toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe("PODetailPage — DETAIL-05 shared labels + honest unit", () => {
       }),
       source: "api",
     });
-    render(await PODetailPage({ params: { id: "x" } }));
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     const cells = screen.getAllByText("—");
     expect(cells.length).toBeGreaterThanOrEqual(1);
   });

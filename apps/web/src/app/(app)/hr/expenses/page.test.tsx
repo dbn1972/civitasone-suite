@@ -22,12 +22,12 @@ describe("ExpensesPage travel-request link (GAP-HR-TRAVEL-02)", () => {
   beforeEach(() => formProps.mockReset());
 
   it("passes a valid ?travelRequestId to the claim form", async () => {
-    render(await ExpensesPage({ searchParams: { travelRequestId: TRAVEL_ID } }));
+    render(await ExpensesPage({ searchParams: Promise.resolve({ travelRequestId: TRAVEL_ID }) }));
     expect(formProps).toHaveBeenCalledWith({ travelRequestId: TRAVEL_ID });
   });
 
   it("drops a malformed ?travelRequestId rather than forwarding it", async () => {
-    render(await ExpensesPage({ searchParams: { travelRequestId: "<script>x</script>" } }));
+    render(await ExpensesPage({ searchParams: Promise.resolve({ travelRequestId: "<script>x</script>" }) }));
     expect(formProps).toHaveBeenCalledWith({});
   });
 

@@ -5,11 +5,12 @@ import { toHumanError } from "@/lib/messages";
 import { IssueBookForm } from "./IssueBookForm";
 import { IssuesTable } from "./IssuesTable";
 
-export default async function LibraryIssuesPage({
-  searchParams,
-}: {
-  searchParams?: { bookId?: string };
-}) {
+export default async function LibraryIssuesPage(
+  props: {
+    searchParams?: Promise<{ bookId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const [{ data: issues, source: issuesSource }, { data: books, source: booksSource }] = await Promise.all([
     getLibraryIssues(),
     getLibraryBooks(),
@@ -37,7 +38,6 @@ export default async function LibraryIssuesPage({
         back="/estab/library"
         actions={issuesErrored || booksErrored ? <DataSourceBadge source="error" /> : null}
       />
-
       {/* GAP-ESTAB-LIBRARY-ISSUES-05: loan stats depend only on the issues
           loader; a catalogue failure affects the form card, not these counts. */}
       <StatGrid>
@@ -45,23 +45,21 @@ export default async function LibraryIssuesPage({
         <StatCard icon="⏰" tone="bad" label="Overdue" value={issuesErrored ? "—" : overdueCount.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" label="Returned" value={issuesErrored ? "—" : returnedCount.toLocaleString("en-IN")} />
       </StatGrid>
-
       {booksErrored ? (
         // The catalogue failed to load — do NOT let the form claim "no copies
         // are available to issue", which is a different (false) statement.
-        <Card title="Issue a book">
+        (<Card title="Issue a book">
           <RefreshErrorState error={toHumanError("load", { area: "book catalogue" })} backHref="/estab/library" />
-        </Card>
+        </Card>)
       ) : (
         <IssueBookForm books={issuableBooks} defaultBookId={searchParams?.bookId} />
       )}
-
       <Card title="Loans">
         {issuesErrored && issues.length === 0 ? (
           // GAP-ESTAB-LIBRARY-ISSUES-04: a failed loans fetch gets a retryable
           // error state, not a bare badge, so an outage is not mistaken for
           // "no loans yet".
-          <RefreshErrorState error={toHumanError("load", { area: "loans" })} backHref="/estab/library" />
+          (<RefreshErrorState error={toHumanError("load", { area: "loans" })} backHref="/estab/library" />)
         ) : issues.length === 0 ? (
           <EmptyState icon="📖" title="No loans yet" message="Issued books will appear here." />
         ) : (

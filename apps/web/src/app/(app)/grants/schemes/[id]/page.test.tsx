@@ -47,7 +47,7 @@ describe("SchemeDetailPage", () => {
   });
 
   it("renders exactly one breadcrumb back-link to /grants/schemes, not two", async () => {
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     const backLinks = screen.getAllByRole("link", { name: "Schemes" });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/grants/schemes");
@@ -56,14 +56,14 @@ describe("SchemeDetailPage", () => {
   });
 
   it("still renders the page heading", async () => {
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getByRole("heading", { level: 1, name: "PM Farmer Support Scheme" })).toBeInTheDocument();
   });
 
   // GAP-GRANTS-SCHEMES-DETAIL-03: a non-404 error shows retry, not notFound.
   it("shows a retry error state on a server error (not 'page not found')", async () => {
     getSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const page = await SchemeDetailPage({ params: { id: "scheme-1" } });
+    const page = await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) });
     render(page);
     // RefreshErrorState renders a Retry affordance; notFound() would have thrown.
     expect(screen.getByRole("heading", { level: 1, name: "Scheme" })).toBeInTheDocument();
@@ -71,20 +71,20 @@ describe("SchemeDetailPage", () => {
 
   it("calls notFound() on a genuine 404", async () => {
     getSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(SchemeDetailPage({ params: { id: "missing" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(SchemeDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   // GAP-GRANTS-SCHEMES-DETAIL-01
   it("hides management actions (Close Scheme) for a read-only role", async () => {
     rolesMock.mockReturnValue(["grant_viewer"]);
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.queryByRole("button", { name: "Close Scheme" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "+ New Application" })).not.toBeInTheDocument();
   });
 
   it("shows Close Scheme for a maker role", async () => {
     rolesMock.mockReturnValue(["grant_admin"]);
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getByRole("button", { name: "Close Scheme" })).toBeInTheDocument();
   });
 
@@ -94,7 +94,7 @@ describe("SchemeDetailPage", () => {
       data: { ...OPEN_SCHEME, openAt: "2020-01-01", closeAt: "2020-12-31" },
       source: "api",
     });
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.queryByRole("link", { name: "+ New Application" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Closed/ })).toBeDisabled();
   });
@@ -105,19 +105,19 @@ describe("SchemeDetailPage", () => {
       data: { ...OPEN_SCHEME, reportingFrequencyDays: 0 },
       source: "api",
     });
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.queryByText("Reporting Cycle")).not.toBeInTheDocument();
   });
 
   // GAP-GRANTS-SCHEMES-DETAIL-06: only one New Application entry.
   it("renders at most one '+ New Application' control", async () => {
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getAllByRole("link", { name: "+ New Application" })).toHaveLength(1);
   });
 
   // GAP-GRANTS-SCHEMES-DETAIL-04: utilisation reflects disbursed vs budget.
   it("shows budget utilisation (25%)", async () => {
-    render(await SchemeDetailPage({ params: { id: "scheme-1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getAllByText(/25\.0%/).length).toBeGreaterThan(0);
   });
 });

@@ -130,11 +130,12 @@ async function getPendingRefunds(): Promise<LoaderResult<PendingRefundRow[]>> {
   });
 }
 
-export default async function RefundsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function RefundsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

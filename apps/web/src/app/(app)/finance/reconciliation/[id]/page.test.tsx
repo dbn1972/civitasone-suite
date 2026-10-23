@@ -60,7 +60,7 @@ describe("ReconciliationRunDetailPage", () => {
   it("renders the run and its exceptions", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: RUN, breaks: [EXCEPTION] }, source: "api" });
 
-    const ui = await ReconciliationRunDetailPage({ params: { id: RUN.id } });
+    const ui = await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) });
     render(ui);
 
     expect(screen.getByText(/Recon Run — book-vs-bank/)).toBeInTheDocument();
@@ -70,14 +70,14 @@ describe("ReconciliationRunDetailPage", () => {
   // GAP-FINANCE-RECONCILIATION-DETAIL-03: failure vs not-found are told apart by status.
   it("shows a retryable error state (not not-found) on a 500", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: null, breaks: [] }, source: "error", status: 500 });
-    render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     expect(screen.queryByText("Run not found")).not.toBeInTheDocument();
   });
 
   it("shows 'Run not found' inside the page chrome (header + back link) on a 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: null, breaks: [] }, source: "error", status: 404 });
-    render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     expect(screen.getByText("Run not found")).toBeInTheDocument();
     expect(screen.getByText("Reconciliation Workbench")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("ReconciliationRunDetailPage", () => {
   // GAP-FINANCE-RECONCILIATION-DETAIL-02
   it("shows the run status pill and completed date", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: RUN, breaks: [] }, source: "api" });
-    render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     expect(screen.getByText("Completed")).toBeInTheDocument();
     expect(screen.getByText(/completed .*(01\/07\/2026|01 Jul 2026)/)).toBeInTheDocument();
     expect(screen.queryByText(/still in progress/)).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("ReconciliationRunDetailPage", () => {
 
   it("flags a running run as in progress and withholds the Unbalanced verdict", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: { ...RUN, status: "running", completedAt: null }, breaks: [] }, source: "api" });
-    render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     expect(screen.getByText("Running")).toBeInTheDocument();
     expect(screen.getByText("Run still in progress; counts may change.")).toBeInTheDocument();
     expect(screen.queryByText("Unbalanced")).not.toBeInTheDocument();
@@ -104,7 +104,7 @@ describe("ReconciliationRunDetailPage", () => {
   // GAP-FINANCE-RECONCILIATION-DETAIL-04: 100 source / 98 target / 95 matched -> 5 and 3 unmatched
   it("shows unmatched rows per side and links Breaks to the exceptions table", async () => {
     fetchJsonMock.mockResolvedValue({ data: { data: RUN, breaks: [EXCEPTION] }, source: "api" });
-    const { container } = render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    const { container } = render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     const note = screen.getByText(/Unmatched rows:/);
     expect(note.textContent).toMatch(/5.*in finance-book.*3.*in bank-statement/);
     expect(screen.getByRole("link", { name: "View 1 breaks for this run" })).toHaveAttribute("href", "#exceptions");
@@ -115,7 +115,7 @@ describe("ReconciliationRunDetailPage", () => {
   it("hides exception actions from an audit_officer", async () => {
     rolesMock.mockReturnValue(["audit_officer"]);
     fetchJsonMock.mockResolvedValue({ data: { data: RUN, breaks: [EXCEPTION] }, source: "api" });
-    render(await ReconciliationRunDetailPage({ params: { id: RUN.id } }));
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
     expect(screen.getByText("UTR12345")).toBeInTheDocument();
     expect(screen.queryByLabelText(/Resolve exception/)).not.toBeInTheDocument();
   });

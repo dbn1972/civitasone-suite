@@ -153,7 +153,7 @@ function buildAnswer(
 
 export async function POST(request: NextRequest) {
   // GAP2-SHELL-PROXY-02: session gate — match every other /api/proxy/* path.
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) {
     return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
   }

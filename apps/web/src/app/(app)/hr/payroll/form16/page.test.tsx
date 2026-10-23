@@ -45,7 +45,7 @@ describe("Form16Page", () => {
 
   it("denies bulk generation to a role with no payroll admin privilege, without fetching bulk-status, but still shows Verify", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
-    const ui = await Form16Page({ searchParams: {} });
+    const ui = await Form16Page({ searchParams: Promise.resolve({}) });
     renderPage(ui);
     expect(screen.getByText(/don.t have permission/i)).toBeInTheDocument();
     expect(statusAwareGetMock).not.toHaveBeenCalled();
@@ -74,7 +74,7 @@ describe("Form16Page", () => {
       },
     });
 
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
 
     expect(screen.getByText("job-1")).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe("Form16Page", () => {
   it("renders a legitimate empty state on a 404 (no job created yet)", async () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 404, body: { code: "NOT_FOUND" } });
 
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
 
     expect(screen.getByText("No Form-16 filing run for FY 2025-26")).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe("Form16Page", () => {
   it("renders the error affordance (not the empty-state copy) on a real failure like 403", async () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 403, body: { code: "FORBIDDEN" } });
 
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe("Form16Page", () => {
         },
       },
     });
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     fireEventClickSummary();
     expect(screen.getByText("e9: No PAN on file")).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("Form16Page", () => {
         },
       },
     });
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     fireEventClickSummary();
     expect(screen.getByText(/unrecognized format/)).toBeInTheDocument();

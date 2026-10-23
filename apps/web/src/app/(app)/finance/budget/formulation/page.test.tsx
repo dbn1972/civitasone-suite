@@ -29,7 +29,7 @@ describe("BudgetFormulationPage", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("Proposed Outlay (BE, FY 2026-27)")).toBeInTheDocument();
     // the card (and the row's BE cell) show this FY's BE total
     expect(screen.getAllByText("₹12,34,567.89").length).toBeGreaterThan(0);
@@ -39,14 +39,14 @@ describe("BudgetFormulationPage", () => {
 
   it("ignores a malformed ?fy= and falls back to a valid FY label", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-99" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-99" }) }));
     expect(screen.queryByText(/FY 2026-99/)).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-BUDGET-FORMULATION-03
   it("on a failed fetch shows — cards and a Retry state, not ₹0.00 / No records", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "error", status: 500 });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("We couldn't load budget estimates.")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBe(4);
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("BudgetFormulationPage", () => {
 
   it("a genuinely empty FY still shows zeros, no error", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("₹0.00")).toBeInTheDocument();
     expect(screen.queryByText(/We couldn't load/)).not.toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
 
   it("each money column shows the field it is named for (BE=beMinor, Sanctioned, Released)", async () => {
     getBudgets.mockResolvedValue({ data: [full({})], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const row = screen.getByText("2202").closest("tr")!;
     const cells = Array.from(row.querySelectorAll("td")).map((c) => c.textContent);
     const header = Array.from(row.closest("table")!.querySelectorAll("th")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
@@ -89,7 +89,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
     const idx = header.findIndex((h) => h === "Last Year (BE)");
     const lastYear = (head: string) => screen.getByText(head).closest("tr")!.querySelectorAll("td")[idx].textContent;
@@ -106,7 +106,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
     const idx = header.findIndex((h) => h === "Last Year (BE)");
     const cells = screen.getAllByRole("row").slice(1).map((r) => r.querySelectorAll("td")[idx]?.textContent);
@@ -118,7 +118,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       data: [full({ id: "a" }), full({ id: "b", majorHead: "2203" }), full({ id: "c", majorHead: "2204", status: "submitted" })],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("approved 2")).toBeInTheDocument();
     expect(screen.queryByText("Pending Review")).not.toBeInTheDocument();
     // card label "Pending" + tab "Pending"

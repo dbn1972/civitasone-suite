@@ -6,7 +6,8 @@ import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/rol
 import { orderTaskTree } from "./taskTree";
 import { AddTaskForm } from "./AddTaskForm";
 
-export default async function ProjectTasksPage({ params }: { params: { id: string } }) {
+export default async function ProjectTasksPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: tasks, source } = await getProjectTasks(params.id);
   const errored = source === "error";
 

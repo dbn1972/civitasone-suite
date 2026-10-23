@@ -2,11 +2,12 @@ import { PageHeader } from "../../../_components/ds";
 import { getDocumentFolders } from "../_data/loaders";
 import { UploadDocumentForm, type FolderOption } from "./UploadDocumentForm";
 
-export default async function UploadDocumentPage({
-  searchParams,
-}: {
-  searchParams: { folderId?: string };
-}) {
+export default async function UploadDocumentPage(
+  props: {
+    searchParams: Promise<{ folderId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: folders } = await getDocumentFolders();
   const options: FolderOption[] = folders.map((f) => ({ id: f.id, name: f.name, path: f.path }));
   const defaultFolderId =

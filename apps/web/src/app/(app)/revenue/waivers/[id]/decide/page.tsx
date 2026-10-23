@@ -45,7 +45,8 @@ async function getWaiver(id: string): Promise<LoaderResult<WaiverRecord | null>>
   });
 }
 
-export default async function WaiverDecidePage({ params }: { params: { id: string } }) {
+export default async function WaiverDecidePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const waiverId = params.id;
   const { data: waiver, source, status } = await getWaiver(waiverId);
 

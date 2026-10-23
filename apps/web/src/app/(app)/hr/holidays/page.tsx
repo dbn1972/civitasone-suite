@@ -68,7 +68,8 @@ async function getHolidays(year: number): Promise<LoaderResult<Row[]>> {
  */
 const HOLIDAY_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
-export default async function HolidaysPage({ searchParams }: { searchParams?: { year?: string } }) {
+export default async function HolidaysPage(props: { searchParams?: Promise<{ year?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("holidays");
   const currentYear = new Date().getFullYear();
   // GAP-HR-HOLIDAYS-02: the backend already accepts ?year= (defaulting to

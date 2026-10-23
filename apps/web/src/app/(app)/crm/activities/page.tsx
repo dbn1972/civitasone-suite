@@ -6,7 +6,8 @@ import { getSessionRoles, CRM_ADMIN_ROLES, hasAnyRole } from "@/lib/auth/roleGua
 import { ActivitiesTable } from "./ActivitiesTable";
 import { LogActivityButton } from "./LogActivityButton";
 
-export default async function Page({ searchParams }: { searchParams?: { segment?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ segment?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crm.activities");
   const { data: activities, source } = await getCRMActivities();
   // F2-04: the activities export is a tenant-wide bulk egress, so it is offered

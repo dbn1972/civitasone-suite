@@ -20,7 +20,8 @@ async function getRunDetail(id: string): Promise<LoaderResult<RunDetail>> {
   });
 }
 
-export default async function ReconciliationRunDetailPage({ params }: { params: { id: string } }) {
+export default async function ReconciliationRunDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getRunDetail(params.id);
   const { data: detail, source } = result;
   const run = detail.data;

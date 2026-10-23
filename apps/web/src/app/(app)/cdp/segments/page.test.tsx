@@ -16,7 +16,7 @@ beforeEach(() => mocked.mockReset());
 describe("CDP segments page (GAP-CDP-SEGMENTS-02/03)", () => {
   it("uses view-only copy agreeing with the hub tile", async () => {
     mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 25 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("View audience segments for campaigns.")).toBeInTheDocument();
   });
 
@@ -25,7 +25,7 @@ describe("CDP segments page (GAP-CDP-SEGMENTS-02/03)", () => {
       data: { rows: [{ id: "s1", name: "VIPs", members: "1,234", ruleSummary: "2 rules (AND)", status: "active", updatedAt: "01 Aug 2026" }], total: 1, limit: 25 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Members")).toBeInTheDocument();
     expect(screen.getByText("Rule summary")).toBeInTheDocument();
     expect(screen.getByText("1,234")).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe("CDP segments page (GAP-CDP-SEGMENTS-02/03)", () => {
       data: { rows: [{ id: "s2", name: "New", members: "—", ruleSummary: "—", status: "paused", updatedAt: "—" }], total: 1, limit: 25 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
@@ -48,7 +48,7 @@ describe("CDP segments page (GAP-CDP-SEGMENTS-02/03)", () => {
 describe("CDP segments back navigation (GAP-CDP-PROFILES-DETAIL-05)", () => {
   it("renders exactly one Customer Data Platform back link to /cdp", async () => {
     mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 25 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const backLinks = screen.getAllByRole("link", { name: /Customer Data Platform/i });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/cdp");

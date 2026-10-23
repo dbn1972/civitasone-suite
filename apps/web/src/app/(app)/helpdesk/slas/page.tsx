@@ -33,7 +33,8 @@ const BUCKET_TITLES: Record<SlaBucket, string> = {
   within_sla: "Within SLA tickets",
 };
 
-export default async function Page({ searchParams }: { searchParams: { bucket?: string | string[] } }) {
+export default async function Page(props: { searchParams: Promise<{ bucket?: string | string[] }> }) {
+  const searchParams = await props.searchParams;
   const { data: tickets, source, bucketSources } = await getSlaTickets();
   const errored = source === "error";
   // GAP-HELPDESK-SLAS-04: only managers may export (requesterName is PII).

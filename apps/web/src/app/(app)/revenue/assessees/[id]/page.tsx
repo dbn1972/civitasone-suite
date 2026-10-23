@@ -69,7 +69,8 @@ async function getInstalmentPlans(id: string): Promise<LoaderResult<InstalmentPl
   });
 }
 
-export default async function AssesseeDetailPage({ params }: { params: { id: string } }) {
+export default async function AssesseeDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [assesseeResult, dcbResult, demandsResult, billsResult, receiptsResult, instalmentsResult] =
     await Promise.all([
       getAssessee(params.id),

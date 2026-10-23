@@ -50,7 +50,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // every real slip showed "not available" for both tables.
   it("derives earnings and deductions from components[], not the old fictional earnings/deductionItems shape", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Basic Pay")).toBeInTheDocument();
     expect(screen.getByText("Provident Fund")).toBeInTheDocument();
@@ -61,7 +61,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // fictional stat.pfEmployee/esiEmployee/esiEmployer shape.
   it("shows the real statutory columns and the employer-contribution note when an employer share is present", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("PF (Employee)")).toBeInTheDocument();
     expect(screen.getByText("PF (Employer)")).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // isn't.
   it("shows a retryable error (not the not-found card) when the fetch itself fails", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error", status: 500 });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
     expect(screen.queryByText(/may have been removed/i)).not.toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
 
   it("still shows the not-found card for a genuine miss (fetch succeeded, slip is null)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "api", status: 404 });
-    const ui = await PayslipDetailPage({ params: { id: "missing" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "missing" }) });
     renderPage(ui);
     expect(screen.getByText(/may have been removed/i)).toBeInTheDocument();
   });
@@ -93,7 +93,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // GAP-PAYROLL-SLIPS-DETAIL-04: slip.status.charAt(0) had no guard.
   it("never throws for an unrecognised status and falls back to the raw string", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "weird_future_status" }), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     expect(() => renderPage(ui)).not.toThrow();
     expect(screen.getByText("weird_future_status")).toBeInTheDocument();
   });
@@ -103,7 +103,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   it("points an employee's back-link at /hr/payroll, not the admin-only salary-slips list", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     const back = screen.getByText("Back to Payroll").closest("a");
     expect(back).toHaveAttribute("href", "/hr/payroll");
@@ -112,7 +112,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   it("points an admin's back-link at the salary-slips list", async () => {
     getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     const back = screen.getByText("Back to Salary Slips").closest("a");
     expect(back).toHaveAttribute("href", "/hr/payroll/salary-slips");
@@ -122,7 +122,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // downloadable.
   it("disables Download PDF for a draft slip", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "draft" }), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     const downloadEl = screen.getByText("Download PDF");
     expect(downloadEl.closest("a")).toBeNull();
@@ -131,7 +131,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
 
   it("keeps Download PDF as a real link for a finalized slip", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "finalized" }), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Download PDF").closest("a")).toHaveAttribute(
       "href",
@@ -141,7 +141,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
 
   it("keeps Download PDF as a real link for a paid slip (the only final status the backend can hold)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "paid" }), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Download PDF").closest("a")).toHaveAttribute(
       "href",
@@ -154,7 +154,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // never the raw English enum or an enabled print.
   it("renders an exception slip with its translated label and Download PDF disabled", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "exception" }), source: "api" });
-    const ui = await PayslipDetailPage({ params: { id: "slip-1" } });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText(enMessages.salarySlipDashboard.status.exception)).toBeInTheDocument();
     expect(screen.queryByText("exception")).not.toBeInTheDocument();
@@ -167,7 +167,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
   // rendered as three identical "not available" cards.
   it("SLIPS-DETAIL-03: a slip with no breakdown shows ONE note instead of three 'not available' cards", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ components: [], pfEmployeeMinor: 0, pfEmployerMinor: 0 }), source: "api" });
-    renderPage(await PayslipDetailPage({ params: { id: "slip-1" } }));
+    renderPage(await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getAllByText(/no earnings, deductions or statutory breakdown on file/)).toHaveLength(1);
     expect(screen.queryByText("Earnings")).not.toBeInTheDocument();
     expect(screen.queryByText("Deductions")).not.toBeInTheDocument();
@@ -179,7 +179,7 @@ describe("PayslipDetailPage (dashboard view)", () => {
       data: baseSlip({ components: [{ code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: 50000 }], pfEmployeeMinor: 0, pfEmployerMinor: 0 }),
       source: "api",
     });
-    renderPage(await PayslipDetailPage({ params: { id: "slip-1" } }));
+    renderPage(await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getByText("Basic Pay")).toBeInTheDocument();
     expect(screen.queryByText(/no earnings, deductions or statutory breakdown/)).not.toBeInTheDocument();
     expect(screen.queryByText("Statutory Contributions")).not.toBeInTheDocument();
