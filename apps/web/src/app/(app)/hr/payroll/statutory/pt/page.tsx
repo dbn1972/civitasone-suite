@@ -28,7 +28,8 @@ async function getData(): Promise<LoaderResult<PtVersionsPayload>> {
  * that is overwritten. Past and current versions are read-only; a change is a
  * new version that takes effect from its own date.
  */
-export default async function ProfessionalTaxPage({ searchParams }: { searchParams?: { state?: string; version?: string } }) {
+export default async function ProfessionalTaxPage(props: { searchParams?: Promise<{ state?: string; version?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("pt");
   // GAP-PAYROLL-STATUTORY-PT-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API is READER_ROLES-only in payroll-service. Gate before

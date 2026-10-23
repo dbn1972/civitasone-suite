@@ -47,7 +47,7 @@ describe("AssesseeDetailPage", () => {
 
   it("renders the assessee and DCB snapshot", async () => {
     mockAllSuccess();
-    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    const ui = await AssesseeDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.getByText("Ramesh Kumar")).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("AssesseeDetailPage", () => {
         });
       return Promise.resolve({ data: [], source: "api" });
     });
-    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    const ui = await AssesseeDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
     fireEvent.click(screen.getByRole("tab", { name: "Receipts" }));
     expect(screen.getByText("Bank reconciled")).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe("AssesseeDetailPage", () => {
 
   it("offers deep-link actions preselecting this assessee (DETAIL-01)", async () => {
     mockAllSuccess();
-    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    const ui = await AssesseeDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
     const receipt = screen.getByRole("link", { name: "Record receipt" });
     expect(receipt).toHaveAttribute("href", `/revenue/receipts?assesseeId=${ID}`);
@@ -105,7 +105,7 @@ describe("AssesseeDetailPage", () => {
       if (path.includes("/receipts")) return Promise.resolve({ data: [], source: "error" });
       return Promise.resolve({ data: [], source: "api" });
     });
-    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    const ui = await AssesseeDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
     fireEvent.click(screen.getByRole("tab", { name: "Receipts" }));
     expect(screen.queryByText("No receipts recorded")).not.toBeInTheDocument();
@@ -119,7 +119,7 @@ describe("AssesseeDetailPage", () => {
       if (path.endsWith(`/assessees/${ID}`)) return Promise.resolve({ data: null, source: "error" });
       return Promise.resolve({ data: [], source: "error" });
     });
-    const ui = await AssesseeDetailPage({ params: { id: ID } });
+    const ui = await AssesseeDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
     expect(screen.getAllByText("Assessee unavailable").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("We couldn't load this assessee.")).toBeInTheDocument();

@@ -11,7 +11,8 @@ type FreezeRow = { id: string; name: string; state: string; startsAt: string; en
 const FREEZE_STATE_LABELS: Record<string, string> = { upcoming: "Upcoming", active: "Active", ended: "Ended" };
 const FREEZE_STATE_VARIANTS: Record<string, "good" | "warn" | "mut"> = { upcoming: "warn", active: "good", ended: "mut" };
 
-export default async function Page({ searchParams }: { searchParams?: { showEnded?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ showEnded?: string }> }) {
+  const searchParams = await props.searchParams;
   const [{ data: changes, source: cSource }, { data: freezes, source: fSource }] = await Promise.all([
     getChangeRequests(),
     getChangeFreezes(),

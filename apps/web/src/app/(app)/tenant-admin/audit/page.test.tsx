@@ -115,7 +115,7 @@ describe("TenantAuditPage — notification-prefs entity filter", () => {
 
   it("with ?entity=notification-prefs shows only pref-change events + a scope notice", async () => {
     getTenantAuditLogMock.mockResolvedValue({ data: PREF_EVENTS, source: "api" });
-    render(await TenantAuditPage({ searchParams: { entity: "notification-prefs" } }));
+    render(await TenantAuditPage({ searchParams: Promise.resolve({ entity: "notification-prefs" }) }));
     const table = screen.getByRole("table");
     expect(within(table).getByText("update_prefs")).toBeInTheDocument();
     expect(within(table).getByText("set_prefs")).toBeInTheDocument();

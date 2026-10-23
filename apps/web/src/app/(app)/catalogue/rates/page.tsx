@@ -13,7 +13,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * endpoint) and lists that product's rate cards newest-first with the paise-correct amount
  * and an in-force marker.
  */
-export default async function Page({ searchParams }: { searchParams?: { productId?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ productId?: string }> }) {
+  const searchParams = await props.searchParams;
   const requested = searchParams?.productId;
   const productId = requested && UUID_RE.test(requested) ? requested : undefined;
   const products = await getCatalogueProducts();

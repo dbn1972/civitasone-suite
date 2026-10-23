@@ -14,9 +14,10 @@ const TENANT_ID = process.env.DEMO_TENANT_ID ?? process.env.NEXT_PUBLIC_DEMO_TEN
 /** Small label text with >= 4.5:1 contrast on white (the old #94a3b8 was ~2.6:1). */
 const MUTED = "#5b6b80";
 
-export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
+export default async function ApplicationDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("careersPortalApplication");
-  const token = cookies().get("cand_token")?.value;
+  const token = (await cookies()).get("cand_token")?.value;
   if (!token) redirect("/careers/portal/login");
 
   const result = await fetchApplication(token, params.id, { gateway: GATEWAY, fallbackTenantId: TENANT_ID });

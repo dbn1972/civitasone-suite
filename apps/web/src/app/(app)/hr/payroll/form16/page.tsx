@@ -103,11 +103,12 @@ async function getBulkStatus(fy: string): Promise<JobLookup> {
   return { state: "error" };
 }
 
-export default async function Form16Page({
-  searchParams,
-}: {
-  searchParams: { fy?: string };
-}) {
+export default async function Form16Page(
+  props: {
+    searchParams: Promise<{ fy?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("form16");
   // FyLookupForm stays a plain synchronous component (see its own file for
   // why) so its copy is resolved here and passed down as props.

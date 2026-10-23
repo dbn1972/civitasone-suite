@@ -51,7 +51,7 @@ function mockOvertimeResponse(
 async function renderPage(searchParams?: { offset?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await OvertimePage({ searchParams })}
+      {await OvertimePage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

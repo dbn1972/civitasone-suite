@@ -9,7 +9,8 @@ import { EnrolButton } from "./EnrolButton";
 
 type LessonRow = { id: string; title: string; module: string; contentType: string; duration: string };
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: course, source } = await getCourseDetail(params.id);
 
   // GAP-LEARNING-COURSES-DETAIL-04: distinguish a real load error (retry) from

@@ -30,7 +30,7 @@ beforeEach(() => {
 describe("Course detail page (GAP-LEARNING-COURSES-DETAIL-02/04)", () => {
   it("shows a retry error state (NOT 'Course not found') on a load error", async () => {
     getCourseDetailMock.mockResolvedValue({ data: null, source: "error" });
-    render(await Page({ params: { id: "c1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByText(/course not found/i)).toBeNull();
     // RefreshErrorState renders the human "couldn't load" copy
     expect(screen.getByText(/could ?n.t load course/i)).toBeInTheDocument();
@@ -39,7 +39,7 @@ describe("Course detail page (GAP-LEARNING-COURSES-DETAIL-02/04)", () => {
 
   it("calls notFound() for a genuine missing course (null from a healthy API)", async () => {
     getCourseDetailMock.mockResolvedValue({ data: null, source: "api" });
-    await expect(Page({ params: { id: "c1" } })).rejects.toThrow(/NEXT_NOT_FOUND/);
+    await expect(Page({ params: Promise.resolve({ id: "c1" }) })).rejects.toThrow(/NEXT_NOT_FOUND/);
     expect(notFoundMock).toHaveBeenCalled();
   });
 
@@ -51,7 +51,7 @@ describe("Course detail page (GAP-LEARNING-COURSES-DETAIL-02/04)", () => {
       },
       source: "api",
     });
-    render(await Page({ params: { id: "c1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c1" }) }));
     const link = screen.getByRole("link", { name: "Intro Safety" });
     expect(link.getAttribute("href")).toBe("/learning/courses/pre1");
   });
@@ -64,7 +64,7 @@ describe("Course detail page (GAP-LEARNING-COURSES-DETAIL-02/04)", () => {
       },
       source: "api",
     });
-    render(await Page({ params: { id: "c1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByRole("button", { name: /enrol now/i })).toBeInTheDocument();
     // never a "add ?employeeId=" fallback button
     expect(screen.queryByText(/employeeId/i)).toBeNull();

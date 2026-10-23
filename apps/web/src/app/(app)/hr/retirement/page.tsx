@@ -36,11 +36,12 @@ async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   });
 }
 
-export default async function RetirementPage({
-  searchParams,
-}: {
-  searchParams?: { empId?: string };
-}) {
+export default async function RetirementPage(
+  props: {
+    searchParams?: Promise<{ empId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("retirement");
   const roles = getSessionRoles();
   if (!RETIREMENT_ROLES.some((r) => roles.includes(r))) {

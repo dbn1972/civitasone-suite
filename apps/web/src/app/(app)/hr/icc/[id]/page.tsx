@@ -81,7 +81,8 @@ function daysRemaining(filedAt: string): number {
   return Math.ceil((due.getTime() - Date.now()) / 86_400_000);
 }
 
-export default async function IccDetailPage({ params }: { params: { id: string } }) {
+export default async function IccDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const roles = getSessionRoles();
   if (!roles.some((r) => IDENTITY_ROLES.includes(r))) {
     return (

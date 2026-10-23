@@ -13,7 +13,7 @@ beforeEach(() => {
 });
 
 async function renderPage(search: Record<string, string> = {}) {
-  render(await VerifyPage({ searchParams: search }));
+  render(await VerifyPage({ searchParams: Promise.resolve(search) }));
 }
 
 describe("VerifyPage — GAP-LEARNING-ASSESSMENTS-VERIFY-01/02/04", () => {

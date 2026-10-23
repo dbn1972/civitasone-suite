@@ -51,7 +51,7 @@ function render(ui: React.ReactElement) {
 
 describe("/finance/payments/new with real finance-service payloads (HIGH: passed / on_hold bills)", () => {
   it("lists the passed bill (and only it) as payable", async () => {
-    render(await NewPaymentPage({ searchParams: {} }));
+    render(await NewPaymentPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("option", { name: /INV-PASSED — Acme Supplies — ₹47,500\.00/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-HOLD/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-PENDING/ })).not.toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("/finance/payments/new with real finance-service payloads (HIGH: passed
   // GAP-FINANCE-PAYMENTS-01: do not invite a guaranteed refusal (payer != creator, payer != passer).
   it("does not list a passed bill the signed-in officer created or passed, and says how many were left out", async () => {
     viewer.id = "99999999-0000-4000-8000-000000000009";
-    render(await NewPaymentPage({ searchParams: {} }));
+    render(await NewPaymentPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("option", { name: /INV-PASSED/ })).toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-MINE-MADE/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("option", { name: /INV-MINE-PASSED/ })).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("/finance/payments/new with real finance-service payloads (HIGH: passed
 
   it("lists every passed bill for a different officer, with no left-out note", async () => {
     viewer.id = "cccccccc-0000-4000-8000-00000000000c";
-    render(await NewPaymentPage({ searchParams: {} }));
+    render(await NewPaymentPage({ searchParams: Promise.resolve({}) }));
     for (const no of ["INV-PASSED", "INV-MINE-MADE", "INV-MINE-PASSED"]) {
       expect(screen.getByRole("option", { name: new RegExp(no) })).toBeInTheDocument();
     }
@@ -80,7 +80,7 @@ describe("/finance/payments/new with real finance-service payloads (HIGH: passed
 
   it("fails open (the server decides) when the signed-in user id is unknown", async () => {
     viewer.id = null;
-    render(await NewPaymentPage({ searchParams: {} }));
+    render(await NewPaymentPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("option", { name: /INV-MINE-MADE/ })).toBeInTheDocument();
   });
 

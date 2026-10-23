@@ -18,7 +18,7 @@ import { EndConversationButton } from "./EndConversationButton";
 import { HandoffButton } from "./HandoffButton";
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 function formatDateTime(iso: string | null): string {
@@ -27,7 +27,8 @@ function formatDateTime(iso: string | null): string {
   return formatIndianDateTime(iso);
 }
 
-export default async function ChatConversationPage({ params }: PageProps) {
+export default async function ChatConversationPage(props: PageProps) {
+  const params = await props.params;
   // GAP-AI-CHAT-DETAIL-02 / -04: citizen transcripts carry DPDP-sensitive text,
   // so only AI operators (ai_user/ai_admin/super_admin — ai-agent-service's
   // READ_ROLES) may open a conversation. A role outside the set is redirected

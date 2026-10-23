@@ -35,13 +35,13 @@ describe("Internal ticket detail — Requester row (GAP2-HELPDESK-INTERNAL-DETAI
 
   it("omits the Requester row (never a blank label) when no requester name is available", async () => {
     ticket = { ...base };
-    render(await Page({ params: { id: base.id } }));
+    render(await Page({ params: Promise.resolve({ id: base.id }) }));
     expect(screen.queryByText("Requester")).not.toBeInTheDocument();
   });
 
   it("renders the Requester row with the resolved name when present", async () => {
     ticket = { ...base, requester: "Asha Rao" };
-    render(await Page({ params: { id: base.id } }));
+    render(await Page({ params: Promise.resolve({ id: base.id }) }));
     expect(screen.getByText("Requester")).toBeInTheDocument();
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
   });

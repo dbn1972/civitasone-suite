@@ -61,7 +61,7 @@ describe("GrievanceDetailPage", () => {
       data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
       source: "api",
     });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.queryByText("9876543210")).not.toBeInTheDocument();
@@ -80,7 +80,7 @@ describe("GrievanceDetailPage", () => {
       data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
       source: "api",
     });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     const { container } = render(ui);
 
     expect(String(fetchJsonMock.mock.calls[0]![0])).toBe(`/api/v1/crm/grievances/${ID}?pii=masked`);
@@ -101,7 +101,7 @@ describe("GrievanceDetailPage", () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ data: { value: "9876543210" } }), { status: 200 }));
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -130,7 +130,7 @@ describe("GrievanceDetailPage", () => {
       data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
       source: "api",
     });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("GrievanceDetailPage", () => {
       }),
       source: "api",
     });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.getByText("Forwarded To")).toBeInTheDocument();
@@ -168,7 +168,7 @@ describe("GrievanceDetailPage", () => {
   // enum "Appeal"), matching the timeline step, the register tile and the register table.
   it("labels an APPEAL grievance's status pill 'First appeal', and leaves other statuses humanised", async () => {
     fetchJsonMock.mockResolvedValue({ data: grievance({ status: "APPEAL", escalatedAt: "2026-08-03T00:00:00.000Z" }), source: "api" });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     const statusPill = screen.getByText("Status").nextElementSibling!.querySelector(".pill");
     expect(statusPill).toHaveTextContent("First appeal");
     expect(screen.queryByText("Appeal")).not.toBeInTheDocument();
@@ -176,7 +176,7 @@ describe("GrievanceDetailPage", () => {
 
   it("keeps the humanised label for a non-APPEAL status", async () => {
     fetchJsonMock.mockResolvedValue({ data: grievance({ status: "ATTENDED" }), source: "api" });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("Status").nextElementSibling!.querySelector(".pill")).toHaveTextContent("Attended");
   });
 
@@ -188,7 +188,7 @@ describe("GrievanceDetailPage", () => {
     ["low", "Low", "mut"],
   ])("renders %s priority with the shared .pill.%s tone class", async (priority, label, tone) => {
     fetchJsonMock.mockResolvedValue({ data: grievance({ priority }), source: "api" });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     const badge = screen.getByText("Priority").nextElementSibling!.querySelector("span")!;
     expect(badge).toHaveTextContent(label);
     expect(badge).toHaveClass("pill", tone);
@@ -202,7 +202,7 @@ describe("GrievanceDetailPage", () => {
       data: grievance({ assignedTo: "11111111-2222-4333-8444-555555555555", assignedAt: "2026-08-05T10:30:00.000Z" }),
       source: "api",
     });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     const step = screen.getByText("Assigned").closest("li")!;
     expect(step).toHaveTextContent(formatIndianDateTime("2026-08-05T10:30:00.000Z"));
   });
@@ -212,7 +212,7 @@ describe("GrievanceDetailPage", () => {
       data: grievance({ assignedTo: "11111111-2222-4333-8444-555555555555", assignedAt: null }),
       source: "api",
     });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     const step = screen.getByText("Assigned").closest("li")!;
     expect(step).toHaveTextContent("✓");
     // Only the label and tick: no timestamp line.
@@ -222,7 +222,7 @@ describe("GrievanceDetailPage", () => {
 
   it("does not mark Assigned done when nobody is assigned", async () => {
     fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: undefined, assignedAt: null }), source: "api" });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("Assigned").closest("li")).toHaveTextContent("○");
   });
 
@@ -230,7 +230,7 @@ describe("GrievanceDetailPage", () => {
   // not "Grievance not found".
   it("renders a retry error state (not 'not found') on a 500", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.queryByText("Grievance not found")).not.toBeInTheDocument();
@@ -239,7 +239,7 @@ describe("GrievanceDetailPage", () => {
 
   it("renders 'Grievance not found' on a 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.getAllByText("Grievance not found").length).toBeGreaterThan(0);
@@ -251,7 +251,7 @@ describe("GrievanceDetailPage", () => {
   it("does not print a raw assignee UUID verbatim in the Assigned To row", async () => {
     const assigneeId = "11111111-2222-4333-8444-555555555555";
     fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: assigneeId }), source: "api" });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
 
     expect(screen.queryByText(assigneeId)).not.toBeInTheDocument();
@@ -260,7 +260,7 @@ describe("GrievanceDetailPage", () => {
 
   it("shows 'Unassigned' when there is no assignee", async () => {
     fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: undefined }), source: "api" });
-    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const ui = await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) });
     render(ui);
     expect(screen.getByText("Unassigned")).toBeInTheDocument();
   });
@@ -276,7 +276,7 @@ describe("GrievanceDetailPage", () => {
       }
       return { data: grievance({ assignedTo: assigneeId }), source: "api" };
     });
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("Sunita Mohanty")).toBeInTheDocument();
     expect(screen.queryByText(/Assigned \(ID/)).not.toBeInTheDocument();
     expect(screen.queryByText(assigneeId)).not.toBeInTheDocument();
@@ -289,7 +289,7 @@ describe("GrievanceDetailPage", () => {
         ? { data: null, source: "error", status: 403 }
         : { data: grievance({ assignedTo: assigneeId }), source: "api" },
     );
-    render(await GrievanceDetailPage({ params: { id: ID } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText(/Assigned \(ID 11111111…\)/)).toBeInTheDocument();
   });
 });

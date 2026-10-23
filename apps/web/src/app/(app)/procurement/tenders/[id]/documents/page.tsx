@@ -18,7 +18,8 @@ import { TenderDocumentsClient } from "./TenderDocumentsClient";
  * tender docs WRITE_ROLES) and only a writer sees the form; the service remains
  * the authority (POST .../documents 403s a non-writer).
  */
-export default async function TenderDocumentsPage({ params }: { params: { id: string } }) {
+export default async function TenderDocumentsPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: tender, source } = await getProcurementTenderById(params.id);
   const canUpload = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
 

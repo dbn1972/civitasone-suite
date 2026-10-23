@@ -130,7 +130,8 @@ function RegimeTable({ cfg, title, note, t }: {
   );
 }
 
-export default async function TaxConfigPage({ searchParams }: { searchParams?: { fy?: string } }) {
+export default async function TaxConfigPage(props: { searchParams?: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollTaxConfig");
 
   const defaultFy = currentFinancialYear();

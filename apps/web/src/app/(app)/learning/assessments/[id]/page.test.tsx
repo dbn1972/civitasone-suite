@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 async function renderPage(id = "a1") {
-  render(await AttemptPage({ params: { id } }));
+  render(await AttemptPage({ params: Promise.resolve({ id }) }));
 }
 
 describe("Assessment attempt page — GAP-LEARNING-ASSESSMENTS-01", () => {

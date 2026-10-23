@@ -36,7 +36,7 @@ describe("ClaimDetailPage", () => {
   it("maps a claim and links its policy and asset", async () => {
     rolesMock.mockReturnValue(["asset_admin"]);
     load();
-    render(await ClaimDetailPage({ params: { id: "c1" } }));
+    render(await ClaimDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByRole("link", { name: "POL-1 · National" })).toHaveAttribute("href", "/assets/insurance/p1");
     expect(screen.getByRole("link", { name: "AST-1 · Laptop" })).toHaveAttribute("href", "/assets/a1");
     expect(screen.getByText("Water damage")).toBeInTheDocument();
@@ -45,7 +45,7 @@ describe("ClaimDetailPage", () => {
   it("offers Settle / Reject to an asset_admin on a pending claim", async () => {
     rolesMock.mockReturnValue(["asset_admin"]);
     load();
-    render(await ClaimDetailPage({ params: { id: "c1" } }));
+    render(await ClaimDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByRole("button", { name: "Settle claim" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Reject claim" })).toBeInTheDocument();
   });
@@ -53,25 +53,25 @@ describe("ClaimDetailPage", () => {
   it("hides the decision controls from a role the service would refuse", async () => {
     rolesMock.mockReturnValue(["asset_manager"]);
     load();
-    render(await ClaimDetailPage({ params: { id: "c1" } }));
+    render(await ClaimDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByRole("button", { name: "Settle claim" })).not.toBeInTheDocument();
   });
 
   it("hides the controls once the claim is settled", async () => {
     rolesMock.mockReturnValue(["super_admin"]);
     load("settled");
-    render(await ClaimDetailPage({ params: { id: "c1" } }));
+    render(await ClaimDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByRole("button", { name: "Settle claim" })).not.toBeInTheDocument();
   });
 
   it("renders not-found for a 404 and a retry error state for a 500", async () => {
     rolesMock.mockReturnValue([]);
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error", status: 404 });
-    const { unmount } = render(await ClaimDetailPage({ params: { id: "x" } }));
+    const { unmount } = render(await ClaimDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("This claim does not exist or the link is incorrect.")).toBeInTheDocument();
     unmount();
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error", status: 500 });
-    render(await ClaimDetailPage({ params: { id: "x" } }));
+    render(await ClaimDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByText("This claim does not exist or the link is incorrect.")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /retry|try again/i })).toBeInTheDocument();
   });

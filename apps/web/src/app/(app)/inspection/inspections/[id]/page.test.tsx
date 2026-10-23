@@ -38,7 +38,7 @@ describe("InspectionDetailPage", () => {
       },
     });
 
-    render(await InspectionDetailPage({ params: { id: ID } }));
+    render(await InspectionDetailPage({ params: Promise.resolve({ id: ID }) }));
 
     expect(getInspectionByIdMock).toHaveBeenCalledWith(ID);
     expect(screen.getByText(ID)).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe("InspectionDetailPage", () => {
   it("calls notFound() on a 404", async () => {
     getInspectionByIdMock.mockResolvedValueOnce({ source: "error", status: 404, data: null });
 
-    await expect(InspectionDetailPage({ params: { id: ID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(InspectionDetailPage({ params: Promise.resolve({ id: ID }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledTimes(1);
   });
 
@@ -64,7 +64,7 @@ describe("InspectionDetailPage", () => {
       data: null,
     });
 
-    render(await InspectionDetailPage({ params: { id: ID } }));
+    render(await InspectionDetailPage({ params: Promise.resolve({ id: ID }) }));
 
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/connection refused|10\.0\.0\.5|INTERNAL/)).not.toBeInTheDocument();

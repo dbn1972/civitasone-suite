@@ -55,7 +55,7 @@ describe("ReturnsPage -- no full PAN in client-component props", () => {
   });
 
   it("strips pan/panFlag from every DataTable row (24Q and 26Q)", async () => {
-    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    const ui = await ReturnsPage({ searchParams: Promise.resolve({ fy: "2025-26", quarter: "Q1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(dataTableProps.length).toBe(2);
     for (const props of dataTableProps) {

@@ -34,7 +34,8 @@ function seatsDisplay(enrolled?: number, max?: number): string {
   return `${n} / ${max}`;
 }
 
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const isPrivileged = roles.some((r: string) => PRIVILEGED_ROLES.includes(r));
   const queryEmployeeId = typeof searchParams?.employeeId === "string" ? searchParams.employeeId : "";
@@ -85,7 +86,6 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
         subtitle="Scheduled training programmes and your own nomination status."
         back="/learning"
       />
-
       <div className="card">
         <div className="card-h"><h3>{viewerName ? `My Nominations — ${viewerName}` : "My Nominations"}</h3></div>
         {noLinkedRecord ? (
@@ -97,7 +97,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
         ) : nom?.source === "error" ? (
           // GAP-LEARNING-CALENDAR-04: a retry control matching the programmes
           // card, instead of a static badge + EmptyState with no retry.
-          <RefreshErrorState error={toHumanError("load", { area: "nominations" })} backHref="/learning" />
+          (<RefreshErrorState error={toHumanError("load", { area: "nominations" })} backHref="/learning" />)
         ) : nomRows.length === 0 ? (
           <EmptyState icon="📋" title="No nominations yet" message="You have not been nominated to any training programme." />
         ) : (
@@ -115,7 +115,6 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
           />
         )}
       </div>
-
       <div className="card">
         <div className="card-h"><h3>Programmes</h3></div>
         {source === "error" ? (

@@ -29,7 +29,7 @@ beforeEach(() => {
 });
 
 async function renderPage(searchParams: Record<string, string> = {}) {
-  render(await Page({ searchParams }));
+  render(await Page({ searchParams: Promise.resolve(searchParams) }));
 }
 
 describe("Course catalogue page (GAP-LEARNING-COURSES-01/02/03/04)", () => {
@@ -55,7 +55,7 @@ describe("Course catalogue page (GAP-LEARNING-COURSES-01/02/03/04)", () => {
     expect(screen.queryByLabelText(/filter by status/i)).toBeNull();
 
     rolesMock.mockReturnValue(["hr_admin"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByLabelText(/filter by status/i)).toBeInTheDocument();
   });
 

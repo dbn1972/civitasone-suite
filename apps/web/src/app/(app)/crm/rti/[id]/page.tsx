@@ -105,11 +105,12 @@ const FAA_OUTCOME_KEY: Record<string, string> = {
  * Reveal button. The page never holds a clear value for anyone.
  */
 
-export default async function RtiDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function RtiDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const t = await getTranslations("crmRtiDetail");
   const tSection = await getTranslations("crmRtiSections");
   const roles = getSessionRoles();

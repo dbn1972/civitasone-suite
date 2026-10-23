@@ -8,7 +8,8 @@ import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
 // rows are no longer a dead end. Lifecycle actions (extend/close/award) are a
 // separate, larger scope requiring confirmed backend endpoints + audit/permission
 // gates, recorded for HUMAN REVIEW — this page deliberately offers none.
-export default async function ReverseAuctionDetailPage({ params }: { params: { id: string } }) {
+export default async function ReverseAuctionDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: auction, source } = await getProcurementReverseAuctionById(params.id);
 
   if (!auction) {

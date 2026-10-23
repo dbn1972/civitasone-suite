@@ -40,20 +40,20 @@ describe("CopilotTurnPage (GAP-AI-COPILOT-DETAIL-01/02/04/05)", () => {
 
   it("DETAIL-01: a non-404 error renders a retry state, not 'Turn not found'", async () => {
     getCopilotTurnMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await CopilotTurnPage({ params }));
+    render(await CopilotTurnPage({ params: Promise.resolve(params) }));
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(notFoundMock).not.toHaveBeenCalled();
   });
 
   it("DETAIL-01: a real 404 calls notFound()", async () => {
     getCopilotTurnMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(CopilotTurnPage({ params })).rejects.toBeInstanceOf(NotFoundSignal);
+    await expect(CopilotTurnPage({ params: Promise.resolve(params) })).rejects.toBeInstanceOf(NotFoundSignal);
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it("DETAIL-04: an awaiting turn says the page updates automatically, not 'reload'", async () => {
     getCopilotTurnMock.mockResolvedValue({ data: turn({ response: null }), source: "api", status: 200 });
-    render(await CopilotTurnPage({ params }));
+    render(await CopilotTurnPage({ params: Promise.resolve(params) }));
     expect(screen.getByText(/updates automatically/i)).toBeInTheDocument();
     expect(screen.queryByText(/Reload this page/i)).not.toBeInTheDocument();
     // Sources card must not claim "answered without citing" before an answer exists
@@ -67,7 +67,7 @@ describe("CopilotTurnPage (GAP-AI-COPILOT-DETAIL-01/02/04/05)", () => {
       source: "api",
       status: 200,
     });
-    render(await CopilotTurnPage({ params }));
+    render(await CopilotTurnPage({ params: Promise.resolve(params) }));
     expect(screen.getByText("Evil")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Evil" })).not.toBeInTheDocument();
   });
@@ -78,7 +78,7 @@ describe("CopilotTurnPage (GAP-AI-COPILOT-DETAIL-01/02/04/05)", () => {
       source: "api",
       status: 200,
     });
-    render(await CopilotTurnPage({ params }));
+    render(await CopilotTurnPage({ params: Promise.resolve(params) }));
     expect(screen.getByRole("link", { name: "Doc" })).toHaveAttribute("href", "https://x.gov.in/a");
     expect(screen.getByText("87% match")).toBeInTheDocument();
   });

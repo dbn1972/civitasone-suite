@@ -42,7 +42,8 @@ const SERVICE_TYPES = [
   "Other",
 ];
 
-export default async function ServiceRequestsPage({ searchParams }: { searchParams?: SP }) {
+export default async function ServiceRequestsPage(props: { searchParams?: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crmServiceRequestsPage");
   const pageParam = Number.parseInt(searchParams?.page ?? "1", 10);
   const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;

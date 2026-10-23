@@ -43,7 +43,7 @@ describe("GrantDisbursementDetailPage", () => {
   });
 
   it("renders exactly one breadcrumb back-link when the disbursement is found", async () => {
-    render(await GrantDisbursementDetailPage({ params: { id: "disb-1" } }));
+    render(await GrantDisbursementDetailPage({ params: Promise.resolve({ id: "disb-1" }) }));
     const backLinks = screen.getAllByRole("link", { name: "Back" });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/grants/releases");
@@ -54,7 +54,7 @@ describe("GrantDisbursementDetailPage", () => {
   // were wrongly treated as rupees). The same paise value is forwarded straight
   // to the eOffice note (no float *100, no rupees→paise conversion).
   it("shows the amount from paise and forwards the same paise to the eOffice note", async () => {
-    render(await GrantDisbursementDetailPage({ params: { id: "disb-1" } }));
+    render(await GrantDisbursementDetailPage({ params: Promise.resolve({ id: "disb-1" }) }));
     expect(screen.getAllByText("₹10,000.00").length).toBeGreaterThan(0);
     expect(raiseSpy).toHaveBeenCalledWith(expect.objectContaining({ amountMinor: 1000000 }));
   });
@@ -62,7 +62,7 @@ describe("GrantDisbursementDetailPage", () => {
   // GAP-GRANTS-DISBURSEMENTS-DETAIL-01: no maker role → no RaiseEOfficeNote.
   it("hides the eOffice note for a non-maker role", async () => {
     rolesMock.mockReturnValue(["audit_officer"]);
-    render(await GrantDisbursementDetailPage({ params: { id: "disb-1" } }));
+    render(await GrantDisbursementDetailPage({ params: Promise.resolve({ id: "disb-1" }) }));
     expect(screen.queryByTestId("raise-eoffice")).not.toBeInTheDocument();
   });
 
@@ -70,7 +70,7 @@ describe("GrantDisbursementDetailPage", () => {
   // not the "Disbursement not found … ID is invalid" empty state.
   it("renders a retry state (not 'not found') on a failed fetch", async () => {
     getGrantDisbursementByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await GrantDisbursementDetailPage({ params: { id: "disb-1" } }));
+    render(await GrantDisbursementDetailPage({ params: Promise.resolve({ id: "disb-1" }) }));
     expect(screen.queryByText(/Disbursement not found/)).not.toBeInTheDocument();
     expect(screen.getAllByText(/try again|couldn't load|couldn’t load|retry/i).length).toBeGreaterThan(0);
   });
@@ -78,7 +78,7 @@ describe("GrantDisbursementDetailPage", () => {
   // A genuine not-found (successful api, no match) still shows the empty state.
   it("shows 'Disbursement not found' for a successful null (api source)", async () => {
     getGrantDisbursementByIdMock.mockResolvedValue({ data: null, source: "api" });
-    render(await GrantDisbursementDetailPage({ params: { id: "missing" } }));
+    render(await GrantDisbursementDetailPage({ params: Promise.resolve({ id: "missing" }) }));
     expect(screen.getByText("Disbursement not found")).toBeInTheDocument();
   });
 });

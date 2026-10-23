@@ -26,7 +26,8 @@ async function getType(id: string): Promise<{ type: EmpType | null; failed: bool
   return { type: (r.data ?? []).find((t) => t.id === id) ?? null, failed: false };
 }
 
-export default async function EditEmployeeTypePage({ params }: { params: { id: string } }) {
+export default async function EditEmployeeTypePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("employeeTypes");
   const roles = getSessionRoles();
   const canManage = roles.some((r: string) => EMPLOYEE_TYPE_ADMIN_ROLES.includes(r));

@@ -22,7 +22,7 @@ function stub(list: V[] | "error") {
     : new Response(JSON.stringify({ data: list }), { status: 200 })));
 }
 async function renderPage(sp: { type?: string; q?: string; page?: string } = {}) {
-  const el = await CareersPage({ searchParams: sp });
+  const el = await CareersPage({ searchParams: Promise.resolve(sp) });
   return render(el);
 }
 const chip = (name: RegExp) => within(screen.getByRole("navigation", { name: /filter by vacancy type/i })).queryByRole("link", { name });

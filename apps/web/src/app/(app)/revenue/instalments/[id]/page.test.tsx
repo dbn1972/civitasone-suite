@@ -38,7 +38,7 @@ describe("InstalmentPlanDetailPage", () => {
 
   it("renders the plan header and schedule lines summing to the total (GAP-REVENUE-INSTALMENTS-02)", async () => {
     fetchJsonMock.mockResolvedValue({ data: PLAN, source: "api", status: 200 });
-    const ui = await InstalmentPlanDetailPage({ params: { id: "p1" } });
+    const ui = await InstalmentPlanDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
 
     expect(screen.getByText("Schedule")).toBeInTheDocument();
@@ -50,13 +50,13 @@ describe("InstalmentPlanDetailPage", () => {
 
   it("renders notFound() on a 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(InstalmentPlanDetailPage({ params: { id: "missing" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(InstalmentPlanDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it("renders a retry state (not notFound) on a 503", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    const ui = await InstalmentPlanDetailPage({ params: { id: "p1" } });
+    const ui = await InstalmentPlanDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
 
     expect(notFoundMock).not.toHaveBeenCalled();

@@ -70,7 +70,7 @@ describe("SalarySlipsPage", () => {
   it("GAP-PAYROLL-SALARY-SLIPS-02: a full page (possibly truncated) shows a banner and no money totals", async () => {
     const rows = Array.from({ length: 500 }, (_, i) => ({ id: `s${i}`, employeeId: `e${i}`, employeeName: "A", department: "D", payPeriod: "Aug 2026", gross: 100, deductions: 0, net: 100, status: "finalized" }));
     fetchJsonMock.mockResolvedValueOnce({ data: rows, source: "api" });
-    renderPage(await SalarySlipsPage({ searchParams: {} }));
+    renderPage(await SalarySlipsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing the first 500 slips only/)).toBeInTheDocument();
     expect(screen.getByText("500+")).toBeInTheDocument();
     expect(screen.queryByText("₹50,000.00")).not.toBeInTheDocument();
@@ -80,15 +80,15 @@ describe("SalarySlipsPage", () => {
     const mk = (id: string, payPeriod: string, gross: number, net: number) => ({ id, employeeId: id, employeeName: id, department: "D", payPeriod, gross, deductions: 0, net, status: "finalized" });
     const data = [mk("a", "Jul 2026", 100000, 90000), mk("b", "Aug 2026", 200000, 150000), mk("c", "Aug 2026", 300000, 250000)];
     fetchJsonMock.mockResolvedValue({ data, source: "api" });
-    const { unmount } = renderPage(await SalarySlipsPage({ searchParams: {} }));
+    const { unmount } = renderPage(await SalarySlipsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("₹5,000.00")).toBeInTheDocument(); // Aug gross 2000+3000
     expect(screen.getByText("₹4,000.00")).toBeInTheDocument(); // Aug net 1500+2500
     expect(screen.queryByText("₹6,000.00")).not.toBeInTheDocument(); // not Jul+Aug
     unmount();
-    renderPage(await SalarySlipsPage({ searchParams: { period: "Jul 2026" } }));
+    renderPage(await SalarySlipsPage({ searchParams: Promise.resolve({ period: "Jul 2026" }) }));
     expect(screen.getByText("₹1,000.00", { selector: ".v, .value, div, p, span" })).toBeInTheDocument();
     cleanup();
-    renderPage(await SalarySlipsPage({ searchParams: { period: "all" } }));
+    renderPage(await SalarySlipsPage({ searchParams: Promise.resolve({ period: "all" }) }));
     expect(screen.getByText(/hidden for All periods/)).toBeInTheDocument();
     expect(screen.queryByText("₹6,000.00")).not.toBeInTheDocument();
   });

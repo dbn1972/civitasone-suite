@@ -15,7 +15,7 @@ import GstLoading from "./loading";
 // six stat cards in a 4-column grid (two rows); a skeleton with four left the second row to pop in.
 describe("GST loading skeleton mirrors the page", () => {
   it("shows exactly as many stat cards as the page renders", async () => {
-    const { container: pageDom, unmount } = render(await GstConsolePage({ searchParams: { period: "2026-06" } }));
+    const { container: pageDom, unmount } = render(await GstConsolePage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const pageStatCards = pageDom.querySelectorAll(".stat").length;
     unmount();
 

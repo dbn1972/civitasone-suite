@@ -8,7 +8,8 @@ import { DebtSchedule } from "./DebtSchedule";
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
 /** One loan: terms, repayment position and its EMI schedule (GAP-FINANCE-DEBT-01). */
-export default async function DebtDetailPage({ params }: { params: { id: string } }) {
+export default async function DebtDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("financeDebtDetail");
   const result = await getFinanceDebtById(params.id);
   const { data: debt, source, status } = result;

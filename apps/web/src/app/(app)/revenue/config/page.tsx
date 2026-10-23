@@ -57,11 +57,12 @@ async function getRebateRules(rateHeadId: string): Promise<LoaderResult<RebateRu
   );
 }
 
-export default async function RateConfigPage({
-  searchParams,
-}: {
-  searchParams?: { rateHeadId?: string };
-}) {
+export default async function RateConfigPage(
+  props: {
+    searchParams?: Promise<{ rateHeadId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: rateHeads, source: rateHeadsSource } = await getRateHeads();
 
   const requestedId = searchParams?.rateHeadId;

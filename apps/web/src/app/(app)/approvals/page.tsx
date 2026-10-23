@@ -16,11 +16,12 @@ function parsePage(raw: string | string[] | undefined): number {
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
 }
 
-export default async function MyApprovalsPage({
-  searchParams,
-}: {
-  searchParams?: SearchParams;
-}) {
+export default async function MyApprovalsPage(
+  props: {
+    searchParams?: Promise<SearchParams>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const page = parsePage(searchParams?.page);
   const { data, source } = await getMyApprovals(page, PAGE_SIZE);
   const failed = source === "error";

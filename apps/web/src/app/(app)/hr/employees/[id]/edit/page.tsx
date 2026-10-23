@@ -18,11 +18,12 @@ import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
  * who couldn't act on the record either way.
  */
 
-export default async function EditEmployeePage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function EditEmployeePage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
 

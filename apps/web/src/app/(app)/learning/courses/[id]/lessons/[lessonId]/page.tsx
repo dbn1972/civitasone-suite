@@ -11,7 +11,8 @@ import { getCourseDetail } from "../../../../_data";
 import { getMyProfile } from "@/app/_data/loaders";
 import { MarkCompleteButton } from "./MarkCompleteButton";
 
-export default async function Page({ params }: { params: { id: string; lessonId: string } }) {
+export default async function Page(props: { params: Promise<{ id: string; lessonId: string }> }) {
+  const params = await props.params;
   const [{ data: course, source, status }, { data: profile }] = await Promise.all([
     getCourseDetail(params.id),
     getMyProfile(),

@@ -52,7 +52,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
       },
       source: "api",
     });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Total Paid (initiated)").closest(".stat")).toHaveTextContent("₹10.00");
     expect(screen.getByText("Total Billed").closest(".stat")).toHaveTextContent("₹17.00");
     expect(screen.getByText("TDS Deducted (initiated payments)").closest(".stat")).toHaveTextContent("₹1.00");
@@ -63,7 +63,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
       data: { ...base, bills: [{ id: "b2", billNo: "B-2", date: "2025-03-02", amount: "500", tds: "50", status: "pending" }] },
       source: "api",
     });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Total Paid (initiated)").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("Total Paid (initiated)").closest(".stat")).not.toHaveTextContent("₹5.00");
   });
@@ -79,13 +79,13 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
       },
       source: "api",
     });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Total Paid (initiated)").closest(".stat")).toHaveTextContent("₹9,00,71,99,25,47,409.94");
   });
 
   it("prints a single dash for a vendor with no bank data, and a formatted date", async () => {
     getFinanceVendorById.mockResolvedValue({ data: { ...base, createdAt: "2024-03-05T10:00:00Z", bills: [] }, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByText("— (—)")).not.toBeInTheDocument();
     expect(screen.getByText("05 Mar 2024")).toBeInTheDocument();
   });
@@ -95,7 +95,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
       data: { ...base, bills: [{ id: "b1", billNo: "B-1", date: "2025-03-01", amount: "1000", tds: "0", status: "paid" }] },
       source: "api",
     });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByRole("link", { name: /Open/i })).toHaveAttribute("href", "/finance/expenditure/bills/b1");
   });
 
@@ -106,7 +106,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
     session.roles = ["finance_admin"];
     session.userId = "11111111-1111-4111-8111-111111111111";
     getFinanceVendorById.mockResolvedValue({ data: PENDING_VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("approval-actions own")).toBeInTheDocument();
     expect(screen.queryByText("status-action")).not.toBeInTheDocument();
     expect(screen.queryByText(/^bank-change/)).not.toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
   it("a pending vendor offers nothing to a non-approver", async () => {
     session.roles = ["finance_officer"];
     getFinanceVendorById.mockResolvedValue({ data: PENDING_VENDOR, source: "api" });
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByText(/approval-actions/)).not.toBeInTheDocument();
   });
 
@@ -132,7 +132,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
       },
       source: "api",
     });
-    const { container } = render(await VendorDetailPage({ params: { id: "v1" } }));
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("Created by").closest(".field")).toHaveTextContent("Asha Rao");
     expect(screen.getByText("Approved by").closest(".field")).toHaveTextContent("Dev Menon");
     expect(screen.getByText(/bank-change pending:Kiran Shah:false propose=true decide=true/)).toBeInTheDocument();
@@ -143,13 +143,13 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
   it("only reveal roles get Reveal controls; the page never holds a clear value", async () => {
     getFinanceVendorById.mockResolvedValue({ data: PENDING_VENDOR, source: "api" });
     session.roles = ["audit_officer"];
-    const a = render(await VendorDetailPage({ params: { id: "v1" } }));
+    const a = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
     expect(a.container.textContent).toContain("ABCDE****F");
     expect(a.container.textContent).toContain("******3210");
     a.unmount();
     session.roles = ["finance_officer"];
-    render(await VendorDetailPage({ params: { id: "v1" } }));
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(4);
   });
 });

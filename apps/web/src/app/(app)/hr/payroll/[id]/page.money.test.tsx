@@ -79,7 +79,7 @@ describe("PayrollRunDetailPage — GAP-PAYROLL-RUNS-01 exact paise", () => {
 
   it("renders the run's gross / deductions / net from the paise strings, ignoring the rupee floats", async () => {
     mockLoaders(paiseRun(), { data: [], source: "api" });
-    renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     expect(statValue("Gross")).toBe("₹1,50,000.00");
     expect(statValue("Deductions")).toBe("₹26,543.22");
     expect(statValue("Net Pay")).toBe("₹1,23,456.78");
@@ -87,7 +87,7 @@ describe("PayrollRunDetailPage — GAP-PAYROLL-RUNS-01 exact paise", () => {
 
   it("a legacy payload (rupee floats only) renders the identical figures", async () => {
     mockLoaders(legacyRun(), { data: [], source: "api" });
-    renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     expect(statValue("Gross")).toBe("₹1,50,000.00");
     expect(statValue("Deductions")).toBe("₹26,543.22");
     expect(statValue("Net Pay")).toBe("₹1,23,456.78");
@@ -95,7 +95,7 @@ describe("PayrollRunDetailPage — GAP-PAYROLL-RUNS-01 exact paise", () => {
 
   it("shows the same net as the runs list for the same run (the /hr/payroll and /hr/payroll/runs table)", async () => {
     mockLoaders(paiseRun(), { data: [], source: "api" });
-    const detail = renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    const detail = renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     const detailNet = statValue("Net Pay");
     detail.unmount();
 
@@ -111,7 +111,7 @@ describe("PayrollRunDetailPage — GAP-PAYROLL-RUNS-01 exact paise", () => {
 
   it("the month-over-month card compares exact paise against the previous month's grossMinor", async () => {
     mockLoaders(paiseRun(), { data: [{ id: "run-0", payPeriod: "2026-08", employeeCount: 1, grossAmount: 1, netAmount: 1, grossMinor: "10000000", status: "paid" }], source: "api" });
-    const { container } = renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    const { container } = renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     expect(container.textContent).toContain("₹1,00,000.00");
     // (15,000,000 - 10,000,000) / 10,000,000 = +50.0%
     expect(container.textContent).toContain("↑ 50.0%");
@@ -119,14 +119,14 @@ describe("PayrollRunDetailPage — GAP-PAYROLL-RUNS-01 exact paise", () => {
 
   it("a failed previous-month fetch is unknown (no delta), not a fabricated zero", async () => {
     mockLoaders(paiseRun(), { data: [], source: "error" });
-    const { container } = renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    const { container } = renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     expect(container.textContent).not.toContain("↑");
     expect(container.textContent).not.toContain("↓");
   });
 
   it("the per-slip money in the table is the slip's paise strings", async () => {
     mockLoaders(paiseRun(), { data: [], source: "api" });
-    renderPage(await PayrollRunDetailPage({ params: { id: "run-1" } }));
+    renderPage(await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) }));
     // the slips table repeats the run's figures for its one slip
     expect(screen.getAllByText("₹1,23,456.78").length).toBeGreaterThanOrEqual(2);
   });

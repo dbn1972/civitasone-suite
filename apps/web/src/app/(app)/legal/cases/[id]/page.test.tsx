@@ -23,14 +23,14 @@ describe("Legal case detail failmask (GAP-LEGAL-CASES-DETAIL-02)", () => {
 
   it("renders a retry error state (not notFound) on a 503 service outage", async () => {
     getLegalCaseById.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(notFound).not.toHaveBeenCalled();
     expect(screen.getByText(/Unable to load case details/i)).toBeInTheDocument();
   });
 
   it("calls notFound() on a genuine 404", async () => {
     getLegalCaseById.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(LegalCaseDetailPage({ params: { id: "c1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFound).toHaveBeenCalled();
   });
 });
@@ -40,7 +40,7 @@ describe("Legal case detail lifecycle labels (GAP-LEGAL-CASES-DETAIL-04)", () =>
 
   it("uses 'Filed date' (not 'Raised date') for the filed date", async () => {
     getLegalCaseById.mockResolvedValue({ data: caseData, source: "api", status: 200 });
-    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByText("Filed date")).toBeInTheDocument();
     expect(screen.queryByText("Raised date")).not.toBeInTheDocument();
   });
@@ -61,7 +61,7 @@ describe("Legal case detail order type display (GAP-LEGAL-CASES-DETAIL-01)", () 
       source: "api",
       status: 200,
     });
-    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByText("Affidavit filings")).toBeInTheDocument();
     expect(screen.getByText("Affidavit of service")).toBeInTheDocument();
     // The compliance court-orders table should NOT contain the affidavit summary
@@ -76,7 +76,7 @@ describe("Legal case detail order type display (GAP-LEGAL-CASES-DETAIL-01)", () 
       source: "api",
       status: 200,
     });
-    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByText("Affidavit filings")).not.toBeInTheDocument();
     // "Judgment in favour" uniquely identifies the court-order row (distinct from
     // the lifecycle timeline "Judgment" stage label).
@@ -113,7 +113,7 @@ describe("Legal case detail against the real service shape", () => {
 
   it("renders hearings, court orders and affidavit filings from the real shape", async () => {
     getLegalCaseById.mockResolvedValue({ data: LegalCaseDetailSchema.parse(realServicePayload), source: "api", status: 200 });
-    render(await LegalCaseDetailPage({ params: { id: realServicePayload.id } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: realServicePayload.id }) }));
     expect(screen.getAllByText("Arguments").length).toBeGreaterThan(0);
     expect(screen.getByText("Status quo")).toBeInTheDocument();
     expect(screen.getByText("Affidavit filings")).toBeInTheDocument();
@@ -128,7 +128,7 @@ describe("Legal case detail against the real service shape", () => {
       filedDate: "2026-10-22", status: "pending", hearings: [], orders: [],
     });
     getLegalCaseById.mockResolvedValue({ data: bare, source: "api", status: 200 });
-    render(await LegalCaseDetailPage({ params: { id: "b" } }));
+    render(await LegalCaseDetailPage({ params: Promise.resolve({ id: "b" }) }));
     expect(screen.getAllByText(/X\/1\/2026/).length).toBeGreaterThan(0);
   });
 });

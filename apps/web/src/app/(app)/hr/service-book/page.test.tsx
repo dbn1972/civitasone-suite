@@ -71,7 +71,7 @@ describe("ServiceBookPage (HR caller)", () => {
     fetchJsonMock.mockResolvedValue(
       apiResult([{ id: "e1", employee: "Priya Nair", eventType: "transfer", effectiveDate: "2026-01-01" }], { transfersTotal: 1 }),
     );
-    await renderPage({ searchParams: { empId: "emp-42" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "emp-42" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/hrms/service-book?employeeId=emp-42",
       expect.anything(),
@@ -147,7 +147,7 @@ describe("ServiceBookPage (HR caller)", () => {
     fetchJsonMock.mockResolvedValue(
       apiResult([{ id: "e1", employeeId: "emp-42", employee: "Priya Nair", eventType: "join", effectiveDate: "2020-01-01" }]),
     );
-    await renderPage({ searchParams: { empId: "emp-42" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "emp-42" }) });
     expect(screen.getByRole("combobox", { name: "Show one employee's service book" })).toHaveValue("Priya Nair");
   });
 
@@ -168,7 +168,7 @@ describe("ServiceBookPage (HR caller)", () => {
     fetchJsonMock.mockResolvedValue(
       apiResult([{ id: "e9", employee: "Priya Nair", eventType: "join", effectiveDate: "2019-01-01" }], { total: 1200, hasMore: false }),
     );
-    await renderPage({ searchParams: { page: "2" } });
+    await renderPage({ searchParams: Promise.resolve({ page: "2" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/hrms/service-book?limit=1000&offset=1000",
       expect.anything(),
@@ -185,7 +185,7 @@ describe("ServiceBookPage (HR caller)", () => {
     fetchJsonMock.mockResolvedValue(
       apiResult([{ id: "e1", employeeId: "emp-42", employee: "Priya Nair", eventType: "join", effectiveDate: "2026-01-01" }], { total: 2500, hasMore: true }),
     );
-    await renderPage({ searchParams: { empId: "emp-42", page: "2" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "emp-42", page: "2" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/hrms/service-book?employeeId=emp-42&limit=1000&offset=1000",
       expect.anything(),
@@ -198,7 +198,7 @@ describe("ServiceBookPage (HR caller)", () => {
   it("treats a junk ?page= as page 1", async () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     fetchJsonMock.mockResolvedValue(apiResult([]));
-    await renderPage({ searchParams: { page: "-4" } });
+    await renderPage({ searchParams: Promise.resolve({ page: "-4" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/service-book", expect.anything(), expect.anything());
   });
 
@@ -275,7 +275,7 @@ describe("ServiceBookPage (self-service caller)", () => {
   it("ignores ?empId= for a non-HR caller (own record only, never someone else's by URL)", async () => {
     getSessionRolesMock.mockReturnValue(["manager"]);
     fetchJsonMock.mockResolvedValue(apiResult([]));
-    await renderPage({ searchParams: { empId: "someone-elses-id" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "someone-elses-id" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith("/api/v1/hrms/service-book/me", expect.anything(), expect.anything());
   });
 });

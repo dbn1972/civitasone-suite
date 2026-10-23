@@ -37,7 +37,7 @@ function pageOf(rows: typeof MOCK_REQUESTS, over: Record<string, unknown> = {}) 
 }
 
 async function renderPage(searchParams?: { page?: string }) {
-  const page = await LeaveManagementPage({ searchParams });
+  const page = await LeaveManagementPage({ searchParams: Promise.resolve(searchParams ?? {}) });
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{page}</NextIntlClientProvider>);
 }
 

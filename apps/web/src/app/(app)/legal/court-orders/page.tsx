@@ -20,11 +20,12 @@ function toInitialFilter(value: string | undefined): "All" | "Due" | "Risk" {
   return "All";
 }
 
-export default async function CourtOrdersPage({
-  searchParams,
-}: {
-  searchParams: { page?: string; filter?: string };
-}) {
+export default async function CourtOrdersPage(
+  props: {
+    searchParams: Promise<{ page?: string; filter?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const page = Math.max(toPositiveInt(searchParams.page, 1), 1);
   const offset = (page - 1) * PAGE_SIZE;
   const { data, source } = await getCourtOrdersPage({ limit: PAGE_SIZE, offset });

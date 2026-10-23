@@ -154,18 +154,18 @@ describe("VigilancePage", () => {
   // ── GAP-HR-VIGILANCE-04: filters run on the backend ────────────────────────
   it("forwards a known status and a trimmed search to the backend; ignores an unknown status", async () => {
     fetchJsonMock.mockResolvedValue(apiResult([rowFor("closed", 1)], { chargeMemoStage: 0, underInquiry: 0, closed: 1, total: 1 }));
-    await VigilancePage({ searchParams: { status: "closed", q: "  Menon  " } });
+    await VigilancePage({ searchParams: Promise.resolve({ status: "closed", q: "  Menon  " }) });
     const sp = new URL((fetchJsonMock.mock.calls[0] as [string])[0], "http://x").searchParams;
     expect(sp.get("status")).toBe("closed");
     expect(sp.get("q")).toBe("Menon");
     fetchJsonMock.mockClear();
-    await VigilancePage({ searchParams: { status: "dropped" } });
+    await VigilancePage({ searchParams: Promise.resolve({ status: "dropped" }) });
     expect(new URL((fetchJsonMock.mock.calls[0] as [string])[0], "http://x").searchParams.has("status")).toBe(false);
   });
 
   it("renders a server-side filter form (status without 'dropped', search), pre-filled and clearable", async () => {
     fetchJsonMock.mockResolvedValue({ data: { items: [rowFor("closed", 1)], total: 1, hasMore: false, stats: { chargeMemoStage: 0, underInquiry: 0, penaltyAndAppeal: 0, closed: 1, dropped: 0, total: 1 } }, source: "api" as const });
-    const ui = await VigilancePage({ searchParams: { status: "closed", q: "Menon" } });
+    const ui = await VigilancePage({ searchParams: Promise.resolve({ status: "closed", q: "Menon" }) });
     render(ui);
     const form = screen.getByRole("search", { name: "Filter vigilance cases" });
     const select = within(form).getByLabelText("Status") as HTMLSelectElement;
@@ -188,14 +188,14 @@ describe("VigilancePage", () => {
 
   it("shows a 'no match' message (not the empty-register one) when a filter finds nothing", async () => {
     fetchJsonMock.mockResolvedValue(apiResult([], { chargeMemoStage: 3, underInquiry: 0, closed: 0, total: 3 }));
-    render(await VigilancePage({ searchParams: { q: "nobody" } }));
+    render(await VigilancePage({ searchParams: Promise.resolve({ q: "nobody" }) }));
     expect(screen.getByText("No cases match")).toBeInTheDocument();
     expect(screen.queryByText("No vigilance cases on record")).not.toBeInTheDocument();
   });
 
   it("batch paging keeps the active filter in the Next/Previous links", async () => {
     fetchJsonMock.mockResolvedValue({ data: { items: [rowFor("closed", 1)], total: 450, hasMore: true, stats: { chargeMemoStage: 0, underInquiry: 0, penaltyAndAppeal: 0, closed: 450, dropped: 0, total: 450 } }, source: "api" as const });
-    render(await VigilancePage({ searchParams: { page: "2", status: "closed", q: "Menon" } }));
+    render(await VigilancePage({ searchParams: Promise.resolve({ page: "2", status: "closed", q: "Menon" }) }));
     expect(new URL((fetchJsonMock.mock.calls[0] as [string])[0], "http://x").searchParams.get("offset")).toBe("200");
     const next = new URL(screen.getByRole("link", { name: /Next 200/ }).getAttribute("href")!, "http://x").searchParams;
     expect([next.get("page"), next.get("status"), next.get("q")]).toEqual(["3", "closed", "Menon"]);

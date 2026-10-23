@@ -3,7 +3,8 @@ import { getSessionRoles, hasAnyRole, NOTIFICATION_CAMPAIGN_MANAGE_ROLES } from 
 import { CampaignDetail } from "../_components/CampaignDetail";
 
 /** MK-001 / MK-004 — a single campaign: fields, metrics dashboard, send/cancel. */
-export default function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01: campaign send/cancel is an admin-only
   // commercial mass-send. The notification-service already restricts it to
   // NOTIFICATION_CAMPAIGN_MANAGE_ROLES (bulk/routes.ts requireRole(ADMIN)) and 403s others;

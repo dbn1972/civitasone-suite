@@ -7,11 +7,12 @@ import { FyFilter } from "../../_components/FyFilter";
 import { MonitoringTable } from "./MonitoringTable";
 import { exceptionCount, onTrackCount, type MonitoringTotals as Totals } from "../_lib/monitoringTotals";
 
-export default async function BudgetMonitoringPage({
-  searchParams,
-}: {
-  searchParams?: { fy?: string };
-}) {
+export default async function BudgetMonitoringPage(
+  props: {
+    searchParams?: Promise<{ fy?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // These endpoints REQUIRE ?fy= and return HTTP 400 without it, so the page
   // must resolve a concrete FY (honouring the FyFilter's ?fy=, else today's FY)
   // instead of calling the loaders bare — which always errored to empty zeros.

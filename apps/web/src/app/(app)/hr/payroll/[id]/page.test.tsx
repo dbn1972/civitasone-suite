@@ -43,7 +43,7 @@ function run(over: Record<string, unknown> = {}) {
 }
 
 async function renderPage() {
-  const ui = await PayrollRunDetailPage({ params: { id: "run-1" } });
+  const ui = await PayrollRunDetailPage({ params: Promise.resolve({ id: "run-1" }) });
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

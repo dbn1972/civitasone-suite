@@ -64,7 +64,7 @@ describe("GrievancesPage stat cards", () => {
       source: "api",
     });
 
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // 3 open (REGISTERED/FORWARDED/ATTENDED), 1 escalated (APPEAL), 2 resolved (DISPOSED).
@@ -83,7 +83,7 @@ describe("GrievancesPage stat cards", () => {
     const rows = Array.from({ length: 50 }, (_, i) => row(String(i + 1), "REGISTERED"));
     getCrmGrievancesMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
 
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(getCrmGrievancesMock).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 50 }));
@@ -100,7 +100,7 @@ describe("GrievancesPage stat cards", () => {
     const rows = Array.from({ length: 20 }, (_, i) => row(String(101 + i), "REGISTERED"));
     getCrmGrievancesMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
 
-    const ui = await GrievancesPage({ searchParams: { page: "3", status: "REGISTERED" } });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({ page: "3", status: "REGISTERED" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(getCrmGrievancesMock).toHaveBeenCalledWith(
@@ -121,7 +121,7 @@ describe("GrievancesPage stat cards", () => {
   // (status/priority selects + a whole-register search box).
   it("renders the server-side filter controls", async () => {
     getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByLabelText("Filter by status")).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe("GrievancesPage stat cards", () => {
   // NOT the "No grievances yet" first-use empty copy.
   it("renders a retry error state (not the empty register copy) on a load error", async () => {
     getCrmGrievancesMock.mockResolvedValue({ data: { rows: [], total: 0 }, source: "error", status: 500 });
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.queryByText(/No grievances yet/i)).not.toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("GrievancesPage stat cards", () => {
       row("3", "FORWARDED", "2999-01-01T00:00:00.000Z"), // future → not overdue
     ];
     getCrmGrievancesMock.mockResolvedValue({ data: { rows, total: 3 }, source: "api" });
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText(/Overdue \(this page\)/).nextElementSibling).toHaveTextContent("1");
@@ -162,7 +162,7 @@ describe("GrievancesPage stat cards", () => {
   it("hides the CSV export button for a role without export rights", async () => {
     rolesMock.mockReturnValue(["crm_user"]);
     getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.queryByRole("button", { name: /CSV/i })).not.toBeInTheDocument();
   });
@@ -170,7 +170,7 @@ describe("GrievancesPage stat cards", () => {
   it("shows the CSV export button for a role with export rights", async () => {
     rolesMock.mockReturnValue(["crm_admin"]);
     getCrmGrievancesMock.mockResolvedValue({ data: { rows: ROWS, total: ROWS.length }, source: "api" });
-    const ui = await GrievancesPage({ searchParams: {} });
+    const ui = await GrievancesPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByRole("button", { name: /CSV/i })).toBeInTheDocument();
   });

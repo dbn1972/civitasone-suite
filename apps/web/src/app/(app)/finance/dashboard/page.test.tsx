@@ -65,7 +65,7 @@ describe("FinanceDashboardPage", () => {
   // GAP-FINANCE-DASHBOARD-02: the FY selector must actually drive the loader.
   it("passes the selected fiscal year to the dashboard endpoint and shows it", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
-    render(await FinanceDashboardPage({ searchParams: { fy: "2025-26" } }));
+    render(await FinanceDashboardPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
     expect(paths.some((p) => p.includes("/api/v1/finance/dashboard?fy=2025-26"))).toBe(true);
     expect(screen.getByText(/FY 2025-26/)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("FinanceDashboardPage", () => {
 
   it("ignores an unrecognised fy value instead of forwarding it", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
-    render(await FinanceDashboardPage({ searchParams: { fy: "1999-00; drop" } }));
+    render(await FinanceDashboardPage({ searchParams: Promise.resolve({ fy: "1999-00; drop" }) }));
     const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
     expect(paths.some((p) => p.includes("drop"))).toBe(false);
   });

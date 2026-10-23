@@ -52,11 +52,12 @@ function pickData<T>(payload: unknown): T[] {
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default async function TenderDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function TenderDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const [quotationsResult, tenderByIdResult] = await Promise.all([
     fetchJson<unknown, QuotationRow[]>(
       `/api/v1/works/tenders/${params.id}/quotations`,
@@ -179,7 +180,6 @@ export default async function TenderDetailPage({
           ) : undefined
         }
       />
-
       <StatGrid>
         <StatCard
           icon="📝"
@@ -207,7 +207,6 @@ export default async function TenderDetailPage({
           value={statusView.label}
         />
       </StatGrid>
-
       {quotationsResult.source === "error" ? (
         <div className="card">
           <div className="card-h">
@@ -242,7 +241,6 @@ export default async function TenderDetailPage({
         </Card>
         </div>
       )}
-
       {tender && (
         <Card title="Tender Details" padding>
           <dl className="fields">
@@ -275,7 +273,6 @@ export default async function TenderDetailPage({
           </dl>
         </Card>
       )}
-
       <TenderActions
         tenderId={params.id}
         workId={tender?.workId ?? null}
@@ -291,7 +288,6 @@ export default async function TenderDetailPage({
           status: q.status,
         }))}
       />
-
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <Link href="/works/tenders" className="btn ghost">
           ← All tenders

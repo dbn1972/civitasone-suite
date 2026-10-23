@@ -32,7 +32,7 @@ describe("InspectionsPage", () => {
       listResult([{ id: "11111111-2222-4333-8444-555555555555", state: "scheduled", entityId: "e1" }], 1),
     );
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getAllByText("Scheduled").length).toBeGreaterThan(0);
@@ -42,7 +42,7 @@ describe("InspectionsPage", () => {
   it("renders an honest empty state with a CTA when there are no inspections", async () => {
     fetchJsonMock.mockResolvedValueOnce(listResult([], 0));
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("No inspections yet")).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("InspectionsPage", () => {
   it("shows the error state on a real fetch failure (source: error)", async () => {
     fetchJsonMock.mockResolvedValueOnce(listResult([], null, "error"));
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("We couldn't load inspections.")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("InspectionsPage", () => {
       listResult([{ id: "11111111-2222-4333-8444-555555555555", entityId: "e1" }], 1),
     );
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("We couldn't load inspections.")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("InspectionsPage", () => {
       ),
     );
 
-    const ui = await InspectionsPage({ searchParams: { page: "2" } });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({ page: "2" }) });
     render(ui);
 
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("page=2");
@@ -96,7 +96,7 @@ describe("InspectionsPage", () => {
       listResult([{ id: "33333333-2222-4333-8444-555555555555", state: "completed" }], 1),
     );
 
-    const ui = await InspectionsPage({ searchParams: { page: "1" } });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({ page: "1" }) });
     render(ui);
 
     expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("InspectionsPage", () => {
       ),
     );
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Column header must be present.
@@ -145,7 +145,7 @@ describe("InspectionsPage", () => {
       ),
     );
 
-    const ui = await InspectionsPage({ searchParams: {} });
+    const ui = await InspectionsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // The inspector cell must fall back to "—".

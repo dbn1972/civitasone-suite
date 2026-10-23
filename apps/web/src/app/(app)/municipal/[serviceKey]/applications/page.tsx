@@ -12,8 +12,8 @@ import { statusFilterOptions } from "../../_data/records";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { serviceKey: string };
-  searchParams?: { page?: string; status?: string; q?: string };
+  params: Promise<{ serviceKey: string }>;
+  searchParams?: Promise<{ page?: string; status?: string; q?: string }>;
 };
 
 // GAP-...-APPLICATIONS-01: validate searchParams at the boundary (zod).
@@ -30,7 +30,9 @@ function withParams(serviceKey: string, params: { page?: number; status?: string
   return `/municipal/${serviceKey}/applications${qs ? `?${qs}` : ""}`;
 }
 
-export default async function MunicipalApplicationsPage({ params, searchParams }: Props) {
+export default async function MunicipalApplicationsPage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const config = getMunicipalService(params.serviceKey);
   if (!config) notFound();
 

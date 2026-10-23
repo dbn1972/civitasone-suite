@@ -122,7 +122,7 @@ describe("ContractualPage server paging (GAP-HR-CONTRACTUAL-03)", () => {
 
   it("page 2 asks for offset 50 and links both ways; the last page has no next link", async () => {
     serve(many(50), { total: 120, summary: SUMMARY });
-    await renderPage({ searchParams: { page: "2" } });
+    await renderPage({ searchParams: Promise.resolve({ page: "2" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/hrms/contracts?limit=50&offset=50&sort=endDate&summary=true",
       expect.anything(),
@@ -135,7 +135,7 @@ describe("ContractualPage server paging (GAP-HR-CONTRACTUAL-03)", () => {
 
   it("page 3 loads the rest (20 rows) and offers only 'Previous'", async () => {
     serve(many(20), { total: 120, summary: SUMMARY });
-    await renderPage({ searchParams: { page: "3" } });
+    await renderPage({ searchParams: Promise.resolve({ page: "3" }) });
     expect(screen.getByText(/Showing contracts 101–120 of 120/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "← Previous page" })).toHaveAttribute("href", "/hr/contractual?page=2");
     expect(screen.queryByRole("link", { name: "Next page →" })).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("ContractualPage server paging (GAP-HR-CONTRACTUAL-03)", () => {
 
   it("treats a junk ?page= as page 1", async () => {
     serve([], { total: 0, summary: { active: 0, expiring: 0, expired: 0, agencies: 0 } });
-    await renderPage({ searchParams: { page: "abc" } });
+    await renderPage({ searchParams: Promise.resolve({ page: "abc" }) });
     expect(fetchJsonMock).toHaveBeenCalledWith(expect.stringContaining("offset=0"), expect.anything(), expect.anything());
   });
 

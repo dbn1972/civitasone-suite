@@ -3,13 +3,18 @@ import { notFound } from "next/navigation";
 import { ModuleGate } from "../../ModuleGate";
 import { getMunicipalService } from "../_data/services";
 
-export default function MunicipalServiceLayout({
-  children,
-  params,
-}: {
-  children: ReactNode;
-  params: { serviceKey: string };
-}) {
+export default async function MunicipalServiceLayout(
+  props: {
+    children: ReactNode;
+    params: Promise<{ serviceKey: string }>;
+  }
+) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   const config = getMunicipalService(params.serviceKey);
   if (!config) notFound();
 

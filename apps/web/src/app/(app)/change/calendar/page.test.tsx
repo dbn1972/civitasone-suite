@@ -29,7 +29,7 @@ describe("change/calendar page (GAP-CHANGE-CALENDAR-02 / -03 / -01)", () => {
   it("CALENDAR-02: a freezes-loader error shows '—' for the Change freezes stat, not 0", async () => {
     getChangeRequests.mockResolvedValue({ data: [], source: "api" });
     getChangeFreezes.mockResolvedValue({ data: [], source: "error" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     // The 'Change freezes' stat must not read as a reassuring 0.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
@@ -39,7 +39,7 @@ describe("change/calendar page (GAP-CHANGE-CALENDAR-02 / -03 / -01)", () => {
     const future = freeze("f-new", "2999-01-01T00:00:00.000Z", "2999-01-02T00:00:00.000Z", "Future freeze");
     getChangeRequests.mockResolvedValue({ data: [], source: "api" });
     getChangeFreezes.mockResolvedValue({ data: [past, future], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Future freeze")).toBeInTheDocument();
     expect(screen.queryByText("Old freeze")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Show ended \(1\)/ })).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe("change/calendar page (GAP-CHANGE-CALENDAR-02 / -03 / -01)", () => {
     getChangeFreezes.mockResolvedValue({
       data: [freeze("f1", "2026-09-01T00:00:00.000Z", "2026-09-10T00:00:00.000Z", "YE freeze")], source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Conflicts with freeze/)).toBeInTheDocument();
   });
 });

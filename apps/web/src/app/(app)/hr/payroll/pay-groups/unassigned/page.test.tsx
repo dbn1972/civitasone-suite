@@ -52,7 +52,7 @@ describe("Unassigned pay-group report", () => {
         ],
       },
     });
-    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: { month: "2026-10" } })));
+    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: Promise.resolve({ month: "2026-10" }) })));
     expect(screen.getByText("2 employees are in no pay group.")).toBeInTheDocument();
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Assign Asha Rao to a pay group" })).toBeInTheDocument();
@@ -62,13 +62,13 @@ describe("Unassigned pay-group report", () => {
 
   it("shows the empty state only when the load succeeded with no rows", async () => {
     mockApi({ source: "api", data: { month: "2026-10", total: 0, data: [] } });
-    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: { month: "2026-10" } })));
+    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: Promise.resolve({ month: "2026-10" }) })));
     expect(screen.getByText("Everyone is in a pay group")).toBeInTheDocument();
   });
 
   it("shows an error, NOT the empty state, when the load failed", async () => {
     mockApi({ source: "error", status: 500, data: { month: "2026-10", total: 0, data: [] } });
-    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: { month: "2026-10" } })));
+    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: Promise.resolve({ month: "2026-10" }) })));
     expect(screen.queryByText("Everyone is in a pay group")).not.toBeInTheDocument();
     expect(screen.queryByText(/employees are in no pay group/)).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe("Unassigned pay-group report", () => {
       source: "api",
       data: { month: "2026-10", total: 1, data: [{ employeeId: "e1", employeeNo: "E-1", fullName: "Asha Rao", departmentName: "Finance" }] },
     });
-    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: { month: "2026-10" } })));
+    render(withIntl(await UnassignedPayGroupReportPage({ searchParams: Promise.resolve({ month: "2026-10" }) })));
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Assign/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Bulk assign" })).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("Unassigned pay-group report", () => {
 
   it("falls back to the current month for a garbled month param", async () => {
     mockApi({ source: "api", data: { month: "2026-10", total: 0, data: [] } });
-    await UnassignedPayGroupReportPage({ searchParams: { month: "not-a-month" } });
+    await UnassignedPayGroupReportPage({ searchParams: Promise.resolve({ month: "not-a-month" }) });
     const url = String(fetchJsonMock.mock.calls.find((c) => String(c[0]).includes("/unassigned"))![0]);
     expect(url).toMatch(/month=\d{4}-\d{2}&/);
     expect(url).not.toContain("not-a-month");

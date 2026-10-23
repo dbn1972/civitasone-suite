@@ -24,7 +24,7 @@ function route(rfq: RFQDetail | null, source: "api" | "error" = "api") {
 }
 
 async function renderPage(id: string) {
-  const el = await RFQDetailPage({ params: { id } });
+  const el = await RFQDetailPage({ params: Promise.resolve({ id }) });
   return render(<ToastProvider>{el}</ToastProvider>);
 }
 

@@ -29,11 +29,12 @@ const LEDGER_COLUMNS = [
 // /inventory/list "back" links below (the redirect already made the old
 // href work, just via an extra hop); everything else (loader, ledger table,
 // field labels) is identical to what was already live before the rename.
-export default async function StockItemDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function StockItemDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const result = await getStockItemById(params.id);
   const { data: item } = result;
 
@@ -150,11 +151,11 @@ export default async function StockItemDetailPage({
               <h3>Stock ledger</h3>
             </div>
             {item.stockLedger.length === 0 ? ( // ux-001-ok: a failed fetch returns above (LoadErrorState) and a 404 returns "Item not found", so `item` here is real -- this is a genuinely ledger-free item, never a masked fetch failure
-              <EmptyState
+              (<EmptyState
                 icon="📋"
                 title="No ledger entries"
                 message="Stock movements for this item will appear here."
-              />
+              />)
             ) : (
               <DataTable
                 columns={LEDGER_COLUMNS}

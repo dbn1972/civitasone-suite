@@ -8,11 +8,12 @@ import { UnassignedTable } from "../UnassignedTable";
 import { getActiveGroups, getUnassigned } from "../payGroupData";
 import { MEMBERS_PAGE_SIZE, hasNoRows, parseOffset, resolveMonth } from "../payGroupMembership";
 
-export default async function UnassignedPayGroupReportPage({
-  searchParams,
-}: {
-  searchParams?: { month?: string; offset?: string };
-}) {
+export default async function UnassignedPayGroupReportPage(
+  props: {
+    searchParams?: Promise<{ month?: string; offset?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payGroupUnassigned");
 
   const roles = getSessionRoles();

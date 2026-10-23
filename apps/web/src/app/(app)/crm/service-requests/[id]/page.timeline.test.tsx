@@ -51,7 +51,7 @@ beforeEach(() => {
 
 describe("F6-01 SR detail timeline wiring", () => {
   it("renders the status timeline card from the history endpoint", async () => {
-    render(await Page({ params: { id: "sr-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "sr-1" }) }));
     expect(screen.getByText("Status timeline")).toBeInTheDocument();
     // The history note shows up in the timeline (plus the resolution card).
     expect(screen.getAllByText("Issued").length).toBeGreaterThanOrEqual(1);
@@ -73,14 +73,14 @@ describe("F6-01 SR detail timeline wiring", () => {
       }
       return Promise.resolve({ data: detail, source: "api" });
     });
-    render(await Page({ params: { id: "sr-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "sr-1" }) }));
     expect(screen.getByText("by Meera Nair")).toBeInTheDocument();
     expect(screen.getByText("by Rahul Verma")).toBeInTheDocument();
     expect(screen.queryByText(/9f1c0b2a/)).not.toBeInTheDocument();
   });
 
   it("calls fetchJson for both the detail and the history endpoints", async () => {
-    await Page({ params: { id: "sr-1" } });
+    await Page({ params: Promise.resolve({ id: "sr-1" }) });
     const urls = fetchJsonMock.mock.calls.map((c) => c[0] as string);
     // The detail is requested masked (?maskPii=true) so PII is only ever shown via the audited reveal.
     expect(urls.some((u) => u.endsWith("/service-requests/sr-1?maskPii=true"))).toBe(true);

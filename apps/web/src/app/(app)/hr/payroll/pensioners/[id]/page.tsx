@@ -30,7 +30,8 @@ type PensionerDetail = {
 // GET /v1/payroll/pensioners/:id is READER_ROLES; status changes and the
 // audited reveal are PAYROLL_ROLES (payroll-service fin03-routes.ts).
 
-export default async function PensionerDetailPage({ params }: { params: { id: string } }) {
+export default async function PensionerDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("pensionerDetail");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {

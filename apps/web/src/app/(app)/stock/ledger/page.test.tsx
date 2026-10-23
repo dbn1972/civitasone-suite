@@ -36,7 +36,7 @@ describe("GAP-STOCK-LEDGER-08: loader receives date-range and type from searchPa
     const { getStockLedger } = await import("../../../_data/loaders");
     const mock = getStockLedger as ReturnType<typeof vi.fn>;
     mock.mockResolvedValueOnce({ data: [], source: "api" });
-    await StockLedgerPage({ searchParams: { from: "2026-01-01", to: "2026-06-30", type: "receipt", cursor: "abc" } });
+    await StockLedgerPage({ searchParams: Promise.resolve({ from: "2026-01-01", to: "2026-06-30", type: "receipt", cursor: "abc" }) });
     expect(mock).toHaveBeenCalledWith(expect.objectContaining({
       from: "2026-01-01",
       to: "2026-06-30",
@@ -49,7 +49,7 @@ describe("GAP-STOCK-LEDGER-08: loader receives date-range and type from searchPa
     const { getStockLedger } = await import("../../../_data/loaders");
     const mock = getStockLedger as ReturnType<typeof vi.fn>;
     mock.mockResolvedValueOnce({ data: [], source: "api" });
-    await StockLedgerPage({ searchParams: {} });
+    await StockLedgerPage({ searchParams: Promise.resolve({}) });
     // Should still be called (just with limit)
     expect(mock).toHaveBeenCalled();
   });

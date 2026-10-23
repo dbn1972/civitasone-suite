@@ -7,8 +7,8 @@ import { SIGNAL_LABEL, signalLabel } from "../health";
 import { FollowUpModal } from "./FollowUpModal";
 
 interface PageProps {
-  params: { accountId: string };
-  searchParams?: { followUp?: string };
+  params: Promise<{ accountId: string }>;
+  searchParams?: Promise<{ followUp?: string }>;
 }
 
 function formatDateTime(iso: string): string {
@@ -29,7 +29,9 @@ function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id;
 }
 
-export default async function AccountHealthDetailPage({ params, searchParams }: PageProps) {
+export default async function AccountHealthDetailPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // GAP-CRM-HEALTH-05: ?followUp=1 (from the watchlist row link) opens the
   // follow-up form immediately.
   const openFollowUp = searchParams?.followUp === "1";
@@ -108,20 +110,19 @@ export default async function AccountHealthDetailPage({ params, searchParams }: 
         />
         <StatCard icon="🔁" tone="good" label={t("version")} value={String(breakdown.version)} />
       </StatGrid>
-
       <Card title={t("contributingSignals")}>
         {breakdown.contributingFactors.length === 0 ? ( // ux-001-ok: `breakdown` is only reachable past the earlier `if (!breakdown) return` guard above (source==="error" implies a null breakdown per the loader contract) -- this is a genuinely signal-free stored score, never a masked fetch failure
-          <EmptyState
+          (<EmptyState
             icon="🧮"
             title={t("noSignalsTitle")}
             message={t("noSignalsMessage")}
-          />
+          />)
         ) : (
           // Deliberately a plain table, not DataTable: this is a fixed,
           // short explanation of how one score was composed. Sorting, filtering
           // and CSV export would be noise on a five-row breakdown, and reordering
           // the rows would obscure the weighting narrative.
-          <table className="tbl">
+          (<table className="tbl">
             <caption className="sr-only">
               {t("signalsCaption")}
             </caption>
@@ -167,10 +168,9 @@ export default async function AccountHealthDetailPage({ params, searchParams }: 
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>)
         )}
       </Card>
-
       {breakdown.storedScore !== breakdown.score && (
         <Card title={t("recomputedTitle")}>
           <p style={{ padding: "12px 16px 0", margin: 0, color: "var(--ink2)", fontSize: 13 }}>

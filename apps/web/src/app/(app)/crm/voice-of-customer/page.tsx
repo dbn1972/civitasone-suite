@@ -39,11 +39,12 @@ function parseRange(sp?: { from?: string; to?: string }): { range: { from?: stri
   return { range: { ...(from ? { from } : {}), ...(to ? { to } : {}) }, invalid: false };
 }
 
-export default async function VoiceOfCitizenPage({
-  searchParams,
-}: {
-  searchParams?: { from?: string; to?: string };
-}) {
+export default async function VoiceOfCitizenPage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crmVoiceOfCitizen");
   const { range, invalid } = parseRange(searchParams);
   if (invalid) {

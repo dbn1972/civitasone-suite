@@ -41,7 +41,8 @@ async function getAssetLabel(id: string): Promise<LoaderResult<string | null>> {
   });
 }
 
-export default async function ClaimDetailPage({ params }: { params: { id: string } }) {
+export default async function ClaimDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const claimRes = await getClaim(params.id);
   const claim = claimRes.data;
   const back = { back: "/assets/insurance/claims", backLabel: "Insurance Claims" } as const;

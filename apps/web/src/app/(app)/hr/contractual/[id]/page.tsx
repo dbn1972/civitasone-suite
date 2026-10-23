@@ -27,7 +27,8 @@ type ApiHistoryRow = Record<string, unknown>;
  * GET /v1/hrms/contracts/employee/:employeeId/history (both ALL_ROLES in
  * contracts/routes.ts); Renew/Terminate live in ContractActions.
  */
-export default async function ContractDetailPage({ params }: { params: { id: string } }) {
+export default async function ContractDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("contractualDetail");
   const roles = getSessionRoles();
 

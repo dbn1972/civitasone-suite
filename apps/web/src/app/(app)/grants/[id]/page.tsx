@@ -9,7 +9,8 @@ import { GRANTS_DISBURSE_ROLES, GRANTS_UC_VALIDATE_ROLES } from "../roles";
 import { getGrantById } from "../../../_data/loaders";
 import { GrantInstallmentsTable, GrantUCsTable } from "./GrantDetailTables";
 
-export default async function GrantDetailPage({ params }: { params: { id: string } }) {
+export default async function GrantDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: grant, source, status } = await getGrantById(params.id);
 
   // GAP-GRANTS-DETAIL-02: a failed fetch must NOT masquerade as a genuine

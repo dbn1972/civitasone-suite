@@ -19,7 +19,7 @@ import { mapRows, departmentCadreLabel } from "./_data";
 async function renderPage(searchParams?: { year?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await StaffingPlanPage({ searchParams })}
+      {await StaffingPlanPage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

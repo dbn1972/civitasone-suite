@@ -12,7 +12,8 @@ import { SlaBadge } from "../../../SlaBadge";
  * being limited to the list's summary row. Also the anchor for a future
  * Cancel action (pending_approval requests) once the backend supports it.
  */
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: req, source, status } = await getServiceRequest(params.id);
 
   if (source === "error" && status !== 404) {

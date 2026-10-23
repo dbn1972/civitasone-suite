@@ -69,7 +69,7 @@ describe("LoansPage", () => {
   });
 
   it("prompts for an employee search when no empId is given, without fabricating data", async () => {
-    const ui = await LoansPage({ searchParams: {} });
+    const ui = await LoansPage({ searchParams: Promise.resolve({}) });
     renderPage(ui);
 
     expect(screen.getByText("Search for an employee to see their loans")).toBeInTheDocument();
@@ -79,7 +79,7 @@ describe("LoansPage", () => {
   it("renders loans for the searched employee and names that employee (GAP-PAYROLL-LOANS-01)", async () => {
     mockApi([loan({})]);
 
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
 
     expect(screen.getByText("LN-1")).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("LoansPage", () => {
 
   it("says when the employee's name cannot be resolved instead of guessing", async () => {
     mockApi([loan({})], []);
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.getByText("Loans — employee name unavailable")).toBeInTheDocument();
   });
@@ -98,7 +98,7 @@ describe("LoansPage", () => {
   it("shows the error data-source badge when the API fails for a searched employee", async () => {
     mockApi("error");
 
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("LoansPage", () => {
       loan({ id: "b", loanNo: "LN-B", status: "disbursed", outstandingMinor: "300000", emiMinor: "25000" }),
       loan({ id: "c", loanNo: "LN-C", status: "closed", outstandingMinor: "0", emiMinor: "40000" }),
     ]);
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
 
     const stat = (label: string) => screen.getByText(label).closest(".stat") as HTMLElement;
@@ -122,7 +122,7 @@ describe("LoansPage", () => {
 
   it("gives a payroll officer the create form and Disburse actions", async () => {
     mockApi([loan({})]);
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.getByRole("button", { name: "Create Loan" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Disburse loan LN-1" })).toBeInTheDocument();
@@ -131,7 +131,7 @@ describe("LoansPage", () => {
   it("gives hr_admin a read-only view: no create form, no Disburse (GAP-PAYROLL-LOANS-02)", async () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     mockApi([loan({})]);
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.getByText("LN-1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create Loan" })).not.toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("LoansPage", () => {
 
   it("shows PermissionDenied to a manager-only session and fetches nothing (GAP-PAYROLL-LOANS-02)", async () => {
     getSessionRolesMock.mockReturnValue(["manager", "employee"]);
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.queryByRole("button", { name: "Create Loan" })).not.toBeInTheDocument();
     expect(screen.queryByText("LN-1")).not.toBeInTheDocument();
@@ -148,7 +148,7 @@ describe("LoansPage", () => {
   });
 
   it("GAP-PAYROLL-LOANS-06: no permanent empty 'schedule' card before an employee is searched", async () => {
-    const ui = await LoansPage({ searchParams: {} });
+    const ui = await LoansPage({ searchParams: Promise.resolve({}) });
     renderPage(ui);
     expect(screen.queryByText(/Recovery Schedule/)).not.toBeInTheDocument();
     expect(screen.queryByText("Recovery schedule not yet available")).not.toBeInTheDocument();
@@ -161,7 +161,7 @@ describe("LoansPage", () => {
       source: "api",
       payload: { schedule: [{ installmentNo: 1, openingMinor: 100000, emiMinor: 60000, principalMinor: 59000, interestMinor: 1000, closingMinor: 41000 }] },
     };
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.getByText("Recovery Schedule — LN-9")).toBeInTheDocument();
     expect(screen.getByText("₹410.00")).toBeInTheDocument();
@@ -173,7 +173,7 @@ describe("LoansPage", () => {
   it("GAP-PAYROLL-LOANS-06: a loanId that is not one of the employee's loans is ignored", async () => {
     mockApi([loan({ id: "mine", loanNo: "LN-1", status: "active" })]);
     scheduleResult = { source: "api", payload: { schedule: [] } };
-    await LoansPage({ searchParams: { empId: EMP_ID, loanId: "someone-elses" } });
+    await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID, loanId: "someone-elses" }) });
     const scheduleCalls = fetchJsonMock.mock.calls.filter(([u]) => String(u).includes("/schedule"));
     expect(String(scheduleCalls[0][0])).toBe("/api/v1/payroll/loans/mine/schedule");
   });
@@ -181,7 +181,7 @@ describe("LoansPage", () => {
   it("GAP-PAYROLL-LOANS-06: a failed schedule load shows a load error, not an empty schedule", async () => {
     mockApi([loan({ id: "live", status: "active" })]);
     scheduleResult = { source: "error", payload: null };
-    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    const ui = await LoansPage({ searchParams: Promise.resolve({ empId: EMP_ID }) });
     renderPage(ui);
     expect(screen.queryByText("No installments")).not.toBeInTheDocument();
   });

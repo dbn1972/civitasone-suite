@@ -24,7 +24,7 @@ describe("BillsPage", () => {
   it("prompts to choose an assessee when none is selected", async () => {
     fetchJsonMock.mockResolvedValueOnce(assesseesPage);
 
-    const ui = await BillsPage({ searchParams: {} });
+    const ui = await BillsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -64,7 +64,7 @@ describe("BillsPage", () => {
         source: "api",
       });
 
-    const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await BillsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("2025-2026")).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("BillsPage", () => {
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await BillsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     expect(screen.getByText("No demands raised")).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("BillsPage", () => {
       .mockResolvedValueOnce({ data: [], source: "error" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await BillsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     // A real retry affordance replaces the stats/tables, not a silent "0".
@@ -123,7 +123,7 @@ describe("BillsPage", () => {
       })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await BillsPage({ searchParams: { assesseeId: "a1" } });
+    const ui = await BillsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
     render(ui);
 
     // The raw lowercase "unknown" string must never be shown.
@@ -137,7 +137,7 @@ describe("BillsPage", () => {
       source: "api" as const,
     });
 
-    const ui = await BillsPage({ searchParams: {} });
+    const ui = await BillsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     const option = screen.getByRole("option", { name: /Sharma — PT-1023 \(Residential\)/ });

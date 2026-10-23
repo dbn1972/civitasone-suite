@@ -66,11 +66,12 @@ function FileRow({ file }: { file: FileSummary }) {
   );
 }
 
-export default async function DocumentLibraryPage({
-  searchParams,
-}: {
-  searchParams: { folderId?: string; showDeleted?: string };
-}) {
+export default async function DocumentLibraryPage(
+  props: {
+    searchParams: Promise<{ folderId?: string; showDeleted?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const folderId = searchParams.folderId;
   const showDeleted = searchParams.showDeleted === "1";
   const t = await getTranslations("documentsLibrary");

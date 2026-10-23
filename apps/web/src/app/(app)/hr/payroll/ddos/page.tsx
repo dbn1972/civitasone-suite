@@ -32,7 +32,8 @@ async function getDepartments(): Promise<LoaderResult<DepartmentOption[]>> {
   });
 }
 
-export default async function DdosPage({ searchParams }: { searchParams?: { edit?: string } }) {
+export default async function DdosPage(props: { searchParams?: Promise<{ edit?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollDdos");
 
   // GAP-PAYROLL-DDOS-04: GET /v1/payroll/ddos is READER_ROLES and the POST

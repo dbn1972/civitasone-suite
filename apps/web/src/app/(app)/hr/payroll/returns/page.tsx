@@ -199,11 +199,12 @@ function quarterSummary(q: Quarter, lookup: Form24QLookup): QuarterSummaryRow {
   };
 }
 
-export default async function ReturnsPage({
-  searchParams,
-}: {
-  searchParams: { fy?: string; quarter?: string };
-}) {
+export default async function ReturnsPage(
+  props: {
+    searchParams: Promise<{ fy?: string; quarter?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollReturns");
   // GAP-PAYROLL-RETURNS-04: form24q/form26q and the force-file bypass are all
   // RETURN_FILER_ROLES in payroll-service (payroll_admin, payroll_officer,

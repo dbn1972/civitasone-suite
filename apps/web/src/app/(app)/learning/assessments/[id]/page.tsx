@@ -14,7 +14,8 @@ import { AttemptClient } from "./AttemptClient";
  * id (getMyProfile); a non-HR caller's value is force-scoped server-side
  * anyway (assessment/routes.ts), so this is a self-attempt only.
  */
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [{ data: assessment, source: aSource }, { data: questions, source: qSource }, { data: me }] = await Promise.all([
     getAssessment(params.id),
     getAssessmentQuestions(params.id),

@@ -7,7 +7,8 @@ import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { AddMemberForm } from "./AddMemberForm";
 import { RemoveMemberButton } from "./RemoveMemberButton";
 
-export default async function ProjectMembersPage({ params }: { params: { id: string } }) {
+export default async function ProjectMembersPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: members, source } = await getProjectMembers(params.id);
   const errored = source === "error";
 

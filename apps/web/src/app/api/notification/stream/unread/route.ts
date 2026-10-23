@@ -12,7 +12,7 @@ const GATEWAY = (
  * Proxy GET /api/notification/stream/unread to notification-service.
  */
 export async function GET(req: Request) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) {
     return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
   }

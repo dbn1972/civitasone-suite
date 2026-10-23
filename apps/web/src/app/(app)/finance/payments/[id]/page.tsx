@@ -27,7 +27,8 @@ function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): string
   return undefined;
 }
 
-export default async function PaymentDetailPage({ params }: { params: { id: string } }) {
+export default async function PaymentDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinancePaymentById(params.id);
   const { data: payment } = result;
 

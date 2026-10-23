@@ -24,7 +24,7 @@ describe("PayrollComparisonPage", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 9, 2));
     try {
-      render(await PayrollComparisonPage({ searchParams: {} }));
+      render(await PayrollComparisonPage({ searchParams: Promise.resolve({}) }));
       expect(screen.getByLabelText(/Period 1/)).toHaveAttribute("placeholder", "2026-09");
       expect(screen.getByLabelText(/Period 2/)).toHaveAttribute("placeholder", "2026-10");
       expect(screen.getByText(/e\.g\. 2026-09 and 2026-10/)).toBeInTheDocument();
@@ -42,13 +42,13 @@ describe("PayrollComparisonPage", () => {
       },
       source: "api",
     });
-    render(await PayrollComparisonPage({ searchParams: { period1: "2025-06", period2: "2025-05" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2025-06", period2: "2025-05" }) }));
     expect(String(fetchJsonMock.mock.calls[0][0])).toContain("period1=2025-05&period2=2025-06");
     expect(screen.getByText("Periods were reordered so the earlier one comes first.")).toBeInTheDocument();
   });
 
   it("prompts for two periods when none are selected", async () => {
-    render(await PayrollComparisonPage({ searchParams: {} }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Choose two periods to compare")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
@@ -61,7 +61,7 @@ describe("PayrollComparisonPage", () => {
       },
       source: "api",
     });
-    render(await PayrollComparisonPage({ searchParams: { period1: "2025-05", period2: "2025-06" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2025-05", period2: "2025-06" }) }));
     expect(screen.getByText("2025-05 vs 2025-06")).toBeInTheDocument();
     expect(screen.getByText("Gross Pay")).toBeInTheDocument();
     expect(screen.getByText("+4.0%")).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("PayrollComparisonPage", () => {
   });
 
   it("shows an inline field error for a malformed period instead of the generic empty state (COMPARISON-01)", async () => {
-    render(await PayrollComparisonPage({ searchParams: { period1: "2026-8", period2: "2026-09" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2026-8", period2: "2026-09" }) }));
     expect(screen.getByText(/"2026-8" is not a valid period/)).toBeInTheDocument();
     expect(screen.queryByText("Choose two periods to compare")).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Period 1/)).toHaveAttribute("aria-invalid", "true");
@@ -79,7 +79,7 @@ describe("PayrollComparisonPage", () => {
   });
 
   it("rejects month 13 without calling the API (COMPARISON-01)", async () => {
-    render(await PayrollComparisonPage({ searchParams: { period1: "2026-13", period2: "2026-09" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2026-13", period2: "2026-09" }) }));
     expect(screen.getByText(/"2026-13" is not a valid period/)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
@@ -89,21 +89,21 @@ describe("PayrollComparisonPage", () => {
       data: { period1: { period: "2025-05", gross: "100", net: "90", headcount: 1 }, period2: null },
       source: "api",
     });
-    render(await PayrollComparisonPage({ searchParams: { period1: "2025-05", period2: "2025-06" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2025-05", period2: "2025-06" }) }));
     expect(screen.getByText("No payroll register totals were found for 2025-06.")).toBeInTheDocument();
     expect(screen.queryByText("We couldn't load payroll comparison.")).not.toBeInTheDocument();
   });
 
   it("shows a real error state on HTTP failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
-    render(await PayrollComparisonPage({ searchParams: { period1: "2025-05", period2: "2025-06" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2025-05", period2: "2025-06" }) }));
     expect(screen.getByText("We couldn't load payroll comparison.")).toBeInTheDocument();
     expect(screen.queryByText("No comparison data")).not.toBeInTheDocument();
   });
 
   it("denies employee sessions without fetching (COMPARISON-03)", async () => {
     rolesMock.mockReturnValue(["employee"]);
-    render(await PayrollComparisonPage({ searchParams: { period1: "2025-05", period2: "2025-06" } }));
+    render(await PayrollComparisonPage({ searchParams: Promise.resolve({ period1: "2025-05", period2: "2025-06" }) }));
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });

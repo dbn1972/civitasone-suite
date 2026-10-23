@@ -42,7 +42,7 @@ afterEach(() => vi.unstubAllGlobals());
 describe("one office identity across the public careers pages (HOME-02 / PORTAL-LOGIN-02)", () => {
   it("home, vacancy and sign-in show the SAME configured office name, department and emblem", async () => {
     stub(ORG);
-    for (const view of [await CareersPage({ searchParams: {} }), await VacancyPage({ params: { id: "v1" } }), await LoginPage({})]) {
+    for (const view of [await CareersPage({ searchParams: Promise.resolve({}) }), await VacancyPage({ params: Promise.resolve({ id: "v1" }) }), await LoginPage({})]) {
       const { unmount } = render(view);
       const header = screen.getByTestId("careers-org-header");
       expect(header).toHaveTextContent("Housing & Urban Development Department");
@@ -54,7 +54,7 @@ describe("one office identity across the public careers pages (HOME-02 / PORTAL-
 
   it("an office that configured nothing gets a neutral header -- never an invented body", async () => {
     stub({ organisationName: null, departmentName: null, emblemUrl: null });
-    render(await CareersPage({ searchParams: {} }));
+    render(await CareersPage({ searchParams: Promise.resolve({}) }));
     const header = screen.getByTestId("careers-org-header");
     expect(header).toHaveTextContent("Careers");
     expect(header.querySelector("img")).toBeNull();
@@ -63,14 +63,14 @@ describe("one office identity across the public careers pages (HOME-02 / PORTAL-
 
   it("an unreachable identity endpoint degrades to the neutral header and the board still renders", async () => {
     stub("down");
-    render(await CareersPage({ searchParams: {} }));
+    render(await CareersPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("careers-org-header")).toHaveTextContent("Careers");
     expect(screen.getByText("Assistant Engineer")).toBeInTheDocument();
   });
 
   it("'Powered by CivitasOne' is small footer text only, not the page identity", async () => {
     stub(ORG);
-    render(await CareersPage({ searchParams: {} }));
+    render(await CareersPage({ searchParams: Promise.resolve({}) }));
     const powered = screen.getByText("Powered by CivitasOne");
     expect(powered.closest("footer")).not.toBeNull();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Join Our Team");
@@ -82,7 +82,7 @@ describe("one office identity across the public careers pages (HOME-02 / PORTAL-
     vi.stubGlobal("fetch", vi.fn(async (url: string) => String(url).endsWith("/careers/organisation")
       ? new Response(JSON.stringify({ data: ORG }), { status: 200 })
       : new Response(JSON.stringify({ data: [], total: 0 }), { status: 200 })));
-    render(await PortalPage({ searchParams: {} }));
+    render(await PortalPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("careers-org-header")).toHaveTextContent("Housing & Urban Development Department");
   });
 });

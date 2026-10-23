@@ -134,11 +134,12 @@ async function getPendingWriteOffs(): Promise<LoaderResult<PendingWriteOffRow[]>
   );
 }
 
-export default async function WriteOffsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function WriteOffsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

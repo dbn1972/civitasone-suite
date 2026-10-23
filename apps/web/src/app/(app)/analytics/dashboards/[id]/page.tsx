@@ -11,7 +11,8 @@ import { toHumanError } from "@/lib/messages";
 // with its own access enforcement (returns 404 when the caller may not view
 // it), so this page just renders it. Private-visibility rows a caller cannot
 // see come back as 404 server-side — we never widen access here.
-export default async function AnalyticsDashboardDetailPage({ params }: { params: { id: string } }) {
+export default async function AnalyticsDashboardDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tFallback = await getTranslations("employeeFallback");
   const { data: dashboard, source, status } = await getAnalyticsDashboardById(params.id);
 

@@ -14,7 +14,8 @@ const TYPE_LABELS: Record<string, string> = {
 
 // GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05: read-only view of a posted stock movement, the
 // target of "View stock adjustment" on an approved cycle count.
-export default async function InventoryMovementDetailPage({ params }: { params: { id: string } }) {
+export default async function InventoryMovementDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getInventoryMovementById(params.id);
   const movement = result.data;
 

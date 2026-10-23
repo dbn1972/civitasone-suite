@@ -14,7 +14,8 @@ import { getTranslations } from "next-intl/server";
 import { AccountingBanner } from "../AccountingBanner";
 import { journalKey, journalState, journalTone, rejectionNote } from "../glStatus";
 
-export default async function AssetDetailPage({ params }: { params: { id: string } }) {
+export default async function AssetDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: asset, source, parts } = await getAssetById(params.id);
 
   if (!asset) {
@@ -166,7 +167,6 @@ export default async function AssetDetailPage({ params }: { params: { id: string
           ) : null}
         </div>
       </div>
-
       {canWriteAssets(roles) && scope === "full" ? (
       <RaiseEOfficeNote
         refType="asset_disposal"

@@ -24,7 +24,8 @@ function toPeriod(value: string | string[] | undefined): ReportPeriod {
   return "mtd";
 }
 
-export default async function Page({ searchParams }: { searchParams: { period?: string | string[] } }) {
+export default async function Page(props: { searchParams: Promise<{ period?: string | string[] }> }) {
+  const searchParams = await props.searchParams;
   const period = toPeriod(searchParams.period);
   const { data: analytics, source } = await getTicketAnalytics(period);
   const errored = source === "error";

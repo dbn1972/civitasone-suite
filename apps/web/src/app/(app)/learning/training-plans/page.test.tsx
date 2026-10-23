@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 async function renderPage(searchParams: Record<string, string> = {}) {
-  render(await Page({ searchParams }));
+  render(await Page({ searchParams: Promise.resolve(searchParams) }));
 }
 
 describe("Training plans list (GAP-LEARNING-TRAINING-PLANS-01/02/03/04/05)", () => {
@@ -54,7 +54,7 @@ describe("Training plans list (GAP-LEARNING-TRAINING-PLANS-01/02/03/04/05)", () 
     expect(screen.queryByRole("link", { name: /new plan/i })).toBeNull();
 
     rolesMock.mockReturnValue(["hr_admin"]);
-    const r = await Page({ searchParams: {} });
+    const r = await Page({ searchParams: Promise.resolve({}) });
     render(r);
     expect(screen.getByRole("link", { name: /new plan/i })).toHaveAttribute("href", "/learning/training-plans/new");
   });

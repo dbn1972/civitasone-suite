@@ -7,11 +7,12 @@ import { OrdersConsole } from "./OrdersConsole";
 
 export const dynamic = "force-dynamic";
 
-export default async function OrdersListPage({
-  searchParams,
-}: {
-  searchParams: { caseId?: string };
-}) {
+export default async function OrdersListPage(
+  props: {
+    searchParams: Promise<{ caseId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const caseId = (searchParams.caseId ?? "").trim();
   const casesResult = await getCases();
   // GAP-COURT-ORDERS-01: the signed-in officer's id (JWT sub) lets the console

@@ -6,11 +6,12 @@ import { formatMoney } from "@/lib/formatters";
 import { HIGH_VALUE_MINOR } from "@/lib/crm/pipelineThresholds";
 import { KanbanBoard } from "./_components/KanbanBoard";
 
-export default async function PipelinePage({
-  searchParams,
-}: {
-  searchParams?: { pipelineId?: string };
-}) {
+export default async function PipelinePage(
+  props: {
+    searchParams?: Promise<{ pipelineId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crmPipelinePage");
   const selectedPipelineId = searchParams?.pipelineId;
   const { data: pipelines, source: pipelineSource } = await getPipelines();

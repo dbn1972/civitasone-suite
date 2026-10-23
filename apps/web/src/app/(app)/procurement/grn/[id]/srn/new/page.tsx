@@ -3,7 +3,8 @@ import { getSessionName, getSessionUserId } from "@/lib/auth/roleGuard";
 import { getProcurementGRNById } from "../../../../../../_data/loaders";
 import { CreateSrnForm } from "./CreateSrnForm";
 
-export default async function NewSrnPage({ params }: { params: { id: string } }) {
+export default async function NewSrnPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-04 — show the signed-in officer's display
   // name (falling back to a short id hint, then "You"), never a raw JWT `sub`
   // UUID. The authoritative officer is still set server-side from the session.

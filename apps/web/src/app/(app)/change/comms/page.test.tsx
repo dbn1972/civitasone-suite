@@ -22,7 +22,7 @@ describe("change/comms page (GAP-CHANGE-COMMS-01/-02/-03/-04)", () => {
 
   it("COMMS-01: makes no delivery claim — no 'Published'/'broadcast' wording in the page copy", async () => {
     getChangeRequests.mockResolvedValue({ data: [completed(1)], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Release notes recorded")).toBeInTheDocument();
     expect(screen.queryByText(/Published releases/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/broadcasts published/i)).not.toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("change/comms page (GAP-CHANGE-COMMS-01/-02/-03/-04)", () => {
 
   it("COMMS-03: labels the date as 'Reviewed' (pirAt) rather than a bare date", async () => {
     getChangeRequests.mockResolvedValue({ data: [completed(1)], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/^Reviewed /)).toBeInTheDocument();
   });
 
@@ -38,7 +38,7 @@ describe("change/comms page (GAP-CHANGE-COMMS-01/-02/-03/-04)", () => {
     getChangeRequests.mockResolvedValue({
       data: Array.from({ length: 15 }, (_, i) => completed(i + 1)), source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing 1–10 of 15/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/change/comms?page=2");
   });
@@ -48,7 +48,7 @@ describe("change/comms page (GAP-CHANGE-COMMS-01/-02/-03/-04)", () => {
       data: [completed(1, { title: "Payments gateway" }), completed(2, { title: "DB migration" })],
       source: "api",
     });
-    render(await Page({ searchParams: { q: "gateway" } }));
+    render(await Page({ searchParams: Promise.resolve({ q: "gateway" }) }));
     expect(screen.getByText("Payments gateway")).toBeInTheDocument();
     expect(screen.queryByText("DB migration")).not.toBeInTheDocument();
     expect(screen.getByText(/Showing 1–1 of 1/)).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("change/comms page (GAP-CHANGE-COMMS-01/-02/-03/-04)", () => {
 
   it("COMMS-04: a release note is clamped behind a native <details> toggle", async () => {
     getChangeRequests.mockResolvedValue({ data: [completed(1)], source: "api" });
-    const { container } = render(await Page({ searchParams: {} }));
+    const { container } = render(await Page({ searchParams: Promise.resolve({}) }));
     const details = container.querySelector("details");
     expect(details).not.toBeNull();
     expect(details?.querySelector("summary")?.textContent).toBe("Release notes");

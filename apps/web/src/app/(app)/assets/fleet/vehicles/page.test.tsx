@@ -22,7 +22,7 @@ describe("FleetVehiclesPage", () => {
       data: [{ id: "11111111-1111-1111-1111-111111111111", registrationNo: "DL01AB1234", make: "Tata", model: "Sumo", year: 2020, fuelType: "diesel" }],
       source: "api",
     });
-    render(await FleetVehiclesPage({ searchParams: { vehicleId: "11111111-1111-1111-1111-111111111111" } }));
+    render(await FleetVehiclesPage({ searchParams: Promise.resolve({ vehicleId: "11111111-1111-1111-1111-111111111111" }) }));
     expect(screen.getByRole("link", { name: "Record GPS for DL01AB1234" })).toHaveAttribute(
       "href",
       "/assets/fleet/vehicles?vehicleId=11111111-1111-1111-1111-111111111111#record-gps",

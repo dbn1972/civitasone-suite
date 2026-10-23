@@ -48,7 +48,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   it("renders a candidate row using the real /talent-pool response field names", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({})]), source: "api" });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
       source: "api",
     });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     const row = screen.getByText("No Skills Person").closest("tr") as HTMLElement;
@@ -81,7 +81,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
       source: "api",
     });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     const row = screen.getByText("Null Skills Person").closest("tr") as HTMLElement;
@@ -91,7 +91,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   it("shows the empty state when there are no candidates", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([]), source: "api" });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("No candidates found")).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   it("shows the data-source badge when the fetch fails for a reason other than a permission denial", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([]), source: "error" });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   it("shows an honest access-restricted state, not the generic retry-suggesting error, when the fetch 403s", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([]), source: "error", status: 403 });
 
-    const ui = await TalentPoolPage({ searchParams: {} });
+    const ui = await TalentPoolPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   // GAP-RECRUITMENT-TALENT-POOL-01
   it("does not show an always-zero 'Active Stages' card and states the pool scope (rejected/withdrawn/not selected)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({ stage: "rejected" })]), source: "api" });
-    render(await TalentPoolPage({ searchParams: {} }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText("Active Stages")).not.toBeInTheDocument();
     expect(screen.getByText(/previously rejected, withdrawn or not selected/i)).toBeInTheDocument();
     expect(screen.queryByText(/All candidates who applied/i)).not.toBeInTheDocument();
@@ -138,7 +138,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
 
   it("the headline count is the server total across all pages, not the rows on this page", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({})], 137), source: "api" });
-    render(await TalentPoolPage({ searchParams: {} }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Candidates (137)")).toBeInTheDocument();
     expect(screen.getByText("Showing 1–1 of 137")).toBeInTheDocument();
   });
@@ -149,7 +149,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
       data: pool([candidate({ id: "app-9", jobOpeningId: "job-3" })]),
       source: "api",
     });
-    render(await TalentPoolPage({ searchParams: {} }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     const link = screen.getByRole("link", { name: /Ravi Kumar/i });
     expect(link).toHaveAttribute("href", "/hr/recruitment/job-3/applications/app-9");
   });
@@ -159,7 +159,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
       data: pool([candidate({ id: "app-10", applicantName: "Orphan Person", jobOpeningId: null })]),
       source: "api",
     });
-    render(await TalentPoolPage({ searchParams: {} }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Orphan Person")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Orphan Person/ })).not.toBeInTheDocument();
   });
@@ -167,7 +167,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   // GAP-RECRUITMENT-TALENT-POOL-04
   it("renders Source as plain text, not a coloured status pill", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({ source: "public_portal" })]), source: "api" });
-    const { container } = render(await TalentPoolPage({ searchParams: {} }));
+    const { container } = render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     const cell = screen.getAllByText("Public careers portal").find((el) => el.closest("td"));
     expect(cell).toBeTruthy();
     expect(cell!.closest(".pill")).toBeNull();
@@ -177,7 +177,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   // GAP-RECRUITMENT-TALENT-POOL-05
   it("forwards source, skill, minExp and the page offset to the API, URL-encoded", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({})], 120), source: "api" });
-    render(await TalentPoolPage({ searchParams: { skill: "C++ & Go", minExp: "3", source: "public_portal", page: "2" } }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({ skill: "C++ & Go", minExp: "3", source: "public_portal", page: "2" }) }));
     const path = fetchJsonMock.mock.calls[0][0] as string;
     expect(path).toContain("limit=50&offset=50");
     expect(path).toContain("skill=C%2B%2B%20%26%20Go");
@@ -187,7 +187,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
 
   it("offers a Source filter and Next/Previous paging that keeps the active filters", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({})], 120), source: "api" });
-    render(await TalentPoolPage({ searchParams: { skill: "excel", source: "internal", page: "2" } }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({ skill: "excel", source: "internal", page: "2" }) }));
     expect(screen.getByLabelText("Source")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute("href", "/hr/recruitment/talent-pool?skill=excel&source=internal&page=3");
     expect(screen.getByRole("link", { name: "Previous" })).toHaveAttribute("href", "/hr/recruitment/talent-pool?skill=excel&source=internal");
@@ -196,7 +196,7 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
   // GAP-RECRUITMENT-TALENT-POOL-07
   it("uses the shared btn-tall class instead of inline minHeight on Search and Clear", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: pool([candidate({})]), source: "api" });
-    render(await TalentPoolPage({ searchParams: {} }));
+    render(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     const search = screen.getByRole("button", { name: "Search" });
     const clear = screen.getByRole("link", { name: "Clear" });
     expect(search.className).toContain("btn-tall");
@@ -214,11 +214,11 @@ describe("TalentPoolPage: audited reveal and purpose note", () => {
 
   it("an hr_admin sees a Reveal control per row; hr_officer does not (the service refuses it anyway)", async () => {
     fetchJsonMock.mockResolvedValue({ data: pool([candidate({})]), source: "api" });
-    withIntl(await TalentPoolPage({ searchParams: {} }));
+    withIntl(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("button", { name: /reveal contact details for ravi kumar/i })).toBeInTheDocument();
     document.body.innerHTML = "";
     rolesMock.roles = ["hr_officer"];
-    withIntl(await TalentPoolPage({ searchParams: {} }));
+    withIntl(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByRole("button", { name: /reveal contact details/i })).not.toBeInTheDocument();
     expect(screen.getByText("r***@e***.com")).toBeInTheDocument();
   });
@@ -229,7 +229,7 @@ describe("TalentPoolPage: audited reveal and purpose note", () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: { id: "c1", email: "ravi@example.com", mobile: null } }), { status: 200 }));
     vi.stubGlobal("fetch", fetchFn);
     fetchJsonMock.mockResolvedValue({ data: pool([candidate({ jobOpeningId: "job-3" })]), source: "api" });
-    withIntl(await TalentPoolPage({ searchParams: {} }));
+    withIntl(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     fireEvent.click(screen.getByRole("button", { name: /reveal contact details for ravi kumar/i }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.change(within(dialog).getByLabelText(/reason/i), { target: { value: "re-engage for new vacancy" } });
@@ -244,11 +244,11 @@ describe("TalentPoolPage: audited reveal and purpose note", () => {
 
   it("shows the office's configured purpose / retention note, or a default when none is set", async () => {
     fetchJsonMock.mockResolvedValue({ data: { ...pool([candidate({})]), purposeNote: "Held for 12 months for reconsideration only." }, source: "api" });
-    withIntl(await TalentPoolPage({ searchParams: {} }));
+    withIntl(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("note")).toHaveTextContent("Held for 12 months for reconsideration only.");
     document.body.innerHTML = "";
     fetchJsonMock.mockResolvedValue({ data: pool([candidate({})]), source: "api" });
-    withIntl(await TalentPoolPage({ searchParams: {} }));
+    withIntl(await TalentPoolPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("note")).toHaveTextContent(/recruitment only/i);
   });
 });

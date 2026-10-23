@@ -11,11 +11,12 @@ import { BUDGET_TAB_ALL, budgetTabOf, parseBudgetTab, priorYearBeByHead } from "
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function BudgetFormulationPage({
-  searchParams,
-}: {
-  searchParams?: { fy?: string; tab?: string; highlight?: string };
-}) {
+export default async function BudgetFormulationPage(
+  props: {
+    searchParams?: Promise<{ fy?: string; tab?: string; highlight?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("financeBudgetFormulation");
   // GAP-FINANCE-BUDGET-FORMULATION-02: the headline is THIS fiscal year's
   // proposed Budget Estimate. It used to sum sanctionedAmount (the live RE)
@@ -65,14 +66,12 @@ export default async function BudgetFormulationPage({
           </>
         }
       />
-
       <StatGrid>
         <StatCard icon="📝" tone="info" label={`Budget Heads (FY ${fy})`} value={errored ? "—" : budgets.length} />
         <StatCard icon="🏢" tone="info" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `${t("status.approved").toLowerCase()} ${approved}`} up={true} />
         <StatCard icon="💰" tone="warn" label={`Proposed Outlay (BE, FY ${fy})`} value={errored ? "—" : formatMoney(totalBe)} up={false} />
         <StatCard icon="⏳" tone="bad" label={t("status.pending")} value={errored ? "—" : pending} />
       </StatGrid>
-
       <Card title={`Budget estimates (BE) — FY ${fy}`}>
         {errored ? (
           <div className="pad">
@@ -80,7 +79,7 @@ export default async function BudgetFormulationPage({
           </div>
         ) : (
           /* UX-012: the data-source badge lives inside FormulationTable. */
-          <FormulationTable budgets={budgets} source="api" priorBe={priorBe} initialTab={initialTab} {...(highlightId ? { highlightId } : {})} />
+          (<FormulationTable budgets={budgets} source="api" priorBe={priorBe} initialTab={initialTab} {...(highlightId ? { highlightId } : {})} />)
         )}
       </Card>
     </>

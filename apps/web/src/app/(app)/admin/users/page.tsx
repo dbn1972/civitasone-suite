@@ -19,7 +19,10 @@ import { AdminUsersManager } from "./AdminUsersManager";
 // invented values — identity-service doesn't track either at this layer
 // (same honest-omission call already made for GET /v1/admin/mfa/users, see
 // gap/routes.ts).
-export default async function AdminUsersPage({ searchParams }: { searchParams?: { q?: string; status?: string; page?: string } }) {
+export default async function AdminUsersPage(
+  props: { searchParams?: Promise<{ q?: string; status?: string; page?: string }> }
+) {
+  const searchParams = await props.searchParams;
   // GAP-ADMIN-USERS-01/02: admin-service user + role routes require tenant_admin or higher.
   requireAnyRole(ADMIN_TENANT_ROLES);
   const sessionRoles = getSessionRoles();

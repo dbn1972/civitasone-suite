@@ -38,7 +38,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-01: Actions closed is todo for a scheduled meeting with no action points", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     const steps = Array.from(container.querySelectorAll("li"));
@@ -53,7 +53,7 @@ describe("MeetingDetailPage", () => {
       minutes: "All items discussed.",
     });
     fetchJsonMock.mockResolvedValueOnce({ data: meeting, source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     const steps = Array.from(container.querySelectorAll("li"));
@@ -63,7 +63,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-03: scheduled date is formatted, not raw", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     render(ui);
 
     // Raw date "2026-10-01" should not appear; formatted date should.
@@ -72,7 +72,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-04: MOM shows 'Not yet held' for scheduled meeting", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Not yet held")).toBeInTheDocument();
@@ -81,7 +81,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-04: MOM shows 'Pending' for in_progress meeting without minutes", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ status: "in_progress" }), source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getAllByText("Pending").length).toBeGreaterThanOrEqual(1);
@@ -89,7 +89,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-06: absent attendee shows grey 'Absent' pill, not red 'No'", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
-    const ui = await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} });
+    const ui = await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     // Ravi is absent — pill should say "Absent", not "No"
@@ -106,7 +106,7 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-02: the timeline has no empty date slot, and a cancelled meeting does not show the agenda as circulated", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ status: "cancelled" }), source: "api" });
-    const { container } = render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    const { container } = render(await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) }));
     const slots = Array.from(container.querySelectorAll(".tl .d"));
     expect(slots.map((d) => d.textContent)).toEqual(["01 Oct 2026"]);
     const agenda = Array.from(container.querySelectorAll("li")).find((li) => li.textContent?.includes("Agenda circulated"));
@@ -116,14 +116,14 @@ describe("MeetingDetailPage", () => {
 
   it("GAP-ESTAB-MEETINGS-DETAIL-04: a completed meeting with minutes shows them", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ status: "completed", minutes: "Budget approved." }), source: "api" });
-    render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    render(await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Captured")).toBeInTheDocument();
     expect(screen.getByText("Budget approved.")).toBeInTheDocument();
   });
 
   it("GAP-ESTAB-MEETINGS-DETAIL-05: the header is the shared PageHeader (back link, h1 with the title and status) and the only Agenda route is the tab", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
-    render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    render(await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) }));
     const h1 = screen.getByRole("heading", { level: 1 });
     expect(h1.id).toBe("page-heading");
     expect(h1.textContent).toContain("Budget Review");

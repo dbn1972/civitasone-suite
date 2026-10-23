@@ -29,7 +29,7 @@ function stub(res: Response | Error) {
   return f;
 }
 const list = (data: unknown[], total = data.length) => new Response(JSON.stringify({ data, total }), { status: 200 });
-async function open(sp?: { page?: string }) { return render(await PortalPage({ searchParams: sp })); }
+async function open(sp?: { page?: string }) { return render(await PortalPage({ searchParams: Promise.resolve(sp ?? {}) })); }
 
 beforeEach(() => { cookieJar.token = goodToken; });
 afterEach(() => { vi.unstubAllGlobals(); });

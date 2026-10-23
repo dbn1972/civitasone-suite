@@ -20,7 +20,7 @@ const ALL = [
 ];
 
 async function renderPage(id = "S") {
-  render(<NextIntlClientProvider locale="en" messages={enMessages}>{await EditLocationPage({ params: { id } })}</NextIntlClientProvider>);
+  render(<NextIntlClientProvider locale="en" messages={enMessages}>{await EditLocationPage({ params: Promise.resolve({ id }) })}</NextIntlClientProvider>);
 }
 
 describe("EditLocationPage", () => {

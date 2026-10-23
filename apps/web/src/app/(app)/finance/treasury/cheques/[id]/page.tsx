@@ -30,7 +30,8 @@ import {
  * per-step actor ids on the instrument (names resolved server-side), and the actor
  * column is hidden when no step has one.
  */
-export default async function ChequeDetailPage({ params }: { params: { id: string } }) {
+export default async function ChequeDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceChequeById(params.id);
   const { data: cheque, source, status } = result;
 

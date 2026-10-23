@@ -17,11 +17,12 @@ type SP = {
 // Matches the loader default so the server pager and the API page size agree.
 const PAGE_SIZE = 50;
 
-export default async function RtiPage({
-  searchParams,
-}: {
-  searchParams?: SP;
-}) {
+export default async function RtiPage(
+  props: {
+    searchParams?: Promise<SP>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-CRM-RTI-02: `page` is now URL-driven and passed to the loader, so RTI
   // requests beyond the first 50 are reachable. Filtering is server-side
   // because the API paginates — narrowing client-side would only narrow the

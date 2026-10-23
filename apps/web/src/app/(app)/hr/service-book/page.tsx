@@ -87,11 +87,12 @@ async function getMyData(): Promise<LoaderResult<ServiceBookPayload>> {
   });
 }
 
-export default async function ServiceBookPage({
-  searchParams,
-}: {
-  searchParams?: { empId?: string; page?: string };
-}) {
+export default async function ServiceBookPage(
+  props: {
+    searchParams?: Promise<{ empId?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("serviceBook");
   const roles = getSessionRoles();
   const isHr = HR_ROLES.some((r) => roles.includes(r));

@@ -3,7 +3,8 @@ import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { KnowledgeSearchClient } from "./SearchClient";
 
-export default async function KnowledgeSearchPage({ searchParams }: { searchParams?: { q?: string } }) {
+export default async function KnowledgeSearchPage(props: { searchParams?: Promise<{ q?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data: docs, source } = await getKnowledgeDocs();
   const initialQuery = typeof searchParams?.q === "string" ? searchParams.q : "";
 

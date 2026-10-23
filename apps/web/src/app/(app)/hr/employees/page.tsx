@@ -57,7 +57,8 @@ function empPageHref(type: string, p: number, q: string, status = ""): string {
   return "/hr/employees" + (qs.length ? "?" + qs.join("&") : "");
 }
 
-export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
+export default async function EmployeeDirectoryPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  const searchParams = await props.searchParams;
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
   const typeFilter = searchParams?.type ?? "all";
   // GAP-HR-EMPLOYEES-04: real server-side search, forwarded to the backend

@@ -49,7 +49,8 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-export default async function PayGroupsPage({ searchParams }: { searchParams?: { edit?: string } }) {
+export default async function PayGroupsPage(props: { searchParams?: Promise<{ edit?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollPayGroups");
 
   // GAP-PAYROLL-PAY-GROUPS-04: GET is READER_ROLES and POST is PAYROLL_ROLES

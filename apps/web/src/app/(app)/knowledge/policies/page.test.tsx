@@ -46,7 +46,7 @@ describe("Policies Page", () => {
       data: [pol({ id: "abcdef01-0000-0000-0000-000000000000", referenceNo: null })],
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Unassigned")).toBeInTheDocument();
     expect(screen.queryByText("ABCDEF01")).not.toBeInTheDocument();
   });
@@ -56,7 +56,7 @@ describe("Policies Page", () => {
       data: [pol({ docType: "circular" })],
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     // Should render as plain text "CIRCULAR" not inside a StatusPill
     expect(screen.getByText("CIRCULAR")).toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe("Policies Page", () => {
       data: [pol({ status: "under_review" })],
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Under review")).toBeInTheDocument();
     expect(screen.queryByText("under review")).not.toBeInTheDocument();
   });
@@ -74,7 +74,7 @@ describe("Policies Page", () => {
   it("GAP-POLICIES-03: Review due stat links to ?filter=review-due", async () => {
     getKnowledgePoliciesMock.mockResolvedValue({ data: [], source: "api" });
     getReviewDuePoliciesMock.mockResolvedValue({ data: [pol()], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const link = screen.getByRole("link", { name: /review due/i });
     expect(link).toHaveAttribute("href", "/knowledge/policies?filter=review-due");
   });
@@ -84,14 +84,14 @@ describe("Policies Page", () => {
       data: [pol({ status: "published", reviewDueDate: "2020-01-01" })],
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Overdue/)).toBeInTheDocument();
   });
 
   it("GAP-POLICIES-01: + New action links to /knowledge/policies/new", async () => {
     getKnowledgePoliciesMock.mockResolvedValue({ data: [], source: "api" });
     getSessionRolesMock.mockReturnValue(["knowledge_admin"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const link = screen.getByRole("link", { name: "+ New" });
     expect(link).toHaveAttribute("href", "/knowledge/policies/new");
   });
@@ -102,7 +102,7 @@ describe("Policies Page", () => {
       data: [pol({ id: "due1", title: "Due Policy", referenceNo: "POL-01" })],
       source: "api",
     });
-    render(await Page({ searchParams: { filter: "review-due" } }));
+    render(await Page({ searchParams: Promise.resolve({ filter: "review-due" }) }));
     expect(screen.getByText("Due Policy")).toBeInTheDocument();
     expect(screen.getByText("Documents due for review")).toBeInTheDocument();
   });
@@ -117,7 +117,7 @@ describe("Policies Page w2 closures", () => {
 
   it("GAP-POLICIES-02: the Type cell is plain text, not a status pill (and Status is)", async () => {
     getKnowledgePoliciesMock.mockResolvedValue({ data: [pol({ docType: "circular", status: "published" })], source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("CIRCULAR").closest(".pill")).toBeNull();
     const table = within(screen.getByRole("table"));
     expect(table.getByText("Published").closest(".pill")).not.toBeNull();
@@ -131,7 +131,7 @@ describe("Policies Page w2 closures", () => {
       ],
       source: "api",
     });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const pills = screen.getAllByText(/Overdue/);
     expect(pills).toHaveLength(1);
     expect(pills[0]!.closest(".pill")).toHaveClass("bad");
@@ -148,11 +148,11 @@ describe("Policies Page empty state (GAP-KNOWLEDGE-POLICIES-01)", () => {
   it("an author sees a working create link inside the empty state; a viewer without author roles does not", async () => {
     getKnowledgePoliciesMock.mockResolvedValue({ data: [], source: "api" });
     getSessionRolesMock.mockReturnValue(["knowledge_admin"]);
-    const { unmount } = render(await Page({ searchParams: {} }));
+    const { unmount } = render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("link", { name: "Create a governed document" })).toHaveAttribute("href", "/knowledge/policies/new");
     unmount();
     getSessionRolesMock.mockReturnValue(["employee"]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByRole("link", { name: "Create a governed document" })).not.toBeInTheDocument();
   });
 });

@@ -46,7 +46,7 @@ const ONE_EMPLOYEE = [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", depart
 async function renderPage(searchParams?: Record<string, string>) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await EmployeeDirectoryPage({ searchParams })}
+      {await EmployeeDirectoryPage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

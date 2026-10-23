@@ -34,7 +34,7 @@ describe("EstabFileDetailPage — not-found vs error (L3)", () => {
     // file was lost during a backend blip.
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     expect(screen.queryByText("File not found")).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("EstabFileDetailPage — note sheet when/officer/signedAt (FILES-DETAIL
       },
     });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     // When column header is present (date/time now shown per row).
@@ -139,7 +139,7 @@ describe("EstabFileDetailPage - service-resolved officer names (SF-17b)", () => 
       },
     });
 
-    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    const ui = await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) });
     render(ui);
 
     expect(screen.getByText("Anita Desai")).toBeInTheDocument();
@@ -185,7 +185,7 @@ describe("EstabFileDetailPage — which draft Submit and Sign act on (GAP-ESTAB-
       return new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } });
     });
 
-    render(await EstabFileDetailPage({ params: { id: "f1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) }));
     fireEvent.click(screen.getByRole("button", { name: "Sign note (green)" }));
     const dialog = await screen.findByRole("alertdialog");
     fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Sign note") as HTMLElement);
@@ -201,7 +201,7 @@ describe("EstabFileDetailPage — which draft Submit and Sign act on (GAP-ESTAB-
       data: detail({ noteSheets: [note("n-sub", { noteStatus: "submitted" })] }),
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    render(await EstabFileDetailPage({ params: { id: "f1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) }));
     expect(screen.getByRole("button", { name: "Submit for approval" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Sign note (green)" })).toBeDisabled();
     expect(screen.getByText(/Save a yellow note first/)).toBeInTheDocument();
@@ -222,7 +222,7 @@ describe("EstabFileDetailPage — note sheet shows date AND time, and the signat
       }),
     });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    render(await EstabFileDetailPage({ params: { id: "f1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) }));
 
     const rows = screen.getAllByRole("row").filter((r) => r.textContent?.includes("Content of"));
     expect(rows).toHaveLength(2);
@@ -241,7 +241,7 @@ describe("EstabFileDetailPage — a closed file is read-only (GAP-ESTAB-FILES-DE
     it(`a ${status} file shows the read-only notice and none of Save note / Submit / Sign / Refer`, async () => {
       fetchJsonMock.mockResolvedValue({ source: "api", data: detail({ status, noteSheets: [note("n1")] }) });
       vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-      render(await EstabFileDetailPage({ params: { id: "f1" } }));
+      render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) }));
       expect(screen.getByText(new RegExp(`This file is ${status}; no further noting`))).toBeInTheDocument();
       for (const name of ["Save yellow note", "Submit for approval", "Sign note (green)", "Refer back"]) {
         expect(screen.queryByRole("button", { name })).toBeNull();
@@ -273,14 +273,14 @@ describe("EstabFileDetailPage - the allocated file number after create (GAP-ESTA
 
   it("arriving with ?created=1 shows the file number the service allocated, in a status banner", async () => {
     fetchJsonMock.mockResolvedValue({ source: "api", data: FILE });
-    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }), searchParams: Promise.resolve({ created: "1" }) }));
     const banner = screen.getByText(/File ESTAB-A\/00042\/2026 has been created/);
     expect(banner.getAttribute("role")).toBe("status");
   });
 
   it("without the flag there is no created banner (the number is still the page title)", async () => {
     fetchJsonMock.mockResolvedValue({ source: "api", data: FILE });
-    render(await EstabFileDetailPage({ params: { id: "f1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }) }));
     expect(screen.queryByText(/has been created/)).toBeNull();
     expect(screen.getByText(/ESTAB-A\/00042\/2026 · Fresh file/)).toBeInTheDocument();
   });
@@ -288,7 +288,7 @@ describe("EstabFileDetailPage - the allocated file number after create (GAP-ESTA
   it("?created=1 before the create command has been processed says it is being created, with a refresh link (not an error)", async () => {
     // The file does not exist yet: the loader collapses that 404 into source "error".
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }), searchParams: Promise.resolve({ created: "1" }) }));
     expect(screen.getByText("Creating your file…")).toBeInTheDocument();
     expect(screen.getByText(/file number is assigned as soon as it is processed/).getAttribute("role")).toBe("status");
     expect(screen.getByRole("link", { name: "Refresh" })).toHaveAttribute("href", "/estab/files/f1?created=1");
@@ -298,7 +298,7 @@ describe("EstabFileDetailPage - the allocated file number after create (GAP-ESTA
 
   it("?created=1 with a real failure (not a 404) is still the ordinary retryable error, not 'being created'", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await EstabFileDetailPage({ params: { id: "f1" }, searchParams: { created: "1" } }));
+    render(await EstabFileDetailPage({ params: Promise.resolve({ id: "f1" }), searchParams: Promise.resolve({ created: "1" }) }));
     expect(screen.queryByText("Creating your file…")).toBeNull();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });

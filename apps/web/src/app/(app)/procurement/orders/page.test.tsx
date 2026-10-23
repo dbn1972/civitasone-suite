@@ -22,7 +22,7 @@ describe("OrdersPage ?status= (GAP-PROCUREMENT-DASHBOARD-02)", () => {
   });
 
   async function initialStatusFor(searchParams?: Record<string, string | string[] | undefined>): Promise<string | null> {
-    const { unmount } = render(await OrdersPage(searchParams === undefined ? {} : { searchParams }));
+    const { unmount } = render(await OrdersPage(searchParams === undefined ? {} : { searchParams: Promise.resolve(searchParams) }));
     const value = screen.getByTestId("orders-table").getAttribute("data-initial-status");
     unmount();
     return value;

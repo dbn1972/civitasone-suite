@@ -74,7 +74,8 @@ async function getReconciliation(period: string, formType: string): Promise<Load
   );
 }
 
-export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string; formType?: string } }) {
+export default async function ChallansPage(props: { searchParams?: Promise<{ period?: string; formType?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("challans");
   // GAP-PAYROLL-STATUTORY-CHALLANS-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API (TDS challans) is READER_ROLES-only in

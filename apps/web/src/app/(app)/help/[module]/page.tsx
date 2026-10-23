@@ -9,7 +9,8 @@ export function generateStaticParams() {
   return HELP_MODULES.map((m) => ({ module: m.slug }));
 }
 
-export function generateMetadata({ params }: { params: { module: string } }) {
+export async function generateMetadata(props: { params: Promise<{ module: string }> }) {
+  const params = await props.params;
   const mod = getHelpModule(params.module);
   return { title: mod ? `Help — ${mod.title}` : "Help" };
 }
@@ -29,7 +30,8 @@ export function generateMetadata({ params }: { params: { module: string } }) {
  * the h1 title is the plain module name, so a screen reader announces "Grants",
  * not "🎁 Grants".
  */
-export default async function HelpModulePage({ params }: { params: { module: string } }) {
+export default async function HelpModulePage(props: { params: Promise<{ module: string }> }) {
+  const params = await props.params;
   const mod = getHelpModule(params.module);
   if (!mod) notFound();
 

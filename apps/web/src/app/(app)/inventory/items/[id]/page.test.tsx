@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 async function show() {
-  render(await Page({ params: { id: "i1" } }));
+  render(await Page({ params: Promise.resolve({ id: "i1" }) }));
 }
 
 describe("item master detail: one item, with its linked stock-side balances", () => {

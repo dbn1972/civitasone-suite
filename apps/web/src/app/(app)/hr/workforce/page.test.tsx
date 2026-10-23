@@ -72,7 +72,7 @@ describe("WorkforcePage", () => {
 
   it("renders real stat counts when every loader succeeds (real API shapes, not the old fabricated-mismatch shapes)", async () => {
     mockLoaders({});
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
     // totalHeadcount = 40 + 12 = 52; departments = 2 rows
     expect(screen.getByText("statTotalHeadcount").closest(".stat")).toHaveTextContent("52");
     expect(screen.getByText("statDepartments").closest(".stat")).toHaveTextContent("2");
@@ -87,7 +87,7 @@ describe("WorkforcePage", () => {
 
   it("headcount error: headcount card shows a retry state, retirement AND vacancy cards still render (GAP-HR-WORKFORCE-02)", async () => {
     mockLoaders({ headcount: { data: [], source: "error" } });
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText("statTotalHeadcount").closest(".stat")).toHaveTextContent("—");
     // Not read as "no headcount data" (an empty department) -- a real retry affordance.
@@ -100,7 +100,7 @@ describe("WorkforcePage", () => {
 
   it("retirement error: retirement stats show —, headcount and vacancy cards are unaffected", async () => {
     mockLoaders({ retirements: { data: [], source: "error" } });
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText("statRetiringSoon").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("statRetiring12").closest(".stat")).toHaveTextContent("—");
@@ -110,7 +110,7 @@ describe("WorkforcePage", () => {
 
   it("vacancy-forecast error shows a retry state without blanking the other two cards (GAP-HR-WORKFORCE-04)", async () => {
     mockLoaders({ vacancy: { data: [], source: "error" } });
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText("statTotalHeadcount").closest(".stat")).toHaveTextContent("52");
     expect(screen.getByText("statRetiringSoon").closest(".stat")).not.toHaveTextContent("—");
@@ -119,7 +119,7 @@ describe("WorkforcePage", () => {
 
   it("renders projected-vacancy rows from the real {horizon,count} shape (GAP-HR-WORKFORCE-04)", async () => {
     mockLoaders({});
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("horizon1Year").closest("tr")).toHaveTextContent("3");
     expect(screen.getByText("horizon3Years").closest("tr")).toHaveTextContent("5");
     // Not present in the mocked response at all -- filled in as an explicit,
@@ -131,7 +131,7 @@ describe("WorkforcePage", () => {
 
   it("?groupBy=grade shows rows labelled by pay grade, including 'ungraded'", async () => {
     mockLoaders({});
-    render(await WorkforcePage({ searchParams: { groupBy: "grade" } }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({ groupBy: "grade" }) }));
     expect(screen.getByText("Grade-A")).toBeInTheDocument();
     expect(screen.getByText("ungraded")).toBeInTheDocument();
     // Neutral "Groups" label, not "Departments", for a non-department grouping.
@@ -141,14 +141,14 @@ describe("WorkforcePage", () => {
 
   it("an invalid ?groupBy falls back to department instead of 500ing", async () => {
     mockLoaders({});
-    render(await WorkforcePage({ searchParams: { groupBy: "not_a_real_group" } }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({ groupBy: "not_a_real_group" }) }));
     expect(screen.getByText("Finance")).toBeInTheDocument();
     expect(screen.getByText("statDepartments")).toBeInTheDocument();
   });
 
   it("shows the retirement-age footnote from the backend's own meta, not a hardcoded assumption", async () => {
     mockLoaders({});
-    render(await WorkforcePage({ searchParams: {} }));
+    render(await WorkforcePage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("footnoteRetirementAge")).toBeInTheDocument();
   });
 });

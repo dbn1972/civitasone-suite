@@ -7,7 +7,8 @@ import { getSessionRoles, hasAnyRole, HELPDESK_ROLES } from "@/lib/auth/roleGuar
 import { InternalTicketActions } from "./InternalTicketActions";
 import { helpdeskPriorityVariant } from "@/lib/helpdesk/priorityVariants";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: ticket, source, status } = await getInternalHelpdeskTicketById(params.id);
 
   // GAP-HELPDESK-INTERNAL-DETAIL-03: distinguish fetch failure from a real 404.
@@ -60,7 +61,6 @@ export default async function Page({ params }: { params: { id: string } }) {
           ) : null}
         </div>
       </div>
-
       {/* GAP-HELPDESK-INTERNAL-DETAIL-01: render the description typed in the form */}
       {ticket.description ? (
         <div className="card pad" style={{ marginTop: 16, whiteSpace: "pre-wrap" }}>
@@ -68,7 +68,6 @@ export default async function Page({ params }: { params: { id: string } }) {
           <p style={{ fontSize: "0.875rem", lineHeight: 1.6 }}>{ticket.description}</p>
         </div>
       ) : null}
-
       {/* GAP-HELPDESK-INTERNAL-DETAIL-02: work the ticket (helpdesk roles only) */}
       {canAct ? <InternalTicketActions ticketId={ticket.id} currentStatus={ticket.status} /> : null}
     </>

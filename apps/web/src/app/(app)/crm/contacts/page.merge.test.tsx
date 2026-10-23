@@ -31,7 +31,7 @@ beforeEach(() => {
 describe("Contacts list page: Merge duplicate contacts is role-gated like the endpoint", () => {
   it.each([["crm_admin"], ["super_admin"]])("offers the merge control to %s", async (role) => {
     mockRoles.mockReturnValue([role]);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByTestId("merge")).toBeInTheDocument();
   });
 
@@ -39,7 +39,7 @@ describe("Contacts list page: Merge duplicate contacts is role-gated like the en
     "does not offer the merge control to a session with roles %j (the endpoint would 403)",
     async (...roles) => {
       mockRoles.mockReturnValue(roles.flat() as string[]);
-      render(await Page({ searchParams: {} }));
+      render(await Page({ searchParams: Promise.resolve({}) }));
       expect(screen.queryByTestId("merge")).not.toBeInTheDocument();
     },
   );
@@ -47,7 +47,7 @@ describe("Contacts list page: Merge duplicate contacts is role-gated like the en
   it("still needs two contacts to merge, even for an admin", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     vi.mocked(getCrmContacts).mockResolvedValue({ data: [twoContacts[0]] as never, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByTestId("merge")).not.toBeInTheDocument();
   });
 });

@@ -6,7 +6,8 @@ import { getBulkScanLinks } from "@/app/_data/bulkScanLoaders";
 import { LINK_STATES } from "@/lib/bulkScan/types";
 import { LinksApprovals } from "../_components/LinksApprovals";
 
-export default async function BulkScanLinksPage({ searchParams }: { searchParams?: { state?: string } }) {
+export default async function BulkScanLinksPage(props: { searchParams?: Promise<{ state?: string }> }) {
+  const searchParams = await props.searchParams;
   if (!sessionHasAnyRole(BULK_SCAN_ADMIN_ROLES)) {
     const t = await getTranslations("bulkScan");
     return <AdminAccessDenied title={t("links.title")} area={t("list.area")} roles={BULK_SCAN_ADMIN_ROLES} />;

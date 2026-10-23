@@ -80,7 +80,8 @@ async function getAssetLabel(assetId: string): Promise<LoaderResult<string | nul
   });
 }
 
-export default async function PolicyDetailPage({ params }: { params: { id: string } }) {
+export default async function PolicyDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const policyRes = await getPolicy(params.id);
   const claimsRes = await getClaimsForPolicy(params.id);
   const { data: policy } = policyRes;

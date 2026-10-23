@@ -20,7 +20,8 @@ const TDS_PAN_REVEAL_ROLES = ["finance_officer", "finance_admin", "super_admin"]
  * filed returns (Form 26Q per FY + quarter), so it is titled and labelled as
  * deductions. A real returns source needs a product decision (TDS-RETURNS-04).
  */
-export default async function TDSReturnsPage({ searchParams }: { searchParams?: { fy?: string } }) {
+export default async function TDSReturnsPage(props: { searchParams?: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data, source } = await getFinanceTDSReturns();
   // GAP-FINANCE-STATUTORY-TDS-RETURNS-04: the filing register is per FY; ?fy= is validated against
   // the selectable list, never forwarded raw.

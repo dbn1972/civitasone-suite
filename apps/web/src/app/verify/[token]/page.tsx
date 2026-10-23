@@ -37,7 +37,8 @@ async function verify(token: string): Promise<VerifyResult | null> {
   }
 }
 
-export default async function PublicVerifyPage({ params }: { params: { token: string } }) {
+export default async function PublicVerifyPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const result = await verify(params.token);
 
   // GAP2-SHELL-VERIFY-01: use the design-system status tokens (same set the

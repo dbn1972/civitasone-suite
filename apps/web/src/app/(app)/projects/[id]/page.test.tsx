@@ -43,27 +43,27 @@ describe("GAP-PROJECTS-DETAIL-01 project detail error ordering", () => {
 
   it("renders RefreshErrorState (retry) on a 500 outage — not the 'removed' not-found view", async () => {
     getProjectByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await ProjectDetailPage({ params: { id: "p1" } }));
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Try again")).toBeInTheDocument();
     expect(screen.queryByText(/may have been removed/)).not.toBeInTheDocument();
   });
 
   it("renders the not-found view on a genuine 404", async () => {
     getProjectByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await ProjectDetailPage({ params: { id: "p1" } }));
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Project not found")).toBeInTheDocument();
     expect(screen.queryByText("Try again")).not.toBeInTheDocument();
   });
 
   it("renders the not-found view on a successful load that returned null", async () => {
     getProjectByIdMock.mockResolvedValue({ data: null, source: "api" });
-    render(await ProjectDetailPage({ params: { id: "p1" } }));
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Project not found")).toBeInTheDocument();
   });
 
   it("renders the project on success", async () => {
     getProjectByIdMock.mockResolvedValue({ data: OK_PROJECT, source: "api" });
-    render(await ProjectDetailPage({ params: { id: "p1" } }));
+    render(await ProjectDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Rural Road")).toBeInTheDocument();
   });
 });

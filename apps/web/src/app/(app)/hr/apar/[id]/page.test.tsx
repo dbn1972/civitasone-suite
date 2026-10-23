@@ -63,7 +63,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
   it("shows 'APAR not found' for a genuine 404 (record doesn't exist)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
 
-    const ui = await AparDetailPage({ params: { id: "does-not-exist" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) });
     render(ui);
 
     expect(screen.getByText("APAR not found")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
   it("shows a retryable load error (NOT 'APAR not found') when the API call itself fails with a 5xx", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("APAR not found")).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
   it("also treats a network error (no HTTP status at all) as a retryable load error, never 'not found'", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("APAR not found")).not.toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
       data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("APAR not found")).not.toBeInTheDocument();
@@ -126,7 +126,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("Concurs with rating.")).toBeInTheDocument();
@@ -146,7 +146,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("Reviewing Officer — Remarks")).not.toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("super_admin")).toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("Yes — privileged override")).not.toBeInTheDocument();
@@ -212,7 +212,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     // weighted: (10*60 + 2*40) / 100 = 6.8 ; plain average would be 6.0
@@ -232,7 +232,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("Simple Average (unweighted)")).toBeInTheDocument();
@@ -250,7 +250,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("2026-04-14T20:00:00Z")).not.toBeInTheDocument();
@@ -265,7 +265,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText(/Confidential — APAR/)).toBeInTheDocument();
@@ -297,7 +297,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("(Outstanding \u22659 \u00b7 Very Good \u22657 \u00b7 Good \u22655 \u00b7 Average \u22654 \u00b7 else Below Average)")).toBeInTheDocument();
@@ -313,7 +313,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("(Outstanding \u22658.5 \u00b7 else Below Average)")).toBeInTheDocument();
@@ -325,7 +325,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple
       data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     const { container } = render(ui);
 
     expect(container.textContent).not.toMatch(/Outstanding/);
@@ -344,7 +344,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     // 6.8 weighted Grade, 6.0 unweighted -- labelled as such, with the reason on the page
@@ -364,7 +364,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-05 grade scale + Grade vs Simple
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText(/the two can differ/)).not.toBeInTheDocument();
@@ -395,7 +395,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03 Reviewing Officer decision fr
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("Reviewing Officer — Decision")).toBeInTheDocument();
@@ -413,7 +413,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03 Reviewing Officer decision fr
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("Concurred with the Reporting Officer's scores")).toBeInTheDocument();
@@ -429,7 +429,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03 Reviewing Officer decision fr
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("Reviewing Officer — Decision")).not.toBeInTheDocument();
@@ -458,7 +458,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText(/A Kumar \(E101\)/)).toBeInTheDocument();
@@ -478,7 +478,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByText("ro-unresolved")).not.toBeInTheDocument();
@@ -498,7 +498,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
         actions: BASE_ACTIONS,
       },
     });
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
     expect(screen.getByText("Unknown officer")).toBeInTheDocument();
     expect(screen.queryByText("actor-raw-uuid-9")).not.toBeInTheDocument();
@@ -515,7 +515,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.getByText("A Kumar")).toBeInTheDocument();
@@ -542,7 +542,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-01 stage-action wiring", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     renderWithIntl(ui);
 
     expect(screen.getByRole("heading", { name: "Workflow Action" })).toBeInTheDocument();
@@ -558,7 +558,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-01 stage-action wiring", () => {
       data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     render(ui);
 
     expect(screen.queryByRole("heading", { name: "Workflow Action" })).not.toBeInTheDocument();
@@ -574,7 +574,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-01 stage-action wiring", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     renderWithIntl(ui);
 
     expect(screen.getByText(/privileged override/)).toBeInTheDocument();
@@ -589,7 +589,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-01 stage-action wiring", () => {
       },
     });
 
-    const ui = await AparDetailPage({ params: { id: "a1" } });
+    const ui = await AparDetailPage({ params: Promise.resolve({ id: "a1" }) });
     renderWithIntl(ui);
 
     expect(screen.getByRole("button", { name: "Finalise APAR" })).toBeInTheDocument();

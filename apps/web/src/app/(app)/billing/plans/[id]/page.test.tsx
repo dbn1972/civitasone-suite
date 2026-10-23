@@ -22,7 +22,7 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
       source: "api",
       status: 200,
     });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     expect(screen.getAllByText("₹49,999.00").length).toBeGreaterThan(0);
     expect(screen.queryByText(/INR 4999900/)).not.toBeInTheDocument();
   });
@@ -33,7 +33,7 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
       source: "api",
       status: 200,
     });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     expect(screen.getAllByText("std_monthly").length).toBeGreaterThan(0);
     // govt exempt No appears (stat + field)
     expect(screen.getAllByText("No").length).toBeGreaterThan(0);
@@ -45,7 +45,7 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
       source: "api",
       status: 200,
     });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     // status defaults to — not Active
     expect(screen.queryByText("Active")).not.toBeInTheDocument();
     // no "INR undefined" style string
@@ -54,21 +54,21 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
 
   it("a 404 shows 'Plan not found', NOT the error state (DETAIL-03)", async () => {
     getPlanMock.mockResolvedValueOnce({ data: null, source: "error", status: 404 });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     expect(screen.getByText("Plan not found")).toBeInTheDocument();
     expect(screen.queryByText(/try again|retry/i)).not.toBeInTheDocument();
   });
 
   it("a 500 shows a retryable error state, NOT 'Plan not found' (DETAIL-03)", async () => {
     getPlanMock.mockResolvedValueOnce({ data: null, source: "error", status: 500 });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     expect(screen.queryByText("Plan not found")).not.toBeInTheDocument();
     expect(screen.getAllByText(/try again|retry/i).length).toBeGreaterThan(0);
   });
 
   it("a 403 shows an access-restricted state, NOT 'Plan not found' (DETAIL-03)", async () => {
     getPlanMock.mockResolvedValueOnce({ data: null, source: "error", status: 403, errorMessage: "nope" });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     expect(screen.queryByText("Plan not found")).not.toBeInTheDocument();
     expect(screen.getByText(/don't have permission/i)).toBeInTheDocument();
   });
@@ -79,7 +79,7 @@ describe("PlanDetailPage (GAP-BILLING-PLANS-DETAIL-01..05)", () => {
       source: "api",
       status: 200,
     });
-    render(await PlanDetailPage({ params: PARAMS }));
+    render(await PlanDetailPage({ params: Promise.resolve(PARAMS) }));
     const subsLink = screen.getByRole("link", { name: /view subscriptions/i });
     expect(subsLink).toHaveAttribute("href", "/billing/subscriptions");
   });

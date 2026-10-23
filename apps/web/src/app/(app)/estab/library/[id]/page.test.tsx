@@ -48,7 +48,7 @@ describe("LibraryBookDetailPage", () => {
   it("renders the 'Issue this book' link when copies are available", async () => {
     fetchJsonMock.mockResolvedValueOnce(availableBook);
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     expect(screen.getByRole("link", { name: "Issue this book" })).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("LibraryBookDetailPage", () => {
   it("does NOT render the Issue CTA when copiesAvailable is 0 — shows a plain note instead", async () => {
     fetchJsonMock.mockResolvedValueOnce(unavailableBook);
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     expect(screen.queryByRole("link", { name: "Issue this book" })).not.toBeInTheDocument();
@@ -69,7 +69,7 @@ describe("LibraryBookDetailPage", () => {
     // book does not exist.
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error", status: 500 });
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     expect(screen.queryByText("Book not found")).not.toBeInTheDocument();
@@ -80,7 +80,7 @@ describe("LibraryBookDetailPage", () => {
   it("GAP-ESTAB-LIBRARY-DETAIL-03: renders a 'Book not found' EmptyState with a back action on a 404", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "error", status: 404 });
 
-    const ui = await LibraryBookDetailPage({ params: { id: "missing" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "missing" }) });
     render(ui);
 
     expect(screen.getAllByText("Book not found").length).toBeGreaterThan(0);
@@ -96,7 +96,7 @@ describe("LibraryBookDetailPage", () => {
     };
     fetchJsonMock.mockResolvedValueOnce(allAvailable);
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Edit book details" })).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe("LibraryBookDetailPage", () => {
     };
     fetchJsonMock.mockResolvedValueOnce(partialOut);
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     const withdrawBtn = screen.getByRole("button", { name: /Cannot withdraw: 1 copies are on loan/ });
@@ -126,7 +126,7 @@ describe("LibraryBookDetailPage", () => {
     };
     fetchJsonMock.mockResolvedValueOnce(withdrawn);
 
-    const ui = await LibraryBookDetailPage({ params: { id: "b1" } });
+    const ui = await LibraryBookDetailPage({ params: Promise.resolve({ id: "b1" }) });
     render(ui);
 
     expect(screen.getByText("This book has been withdrawn from the catalogue.")).toBeInTheDocument();

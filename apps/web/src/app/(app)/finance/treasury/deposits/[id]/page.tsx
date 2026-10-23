@@ -9,7 +9,8 @@ import { depositStatusVariant, depositTypeLabel } from "../depositStats";
  * refund / forfeit / adjustment events. Only a real 404 means "not found"; any other failed
  * load is an outage the user can retry, and a 403 is a permission decision.
  */
-export default async function DepositDetailPage({ params }: { params: { id: string } }) {
+export default async function DepositDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceDepositById(params.id);
   const { data: deposit, source, status } = result;
 

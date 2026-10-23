@@ -9,7 +9,7 @@ import { AutoRefresh } from "../AutoRefresh";
 import { MaskablePromptText } from "../MaskablePromptText";
 
 interface PageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 function formatDateTime(iso: string): string {
@@ -17,7 +17,8 @@ function formatDateTime(iso: string): string {
   return formatIndianDateTime(iso);
 }
 
-export default async function CopilotTurnPage({ params }: PageProps) {
+export default async function CopilotTurnPage(props: PageProps) {
+  const params = await props.params;
   const { data: turn, source, status } = await getCopilotTurn(params.id);
 
   // GAP-AI-COPILOT-DETAIL-01: an outage used to be shown as "Turn not found —
@@ -73,12 +74,10 @@ export default async function CopilotTurnPage({ params }: PageProps) {
           value={turn.tokens === null ? "—" : turn.tokens.toLocaleString("en-IN")}
         />
       </StatGrid>
-
       <Card title="Prompt">
         {/* GAP-AI-COPILOT-DETAIL-03: mask detected identifiers by default. */}
         <MaskablePromptText text={turn.prompt} label="prompt" />
       </Card>
-
       <Card title="Response">
         {answered ? (
           <MaskablePromptText text={turn.response ?? ""} label="response" />
@@ -90,16 +89,15 @@ export default async function CopilotTurnPage({ params }: PageProps) {
           />
         )}
       </Card>
-
       <Card title="Sources">
         {!answered ? (
           // GAP-AI-COPILOT-DETAIL-04: do not claim "answered without citing
           // documents" before the answer exists.
-          <EmptyState
+          (<EmptyState
             icon="🔗"
             title="Sources appear once the answer is ready"
             message="Any documents the copilot cites will be listed here when the answer arrives."
-          />
+          />)
         ) : turn.sourceCitations.length === 0 ? (
           <EmptyState
             icon="🔗"
@@ -124,12 +122,12 @@ export default async function CopilotTurnPage({ params }: PageProps) {
                   {typeof citation.score === "number" && (
                     // GAP-AI-COPILOT-DETAIL-05: show a readable percentage, with
                     // the raw score as a tooltip.
-                    <span
+                    (<span
                       style={{ color: "var(--muted)", marginInlineStart: 8, fontSize: 12 }}
                       title={`Relevance score ${citation.score.toFixed(2)}`}
                     >
                       {Math.round(citation.score * 100)}% match
-                    </span>
+                                          </span>)
                   )}
                 </li>
               );

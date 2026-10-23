@@ -15,7 +15,7 @@ describe("KnowledgeSearchPage", () => {
 
   it("GAP-SEARCH-02: failed fetch shows retry state, not 'No documents found'", async () => {
     getKnowledgeDocsMock.mockResolvedValue({ data: [], source: "error" });
-    render(await KnowledgeSearchPage({ searchParams: {} }));
+    render(await KnowledgeSearchPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(screen.queryByText("No documents found")).not.toBeInTheDocument();
   });
@@ -36,7 +36,7 @@ describe("KnowledgeSearchPage", () => {
       }],
       source: "api",
     });
-    render(await KnowledgeSearchPage({ searchParams: {} }));
+    render(await KnowledgeSearchPage({ searchParams: Promise.resolve({}) }));
     // Old misleading text should be gone
     expect(screen.queryByText(/Full-text/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/all documents & modules/i)).not.toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("KnowledgeSearchPage", () => {
       }],
       source: "api",
     });
-    render(await KnowledgeSearchPage({ searchParams: { q: "Travel" } }));
+    render(await KnowledgeSearchPage({ searchParams: Promise.resolve({ q: "Travel" }) }));
     // Should show results without user having to press Enter; query chip shows count
     expect(screen.getByText(/Results/)).toBeInTheDocument();
   });

@@ -7,7 +7,8 @@ import { GRANTS_DISBURSE_ROLES } from "../../roles";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
-export default async function GrantDisbursementDetailPage({ params }: { params: { id: string } }) {
+export default async function GrantDisbursementDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: disbursement, source, status } = await getGrantDisbursementById(params.id);
 
   // GAP-GRANTS-DISBURSEMENTS-DETAIL-04: a failed fetch must not read as
@@ -56,7 +57,6 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
           </>
         }
       />
-
       {/* GAP-GRANTS-DISBURSEMENTS-DETAIL-08: the stat cards are the single
           summary; the duplicate details Card (which repeated Amount/Grantee/
           Release Date/Status) is removed. The details Card now only carries
@@ -67,7 +67,6 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
         <StatCard icon="👥" tone="neutral" label="Grantee" value={disbursement.granteeName ?? "—"} />
         <StatCard icon="📅" tone="warn" label="Release Date" value={formatIndianDate(disbursement.releaseDate)} />
       </StatGrid>
-
       <Card title="Disbursement details" padding>
         <div className="fields">
           <div className="field"><span className="label">Release No</span><span className="mono">{disbursement.releaseNo}</span></div>
@@ -77,7 +76,6 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
           )}
         </div>
       </Card>
-
       {/* GAP-GRANTS-DISBURSEMENTS-DETAIL-01: raising the approval note is a
           maker action — only shown to a grants disburse role. The eOffice
           from-module route + grant-service submit-approval both enforce roles

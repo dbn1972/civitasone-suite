@@ -12,13 +12,14 @@ import { BillingActions } from "./BillingActions";
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-export default async function BillingDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { workId: string };
-  searchParams?: { bill?: string };
-}) {
+export default async function BillingDetailPage(
+  props: {
+    params: Promise<{ workId: string }>;
+    searchParams?: Promise<{ bill?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   // GAP-WORKS-BILLING-WORKID-01: consume the shared loader (mapBillRow) instead
   // of a local BillRow/pickData that read r.billNo/r.mode/r.stage — fields the
   // works Bill contract never carries (it is billNumber/billMode/status). The

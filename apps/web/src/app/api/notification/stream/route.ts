@@ -14,7 +14,7 @@ const GATEWAY = (
  * Uses ReadableStream to avoid buffering the SSE response.
  */
 export async function GET(req: Request) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) {
     return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
   }

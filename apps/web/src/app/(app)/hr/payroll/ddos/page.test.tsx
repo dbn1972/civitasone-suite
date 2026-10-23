@@ -35,7 +35,7 @@ function routeFetch(ddos: unknown, ddoSource: "api" | "error" = "api", deptSourc
 }
 
 async function renderPage(searchParams?: { edit?: string }) {
-  const ui = await DdosPage({ searchParams });
+  const ui = await DdosPage({ searchParams: Promise.resolve(searchParams ?? {}) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

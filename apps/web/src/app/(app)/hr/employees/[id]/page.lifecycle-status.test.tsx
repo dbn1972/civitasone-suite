@@ -41,7 +41,7 @@ function mockLifecycle(opts: { transfers?: Rows; promotions?: Rows; deputation?:
 async function renderPage(roles: string[], employee: Record<string, unknown> = EMP) {
   mockRoles = roles;
   getEmployeeByIdMock.mockResolvedValue({ data: employee, source: "api" });
-  const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+  const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

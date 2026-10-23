@@ -31,7 +31,7 @@ beforeEach(() => {
 });
 
 async function renderPage(search: Record<string, string> = {}) {
-  render(await CompetencyPage({ searchParams: search }));
+  render(await CompetencyPage({ searchParams: Promise.resolve(search) }));
 }
 
 describe("CompetencyPage — GAP-LEARNING-COMPETENCY-01/02/03/04/05", () => {

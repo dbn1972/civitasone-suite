@@ -51,7 +51,7 @@ describe("SessionDetailPage — real data (DETAIL-01/04)", () => {
       },
     });
 
-    const ui = await SessionDetailPage({ params: { id: "sess-real-1" } });
+    const ui = await SessionDetailPage({ params: Promise.resolve({ id: "sess-real-1" }) });
     render(ui);
 
     expect(screen.getByText("asha@gov.in")).toBeInTheDocument();
@@ -65,7 +65,7 @@ describe("SessionDetailPage — real data (DETAIL-01/04)", () => {
   it("calls notFound() for a 404 session id (no fabricated data)", async () => {
     getSessionById.mockResolvedValue({ source: "error", status: 404, data: null });
 
-    await expect(SessionDetailPage({ params: { id: "missing" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(SessionDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFound).toHaveBeenCalled();
   });
 
@@ -83,7 +83,7 @@ describe("SessionDetailPage — real data (DETAIL-01/04)", () => {
       },
     });
 
-    const ui = await SessionDetailPage({ params: { id: "sess-own" } });
+    const ui = await SessionDetailPage({ params: Promise.resolve({ id: "sess-own" }) });
     render(ui);
 
     expect(screen.queryByRole("button", { name: /Revoke Session/i })).not.toBeInTheDocument();

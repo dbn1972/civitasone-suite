@@ -38,7 +38,7 @@ describe("ChallanDetailPage", () => {
   it("fetches the challan by the route id and renders real data", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: CHALLAN, source: "api" });
 
-    const ui = await ChallanDetailPage({ params: { id: "c1" } });
+    const ui = await ChallanDetailPage({ params: Promise.resolve({ id: "c1" }) });
     render(ui);
 
     expect(getFinanceChallanByIdMock).toHaveBeenCalledWith("c1");
@@ -57,7 +57,7 @@ describe("ChallanDetailPage", () => {
     getFinanceChallanByIdMock.mockResolvedValue({
       data: { ...CHALLAN, receiptHeadCode: "0040", receiptHeadName: "Tax Revenue" }, source: "api",
     });
-    const { container } = render(await ChallanDetailPage({ params: { id: "c1" } }));
+    const { container } = render(await ChallanDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getAllByText("0040 - Tax Revenue").length).toBeGreaterThan(0);
     expect(container.textContent).not.toContain("0030-stamps");
     expect(container.querySelectorAll(".pill").length).toBe(1);
@@ -66,14 +66,14 @@ describe("ChallanDetailPage", () => {
 
   it("shows a dash, not the uuid, when the head could not be resolved", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: CHALLAN, source: "api" });
-    const { container } = render(await ChallanDetailPage({ params: { id: "c1" } }));
+    const { container } = render(await ChallanDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(container.textContent).not.toContain("0030-stamps");
   });
 
   it("shows an honest empty state instead of fake data when no record is found", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "api" });
 
-    const ui = await ChallanDetailPage({ params: { id: "does-not-exist" } });
+    const ui = await ChallanDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) });
     render(ui);
 
     expect(getFinanceChallanByIdMock).toHaveBeenCalledWith("does-not-exist");
@@ -85,21 +85,21 @@ describe("ChallanDetailPage", () => {
   // GAP-FINANCE-REVENUE-CHALLANS-DETAIL-02: a failed load is not "not found".
   it("shows a retry state, not 'not available', when the load fails (5xx)", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await ChallanDetailPage({ params: { id: "c1" } }));
+    render(await ChallanDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByText("Challan detail not available")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
   });
 
   it("shows the access-restricted state, with no retry, on a 403", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 403, errorMessage: "Not allowed" });
-    render(await ChallanDetailPage({ params: { id: "c1" } }));
+    render(await ChallanDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByText("Challan detail not available")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again|retry/i })).not.toBeInTheDocument();
   });
 
   it("still shows the not-found state for a genuine 404", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await ChallanDetailPage({ params: { id: "nope" } }));
+    render(await ChallanDetailPage({ params: Promise.resolve({ id: "nope" }) }));
     expect(screen.getByText("Challan detail not available")).toBeInTheDocument();
   });
 });
