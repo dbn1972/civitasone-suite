@@ -24,7 +24,12 @@ test.describe('CRM', () => {
     await page.goto('/crm/contacts');
     await expect(page.getByRole('heading', { level: 1, name: /contacts/i })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Anita Desai' })).toBeVisible();
-    await expect(page.getByText('anita@example.com')).toBeVisible();
+    // GAP-CRM-CONTACTS-02 (73f2ae554, DPDP): email is masked server-side for
+    // every role and shown as "a***@e******.c**" with an audited Reveal; the
+    // clear address must never be in the DOM. The mock keeps the real service
+    // shape (clear value, masked by the page). Assert masked shown, clear absent.
+    await expect(page.getByRole('cell', { name: /email address \(masked\)/ })).toContainText('a***@e******.c**');
+    await expect(page.getByText('anita@example.com')).toHaveCount(0);
   });
 
   test('contacts list shows column headers', async ({ page }) => {
