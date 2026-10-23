@@ -20,5 +20,9 @@ export const createDelegation = (ctx: RequestContext, body: {
   ...body, delegatorId: ctx.actorId, toDate: body.toDate ?? null, reason: body.reason ?? null,
 });
 
+/** Records (via the consumer) an audited refusal of a revoke the caller does not own. */
+export const refuseDelegationRevoke = (ctx: RequestContext, id: string) =>
+  pub(ctx, COMMANDS.refuseDelegationRevoke, id, {});
+
 export const revokeDelegation = (ctx: RequestContext, id: string) =>
   pub(ctx, COMMANDS.revokeDelegation, id, {});
