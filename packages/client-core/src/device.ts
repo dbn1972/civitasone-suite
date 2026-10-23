@@ -35,13 +35,27 @@ const DEVICE_ID_KEY = "civitasone_device_id";
 
 /** Stable device UUID — persisted per browser/installation. */
 export function getOrCreateDeviceId(storage?: { getItem(k: string): string | null; setItem(k: string, v: string): void }): string {
-  const store = storage ?? (typeof localStorage !== "undefined" ? localStorage : null);
-  if (!store) return crypto.randomUUID();
-  const existing = store.getItem(DEVICE_ID_KEY);
-  if (existing) return existing;
-  const id = crypto.randomUUID();
-  store.setItem(DEVICE_ID_KEY, id);
-  return id;
+  // CLOS2-S3-03: with storage blocked (Safari "block all cookies", sandboxed
+  // iframes) merely touching window.localStorage throws SecurityError. Fail soft
+  // to a per-page-load id so requests are still sent; header names/semantics are
+  // unchanged.
+  try {
+    const store = storage ?? (typeof localStorage !== "undefined" ? localStorage : null);
+    if (!store) return memoryDeviceId();
+    const existing = store.getItem(DEVICE_ID_KEY);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    store.setItem(DEVICE_ID_KEY, id);
+    return id;
+  } catch {
+    return memoryDeviceId();
+  }
+}
+
+let inMemoryDeviceId: string | null = null;
+function memoryDeviceId(): string {
+  inMemoryDeviceId ??= crypto.randomUUID();
+  return inMemoryDeviceId;
 }
 
 /** Browser fingerprint hash for device binding (not used for tracking). */

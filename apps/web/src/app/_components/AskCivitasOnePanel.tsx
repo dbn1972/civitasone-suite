@@ -9,6 +9,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { scrollBehavior } from "@/lib/motion";
+import { renderMarkdown } from "./renderMarkdown";
+
+// Re-exported for existing callers/tests that import it from the panel (CLOS2-S3-08).
+export { renderMarkdown };
 
 const SESSION_KEY = "civitasone.assistant.messages";
 
@@ -21,32 +25,6 @@ export interface ChatMessage {
 
 interface AskCivitasOnePanelProps {
   onClose: () => void;
-}
-
-/** Simple markdown-to-HTML renderer (bold, italic, code, links, line breaks). */
-export function renderMarkdown(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    // Links run before the inline substitutions, and the href is entity-escaped, so a
-    // `*`, backtick or quote inside a link target can never become markup or break out
-    // of the attribute.
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, rawHref) => {
-      const href = /^https?:\/\//i.test(rawHref)
-        ? rawHref
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;")
-            .replace(/\*/g, "&#42;")
-            .replace(/`/g, "&#96;")
-        : "#";
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
-    })
-    .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/\n/g, "<br>");
 }
 
 function loadMessages(): ChatMessage[] {

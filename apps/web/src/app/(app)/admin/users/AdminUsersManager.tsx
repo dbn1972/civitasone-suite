@@ -93,6 +93,10 @@ function EditRolesSheet({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // CLOS2-S1-01: true once the current-roles load failed. Save sends a FULL role
+  // set, so saving on top of an unknown (wrongly empty) current set would wipe
+  // the user's real roles.
+  const [loadFailed, setLoadFailed] = useState(false);
   const formError = useFormError("user roles");
 
   const userId = user?.id;
@@ -108,19 +112,23 @@ function EditRolesSheet({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setLoadFailed(false);
     // Deliberately /admin/user-roles/, not /admin/users/:id/roles — the
     // gateway's admin-users entry shadows the whole /v1/admin/users/* prefix
     // straight to identity-service, which has no matching route there (see
     // gap/routes.ts's comment on the admin-service handler for this).
     fetch(`/api/proxy/v1/admin/user-roles/${userId}`)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        return res.json();
+      })
       .then((body: { data?: Array<{ key: string }> }) => {
         if (cancelled) return;
         const keys = new Set((body.data ?? []).map((r) => r.key));
         setCurrent(keys);
         setSelected(new Set(keys));
       })
-      .catch(() => { if (!cancelled) setError("Couldn't load this user's current roles."); })
+      .catch(() => { if (!cancelled) { setLoadFailed(true); setError("Couldn't load this user's current roles."); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [userId]);
@@ -205,7 +213,7 @@ function EditRolesSheet({
           </div>
         )}
         <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-          <Button type="button" size="sm" disabled={busy || loading || !changed} onClick={() => setConfirmOpen(true)} loading={busy}>
+          <Button type="button" size="sm" disabled={busy || loading || loadFailed || !changed} onClick={() => setConfirmOpen(true)} loading={busy}>
             {busy ? "Saving…" : "Save roles"}
           </Button>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>Cancel</Button>
