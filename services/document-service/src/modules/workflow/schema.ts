@@ -57,6 +57,7 @@ export type DakView = {
   priority:        string;
   status:          string;
   assignedTo:      string | null;
+  createdBy:       string;
   dueDate:         Date | null;
   createdAt:       Date;
   updatedAt:       Date;

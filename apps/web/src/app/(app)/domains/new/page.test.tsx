@@ -59,7 +59,7 @@ describe("NewDomainPage", () => {
     fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Register Domain" }));
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
-    expect(String(spy.mock.calls[0]![0])).toBe("/api/v1/domains");
+    expect(String(spy.mock.calls[0]![0])).toBe("/api/proxy/v1/domains");
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/domains"));
     expect(pushMock.mock.calls.every((c) => !/\/domains\/[^/]+$/.test(String(c[0])) || c[0] === "/domains")).toBe(true);
   });

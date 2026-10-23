@@ -25,8 +25,8 @@ import { registerWorkflowConsumers } from "../src/modules/workflow/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
-function authHeaders(roles: string[], tid: string): Record<string, string> {
-  const jwt = signToken({ sub: randomUUID(), tid, roles, sid: "sess-comp007-workflow" }, SECRET);
+function authHeaders(roles: string[], tid: string, sub: string = randomUUID()): Record<string, string> {
+  const jwt = signToken({ sub, tid, roles, sid: "sess-comp007-workflow" }, SECRET);
   return { authorization: `Bearer ${jwt}`, "x-tenant-id": tid };
 }
 
@@ -85,7 +85,7 @@ describe("COMP-007: workflow -- POST /v1/documents/daks (create)", () => {
 
     const get = await app.inject({
       method: "GET", url: `/v1/documents/daks/${created.id}`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
     });
     expect(get.statusCode).toBe(200);
     expect(get.json().subject).toBe("Property tax reassessment request");
@@ -103,7 +103,7 @@ describe("COMP-007: workflow -- inbox, forward, acknowledge (real DB, tenant-iso
 
     const forward = await app.inject({
       method: "POST", url: `/v1/documents/daks/${created.id}/forward`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, creator),
       payload: { assignedTo: assignee },
     });
     expect(forward.statusCode).toBe(202);
@@ -132,7 +132,7 @@ describe("COMP-007: workflow -- inbox, forward, acknowledge (real DB, tenant-iso
 
     const ack = await app.inject({
       method: "POST", url: `/v1/documents/daks/${created.id}/acknowledge`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
     });
     expect(ack.statusCode).toBe(202);
     await appQueue.drain();
@@ -142,7 +142,7 @@ describe("COMP-007: workflow -- inbox, forward, acknowledge (real DB, tenant-iso
     // real-DB-backed aggregate rather than a single-row projection.
     const summary = await app.inject({
       method: "GET", url: "/v1/documents/inbox/summary",
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
     });
     expect(summary.statusCode).toBe(200);
     expect(typeof summary.json().pendingCount).toBe("number");
@@ -157,7 +157,7 @@ describe("COMP-007: workflow -- notings and approval decisions (real DB)", () =>
 
     const addNoting = await app.inject({
       method: "POST", url: `/v1/documents/daks/${created.id}/notings`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
       payload: { body: "Forwarded to revenue department for verification." },
     });
     expect(addNoting.statusCode).toBe(202);
@@ -165,7 +165,7 @@ describe("COMP-007: workflow -- notings and approval decisions (real DB)", () =>
 
     const list = await app.inject({
       method: "GET", url: `/v1/documents/daks/${created.id}/notings`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
     });
     expect(list.json().data).toHaveLength(1);
     expect(list.json().data[0].body).toBe("Forwarded to revenue department for verification.");
@@ -178,7 +178,7 @@ describe("COMP-007: workflow -- notings and approval decisions (real DB)", () =>
 
     const submit = await app.inject({
       method: "POST", url: `/v1/documents/daks/${created.id}/approval`,
-      headers: authHeaders(["document_user"], tid),
+      headers: authHeaders(["document_user"], tid, actorId),
     });
     expect(submit.statusCode).toBe(202);
     await appQueue.drain();
