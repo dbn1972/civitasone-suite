@@ -6,14 +6,15 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, FINANCE_HANDOFF } from "../../topics.js";
 import { measurementBooks, measurements, bills, billItems, accountCompilations } from "./schema.js";
 import {
-  calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward,
+  calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, canRecordMeasurement, billAmountExceedsAward, billNumberLockKey,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
   computeMeasuredValueMinor, boqItemBelongsToMbWork, isSelfFinalization,
+  isValidNextStep, eMbFinalizationSequence, billFinalizationSequence,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
 import { awards } from "../tender/schema.js";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -83,17 +84,26 @@ export function registerBillingConsumers(q: Queue): void {
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
       // GAP-WORKS-BILLING-WORKID-03: maker-checker re-enforced in the consumer
       // (the route pre-check can race / be bypassed by a replayed command).
+      // GAP-WORKS-BILLING-WORKID-07: the row is locked for the rest of this transaction, so two finalize commands for
+      // the same MB (a double click publishes two, each with its own messageId) are serialised and the second one
+      // sees the first one's result instead of both applying and both emitting events.
       const mbRows = await tx.select().from(measurementBooks)
         .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, id)))
+        .for("update")
         .limit(1);
       const mbRow = mbRows[0];
       if (!mbRow) throw new NonRetryableError("MB_NOT_FOUND: measurement book not found for finalization");
       if (isSelfFinalization(msg.actorId, { createdBy: mbRow.createdBy, issuedBy: mbRow.issuedBy })) {
         throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The issuer of a measurement book cannot finalize it (maker-checker rule)");
       }
+      // Already at the requested step: an idempotent replay. Applied once, so no second status write, event or audit row.
+      if (mbRow.status === nextStatus) return;
+      if (!isValidNextStep(mbRow.status, nextStatus, eMbFinalizationSequence())) {
+        throw new NonRetryableError(`INVALID_STEP: Cannot transition from '${mbRow.status}' to '${nextStatus}'`);
+      }
       await tx.update(measurementBooks)
         .set({ status: nextStatus })
-        .where(eq(measurementBooks.id, id));
+        .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.mbFinalized,
@@ -116,6 +126,18 @@ export function registerBillingConsumers(q: Queue): void {
       const workId = p.workId as string;
       const awardId = p.awardId as string;
       const mbId = p.mbId as string | undefined;
+
+      // The route validates the amounts (shared/validators.ts); re-checked here so a directly published command cannot
+      // book a zero or negative gross, or a negative deduction, as a bill.
+      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
+      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
+      if (gross <= 0n) throw new NonRetryableError("INVALID_AMOUNT: bill gross amount must be greater than zero");
+      if (deductions < 0n) throw new NonRetryableError("INVALID_AMOUNT: bill deductions cannot be negative");
+
+      // A bill number is unique within a work. Serialise bill creation per (tenant, work) for the rest of this
+      // transaction (released at commit/rollback) so two concurrent creates cannot both pass the duplicate check below,
+      // including when they cite different MBs (the MB row lock further down only serialises bills on the SAME MB).
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${billNumberLockKey(msg.tenantId, workId)}, 0))`);
 
       // FR-BIL-012 + bug #2 (defense-in-depth — also enforced pre-enqueue in
       // billing/routes.ts): the cited award must exist AND actually belong
@@ -169,8 +191,6 @@ export function registerBillingConsumers(q: Queue): void {
       const rateByBoqItem = new Map(boqRows.map((b) => [b.id, b.rate]));
       const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
 
-      const gross = parseMinor(p.grossAmountMinor as string | number | bigint);
-      const deductions = parseMinor((p.deductionsMinor as string | number | bigint) ?? 0);
       const netPayable = calculateNetPayable(gross, deductions);
 
       // Code-review fix (double-billing gap): cumulative gross ALREADY
@@ -192,6 +212,10 @@ export function registerBillingConsumers(q: Queue): void {
       // FR-BIL-012: cumulative gross billed amount must not exceed award ceiling.
       const priorBillRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.workId, workId)));
+      const wantedNumber = String(p.billNumber ?? "").trim().toLowerCase();
+      if (priorBillRows.some((row) => String(row.billNumber ?? "").trim().toLowerCase() === wantedNumber)) {
+        throw new NonRetryableError("DUPLICATE_BILL_NUMBER: bill number already used for this work");
+      }
       const priorBilledGross = priorBillRows.reduce(
         (sum, row) => sum + (row.grossAmountMinor ?? 0n),
         0n,
@@ -257,18 +281,26 @@ export function registerBillingConsumers(q: Queue): void {
 
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
 
+      // GAP-WORKS-BILLING-WORKID-07: lock the bill row, then re-check its CURRENT step. Two finalize commands for the
+      // same step (each carries its own messageId, so markProcessed cannot dedupe them) are serialised; the second is
+      // a no-op replay, so a double DO-finalize cannot raise a second finance hand-off with a fresh financeBillId.
       const billRows = await tx.select().from(bills)
         .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)))
+        .for("update")
         .limit(1);
       const bill = billRows[0];
       if (!bill) throw new NonRetryableError("BILL_NOT_FOUND: bill record not found for finalization");
       if (isSelfFinalization(msg.actorId, { createdBy: bill.createdBy })) {
         throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The creator of a bill cannot finalize it (maker-checker rule)");
       }
+      if (bill.status === nextStatus) return;
+      if (!isValidNextStep(bill.status, nextStatus, billFinalizationSequence())) {
+        throw new NonRetryableError(`INVALID_STEP: Cannot transition from '${bill.status}' to '${nextStatus}'`);
+      }
 
       await tx.update(bills)
         .set({ status: nextStatus })
-        .where(eq(bills.id, id));
+        .where(and(eq(bills.tenantId, msg.tenantId), eq(bills.id, id)));
 
       await enqueue(tx, {
         topic: EVENTS.billFinalized,
@@ -331,12 +363,17 @@ export function registerBillingConsumers(q: Queue): void {
       const boqItemId = p.boqItemId as string;
       const quantity = Number(p.quantity as number);
 
+      // Lock the MB row so a concurrent finalize cannot move it past draft between this check and the insert below.
       const mbRows = await tx.select().from(measurementBooks)
         .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, mbId)))
+        .for("update")
         .limit(1);
       const mb = mbRows[0];
       if (!mb) {
         throw new NonRetryableError("MB_NOT_FOUND: measurement references non-existent measurement book");
+      }
+      if (!canRecordMeasurement(mb.status)) {
+        throw new NonRetryableError(`MB_NOT_OPEN: measurement book status is '${mb.status}'; measurements can only be recorded while it is 'draft'`);
       }
 
       const boqRows = await tx.select().from(boqItems)

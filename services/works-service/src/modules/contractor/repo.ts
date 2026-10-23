@@ -1,5 +1,6 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, count, getTableColumns } from "drizzle-orm";
 import { scopedRead, db, type ScopedTx } from "../../shared/db.js";
+import { workProposals } from "../proposal/schema.js";
 import {
   contractors,
   contractorRatings,
@@ -88,6 +89,15 @@ export async function listContractors(
   );
 }
 
+/** GAP-WORKS-CONTRACTORS-03: the true size of the active register, so the list can report "N of total". */
+export async function countContractors(tenantId: string): Promise<number> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ value: count() }).from(contractors)
+      .where(and(eq(contractors.tenantId, tenantId), eq(contractors.active, true)));
+    return Number(rows[0]?.value ?? 0);
+  });
+}
+
 export async function updateContractorRating(
   tx: ScopedTx,
   id: string,
@@ -115,13 +125,64 @@ export async function insertRatingHistory(
   await tx.insert(contractorRatings).values(row);
 }
 
+/**
+ * GAP-WORKS-CONTRACTORS-DETAIL-04: take the contractor row lock for the rest of the caller's transaction. Concurrent
+ * rate commands for one contractor queue up behind it, so a cooling-off check made after this call reads every
+ * rating committed by the commands that went first. False when the contractor does not exist in this tenant.
+ */
+export async function lockContractorTx(tx: ScopedTx, tenantId: string, contractorId: string): Promise<boolean> {
+  const rows = await tx.select({ id: contractors.id }).from(contractors)
+    .where(and(eq(contractors.tenantId, tenantId), eq(contractors.id, contractorId)))
+    .for("update")
+    .limit(1);
+  return rows.length > 0;
+}
+
+/**
+ * GAP-WORKS-CONTRACTORS-DETAIL-04: the most recent rating of a contractor recorded by one officer, for the
+ * cooling-off check. Null when that officer has never rated it.
+ */
+export async function latestRatingByActor(
+  tenantId: string,
+  contractorId: string,
+  actorId: string,
+): Promise<{ ratedAt: Date } | null> {
+  return scopedRead((tx) => latestRatingByActorTx(tx, tenantId, contractorId, actorId));
+}
+
+/** Same lookup inside the caller's transaction (the consumer re-asserts the cooldown where it writes). */
+export async function latestRatingByActorTx(
+  tx: ScopedTx,
+  tenantId: string,
+  contractorId: string,
+  actorId: string,
+): Promise<{ ratedAt: Date } | null> {
+  const rows = await tx.select({ ratedAt: contractorRatings.ratedAt }).from(contractorRatings)
+    .where(and(
+      eq(contractorRatings.tenantId, tenantId),
+      eq(contractorRatings.contractorId, contractorId),
+      eq(contractorRatings.ratedBy, actorId),
+    ))
+    .orderBy(desc(contractorRatings.ratedAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** A rating-history row plus the human work number of the work it is linked to (null when unlinked). */
+export type RatingHistoryRow = ContractorRatingRow & { workNumber: string | null };
+
 export async function listRatingHistory(
   tenantId: string,
   contractorId: string,
   limit = 50,
-): Promise<ContractorRatingRow[]> {
+): Promise<RatingHistoryRow[]> {
   return scopedRead((tx) =>
-    tx.select().from(contractorRatings)
+    tx.select({ ...getTableColumns(contractorRatings), workNumber: workProposals.workNumber })
+      .from(contractorRatings)
+      .leftJoin(
+        workProposals,
+        and(eq(workProposals.id, contractorRatings.workId), eq(workProposals.tenantId, contractorRatings.tenantId)),
+      )
       .where(
         and(
           eq(contractorRatings.tenantId, tenantId),

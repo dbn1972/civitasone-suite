@@ -16,15 +16,21 @@ export function registerApprovalConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      // The route validates both (shared/validators.ts); re-checked here so a directly published command cannot
+      // reach the insert with an Invalid Date or a zero/negative approved amount.
+      const aaDate = new Date(p.aaDate as string);
+      if (Number.isNaN(aaDate.getTime())) throw new NonRetryableError("INVALID_AA_DATE: aaDate is not a valid date");
+      const approvedAmountMinor = BigInt(p.approvedAmountMinor as string | number);
+      if (approvedAmountMinor <= 0n) throw new NonRetryableError("INVALID_AMOUNT: approved amount must be greater than zero");
       await tx.insert(administrativeApprovals).values({
         id: p.id as string,
         tenantId: msg.tenantId,
         workId: p.workId as string,
         aaNumber: p.aaNumber as string,
-        aaDate: new Date(p.aaDate as string),
+        aaDate,
         approvingAuthorityId: p.approvingAuthorityId as string,
         approvingOfficeId: (p.approvingOfficeId as string) ?? undefined,
-        approvedAmountMinor: BigInt(p.approvedAmountMinor as string | number),
+        approvedAmountMinor,
         remarks: (p.remarks as string) ?? undefined,
         approvalType: p.approvalType as string,
         status: "draft",
@@ -84,17 +90,22 @@ export function registerApprovalConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      // Same defence-in-depth as aaCreate: never insert an Invalid Date or a zero/negative sanctioned amount.
+      const tsDate = new Date(p.tsDate as string);
+      if (Number.isNaN(tsDate.getTime())) throw new NonRetryableError("INVALID_TS_DATE: tsDate is not a valid date");
+      const tsAmountMinor = BigInt(p.tsAmountMinor as string | number);
+      if (tsAmountMinor <= 0n) throw new NonRetryableError("INVALID_AMOUNT: sanctioned amount must be greater than zero");
       await tx.insert(technicalSanctions).values({
         id: p.id as string,
         tenantId: msg.tenantId,
         workId: p.workId as string,
         tsNumber: p.tsNumber as string,
-        tsDate: new Date(p.tsDate as string),
+        tsDate,
         tsAuthorityId: p.tsAuthorityId as string,
         tsOfficeId: (p.tsOfficeId as string) ?? undefined,
         srYear: (p.srYear as string) ?? undefined,
         zone: (p.zone as string) ?? undefined,
-        tsAmountMinor: BigInt(p.tsAmountMinor as string | number),
+        tsAmountMinor,
         remarks: (p.remarks as string) ?? undefined,
         sanctionType: p.sanctionType as string,
         status: "draft",

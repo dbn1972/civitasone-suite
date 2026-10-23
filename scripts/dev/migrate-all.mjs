@@ -5,7 +5,7 @@
  *
  * Usage: node scripts/dev/migrate-all.mjs
  */
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,7 +157,7 @@ for (const svc of SERVICES) {
     const sql = readFileSync(filePath);
     try {
       const inv = psqlInvocation(svc.db);
-      execSync(inv.cmd, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
+      execFileSync(inv.file, inv.args, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
       console.log(`[ok]   ${svc.name}/${file} → ${svc.db}`);
       applied++;
     } catch (err) {

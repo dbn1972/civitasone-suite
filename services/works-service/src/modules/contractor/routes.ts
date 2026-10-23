@@ -1,9 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { getProposal } from "../proposal/repo.js";
+import { withMaskedPan } from "./mask.js";
+import { ratingCooldownDays, isWithinRatingCooldown } from "./rating-policy.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do"];
 // Unmasked PAN is DPDP-sensitive: narrower than WRITE_ROLES (no works_operator).
@@ -15,9 +20,15 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/contractors", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const q = v.listQuerySchema.parse(req.query);
-    const data = await repo.listContractors(ctx.tenantId, { limit: q.limit, offset: q.offset });
-    return reply.send({ data, meta: { limit: q.limit, offset: q.offset } });
+    const q = v.contractorListQuerySchema.parse(req.query);
+    const [rows, total] = await Promise.all([
+      repo.listContractors(ctx.tenantId, { limit: q.limit, offset: q.offset }),
+      repo.countContractors(ctx.tenantId),
+    ]);
+    // GAP-WORKS-CONTRACTORS-06 (DPDP): the register never carries a clear PAN, whatever the caller's role. The
+    // audited reveal endpoint is the only way to read one from a list context.
+    const data = rows.map(withMaskedPan);
+    return reply.send({ data, meta: { limit: q.limit, offset: q.offset, page: q.page, pageSize: q.pageSize, total } });
   });
 
   // Get contractor by id
@@ -27,7 +38,9 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const { id } = v.idParamSchema.parse(req.params);
     const row = await repo.findContractorById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "contractor not found");
-    return reply.send({ data: row });
+    // The clear PAN is returned only to the roles entitled to reveal it (PII_REVEAL_ROLES, the same set that may call
+    // reveal-pan); every other reader gets the masked form.
+    return reply.send({ data: hasAnyRole(ctx, PII_REVEAL_ROLES) ? row : withMaskedPan(row) });
   });
 
   // Get contractor rating history
@@ -37,7 +50,13 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const { id } = v.idParamSchema.parse(req.params);
     const { limit } = v.listQuerySchema.parse(req.query);
     const rows = await repo.listRatingHistory(ctx.tenantId, id, Math.min(limit, 100));
-    return reply.send({ data: rows });
+    // GAP-WORKS-CONTRACTORS-DETAIL-03: resolve who rated, server-side, through identity-service (no cross-service
+    // SQL). An officer who cannot be resolved gets ratedByName null; the raw ratedBy id stays in the row for the
+    // self-cooldown check but is never what the UI prints.
+    const names = await fetchUserNames(ctx.tenantId, rows.map((r) => r.ratedBy));
+    const data = rows.map((r) => ({ ...r, ratedByName: names.get(r.ratedBy) ?? null }));
+    // meta.cooldownDays tells the rating form how long a repeat rating by the same officer is held back (0 = none).
+    return reply.send({ data, meta: { cooldownDays: ratingCooldownDays() } });
   });
 
   // Create contractor
@@ -60,7 +79,23 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const body = v.rateContractorSchema.parse(req.body);
     const existing = await repo.findContractorById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
-    const result = await commands.rateContractor(ctx, id, body.rating, body.comment);
+
+    // GAP-WORKS-CONTRACTORS-DETAIL-04: a rating may name the work it is about; that work must exist in this tenant.
+    if (body.workId && !(await getProposal(ctx.tenantId, body.workId))) {
+      throw new HttpError(404, "NOT_FOUND", "work not found");
+    }
+
+    // GAP-WORKS-CONTRACTORS-DETAIL-04: the same officer may not rate the same contractor again inside the configured
+    // cooling-off period. 409 so the rating dialog stays open with a clear message; the consumer re-checks.
+    const cooldownDays = ratingCooldownDays();
+    if (cooldownDays > 0) {
+      const last = await repo.latestRatingByActor(ctx.tenantId, id, ctx.actorId);
+      if (last && isWithinRatingCooldown(last.ratedAt, new Date(), cooldownDays)) {
+        throw new HttpError(409, "RATING_COOLDOWN", `You have already rated this contractor within the last ${cooldownDays} days`);
+      }
+    }
+
+    const result = await commands.rateContractor(ctx, id, body.rating, body.comment, body.workId);
     return reply.status(202).send(result);
   });
 
@@ -104,7 +139,15 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError)
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId });
+      return reply.code(400).send({
+        code: "VALIDATION_FAILED",
+        message: "invalid request",
+        correlationId,
+        retryable: false,
+        // Same per-field shape as the app-wide envelope (packages/schemas createFastifyErrorHandler), so the web's
+        // useFormError can show each message against its own field.
+        fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
     if (err instanceof HttpError)
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId });
     req.log.error({ err }, "unhandled error");

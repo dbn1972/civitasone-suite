@@ -29,6 +29,12 @@ const REASON_LABEL: Record<string, string> = {
 const reasonLabel = (r: string) => REASON_LABEL[r] ?? r;
 const EMPTY = { fromOfficerId: "", toOfficerId: "", reason: "transfer", remarks: "" };
 
+type CountState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "failed" }
+  | { kind: "ok"; movable: number; staysBehind: number };
+
 export function HandoverPanel() {
   const [operators, setOperators] = useState<Operator[]>([]);
   const [rows, setRows] = useState<Handover[]>([]);
@@ -41,41 +47,64 @@ export function HandoverPanel() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [loadError, setLoadError] = useState("");
-  // GAP-ESTAB-HANDOVER-05: distinguish an operators-roster failure (which must
-  // block the form — you can't pick officers from an empty roster) from a
-  // history-only failure (form stays usable).
+  // GAP-ESTAB-HANDOVER-05: the two loads fail independently. An operators-roster
+  // failure blocks the form (you can't pick officers from an empty roster); a
+  // history-only failure leaves the form fully usable and shows its error in the
+  // history card.
   const [operatorsFailed, setOperatorsFailed] = useState(false);
+  const [historyFailed, setHistoryFailed] = useState(false);
   // GAP-ESTAB-HANDOVER-01: resolved officer name maps for readable labels.
   const [officerMaps, setOfficerMaps] = useState<OfficerMaps | null>(null);
   const tFallback = useTranslations("employeeFallback");
-  // GAP-ESTAB-HANDOVER-03: file count preview for the selected from-officer.
-  const [fileCount, setFileCount] = useState<number | null>(null);
+  const t = useTranslations("estabW2");
+  // GAP-ESTAB-HANDOVER-03: how many files a handover will move off the selected
+  // from-officer's desk. `staysBehind` is the live files the handover does NOT move
+  // (drafts, closed), so the preview never overstates. A handover cannot start
+  // until this is known and non-zero.
+  const [count, setCount] = useState<CountState>({ kind: "idle" });
+  const [countNonce, setCountNonce] = useState(0);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
-    setLoadError("");
     setOperatorsFailed(false);
+    setHistoryFailed(false);
     try {
-      const [opRes, hoRes] = await Promise.all([
+      // Settled, not Promise.all: a failure of one list must not discard the other.
+      const [opRes, hoRes] = await Promise.allSettled([
         fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500", { signal }),
         fetch("/api/proxy/v1/estab/handovers?limit=100", { signal }),
       ]);
-      // A non-OK status is a real failure — never swallow it into an empty list,
+      // An abort means the panel unmounted while the requests were in flight.
+      const aborted = (r: PromiseSettledResult<Response>) =>
+        r.status === "rejected" && r.reason instanceof Error && r.reason.name === "AbortError";
+      if (aborted(opRes) || aborted(hoRes)) return;
+
+      // A non-OK status is a real failure - never swallow it into an empty list,
       // which would falsely read as "no handovers recorded".
-      if (!opRes.ok) {
+      let rosterLoaded = false;
+      if (opRes.status === "fulfilled" && opRes.value.ok) {
+        try {
+          setOperators(((await opRes.value.json()) as { data?: Operator[] }).data ?? []);
+          rosterLoaded = true;
+        } catch {
+          setOperatorsFailed(true);
+        }
+      } else {
         setOperatorsFailed(true);
-        throw new Error("Couldn't load the operator list.");
       }
-      if (!hoRes.ok) throw new Error("Couldn't load the handover history.");
-      setOperators(((await opRes.json()) as { data?: Operator[] }).data ?? []);
-      setRows(((await hoRes.json()) as { data?: Handover[] }).data ?? []);
+      if (hoRes.status === "fulfilled" && hoRes.value.ok) {
+        try {
+          setRows(((await hoRes.value.json()) as { data?: Handover[] }).data ?? []);
+        } catch {
+          setHistoryFailed(true);
+        }
+      } else {
+        setHistoryFailed(true);
+      }
       // GAP-ESTAB-HANDOVER-01: best-effort name resolution (shared with OfficerName).
-      try { setOfficerMaps(await loadMaps()); } catch { /* degrade to short id */ }
-    } catch (err) {
-      // An abort means the panel unmounted while the request was in flight.
-      if (err instanceof Error && err.name === "AbortError") return;
-      setLoadError(err instanceof Error ? err.message : "Failed to load");
+      if (rosterLoaded) {
+        try { setOfficerMaps(await loadMaps()); } catch { /* degrade to short id */ }
+      }
     } finally {
       setLoading(false);
       setLoadedOnce(true);
@@ -88,30 +117,35 @@ export function HandoverPanel() {
     return () => controller.abort();
   }, [load]);
 
-  // GAP-ESTAB-HANDOVER-03: preview how many files sit on the outgoing officer's
-  // desk so the confirm dialog can state the blast radius. Server-side count
-  // (never a capped client list). Re-fetches whenever the from-officer changes.
+  // GAP-ESTAB-HANDOVER-03: preview how many files the handover will move off the
+  // outgoing officer's desk so the confirm dialog can state the blast radius.
+  // Server-side count (never a capped client list); `movableCount` is the exact
+  // set the handover consumer reassigns. Re-fetches when the from-officer changes
+  // (or on "Check again").
   useEffect(() => {
     const from = form.fromOfficerId;
-    if (!from) { setFileCount(null); return; }
+    if (!from) { setCount({ kind: "idle" }); return; }
     const controller = new AbortController();
-    setFileCount(null);
+    setCount({ kind: "loading" });
     (async () => {
       try {
         const res = await fetch(
           `/api/proxy/v1/estab/files/held-count?officerId=${encodeURIComponent(from)}`,
           { signal: controller.signal },
         );
-        if (!res.ok) { setFileCount(null); return; }
-        const body = (await res.json()) as { count?: number };
-        setFileCount(typeof body.count === "number" ? body.count : null);
+        if (!res.ok) { setCount({ kind: "failed" }); return; }
+        const body = (await res.json()) as { count?: number; movableCount?: number };
+        // Without the movable figure there is no number to vouch for: fail closed rather than quote the live count.
+        if (typeof body.movableCount !== "number") { setCount({ kind: "failed" }); return; }
+        const live = typeof body.count === "number" ? body.count : body.movableCount;
+        setCount({ kind: "ok", movable: body.movableCount, staysBehind: Math.max(0, live - body.movableCount) });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        setFileCount(null);
+        setCount({ kind: "failed" });
       }
     })();
     return () => controller.abort();
-  }, [form.fromOfficerId]);
+  }, [form.fromOfficerId, countNonce]);
 
   // GAP-ESTAB-HANDOVER-01: resolve to "Name · Desk Role (division)" when the
   // HRMS/operator maps are available; degrade to the short id otherwise. The
@@ -159,8 +193,10 @@ export function HandoverPanel() {
     setMessage(""); setError("");
     if (!form.fromOfficerId || !form.toOfficerId) { setError("Select both officers"); return; }
     if (form.fromOfficerId === form.toOfficerId) { setError("Officers must differ"); return; }
+    // The confirm dialog states how many files move, so it never opens without that number.
+    if (count.kind !== "ok" || count.movable === 0) return;
     handoverConfirm.trigger();
-  }, [form, handoverConfirm]);
+  }, [form, handoverConfirm, count]);
 
   const activeOps = operators.filter((o) => o.active);
 
@@ -219,16 +255,28 @@ export function HandoverPanel() {
           </label>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          {fileCount === 0 && form.fromOfficerId ? (
-            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
-              This officer has no active files on their desk.
-            </p>
-          ) : fileCount !== null && form.fromOfficerId ? (
-            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
-              {fileCount} file{fileCount === 1 ? "" : "s"} will be reassigned.
-            </p>
+          {form.fromOfficerId && count.kind === "loading" ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>{t("hoCountLoading")}</p>
           ) : null}
-          <Button disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId} onClick={onHandoverClick}>
+          {form.fromOfficerId && count.kind === "failed" ? (
+            <div role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "0 0 8px" }}>
+              <span>{t("hoCountFailed")}</span>{" "}
+              <Button type="button" variant="ghost" onClick={() => setCountNonce((n) => n + 1)}>{t("hoCountRetry")}</Button>
+            </div>
+          ) : null}
+          {form.fromOfficerId && count.kind === "ok" && count.movable === 0 ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>{t("hoNoActiveFiles")}</p>
+          ) : null}
+          {form.fromOfficerId && count.kind === "ok" && count.movable > 0 ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>{t("hoWillMove", { count: count.movable })}</p>
+          ) : null}
+          {form.fromOfficerId && count.kind === "ok" && count.staysBehind > 0 ? (
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>{t("hoStaysBehind", { count: count.staysBehind })}</p>
+          ) : null}
+          <Button
+            disabled={saving || handoverConfirm.busy || !form.fromOfficerId || !form.toOfficerId || count.kind !== "ok" || count.movable === 0}
+            onClick={onHandoverClick}
+          >
             {saving ? "Handing over…" : "Hand over charge"}
           </Button>
         </div>
@@ -240,7 +288,7 @@ export function HandoverPanel() {
         <div className="card-h"><h3>Handover history</h3></div>
         {loading ? (
           <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
-        ) : loadError ? (
+        ) : historyFailed ? (
           <div className="pad">
             <ErrorState error={toHumanError("load", { area: "handover history" })} onRetry={() => void load()} />
           </div>
@@ -264,7 +312,7 @@ export function HandoverPanel() {
         open={handoverConfirm.open}
         title="Hand over this officer's entire file charge?"
         description={`This reassigns ${
-          fileCount === null ? "every file" : `all ${fileCount} file${fileCount === 1 ? "" : "s"}`
+          count.kind === "ok" ? `all ${count.movable} file${count.movable === 1 ? "" : "s"}` : "the files"
         } currently on ${label(form.fromOfficerId)}'s desk to ${label(form.toOfficerId)} (reason: ${reasonLabel(form.reason)}). Charge transfer takes effect once processed and cannot be undone from here.`}
         confirmLabel="Hand over charge"
         danger

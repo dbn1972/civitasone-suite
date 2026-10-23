@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { userListResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
@@ -69,14 +69,23 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
   // query param, so a caller can only ever read names within their own tenant.
   // Static path, registered before the parametric /identity/users/:id so it is
   // never shadowed by it.
-  app.get("/identity/users/directory", async (req, reply) => {
+  const directoryHandler = async (req: FastifyRequest, reply: FastifyReply) => {
     const ctx = resolveContext(req); // 401 for an unauthenticated caller; no role gate.
     const q = directoryQuery.parse(req.query);
     const rows = q.ids
       ? await queries.directoryByIds(ctx.tenantId, q.ids)
       : await queries.directoryByQuery(ctx.tenantId, q.q as string, q.limit);
     return reply.send({ data: rows });
-  });
+  };
+  // Same effective limit as the plugin default (100/min per tenant+IP), stated per route so it is explicit.
+  const directoryRoute = { config: { rateLimit: { max: 100, timeWindow: "1 minute" } } };
+  app.get("/identity/users/directory", directoryRoute, directoryHandler);
+  // The web reaches this endpoint as /api/v1/identity/users/directory (shared lib/directory helpers and the pickers
+  // built on them). The gateway's identity-v1 prefix forwards that verbatim to /v1/identity/users/directory, a path
+  // this service never registered, so every directory lookup (officer names on the works approvals registers
+  // included) 404ed in a real stack. Serve the same handler on the versioned path; /api/identity/* is not an
+  // option for the web because that prefix is gateway-public and carries the strict 10/min auth limit.
+  app.get("/v1/identity/users/directory", directoryRoute, directoryHandler);
 
   app.patch("/identity/users/:id", async (req, reply) => {
     const ctx = resolveContext(req);

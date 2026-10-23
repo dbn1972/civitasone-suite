@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DataTable, Segmented, Button, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { parseRupeesToPaise } from "@/lib/money";
+import { useEstabT } from "@/lib/estab/useEstabT";
 
 export type BookingRow = {
   id: string;
@@ -21,11 +23,18 @@ const SEGMENTS = ["All", "Pending", "In-house"];
 
 export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]; canOperate?: boolean }) {
   const router = useRouter();
+  const t = useEstabT();
   const [seg, setSeg] = useState("All");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [actionTarget, setActionTarget] = useState<BookingRow | null>(null);
   const [actionKind, setActionKind] = useState<"checkin" | "checkout">("checkin");
+  // Charges collected at check-out, as the officer typed them (rupees). Converted to integer paise with
+  // string arithmetic only (never a float): "1500.50" -> 150050. Blank is not 0; the officer states it.
+  const [charges, setCharges] = useState("");
+  const chargesPaise = parseRupeesToPaise(charges, { allowZero: true });
+  const chargesMinor =
+    chargesPaise !== null && Number.isSafeInteger(Number(chargesPaise)) ? Number(chargesPaise) : null;
 
   const filtered = rows.filter((r) => {
     switch (seg) {
@@ -47,10 +56,12 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
       actionKind === "checkin"
         ? `/api/proxy/v1/estab/room-bookings/${actionTarget.id}/checkin`
         : `/api/proxy/v1/estab/room-bookings/${actionTarget.id}/checkout`;
+    // The charges are what the officer entered at check-out; no tariff is applied or assumed here.
+    if (actionKind === "checkout" && chargesMinor === null) throw new Error(t("ghChargesInvalid"));
     const res = await fetch(endpoint, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(actionKind === "checkout" ? { chargesMinor: 0 } : {}),
+      body: JSON.stringify(actionKind === "checkout" ? { chargesMinor } : {}),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     setMessage(`${actionKind === "checkin" ? "Checked in" : "Checked out"}: ${actionTarget.guest}`);
@@ -62,6 +73,7 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
   function triggerAction(row: BookingRow, kind: "checkin" | "checkout") {
     setActionTarget(row);
     setActionKind(kind);
+    setCharges("");
     confirm.trigger();
   }
 
@@ -123,10 +135,34 @@ export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]
         }
         confirmLabel={actionKind === "checkin" ? "Check in" : "Check out"}
         busy={confirm.busy}
+        confirmDisabled={actionKind === "checkout" && chargesMinor === null}
         errorMessage={confirm.error}
         onConfirm={confirm.confirm}
         onCancel={confirm.cancel}
-      />
+      >
+        {actionKind === "checkout" ? (
+          <div className="cd-field">
+            <label htmlFor="gh-checkout-charges">{t("ghCheckoutCharges")}</label>
+            <input
+              id="gh-checkout-charges"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              value={charges}
+              onChange={(e) => setCharges(e.target.value)}
+              aria-required="true"
+              aria-invalid={charges.trim() !== "" && chargesMinor === null ? true : undefined}
+              aria-describedby="gh-checkout-charges-help"
+            />
+            <p id="gh-checkout-charges-help" style={{ fontSize: 12, margin: "4px 0 0", color: "var(--muted)" }}>
+              {t("ghCheckoutChargesHelp")}
+            </p>
+            {charges.trim() !== "" && chargesMinor === null ? (
+              <p role="alert" style={{ fontSize: 12, margin: "4px 0 0", color: "var(--bad)" }}>{t("ghChargesInvalid")}</p>
+            ) : null}
+          </div>
+        ) : null}
+      </ConfirmDialog>
     </>
   );
 }

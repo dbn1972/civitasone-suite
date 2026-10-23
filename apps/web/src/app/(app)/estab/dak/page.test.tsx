@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, act, cleanup } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -10,7 +10,11 @@ const identity = vi.hoisted(() => ({ roles: ["estab_officer"] as string[] }));
 vi.mock("@/lib/auth/useSessionIdentity", () => ({
   useSessionIdentity: () => ({ loaded: true, userId: "u1", roles: identity.roles }),
 }));
-const divisions = vi.hoisted(() => ({ value: { loaded: true, failed: false, divisions: ["Admin", "Finance"] } }));
+const divisions = vi.hoisted(() => ({
+  value: { loaded: true, failed: false, forbidden: false, divisions: ["Admin", "Finance"] } as {
+    loaded: boolean; failed: boolean; forbidden?: boolean; divisions: string[];
+  },
+}));
 vi.mock("@/lib/estab/useEstabDivisions", () => ({ useEstabDivisions: () => divisions.value }));
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -72,8 +76,8 @@ describe("DAK-01: open-file requires classification dialog", () => {
     });
   });
 
-  it("when the department list is unavailable (403 or none enrolled), Department is a typed field and its value is posted", async () => {
-    divisions.value = { loaded: true, failed: true, divisions: [] };
+  it("when the department list is unavailable (403 for this role), Department is a typed field and its value is posted", async () => {
+    divisions.value = { loaded: true, failed: true, forbidden: true, divisions: [] };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
       if (String(input).includes("open-file")) return Promise.resolve(jsonResponse({ id: "file-new" }));
       return Promise.resolve(jsonResponse({ data: [RECEIVED_ROW] }));
@@ -100,6 +104,23 @@ describe("DAK-01: open-file requires classification dialog", () => {
     const dept = screen.getByLabelText(/Department/i) as HTMLSelectElement;
     expect(Array.from(dept.options).map((o) => o.value)).toEqual(["", "Admin", "Finance"]);
     expect(screen.queryByPlaceholderText(/ADMIN/i)).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-FILES-NEW-03: when the department list failed to load (network/server), Department is a disabled select with an alert, never a typed field", async () => {
+    divisions.value = { loaded: true, failed: true, forbidden: false, divisions: [] };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [RECEIVED_ROW] }));
+    render(<DakRegistryPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
+    await screen.findByText(/Open file from DAK/i);
+    const dept = screen.getByLabelText(/Department/i) as HTMLSelectElement;
+    expect(dept.tagName).toBe("SELECT");
+    expect(dept.disabled).toBe(true);
+    const why = screen.getByText(/Departments could not be loaded/i);
+    expect(why.getAttribute("role")).toBe("alert");
+    fireEvent.change(screen.getByLabelText(/Classification/i), { target: { value: "confidential" } });
+    fireEvent.click(screen.getByRole("button", { name: /Open the file/i }));
+    expect(await screen.findByText("Select a department.")).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("open-file"))).toBe(false);
   });
 
   it("GAP-ESTAB-FILES-NEW-03: with no departments enrolled Department is an enabled typed field and says why", async () => {
@@ -178,8 +199,8 @@ describe("DAK-03: register form fields and validation", () => {
   });
 
   it("Given a valid form, When submitted, Then it posts the chosen fields and the message says the number appears once processed", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.resolve(jsonResponse({ id: "x", status: "accepted" }, 202));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((...args: [RequestInfo | URL, RequestInit?]) => {
+      if (args[1]?.method === "POST") return Promise.resolve(jsonResponse({ id: "x", status: "accepted" }, 202));
       return Promise.resolve(jsonResponse({ data: [] }));
     });
     render(<DakRegistryPage />);
@@ -290,5 +311,161 @@ describe("DAK page i18n", () => {
     expect(screen.getByLabelText(hi.dakSearchLabel)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: hi.dakRegisterBtn })).toBeInTheDocument();
     expect(hi.dakRegisterHeading).not.toBe(enMessages.estabW2.dakRegisterHeading);
+  });
+});
+
+describe("DAK-03: the allocated DAK number and barcode reach the success message", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    identity.roles = ["estab_officer"];
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const NEW_ROW = {
+    id: "new-1", dakNo: "DAK/2026/0042", fromAddress: "Home Ministry", subject: "Fresh memo",
+    receivedAt: "2026-10-21", status: "received", fileId: null, fileRef: null, barcode: "DAK-DAK-2026-0042", sourceSection: null,
+  };
+
+  async function tick(ms: number) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms);
+    });
+  }
+
+  /** The service: the register is empty until the registration is processed, then holds the new row. */
+  function installService(opts: { appearsOnPoll: number | null; row?: Record<string, unknown> }) {
+    let polls = 0;
+    const lookups: string[] = [];
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://x");
+      if (init?.method === "POST") return Promise.resolve(jsonResponse({ id: "new-1", status: "accepted" }, 202));
+      const q = url.searchParams.get("q");
+      if (q) {
+        // a lookup of the new row by its subject or number; like the service, refuse a term over 100 characters
+        polls += 1;
+        lookups.push(q);
+        if (q.length > 100) return Promise.resolve(jsonResponse({ error: { code: "VALIDATION" } }, 400));
+        const present = opts.appearsOnPoll !== null && polls >= opts.appearsOnPoll;
+        return Promise.resolve(jsonResponse({ data: present ? [opts.row ?? NEW_ROW] : [], pagination: { total: present ? 1 : 0 } }));
+      }
+      return Promise.resolve(jsonResponse({ data: [], pagination: { total: 0 } }));
+    });
+    return { fetchSpy, polls: () => polls, lookups };
+  }
+
+  async function register(dakNo = "", subject = "Fresh memo") {
+    render(<DakRegistryPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
+    if (dakNo) fireEvent.change(screen.getByLabelText(/^DAK number/i), { target: { value: dakNo } });
+    fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Home Ministry" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: subject } });
+    fireEvent.click(screen.getByRole("button", { name: "Register DAK" }));
+    await screen.findByText(/registered\./);
+  }
+
+  it("Given an auto-numbered DAK, When the row appears on the 2nd lookup, Then the message names the allocated number and barcode", async () => {
+    const h = installService({ appearsOnPoll: 2 });
+    await register();
+    expect(screen.getByText(/Its DAK number and barcode appear in the register below once it is processed/)).toBeInTheDocument();
+    await tick(1000); // lookup 1: not processed yet
+    expect(screen.queryByText(/Barcode DAK-DAK-2026-0042/)).not.toBeInTheDocument();
+    await tick(1000); // lookup 2: processed
+    expect(await screen.findByText("DAK DAK/2026/0042 registered. Barcode DAK-DAK-2026-0042.")).toBeInTheDocument();
+    // the lookup is by the subject, whatever the received date, and it stops once the row is found
+    expect(h.lookups).toEqual(["Fresh memo", "Fresh memo"]);
+    await tick(10_000);
+    expect(h.polls()).toBe(2);
+  });
+
+  it("Given a typed DAK number, the message names it straight away and then adds the barcode", async () => {
+    installService({ appearsOnPoll: 1, row: { ...NEW_ROW, dakNo: "D-77", barcode: "DAK-D-77" } });
+    await register("D-77");
+    expect(screen.getByText(/DAK D-77 registered\. Its barcode appears in the register below/)).toBeInTheDocument();
+    await tick(1000);
+    expect(await screen.findByText("DAK D-77 registered. Barcode DAK-D-77.")).toBeInTheDocument();
+  });
+
+  it("Given a typed DAK number, Then the lookup is by that number, not by the subject", async () => {
+    const h = installService({ appearsOnPoll: 1, row: { ...NEW_ROW, dakNo: "D-77", barcode: "DAK-D-77" } });
+    await register("D-77");
+    await tick(1000);
+    await screen.findByText("DAK D-77 registered. Barcode DAK-D-77.");
+    expect(h.lookups).toEqual(["D-77"]);
+  });
+
+  it("Given a subject over 100 characters, When the row appears, Then the lookup term is cut to 100 characters and the barcode still shows", async () => {
+    const longSubject = "Request for the sanction of an advance for the annual conference of the department, with the budget head and the proposed venue, dates and delegates listed in the enclosed note";
+    expect(longSubject.length).toBeGreaterThan(100);
+    const h = installService({ appearsOnPoll: 2, row: { ...NEW_ROW, subject: longSubject } });
+    await register("", longSubject);
+    await tick(1000); // lookup 1: not processed yet
+    await tick(1000); // lookup 2: processed
+    expect(await screen.findByText("DAK DAK/2026/0042 registered. Barcode DAK-DAK-2026-0042.")).toBeInTheDocument();
+    // the first 100 characters, trimmed (the service trims the term too)
+    const term = longSubject.slice(0, 100).trim();
+    expect(h.lookups).toEqual([term, term]);
+    expect(h.lookups.every((q) => q.length <= 100)).toBe(true);
+  });
+
+  it("Given the row never appears, Then the message stays the honest 'appears once processed' text and the lookups stop", async () => {
+    const h = installService({ appearsOnPoll: null });
+    await register();
+    for (let i = 0; i < 5; i += 1) await tick(1000);
+    expect(screen.getByText(/Its DAK number and barcode appear in the register below once it is processed/)).toBeInTheDocument();
+    expect(h.polls()).toBe(5);
+    await tick(10_000);
+    expect(h.polls()).toBe(5);
+  });
+
+  it("stops looking when the page is closed", async () => {
+    const h = installService({ appearsOnPoll: null });
+    render(<DakRegistryPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Home Ministry" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Fresh memo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register DAK" }));
+    await screen.findByText(/registered\./);
+    await tick(1000);
+    const seen = h.polls();
+    cleanup();
+    await tick(10_000);
+    expect(h.polls()).toBe(seen);
+  });
+});
+
+describe("DAK-05: status label and success message (GAP-ESTAB-DAK-05)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); identity.roles = ["estab_officer"]; });
+
+  it("shows status file_opened as 'File Opened' (humanised), never the raw value", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [{ ...RECEIVED_ROW, status: "file_opened" }] }));
+    render(<DakRegistryPage />);
+    await screen.findByText("DAK/2026/001");
+    expect(screen.getByText("File Opened")).toBeInTheDocument();
+    expect(screen.queryByText("file_opened")).not.toBeInTheDocument();
+    expect(screen.queryByText("file opened")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty source section as an em dash and a set one as a readable label", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [
+      { ...RECEIVED_ROW, id: "a", dakNo: "DAK/A", sourceSection: null },
+      { ...RECEIVED_ROW, id: "b", dakNo: "DAK/B", sourceSection: "accounts_branch" },
+    ] }));
+    render(<DakRegistryPage />);
+    await screen.findByText("DAK/A");
+    expect(screen.getByText("Accounts Branch")).toBeInTheDocument();
+    expect(screen.queryByText("manual")).not.toBeInTheDocument();
+  });
+
+  it("the success message names the DAK number the clerk typed", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((...args: [RequestInfo | URL, RequestInit?]) =>
+      Promise.resolve(args[1]?.method === "POST" ? jsonResponse({ id: "z", status: "accepted" }, 202) : jsonResponse({ data: [] })));
+    render(<DakRegistryPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^DAK number/i), { target: { value: "DAK/2026/555" } });
+    fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Ministry" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Memo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register DAK" }));
+    expect(await screen.findByText(/DAK DAK\/2026\/555 registered\./)).toBeInTheDocument();
   });
 });

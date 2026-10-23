@@ -7,7 +7,7 @@
  *
  * Usage: node scripts/dev/seed-all.mjs
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { psqlInvocation } from "./psql-exec.mjs";
 
 const T  = "00000000-0000-0000-0000-000000000001";  // tenant_id (demo-tenant)
@@ -20,7 +20,7 @@ let errors = 0;
 function psql(db, sql) {
   try {
     const inv = psqlInvocation(db);
-    execSync(inv.cmd, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
+    execFileSync(inv.file, inv.args, { input: sql, stdio: ["pipe", "pipe", "pipe"], env: inv.env });
   } catch (err) {
     const msg = ((err.stderr ?? "") + (err.stdout ?? "")).toString().trim();
     console.error(`  [ERR] ${db}: ${msg.slice(0, 400)}`);
