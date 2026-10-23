@@ -3,7 +3,8 @@
  *
  * Mirrors services/workflow-service/src/modules/delegations (routes.ts, schema.ts):
  *   POST   /v1/workflow/delegations                { delegateId, roles[1..20], fromDate, toDate, reason? }  -> 202 { id, status, correlationId }
- *   GET    /v1/workflow/delegations                -> { data: DelegationView[], total }   (whole tenant, newest first)
+ *   GET    /v1/workflow/delegations                -> { data: DelegationView[], total }   (newest first). Scoped by caller: plain users see rows where they are delegator or delegate;
+ *                                                    admins see the tenant. Filters: mine=true (delegator), toMe=true (delegate), delegatorId/delegateId (admin only)
  *   DELETE /v1/workflow/delegations/:id            -> 202 { id, status, correlationId }
  *   GET    /v1/workflow/delegations/legacy-report  -> { data: LegacyRow[], total }        (admin roles only)
  * Errors: { code, message, correlationId, retryable } with DELEGATION_ROLE_NOT_HELD (403),

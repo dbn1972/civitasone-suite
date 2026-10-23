@@ -16712,6 +16712,11 @@
   },
   "workflowDelegations": {
     "title": "My delegations",
+    "tabsAria": "Delegation lists",
+    "tabMine": "My delegations",
+    "tabToMe": "Delegated to me",
+    "colDelegator": "Delegated by",
+    "emptyToMeMessage": "Nobody has delegated a role to you right now. Delegations handed to you will be listed here.",
     "subtitle": "Let a colleague act on your behalf for a fixed period. A delegation passes on only the roles you pick, and only while you still hold them.",
     "legacyLink": "Legacy delegations",
     "formTitle": "New delegation",
@@ -16791,7 +16796,6 @@
     "legacyColReason": "Reason",
     "legacyOpenEnded": "No end date",
     "legacyShown": "Showing {count} of {total}.",
-    "listTruncated": "Showing the newest {count} of {total} delegations in your office. Older ones may not appear here.",
     "legacyForbiddenTitle": "You do not have access to this report.",
     "legacyForbiddenNext": "Only workflow administrators can see legacy delegations."
   }

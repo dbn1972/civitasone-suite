@@ -5,10 +5,11 @@
  *
  * API (workflow-service, via /api/proxy): POST/GET/DELETE /v1/workflow/delegations. Writes are CQRS: a 202 means
  * "received", so after each write this panel polls the list (bounded) until the change is visible, never faking success.
- * The list endpoint returns the whole office, so "mine" is the rows whose delegatorId is the signed-in user.
+ * The service scopes the list to the caller: ?mine=true returns delegations the caller created (delegator) and
+ * ?toMe=true those handed to the caller (delegate), so there is no client-side filtering or row window.
  * The role picker offers only roles the user holds (from the session); the service re-checks them against the token.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import {
@@ -28,11 +29,14 @@ import {
 const LIST_URL = "/api/proxy/v1/workflow/delegations";
 const LIST_LIMIT = 200;
 
+/** "mine" = I am the delegator (can revoke); "toMe" = I am the delegate (read-only). */
+type View = "mine" | "toMe";
+
 type Loaded = { rows: Delegation[]; total: number };
 type ListState = { status: "loading" } | { status: "error" } | ({ status: "ready" } & Loaded);
 
-async function fetchDelegations(): Promise<Loaded> {
-  const res = await fetch(`${LIST_URL}?limit=${LIST_LIMIT}`, { cache: "no-store" });
+async function fetchDelegations(view: View = "mine"): Promise<Loaded> {
+  const res = await fetch(`${LIST_URL}?limit=${LIST_LIMIT}&${view === "mine" ? "mine=true" : "toMe=true"}`, { cache: "no-store" });
   if (!res.ok) throw new Error("LIST_UNAVAILABLE");
   const parsed = parseDelegationList(await res.json());
   if (!parsed) throw new Error("LIST_UNEXPECTED_BODY");
@@ -58,35 +62,46 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   const today = todayIST();
 
   // ---- list ---------------------------------------------------------------
+  const [view, setView] = useState<View>("mine");
+  const viewRef = useRef<View>("mine");
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [names, setNames] = useState<Map<string, string>>(new Map());
 
   const apply = useCallback((l: Loaded) => setList({ status: "ready", ...l }), []);
-  const load = useCallback(async () => {
+  const load = useCallback(async (v?: View) => {
+    const target = v ?? viewRef.current;
     setList({ status: "loading" });
     try {
-      apply(await fetchDelegations());
+      const loaded = await fetchDelegations(target);
+      if (viewRef.current === target) apply(loaded);
     } catch {
-      setList({ status: "error" });
+      if (viewRef.current === target) setList({ status: "error" });
     }
   }, [apply]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const mine = useMemo(
-    () => (list.status === "ready" && userId ? list.rows.filter((r) => r.delegatorId === userId) : []),
-    [list, userId],
-  );
+  function switchView(next: View) {
+    if (next === viewRef.current) return;
+    viewRef.current = next;
+    setView(next);
+    void load(next);
+  }
+
+  /** Rows are already scoped by the service to the active view. */
+  const rows = useMemo(() => (list.status === "ready" ? list.rows : []), [list]);
+  /** The other party: the delegate on "mine", the delegator on "toMe". */
+  const personIdOf = useCallback((r: Delegation) => (view === "mine" ? r.delegateId : r.delegatorId), [view]);
 
   useEffect(() => {
-    const ids = mine.map((r) => r.delegateId);
+    const ids = rows.map(personIdOf);
     if (ids.length === 0) return;
     let live = true;
     void resolveDirectoryUsers(ids).then((opts) => {
       if (live) setNames(new Map(opts.map((o) => [o.id, o.label])));
     });
     return () => { live = false; };
-  }, [mine]);
+  }, [rows, personIdOf]);
 
   const nameOf = useCallback(
     (id: string) => names.get(id) ?? t("unknownPerson", { id: formatShortId(id) }),
@@ -97,15 +112,15 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   const pollOpts = pollDelayMs !== undefined ? { initialDelayMs: pollDelayMs } : {};
   const created = useAcceptedWrite<string, Loaded>({
     ...pollOpts,
-    poll: () => fetchDelegations(),
+    poll: () => fetchDelegations("mine"),
     isDone: (l, id) => l.rows.some((r) => r.id === id),
-    onConfirmed: (l) => apply(l),
+    onConfirmed: (l) => { if (viewRef.current === "mine") apply(l); },
   });
   const revoked = useAcceptedWrite<string, Loaded>({
     ...pollOpts,
-    poll: () => fetchDelegations(),
+    poll: () => fetchDelegations("mine"),
     isDone: (l, id) => !l.rows.some((r) => r.id === id && r.isActive),
-    onConfirmed: (l) => apply(l),
+    onConfirmed: (l) => { if (viewRef.current === "mine") apply(l); },
   });
   const formError = useFormError("delegation");
 
@@ -211,12 +226,12 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   }
 
   // ---- render ---------------------------------------------------------------
-  const active = mine.filter((r) => ["active", "upcoming"].includes(delegationState(r, today)));
-  const history = mine.filter((r) => ["expired", "revoked"].includes(delegationState(r, today)));
-  const truncated = list.status === "ready" && list.total > list.rows.length;
+  const active = rows.filter((r) => ["active", "upcoming"].includes(delegationState(r, today)));
+  const history = rows.filter((r) => ["expired", "revoked"].includes(delegationState(r, today)));
+  const isMine = view === "mine";
 
   const columns = (withActions: boolean) => [
-    { key: "delegateId" as const, label: t("colDelegate"), render: (r: Delegation) => nameOf(r.delegateId) },
+    { key: "delegateId" as const, label: isMine ? t("colDelegate") : t("colDelegator"), render: (r: Delegation) => nameOf(personIdOf(r)) },
     {
       key: "roles" as const, label: t("colRoles"),
       render: (r: Delegation) => (
@@ -261,6 +276,24 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
         actions={canViewLegacy ? <Link href="/workflow/delegations/legacy" className="btn ghost">{t("legacyLink")}</Link> : null}
       />
 
+      <div className="seg" role="tablist" aria-label={t("tabsAria")} style={{ marginBottom: 14 }}>
+        {(["mine", "toMe"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            role="tab"
+            id={`deleg-tab-${v}`}
+            aria-selected={view === v}
+            aria-controls="deleg-tabpanel"
+            className={view === v ? "on" : undefined}
+            onClick={() => switchView(v)}
+          >
+            {t(v === "mine" ? "tabMine" : "tabToMe")}
+          </button>
+        ))}
+      </div>
+
+      {isMine ? (
       <Card title={t("formTitle")} padding>
         <form onSubmit={(e) => void onSubmit(e)} noValidate aria-label={t("formTitle")} style={{ display: "grid", gap: 14, maxWidth: 640 }}>
           <fieldset
@@ -331,8 +364,11 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
         </form>
         <AcceptedNotice {...created.noticeProps} onRefresh={() => void load()} message={t("createdMessage")} />
       </Card>
+      ) : null}
 
-      <AcceptedNotice {...revoked.noticeProps} onRefresh={() => void load()} message={t("revokedMessage")} />
+      {isMine ? <AcceptedNotice {...revoked.noticeProps} onRefresh={() => void load()} message={t("revokedMessage")} /> : null}
+
+      <div id="deleg-tabpanel" role="tabpanel" aria-labelledby={`deleg-tab-${view}`}>
 
       {list.status === "loading" ? (
         <div role="status" aria-busy="true" style={{ marginTop: 18 }}>
@@ -348,17 +384,12 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
         </div>
       ) : (
         <>
-          {truncated ? (
-            <p className="mut" role="note" style={{ margin: "12px 0 0", fontSize: 13 }}>
-              {t("listTruncated", { count: list.rows.length, total: list.total })}
-            </p>
-          ) : null}
           <div style={{ marginTop: 18 }}>
             <Card title={t("activeTitle")}>
               {active.length === 0 ? (
-                <div className="pad"><EmptyState icon="🤝" title={t("emptyActiveTitle")} message={t("emptyActiveMessage")} /></div>
+                <div className="pad"><EmptyState icon="🤝" title={t("emptyActiveTitle")} message={isMine ? t("emptyActiveMessage") : t("emptyToMeMessage")} /></div>
               ) : (
-                <div className="pad"><DataTable<Delegation> columns={columns(true)} rows={active} rowKey={(r) => r.id} /></div>
+                <div className="pad"><DataTable<Delegation> columns={columns(isMine)} rows={active} rowKey={(r) => r.id} /></div>
               )}
             </Card>
           </div>
@@ -373,6 +404,8 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
           </div>
         </>
       )}
+
+      </div>
 
       {revoking ? (
         <ConfirmDialog

@@ -101,21 +101,24 @@ describe("DelegationsPanel: list states are distinct", () => {
     expect(screen.queryByText("We couldn’t load your delegations.")).not.toBeInTheDocument();
   });
 
-  it("notes when the office list is longer than the window fetched", async () => {
+  it("asks the service for only my delegations and shows no client-side window note", async () => {
     stub({ lists: [() => list([row()], 350)] });
     panel();
-    expect(await screen.findByRole("note")).toHaveTextContent("Showing the newest 1 of 350");
+    await screen.findByRole("button", { name: /Revoke delegation to/ });
+    const listCalls = calls.filter((c) => c.method === "GET" && c.url.includes("/v1/workflow/delegations"));
+    expect(listCalls.length).toBeGreaterThan(0);
+    expect(listCalls.every((c) => c.url.includes("mine=true") && !c.url.includes("toMe"))).toBe(true);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });
 
 describe("DelegationsPanel: my active and expired delegations", () => {
-  it("lists only my delegations, split into active and expired/revoked, with names", async () => {
+  it("lists my delegations (the service scopes the list to me), split into active and expired/revoked, with names", async () => {
     stub({
       lists: [() => list([
         row(),
         row({ id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", fromDate: addDays(TODAY, -40), toDate: addDays(TODAY, -10), reason: "Old" }),
         row({ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", isActive: false, reason: "Cancelled" }),
-        row({ id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", delegatorId: RAVI, delegateId: ASHA, reason: "Not mine" }),
       ])],
     });
     panel();
@@ -128,9 +131,41 @@ describe("DelegationsPanel: my active and expired delegations", () => {
     expect(within(history).getByText("Cancelled")).toBeInTheDocument();
     expect(within(history).getByText("Expired")).toBeInTheDocument();
     expect(within(history).getByText("Revoked")).toBeInTheDocument();
-    expect(screen.queryByText("Not mine")).not.toBeInTheDocument();
     // Only the one active row can be revoked.
     expect(screen.getAllByRole("button", { name: /Revoke delegation to/ })).toHaveLength(1);
+  });
+});
+
+describe("DelegationsPanel: Delegated to me tab", () => {
+  it("loads ?toMe=true, shows who delegated, and offers no revoke or create form", async () => {
+    const lists = [
+      () => list([row()]),
+      () => list([row({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", delegatorId: RAVI, delegateId: ME, reason: "Covering for Ravi" })]),
+    ];
+    stub({ lists });
+    panel();
+    await screen.findByRole("button", { name: /Revoke delegation to/ });
+    fireEvent.click(screen.getByRole("tab", { name: "Delegated to me" }));
+    expect(await screen.findByText("Covering for Ravi")).toBeInTheDocument();
+    expect(await screen.findByText("Ravi Menon")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Delegated by" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Revoke delegation to/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "New delegation" })).not.toBeInTheDocument();
+    const toMeCall = calls.filter((c) => c.method === "GET" && c.url.includes("toMe=true"));
+    expect(toMeCall).toHaveLength(1);
+    expect(toMeCall[0]!.url).not.toContain("mine=true");
+    // Back to my own list restores the revoke action and the form.
+    fireEvent.click(screen.getByRole("tab", { name: "My delegations" }));
+    expect(await screen.findByRole("button", { name: /Revoke delegation to/ })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "New delegation" })).toBeInTheDocument();
+  });
+
+  it("shows its own empty state when nothing is delegated to me", async () => {
+    stub({ lists: [() => list([]), () => list([])] });
+    panel();
+    await screen.findByText("No active delegations");
+    fireEvent.click(screen.getByRole("tab", { name: "Delegated to me" }));
+    expect(await screen.findByText(/Nobody has delegated a role to you/)).toBeInTheDocument();
   });
 });
 
