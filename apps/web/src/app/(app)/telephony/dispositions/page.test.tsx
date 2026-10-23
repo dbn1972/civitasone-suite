@@ -57,6 +57,13 @@ describe("TelephonyDispositionsPage", () => {
     expect(screen.queryByText(/showing saved data/i)).not.toBeInTheDocument();
   });
 
+  it("shows an error state when the payload was rejected (data null, no error, not loading)", () => {
+    resource.mockReturnValue(base({ data: null, error: null, loading: false }));
+    render(<TelephonyDispositionsPage />);
+    expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+    expect(screen.queryByText(/^0$/)).not.toBeInTheDocument();
+  });
+
   // GAP-TELEPHONY-DISPOSITIONS-02
   it("subtitle no longer says 'resolved calls'", () => {
     resource.mockReturnValue(base({ data: agg([["resolved", 1]]) }));

@@ -139,7 +139,9 @@ export default function TelephonyDispositionsPage() {
   );
 
   // GAP-TELEPHONY-DISPOSITIONS-01: honest error state, no "saved data" over empty.
-  if (error && !hasData) {
+  // A payload toCallMetrics() rejected (e.g. web deployed ahead of telephony-service)
+  // leaves data=null with no error and loading=false: that is an error, not zero calls.
+  if (!hasData && (error || !loading)) {
     return (
       <>
         {header}
