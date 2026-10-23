@@ -120,12 +120,19 @@ export async function listAgents(
 
 // ─── Dashboard KPIs (task counts by status) ─────────────────────────────────
 
-export async function getKpis(tenantId: string): Promise<{ status: string; count: number }[]> {
+export async function getKpis(
+  tenantId: string,
+  assigneeId?: string,
+): Promise<{ status: string; count: number }[]> {
   const rows = await scopedRead((tx) =>
     tx
       .select({ status: tasks.status, count: sql<number>`count(*)::int` })
       .from(tasks)
-      .where(eq(tasks.tenantId, tenantId))
+      .where(
+        assigneeId
+          ? and(eq(tasks.tenantId, tenantId), eq(tasks.assigneeId, assigneeId))
+          : eq(tasks.tenantId, tenantId),
+      )
       .groupBy(tasks.status),
   );
   return rows.map((r) => ({ status: r.status, count: r.count }));
