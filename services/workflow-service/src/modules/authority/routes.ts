@@ -8,6 +8,7 @@ import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import type { AuthorityLimitRow } from "./schema.js";
 import { evaluateAuthority, type AuthorityScope, type AuthorityType } from "./domain.js";
+import { todayIST } from "../../shared/dates.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
@@ -76,7 +77,7 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
       onDate: z.string().regex(dateRe).optional(),
       scopes: z.array(z.object({ scopeType: scopeEnum, scopeRef: z.string().min(1).max(128) })).min(1),
     }).parse(req.body);
-    const onDate = body.onDate ?? new Date().toISOString().slice(0, 10);
+    const onDate = body.onDate ?? todayIST();
     const limits = await repo.activeLimits(ctx.tenantId);
     const decision = evaluateAuthority(limits, { scopes: body.scopes as Array<{ scopeType: AuthorityScope; scopeRef: string }> }, body.authorityType as AuthorityType, BigInt(body.amount), onDate);
     return reply.send({ data: decision });
