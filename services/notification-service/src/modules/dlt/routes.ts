@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { createDltTemplateBody, updateDltTemplateBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -49,7 +50,7 @@ export async function dltRoutes(app: FastifyInstance): Promise<void> {
   // GET /notifications/dlt-templates/:id — get one
   app.get("/notifications/dlt-templates/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const row = await repo.findById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "DLT template not found");
     return reply.send({ data: row });
@@ -59,7 +60,7 @@ export async function dltRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/notifications/dlt-templates/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const parsed = updateDltTemplateBody.safeParse(req.body);
     if (!parsed.success) {
       throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => i.message).join("; "));
@@ -75,7 +76,7 @@ export async function dltRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/notifications/dlt-templates/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
 
     const existing = await repo.findById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "DLT template not found");

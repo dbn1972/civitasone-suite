@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { scopedRead } from "../../shared/db.js";
 
 const REVIEW_QUEUE_ROLES = ["notification_admin", "helpdesk_admin", "super_admin"];
@@ -67,7 +68,7 @@ export async function reviewQueueRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/inbox/review-queue/:id/link", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVIEW_QUEUE_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = linkBody.parse(req.body);
 
     const result = await scopedRead((tx) => tx.execute(sql`
@@ -91,7 +92,7 @@ export async function reviewQueueRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/inbox/review-queue/:id/resolve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVIEW_QUEUE_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = resolveBody.parse(req.body);
 
     if (body.action === "link") {
@@ -147,7 +148,7 @@ export async function reviewQueueRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/contact-review-queue/:id/resolve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVIEW_QUEUE_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = linkBody.parse(req.body);
 
     const result = await scopedRead((tx) => tx.execute(sql`
@@ -171,7 +172,7 @@ export async function reviewQueueRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/inbox/review-queue/:id/discard", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVIEW_QUEUE_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = discardBody.parse(req.body);
 
     const metadata = body.reason ? { discardReason: body.reason } : {};
@@ -225,7 +226,7 @@ export async function reviewQueueRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/contact-review-queue/:id/discard", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVIEW_QUEUE_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = discardBody.parse(req.body);
 
     const metadata = body.reason ? { discardReason: body.reason } : {};
