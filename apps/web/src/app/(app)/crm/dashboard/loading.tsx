@@ -9,7 +9,7 @@ export default function Loading() {
           {/* GAP-CRM-DASHBOARD-03: same h1 the loaded page shows (crm.dashboard.title
               default) so the heading does not flip from "Dashboard" to the real
               title on paint. */}
-          <h1 id="page-heading">{t("dashboardTitle")}</h1>
+          <div data-skeleton-heading="">{t("dashboardTitle")}</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

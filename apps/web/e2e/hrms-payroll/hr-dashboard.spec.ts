@@ -43,7 +43,7 @@ test.describe('HR Hub & Dashboard', () => {
   test.describe('HR Dashboard', () => {
     test('dashboard page loads with KPI heading', async ({ page }) => {
       await page.goto('/hr/dashboard');
-      await expect(page.getByText(/headcount|head.*count/i).or(page.locator('#page-heading')).first()).toBeVisible();
+      await expect(page.getByText(/headcount|head.*count/i).or(page.locator('#page-heading:visible')).first()).toBeVisible();
     });
 
     test('shows headcount metric', async ({ page }) => {
@@ -73,12 +73,12 @@ test.describe('HR Hub & Dashboard', () => {
       const empLink = page.getByRole('link', { name: /employees/i }).first();
       if (await empLink.isVisible()) {
         await empLink.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
         // Then to a specific employee
         const firstEmpLink = page.locator('tbody tr').first().getByRole('link').first();
         if (await firstEmpLink.isVisible()) {
           await firstEmpLink.click();
-          await expect(page.locator('#page-heading')).toBeVisible();
+          await expect(page.locator('#page-heading:visible')).toBeVisible();
         }
       }
     });
@@ -88,12 +88,12 @@ test.describe('HR Hub & Dashboard', () => {
       const applyLink = page.getByRole('link', { name: /apply|new leave/i }).first();
       await expect(applyLink).toBeVisible();
       await applyLink.click();
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
       // Back navigation
       const backLink = page.getByRole('link', { name: /back|leave/i }).first();
       if (await backLink.isVisible() && await backLink.getAttribute('href') === '/hr/leave') {
         await backLink.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
 
@@ -102,13 +102,13 @@ test.describe('HR Hub & Dashboard', () => {
       const structLink = page.getByRole('link', { name: /pay structures|structures/i });
       if (await structLink.isVisible()) {
         await structLink.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
 
     test('payroll → salary slips → back flow', async ({ page }) => {
       await page.goto('/hr/payroll/salary-slips');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -140,7 +140,7 @@ test.describe('HR Hub & Dashboard', () => {
         }),
       );
       await page.goto('/hr/employees');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('empty payroll runs shows create prompt', async ({ page }) => {
@@ -148,7 +148,7 @@ test.describe('HR Hub & Dashboard', () => {
         route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }),
       );
       await page.goto('/hr/payroll');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 

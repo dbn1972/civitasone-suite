@@ -10,7 +10,7 @@ import LeadEscalationRulesLoading from "./loading";
 describe("GAP-CRM-ESCALATION-RULES-06/07 loading skeleton", () => {
   it("titles the skeleton 'Lead Escalation Rules' and renders no stat tiles", () => {
     const { container } = renderWithIntl(<LeadEscalationRulesLoading />);
-    expect(container.querySelector("#page-heading")?.textContent).toBe("Lead Escalation Rules");
+    expect(container.querySelector("[data-skeleton-heading]")?.textContent).toBe("Lead Escalation Rules");
     // No four-tile grid: the old skeleton used a repeat() tile grid with fixed
     // 80px blocks; the new one is a card + rows only.
     expect(container.innerHTML).not.toContain("#f1f5f9");

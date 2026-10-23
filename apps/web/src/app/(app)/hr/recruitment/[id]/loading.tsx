@@ -7,7 +7,7 @@ export default async function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("vacancyDetailHeading")}</h1>
+          <div data-skeleton-heading="">{t("vacancyDetailHeading")}</div>
           <div className="sub">{t("loadingVacancy")}</div>
         </div>
       </div>

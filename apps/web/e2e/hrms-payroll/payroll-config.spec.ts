@@ -24,7 +24,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('Pay Structures', () => {
     test('page loads with heading and back navigation', async ({ page }) => {
       await page.goto('/hr/payroll/structures');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows stat cards (total, active, default)', async ({ page }) => {
@@ -48,13 +48,12 @@ test.describe('Payroll Configuration', () => {
 
     test('shows default indicator', async ({ page }) => {
       await page.goto('/hr/payroll/structures');
-      // Default indicator only present when a structure has isDefault=true in DB
-      const defaultInd = page.getByText('Yes').first().or(page.getByText(/default/i).first());
-      if (await defaultInd.isVisible()) {
-        await expect(defaultInd).toBeVisible();
-      } else {
-        await expect(page.locator('tbody tr').first()).toBeVisible();
-      }
+      // Structures render as cards (SalaryStructureCard), never as <tbody> rows
+      // (see the REL-023 note above); the default one carries a "Default" badge
+      // (salaryStructureCard.defaultBadge). Assert the badge directly -- the old
+      // isVisible() probe raced the streamed content and fell back to a table
+      // row that this page has never rendered.
+      await expect(page.getByText('Default', { exact: true }).first()).toBeVisible();
     });
 
     test('shows create structure form', async ({ page }) => {
@@ -80,7 +79,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('DDOs', () => {
     test('DDO page loads', async ({ page }) => {
       await page.goto('/hr/payroll/ddos');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows DDO master data', async ({ page }) => {
@@ -96,7 +95,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('Pensioners', () => {
     test('pensioners page loads', async ({ page }) => {
       await page.goto('/hr/payroll/pensioners');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows pensioner master data', async ({ page }) => {
@@ -112,17 +111,17 @@ test.describe('Payroll Configuration', () => {
   test.describe('Tax Configuration', () => {
     test('tax config page loads', async ({ page }) => {
       await page.goto('/hr/payroll/tax-config');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('income tax page loads', async ({ page }) => {
       await page.goto('/hr/payroll/income-tax');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('tax declaration page loads', async ({ page }) => {
       await page.goto('/hr/payroll/tax-declaration');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -131,7 +130,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('GPF', () => {
     test('GPF page loads', async ({ page }) => {
       await page.goto('/hr/payroll/gpf');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -140,7 +139,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('NPS', () => {
     test('NPS page loads', async ({ page }) => {
       await page.goto('/hr/payroll/nps');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -149,7 +148,7 @@ test.describe('Payroll Configuration', () => {
   test.describe('Form 16', () => {
     test('Form 16 page loads', async ({ page }) => {
       await page.goto('/hr/payroll/form16');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -158,12 +157,12 @@ test.describe('Payroll Configuration', () => {
   test.describe('Statutory Returns', () => {
     test('statutory returns page loads', async ({ page }) => {
       await page.goto('/hr/payroll/returns');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('statutory deductions page loads', async ({ page }) => {
       await page.goto('/hr/payroll/statutory');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -173,82 +172,82 @@ test.describe('Payroll Configuration', () => {
     test.describe.configure({ timeout: 90000 }); // extra headroom after 130+ tests
     test('arrears page loads', async ({ page }) => {
       await page.goto('/hr/payroll/arrears');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('bonus page loads', async ({ page }) => {
       await page.goto('/hr/payroll/bonus');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('loans page loads', async ({ page }) => {
       await page.goto('/hr/payroll/loans');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('FnF page loads', async ({ page }) => {
       await page.goto('/hr/payroll/fnf');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('disbursement page loads', async ({ page }) => {
       await page.goto('/hr/payroll/disbursement');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('pay groups page loads', async ({ page }) => {
       await page.goto('/hr/payroll/pay-groups');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('salary revisions page loads', async ({ page }) => {
       await page.goto('/hr/payroll/salary-revisions');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('reimbursements page loads', async ({ page }) => {
       await page.goto('/hr/payroll/reimbursements');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('off-cycle page loads', async ({ page }) => {
       await page.goto('/hr/payroll/off-cycle');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('payroll register page loads', async ({ page }) => {
       await page.goto('/hr/payroll/register');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('comparison page loads', async ({ page }) => {
       await page.goto('/hr/payroll/comparison');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('costing page loads', async ({ page }) => {
       await page.goto('/hr/payroll/costing');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('CTC page loads', async ({ page }) => {
       await page.goto('/hr/payroll/ctc');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('corrections page loads', async ({ page }) => {
       await page.goto('/hr/payroll/corrections');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('flex benefits page loads', async ({ page }) => {
       await page.goto('/hr/payroll/flex-benefits');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('period page loads', async ({ page }) => {
       await page.goto('/hr/payroll/period');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 });

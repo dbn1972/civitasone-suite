@@ -22,7 +22,7 @@ test.describe('Recruitment', () => {
   test.describe('Recruitment Page', () => {
     test('page loads with heading', async ({ page }) => {
       await page.goto('/hr/recruitment');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows stat cards with vacancy metrics', async ({ page }) => {
@@ -88,7 +88,7 @@ test.describe('Recruitment', () => {
     test('shows empty state when no vacancies', async ({ page }) => {
       // page.route() intercepts browser-fetch only, not SSR; just verify page loads
       await page.goto('/hr/recruitment');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -97,7 +97,7 @@ test.describe('Recruitment', () => {
   test.describe('New Vacancy', () => {
     test('new vacancy page loads', async ({ page }) => {
       await page.goto('/hr/recruitment/new');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -106,7 +106,7 @@ test.describe('Recruitment', () => {
   test.describe('Talent Pool', () => {
     test('talent pool page loads', async ({ page }) => {
       await page.goto('/hr/recruitment/talent-pool');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -149,12 +149,12 @@ test.describe('Recruitment', () => {
             }),
           );
           await link.click();
-          await expect(page.locator('#page-heading')).toBeVisible();
+          await expect(page.locator('#page-heading:visible')).toBeVisible();
         } else {
-          await expect(page.locator('#page-heading')).toBeVisible();
+          await expect(page.locator('#page-heading:visible')).toBeVisible();
         }
       } else {
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
   });

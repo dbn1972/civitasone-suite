@@ -7,7 +7,7 @@ export default async function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("queue.title")}</h1>
+          <div data-skeleton-heading="">{t("queue.title")}</div>
           <div className="sub">{t("loading")}</div>
         </div>
       </div>

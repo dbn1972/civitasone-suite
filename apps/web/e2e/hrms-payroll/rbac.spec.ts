@@ -76,19 +76,19 @@ test.describe('RBAC — HR Admin', () => {
 
   test('can access leave management', async ({ page }) => {
     await page.goto('/hr/leave');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
     // HR admin should see approval actions
     await expect(page.getByRole('link', { name: /approval/i })).toBeVisible();
   });
 
   test('can access attendance', async ({ page }) => {
     await page.goto('/hr/attendance');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('can access payroll runs', async ({ page }) => {
     await page.goto('/hr/payroll');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('dashboard shows full metrics', async ({ page }) => {
@@ -112,7 +112,7 @@ test.describe('RBAC — Employee (Self-Service)', () => {
 
   test('can access leave application', async ({ page }) => {
     await page.goto('/hr/leave');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('payroll access restricted — shows only own slips or error', async ({ page }) => {
@@ -121,7 +121,7 @@ test.describe('RBAC — Employee (Self-Service)', () => {
     );
     await page.goto('/hr/payroll');
     // Page should handle 403 gracefully
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 });
 
@@ -132,7 +132,7 @@ test.describe('RBAC — Manager', () => {
 
   test('can view team employees', async ({ page }) => {
     await page.goto('/hr/employees');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('can access leave approvals', async ({ page }) => {
@@ -142,7 +142,7 @@ test.describe('RBAC — Manager', () => {
 
   test('can view team attendance', async ({ page }) => {
     await page.goto('/hr/attendance');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 });
 
@@ -153,7 +153,7 @@ test.describe('RBAC — Payroll Officer', () => {
 
   test('can access payroll runs', async ({ page }) => {
     await page.goto('/hr/payroll');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('can view salary slips', async ({ page }) => {
@@ -161,6 +161,6 @@ test.describe('RBAC — Payroll Officer', () => {
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fixtures.salarySlips) }),
     );
     await page.goto('/hr/payroll/salary-slips');
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 });

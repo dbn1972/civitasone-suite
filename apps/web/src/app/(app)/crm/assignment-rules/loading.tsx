@@ -6,7 +6,7 @@ export default function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("assignmentRulesTitle")}</h1>
+          <div data-skeleton-heading="">{t("assignmentRulesTitle")}</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

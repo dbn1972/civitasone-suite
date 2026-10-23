@@ -173,7 +173,7 @@ test.describe('UX Quality — Payroll Run Lifecycle (High-Stakes Action)', () =>
       await expect(page.getByText(/draft|running|processing|approved|disbursed/i).first()).toBeVisible();
     } else {
       // No runs yet; page-heading still shows
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     }
   });
 
@@ -255,7 +255,7 @@ test.describe('UX Quality — Navigation & Cognitive Load', () => {
   test('HR hub has categorized tiles (not 72 flat items)', async ({ page }) => {
     await page.goto('/hr');
     // Page should have some organizational structure
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
     // Should have navigable tiles
     const links = await page.getByRole('link').count();
     expect(links).toBeGreaterThan(10); // Has navigation tiles
@@ -303,7 +303,7 @@ test.describe('UX Quality — Navigation & Cognitive Load', () => {
     if (await empLink.isVisible()) {
       await empLink.click();
     }
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
     // Grouped information sections (department label or personal info)
     await expect(
       page.getByText(/personal information/i)
@@ -346,7 +346,7 @@ test.describe('UX Quality — Feedback & Error Recovery', () => {
     });
     await page.goto('/hr/employees');
     // Page heading should be visible immediately (from server component)
-    await expect(page.locator('#page-heading')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
   });
 
   test('error state offers retry (not just "something went wrong")', async ({ page }) => {
@@ -472,7 +472,7 @@ test.describe('UX Quality — Information Hierarchy', () => {
   test('payroll page shows context before action (understand then act)', async ({ page }) => {
     await page.goto('/hr/payroll');
     // Create form should come AFTER stat cards (understand the state first)
-    const heading = page.locator('#page-heading');
+    const heading = page.locator('#page-heading:visible');
     await expect(heading).toBeVisible();
     // Stats visible before action area
     await expect(page.getByText(/total runs/i)).toBeVisible();
