@@ -37,7 +37,8 @@ import { db } from "../src/shared/db.js";
 import { registerAnomalyConsumers } from "../src/modules/anomaly/consumer.js";
 import { CONSUMED_EVENTS } from "../src/topics.js";
 
-const TENANT = "10000000-0000-4000-8000-000000000099";
+// Unique per run: the outbox rows this test counts are never cleaned, so a fixed tenant accumulates across runs on a reused DB.
+const TENANT = globalThis.crypto.randomUUID();
 const ACTOR = "bb000001-ec00-4000-8000-0000000000ff";
 
 function tenantWrappedQueue(): MemoryQueue {

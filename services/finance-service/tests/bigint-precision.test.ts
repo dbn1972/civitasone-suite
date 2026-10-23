@@ -16,6 +16,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { financeLedger } from "../src/modules/gl/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { scoped } from "./_tenant.js";
+import { purgeLedgerRows } from "./_purge-ledger.js";
 
 const TENANT = "c1111111-aaaa-4000-8000-000000000002";
 const ACTOR = "00000000-aaaa-4000-8000-0000000000ab";
@@ -39,11 +40,9 @@ async function seedHead() {
 }
 
 async function clean() {
-  // The ledger is append-only (trigger blocks DELETE), so we bypass with raw SQL
-  // that temporarily disables the trigger for test cleanup.
-  await db.execute(sql`
-    DELETE FROM gl.finance_ledger WHERE tenant_id = ${TENANT}::uuid
-  `).catch(() => { /* ignore if trigger blocks — test rows are tenant-scoped */ });
+  // The ledger is append-only (trigger + RLS), so purge through the transactional
+  // trigger-bypass helper; the tenant is dedicated to this file.
+  await purgeLedgerRows(TENANT, sql`true`);
   await db.delete(financeHeads).where(eq(financeHeads.id, HEAD_ID)).catch(() => {});
 }
 

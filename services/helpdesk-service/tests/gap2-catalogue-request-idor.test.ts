@@ -34,7 +34,9 @@ vi.mock("../src/shared/infra.js", async () => {
 });
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr"; // gitleaks:allow
-const TENANT = "aaaaaaaa-0000-4000-8000-00000000cf01";
+// Unique per run: helpdesk files share one DB; a fixed tenant id made this file and
+// catalogue-sweeper.test.ts wipe/see each other's rows.
+const TENANT = globalThis.crypto.randomUUID();
 const OWNER = randomUUID();
 const OTHER = randomUUID();
 const AGENT = randomUUID();

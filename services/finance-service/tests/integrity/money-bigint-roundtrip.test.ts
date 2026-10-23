@@ -14,6 +14,7 @@ import { db, sqlClient } from "../../src/shared/db.js";
 import { financeLedger } from "../../src/modules/gl/schema.js";
 import { financeHeads } from "../../src/modules/budget/schema.js";
 import { scoped } from "../_tenant.js";
+import { purgeLedgerRows } from "../_purge-ledger.js";
 
 const TENANT = "c2222222-aaaa-4000-8000-000000000004";
 const ACTOR = "00000000-aaaa-4000-8000-0000000000cd";
@@ -42,9 +43,8 @@ async function seedHead() {
 }
 
 afterAll(async () => {
-  await db
-    .execute(sql`DELETE FROM gl.finance_ledger WHERE tenant_id = ${TENANT}::uuid`)
-    .catch(() => {});
+  // Append-only ledger: purge through the transactional trigger-bypass helper (tenant is dedicated to this file).
+  await purgeLedgerRows(TENANT, sql`true`);
   await db.delete(financeHeads).where(eq(financeHeads.id, HEAD_ID)).catch(() => {});
   await sqlClient.end();
 });
