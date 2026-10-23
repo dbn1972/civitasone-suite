@@ -5,7 +5,7 @@ import type { NotificationDelivery } from "@civitasone/types";
 import { PageHeader, StatCard, StatGrid, DataTable, Segmented, EmptyState, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate, maskRecipient } from "@/lib/formatters";
+import { formatDateTimeIST, formatIndianDate, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
 import { isInDeliveryGroup } from "../_components/deliveryStatus";
 import { channelLabel } from "../_components/channelLabel";
@@ -56,7 +56,7 @@ export default function NotificationDeliveriesPage() {
 
   const cacheNote =
     offline || source === "cache"
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(cachedAt)}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   const tableRows: DeliveryRow[] = deliveries.map((d) => ({

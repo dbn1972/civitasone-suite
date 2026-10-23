@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatDateTimeIST } from "@/lib/formatters";
 import type { ProjectWbsNode } from "@/app/_data/loaders";
 
 type TreeNode = ProjectWbsNode & { children: TreeNode[] };
@@ -79,7 +80,7 @@ export function WbsTree({ nodes, source = "api" }: { nodes: ProjectWbsNode[]; so
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(cachedAt)}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   const tree = buildTree(data);
