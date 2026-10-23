@@ -16,10 +16,11 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
  */
 export async function nextOpinionNo(tx: Writer, tenantId: string, year: number): Promise<string> {
   const prefix = `OPN/${year}/`;
+  const prefixPattern = `${prefix}%`;
   const rows = await (tx as typeof db)
     .select({ count: sql<number>`count(*)::int` })
     .from(legalOpinions)
-    .where(and(eq(legalOpinions.tenantId, tenantId), sql`${legalOpinions.opinionNo} LIKE ${prefix + "%"}`));
+    .where(and(eq(legalOpinions.tenantId, tenantId), sql`${legalOpinions.opinionNo} LIKE ${prefixPattern}`));
   const seq = (rows[0]?.count ?? 0) + 1;
   return `${prefix}${String(seq).padStart(4, "0")}`;
 }

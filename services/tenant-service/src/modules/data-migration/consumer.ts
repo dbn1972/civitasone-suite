@@ -124,7 +124,7 @@ export function registerDataMigrationConsumers(q: Queue): void {
             if (code) seenCodes.add(code);
             inserted++;
           } catch (err) {
-            errors.push({ index: i, error: `insert failed: ${err instanceof Error ? err.message : String(err)}` });
+            errors.push({ index: i, error: `row insert failed: ${err instanceof Error ? err.message : String(err)}` });
           }
         }
       } else {
