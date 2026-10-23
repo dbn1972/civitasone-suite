@@ -1,3 +1,4 @@
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
@@ -54,8 +55,16 @@ export function registerF3_pay_matrix_Consumers(queue: Queue): void {
 
             for (const item of plan) {
               const employeeId = String(item.employeeId ?? "");
-              const fromMinor = Number(item.fromMinor);
-              const toMinor = Number(item.toMinor);
+              // Strict parse: a malformed/unsafe amount becomes NaN, which the
+              // Number.isFinite guard below turns into the existing "skip malformed item" path.
+              let fromMinor = Number.NaN;
+              let toMinor = Number.NaN;
+              try {
+                fromMinor = minorToSafeNumber(item.fromMinor);
+                toMinor = minorToSafeNumber(item.toMinor);
+              } catch {
+                /* left as NaN -> skipped as malformed below */
+              }
               // Defensive validation of the queued payload — never trust it
               // enough to move pay backwards or off a malformed value.
               if (!employeeId || !Number.isFinite(fromMinor) || !Number.isFinite(toMinor) || toMinor < fromMinor) {

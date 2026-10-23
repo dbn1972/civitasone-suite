@@ -9,7 +9,7 @@ const AUDIT_TOPIC = "audit.event.record";
 export type LegalClearance = {
   reviewId: string;
   contractRef: string;
-  valueMinor: number;
+  valueMinor: number | string; // legal-service now emits an exact base-10 string
   clearedAt: string;
 };
 
@@ -17,7 +17,7 @@ export type LegalClearance = {
 export function registerClearanceConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.legalContractCleared, async (msg) => {
     const p = msg.payload as {
-      reviewId: string; contractRef: string; valueMinor: number;
+      reviewId: string; contractRef: string; valueMinor: number | string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;

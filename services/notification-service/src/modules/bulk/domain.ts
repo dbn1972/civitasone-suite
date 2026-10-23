@@ -79,5 +79,8 @@ export type CampaignResponseView = {
  */
 export function computeRoiBps(attributedRevenueMinor: bigint, actualCostMinor: bigint): number | null {
   if (actualCostMinor === 0n) return null;
-  return Number(((attributedRevenueMinor - actualCostMinor) * 10000n) / actualCostMinor);
+  // The money arithmetic above is exact BigInt; what is converted here is the resulting
+  // basis-point RATIO (a small dimensionless integer, not an amount).
+  const roiBpsExact = ((attributedRevenueMinor - actualCostMinor) * 10000n) / actualCostMinor;
+  return Number(roiBpsExact);
 }

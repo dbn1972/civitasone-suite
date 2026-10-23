@@ -1,3 +1,4 @@
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -45,7 +46,7 @@ export async function reportsRoutes(app: FastifyInstance): Promise<void> {
         code: r.code,
         name: r.name,
         expenditureMinor: r.expenditure_minor,
-        expenditureRupees: Number(r.expenditure_minor) / 100,
+        expenditureRupees: minorToMajorNumber(r.expenditure_minor),
       })),
     });
   });

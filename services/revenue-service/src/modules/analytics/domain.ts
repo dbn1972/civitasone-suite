@@ -46,7 +46,9 @@ export interface PeriodTrend {
  */
 export function collectionEfficiencyBps(demandMinor: bigint, collectionMinor: bigint): number {
   if (demandMinor <= 0n) return 0;
-  return Number((collectionMinor * 10000n) / demandMinor);
+  // Ratio in basis points (dimensionless, small): the amounts stay bigint until here.
+  const efficiencyBpsExact = (collectionMinor * 10000n) / demandMinor;
+  return Number(efficiencyBpsExact);
 }
 
 /**
@@ -239,7 +241,9 @@ export function forecast(
   const madMinor = residCount === 0 ? 0n : residSum / BigInt(residCount);
 
   const meanY = bigintMean(series);
-  const confidenceBps = meanY <= 0n ? 0 : Math.max(0, 10000 - Number((madMinor * 10000n) / meanY));
+  // MAD/mean ratio in basis points (dimensionless): the amounts stay bigint until here.
+  const madRatioBps = meanY <= 0n ? 0n : (madMinor * 10000n) / meanY;
+  const confidenceBps = meanY <= 0n ? 0 : Math.max(0, 10000 - Number(madRatioBps));
 
   // ── forward projection ───────────────────────────────────────────────────────
   const work = [...series];

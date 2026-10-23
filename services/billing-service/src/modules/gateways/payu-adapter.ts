@@ -20,6 +20,7 @@ import type {
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
+import { minorToMajorString } from "@civitasone/schemas/money";
 
 const BASE_URL = process.env.PAYU_BASE_URL ?? "https://sandboxsecure.payu.in";
 const TIMEOUT_MS = Number(process.env.PAYMENT_TIMEOUT_MS ?? "10000");
@@ -60,7 +61,7 @@ export const payuAdapter: PaymentGateway = {
 
   async createOrder(amount: bigint, currency: string, metadata: OrderMetadata): Promise<GatewayOrder> {
     const txnId = `payu-${metadata.tenantId}-${Date.now()}`;
-    const amountStr = (Number(amount) / 100).toFixed(2); // PayU expects rupees
+    const amountStr = minorToMajorString(amount); // PayU expects rupees
     const merchantKey = getMerchantKey();
     const salt = getSalt();
 
@@ -233,7 +234,7 @@ export const payuAdapter: PaymentGateway = {
     });
 
     if (amountPaise != null) {
-      params.set("var2", (Number(amountPaise) / 100).toFixed(2));
+      params.set("var2", minorToMajorString(amountPaise));
     }
 
     const res = await fetchWithTimeout(`${BASE_URL}/merchant/postservice?form=2`, {

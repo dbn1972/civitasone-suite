@@ -45,6 +45,8 @@
  * dedicated pass if this module is touched again.
  */
 
+import { minorToSafeNumber } from "@civitasone/schemas/money";
+
 export const MAX_QUALIFYING_HALF_YEARS = 66; // 33 years (DCRG cap only)
 export const MIN_PENSION_QUALIFYING_HALF_YEARS = 20; // 10 years — pension floor (CCS Pension Rules 2021, Rule 44)
 export const FULL_PENSION_FRACTION = 0.5; // 50% of average emoluments (flat, irrespective of length once >= 10 yrs)
@@ -285,7 +287,7 @@ export function computePension(input: PensionInput): PensionResult {
   const daRate = input.daRatePct / 100;
 
   // Last-drawn Basic+DA (emoluments base for DCRG and commutation).
-  const lastBasic = Number(input.lastBasicMinor);
+  const lastBasic = minorToSafeNumber(input.lastBasicMinor); // float DA/pension maths below: reject (not round) > 2^53
   const emolumentsBasicPlusDa = toPaise(lastBasic * (1 + daRate));
 
   if (input.pensionScheme !== "GPF") {
@@ -328,7 +330,7 @@ export function computePension(input: PensionInput): PensionResult {
   const avgEmolumentsSource: PensionResult["avgEmolumentsSource"] =
     input.avgEmolumentsMinor !== undefined ? "last_10_months" : "last_drawn_fallback";
   const avgEmoluments =
-    input.avgEmolumentsMinor !== undefined ? Number(input.avgEmolumentsMinor) : lastBasic * (1 + daRate);
+    input.avgEmolumentsMinor !== undefined ? minorToSafeNumber(input.avgEmolumentsMinor) : lastBasic * (1 + daRate);
 
   // Superannuation pension — CCS (Pension) Rules, 2021, Rule 44 (position w.e.f.
   // 01.01.2006): a flat 50% of average emoluments once the 10-year qualifying
@@ -408,7 +410,7 @@ export function computePension(input: PensionInput): PensionResult {
  * Returns paise. Used by separation settlement.
  */
 export function elEncashment(lastBasicMinor: bigint, daRatePct: number, elBalanceDays: number): bigint {
-  const dailyEmolument = Number(lastBasicMinor) * (1 + daRatePct / 100) / 30;
+  const dailyEmolument = minorToSafeNumber(lastBasicMinor) * (1 + daRatePct / 100) / 30;
   const days = Math.min(Math.max(elBalanceDays, 0), 300);
   return toPaise(dailyEmolument * days);
 }

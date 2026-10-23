@@ -172,8 +172,8 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       gatewayOrderId: result.gatewayOrderId,
       // GAP2-BILLING-PAYMENTS-11: capturedAmount is a bigint; pass its exact
       // integer-paise string (matching the initiate/refund branches) instead of
-      // Number(result.capturedAmount), which float-rounded money above
-      // Number.MAX_SAFE_INTEGER paise into the audit/reconciliation command.
+      // a float coercion, which rounded money above Number.MAX_SAFE_INTEGER paise
+      // in the audit/reconciliation command.
       amountPaise: result.capturedAmount.toString(),
       status: result.status,
     });

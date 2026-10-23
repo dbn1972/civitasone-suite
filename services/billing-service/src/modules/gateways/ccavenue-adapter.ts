@@ -21,6 +21,7 @@ import type {
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
+import { minorToMajorString } from "@civitasone/schemas/money";
 
 const BASE_URL = process.env.CCAVENUE_BASE_URL ?? "https://test.ccavenue.com";
 const TIMEOUT_MS = Number(process.env.PAYMENT_TIMEOUT_MS ?? "10000");
@@ -82,7 +83,7 @@ export const ccavenueAdapter: PaymentGateway = {
 
   async createOrder(amount: bigint, currency: string, metadata: OrderMetadata): Promise<GatewayOrder> {
     const orderId = `cca-${metadata.tenantId}-${Date.now()}`;
-    const amountStr = (Number(amount) / 100).toFixed(2); // CCAvenue expects rupees
+    const amountStr = minorToMajorString(amount); // CCAvenue expects rupees
     const merchantId = getMerchantId();
     const accessCode = getAccessCode();
     const workingKey = getWorkingKey();
@@ -219,7 +220,7 @@ export const ccavenueAdapter: PaymentGateway = {
     const refundData = [
       `merchant_id=${merchantId}`,
       `reference_no=${orderId}`,
-      `refund_amount=${amountPaise != null ? (Number(amountPaise) / 100).toFixed(2) : ""}`,
+      `refund_amount=${amountPaise != null ? minorToMajorString(amountPaise) : ""}`,
       `refund_ref_no=refund-${orderId}-${Date.now()}`,
     ].join("&");
 

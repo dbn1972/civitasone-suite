@@ -1,3 +1,4 @@
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
@@ -109,7 +110,7 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
         orderId: p.productId,
         item: p.name,
         supplier: p.seller ?? "",
-        amount: Number(p.unitPriceMinor) / 100,
+        amount: minorToMajorNumber(p.unitPriceMinor), // display rupees
         deliveryDate: "",
         gemStatus: p.availability,
       }));
