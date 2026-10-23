@@ -1449,6 +1449,7 @@ jobs:
           CIVITAS_PSQL_MODE: host
         run: node scripts/dev/seed-all.mjs
       - name: Start live stack
+        id: live-stack
         run: SKIP_BUILD=1 bash scripts/dev/start-stack.sh
       - name: Verify all screens against live gateway
         run: node scripts/contract/verify-screens.mjs --gateway http://localhost:8080 --live-known-gaps
@@ -1470,6 +1471,22 @@ jobs:
           node scripts/ops/verify-pgbouncer-routing.mjs --json > /tmp/pgbouncer-report.json || true
           cat /tmp/pgbouncer-report.json
           node scripts/ci/assert-pgbouncer-report-shape.mjs /tmp/pgbouncer-report.json
+      # Evidence for the Release Gate: L1 (tenant isolation), L2 (authz/BOLA) and
+      # L4 (API contract) are live-gateway lanes and had no producer in CI, so the
+      # gate reported them UNMEASURED on every main run. This is the one job with
+      # the full fleet up. Only runs when the stack actually started (a lane run
+      # against nothing would be noise, not evidence); runs even if an earlier
+      # verification step failed, so those failures cannot hide these lanes.
+      - name: Run live quality lanes (L1 tenant isolation, L2 authz, L4 API contract)
+        if: ${{ !cancelled() && steps.live-stack.conclusion == 'success' }}
+        run: bash scripts/ci/run-live-lanes.sh ci-evidence
+      - name: Upload live-lane evidence
+        if: ${{ !cancelled() && steps.live-stack.conclusion == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-l1-l2-l4-evidence
+          path: ci-evidence/
+          retention-days: 14
 
 
   # ─────────────────────────────────────────────
@@ -1798,7 +1815,10 @@ jobs:
   release-gate:
     name: Release Gate (evidence audit)
     runs-on: ubuntu-latest
-    needs: [quality-gates-schema, quality-gates-domain]
+    # live-stack-verify produces the L1/L2/L4 evidence; without it in `needs` this
+    # job could download the pack before that artifact exists. It is skipped on
+    # PRs (main-only), which `always()` below tolerates.
+    needs: [quality-gates-schema, quality-gates-domain, live-stack-verify]
     # Kept `always()`: this job must still audit whatever evidence exists —
     # and correctly report BLOCKED/FAIL — even when an upstream quality-gate
     # job failed, rather than being silently skipped in exactly the case
@@ -1831,11 +1851,11 @@ jobs:
           # cannot run on a PR runner, so a BLOCKED verdict is expected on
           # every PR and must not fail it. Main's real enforcement is the
           # step below.
-          node scripts/ci/release-gate.mjs --evidence "$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)" || true
+          node scripts/ci/release-gate.mjs --evidence "$(bash scripts/ci/select-evidence-dir.sh downloaded-evidence)" || true
       - name: Enforce release gate (main only)
         if: github.ref == 'refs/heads/main'
         run: |
-          EVIDENCE_DIR="$(find downloaded-evidence -type d -name '2*' | head -1 || echo downloaded-evidence)"
+          EVIDENCE_DIR="$(bash scripts/ci/select-evidence-dir.sh downloaded-evidence)"
           set +e
           node scripts/ci/release-gate.mjs --evidence "$EVIDENCE_DIR" --json > release-gate.json
           STATUS=$?

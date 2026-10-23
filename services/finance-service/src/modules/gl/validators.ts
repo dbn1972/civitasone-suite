@@ -7,8 +7,14 @@ import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
 // string | safe-integer number | bigint.
 const zMoneyMinor = zMoneyMinorBase.pipe(z.bigint().nonnegative());
 
+// A NUL (U+0000) byte is not storable in a Postgres text column: it reaches the
+// duplicate-voucher / control-account lookups in gl/routes.ts as a driver error and
+// surfaced as a 500. It is never legitimate input, so refuse it at the boundary (400).
+const noNul = (v: string) => !v.includes("\u0000");
+const NO_NUL_MESSAGE = "must not contain NUL (\\u0000) characters";
+
 const journalLine = z.object({
-  accountCode: z.string().min(1),
+  accountCode: z.string().min(1).refine(noNul, NO_NUL_MESSAGE),
   debitMinor:  zMoneyMinor,
   creditMinor: zMoneyMinor,
 }).refine(
@@ -25,7 +31,7 @@ const journalLine = z.object({
 
 export const postJournalBody = z.object({
   // Pass "AUTO" (or omit) to allocate a gapless, FY-sequential voucher number.
-  voucherNo:   z.string().min(1).max(64).default("AUTO"),
+  voucherNo:   z.string().min(1).max(64).refine(noNul, NO_NUL_MESSAGE).default("AUTO"),
   type:        z.enum(["journal", "payment", "receipt", "contra"]),
   postingDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "postingDate must be YYYY-MM-DD"),
   lines:       z.array(journalLine).min(2),
@@ -33,7 +39,7 @@ export const postJournalBody = z.object({
   // Setting this true requires BUDGET_OVERRIDE_ROLES (gl/routes.ts) — a plain
   // finance_officer cannot post over budget even by sending this flag.
   budgetOverride: z.boolean().default(false),
-  overrideReason: z.string().min(1).max(500).optional(),
+  overrideReason: z.string().min(1).max(500).refine(noNul, NO_NUL_MESSAGE).optional(),
 }).refine(
   (b) => {
     const td = b.lines.reduce((s, l) => s + l.debitMinor,  0n);
