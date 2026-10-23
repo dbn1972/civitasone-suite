@@ -1,20 +1,17 @@
 /**
- * Proof that complaintNumber/hotspotCode generation does not collide under
- * concurrent load. Unlike fire-service/animal-service (real Postgres
- * SEQUENCEs), drainage-service's commands.ts still uses the mitigation
- * documented in complaints/commands.ts and hotspots/commands.ts:
- * `` `DRN-${Date.now()}-${randomInt(1000, 9999)}` `` backed by a genuine
- * UNIQUE constraint on complaint_number/hotspot_code (migrations/
- * 0001_initial.sql). This is weaker than a DB sequence (still probabilistic,
- * not guaranteed-unique by construction) but is the actual shipped design;
- * this test proves that at real concurrency it does not, in practice,
- * produce colliding numbers or dropped/failed inserts.
+ * Proof that complaintNumber/hotspotCode allocation does not collide or lose
+ * accepted commands under concurrent load. Both numbers are allocated by the
+ * consumer from Postgres SEQUENCEs (migrations/0003_number_sequences.sql)
+ * inside the insert transaction -- guaranteed unique by construction, and a
+ * retry re-allocates instead of replaying a stale code.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { sql } from "drizzle-orm";
+import { sqlClient, db } from "../src/shared/db.js";
+import { auditFailedCreate } from "../src/shared/numbers.js";
 import { queue } from "../src/shared/infra.js";
 import { registerComplaintConsumers } from "../src/modules/complaints/consumer.js";
 import { registerHotspotConsumers } from "../src/modules/hotspots/consumer.js";
@@ -78,6 +75,7 @@ describe("complaint number generation -- no collisions under concurrency", () =>
     const numbers = await Promise.all(ids.map((id) => findComplaintAsTenantA(id).then((row) => row?.complaintNumber)));
     expect(numbers.every((n) => typeof n === "string")).toBe(true);
     expect(new Set(numbers).size).toBe(50);
+    for (const n of numbers) expect(n).toMatch(/^DRN-\d{4}-\d{6}$/);
   });
 });
 
@@ -98,5 +96,32 @@ describe("hotspot code generation -- no collisions under concurrency", () => {
     const codes = await Promise.all(ids.map((id) => findHotspotAsTenantA(id).then((row) => row?.hotspotCode)));
     expect(codes.every((c) => typeof c === "string")).toBe(true);
     expect(new Set(codes).size).toBe(50);
+    for (const c of codes) expect(c).toMatch(/^DRNH-\d{4}-\d{6}$/);
+  });
+});
+
+describe("terminal failure of a create command is audited, never silent", () => {
+  it("onOutcome(failed) records an audit.event.record outcome=failure in the outbox", async () => {
+    const messageId = randomUUID();
+    const hook = auditFailedCreate("hotspot.identify", "drainage_hotspot").onOutcome!;
+    await hook({ messageId, tenantId: TENANT_A, topic: "drainage.hotspot.identify", status: "failed", reason: "boom" });
+    const rows = await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) =>
+        tx.execute(sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record' AND correlation_id = ${messageId}`),
+      ),
+    );
+    expect(rows.length).toBe(1);
+    const payload = (rows[0] as { payload: Record<string, unknown> }).payload;
+    expect(payload.outcome).toBe("failure");
+    expect(payload.action).toBe("hotspot.identify");
+  });
+
+  it("onOutcome(succeeded) records nothing", async () => {
+    const messageId = randomUUID();
+    await auditFailedCreate("hotspot.identify", "drainage_hotspot").onOutcome!({ messageId, tenantId: TENANT_A, topic: "t", status: "succeeded" });
+    const rows = await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE correlation_id = ${messageId}`)),
+    );
+    expect(rows.length).toBe(0);
   });
 });

@@ -47,7 +47,7 @@ describe("POST /v1/drainage/hotspots", () => {
     expect(row.version).toBe(1);
     expect(row.complaintCount).toBe(4);
     expect(row.riskScore).toBe(55);
-    expect(row.hotspotCode).toMatch(/^DRNH-\d+-\d{4}$/);
+    expect(row.hotspotCode).toMatch(/^DRNH-\d{4}-\d{6}$/);
   });
 
   it("requires ADMIN_ROLES to identify a hotspot", async () => {

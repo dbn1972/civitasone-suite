@@ -49,7 +49,7 @@ describe("POST /v1/drainage/complaints", () => {
     expect(row.version).toBe(1);
     expect(row.reportedBy).toBe(ACTOR_A);
     expect(typeof row.complaintNumber).toBe("string");
-    expect(row.complaintNumber).toMatch(/^DRN-\d+-\d{4}$/);
+    expect(row.complaintNumber).toMatch(/^DRN-\d{4}-\d{6}$/);
   });
 
   it("honours an explicit severity override instead of the derived default", async () => {

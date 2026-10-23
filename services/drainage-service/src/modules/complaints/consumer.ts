@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { emitMunicipalNotification, MUNICIPAL_EVENT_TYPES } from "../../shared/cross-events.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextComplaintNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "drainage.complaints.consumer" });
@@ -21,8 +22,10 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+      const complaintNumber: string = await nextComplaintNumber(tx);
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, complaintNumber: p.complaintNumber,
+        id: p.id, tenantId: msg.tenantId, complaintNumber,
         reportedBy: p.reportedBy, location: p.location, complaintType: p.complaintType,
         description: p.description, photo: p.photo, severity: p.severity, status: "reported",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -30,7 +33,7 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.complaintCreated, eventType: EVENTS.complaintCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { complaintId: p.id, complaintNumber: p.complaintNumber, complaintType: p.complaintType, severity: p.severity },
+        payload: { complaintId: p.id, complaintNumber, complaintType: p.complaintType, severity: p.severity },
       });
       // Citizen-meaningful: acknowledgement that the complaint was received,
       // with a reference number to track it. complaintNumber is already in
@@ -40,14 +43,14 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       // Resolve below.
       await emitMunicipalNotification(tx, ctxOf(msg), {
         eventType: MUNICIPAL_EVENT_TYPES.applicationSubmitted,
-        recipient: p.complaintNumber,
+        recipient: complaintNumber,
         recipientId: p.id,
-        variables: { complaintId: p.id, complaintNumber: p.complaintNumber, complaintType: p.complaintType },
+        variables: { complaintId: p.id, complaintNumber, complaintType: p.complaintType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "complaint.create", resourceType: "drainage_complaint", resourceId: p.id });
     });
     log.info({ id: p.id }, "complaint created");
-  });
+  }, auditFailedCreate("complaint.create", "drainage_complaint"));
 
   queue.subscribe(COMMANDS.complaintAssign, async (msg) => {
     const p = msg.payload as any;
