@@ -13,6 +13,7 @@ import { queue as appQueue } from "../src/shared/infra.js";
 import { registerWorkflowConsumers } from "../src/modules/workflow/consumer.js";
 import * as commands from "../src/modules/workflow/commands.js";
 import type { RequestContext } from "@civitasone/types";
+import { auditsOf } from "./bulk-scan-review-helpers.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -137,6 +138,9 @@ describe("approval decide scoping (segregation of duties)", () => {
     commands.decideApproval(ctxFor(tid, stranger), approvalId, "approved", null, false);
     await appQueue.drain();
     expect(await statusOf(tid, approvalId)).toBe("pending");
+    // A rejected command is audited as denied, not dropped silently.
+    const deniedDecides = (await auditsOf(tid, "decide")).filter((a) => a.payload.outcome === "denied" && a.payload.resourceId === approvalId);
+    expect(deniedDecides.map((a) => a.actorId).sort()).toEqual([owner, stranger].sort());
 
     // The actual holder decides.
     expect((await decide(tid, approver, ["document_user"], approvalId)).statusCode).toBe(202);
@@ -174,6 +178,11 @@ describe("consumer re-checks the current holder", () => {
     const [row] = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select assigned_to, status from document.daks where tenant_id = ${tid} and id = ${id}`);
     expect(row.assigned_to).toBe(assignee);
     expect(row.status).toBe("forwarded");
+    // Both rejected commands leave a denied audit event.
+    for (const action of ["forward", "acknowledge"]) {
+      const denied = (await auditsOf(tid, action)).filter((a) => a.payload.outcome === "denied" && a.payload.resourceId === id && a.actorId === owner);
+      expect(denied).toHaveLength(1);
+    }
 
     // The current holder's command still goes through.
     commands.acknowledgeDak(ctxFor(tid, assignee), id, false);
