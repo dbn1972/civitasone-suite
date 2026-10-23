@@ -83,6 +83,7 @@ export const COMMANDS = {
   draftSave:               "citizen.application.draft_save",
   draftUpdate:             "citizen.application.draft_update",
   draftSubmit:             "citizen.application.draft_submit",
+  draftDelete:             "citizen.application.draft_delete",
   // COMP-002 -- generic citizen service-request portal
   serviceRequestSubmit:    "citizen.service_request.submit",
   serviceRequestUpdate:    "citizen.service_request.update",

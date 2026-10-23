@@ -11,6 +11,7 @@ vi.mock("@/lib/notifications/campaigns", async (orig) => {
     getCampaignTemplates: vi.fn(),
     getCampaignSegments: vi.fn(),
     createCampaign: vi.fn(),
+    searchCampaignContacts: vi.fn(),
   };
 });
 
@@ -25,7 +26,11 @@ beforeEach(() => {
     source: "api",
   });
   vi.mocked(api.createCampaign).mockReset().mockResolvedValue(undefined);
+  vi.mocked(api.searchCampaignContacts).mockReset().mockResolvedValue([]);
 });
+
+const CONTACT_A = "3f2a1c9e-8b4d-4e7a-9c11-0a1b2c3d4e5f";
+const CONTACT_B = "7d6e5f4a-1b2c-4d3e-8f90-a1b2c3d4e5f6";
 
 async function openDialog() {
   fireEvent.click(screen.getByRole("button", { name: /new campaign/i }));
@@ -132,7 +137,49 @@ describe("CampaignList (MK-001)", () => {
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     expect(api.createCampaign).not.toHaveBeenCalled();
     expect(screen.getByLabelText(/^Recipients(\s*\*)?$/)).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByText(/must be a valid email, indian mobile number, or user handle/i)).toBeInTheDocument();
+    expect(screen.getByText(/must be a crm contact id/i)).toBeInTheDocument();
+  });
+
+  // Recipients are CRM contact ids: the consent check only resolves ids, so an
+  // email/phone/handle would be created and then never send.
+  it.each(["asha@example.gov.in", "9876543210", "user-7f3a"])("rejects %s as a recipient (must be a contact id) and does not call create", async (token) => {
+    render(<CampaignList />);
+    await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
+    await openDialog();
+    fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Raw contact" } });
+    fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: token } });
+    fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
+    expect(api.createCampaign).not.toHaveBeenCalled();
+    expect(screen.getByText(/must be a crm contact id/i)).toBeInTheDocument();
+  });
+
+  it("Find contacts looks up CRM contacts and Add puts the contact id into the recipients", async () => {
+    vi.mocked(api.searchCampaignContacts).mockResolvedValue([
+      { id: CONTACT_A, name: "Asha Rao", company: "Zilla Parishad", email: "a***@example.gov.in", phone: "98******10" },
+    ]);
+    render(<CampaignList />);
+    await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
+    await openDialog();
+    fireEvent.change(screen.getByLabelText("Search CRM contacts"), { target: { value: "asha" } });
+    fireEvent.click(screen.getByRole("button", { name: /find contacts/i }));
+    expect(await screen.findByText(/Asha Rao/)).toBeInTheDocument();
+    expect(api.searchCampaignContacts).toHaveBeenCalledWith("asha");
+    fireEvent.click(screen.getByRole("button", { name: /add asha rao/i }));
+    expect(screen.getByLabelText(/^Recipients(\s*\*)?$/)).toHaveValue(CONTACT_A);
+    expect(screen.getByRole("button", { name: /add asha rao/i })).toBeDisabled(); // no duplicate adds
+    expect(screen.getByText(/1 recipient/)).toBeInTheDocument();
+  });
+
+  it("says so when contact search is unavailable (not 'no matches')", async () => {
+    vi.mocked(api.searchCampaignContacts).mockResolvedValue(null);
+    render(<CampaignList />);
+    await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
+    await openDialog();
+    fireEvent.change(screen.getByLabelText("Search CRM contacts"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: /find contacts/i }));
+    expect(await screen.findByText(/contact search is unavailable/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no matching contacts/i)).not.toBeInTheDocument();
   });
 
   // GAP-NOTIFICATIONS-CAMPAIGNS-02: DPDP consent notice is present.
@@ -143,13 +190,13 @@ describe("CampaignList (MK-001)", () => {
     expect(screen.getByText(/only contact people who have consented/i)).toBeInTheDocument();
   });
 
-  it("accepts a valid email list and converts the rupee budget to paise (no float drift)", async () => {
+  it("accepts a CRM contact id list and converts the rupee budget to paise (no float drift)", async () => {
     render(<CampaignList />);
     await waitFor(() => expect(screen.getByText(/no campaigns yet/i)).toBeInTheDocument());
     await openDialog();
     fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Spring blast" } });
     fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
-    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: "a@x.in, b@x.in" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: `${CONTACT_A}, ${CONTACT_B}` } });
     fireEvent.change(screen.getByLabelText(/budget/i), { target: { value: "1234.56" } });
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     await waitFor(() =>
@@ -157,7 +204,7 @@ describe("CampaignList (MK-001)", () => {
         expect.objectContaining({
           name: "Spring blast",
           templateId: "t1",
-          recipients: ["a@x.in", "b@x.in"],
+          recipients: [CONTACT_A, CONTACT_B],
           budgetMinor: "123456",
           currency: "INR",
         }),
@@ -184,7 +231,7 @@ describe("CampaignList (MK-001)", () => {
     await openDialog();
     fireEvent.change(screen.getByLabelText(/^Name(\s*\*)?$/), { target: { value: "Reload me" } });
     fireEvent.change(screen.getByLabelText(/^Template(\s*\*)?$/), { target: { value: "t1" } });
-    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: "one@x.in" } });
+    fireEvent.change(screen.getByLabelText(/^Recipients(\s*\*)?$/), { target: { value: CONTACT_A } });
     fireEvent.click(screen.getByRole("button", { name: /create campaign/i }));
     await waitFor(() => expect(api.getCampaigns).toHaveBeenCalledTimes(2));
   });

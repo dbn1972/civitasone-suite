@@ -52,7 +52,10 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
     const next = await fetchServiceDefinition(definitionId);
     setDef(next);
     const latest = await fetchLatestSandboxTest(definitionId);
-    setTestPassed(latest.status === "pass");
+    // A pass only counts for the design it tested: the server flags a run whose
+    // design hash no longer matches the draft (it also rejects submit with
+    // TEST_STALE), so the Submit button must not light up on a stale pass.
+    setTestPassed(latest.status === "pass" && latest.stale !== true);
     return next;
   }, [definitionId]);
 

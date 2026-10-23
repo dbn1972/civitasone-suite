@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { isUcVerified } from "@/lib/grants/ucStatus";
+import { isUcVerified, ucStatusLabel } from "@/lib/grants/ucStatus";
 import { useTranslations } from "next-intl";
 import { postDisburse } from "@/app/(app)/grants/postDisburse";
 import type { GrantDetail } from "@civitasone/types";
@@ -160,7 +160,7 @@ export function GrantUCsTable({ ucs, canVerify = false }: { ucs: UC[]; canVerify
     { key: "ucNo", label: "UC No" },
     { key: "amount", label: "Amount", align: "right", render: (row) => formatMoney(row.amount) },
     { key: "period", label: "Period" },
-    { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
+    { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} label={ucStatusLabel(row.status)} /> },
     {
       key: "id",
       label: "Action",

@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { periodEnd } from "./period.js";
 import * as applicationRepo from "../application/repo.js";
 import * as beneficiaryRepo from "../beneficiary/repo.js";
 
@@ -65,7 +66,7 @@ export async function listUtilizationCerts(tenantId: string, limit: number) {
       granteeName: beneficiary?.name ?? "—",
       amount: minorToAmount(row.utilisedMinor),
       periodFrom: `${row.period}-01`,
-      periodTo: `${row.period}-28`,
+      periodTo: periodEnd(row.period),
       submittedDate: new Date(row.submittedAt as unknown as string).toISOString().slice(0, 10),
       status: resolveUcWebStatus(row.status, row.validationStatus),
     };

@@ -9,6 +9,7 @@ import {
   createCampaign,
   sendCampaign,
   cancelCampaign,
+  searchCampaignContacts,
 } from "./campaigns";
 
 vi.mock("@/lib/api/browserClient", () => ({
@@ -145,5 +146,29 @@ describe("campaign mutations", () => {
   it("sendCampaign throws on a non-ok response", async () => {
     bf().mockResolvedValue(fail());
     await expect(sendCampaign("c1")).rejects.toThrow(/BOOM/);
+  });
+});
+
+describe("searchCampaignContacts (CRM contact lookup for recipients)", () => {
+  it("hits the CRM lookup with an encoded query and maps id/name/masked fields", async () => {
+    bf().mockResolvedValue(ok({ data: [
+      { id: "i1", name: "Asha", company: "ZP", email: "a***@x.in", phone: "98******10" },
+      { id: "i2", name: "Bina", company: null, email: null, phone: null },
+      { name: "no id" },
+    ] }));
+    const r = await searchCampaignContacts("a b&c");
+    expect(bf()).toHaveBeenCalledWith("v1/crm/contacts/lookup?q=a%20b%26c&limit=10");
+    expect(r).toEqual([
+      { id: "i1", name: "Asha", company: "ZP", email: "a***@x.in", phone: "98******10" },
+      { id: "i2", name: "Bina", company: null, email: null, phone: null },
+    ]);
+  });
+  it("returns null (not an empty list) when the lookup is forbidden, fails or is malformed", async () => {
+    bf().mockResolvedValue(fail(403));
+    expect(await searchCampaignContacts("x")).toBeNull();
+    bf().mockResolvedValue(ok({ nope: 1 }));
+    expect(await searchCampaignContacts("x")).toBeNull();
+    bf().mockRejectedValue(new Error("net"));
+    expect(await searchCampaignContacts("x")).toBeNull();
   });
 });

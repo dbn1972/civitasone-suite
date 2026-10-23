@@ -49,3 +49,19 @@ export async function latestPassedRunForDefinition(
     return rows[0] ?? null;
   });
 }
+
+/** Same as latestRunForDefinition but inside the caller's transaction (consumer-side gates). */
+export async function latestRunForDefinitionTx(
+  tx: Writer,
+  tenantId: string,
+  serviceDefinitionId: string,
+): Promise<SandboxTestRunRow | null> {
+  const rows = await (tx as typeof db).select().from(sandboxTestRuns)
+    .where(and(
+      eq(sandboxTestRuns.tenantId, tenantId),
+      eq(sandboxTestRuns.serviceDefinitionId, serviceDefinitionId),
+    ))
+    .orderBy(desc(sandboxTestRuns.createdAt))
+    .limit(1);
+  return rows[0] ?? null;
+}

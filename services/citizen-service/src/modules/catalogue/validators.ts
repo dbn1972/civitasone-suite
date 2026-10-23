@@ -55,6 +55,9 @@ const officeOverrideSchema = z.object({
   additionalDocuments: z.array(requiredDocSchema).max(20).optional(),
   slaDays:             z.number().int().min(1).max(3650).optional(),
   note:                safeText({ max: 500, multiline: true }).optional(),
+  // Why the fee differs (the designer requires one for a Rs 0 waiver). Was silently
+  // stripped by this schema, so the justification never reached the stored override.
+  feeWaiverReason:     safeText({ max: 500, multiline: true }).optional(),
 });
 
 const webhookSubscriptionSchema = z.object({

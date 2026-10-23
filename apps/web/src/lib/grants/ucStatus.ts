@@ -17,3 +17,13 @@ export const UC_VERIFIED_STATUSES = ["verified", "validated"] as const;
 export function isUcVerified(status: string | null | undefined): boolean {
   return status != null && (UC_VERIFIED_STATUSES as readonly string[]).includes(status);
 }
+
+/**
+ * GAP-GRANTS-UTILIZATION-02 acceptance: a "validated"/"verified" UC renders as
+ * a green "Verified" pill. StatusPill would humanise the raw "validated" value
+ * to "Validated", so callers pass this as the explicit label. Undefined for
+ * every other status keeps the default humanised label.
+ */
+export function ucStatusLabel(status: string | null | undefined): string | undefined {
+  return isUcVerified(status) ? "Verified" : undefined;
+}

@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertDefinitionPublishable } from "./domain.js";
+import { isLatestTestCurrentTx } from "../sandbox-test/commands.js";
 
 const AUDIT = "audit.event.record";
 
@@ -14,12 +15,32 @@ async function audit(
   msg: { tenantId: string; actorId: string; correlationId: string },
   action: string,
   resourceId: string,
+  newValue?: Record<string, unknown>,
 ): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType: "service_definition", resourceId, outcome: "success" },
+    payload: {
+      service: "citizen", action, resourceType: "service_definition", resourceId, outcome: "success",
+      ...(newValue ? { newValue } : {}),
+    },
   });
+}
+
+/**
+ * The fee-waiver justifications carried by an officeOverrides patch, for the
+ * audit event: which office, what fee, and the stated reason. Undefined when the
+ * patch carries none (so ordinary updates keep their payload unchanged).
+ */
+export function feeWaiverAudit(overrides: unknown): Record<string, unknown> | undefined {
+  if (!Array.isArray(overrides)) return undefined;
+  const waivers = overrides.flatMap((o) => {
+    if (!o || typeof o !== "object") return [];
+    const r = o as { officeId?: unknown; feeFromMinor?: unknown; feeWaiverReason?: unknown };
+    if (typeof r.feeWaiverReason !== "string" || r.feeWaiverReason.trim().length === 0) return [];
+    return [{ officeId: r.officeId, feeFromMinor: r.feeFromMinor ?? null, feeWaiverReason: r.feeWaiverReason }];
+  });
+  return waivers.length > 0 ? { feeWaivers: waivers } : undefined;
 }
 
 export function registerCatalogueConsumers(rawQueue: Queue): void {
@@ -81,7 +102,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
         renewalPolicy: (p.renewalPolicy ?? null) as never,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "definition_create", p.id);
+      await audit(tx, msg, "definition_create", p.id, feeWaiverAudit(p.officeOverrides));
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
   });
@@ -144,7 +165,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (p.rtiLinkage !== undefined) patch.rtiLinkage = p.rtiLinkage;
       if (p.renewalPolicy !== undefined) patch.renewalPolicy = p.renewalPolicy;
       await repo.updateDefinition(tx, p.id, msg.tenantId, patch as never);
-      await audit(tx, msg, "definition_update", p.id);
+      await audit(tx, msg, "definition_update", p.id, feeWaiverAudit(p.officeOverrides));
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "catalogue", p.id));
   });
@@ -170,6 +191,7 @@ export function registerCatalogueConsumers(rawQueue: Queue): void {
       if (!def || def.status !== "draft" || !def.submittedBy) return;
       if (def.submittedBy === msg.actorId) return;
       try { assertDefinitionPublishable(def); } catch { return; }
+      if (!(await isLatestTestCurrentTx(tx, msg.tenantId, def))) return;
       await repo.updateDefinition(tx, p.id, msg.tenantId, {
         status: "published", publishedBy: msg.actorId, publishedAt: new Date(), updatedBy: msg.actorId,
       });
