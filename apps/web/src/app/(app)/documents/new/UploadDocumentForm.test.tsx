@@ -49,7 +49,7 @@ describe("UploadDocumentForm", () => {
         if (url.includes("/admin/uploads/presign")) {
           return new Response(JSON.stringify({ uploadUrl: "https://s3.test/put", key: OBJECT_PATH, headers: {} }), { status: 200 });
         }
-        if (url.startsWith("https://s3.test")) return new Response(null, { status: 200 });
+        if (URL.canParse(url) && new URL(url).origin === "https://s3.test") return new Response(null, { status: 200 });
         return new Response(JSON.stringify({ id: "x" }), { status: 202 });
       });
     }
