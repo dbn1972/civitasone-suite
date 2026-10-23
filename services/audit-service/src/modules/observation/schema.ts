@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, bigint, varchar, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, bigint, varchar, timestamp, date } from "drizzle-orm/pg-core";
 
 export const observationSchema = pgSchema("observation");
 
@@ -13,11 +13,28 @@ export const auditObservations = observationSchema.table("audit_observations", {
   riskLevel:           varchar("risk_level", { length: 16 }).notNull().default("medium"),
   amountInvolvedMinor: bigint("amount_involved_minor", { mode: "bigint" }).notNull().default(0n),
   status:              varchar("status", { length: 24 }).notNull().default("open"),
+  dueDate:             date("due_date"),
   createdAt:           timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:           timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:           uuid("created_by").notNull(),
   updatedBy:           uuid("updated_by").notNull(),
   version:             integer("version").notNull().default(1),
+});
+
+export const auditObservationReplies = observationSchema.table("audit_observation_replies", {
+  id:             uuid("id").primaryKey().defaultRandom(),
+  tenantId:       uuid("tenant_id").notNull(),
+  observationId:  uuid("observation_id").notNull(),
+  replyText:      text("reply_text").notNull(),
+  respondedByRef: text("responded_by_ref").notNull(),
+  attachmentRef:  text("attachment_ref"),
+  decision:       varchar("decision", { length: 16 }),
+  decisionRemarks: text("decision_remarks"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:      uuid("created_by").notNull(),
+  updatedBy:      uuid("updated_by").notNull(),
+  version:        integer("version").notNull().default(1),
 });
 
 export const auditWorkingPapers = observationSchema.table("audit_working_papers", {
@@ -35,4 +52,5 @@ export const auditWorkingPapers = observationSchema.table("audit_working_papers"
 
 export type ObservationRow = typeof auditObservations.$inferSelect;
 export type ObservationInsert = typeof auditObservations.$inferInsert;
-export const schema = { auditObservations, auditWorkingPapers };
+export type ObservationReplyRow = typeof auditObservationReplies.$inferSelect;
+export const schema = { auditObservations, auditObservationReplies, auditWorkingPapers };

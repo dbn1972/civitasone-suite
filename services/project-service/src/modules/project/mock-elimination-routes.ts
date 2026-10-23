@@ -18,7 +18,9 @@ import { projectDprs } from "../progress/schema.js";
 import * as escalationRepo from "../escalation/repo.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 
-const READER_ROLES = ["project_officer", "project_admin", "finance_officer", "tenant_admin", "super_admin", "audit_officer"];
+// project_manager MUST read these: the DPR review and escalation actions require it,
+// so a PM who can act on a DPR/escalation has to be able to list them too.
+const READER_ROLES = ["project_manager", "project_officer", "project_admin", "finance_officer", "tenant_admin", "super_admin", "audit_officer"];
 
 function paginationMeta(total: number, page: number, pageSize: number) {
   return { page, pageSize, total };

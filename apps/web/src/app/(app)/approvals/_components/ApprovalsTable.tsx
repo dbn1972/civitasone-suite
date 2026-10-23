@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSeededResource } from "@/lib/sync/resource";
 import { DataTable } from "@/app/_components/ds";
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus, formatIndianDateTime } from "@/lib/formatters";
 import type { MyApprovalItem } from "@/app/_data/loaders";
 import { isTaskOverdue } from "./overdue";
 
@@ -82,7 +82,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
     <>
       {fromCache && (
         <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--mut)", marginBottom: 8 }}>
-          {offline ? "You're offline." : ""} Showing cached data{cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}.
+          {offline ? "You're offline." : ""} Showing cached data{cachedAt ? ` from ${formatIndianDateTime(cachedAt)}` : ""}.
         </p>
       )}
       <DataTable<ApprovalRow>

@@ -703,6 +703,11 @@ export interface HelpdeskTicketSummary {
   escalatedAt?: string;
   slaStatus?: "within_sla" | "at_risk" | "breached";
   assignee?: string;
+  /** Gapless reference number (helpdesk-service tickets), once allocated. */
+  ticketNo?: string;
+  createdAt?: string;
+  /** Detail view only. */
+  description?: string;
 }
 
 /** Internal ops ticket row (helpdesk-service); same wire shape as HelpdeskTicketSummary. */

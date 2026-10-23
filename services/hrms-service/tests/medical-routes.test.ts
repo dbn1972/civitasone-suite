@@ -20,6 +20,7 @@ const EMP = "bbbbbbbb-0001-4000-8000-000000000001";
 const CLAIM_ID = "cccccccc-0001-4000-8000-000000000001";
 const HOSPITAL_ID = "dddddddd-0001-4000-8000-000000000001";
 
+const MGR_EMP = "bbbbbbbb-0003-4000-8000-000000000003";
 const H = vi.hoisted(() => ({
   selectFrom: vi.fn(),
   update: vi.fn(),
@@ -190,10 +191,17 @@ describe("POST /v1/hrms/medical/claims — submit medical claim", () => {
     await app.close();
   });
 
-  it("managers can submit claims (201)", async () => {
+  it("managers can submit claims for a direct report (201); for a non-report 403", async () => {
+    // Owner decision 2 (2026-10-14): a manager reaches only self + direct reports.
+    // 1st lookup = the actor's own employee link (the manager), 2nd = the
+    // direct-report check resolving the target as that manager's report.
+    H.selectFrom.mockResolvedValueOnce([{ id: MGR_EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP }]);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(USER, ["manager"]), payload });
     expect(r.statusCode).toBe(201);
+    const denied = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(USER, ["manager"]), payload });
+    expect(denied.statusCode).toBe(403); // no actor link / no report row resolves => not a direct report
     await app.close();
   });
 
@@ -780,12 +788,18 @@ describe("GET /v1/hrms/medical/insurance — insurance details", () => {
     await app.close();
   });
 
-  it("managers' access by employeeId is preserved (unaffected — never resolves an actor-employee link)", async () => {
+  it("a manager may read a direct report's insurance (200) but not a non-report's (403)", async () => {
     H.sqlClientQuery.mockReturnValue([insuranceRow()]);
+    // Owner decision 2 (2026-10-14): a manager reaches only self + direct reports.
+    // 1st lookup = the actor's own employee link (the manager), 2nd = the
+    // direct-report check resolving the target as that manager's report.
+    H.selectFrom.mockResolvedValueOnce([{ id: MGR_EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP }]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
     expect(r.statusCode).toBe(200);
-    expect(H.selectFrom).not.toHaveBeenCalled();
+    const denied = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
+    expect(denied.statusCode).toBe(403);
     await app.close();
   });
 });
@@ -891,12 +905,18 @@ describe("GET /v1/hrms/medical/history — medical history timeline", () => {
     await app.close();
   });
 
-  it("managers' access by employeeId is preserved (unaffected — never resolves an actor-employee link)", async () => {
+  it("a manager may read a direct report's history (200) but not a non-report's (403)", async () => {
     H.sqlClientQuery.mockReturnValue([claimRow()]);
+    // Owner decision 2 (2026-10-14): a manager reaches only self + direct reports.
+    // 1st lookup = the actor's own employee link (the manager), 2nd = the
+    // direct-report check resolving the target as that manager's report.
+    H.selectFrom.mockResolvedValueOnce([{ id: MGR_EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP }]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
     expect(r.statusCode).toBe(200);
-    expect(H.selectFrom).not.toHaveBeenCalled();
+    const denied = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
+    expect(denied.statusCode).toBe(403);
     await app.close();
   });
 });

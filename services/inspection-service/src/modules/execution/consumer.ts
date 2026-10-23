@@ -23,6 +23,7 @@ import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
   assertValidTransition,
+  assertMakerCheckerForFinalization,
   DomainError,
   type InspectionState,
 } from "./domain.js";
@@ -66,6 +67,15 @@ export function registerExecutionConsumers(queue: Queue): void {
 
         const currentState = inspection.state as InspectionState;
         const targetState = p.targetState as InspectionState;
+
+        // 1b. Review hand-off and sign-off have dedicated commands that enforce
+        // reviewer assignment and maker-checker; the generic transition must not
+        // be a side door around them.
+        if (targetState === "under_review" || targetState === "finalized") {
+          throw new NonRetryableError(
+            `Cannot transition to ${targetState} via generic transition; use ${targetState === "under_review" ? "submit-review" : "finalize"}`,
+          );
+        }
 
         // 2. Validate transition via state machine (Req 8.1, 8.7)
         try {
@@ -239,6 +249,14 @@ export function registerExecutionConsumers(queue: Queue): void {
           throw err;
         }
 
+        // 3b. Reviewer must not be an inspector who conducted this inspection.
+        try {
+          assertMakerCheckerForFinalization(inspection.assignedInspectors, p.reviewerId, "reviewer");
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
+
         // 4. Assign reviewer and transition to under_review (Req 8.5).
         // Version-guarded (see updateInspectionState) against concurrent
         // writes; `null` means the row moved and is non-retryable, a genuine
@@ -352,6 +370,14 @@ export function registerExecutionConsumers(queue: Queue): void {
           if (err instanceof DomainError) {
             throw new NonRetryableError(err.message);
           }
+          throw err;
+        }
+
+        // 3b. Maker-checker: a conducting inspector cannot finalize (cf. capaVerify)
+        try {
+          assertMakerCheckerForFinalization(inspection.assignedInspectors, msg.actorId);
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
           throw err;
         }
 

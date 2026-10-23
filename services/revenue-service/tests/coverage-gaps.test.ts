@@ -247,6 +247,30 @@ describe("Assessment Repo", () => {
       totalDemand: "150000",
       totalCollected: "30000",
       balance: "120000",
+      outstandingMinor: "0",
+    });
+  });
+
+  it("getDcbSummary classifies refund / adjustment / waiver by entry type and surfaces the service outstanding", async () => {
+    mockGetOrLoad.mockImplementation(async (_key: string, loader: () => Promise<any>) => loader());
+    mockDbWhere
+      .mockResolvedValueOnce([
+        { entryType: "demand", amountMinor: 100000n },
+        { entryType: "collection", amountMinor: 60000n },
+        { entryType: "refund", amountMinor: 10000n },
+        { entryType: "adjustment", amountMinor: 5000n, narration: "Adjustment debit: x" },
+        { entryType: "adjustment", amountMinor: 5000n, narration: "Adjustment credit: x" },
+        { entryType: "waiver", amountMinor: 4000n },
+      ])
+      .mockResolvedValueOnce([{ total: "46000" }]); // service outstanding (latest balance per demand)
+    const { getDcbSummary } = await import("../src/modules/assessment/repo.js");
+    const result = await getDcbSummary("11111111-1111-4111-8111-111111111111", "assessee-2");
+    // collected = 60000 - 10000 (refund) + 0 (adjustment legs net) + 4000 = 54000
+    expect(result).toEqual({
+      totalDemand: "100000",
+      totalCollected: "54000",
+      balance: "46000",
+      outstandingMinor: "46000",
     });
   });
 

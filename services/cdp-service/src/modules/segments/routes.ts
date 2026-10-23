@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { maskProfileView } from "../../shared/pii.js";
 import * as repo from "./repo.js";
 import * as membershipRepo from "./membership-repo.js";
 import * as profilesRepo from "../profiles/repo.js";
@@ -70,7 +71,7 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
     const persisted = await membershipRepo.listMembers(segment.id, ctx.tenantId, q.limit, q.offset);
     if (persisted.total > 0) {
       const memberProfiles = await profilesRepo.findByIds(persisted.rows.map((m) => m.profileId), ctx.tenantId);
-      return reply.send({ data: memberProfiles.map(profilesRepo.toView), meta: { page, pageSize: q.limit, total: persisted.total } });
+      return reply.send({ data: memberProfiles.map((p) => maskProfileView(ctx, profilesRepo.toView(p))), meta: { page, pageSize: q.limit, total: persisted.total } });
     }
     const criteria = segment.criteria as unknown as SegmentCriteria;
     if (!criteria.conditions || !criteria.logic) {
@@ -78,7 +79,7 @@ export async function segmentRoutes(app: FastifyInstance): Promise<void> {
     }
     const { profileIds, total } = await repo.evaluateMembers(criteria, ctx.tenantId, q.limit, q.offset);
     const profiles = await profilesRepo.findByIds(profileIds, ctx.tenantId);
-    return reply.send({ data: profiles.map(profilesRepo.toView), meta: { page, pageSize: q.limit, total } });
+    return reply.send({ data: profiles.map((p) => maskProfileView(ctx, profilesRepo.toView(p))), meta: { page, pageSize: q.limit, total } });
   });
 
   app.post("/v1/cdp/segments", async (req, reply) => {

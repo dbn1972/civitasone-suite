@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, isFieldSupervisor, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as taskRepo from "../tasks/repo.js";
 import { validateCheckIn, validateCheckOut, calculateDurationMinutes, classifyVisitOutcome } from "./domain.js";
@@ -37,7 +37,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FIELD_ROLES);
     const q = historyQuery.parse(req.query);
-    const { rows, total } = await repo.listRecent(ctx.tenantId, q.limit, q.offset);
+    const { rows, total } = await repo.listRecent(ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
     const page = Math.floor(q.offset / q.limit) + 1;
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
@@ -111,7 +111,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const { taskId } = taskIdParam.parse(req.params);
     const q = historyQuery.parse(req.query);
 
-    const { rows, total } = await repo.findByTaskId(taskId, ctx.tenantId, q.limit, q.offset);
+    const { rows, total } = await repo.findByTaskId(taskId, ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
     const page = Math.floor(q.offset / q.limit) + 1;
 
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
@@ -123,6 +123,9 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FIELD_ROLES);
     const { agentId } = agentIdParam.parse(req.params);
     const q = historyQuery.parse(req.query);
+    if (!isFieldSupervisor(ctx) && agentId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "field agents may only view their own visits");
+    }
 
     const { rows, total } = await repo.findByAgent(agentId, ctx.tenantId, q.limit, q.offset);
     const page = Math.floor(q.offset / q.limit) + 1;
@@ -137,7 +140,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
 
     const visit = await repo.findById(id, ctx.tenantId);
-    if (!visit) {
+    if (!visit || (!isFieldSupervisor(ctx) && visit.agentId !== ctx.actorId)) {
       throw new HttpError(404, "NOT_FOUND", "visit not found");
     }
 

@@ -24,6 +24,9 @@ export const helpdeskTicketSchema = z.object({
   escalatedAt: z.string().optional(),
   slaStatus: z.enum(["within_sla", "at_risk", "breached"]).optional(),
   assignee: z.string().optional(),
+  ticketNo: z.string().optional(),
+  createdAt: z.string().optional(),
+  description: z.string().optional(),
 });
 
 export const slaQueueSchema = z.object({
@@ -2244,6 +2247,9 @@ export const AuditObservationSummarySchema = z.object({
   dueDate: z.string().optional(),
   status: z.enum(["open", "replied", "partially_closed", "closed", "compliance_pending"]),
   para: z.string().optional(),
+  // Money value in minor units (paise) — the formatMoney() contract. Without this
+  // key zod strips it from the list response.
+  amount: z.number().optional(),
 });
 export const AuditObservationSummaryListSchema = z.array(AuditObservationSummarySchema);
 

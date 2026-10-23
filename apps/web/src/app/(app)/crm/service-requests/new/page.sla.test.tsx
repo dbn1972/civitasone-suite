@@ -63,4 +63,23 @@ describe("F6-03 SR new form SLA target", () => {
     expect(dueInput.value).toBe("");
     expect(screen.queryByText(/SLA/)).not.toBeInTheDocument();
   });
+
+  // CLOS-S1-15: the derived target date is the IST calendar day of created-now + SLA,
+  // not the UTC day (14:30Z + 6h = 20:30Z = 02:00 IST the NEXT day).
+  it("CLOS-S1-15: derives the target date as an IST calendar day", async () => {
+    const QUICK = { id: "s3", code: "quick", label: "Quick Fix", active: true, sortOrder: 2, slaHours: 6 };
+    vi.mocked(st.getServiceTypes).mockResolvedValue({ source: "api", data: [QUICK] });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-10T14:30:00Z"));
+    try {
+      render(<NewServiceRequestPage />);
+      await waitFor(() => expect(screen.getByRole("option", { name: "Quick Fix" })).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Quick Fix" } });
+      const dueInput = screen.getByLabelText(/target resolution date/i) as HTMLInputElement;
+      await waitFor(() => expect(dueInput.value).not.toBe(""));
+      expect(dueInput.value).toBe("2026-03-11");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

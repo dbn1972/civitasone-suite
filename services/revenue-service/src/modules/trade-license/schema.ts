@@ -42,6 +42,8 @@ export const waivers = tradeLicenseSchema.table('waivers', {
   tenantId:        uuid('tenant_id').notNull(),
   demandId:        uuid('demand_id').notNull(),
   amountMinor:     bigint('amount_minor', { mode: 'bigint' }).notNull(), // paise (bigint); DB column already bigint — GAP2-PLATFORM-REVENUE-MONEY-01 drift fix
+  // penalty | interest | both — which accrued component the waiver forgives (migration 0019).
+  waiverType:      varchar('waiver_type', { length: 16 }).notNull().default('both'),
   reason:          text('reason').notNull(),
   status:          varchar('status', { length: 32 }).notNull().default('pending'),
   requestedBy:     uuid('requested_by').notNull(),

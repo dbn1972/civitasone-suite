@@ -173,4 +173,15 @@ describe("EngineBindingBuilder", () => {
 
     vi.useRealTimers();
   });
+
+  // CLOS-S1-04
+  it("shows clerk-safe copy, never the raw 'Failed to fetch', when the preview request fails offline", async () => {
+    vi.useFakeTimers();
+    vi.mocked(previewEngineBinding).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    render(<EngineBindingBuilder definitionId="d1" initial={[binding]} />);
+    await act(async () => { vi.advanceTimersByTime(300); });
+    expect(screen.queryByText(/failed to fetch/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+    vi.useRealTimers();
+  });
 });

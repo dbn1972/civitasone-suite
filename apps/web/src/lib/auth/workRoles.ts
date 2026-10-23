@@ -151,15 +151,17 @@ export const FINANCE_ROLES = [
  * grants on its own routes — derived (not assumed) from the service's route
  * guards: collection/routes.ts REVENUE_ROLES ("revenue_admin", "revenue_officer",
  * "finance_admin", "super_admin", "tenant_admin") and analytics/routes.ts
- * READ_ROLES (adds "revenue_analyst"). This is the client-side counterpart to
+ * READ_ROLES (adds "revenue_analyst"), plus assessment/routes.ts and
+ * trade-license/routes.ts which also allow "revenue_collector". This is the client-side counterpart to
  * that server enforcement: a signed-in user with NONE of these roles gets
  * "access restricted" on direct navigation to any /revenue/* URL, instead of
- * reading assessee financial/PII data the backend would otherwise 403. Fails
- * OPEN when roles are unknown (empty array), matching Sidebar/moduleVisibility.
+ * reading assessee financial/PII data the backend would otherwise 403. The
+ * /revenue layout FAILS CLOSED when roles are unknown (empty array).
  */
 export const REVENUE_ROLES = [
   "revenue_admin",
   "revenue_officer",
+  "revenue_collector",
   "revenue_analyst",
   "finance_admin",
   "super_admin",

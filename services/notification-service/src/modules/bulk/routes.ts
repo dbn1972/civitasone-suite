@@ -7,6 +7,10 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+// Campaign reads (list / detail / metrics) expose audience, budget and ROI, so
+// they are role-gated too: the campaign admins, the notification admin who runs
+// the module, and the auditor (same read set as deliveries NOTIFY_READ_ROLES).
+const CAMPAIGN_READ = [...ADMIN, "notification_admin", "audit_officer"];
 
 export async function bulkRoutes(app: FastifyInstance): Promise<void> {
   app.post("/notifications/campaigns", async (req, reply) => {
@@ -19,6 +23,7 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
   // MK-001: paginated, tenant-scoped campaign list.
   app.get("/notifications/campaigns", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, CAMPAIGN_READ);
     const { limit, offset } = listCampaignsQuery.parse(req.query);
     return reply.send(await queries.listCampaigns(ctx.tenantId, limit, offset));
   });
@@ -48,6 +53,7 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
   // MK-004: server-computed campaign metrics (recipients/responses/ROI).
   app.get("/notifications/campaigns/:id/metrics", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, CAMPAIGN_READ);
     const { id } = campaignIdParam.parse(req.params);
     const metrics = await queries.getCampaignMetrics(ctx.tenantId, id);
     if (!metrics) throw new HttpError(404, "NOT_FOUND", "campaign not found");
@@ -74,6 +80,7 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/notifications/campaigns/:id", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, CAMPAIGN_READ);
     const { id } = campaignIdParam.parse(req.params);
     const campaign = await queries.getCampaign(ctx.tenantId, id);
     if (!campaign) throw new HttpError(404, "NOT_FOUND", "campaign not found");

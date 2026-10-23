@@ -11,7 +11,7 @@ vi.mock("@/app/_data/apiClient", () => ({
   },
 }));
 
-import { getGrantSchemes } from "./_data";
+import { getGrantSchemes, getGrantApplications, getApplicationById } from "./_data";
 
 async function mapPayload(payload: unknown) {
   await getGrantSchemes(); // captures the mapper
@@ -58,5 +58,22 @@ describe("mapGrantSchemeSummaries (GAP-GRANTS-SCHEMES-04/05)", () => {
       { id: "a", code: "C1", name: "Has projects", status: "open", projectCount: 9 },
     ]);
     expect(rows?.[0]?.applicationCount).toBeNull();
+  });
+});
+
+// CLOS-S2-06: a missing date must stay unknown (null), never become "now".
+describe("grants mappers do not fabricate dates (CLOS-S2-06)", () => {
+  it("getGrantApplications: a row with no sanction date maps sanctionDate to null", async () => {
+    await getGrantApplications();
+    const rows = capturedMap!({ data: [{ id: "a1", grantNo: "G-1", title: "Row without dates", totalAmount: 100 }] }) as Array<{ sanctionDate: string | null }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sanctionDate).toBeNull();
+  });
+
+  it("getApplicationById: a payload with no createdAt maps createdAt to null", async () => {
+    await getApplicationById("a1");
+    const row = capturedMap!({ id: "a1" }) as { createdAt: string | null } | null;
+    expect(row).not.toBeNull();
+    expect(row!.createdAt).toBeNull();
   });
 });

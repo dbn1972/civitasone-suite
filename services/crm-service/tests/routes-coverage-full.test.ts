@@ -48,9 +48,15 @@ describe("POST /v1/crm/contacts", () => {
   });
 
   it("returns 202 with full body", async () => {
+    // F5: the linked account must be a LIVE account of this tenant (a merged / unknown one is a 422), so seed one.
+    await sqlClient.begin(async (tx) => {
+      await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      await tx`INSERT INTO crm.accounts (id, tenant_id, name, created_by, updated_by) VALUES (${VALID_UUID2}, ${TENANT}, 'Routes coverage live account', ${ACTOR}, ${ACTOR}) ON CONFLICT DO NOTHING`;
+    });
     const res = await app.inject({
       method: "POST", url: "/v1/crm/contacts",
-      headers: authHeader(["crm_admin"]),
+      // x-tenant-id scopes the route-level account lookup (RLS) to the tenant the account was seeded in.
+      headers: { ...authHeader(["crm_admin"]), "x-tenant-id": TENANT },
       payload: {
         name: "Jane Smith", email: "jane@example.com", phone: "9876543210",
         company: "Acme Corp", designation: "CTO", city: "Mumbai",

@@ -16,7 +16,8 @@ function label(action: string): string {
   return ACTION_LABELS[action] ?? action.replace(/_/g, " ");
 }
 
-function fmt(ts: string): string {
+function fmt(ts: string | null): string {
+  if (!ts) return "—";
   const d = new Date(ts);
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString("en-IN");
 }

@@ -15,9 +15,10 @@ export async function listScheduledReports(
   tenantId: string,
   limit: number,
   offset: number,
+  ownerId?: string,
 ): Promise<{ data: ScheduledReportView[] }> {
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${ownerId ?? "all"}:${limit}:${offset}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, ownerId);
     return { data: rows };
   });
 }
@@ -26,10 +27,10 @@ export async function listScheduledReports(
  * GAP2-REPORTS-PAGINATION-01: the true tenant-scoped count of enabled
  * scheduled reports for meta.total.
  */
-export async function countScheduledReports(tenantId: string): Promise<number> {
+export async function countScheduledReports(tenantId: string, ownerId?: string): Promise<number> {
   const n = await cache.getOrLoad(
-    cache.makeKey(tenantId, RESOURCE, "count"),
-    () => repo.countByTenant(tenantId),
+    cache.makeKey(tenantId, RESOURCE, ownerId ? `count:${ownerId}` : "count"),
+    () => repo.countByTenant(tenantId, ownerId),
     60,
   );
   return n ?? 0;

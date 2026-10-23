@@ -3,7 +3,9 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
-import { AcceptedNotice, ActionButton } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { AcceptedNotice, ActionButton, EntityPicker } from "@/app/_components/ds";
+import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { formatShortId } from "@/lib/formatters";
@@ -33,6 +35,12 @@ type ActionSpec = {
   confirmDescription?: string;
   reasonLabel?: string;
   irreversible?: boolean;
+  /**
+   * Hand-off to a reviewer: POSTs `{ reviewerId }` to /submit-review (the only
+   * route that records the reviewer; /transition to under_review is rejected
+   * by the service). The dialog hosts a reviewer picker.
+   */
+  pickReviewer?: boolean;
 };
 
 function actionForStatus(status: string): ActionSpec | null {
@@ -63,13 +71,8 @@ function actionForStatus(status: string): ActionSpec | null {
     case "completed":
       return {
         label: "Submit review",
-        path: "transition",
-        body: { targetState: "under_review" },
-        requireRemarks: true,
-        confirmTitle: "Submit this inspection for review?",
-        confirmDescription:
-          "Add a note for the reviewing officer. Your remarks are saved to the inspection record and its history.",
-        reasonLabel: "Submission remarks",
+        path: "submit-review",
+        pickReviewer: true,
       };
     case "under_review":
       return { label: "Finalize", path: "finalize", irreversible: true };
@@ -78,12 +81,55 @@ function actionForStatus(status: string): ActionSpec | null {
   }
 }
 
+/** Reviewer hand-off: the dialog hosts a directory picker; Confirm stays disabled until one is chosen. */
+function SubmitReviewButton({
+  reviewerId,
+  onReviewerChange,
+  disabled,
+  onConfirm,
+  onSuccess,
+}: {
+  reviewerId: string | null;
+  onReviewerChange: (id: string | null) => void;
+  disabled: boolean;
+  onConfirm: () => Promise<void>;
+  onSuccess: () => void;
+}) {
+  const t = useTranslations("inspectionReview");
+  return (
+    <ActionButton
+      label={t("submitLabel")}
+      className="btn ghost"
+      confirmTitle={t("confirmTitle")}
+      confirmDescription={t("confirmDescription")}
+      confirmLabel={t("submitLabel")}
+      blockConfirm={reviewerId === null}
+      disabled={disabled}
+      onConfirm={onConfirm}
+      onSuccess={onSuccess}
+    >
+      <label style={{ display: "block", fontSize: 13, marginBottom: 4 }}>{t("reviewerLabel")}</label>
+      <EntityPicker
+        value={reviewerId}
+        onChange={(v) => onReviewerChange(typeof v === "string" ? v : null)}
+        search={searchDirectoryUsers}
+        resolve={resolveDirectoryUsers}
+        placeholder={t("reviewerPlaceholder")}
+        noResultsText={t("reviewerNoResults")}
+        searchingText={t("reviewerSearching")}
+        searchErrorText={t("reviewerSearchError")}
+      />
+    </ActionButton>
+  );
+}
+
 export function InspectionRowAction({ id, status }: RowProps) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("inspection action");
+  const [reviewerId, setReviewerId] = useState<string | null>(null);
 
   // SF-15: a 202 means "received", not "done". Remember the status at the time of
   // the 202 and show the shared AcceptedNotice (with a manual Refresh) instead of a
@@ -115,7 +161,9 @@ export function InspectionRowAction({ id, status }: RowProps) {
   const pending = priorStatus !== null && !accepted.noticeProps.refreshed;
 
   async function callApi(spec: ActionSpec, reason?: string) {
-    const body = spec.body
+    const body = spec.pickReviewer
+      ? { reviewerId }
+      : spec.body
       ? spec.requireRemarks && reason
         ? { ...spec.body, remarks: reason }
         : spec.body
@@ -176,6 +224,32 @@ export function InspectionRowAction({ id, status }: RowProps) {
           {message}
         </span>
       ) : null}
+      </div>
+    );
+  }
+
+  if (action.pickReviewer) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <SubmitReviewButton
+          reviewerId={reviewerId}
+          onReviewerChange={setReviewerId}
+          disabled={pending}
+          onConfirm={() => callApi(action)}
+          onSuccess={() => {
+            setMessage(QUEUED_MESSAGE);
+            setReviewerId(null);
+            router.refresh();
+            markAccepted(status);
+          }}
+        />
+        {accepted.phase !== "idle" ? (
+          <AcceptedNotice {...accepted.noticeProps} message={message} />
+        ) : message ? (
+          <span role="status" aria-live="polite" style={{ fontSize: 11, color: "var(--good)" }}>
+            {message}
+          </span>
+        ) : null}
       </div>
     );
   }

@@ -1377,6 +1377,9 @@
     "statAvgResolutionDays": "Avg. Resolution Days"
   },
   "citizenRequests": {
+    "errLogRequest": "Could not log the request.",
+    "errLoadRequest": "Failed to load request.",
+    "errRecordAction": "Could not record the action.",
     "pageTitle": "Citizen Service Requests",
     "pageSubtitle": "Grievances and service requests register.",
     "statOpen": "Open",
@@ -16838,5 +16841,19 @@
     "parentTruncated": "Showing the heads from the first {limit} loaded. Search by code or name to find any other parent.",
     "createdMajor": "Head of account \"{code}\" created as a major head.",
     "createdPath": "Head of account \"{code}\" created. It sits at: {path}."
+  },
+  "crmAccountLinkError": {
+    "inactive": "This account has been merged or deactivated, so nothing can be linked to it. Choose the active account it was merged into, or clear the account, and try again.",
+    "notFound": "The selected account could not be found. Choose a different account or clear the account, and try again."
+  },
+  "inspectionReview": {
+    "submitLabel": "Submit review",
+    "confirmTitle": "Submit this inspection for review?",
+    "confirmDescription": "Choose the reviewing officer. The reviewer must not be an inspector who conducted this inspection.",
+    "reviewerLabel": "Reviewing officer",
+    "reviewerPlaceholder": "Search by name",
+    "reviewerNoResults": "No matching people",
+    "reviewerSearching": "Searching…",
+    "reviewerSearchError": "Could not search people. Please try again."
   }
 }

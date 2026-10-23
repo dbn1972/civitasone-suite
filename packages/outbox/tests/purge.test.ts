@@ -169,12 +169,13 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     clearInterval(timer);
   });
 
-  it("swallows purge failures so the scheduled loop keeps running", async () => {
+  it("does not throw on purge failures (loop keeps running) but reports them via logger.warn (CLOS-S6-05)", async () => {
     const logger = { warn: vi.fn() };
-    const db = { execute: vi.fn().mockRejectedValue(new Error("db down")) } as unknown as DrizzleTx;
+    const err = new Error("db down");
+    const db = { execute: vi.fn().mockRejectedValue(err) } as unknown as DrizzleTx;
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
     await expect(vi.advanceTimersByTimeAsync(1000)).resolves.not.toThrow();
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith({ err }, "outbox purge cycle failed");
     clearInterval(timer);
   });
 

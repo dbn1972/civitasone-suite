@@ -18,6 +18,7 @@ export function toView(r: MergeQueueRow) {
     decidedAt: r.decidedAt?.toISOString() ?? null,
     decisionReason: r.decisionReason,
     createdAt: r.createdAt.toISOString(),
+    createdBy: r.createdBy,
   };
 }
 

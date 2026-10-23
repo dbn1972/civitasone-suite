@@ -195,6 +195,32 @@ describe("maskAttribute (GAP-CDP-PROFILES-DETAIL-01)", () => {
     expect(maskAttribute("address", "12 MG Road").value).not.toBe("12 MG Road");
   });
 
+  it("is pattern-based: catches compound / camelCase keys, not just exact names", () => {
+    expect(maskAttribute("emailAddress", "asha@example.gov.in").value).not.toContain("asha@example.gov.in");
+    expect(maskAttribute("mobileNumber", "9876543210").value).toBe("98XXXXX210");
+    expect(maskAttribute("primary_phone", "9876543210").sensitive).toBe(true);
+    expect(maskAttribute("panNumber", "ABCDE1234F").value).toBe("ABCDE****F");
+    expect(maskAttribute("aadhaarNo", "1234 5678 9012").value).toBe("XXXX XXXX 9012");
+    expect(maskAttribute("homeAddress", "12 MG Road").sensitive).toBe(true);
+    expect(maskAttribute("date_of_birth", "1990-01-15").sensitive).toBe(true);
+  });
+
+  it("detects identifier-shaped values under an innocuous key", () => {
+    expect(maskAttribute("note", "asha@example.gov.in").sensitive).toBe(true);
+    expect(maskAttribute("note", "9876543210").sensitive).toBe(true);
+    expect(maskAttribute("ref", "123456789012").value).toBe("XXXX XXXX 9012");
+  });
+
+  it("does not over-mask short-token lookalikes (company, panel, guid)", () => {
+    expect(maskAttribute("company", "Acme").sensitive).toBe(false);
+    expect(maskAttribute("panel", "A").sensitive).toBe(false);
+    expect(maskAttribute("guid", "abc").sensitive).toBe(false);
+  });
+
+  it("shows a value the service already masked as received (no double-masking)", () => {
+    expect(maskAttribute("email", "a***@e*****.g**.in")).toEqual({ value: "a***@e*****.g**.in", sensitive: true });
+  });
+
   it("leaves a non-sensitive attribute (tier) untouched", () => {
     expect(maskAttribute("tier", "gold")).toEqual({ value: "gold", sensitive: false });
   });

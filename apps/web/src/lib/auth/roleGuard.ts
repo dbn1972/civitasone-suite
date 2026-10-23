@@ -167,6 +167,7 @@ export const PROJECT_WRITE_ROLES = ["project_manager", "project_officer", "super
  * others); this gate stops a user who would be 403'd from loading PII.
  */
 export const PROJECT_READER_ROLES = [
+  "project_manager",
   "project_officer",
   "project_admin",
   "finance_officer",
@@ -532,8 +533,9 @@ export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platfor
 /**
  * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
  * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
- * 3 tenant provisioning). The orchestrator and stages routes accept the same
- * set for reads and writes, so this currently equals INSTALL_VIEW_ROLES; the
+ * 3 tenant provisioning). install_user is READ-ONLY: install-service rejects it
+ * with 403 on every mutation, so it is excluded here and operate buttons are
+ * hidden from it. This is INSTALL_VIEW_ROLES minus install_user; the other
  * exception is GET /v1/install/silo-provisions, whose READER_ROLES (see
  * INSTALL_SILO_READ_ROLES) include platform_admin and exclude tenant_admin.
  * It is kept as
@@ -542,7 +544,7 @@ export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platfor
  * mutation controls from a hypothetical read-only install role. The server
  * remains the authority.
  */
-export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+export const INSTALL_OPERATE_ROLES = ["install_admin", "super_admin", "tenant_admin"];
 
 /**
  * GAP-CDP-STEWARD-01: roles permitted to decide (approve/reject) profile-merge
@@ -679,6 +681,12 @@ export const BILLING_PLAN_ADMIN_ROLES = ["super_admin"];
 export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin", "tenant_admin"];
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
+/**
+ * Mirrors notification-service bulk/routes.ts `ADMIN`: the ONLY roles allowed to
+ * create / send / cancel a campaign. Deliberately NOT NOTIFICATION_SEND_ROLES -
+ * notification_admin may send single notifications but the campaign routes 403 it.
+ */
+export const NOTIFICATION_CAMPAIGN_MANAGE_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 
 /**
@@ -799,6 +807,13 @@ export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
  * who may read the endpoint; this gate decides what the UI reveals/exports.
  */
 export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
+
+/**
+ * Roles permitted to open the tenant-wide field agent roster. Mirrors field-service's
+ * GET /v1/field/agents gate (supervisors only); the server stays the authority, this
+ * only decides whether the hub offers the tile.
+ */
+export const FIELD_AGENT_ROSTER_ROLES = ["field_admin", "super_admin"];
 
 /**
  * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
@@ -1117,3 +1132,21 @@ export const ESTAB_DFA_DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_a
  * can READ acknowledgements but is NOT an approver there.
  */
 export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"];
+
+/**
+ * Roles admitted somewhere in inspection-service. Derived from the union of the
+ * `*_ROLES` constants in services/inspection-service/src/modules/**\/routes.ts
+ * (re-derive with `grep -rn "_ROLES = \[" ...` if the service changes). The
+ * service stays the authority; this gate only stops a role with no inspection
+ * permission from landing on a hub whose every call 403s.
+ */
+export const INSPECTION_ROLES = [
+  "inspector",
+  "reviewing_officer",
+  "supervising_officer",
+  "planning_officer",
+  "audit_officer",
+  "inspection_admin",
+  "tenant_admin",
+  "super_admin",
+];

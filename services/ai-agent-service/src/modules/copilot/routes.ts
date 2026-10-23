@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { READ_ROLES } from "../../shared/roles.js";
+import { READ_ROLES, canAccessOwned, hasTenantWideAiAccess } from "../../shared/roles.js";
 import * as repo from "./repo.js";
 import * as guardrailsRepo from "../guardrails/repo.js";
 import { evaluateRules } from "../guardrails/domain.js";
@@ -148,7 +148,8 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
     const q = listQuery.parse(req.query);
 
     const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, {
-      ...(q.userId !== undefined ? { userId: q.userId } : {}),
+      // Plain ai_user: own turns only, whatever userId filter was requested.
+      ...(hasTenantWideAiAccess(ctx.roles) ? (q.userId !== undefined ? { userId: q.userId } : {}) : { userId: ctx.actorId }),
     });
 
     const page = Math.floor(q.offset / q.limit) + 1;
@@ -164,7 +165,7 @@ export async function copilotRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
 
     const turn = await repo.findById(id, ctx.tenantId);
-    if (!turn) {
+    if (!turn || !canAccessOwned(ctx, turn.userId)) {
       throw new HttpError(404, "NOT_FOUND", "copilot turn not found");
     }
 

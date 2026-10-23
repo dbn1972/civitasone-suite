@@ -39,12 +39,26 @@ describe("aggregatePeriodSeries", () => {
     const out = aggregatePeriodSeries(entries);
     expect(out.map((o) => o.period)).toEqual(["2024-04", "2024-05"]);
     expect(out[0]!.demandMinor).toBe(100000n);
-    // collection + refund both count as collection-side
-    expect(out[0]!.collectionMinor).toBe(70000n);
-    expect(out[0]!.efficiencyBps).toBe(7000);
+    // collection counts, a refund NETS IT DOWN (it re-opens the balance)
+    expect(out[0]!.collectionMinor).toBe(50000n);
+    expect(out[0]!.efficiencyBps).toBe(5000);
     expect(out[1]!.demandMinor).toBe(300000n);
     expect(out[1]!.collectionMinor).toBe(150000n);
     expect(out[1]!.efficiencyBps).toBe(5000);
+  });
+
+  it("classifies every entry type: refund nets down, waiver/write_off add, adjustment legs net to zero", () => {
+    const out = aggregatePeriodSeries([
+      { period: "2024-04", entryType: "demand", amountMinor: 100000n },
+      { period: "2024-04", entryType: "collection", amountMinor: 50000n },
+      { period: "2024-04", entryType: "refund", amountMinor: 20000n },
+      { period: "2024-04", entryType: "write_off", amountMinor: 10000n },
+      { period: "2024-04", entryType: "waiver", amountMinor: 5000n },
+      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, narration: "Adjustment debit: x" },
+      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, narration: "Adjustment credit: x" },
+    ]);
+    // 50000 - 20000 + 10000 + 5000 + (7000 - 7000)
+    expect(out[0]!.collectionMinor).toBe(45000n);
   });
 
   it("handles empty input", () => {

@@ -184,3 +184,13 @@ describe("list-price discount maths (GAP-CRM-QUOTATIONS-05, mirrors crm-service 
     expect(quotationDiscountBps([{ listUnitMinor: null, unitPriceMinor: "5", quantity: 1 }])).toBe(0);
   });
 });
+
+describe("isProductSelectable — IST day boundary (CLOS-S3-01)", () => {
+  const base = normaliseProduct({ id: "p", name: "X", code: "X", enabled: true, activeFrom: "2026-04-01", activeTo: "2026-04-01" })!;
+  it("is selectable at 00:30 IST on the first active day (UTC date is still the previous day)", () => {
+    expect(isProductSelectable(base, new Date("2026-04-01T00:30:00+05:30"))).toBe(true);
+  });
+  it("is not selectable at 02:00 IST the day after the window closed (UTC date is still the last day)", () => {
+    expect(isProductSelectable(base, new Date("2026-04-02T02:00:00+05:30"))).toBe(false);
+  });
+});

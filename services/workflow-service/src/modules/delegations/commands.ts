@@ -15,10 +15,14 @@ async function pub(ctx: RequestContext, type: string, id: string, payload: Recor
 }
 
 export const createDelegation = (ctx: RequestContext, body: {
-  delegateId: string; fromDate: string; toDate?: string | null; reason?: string | null;
+  delegateId: string; roles: string[]; fromDate: string; toDate?: string | null; reason?: string | null;
 }) => pub(ctx, COMMANDS.createDelegation, randomUUID(), {
   ...body, delegatorId: ctx.actorId, toDate: body.toDate ?? null, reason: body.reason ?? null,
 });
+
+/** Records (via the consumer) an audited refusal of a revoke the caller does not own. */
+export const refuseDelegationRevoke = (ctx: RequestContext, id: string) =>
+  pub(ctx, COMMANDS.refuseDelegationRevoke, id, {});
 
 export const revokeDelegation = (ctx: RequestContext, id: string) =>
   pub(ctx, COMMANDS.revokeDelegation, id, {});

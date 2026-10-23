@@ -18,6 +18,7 @@ import { relayOnce } from "@civitasone/outbox";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { mintDownloadToken } from "../src/modules/exports/signing.js";
 
 /**
  * Test-harness fix (mirrors audit.test.ts / para.test.ts): a bare `new
@@ -97,13 +98,14 @@ beforeAll(async () => {
     db.transaction((tx) => tx.select().from(auditExports).where(eq(auditExports.id, exportId))),
   );
   const row = rows[0];
-  if (!row || row.status !== "completed" || !row.signedUrl || !row.downloadToken) {
+  if (!row || row.status !== "completed" || !row.signedUrl) {
     throw new Error(
       `test setup failed: export ${exportId} did not complete (status=${row?.status ?? "missing"})`,
     );
   }
   signedUrl = row.signedUrl;
-  downloadToken = row.downloadToken;
+  // The token is no longer persisted: mint a short-lived one bound to the requester.
+  downloadToken = mintDownloadToken({ exportId, tenantId: TENANT, actorId: ACTOR }).token;
 });
 
 afterAll(async () => {
@@ -248,7 +250,11 @@ describe("GET /v1/audit/exports/:id", () => {
     expect(data.status).toBe("completed");
     expect(data.ready).toBe(true);
     expect(typeof data.download).toBe("string");
-    expect(data.download).toBe(signedUrl);
+    // Short-lived requester-bound token (<exp>.<hmac>), never the stored path.
+    expect(data.download).toMatch(/^\d+\.[0-9a-f]{64}$/);
+    expect(data.download).not.toBe(signedUrl);
+    expect(new Date(data.downloadExpiresAt).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(data.downloadExpiresAt).getTime()).toBeLessThanOrEqual(Date.now() + 15 * 60_000 + 1000);
     expect(data.contentSha256).toBeTruthy();
   });
 });
@@ -347,11 +353,8 @@ describe("GET /v1/audit/exports/:id/verify", () => {
 //   and at least one records the "complete" action — proving each mutation
 //   writes its own audit row.
 //
-// NOTE on single-use/expiring tokens: the current schema has no tokenUsedAt
-// or tokenExpiresAt field; the download token is persistent and reusable.
-// Implementing expiry would require a schema migration and an owner decision
-// on TTL — this item is therefore PARTIAL (audit event coverage closed here;
-// token lifetime remains INTERIM/NEEDS OWNER DECISION).
+// NOTE on token lifetime: the download token is a stateless HMAC (15-minute TTL,
+// bound to the requester) — see the final test in this block.
 // ──────────────────────────────────────────────────────────────────────────────
 describe("GAP-AUDIT-EXPORTS-07 — each export mutation writes exactly one audit event", () => {
   let auditEventsTable: typeof import("../src/modules/events/schema.js")["auditEvents"];
@@ -398,22 +401,35 @@ describe("GAP-AUDIT-EXPORTS-07 — each export mutation writes exactly one audit
     expect(completeEvent).toBeDefined();
   });
 
-  it("the download token is persistent (current behaviour — single-use/expiry needs owner decision)", async () => {
-    // Confirm the token can be used a second time; no tokenUsedAt/tokenExpiresAt
-    // field exists in the schema, so single-use enforcement is not implemented.
+  it("the download token is short-lived, requester-bound and not persisted", async () => {
     const jwt = token(["audit_officer"], TENANT, ACTOR);
-    const res1 = await app.inject({
-      method: "GET",
-      url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+    // 1) Nothing reusable is stored: no token column value, no token in the stored path.
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(auditExports).where(eq(auditExports.id, exportId))),
+    );
+    expect(rows[0]!.downloadToken).toBeNull();
+    expect(rows[0]!.signedUrl).not.toContain("token=");
+    // 2) The requester can download with the minted token.
+    const ok = await app.inject({
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
       headers: { authorization: `Bearer ${jwt}` },
     });
-    expect(res1.statusCode).toBe(200);
-    // Second use with the same token succeeds — documenting current behaviour.
-    const res2 = await app.inject({
-      method: "GET",
-      url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers["cache-control"]).toBe("no-store");
+    // 3) Replay by ANOTHER reader in the same tenant with the leaked token is rejected.
+    const other = token(["audit_admin"], TENANT, randomUUID());
+    const replay = await app.inject({
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+      headers: { authorization: `Bearer ${other}` },
+    });
+    expect(replay.statusCode).toBe(403);
+    // 4) An expired token (minted 20 minutes ago) is rejected with 410.
+    const stale = mintDownloadToken({ exportId, tenantId: TENANT, actorId: ACTOR }, Date.now() - 20 * 60_000).token;
+    const expired = await app.inject({
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${stale}`,
       headers: { authorization: `Bearer ${jwt}` },
     });
-    expect(res2.statusCode).toBe(200);
+    expect(expired.statusCode).toBe(410);
+    expect(expired.json().code).toBe("EXPIRED");
   });
 });

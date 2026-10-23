@@ -205,6 +205,57 @@ describe("OLA / underpinning-contract tracking", () => {
   });
 });
 
+describe("web contract — list olas + request detail shapes", () => {
+  it("offerings LIST rows carry their OLAs (turnaround column), tightest first", async () => {
+    const c = await createOffering(adminA());
+    const id = c.json().data.id as string;
+    await post(`/v1/helpdesk/catalogue/offerings/${id}/olas`, adminA(), { name: "Slow", kind: "uc", provider: "ISP", targetMinutes: 480 });
+    await flush();
+    await post(`/v1/helpdesk/catalogue/offerings/${id}/olas`, adminA(), { name: "Fast", kind: "ola", provider: "IT", targetMinutes: 120 });
+    await flush();
+    const noOla = await createOffering(adminA());
+    const noOlaId = noOla.json().data.id as string;
+
+    const list = await get("/v1/helpdesk/catalogue/offerings", userA());
+    expect(list.statusCode).toBe(200);
+    const row = list.json().data.find((o: { id: string }) => o.id === id);
+    expect(row.olas.map((o: { targetMinutes: number }) => o.targetMinutes)).toEqual([120, 480]);
+    // an offering without OLAs still carries an (empty) olas array, never undefined
+    expect(list.json().data.find((o: { id: string }) => o.id === noOlaId).olas).toEqual([]);
+  });
+
+  it("raise-request 202 sends data.requestId (not data.id)", async () => {
+    const c = await createOffering(adminA(), { fulfilmentStages: [] });
+    const id = c.json().data.id as string;
+    const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
+    expect(raise.statusCode).toBe(202);
+    await flush();
+    expect(raise.json().data.requestId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(raise.json().data.id).toBeUndefined();
+  });
+
+  it("request detail sends approvals[{decision,comment,decidedAt}] and stageEvents[{toStage,at,note}]", async () => {
+    const c = await createOffering(adminA(), { approvalRequired: true });
+    const id = c.json().data.id as string;
+    const raise = await post(`/v1/helpdesk/catalogue/offerings/${id}/requests`, userA(), { formData: { reason: "x" } });
+    await flush();
+    const requestId = raise.json().data.requestId;
+    await post(`/v1/helpdesk/catalogue/requests/${requestId}/approve`, adminB_A(), { decision: "rejected", comment: "Budget not approved" });
+    await flush();
+    const d = (await get(`/v1/helpdesk/catalogue/requests/${requestId}`, userA())).json().data;
+    expect(d.rejectionReason).toBeUndefined();
+    expect(d.stageHistory).toBeUndefined();
+    expect(d.approvals).toHaveLength(1);
+    expect(d.approvals[0]).toMatchObject({ decision: "rejected", comment: "Budget not approved" });
+    expect(typeof d.approvals[0].decidedAt).toBe("string");
+    expect(Array.isArray(d.stageEvents)).toBe(true);
+    for (const e of d.stageEvents) {
+      expect(typeof e.toStage).toBe("string");
+      expect(typeof e.at).toBe("string");
+    }
+  });
+});
+
 describe("self-service portal — raise request creates fulfilment item + ticket", () => {
   it("raising a request creates a service_request AND a linked ticket", async () => {
     const c = await createOffering(adminA(), { fulfilmentStages: [] });

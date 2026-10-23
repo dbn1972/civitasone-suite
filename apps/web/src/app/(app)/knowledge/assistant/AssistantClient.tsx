@@ -5,6 +5,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Field, Input, Select } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Citation = { docId: string; title: string; source: string };
 type AskAnswer = { interactionId: string; answer: string; citations: Citation[]; answered: boolean; grounded: boolean };
@@ -24,6 +25,7 @@ type EscalateResponse = { id: string; status: string; correlationId: string };
  */
 export function AssistantClient() {
   const router = useRouter();
+  const formError = useFormError("assistant request");
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
@@ -51,7 +53,9 @@ export function AssistantClient() {
       const body = (await res.json()) as { data: AskAnswer };
       setAnswer(body.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      // CLOS-S2-02: only UserFacingError text passes through; network / parse
+      // exceptions get catalogued copy, never raw `Failed to fetch` / SyntaxError.
+      setError(formError.fromException("load", e).message);
     } finally {
       setBusy(false);
     }
@@ -76,7 +80,7 @@ export function AssistantClient() {
       setEscalated(true);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(formError.fromException("save", e).message);
     } finally {
       setBusy(false);
     }

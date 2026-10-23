@@ -119,12 +119,14 @@ describe("competency profile/gap-analysis — real-DB identity resolution", () =
     expect(r.statusCode).toBe(404);
   });
 
-  it("GET .../employees/:id/profile: manager can still read an arbitrary employee's profile (unrestricted, unchanged)", async () => {
+  // Owner decision 2 (2026-10-14): this test previously asserted a manager could
+  // read ANY employee's profile (200). Managers are now limited to direct reports.
+  it("GET .../employees/:id/profile: a manager who is not Alice's manager is refused (403)", async () => {
     const r = await app.inject({
       method: "GET", url: `/v1/hrms/competency/employees/${aliceEmpId}/profile`,
       headers: auth(BOB_ACTOR, ["manager"]),
     });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(403);
   });
 
   it("GET .../employees/:id/profile: HR can still read an arbitrary employee's profile (unrestricted, unchanged)", async () => {

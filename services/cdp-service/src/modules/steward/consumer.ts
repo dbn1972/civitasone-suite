@@ -36,6 +36,19 @@ export function registerStewardConsumers(rawQueue: Queue): void {
       const mergeRequest = await repo.findByIdTx(tx, p.mergeRequestId, msg.tenantId);
       if (!mergeRequest || mergeRequest.status !== "pending") return;
 
+      // Maker-checker (defence in depth; the route also rejects with 409): the
+      // actor who created the match row may never decide it.
+      if (mergeRequest.createdBy === msg.actorId) {
+        await writeAudit(tx, ctxOf(msg), {
+          action: "steward.decide_denied",
+          resourceType: "merge_queue",
+          resourceId: p.mergeRequestId,
+          details: { reason: "maker_checker" },
+        });
+        log.warn({ id: p.mergeRequestId }, "steward decision rejected: decider created the match");
+        return;
+      }
+
       const ok = await repo.decide(tx, p.mergeRequestId, msg.tenantId, decision, msg.actorId, p.reason);
       if (!ok) return;
 

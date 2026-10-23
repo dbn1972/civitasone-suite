@@ -9,13 +9,19 @@ import { generateBillBody } from "./validators.js";
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
-  app.setErrorHandler((error, _req, reply) => {
+  app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: error.message } });
     }
     if (error instanceof HttpError) {
       return reply.code(error.status).send({ error: { code: error.code, message: error.message } });
     }
+    // Fastify-native 4xx (malformed JSON, 413, 415, 429 ...) are client errors, not 500s. Generic message only.
+    const sc = (error as { statusCode?: number }).statusCode;
+    if (typeof sc === "number" && sc >= 400 && sc < 500) {
+      return reply.code(sc).send({ error: { code: "BAD_REQUEST", message: "bad request" } });
+    }
+    req.log.error({ err: error }, "unhandled error");
     return reply.code(500).send({ error: { code: "INTERNAL", message: "internal server error" } });
   });
 
@@ -25,6 +31,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = generateBillBody.parse(req.body);
+    // The consumer silently drops a second bill for the same assessment, which
+    // left the caller believing one was queued. Reject synchronously instead.
+    const existing = await repo.findBillByAssessment(ctx.tenantId, body.assessmentId);
+    if (existing) {
+      throw new HttpError(409, "BILL_ALREADY_EXISTS", `a bill (${existing.billNo}) has already been issued for this assessment`);
+    }
     const result = await commands.generateBill(ctx, body);
     return reply.code(202).send({ data: result });
   });

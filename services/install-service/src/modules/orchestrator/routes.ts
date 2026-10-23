@@ -17,11 +17,13 @@ import * as queries from "./queries.js";
 import { defaultOnboardingSteps, ONBOARDING_WIZARD_NAME } from "./onboarding.js";
 
 const ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+// install_user is read-only: wizard/step mutations need an install admin role.
+const MUTATE_ROLES = ["install_admin", "super_admin", "tenant_admin"];
 
 export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/install/wizards", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const body = createWizardBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.createWizard(ctx, body));
   });
@@ -29,7 +31,7 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
   /** FN-17 — create the standard tenant onboarding wizard (Stage 3 = Domain Pack). */
   app.post("/v1/install/wizards/onboarding", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const domainPackKey =
       typeof (req.body as { domainPackKey?: string } | null)?.domainPackKey === "string"
         ? (req.body as { domainPackKey: string }).domainPackKey
@@ -63,14 +65,14 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/install/wizards/:wizardId/steps/:stepKey/start", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
     sendAccepted(reply, acceptedResponseSchema, await commands.startStep(ctx, wizardId, stepKey));
   });
 
   app.post("/v1/install/wizards/:wizardId/steps/:stepKey/complete", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
     const body = completeStepBody.parse(req.body ?? {});
     sendAccepted(reply, acceptedResponseSchema, await commands.completeStep(ctx, wizardId, stepKey, body));
@@ -78,7 +80,7 @@ export async function orchestratorRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/install/wizards/:wizardId/steps/:stepKey/skip", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const { wizardId, stepKey } = stepKeyParam.parse(req.params);
     const body = skipStepBody.parse(req.body ?? {});
     sendAccepted(reply, acceptedResponseSchema, await commands.skipStep(ctx, wizardId, stepKey, body.reason));

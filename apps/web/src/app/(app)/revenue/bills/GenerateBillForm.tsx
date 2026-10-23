@@ -7,7 +7,8 @@ import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { DemandRow } from "./page";
 
-type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
+// revenue-service answers 202 { data: { messageId } }.
+type AcceptedResponse = { data?: { messageId?: string } };
 
 export function GenerateBillForm({
   assesseeId,
@@ -70,9 +71,10 @@ export function GenerateBillForm({
       });
       setConfirmOpen(false);
       setTone("good");
+      const messageId = res?.data?.messageId;
       setMessage(
-        res.id
-          ? `Bill generation submitted (id ${res.id}). It is processed asynchronously and will appear below shortly.`
+        messageId
+          ? `Bill generation submitted (ref ${messageId}). It is processed asynchronously and will appear below shortly.`
           : "Bill generation submitted.",
       );
       setDemandId("");

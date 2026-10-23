@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { resolveEmployeeForActor } from "../modules/employee/actor-link.js";
 import { hrmsEmployees } from "../modules/employee/schema.js";
 import { scopedRead, sqlClient } from "./db.js";
+import { HttpError } from "./context.js";
 
 /** Default HR role set for the helpers below. medical passes its own (it adds finance_officer). */
 export const SELF_SCOPE_HR_ROLES: readonly string[] = ["hr_admin", "hr_officer", "super_admin"];
@@ -17,10 +18,9 @@ const HR_ROLES = SELF_SCOPE_HR_ROLES;
  * can close the same IDOR class with the SAME judgment call rather than a
  * second, divergent implementation.
  *
- * A privileged caller (HR_ROLES or manager) gets the `requested` id passed
- * through unchanged -- this module, like training, has no "manager scoped to
- * direct reports" precedent of its own, so manager pass-through is accepted
- * (documented risk, same as training). A bare "employee" caller is ALWAYS
+ * A privileged HR caller gets the `requested` id passed through unchanged. A
+ * manager is limited to self + direct reports (owner decision 2, 2026-10-14;
+ * 403 otherwise). A bare "employee" caller is ALWAYS
  * forced onto their OWN linked hrms_employees record (resolveEmployeeForActor:
  * userRef + verified-email fallback), regardless of the employeeId they
  * requested. Returns null when a bare-employee caller has no resolvable
@@ -33,8 +33,16 @@ export async function resolveOwnEmployeeIdIfBareEmployee(
   requested: string | undefined,
   hrRoles: readonly string[] = HR_ROLES,
 ): Promise<string | undefined | null> {
-  const isPrivileged = [...hrRoles, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return requested;
+  if (hrRoles.some((r) => ctx.roles.includes(r))) return requested;
+  if (ctx.roles.includes("manager")) {
+    // Owner decision 2 (2026-10-14, general HR rule): a manager reads only
+    // themselves or their direct reports -- 403 otherwise. An undefined
+    // `requested` still passes through (callers apply their own scope).
+    if (requested !== undefined && !(await canReadEmployeeRecord(ctx, requested, hrRoles))) {
+      throw new HttpError(403, "FORBIDDEN", "you may only access records of yourself or your direct reports");
+    }
+    return requested;
+  }
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
@@ -62,8 +70,11 @@ export async function resolveOwnEmployeeIdIfNonHr(
  * Read target for the learning "my" endpoints (GAP-LEARNING-MY-LEARNING-01,
  * GAP-LEARNING-HOME-01). Resolves the ONE employee id a read is about:
  *   - bare employee: ALWAYS their own linked record, whatever was requested.
- *   - HR / manager: the `requested` id, or -- when none was requested -- their
- *     own linked record (the normal self-service path).
+ *   - HR: the `requested` id, or -- when none was requested -- their own
+ *     linked record (the normal self-service path).
+ *   - manager: owner decision 2 (2026-10-14) -- direct reports only. A
+ *     `requested` id must be the manager's own record or a direct report's
+ *     (canReadEmployeeRecord), otherwise 403; no `requested` => own record.
  * Returns null when no employee can be resolved (bare employee or privileged
  * caller without a link and without a requested id): callers MUST treat that
  * as "nothing to show" (fail CLOSED), never fall through to a tenant-wide read.
@@ -72,8 +83,15 @@ export async function resolveLearningReadTarget(
   ctx: RequestContext,
   requested: string | undefined,
 ): Promise<string | null> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged && requested) return requested;
+  if (requested) {
+    if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
+    if (ctx.roles.includes("manager")) {
+      if (!(await canReadEmployeeRecord(ctx, requested))) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view learning data of yourself or your direct reports");
+      }
+      return requested;
+    }
+  }
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }

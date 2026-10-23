@@ -138,6 +138,33 @@ async function auditMedicalClaimsListRead(
 }
 
 /**
+ * DPDP audit-on-read for the single-employee medical reads (insurance,
+ * history): an HR/finance/manager caller reading ANOTHER employee's health
+ * data is recorded (own record is not). Reuses the medicalClaimsListRead
+ * command, whose consumer passes the payload straight to the audit outbox.
+ */
+async function auditMedicalEmployeeRead(
+  ctx: RequestContext, targetEmployeeId: string, view: "insurance" | "history",
+): Promise<void> {
+  const privileged = HR_ROLES.some((r) => ctx.roles.includes(r)) || ctx.roles.includes("manager");
+  if (!privileged) return;
+  const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (own?.id === targetEmployeeId) return;
+  await queue.publish(COMMANDS.medicalClaimsListRead, {
+    messageId: randomUUID(),
+    type: COMMANDS.medicalClaimsListRead,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms", action: "read", resourceType: "medical_employee_record",
+      resourceId: targetEmployeeId, outcome: "success", view,
+    },
+  });
+}
+
+/**
  * GAP2-HRMS-MEDICAL-01 / -02: emit a PRECISE audit.event.record for a medical
  * claim's maker-write (create) and the checker-write (approve/reject).
  *
@@ -498,6 +525,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // record exists for someone else).
     const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "insurance");
 
     const [row] = await sqlClient`
       SELECT employee_id, scheme_type, scheme_id, card_number, validity_from,
@@ -524,6 +552,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: same self-scoping as claims/insurance above.
     const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) return reply.send({ data: [] });
+    await auditMedicalEmployeeRead(ctx, effectiveEmployeeId, "history");
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT id, claim_type, amount_minor::text, approved_amount_minor::text,

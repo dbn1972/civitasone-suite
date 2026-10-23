@@ -86,4 +86,13 @@ describe("Field Agents page (GAP-FIELD-AGENTS-01/04)", () => {
     expect(screen.getAllByText(/try again|retry/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("No agents yet")).not.toBeInTheDocument();
   });
+
+  it("a 403 (non-supervisor) shows Access restricted, not a retry-able load error", async () => {
+    agentsMock.mockResolvedValueOnce({ data: [], source: "error", status: 403, errorMessage: "requires one of: field_admin" });
+    render(await AgentsPage());
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(screen.queryByText(/try again|retry|check your connection/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/field_admin/)).not.toBeInTheDocument();
+    expect(screen.queryByText("No agents yet")).not.toBeInTheDocument();
+  });
 });

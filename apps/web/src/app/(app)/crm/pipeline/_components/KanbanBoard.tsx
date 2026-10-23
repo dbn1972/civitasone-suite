@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -273,7 +274,7 @@ export function KanbanBoard({ pipeline, pipelines, deals: serverDeals, source }:
     offline || fromCache
       ? t("cacheNote", {
           hasDate: cachedAt ? "yes" : "no",
-          date: cachedAt ? new Date(cachedAt).toLocaleString("en-IN") : "",
+          date: cachedAt ? formatIndianDateTime(cachedAt) : "",
           isOffline: offline ? "yes" : "no",
         })
       : null;

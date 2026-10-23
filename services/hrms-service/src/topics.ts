@@ -121,6 +121,10 @@ export const COMMANDS = {
   // write to Postgres directly).
   learningEnrolmentsRead: "hrms.learning.enrolments_read",
 
+  // DPDP audit-on-read: HR or a manager reading ANOTHER employee's competency
+  // profile / gap analysis. Recorded by competency/f3-consumer.ts.
+  competencyEmployeeRead: "hrms.competency.employee_read",
+
   // claims (LTC / CEA)
   claimCreate:          "hrms.claim.create",
   claimApprove:         "hrms.claim.approve",

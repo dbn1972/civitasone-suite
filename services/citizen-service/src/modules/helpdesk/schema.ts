@@ -16,6 +16,8 @@ export const citizenTickets = helpdeskSchema.table("citizen_tickets", {
   category:    varchar("category", { length: 64 }).notNull().default("general"),
   channel:     varchar("channel", { length: 24 }).notNull().default("web"),
   ticketType:  varchar("ticket_type", { length: 32 }).notNull().default("grievance"),
+  // Name of the person who reported the issue (agent-logged phone/walk-in tickets).
+  requesterName: varchar("requester_name", { length: 200 }),
   assigneeId:  uuid("assignee_id"),
   slaDueAt:    timestamp("sla_due_at", { withTimezone: true }),
   resolvedAt:  timestamp("resolved_at", { withTimezone: true }),

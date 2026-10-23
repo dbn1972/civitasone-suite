@@ -6,10 +6,12 @@ export const createObservationBody = z.object({
   auditeeRef:          z.string().min(1).max(128),
   finding:             z.string().min(1).max(4000),
   category:            z.enum(["performance", "compliance", "financial"]).default("compliance"),
-  riskLevel:           z.enum(["low", "medium", "high"]).default("medium"),
+  riskLevel:           z.enum(["low", "medium", "high", "critical"]).default("medium"),
   // P0-3: money in PAISE carried as a decimal string to avoid float/Number truncation
   // of amounts above 2^53. Validated as a non-negative integer string; BigInt()-parsed downstream.
   amountInvolvedMinor: z.string().regex(/^\d+$/, "must be a non-negative integer string").default("0"),
+  // Optional compliance due date (ISO calendar date).
+  dueDate:             z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD").optional(),
   reason:              z.string().trim().max(500).optional(),
 });
 export type CreateObservationBody = z.infer<typeof createObservationBody>;

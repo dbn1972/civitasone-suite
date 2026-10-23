@@ -7,18 +7,9 @@ import {
   getInventoryItemForecast,
   getInventoryLowStock,
 } from "./_data";
-import { countBadge, pickMostBelowReorder } from "./hubStats";
+import { buildForecastSeries, countBadge, pickMostBelowReorder } from "./hubStats";
 import { INVENTORY_LIST_LIMIT } from "./_limits";
-import { ForecastChart, type ForecastPoint } from "./ForecastChart";
-
-function buildForecastSeries(dailyForecast: number[]): ForecastPoint[] {
-  const start = new Date();
-  return dailyForecast.map((qty, i) => {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i);
-    return { date: d.toISOString().slice(0, 10), qty };
-  });
-}
+import { ForecastChart } from "./ForecastChart";
 
 export default async function Page() {
   // GAP-INVENTORY-HOME-01: keep the whole loader result. An outage used to

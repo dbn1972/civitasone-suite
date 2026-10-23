@@ -10,7 +10,7 @@ export default async function InventoryInsightsPage() {
   return (
     <DomainInsightPage
       title="Demand Forecasting Insights"
-      subtitle="Exponential smoothing model performance for inventory demand forecast accuracy (MAPE, lower is better)."
+      subtitle="Prediction volume, average confidence and fallback rate for inventory demand forecasts."
       domain="inventory"
       evaluation={evaluation}
       source={source}
@@ -23,7 +23,6 @@ export default async function InventoryInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Forecasts Generated",
-        accuracy: "MAPE (lower is better)",
         fallbackRate: "Fallback Rate",
         topFactor: "Top Factor",
       }}

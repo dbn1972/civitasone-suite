@@ -1,6 +1,7 @@
 "use client";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
@@ -56,6 +57,17 @@ export function RequestDetailClient({
   // first run where the server loader itself failed behaves exactly as
   // before (unconditional fetch).
   const skipFirstFetch = useRef(initialSource === "api");
+  // CLOS-S1-06: the post-mutation polling chain's timer + in-flight request, so
+  // they can be cancelled on unmount and when a new mutation restarts the chain.
+  const pollTimer = useRef<number | undefined>(undefined);
+  const pollAbort = useRef<AbortController | null>(null);
+  const stopPolling = useCallback(() => {
+    window.clearTimeout(pollTimer.current);
+    pollTimer.current = undefined;
+    pollAbort.current?.abort();
+    pollAbort.current = null;
+  }, []);
+  useEffect(() => stopPolling, [stopPolling]);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -67,11 +79,11 @@ export function RequestDetailClient({
       setGrievance((await res.json()) as Grievance);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
-      setLoadError(e instanceof Error ? e.message : "Failed to load request.");
+      setLoadError(e instanceof UserFacingError ? e.message : t("errLoadRequest"));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     if (skipFirstFetch.current) {
@@ -92,11 +104,16 @@ export function RequestDetailClient({
     setNotice(msg);
     setPending(true);
     router.refresh();
+    stopPolling();
+    const controller = new AbortController();
+    pollAbort.current = controller;
     let tries = 0;
     const tick = async () => {
+      if (controller.signal.aborted) return;
       tries += 1;
       try {
-        const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store" });
+        const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store", signal: controller.signal });
+        if (controller.signal.aborted) return;
         if (res.ok) {
           const next = (await res.json()) as Grievance;
           setGrievance(next);
@@ -106,10 +123,11 @@ export function RequestDetailClient({
         /* transient — keep trying up to the cap */
       }
       if (tries >= 5) { setPending(false); return; }
-      window.setTimeout(() => { void tick(); }, 3000);
+      if (controller.signal.aborted) return;
+      pollTimer.current = window.setTimeout(() => { void tick(); }, 3000);
     };
     void tick();
-  }, [grievance?.status, id, router]);
+  }, [grievance?.status, id, router, stopPolling]);
 
   async function addAction(e: React.FormEvent) {
     e.preventDefault();
@@ -126,7 +144,7 @@ export function RequestDetailClient({
       setActionForm({ actionType: "comment", note: "" });
       afterMutate("Action submitted. It will appear once processed.");
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : "Could not record the action.");
+      setFormError(e instanceof UserFacingError ? e.message : t("errRecordAction"));
     } finally {
       setBusy(false);
     }

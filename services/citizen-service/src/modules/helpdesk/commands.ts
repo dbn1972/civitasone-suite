@@ -21,14 +21,17 @@ function stableMessageId(ticketId: string, command: string, correlationId: strin
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 
-export async function createTicket(ctx: RequestContext, body: CreateTicketBody & { citizenId: string }): Promise<Accepted> {
+export async function createTicket(ctx: RequestContext, body: CreateTicketBody & { citizenId: string }): Promise<Accepted & { data: { id: string; ticketNo: string } }> {
   const id = randomUUID();
+  const ticketNo = `HD-${id.slice(0, 8).toUpperCase()}`;
   await queue.publish(COMMANDS.ticketCreate, {
     messageId: id, type: COMMANDS.ticketCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ticketNo: `HD-${id.slice(0, 8).toUpperCase()}`, ...body },
+    payload: { id, tenantId: ctx.tenantId, ticketNo, ...body },
   });
-  return { id, status: "accepted", correlationId: ctx.correlationId };
+  // `data` is the standard F3 envelope for the created resource; the ticket number
+  // is deterministic from the id so the client can show/deep-link it immediately.
+  return { id, status: "accepted", correlationId: ctx.correlationId, data: { id, ticketNo } };
 }
 
 export async function addNote(ctx: RequestContext, id: string, body: TicketNoteBody): Promise<Accepted> {

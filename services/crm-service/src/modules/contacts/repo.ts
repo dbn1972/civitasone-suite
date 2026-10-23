@@ -583,6 +583,20 @@ export async function accountExists(tenantId: string, accountId: string): Promis
   return rows.length > 0;
 }
 
+/**
+ * Tri-state lookup behind the synchronous 422 (F5): "active" = linkable; "inactive" = the account is
+ * in this tenant but merged away / deactivated (merge soft-deletes the duplicate to status
+ * 'inactive'); "missing" = no such account in this tenant.
+ */
+export async function accountLinkState(tenantId: string, accountId: string): Promise<"active" | "inactive" | "missing"> {
+  const rows = await scopedRead((tx) => tx.select({ status: accounts.status }).from(accounts)
+    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.id, accountId)))
+    .limit(1));
+  const row = rows[0];
+  if (!row) return "missing";
+  return row.status === "active" ? "active" : "inactive";
+}
+
 /** In-transaction twin of {@link accountExists}; used by the contact and activity consumers. */
 export async function accountExistsTx(tx: Writer, tenantId: string, accountId: string): Promise<boolean> {
   const rows = await tx.select({ one: sql`1` }).from(accounts)

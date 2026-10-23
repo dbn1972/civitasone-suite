@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { FileUpload } from "./FileUpload";
 
@@ -60,5 +60,34 @@ describe("FileUpload", () => {
     const input = document.querySelector("input[type='file']") as HTMLInputElement;
     expect(input).toBeInTheDocument();
     expect(input).toHaveAttribute("accept", ".pdf,.doc");
+  });
+});
+
+describe("FileUpload — simulated upload timer cleanup (CLOS-S3-05)", () => {
+  afterEach(() => vi.useRealTimers());
+  const pick = (file: File) => {
+    const input = document.querySelector("input[type='file']") as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [file], configurable: true });
+    fireEvent.change(input);
+  };
+
+  it("does not fire onUpload after unmount mid-upload", () => {
+    vi.useFakeTimers();
+    const onUpload = vi.fn();
+    const { unmount } = render(<FileUpload onUpload={onUpload} />);
+    pick(new File(["x"], "a.pdf", { type: "application/pdf" }));
+    unmount();
+    vi.advanceTimersByTime(10_000);
+    expect(onUpload).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onUpload after the file is removed mid-upload", () => {
+    vi.useFakeTimers();
+    const onUpload = vi.fn();
+    render(<FileUpload onUpload={onUpload} />);
+    pick(new File(["x"], "a.pdf", { type: "application/pdf" }));
+    fireEvent.click(screen.getByTitle("Remove file"));
+    vi.advanceTimersByTime(10_000);
+    expect(onUpload).not.toHaveBeenCalled();
   });
 });

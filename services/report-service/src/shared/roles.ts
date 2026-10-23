@@ -28,14 +28,12 @@ export const REPORT_READ_ROLES = [
 
 /**
  * Roles permitted to MUTATE report objects (create a report job, create /
- * update / disable / run a scheduled report). Includes both historical reader
- * names that the respective write surfaces accepted before the fix
- * (jobs accepted `report_user`; scheduled accepted `report_viewer`), unioned
- * so neither flow regresses, plus the admin/finance/tenant roles.
+ * update / disable / run a scheduled report). report_viewer is READ-ONLY and is
+ * deliberately NOT here: a scheduled report emails up to 20 external
+ * recipients, so a read-only viewer must never create, patch, run or delete one.
  */
 export const REPORT_WRITE_ROLES = [
   "report_user",
-  "report_viewer",
   "report_admin",
   "finance_admin",
   "admin",
@@ -43,11 +41,21 @@ export const REPORT_WRITE_ROLES = [
   "super_admin",
 ];
 
+/** Create / share a report JOB (same set as REPORT_WRITE_ROLES). */
+export const REPORT_JOB_WRITE_ROLES = REPORT_WRITE_ROLES;
+
 /**
- * Roles permitted to create or share a report JOB (POST /v1/reports/jobs and
- * /jobs/:id/share). Deliberately excludes the read-only report_viewer role:
- * sharing sends a report to arbitrary recipients, which a viewer must never
- * do. Scheduled-report mutation keeps REPORT_WRITE_ROLES (which still admits
- * report_viewer) for backward compatibility.
+ * Roles with TENANT-WIDE visibility over report jobs and scheduled reports.
+ * Everyone else (report_user, report_viewer) sees and acts on only the rows
+ * they created. Legacy rows with a null requested_by are admin-visible only.
  */
-export const REPORT_JOB_WRITE_ROLES = REPORT_WRITE_ROLES.filter((r) => r !== "report_viewer");
+export const REPORT_ADMIN_ROLES = ["report_admin", "finance_admin", "admin", "tenant_admin", "super_admin"];
+
+export function isReportAdmin(ctx: { roles: readonly string[] }): boolean {
+  return ctx.roles.some((r) => REPORT_ADMIN_ROLES.includes(r));
+}
+
+/** Owner filter for a request: undefined = tenant-wide (admin), else the actor id. */
+export function ownerScope(ctx: { roles: readonly string[]; actorId: string }): string | undefined {
+  return isReportAdmin(ctx) ? undefined : ctx.actorId;
+}
