@@ -1,4 +1,4 @@
-import { formatInIST } from "@/lib/formatters";
+import { formatInIST, istDateKey } from "@/lib/formatters";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
@@ -70,7 +70,8 @@ const HOLIDAY_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 export default async function HolidaysPage({ searchParams }: { searchParams?: { year?: string } }) {
   const t = await getTranslations("holidays");
-  const currentYear = new Date().getFullYear();
+  // CLOS2-S2-05: IST calendar year, not the (UTC) host clock.
+  const currentYear = Number(istDateKey(new Date()).slice(0, 4));
   // GAP-HR-HOLIDAYS-02: the backend already accepts ?year= (defaulting to
   // the current year) -- nothing on this page ever sent it, so next
   // year's gazetted list (usually notified in December) was unreachable.

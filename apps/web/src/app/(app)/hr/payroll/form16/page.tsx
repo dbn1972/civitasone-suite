@@ -4,6 +4,7 @@ import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState } from "..
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { formatIndianDate } from "@/lib/formatters";
+import { currentFinancialYearStart } from "@/lib/financialYear";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { isValidFy } from "@/lib/validators/fy";
@@ -33,8 +34,8 @@ type JobLookup =
 
 /** FY runs Apr–Mar; before April we're still in the FY that started last calendar year. */
 function currentFy(): string {
-  const now = new Date();
-  const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // CLOS2-S2-02: IST-aware FY start (host clock is UTC).
+  const y = currentFinancialYearStart();
   return `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
 }
 
