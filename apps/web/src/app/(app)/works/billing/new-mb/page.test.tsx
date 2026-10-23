@@ -84,16 +84,39 @@ describe("Issue Measurement Book form", () => {
   });
 
   it("maps a 409 DUPLICATE_MB_NUMBER to a field message and keeps the form data (NEW-MB-03)", async () => {
-    mockFetch({ postStatus: 409, postBody: { error: { code: "DUPLICATE_MB_NUMBER" } } });
+    // The body is the FLAT envelope works-service really returns (packages/schemas createFastifyErrorHandler):
+    // { code, message, correlationId, retryable } -- the machine code is at the top level, not under `error`.
+    mockFetch({
+      postStatus: 409,
+      postBody: { code: "DUPLICATE_MB_NUMBER", message: "MB number already used for this work", correlationId: "c-1", retryable: false },
+    });
     searchParamsMock = new URLSearchParams(`workId=${WORK}`);
     render(<NewMbPage />);
     await screen.findByPlaceholderText("UUID of the work");
     fireEvent.change(screen.getByPlaceholderText("UUID of the award"), { target: { value: AWARD } });
     fireEvent.change(screen.getByPlaceholderText("e.g. MB/2024-25/001"), { target: { value: "MB/9" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit" }));
-    expect(await screen.findByText(/already used for this work/i)).toBeInTheDocument();
+    const fieldError = await screen.findByText(/already used for this work/i);
+    // The message sits on the MB number field (linked via aria-describedby), not in a page-level banner.
+    expect(fieldError).toHaveAttribute("id", "new-mb-number-error");
+    expect(screen.getByPlaceholderText("e.g. MB/2024-25/001")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByPlaceholderText("e.g. MB/2024-25/001")).toHaveAttribute("aria-describedby", "new-mb-number-error");
     expect(screen.getByPlaceholderText("e.g. MB/2024-25/001")).toHaveValue("MB/9");
+    expect(screen.getByPlaceholderText("UUID of the award")).toHaveValue(AWARD);
     expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("a 409 with a different code stays a page-level banner and does NOT mark the MB number field invalid", async () => {
+    mockFetch({ postStatus: 409, postBody: { code: "SOMETHING_ELSE", message: "x", correlationId: "c-2", retryable: false } });
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    render(<NewMbPage />);
+    await screen.findByPlaceholderText("UUID of the work");
+    fireEvent.change(screen.getByPlaceholderText("UUID of the award"), { target: { value: AWARD } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. MB/2024-25/001"), { target: { value: "MB/10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await screen.findByRole("alert");
+    expect(screen.getByPlaceholderText("e.g. MB/2024-25/001")).not.toHaveAttribute("aria-invalid");
+    expect(document.getElementById("new-mb-number-error")).toBeNull();
   });
 
   it("offers an award SELECT (not a UUID input) when the work's awards load (NEW-MB-01)", async () => {

@@ -1,19 +1,26 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, Field, Input, Select, Textarea, EntityPicker } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { recentFinancialYears } from "@/lib/fiscalYear";
-import { searchWorkProposals, resolveWorkProposals, DAO_FINALIZED } from "@/lib/entityAdapters/workProposal";
-import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
+import {
+  searchWorkProposals,
+  resolveWorkProposals,
+  isTsEligibleStatus,
+  TS_ELIGIBLE_STATUSES,
+  type WorkProposalOption,
+} from "@/lib/entityAdapters/workProposal";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 
 // Token-based banner styles (no hard-coded hex).
 const okBanner: React.CSSProperties = { background: "var(--good-bg)", color: "var(--good)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
 const errBanner: React.CSSProperties = { background: "var(--bad-bg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
 const infoBanner: React.CSSProperties = { background: "var(--info-bg)", color: "var(--info)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const warnBanner: React.CSSProperties = { background: "var(--warn-bg)", color: "var(--warn)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
 
 // Upper bound: ₹999,99,99,999.99 (just under 1,000 crore) in paise.
 const MAX_AMOUNT_MINOR = 99999999999n;
@@ -39,6 +46,42 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
   const [message, setMessage] = useState("");
   const formError = useFormError("technical sanction");
 
+  // Status of every work the picker has shown or resolved, by id, so the banner and the Create button follow the work
+  // the user actually selected (including one prefilled from ?workId=, which skips the search).
+  const [workStatuses, setWorkStatuses] = useState<Record<string, string | null>>({});
+  const remember = useCallback((opts: WorkProposalOption[]) => {
+    setWorkStatuses((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const o of opts) {
+        if (!(o.id in prev) || prev[o.id] !== o.status) {
+          next[o.id] = o.status;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    return opts;
+  }, []);
+  // A work that is not eligible is LISTED, disabled with the reason, rather than filtered out of the picker.
+  const searchWork = useCallback(
+    async (q: string, signal: AbortSignal) =>
+      remember(
+        await searchWorkProposals(q, signal, {
+          strict: true,
+          eligibleStatuses: TS_ELIGIBLE_STATUSES,
+          ineligibleReason: () => t("notDaoFinalized"),
+        }),
+      ),
+    [remember, t],
+  );
+  const resolveWork = useCallback(async (ids: string[]) => remember(await resolveWorkProposals(ids)), [remember]);
+
+  const workKnown = form.workId !== "" && form.workId in workStatuses;
+  const workEligible = workKnown && isTsEligibleStatus(workStatuses[form.workId]);
+  const workBlocked = workKnown && !workEligible;
+  const missingSelection = !form.workId || !form.tsAuthorityId;
+
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -59,6 +102,14 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
     e.preventDefault();
     setMessage("");
     setError("");
+    if (missingSelection) {
+      setError(t("selectToContinue"));
+      return;
+    }
+    if (workBlocked) {
+      setError(t("bannerBlocked"));
+      return;
+    }
     const amtErr = validateAmount();
     setAmountError(amtErr ?? "");
     if (amtErr) return;
@@ -111,9 +162,20 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
         back="/works/approvals"
         backLabel="Approvals"
       />
-      <div role="note" style={infoBanner}>
-        {t("daoBanner")}
-      </div>
+      {/* The banner follows the selected work: neutral until one is chosen, then eligible / blocked. */}
+      {workBlocked ? (
+        <div role="alert" style={warnBanner}>
+          {t("bannerBlocked")}
+        </div>
+      ) : workEligible ? (
+        <div role="status" style={infoBanner}>
+          {t("bannerEligible")}
+        </div>
+      ) : (
+        <div role="note" style={infoBanner}>
+          {t("daoBanner")}
+        </div>
+      )}
       {message ? (
         <div role="status" aria-live="polite" style={okBanner}>
           {message}
@@ -145,10 +207,12 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
                 id="ts-new-work-id"
                 value={form.workId || null}
                 onChange={(v) => setForm((prev) => ({ ...prev, workId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))}
-                // BR: a TS needs a DAO-finalized proposal, so only those works are offered at all.
-                search={(q, signal) => searchWorkProposals(q, signal, { status: DAO_FINALIZED })}
-                resolve={resolveWorkProposals}
-                placeholder="Search DAO-finalized works by number or description…"
+                // BR-011: a TS needs a DAO-finalized work. Others are listed but disabled, with the reason; the
+                // server's canEnterTS allow-list is still the authority.
+                search={searchWork}
+                resolve={resolveWork}
+                placeholder={t("workPlaceholder")}
+                searchErrorText={t("workSearchFailed")}
                 aria-label="Work"
               />
             </Field>
@@ -169,15 +233,13 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
             </Field>
 
             <Field label="TS authority" required id="ts-new-authority-id">
-              <EntityPicker
+              {/* The tenant user directory (names only, open to any member): the admin-gated /identity/users list
+                  this used to call is not reachable for a works clerk. */}
+              <DirectoryPicker
+                source="user"
                 id="ts-new-authority-id"
                 value={form.tsAuthorityId || null}
-                onChange={(v) =>
-                  setForm((prev) => ({ ...prev, tsAuthorityId: Array.isArray(v) ? (v[0] ?? "") : (v ?? "") }))
-                }
-                search={searchIdentityUsers}
-                resolve={resolveIdentityUsers}
-                placeholder="Search by officer name…"
+                onChange={(id) => setForm((prev) => ({ ...prev, tsAuthorityId: id ?? "" }))}
                 aria-label="TS authority"
               />
             </Field>
@@ -231,8 +293,20 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
             />
           </Field>
 
+          {missingSelection ? (
+            <p id="ts-new-submit-hint" style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+              {t("selectToContinue")}
+            </p>
+          ) : null}
+
           <div style={{ display: "flex", gap: 12 }}>
-            <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={busy || missingSelection || workBlocked}
+              aria-describedby={missingSelection ? "ts-new-submit-hint" : undefined}
+              style={{ minHeight: 44 }}
+            >
               {busy ? "Submitting..." : "Create"}
             </Button>
             <Button

@@ -8,6 +8,7 @@ import { COMMANDS, EVENTS, MODULE_CALLBACK_TOPICS } from "../../topics.js";
 import { isDecisionConsumed } from "@civitasone/eoffice-sdk";
 import { computeFileDueBy } from "../files/domain.js";
 import * as repo from "../files/repo.js";
+import { invalidateFileLists } from "../files/queries.js";
 import { resolveApproval } from "../approval-rules/resolver.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -127,6 +128,7 @@ export function registerLinkageConsumers(queue: Queue): void {
     });
 
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
+    await invalidateFileLists(msg.tenantId);
   });
 }
 

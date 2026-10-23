@@ -198,3 +198,41 @@ describe("GET /identity/users/directory — cross-tenant denial", () => {
     expect(res.json().data).toEqual([{ id: USER_B, displayName: "Chandra Nair" }]);
   });
 });
+
+// The web (lib/directory/*, DirectoryPicker, the works approvals registers) calls /api/v1/identity/users/directory, which
+// the gateway's identity-v1 prefix forwards verbatim to /v1/identity/users/directory. Only /identity/users/directory was
+// registered, so every one of those lookups 404ed in a real stack. The versioned path must behave exactly like the original.
+describe("GET /v1/identity/users/directory — the versioned path the gateway forwards to", () => {
+  const dirV1 = (qs: string, headers = bearer()) =>
+    app.inject({ method: "GET", url: `/v1/identity/users/directory?${qs}`, headers });
+
+  it("401 without a token", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/identity/users/directory?ids=${EMP_A}` });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("serves a plain (non-admin) tenant member the same {id, displayName} rows as the unversioned path", async () => {
+    const v1 = await dirV1(`ids=${EMP_A},${SUSP_A}`);
+    const legacy = await dir(`ids=${EMP_A},${SUSP_A}`);
+    expect(v1.statusCode).toBe(200);
+    expect(v1.json()).toEqual(legacy.json());
+    expect(v1.json().data).toHaveLength(2);
+    for (const r of v1.json().data as Array<Record<string, unknown>>) expect(Object.keys(r).sort()).toEqual(["displayName", "id"]);
+  });
+
+  it("q search works and enforces the same limits (2 characters minimum, exactly one of ids / q)", async () => {
+    const hit = await dirV1("q=Asha");
+    expect(hit.json().data).toEqual([{ id: EMP_A, displayName: "Asha Rao" }]);
+    expect((await dirV1("q=A")).statusCode).toBe(400);
+    expect((await dirV1(`ids=${EMP_A}&q=Asha`)).statusCode).toBe(400);
+    expect((await dirV1("")).statusCode).toBe(400);
+  });
+
+  it("is tenant-scoped exactly like the original: a tenant-A caller cannot resolve a tenant-B id", async () => {
+    const res = await dirV1(`ids=${USER_B}`, bearer(TA));
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data).toHaveLength(0);
+    const own = await dirV1(`ids=${USER_B}`, bearer(TB));
+    expect(own.json().data).toEqual([{ id: USER_B, displayName: "Chandra Nair" }]);
+  });
+});

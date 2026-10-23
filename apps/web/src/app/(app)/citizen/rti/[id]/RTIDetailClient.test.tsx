@@ -150,7 +150,7 @@ describe("RTIDetailClient -- error copy & statutory clock (GAP-CITIZEN-RTI-DETAI
     const { container } = renderClient({ initialRti: evil, initialSource: "api" });
     // No anchor carries the javascript: scheme.
     const anchors = Array.from(container.querySelectorAll("a"));
-    expect(anchors.some((a) => (a.getAttribute("href") ?? "").toLowerCase().startsWith("javascript:"))).toBe(false);
+    expect(anchors.some((a) => /^\s*(?:javascript|data|vbscript):/i.test(a.getAttribute("href") ?? ""))).toBe(false);
     // The inert fallback label is shown instead.
     expect(await screen.findByText(enMessages.citizenRti.responseDocumentUnavailable)).toBeInTheDocument();
   });

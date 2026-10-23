@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const getGuesthouseBookingsMock = vi.fn();
 vi.mock("../../../_data/loaders", () => ({
@@ -135,5 +135,116 @@ describe("GuesthousePage — GUESTHOUSE-01 (check-in/check-out actions)", () => 
     mockRoles = ["employee"];
     render(await GuesthousePage());
     expect(screen.queryByRole("button", { name: "Check in" })).toBeNull();
+  });
+});
+
+describe("GuesthousePage - check-in/out times as the service sends them (GAP-ESTAB-GUESTHOUSE-03)", () => {
+  beforeEach(() => {
+    getGuesthouseBookingsMock.mockReset();
+    mockRoles = ["estab_officer"];
+  });
+
+  const row = (over: Record<string, unknown>) => ({
+    id: "b1", bookingNo: "B1", guestName: "Shri A. Kumar", department: "Health", status: "confirmed", ...over,
+  });
+
+  it("an instant that falls on the next IST calendar day is shown on that day, with its time", async () => {
+    // 03 Oct 2026 19:00 UTC is 04 Oct 2026 00:30 IST: a UTC date cut would name the wrong day.
+    getGuesthouseBookingsMock.mockResolvedValueOnce({
+      data: [row({ checkInDate: "2026-10-01T08:30:00.000Z", checkOutDate: "2026-10-03T19:00:00.000Z" })],
+      source: "api",
+    });
+    render(await GuesthousePage());
+    expect(screen.getByText(/01 Oct 2026, 02:00 pm/i)).toBeInTheDocument();
+    expect(screen.getByText(/04 Oct 2026, 12:30 am/i)).toBeInTheDocument();
+  });
+
+  it("a bare calendar date (no time of day) is shown as the date it is, never as a fabricated 05:30 am", async () => {
+    getGuesthouseBookingsMock.mockResolvedValueOnce({
+      data: [row({ checkInDate: "2026-10-01", checkOutDate: "2026-10-03" })],
+      source: "api",
+    });
+    render(await GuesthousePage());
+    expect(screen.getByText("01 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("03 Oct 2026")).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/05:30/);
+  });
+});
+
+describe("GuesthousePage - check-out records the charges the officer states (GAP-ESTAB-GUESTHOUSE-01)", () => {
+  beforeEach(() => {
+    getGuesthouseBookingsMock.mockReset();
+    mockRoles = ["estab_officer"];
+    vi.restoreAllMocks();
+  });
+
+  const IN_HOUSE = {
+    id: "b2", bookingNo: "B2", guestName: "In-house Guest", department: "Health", roomNo: "103", status: "checked_in",
+    checkInDate: "2026-09-28T08:30:00.000Z", checkOutDate: "2026-10-01T08:30:00.000Z",
+  };
+
+  function spyPatch() {
+    const calls: Array<{ url: string; body: unknown }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(input), body: JSON.parse(String(init?.body ?? "{}")) });
+      return new Response(JSON.stringify({ id: "b2", status: "accepted", correlationId: "c" }), { status: 202 });
+    });
+    return calls;
+  }
+  async function openCheckout() {
+    getGuesthouseBookingsMock.mockResolvedValue({ data: [IN_HOUSE], source: "api" });
+    render(await GuesthousePage());
+    fireEvent.click(screen.getByRole("button", { name: "Check out" }));
+    const dialog = await screen.findByRole("alertdialog");
+    return { dialog, confirm: within(dialog).getByRole("button", { name: "Check out" }) };
+  }
+
+  it("a blank amount is not read as 0: confirm stays disabled until the officer states the charges", async () => {
+    const { confirm } = await openCheckout();
+    expect(confirm).toBeDisabled();
+  });
+
+  it("sends the typed rupees as exact integer paise (1,500.50 -> 150050)", async () => {
+    const calls = spyPatch();
+    const { dialog, confirm } = await openCheckout();
+    fireEvent.change(within(dialog).getByLabelText(/Charges collected/), { target: { value: "1,500.50" } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]!.url).toContain("/room-bookings/b2/checkout");
+    expect(calls[0]!.body).toEqual({ chargesMinor: 150050 });
+  });
+
+  it("an explicit 0 is sent as 0 (nothing charged), by the officer's statement", async () => {
+    const calls = spyPatch();
+    const { dialog, confirm } = await openCheckout();
+    fireEvent.change(within(dialog).getByLabelText(/Charges collected/), { target: { value: "0" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]!.body).toEqual({ chargesMinor: 0 });
+  });
+
+  it("a sub-paise or non-numeric amount is refused with a message and nothing is sent", async () => {
+    const calls = spyPatch();
+    const { dialog, confirm } = await openCheckout();
+    for (const bad of ["12.345", "abc", "-5", "1e3"]) {
+      fireEvent.change(within(dialog).getByLabelText(/Charges collected/), { target: { value: bad } });
+      expect(confirm).toBeDisabled();
+      const why = within(dialog).getByText(/Enter the charges as an amount in rupees/);
+      expect(why.getAttribute("role")).toBe("alert");
+    }
+    expect(calls).toHaveLength(0);
+  });
+
+  it("check-in still sends no charges", async () => {
+    const calls = spyPatch();
+    getGuesthouseBookingsMock.mockResolvedValue({ data: [{ ...IN_HOUSE, status: "confirmed" }], source: "api" });
+    render(await GuesthousePage());
+    fireEvent.click(screen.getByRole("button", { name: "Check in" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).queryByLabelText(/Charges collected/)).toBeNull();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Check in" }));
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]!.body).toEqual({});
   });
 });

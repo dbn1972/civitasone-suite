@@ -9,6 +9,19 @@ import NewGuesthouseBookingPage from "./page";
 import { istLocalToUtcIso } from "./istLocal";
 
 const ROOM_ID = "11111111-1111-1111-1111-111111111111";
+const ROOMS = [
+  { id: ROOM_ID, roomNo: "101", type: "deluxe", capacity: 2, status: "available" },
+  { id: "33333333-3333-3333-3333-333333333333", roomNo: "102", type: "standard", capacity: 1, status: "maintenance" },
+];
+
+/** Waits for the rooms directory to load, then picks Room 101 by what the clerk sees (never by typing an id). */
+async function chooseRoom() {
+  const select = (await screen.findByLabelText(/Room\b/)) as HTMLSelectElement;
+  await waitFor(() => expect(select.options.length).toBeGreaterThan(1));
+  const option = Array.from(select.options).find((o) => o.textContent?.includes("101"));
+  expect(option).toBeDefined();
+  fireEvent.change(select, { target: { value: option!.value } });
+}
 
 describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
   beforeEach(() => {
@@ -20,14 +33,14 @@ describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
       if (init?.method === "POST") { postCalls.push([url, init]); return Promise.resolve(new Response(JSON.stringify({ id: "bk1" }), { status: 202 })); }
-      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: ROOMS }), { status: 200 }));
       if (url.includes("/estab/operators")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
       return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     });
 
     render(<NewGuesthouseBookingPage />);
 
-    fireEvent.change(screen.getByLabelText(/Room\b/), { target: { value: ROOM_ID } });
+    await chooseRoom();
     fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
     fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
     fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
@@ -46,9 +59,11 @@ describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
   });
 
   it("rejects an empty Room selection without calling the API", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(new Response(JSON.stringify({ data: String(input).includes("/estab/rooms") ? ROOMS : [] }), { status: 200 })));
 
     render(<NewGuesthouseBookingPage />);
+    await waitFor(() => expect((screen.getByLabelText(/Room\b/) as HTMLSelectElement).options.length).toBeGreaterThan(1));
 
     // Leave the room blank.
     fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
@@ -64,14 +79,14 @@ describe("NewGuesthouseBookingPage — booking create (L1/L2)", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
       if (init?.method === "POST") return Promise.resolve(new Response("room already booked for that window", { status: 409 }));
-      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: ROOMS }), { status: 200 }));
       if (url.includes("/estab/operators")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
       return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     });
 
     render(<NewGuesthouseBookingPage />);
 
-    fireEvent.change(screen.getByLabelText(/Room\b/), { target: { value: ROOM_ID } });
+    await chooseRoom();
     fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
     fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
     fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
@@ -99,13 +114,13 @@ describe("NewGuesthouseBookingPage — GUESTHOUSE-NEW-03/04/05", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === "string" ? input : input.toString();
       if (init?.method === "POST") { postCalls.push([url, init]); return Promise.resolve(new Response(JSON.stringify({ id: "bk1" }), { status: 202 })); }
-      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify({ data: ROOMS }), { status: 200 }));
       if (url.includes("/estab/operators")) return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
       return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     });
 
     render(<NewGuesthouseBookingPage />);
-    fireEvent.change(screen.getByLabelText(/Room\b/), { target: { value: ROOM_ID } });
+    await chooseRoom();
     fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
     fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
     fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
@@ -119,8 +134,10 @@ describe("NewGuesthouseBookingPage — GUESTHOUSE-NEW-03/04/05", () => {
   });
 
   it("NEW-03: reversed dates and missing name show per-field errors and focus the first invalid field", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) =>
+      Promise.resolve(new Response(JSON.stringify({ data: String(input).includes("/estab/rooms") ? ROOMS : [] }), { status: 200 })));
     render(<NewGuesthouseBookingPage />);
-    fireEvent.change(screen.getByLabelText(/Room\b/), { target: { value: ROOM_ID } });
+    await chooseRoom();
     // leave guest name blank
     fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-05T10:00" } });
     fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
@@ -130,6 +147,87 @@ describe("NewGuesthouseBookingPage — GUESTHOUSE-NEW-03/04/05", () => {
     expect(screen.getByText("Check-out must be after check-in.")).toBeInTheDocument();
     // Focus lands on the first invalid field (guest name, since room is valid).
     expect(screen.getByLabelText(/Guest name/)).toHaveFocus();
+  });
+});
+
+describe("NewGuesthouseBookingPage — GUESTHOUSE-NEW-01 (the room is chosen by name, never typed)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mockRooms(rooms: unknown, status = 200, posts: unknown[][] = []) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (init?.method === "POST") { posts.push([url, init]); return Promise.resolve(new Response(JSON.stringify({ id: "bk1" }), { status: 202 })); }
+      if (url.includes("/estab/rooms")) return Promise.resolve(new Response(JSON.stringify(status === 200 ? { data: rooms } : { message: "boom" }), { status }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+  }
+
+  it("choosing 'Room 101' from the picker posts that room's id", async () => {
+    const posts: unknown[][] = [];
+    mockRooms(ROOMS, 200, posts);
+    render(<NewGuesthouseBookingPage />);
+    const select = (await screen.findByLabelText(/Room\b/)) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBeGreaterThan(1));
+    // The clerk sees names, not ids.
+    expect(Array.from(select.options).map((o) => o.textContent)).toContain("101 · deluxe (2-bed)");
+    expect(select.textContent).not.toContain(ROOM_ID);
+    fireEvent.change(select, { target: { value: screen.getByRole("option", { name: /101 · deluxe/ }).getAttribute("value") } });
+    fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
+    fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
+    fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create booking" }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(JSON.parse((posts[0]![1] as RequestInit).body as string).roomId).toBe(ROOM_ID);
+  });
+
+  it("only rooms that are available are offered", async () => {
+    mockRooms(ROOMS);
+    render(<NewGuesthouseBookingPage />);
+    const select = (await screen.findByLabelText(/Room\b/)) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBeGreaterThan(1));
+    expect(Array.from(select.options).map((o) => o.textContent)).not.toContain("102 · standard (1-bed)");
+  });
+
+  it("with no rooms registered there is NO free-text Room ID field: a disabled picker and a plain explanation, and nothing can be posted", async () => {
+    const posts: unknown[][] = [];
+    mockRooms([], 200, posts);
+    render(<NewGuesthouseBookingPage />);
+    expect(await screen.findByText(/No rooms are registered yet/)).toBeInTheDocument();
+    const room = screen.getByLabelText(/Room\b/) as HTMLSelectElement;
+    expect(room.tagName).toBe("SELECT");
+    expect(room.disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: /Room\b/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value: "Shri A. Kumar" } });
+    fireEvent.change(screen.getByLabelText(/Check-in/), { target: { value: "2026-09-01T10:00" } });
+    fireEvent.change(screen.getByLabelText(/Check-out/), { target: { value: "2026-09-03T10:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create booking" }));
+    expect(await screen.findByText("Select a room.")).toBeInTheDocument();
+    expect(posts).toHaveLength(0);
+  });
+
+  it("when every registered room is unavailable it says so, still without a typed fallback", async () => {
+    mockRooms([ROOMS[1]]);
+    render(<NewGuesthouseBookingPage />);
+    expect(await screen.findByText(/None of the registered rooms is available/)).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: /Room\b/ })).toBeNull();
+  });
+
+  it("when the room directory fails to load it is an alert, not 'no rooms', and not a typed field", async () => {
+    mockRooms(null, 500);
+    render(<NewGuesthouseBookingPage />);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toMatch(/room list could not be loaded/i);
+    expect(screen.queryByText(/No rooms are registered yet/)).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /Room\b/ })).toBeNull();
+  });
+
+  it("the subtitle no longer claims the booking waits for approval (there is no approval step)", () => {
+    mockRooms(ROOMS);
+    render(<NewGuesthouseBookingPage />);
+    expect(screen.queryByText(/pending approval/i)).toBeNull();
+    expect(screen.getByText(/confirmed once it is processed/i)).toBeInTheDocument();
   });
 });
 

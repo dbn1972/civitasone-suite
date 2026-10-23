@@ -307,7 +307,6 @@ import {
   GrantReleaseListSchema,
   GrantUtilizationListSchema,
   EstabDashboardSchema,
-  EstabFileDetailSchema,
   MeetingSummaryListSchema,
   MeetingDetailSchema,
   VehicleSummaryListSchema,
@@ -374,6 +373,8 @@ import {
   mapDealSummaries,
   mapEstabFileSummaries,
   mapEstabFileDetail,
+  mapEstabDesk,
+  type EstabDesk,
   mapHelpdeskTicketList,
   mapHelpdeskTicketDetail,
   mapLegalCaseSummaries,
@@ -4904,25 +4905,32 @@ export async function getGrantUtilization(): Promise<LoaderResult<GrantUtilizati
 // Establishment loaders
 
 const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
-  filesPending: 0,
+  filesActive: 0,
   meetingsToday: 0,
   vehiclesInUse: 0,
   complianceItemsDue: 0,
   slaBreached: 0,
   dakPending: 0,
   avgPendencyDays: 0,
+  openFiles: 0,
+  oldestPendencyDays: 0,
 };
 
 function mapEstabDashboard(payload: unknown): EstabDashboard | null {
   if (!isRecord(payload)) return null;
   return {
-    filesPending: typeof payload.filesPending === "number" ? payload.filesPending : 0,
+    // filesActive is the field name; filesPending is the deprecated alias older services still send.
+    filesActive: typeof payload.filesActive === "number"
+      ? payload.filesActive
+      : typeof payload.filesPending === "number" ? payload.filesPending : 0,
     meetingsToday: typeof payload.meetingsToday === "number" ? payload.meetingsToday : 0,
     vehiclesInUse: typeof payload.vehiclesInUse === "number" ? payload.vehiclesInUse : 0,
     complianceItemsDue: typeof payload.complianceItemsDue === "number" ? payload.complianceItemsDue : 0,
     slaBreached: typeof payload.slaBreached === "number" ? payload.slaBreached : 0,
     dakPending: typeof payload.dakPending === "number" ? payload.dakPending : 0,
     avgPendencyDays: typeof payload.avgPendencyDays === "number" ? payload.avgPendencyDays : 0,
+    openFiles: typeof payload.openFiles === "number" ? payload.openFiles : 0,
+    oldestPendencyDays: typeof payload.oldestPendencyDays === "number" ? payload.oldestPendencyDays : 0,
   };
 }
 
@@ -4945,22 +4953,29 @@ export async function getEstabFiles(): Promise<LoaderResult<EstabFileSummary[]>>
 
 /**
  * GAP-ESTAB-INBOX-01: files currently on the authenticated officer's desk
- * ("My Desk"), filtered server-side by the backend (currentWith = actor) at
- * /api/v1/estab/files/mine — never the whole register.
+ * ("My Desk"), filtered server-side by the backend (the files held under the
+ * officer's own id or their hrms employee id) at /api/v1/estab/files/mine,
+ * never the whole register. `notEnrolled` is true when the tenant uses the
+ * operator model and this officer is not an enrolled operator.
  */
-export async function getEstabDeskFiles(): Promise<LoaderResult<EstabFileSummary[]>> {
-  return fetchJson<unknown, EstabFileSummary[]>("/api/v1/estab/files/mine", [], {
+export async function getEstabDeskFiles(): Promise<LoaderResult<EstabDesk>> {
+  return fetchJson<unknown, EstabDesk>("/api/v1/estab/files/mine", { files: [], notEnrolled: false }, {
     revalidateSeconds: 30,
     telemetryKey: "estab.files.mine",
-    mapResponse: mapEstabFileSummaries,
+    mapResponse: mapEstabDesk,
   });
 }
 
 export async function getEstabFileById(id: string): Promise<LoaderResult<EstabFileDetail | null>> {
+  // No `responseSchema` here on purpose. EstabFileDetailSchema describes the web-normalised shape (a
+  // five-value classification enum, createdBy/createdDate, a string currentHolder), not what
+  // estab-service sends: its DTO carries classification "public", status "draft"/"closed", a null
+  // currentHolder and createdAt, so validating the RAW payload against it rejected every real file and
+  // the page read "couldn't load file" for a file that had just been created. mapEstabFileDetail is the
+  // tolerant boundary: it requires id, fileNo and subject and normalises the rest.
   return fetchJson<unknown, EstabFileDetail | null>(`/api/v1/estab/files/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "estab.file.detail",
-    responseSchema: EstabFileDetailSchema,
     mapResponse: (p) => mapEstabFileDetail(p),
   });
 }

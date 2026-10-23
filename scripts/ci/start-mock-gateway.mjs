@@ -118,7 +118,7 @@ const FIXTURES = {
   '/api/v1/grants/utilization-certs': [{ id: 'uc1', grantNo: 'GRANT-001', period: 'Q1', amount: 10000000, status: 'submitted' }],
   '/api/v1/grants/schemes': [],
 
-  '/api/v1/estab/dashboard': { filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
+  '/api/v1/estab/dashboard': { filesActive: 1, filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
   '/api/v1/estab/files': [{ id: 'fil-001', fileNo: 'FILE-001', subject: 'Annual Budget Proposal 2024', classification: 'confidential', department: 'Finance', createdBy: 'Admin User', createdDate: '2024-01-10', currentHolder: 'Director Finance', status: 'active' }],
   '/api/v1/estab/meetings': [{ id: 'mtg-001', meetingNo: 'MTG-001', title: 'Quarterly Review Board Meeting', type: 'review', scheduledDate: '2024-02-15', scheduledTime: '10:00', venue: 'Conference Room A', chairperson: 'Secretary', attendeesCount: 12, agendaItemsCount: 0, status: 'scheduled' }],
   '/api/v1/estab/vehicles': [{ id: 'veh1', registrationNo: 'DL-01-AB-1234', make: 'Toyota', model: 'Innova', status: 'available' }],

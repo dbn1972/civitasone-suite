@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
+const suspendSearchParams = { on: false };
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParamsMock,
+  useSearchParams: () => {
+    if (suspendSearchParams.on) throw new Promise(() => {}); // never resolves -> the Suspense fallback stays up
+    return searchParamsMock;
+  },
 }));
 
 vi.mock("@/app/_components/ds/Toast", () => ({
@@ -64,6 +69,17 @@ describe("Add BoQ Item form", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it("GAP-WORKS-BOQ-NEW-04: rejects a zero rate before posting (the API refuses it too)", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/greater than zero/i);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("GAP-WORKS-BOQ-NEW-01: converts rupee rate to paise and posts it (bigint money rule)", async () => {
     searchParamsMock = new URLSearchParams(`workId=${WORK}`);
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -83,16 +99,103 @@ describe("Add BoQ Item form", () => {
     expect(typeof body.quantity).toBe("string");
   });
 
-  it("GAP-WORKS-BOQ-NEW-04: maps a 409 duplicate to a clear field message, not the raw status", async () => {
+  // works-service answers a duplicate line with 409 and the flat envelope { code: "DUPLICATE_BOQ_LINE", ... }.
+  const duplicateResponse = () =>
+    new Response(JSON.stringify({ code: "DUPLICATE_BOQ_LINE", message: "x", correlationId: "c", retryable: false }), {
+      status: 409, headers: { "content-type": "application/json" },
+    });
+
+  it("GAP-WORKS-BOQ-NEW-04: a duplicate item code is an inline error ON the item code field, form data kept", async () => {
     searchParamsMock = new URLSearchParams(`workId=${WORK}`);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 409 }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(duplicateResponse());
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Item code/i), { target: { value: "SR-1" } });
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+
+    const codeError = await screen.findByText(/item code is already on the BoQ/i);
+    expect(codeError).toHaveAttribute("role", "alert");
+    expect(codeError).toHaveAttribute("id", "itemCode-error");
+    const code = screen.getByLabelText(/Item code/i);
+    expect(code).toHaveAttribute("aria-invalid", "true");
+    expect(code).toHaveAttribute("aria-describedby", "itemCode-error");
+    // Not a page-level banner, no raw status, nothing cleared, no redirect.
+    expect(document.body.textContent).not.toMatch(/\b409\b/);
+    expect(code).toHaveValue("SR-1");
+    expect(screen.getByLabelText(/Item description/i)).toHaveValue("PCC 1:4:8");
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-WORKS-BOQ-NEW-04: with no item code the duplicate is flagged on the description field", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(duplicateResponse());
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    const descError = await screen.findByText(/line with this description is already on the BoQ/i);
+    expect(descError).toHaveAttribute("id", "itemDescription-error");
+    expect(screen.getByLabelText(/Item description/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/Item code/i)).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("GAP-WORKS-BOQ-NEW-04: editing the flagged field clears its inline error", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(duplicateResponse());
+    render(<NewBoqItemPage />);
+    fillRequired();
+    fireEvent.change(screen.getByLabelText(/Item code/i), { target: { value: "SR-1" } });
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    await screen.findByText(/item code is already on the BoQ/i);
+    fireEvent.change(screen.getByLabelText(/Item code/i), { target: { value: "SR-2" } });
+    expect(screen.queryByText(/item code is already on the BoQ/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/Item code/i)).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("GAP-WORKS-BOQ-NEW-04: another 409 (BoQ frozen after tender) is the catalogued page message, not a field error", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "BOQ_FROZEN", message: "x", correlationId: "c", retryable: false }), {
+        status: 409, headers: { "content-type": "application/json" },
+      }),
+    );
     render(<NewBoqItemPage />);
     fillRequired();
     fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
     fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/already exists for this work/i));
-    expect(alert.textContent).not.toMatch(/\b409\b/);
+    await waitFor(() => expect(alert).toHaveTextContent(/can't be changed any more/i));
+    expect(screen.getByLabelText(/Item code/i)).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("GAP-WORKS-BOQ-NEW-04: the early check against the work's BoQ list flags a duplicate on blur, before any POST", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async (input: RequestInfo | URL) => {
+      if (String(input).endsWith(`/v1/works/boq/${WORK}`)) {
+        return new Response(JSON.stringify({ data: [{ itemCode: "sr-1", itemDescription: "Anything" }] }), { status: 200 });
+      }
+      return new Response("{}", { status: 202 });
+    }) as typeof fetch);
+    render(<NewBoqItemPage />);
+    const code = screen.getByLabelText(/Item code/i);
+    fireEvent.change(code, { target: { value: " SR-1 " } });
+    fireEvent.blur(code);
+    expect(await screen.findByText(/item code is already on the BoQ/i)).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("GAP-WORKS-BOQ-NEW-04: a new code that is not on the list gets no early error", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    vi.spyOn(globalThis, "fetch").mockImplementation((async () =>
+      new Response(JSON.stringify({ data: [{ itemCode: "SR-1", itemDescription: "Anything" }] }), { status: 200 })) as typeof fetch);
+    render(<NewBoqItemPage />);
+    const code = screen.getByLabelText(/Item code/i);
+    fireEvent.change(code, { target: { value: "SR-9" } });
+    fireEvent.blur(code);
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    expect(screen.queryByText(/already on the BoQ/i)).not.toBeInTheDocument();
   });
 
   it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
@@ -148,5 +251,20 @@ describe("Add BoQ Item form - re-check of BOQ-NEW-01 / NEW-03 (work + SR lookup)
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.srItemId).toBe("sr-1");
     expect(body.rate).toBe("45000");
+  });
+});
+
+// GAP-WORKS-BOQ-NEW-04: while useSearchParams() suspends, the boundary shows the SkeletonCard, not a blank frame.
+describe("Add BoQ Item form - Suspense fallback", () => {
+  it("renders the skeleton (and no form) while the search params are still resolving", () => {
+    suspendSearchParams.on = true;
+    try {
+      const { container } = render(<NewBoqItemPage />);
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+      expect(screen.queryByRole("button", { name: "Add BoQ Item" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Item description/i)).not.toBeInTheDocument();
+    } finally {
+      suspendSearchParams.on = false;
+    }
   });
 });

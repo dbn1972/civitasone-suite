@@ -1,20 +1,62 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { DataTable, StatGrid, StatCard, Tabs, TabPanel } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { PENDING_STATUSES } from "@/lib/auth/workRoles";
 
-const columns = [
-  { key: "workNumber", label: "Work Number", sortable: true },
-  { key: "approvalNumber", label: "Approval Number", sortable: true },
-  { key: "date", label: "Date", sortable: true },
-  { key: "authority", label: "Authority", sortable: true },
-  { key: "amount", label: "Amount", align: "right" as const, cellType: "amount" as const, sortable: true },
-  { key: "type", label: "Type", sortable: true },
-  { key: "status", label: "Status", cellType: "status" as const, sortable: true },
-];
+type ApprovalRow = Record<string, unknown>;
+type Translate = (key: "idLabel" | "unknownOfficer", values: { id: string }) => string;
+
+const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+/**
+ * Register columns (GAP-WORKS-APPROVALS-01). The approval number is the first column because the row link to the
+ * approval's detail page sits on it; that leaves Work Number free to be its own link to the work. Rows the loaders
+ * could not resolve (`workNumberResolved` / `authorityResolved` === false) show a labelled short id with the full id as
+ * a tooltip, so a bare hash never reads as a number or a name, and export the FULL id to the CSV so the record can still
+ * be traced. Rows without those flags (older callers) are treated as resolved.
+ */
+export function buildApprovalColumns(t: Translate) {
+  return [
+    { key: "approvalNumber", label: "Approval Number", sortable: true },
+    {
+      key: "workNumber",
+      label: "Work Number",
+      sortable: true,
+      render: (row: ApprovalRow) => {
+        const workId = str(row.workId);
+        const unresolved = row.workNumberResolved === false;
+        const text = unresolved ? t("idLabel", { id: str(row.workNumber) }) : str(row.workNumber) || "—";
+        if (!workId) return text;
+        return (
+          // The row itself navigates to the approval on click; stop that so this link opens the work instead.
+          <Link href={`/works/proposals/${encodeURIComponent(workId)}`} title={unresolved ? workId : undefined} onClick={(e) => e.stopPropagation()}>
+            {text}
+          </Link>
+        );
+      },
+      csv: (row: ApprovalRow) => (row.workNumberResolved === false ? str(row.workId) : str(row.workNumber)),
+    },
+    { key: "date", label: "Date", sortable: true },
+    {
+      key: "authority",
+      label: "Authority",
+      sortable: true,
+      render: (row: ApprovalRow) => {
+        if (row.authorityResolved !== false) return str(row.authority) || "—";
+        return <span title={str(row.authorityId)}>{t("unknownOfficer", { id: str(row.authority) })}</span>;
+      },
+      csv: (row: ApprovalRow) => (row.authorityResolved === false ? str(row.authorityId) : str(row.authority)),
+    },
+    { key: "amount", label: "Amount", align: "right" as const, cellType: "amount" as const, sortable: true },
+    { key: "type", label: "Type", sortable: true },
+    { key: "status", label: "Status", cellType: "status" as const, sortable: true },
+  ];
+}
 
 type Tab = "aa" | "ts";
 
@@ -51,6 +93,8 @@ export function ApprovalsTable({
   tsTotal?: number;
 }) {
   const [tab, setTab] = useState<Tab>("aa");
+  const tNames = useTranslations("works.approvalNames");
+  const columns = buildApprovalColumns((key, values) => tNames(key, values));
   const {
     data: aaData,
     provenance: aaProvenance,

@@ -1802,13 +1802,18 @@ export type GrantUtilization = {
 
 // Establishment types
 export type EstabDashboard = {
-  filesPending: number;
+  /** Files with status "active" (the service count; the File Register shows the same figure). */
+  filesActive: number;
   meetingsToday: number;
   vehiclesInUse: number;
   complianceItemsDue: number;
   slaBreached: number;
   dakPending: number;
   avgPendencyDays: number;
+  /** Files open at any stage (not closed, archived or disposed) — GAP-ESTAB-DASHBOARD-05. */
+  openFiles: number;
+  /** Whole IST days since creation of the oldest open file; 0 when none is open. */
+  oldestPendencyDays: number;
 };
 
 export type EstabFileSummary = {
@@ -1820,7 +1825,15 @@ export type EstabFileSummary = {
   createdBy: string;
   createdDate: string;
   currentHolder?: string;
-  status: "active" | "pending" | "archived" | "disposed";
+  /**
+   * Register vocabulary. The service statuses are draft | active | closed | transferred | archived
+   * (files.estab_files CHECK); a draft is still in work, so the mapper presents it as "active"
+   * (apiMappers), while "closed" (what a file close writes) is kept distinct. "draft" and
+   * "transferred" stay in the union for callers that pass the raw service value. "pending" and
+   * "disposed" are register-side values. closed, archived and disposed are terminal
+   * (isFileReadOnly in estab/files/[id]/FileDetailActions.tsx); closed and archived are never overdue.
+   */
+  status: "draft" | "active" | "pending" | "closed" | "transferred" | "archived" | "disposed";
   dueDate?: string;
   tags: string[];
 };

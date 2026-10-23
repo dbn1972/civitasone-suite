@@ -35,6 +35,10 @@ export const returnDfaBody = z.object({
 export const approveDfaBody = z.object({
   modality:   z.enum(["approved", "approved_with_conditions", "partially_approved"]).default("approved"),
   conditions: z.string().min(1).max(2000).optional(),
+  // GAP-ESTAB-DFA-02: the approver's remarks. The web Approve dialog requires them; they are
+  // optional on the wire so existing API clients keep working, and are recorded in the
+  // dfa.approved audit event (never discarded).
+  reason:     z.string().trim().min(1).max(1000).optional(),
 }).superRefine((v, ctx) => {
   // A conditional / partial approval must state its conditions (CSMOP R10).
   if (v.modality !== "approved" && !v.conditions) {
