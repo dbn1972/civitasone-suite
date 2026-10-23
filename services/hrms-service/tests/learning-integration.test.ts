@@ -132,6 +132,8 @@ describe("enrolment + progress", () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("PREREQUISITES_NOT_MET");
     expect(res.json().missing).toContain(prereqCourseId);
+    // the titles accompany the ids so the UI can name the course instead of printing a UUID
+    expect(res.json().missingCourses).toEqual([{ id: prereqCourseId, title: expect.any(String) }]);
   });
 
   it("completing the prerequisite unblocks enrolment and tracks progress", async () => {

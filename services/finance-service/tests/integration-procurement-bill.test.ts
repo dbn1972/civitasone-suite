@@ -216,6 +216,41 @@ describe("procurement.grn.accepted → draft vendor bill for 3-way match", () =>
     await q.stop();
   });
 
+  // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number procurement sends rides on the bill command.
+  it("carries the human PO number (poNo) onto the bill command as poNumber", async () => {
+    const q = await buildQueue();
+    await q.publish(CONSUMED_EVENTS.grnAccepted, makeMsg(CONSUMED_EVENTS.grnAccepted, { ...GRN_PAYLOAD, poNo: "  PO-2026-014 " }));
+    await settle();
+    const billCall = enqueueMock.mock.calls.find(([_tx, msg]: [unknown, { topic: string }]) => msg.topic === COMMANDS.billCreate);
+    expect(billCall![1].payload.poNumber).toBe("PO-2026-014");
+    expect(billCall![1].payload.poRef).toContain("po-001"); // the opaque link is unchanged
+    await q.stop();
+  });
+
+  it("sends no poNumber when procurement sent none, or sent a stringified missing value", async () => {
+    for (const poNo of [undefined, "", "undefined", "null"]) {
+      enqueueMock.mockClear();
+      const q = await buildQueue();
+      await q.publish(CONSUMED_EVENTS.grnAccepted, makeMsg(CONSUMED_EVENTS.grnAccepted, { ...GRN_PAYLOAD, ...(poNo !== undefined ? { poNo } : {}) }));
+      await settle();
+      const billCall = enqueueMock.mock.calls.find(([_tx, msg]: [unknown, { topic: string }]) => msg.topic === COMMANDS.billCreate);
+      expect(billCall, `poNo=${String(poNo)}`).toBeDefined();
+      expect(billCall![1].payload).not.toHaveProperty("poNumber");
+      await q.stop();
+    }
+  });
+
+  it("never sends a PO number without a PO reference", async () => {
+    const q = await buildQueue();
+    await q.publish(CONSUMED_EVENTS.grnAccepted, makeMsg(CONSUMED_EVENTS.grnAccepted, { ...GRN_PAYLOAD, poRef: "undefined", poNo: "PO-2026-014" }));
+    await settle();
+    const billCall = enqueueMock.mock.calls.find(([_tx, msg]: [unknown, { topic: string }]) => msg.topic === COMMANDS.billCreate);
+    expect(billCall).toBeDefined();
+    expect(billCall![1].payload.poRef).toBeUndefined();
+    expect(billCall![1].payload).not.toHaveProperty("poNumber");
+    await q.stop();
+  });
+
   it("billNo starts with BILL/GRN/ followed by uppercase GRN ID prefix", async () => {
     const q = await buildQueue();
 

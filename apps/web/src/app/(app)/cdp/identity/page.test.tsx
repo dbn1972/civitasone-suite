@@ -13,7 +13,7 @@ beforeEach(() => mocked.mockReset());
 describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
   it("uses view-only copy, not 'pending identity resolution'", async () => {
     mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 50 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/view only/i)).toBeInTheDocument();
     expect(screen.queryByText(/pending identity resolution/i)).not.toBeInTheDocument();
   });
@@ -23,7 +23,7 @@ describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
       data: { rows: [{ id: "3fa1c111-0000-4000-8000-000000000002", label: "a1b2c3d4e5f6", sublabel: "web", status: "anonymous", meta: "20 Aug 2026" }], total: 1, limit: 50 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Visitor")).toBeInTheDocument();
     expect(screen.getByText("Last seen")).toBeInTheDocument();
     // the raw UUID fragment must not be visible
@@ -35,14 +35,14 @@ describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
   it("shows the 'first 50 / more may exist' truncation via the pager line", async () => {
     const rows = Array.from({ length: 50 }, (_, i) => ({ id: `v${i}`, label: `ref${i}` }));
     mocked.mockResolvedValue({ data: { rows, total: 120, limit: 50 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing 1–50 of 120/)).toBeInTheDocument();
   });
 
   it("does not show a next page when all rows fit", async () => {
     const rows = Array.from({ length: 12 }, (_, i) => ({ id: `v${i}`, label: `ref${i}` }));
     mocked.mockResolvedValue({ data: { rows, total: 12, limit: 50 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing 1–12 of 12/)).toBeInTheDocument();
     expect(screen.getByLabelText("Next page")).toHaveAttribute("aria-disabled", "true");
   });
@@ -53,7 +53,7 @@ describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
 describe("CDP identity back navigation (GAP-CDP-PROFILES-DETAIL-05)", () => {
   it("renders exactly one Customer Data Platform back link to /cdp", async () => {
     mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 50 }, source: "api" } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const backLinks = screen.getAllByRole("link", { name: /Customer Data Platform/i });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/cdp");

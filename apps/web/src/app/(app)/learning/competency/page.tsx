@@ -11,7 +11,8 @@ type GapRow = { id: string; competency: string; required: number; held: number; 
 // Mirrors services/hrms-service/src/modules/competency/routes.ts privileged set.
 const PRIVILEGED_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
 
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const roleCode = typeof searchParams?.roleCode === "string" ? searchParams.roleCode : "";
   const queryEmployeeId = typeof searchParams?.employeeId === "string" ? searchParams.employeeId : "";
 
@@ -116,7 +117,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
             <RefreshErrorState error={toHumanError("load", { area: "gap analysis" })} />
           ) : analysis && analysis.requiredCount === 0 ? (
             // GAP-LEARNING-COMPETENCY-05: distinguish "no requirements" from "all met".
-            <EmptyState icon="📋" title="No requirements defined" message={`No competency requirements are defined for role ${roleCode}.`} />
+            (<EmptyState icon="📋" title="No requirements defined" message={`No competency requirements are defined for role ${roleCode}.`} />)
           ) : gapRows.length === 0 ? (
             <EmptyState icon="✅" title="All requirements met" message="This person meets every competency requirement for the role." />
           ) : (

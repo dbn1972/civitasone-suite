@@ -61,7 +61,7 @@ describe("Policy detail page", () => {
       data: { acknowledgedCount: 2, employeeIds: ["emp-aaaa-1111", "emp-bbbb-2222"] },
       source: "api",
     });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.queryByText("emp-aaaa-1111")).not.toBeInTheDocument();
     expect(screen.queryByText("emp-bbbb-2222")).not.toBeInTheDocument();
     expect(screen.getByText(/2 employees have acknowledged/)).toBeInTheDocument();
@@ -74,14 +74,14 @@ describe("Policy detail page", () => {
       data: { acknowledgedCount: 1, employeeIds: ["emp-secret-uuid"] },
       source: "api",
     });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.queryByText("emp-secret-uuid")).not.toBeInTheDocument();
   });
 
   it("GAP-DETAIL-07: supersedes link renders when supersedesId present", async () => {
     getKnowledgePolicyMock.mockResolvedValue({ data: policy({ supersedesId: "old-1" }), source: "api" });
     getPolicyAcknowledgementsMock.mockResolvedValue({ data: { acknowledgedCount: 0, employeeIds: [] }, source: "api" });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     const link = screen.getByRole("link", { name: /View superseded version/i });
     expect(link).toHaveAttribute("href", "/knowledge/policies/old-1");
   });
@@ -93,7 +93,7 @@ describe("Policy detail page", () => {
       data: { acknowledgedCount: 1, employeeIds: ["emp-123"] },
       source: "api",
     });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText(/You have acknowledged this document/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /I have read & understood/ })).not.toBeInTheDocument();
   });
@@ -112,7 +112,7 @@ describe("Policy detail page w2 closures", () => {
 
   it("GAP-POLICIES-05: a draft without referenceNo shows 'Unassigned' in the header, never a truncated id", async () => {
     getKnowledgePolicyMock.mockResolvedValue({ data: policy({ id: "abcdef01-0000-0000-0000-000000000000", referenceNo: null, status: "draft" }), source: "api" });
-    render(await Page({ params: { id: "abcdef01" } }));
+    render(await Page({ params: Promise.resolve({ id: "abcdef01" }) }));
     expect(screen.getByText(/Unassigned/)).toBeInTheDocument();
     expect(screen.queryByText(/ABCDEF01/)).not.toBeInTheDocument();
   });
@@ -122,7 +122,7 @@ describe("Policy detail page w2 closures", () => {
       data: policy({ authorId: "viewer-1", reviewerId: "rev-uuid-9999", approverId: "app-uuid-8888" }),
       source: "api",
     });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Approval trail")).toBeInTheDocument();
     expect(screen.getByText("You")).toBeInTheDocument(); // the viewer is the author
     expect(screen.getAllByText("Another user (recorded in the audit log)")).toHaveLength(2);
@@ -133,7 +133,7 @@ describe("Policy detail page w2 closures", () => {
 
   it("GAP-DETAIL-04: an unapproved draft shows 'Not yet assigned' for approver and no separation note", async () => {
     getKnowledgePolicyMock.mockResolvedValue({ data: policy({ status: "draft", approverId: null, reviewerId: null }), source: "api" });
-    render(await Page({ params: { id: "p1" } }));
+    render(await Page({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getAllByText("Not yet assigned")).toHaveLength(2);
     expect(screen.queryByText(/different person from the author/)).not.toBeInTheDocument();
   });

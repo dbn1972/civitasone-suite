@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
-import { formatIndianDate, formatRupees } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { postWithErrorCode } from "../../_lib/postWithErrorCode";
 import { rupeesToMinorString } from "@/lib/money";
 
@@ -292,7 +292,8 @@ export function IngestChallanForm({ period }: { period: string }) {
           period: challanPeriod,
           bsr: bsrCode,
           serial: challanSerial,
-          amount: formatRupees(parseFloat(tdsAmount) || 0),
+          // Exact decimal -> paise (no parseFloat), shown with formatMoney.
+          amount: formatMoney(rupeesToMinorString(tdsAmount)),
           date: depositDate ? formatIndianDate(depositDate) : "—",
         })}
         onConfirm={() => void ingestChallan()}

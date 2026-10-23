@@ -11,7 +11,8 @@ import { formatIndianDate, formatMoney, humanizeStatus, utilisationPercent, isOv
  * real scheme record carries no such fields. A failed load (5xx / 403 /
  * network) is shown as an error state, never as "not available".
  */
-export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
+export default async function SchemeDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("expenditureSchemeDetail");
   const result = await getFinanceSchemeById(params.id);
   const { data: scheme } = result;
@@ -70,10 +71,11 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         </div>
       </Card>
 
-      {/* GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: links only to routes that exist. */}
+      {/* GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: links only to routes that exist. The UC register is
+          narrowed by the scheme's CODE (unique per office; certificates store it), not its name. */}
       <Card title={t("relatedTitle")} padding>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li><Link href={ucRegisterHref(scheme.name)}>{t("relatedUcs")}</Link></li>
+          <li><Link href={ucRegisterHref(scheme.code)}>{t("relatedUcs")}</Link></li>
           <li><Link href="/finance/budget/fund-releases">{t("relatedFundReleases")}</Link></li>
         </ul>
       </Card>

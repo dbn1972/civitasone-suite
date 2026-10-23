@@ -1026,7 +1026,9 @@
     "reconcileNoChallan": "No challan",
     "reconcilePendingFinalisation": "Run not finalised",
     "filingBlockedMismatchBody": "TDS deducted for {period} does not match the {formType} challans deposited. Resolve the difference before filing {formType}.",
-    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled."
+    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled.",
+    "colFormType": "Form",
+    "reconcileNotMatched": "Not matched"
   },
   "checkinLog": {
     "title": "Check-In Log",
@@ -1375,6 +1377,9 @@
     "statAvgResolutionDays": "Avg. Resolution Days"
   },
   "citizenRequests": {
+    "errLogRequest": "Could not log the request.",
+    "errLoadRequest": "Failed to load request.",
+    "errRecordAction": "Could not record the action.",
     "pageTitle": "Citizen Service Requests",
     "pageSubtitle": "Grievances and service requests register.",
     "statOpen": "Open",
@@ -1599,6 +1604,14 @@
     "reviewAnswers": "Review answers",
     "continueToFee": "Continue to fee",
     "submitApplicationButton": "Submit application",
+    "feeBaseLine": "Base fee",
+    "feeExemptionLine": "Exemption — {label}",
+    "feePayableLine": "Amount payable",
+    "discardDraft": "Discard draft",
+    "discardDraftConfirm": "Discard this draft? Your saved answers will be permanently deleted.",
+    "discardDraftKeep": "Keep draft",
+    "discardDraftYes": "Yes, discard",
+    "discardFailed": "We could not discard the draft. Please try again.",
     "feeSummaryTitle": "Fee summary",
     "feeSummaryNote": "Review the demand lines below. For Test runs, sandbox capture posts a receipt and GL journal when no live gateway key is configured. Counter/offline payments remain available to officers; otherwise you may also receive a payment link or counter slip when the office raises the demand.",
     "howYouCanPay": "How you can pay",
@@ -1975,12 +1988,14 @@
     "newGrossRequiredError": "New gross must be a positive value in rupees.",
     "newBasicBelowOldError": "New basic is below old basic — use revision type \"Correction\" if this is intentional.",
     "newGrossBelowBasicError": "New gross cannot be less than new basic.",
+    "amountTooLargeError": "Amount is too large to record. Check the figure and try again.",
     "recordedMessage": "Salary revision to {amount} for employee {employeeId} submitted. It is saved in the background and will appear in the history below shortly.",
     "confirmTitle": "Record this salary revision?",
     "confirmLabel": "Record revision",
     "confirmDescription": "Record a {revisionType} revision to {amount} basic for employee <strong>{employeeId}</strong>, effective {effectiveDate}.",
     "networkError": "Network error. Please try again.",
-    "orderNoRequiredError": "Enter the order number that sanctions this revision."
+    "orderNoRequiredError": "Enter the order number that sanctions this revision.",
+    "reasonLabel": "Reason for this revision"
   },
   "crm": {
     "loading": {
@@ -2791,7 +2806,8 @@
     "employeePickerPlaceholder": "Type a name or employee code…",
     "financialYearLabel": "Financial Year",
     "submitBtn": "View Form 12BA",
-    "requiredError": "Select an employee to look up."
+    "requiredError": "Select an employee to look up.",
+    "fyInvalidError": "Choose a valid financial year, for example 2026-27."
   },
   "employeeImport": {
     "title": "Bulk Employee Import",
@@ -3293,7 +3309,15 @@
     "labelAuthority": "Sanctioning authority",
     "helpAuthority": "The officer or order that sanctioned this advance, e.g. \"Under Secretary (Finance), order 12/2031\".",
     "errorAuthority": "Name the sanctioning authority.",
-    "reasonLabel": "Reason for this advance"
+    "reasonLabel": "Reason for this advance",
+    "errorPayeePick": "Pick the officer or vendor from the list.",
+    "helpPayeePick": "Search and pick the payee: the record's id is saved with the advance, so the payee is identified without retyping a name. The name and id are used only to issue and recover this advance; individual officers' names are masked for roles not authorised to see them.",
+    "helpPayeeOther": "Type the name of the party receiving the advance. A party that is not an officer or a registered vendor has no record to pick.",
+    "placeholderVendor": "Type a vendor name…",
+    "vendorSearching": "Searching…",
+    "vendorNoResults": "No matching active vendors",
+    "vendorSearchFailed": "Could not load vendors. Check your connection and try again.",
+    "helpPayeeOfficerTyped": "Type the officer's name. Your role cannot search the employee directory, so no employee id is saved with this advance. The name is used only to issue and recover it; individual officers' names are masked for roles not authorised to see them."
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
@@ -3337,7 +3361,12 @@
     "fieldPaymentRef": "Payment Ref",
     "cardTitleLineItems": "Line items",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "titleLoadFailed": "Bill Detail",
+    "areaBill": "bill details",
+    "cannotPassOwn": "You lodged this bill, so another officer must pass it.",
+    "cannotReleaseLodged": "You lodged this bill, so another officer must release its payment.",
+    "cannotReleasePassed": "You passed this bill, so another officer must release its payment."
   },
   "expenditureBillLineItemsTable": {
     "colDescription": "Description",
@@ -3377,17 +3406,17 @@
   },
   "expenditureGuarantees": {
     "title": "Bank Guarantees & EMDs",
-    "subtitle": "Read-only register. EMD and bank-guarantee instruments are lodged, released and invoked in Procurement — Finance only mirrors them here for reporting.",
+    "subtitle": "Read-only register of the guarantees recorded in Finance. Tender EMD and bank-guarantee instruments are a separate register in Procurement.",
     "statTotal": "Total Guarantees",
     "statActive": "Active",
     "statReleased": "Released",
     "cardTitle": "Guarantees & Securities (reporting only)",
-    "reportingOnlyNote": "This register is a read-only mirror of Procurement-managed EMD / bank-guarantee instruments. Release, invoke and other lifecycle changes are performed in Procurement, not here.",
+    "reportingOnlyNote": "This register is read-only: guarantees cannot be recorded, released or invoked from this screen yet. Procurement keeps its own register of tender EMD / bank-guarantee instruments, which is not copied here.",
     "routeErrorBackLabel": "Back to Finance",
     "routeErrorArea": "Finance page",
     "statOtherStatus": "Expired / invoked / other",
     "areaGuarantees": "guarantees",
-    "manageInProcurementLink": "EMD & bank guarantees (Procurement)",
+    "manageInProcurementLink": "EMD & bank guarantees register (Procurement)",
     "statExpiringSoon": "Expiring within {days} days",
     "statLapsed": "Validity lapsed"
   },
@@ -3605,7 +3634,8 @@
     "printPage": "Print",
     "exportMis": "Export MIS (CSV)",
     "printMeta": "Financial year {fy} · Data as of {time}",
-    "paymentsThisMonth": "payments this month"
+    "paymentsThisMonth": "payments this month",
+    "categoryChart": "Expenditure by Category"
   },
   "financeChequesNew": {
     "title": "Issue Cheque / DD",
@@ -3728,8 +3758,16 @@
     "completedLabel": " · Completed {date}",
     "downloadLinkLabel": "Get download link",
     "failureDetailsSummary": "Failure details ({count})",
-    "failureRow": "{employeeId}: {message}",
-    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above."
+    "failureRow": "{employee}: {message}",
+    "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above.",
+    "failureReasonUnknown": "Reason not available. Contact an administrator with the Job ID above.",
+    "failureReasonDataUnavailable": "Salary or tax data could not be read for this employee.",
+    "failureReasonRendererUnavailable": "The PDF renderer was unavailable.",
+    "failureReasonSigningFailed": "The PDF could not be digitally signed.",
+    "failureReasonStorageError": "The PDF could not be saved to storage.",
+    "failureRowsTruncated": "{count, plural, one {# more failure is not shown.} other {# more failures are not shown.}}",
+    "failureRunLevel": "Whole run",
+    "failureEmployeeUnknown": "An employee"
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
@@ -3808,10 +3846,10 @@
     "errorArea": "GPF statements",
     "title": "<term>GPF</term> Statements",
     "subtitle": "General Provident Fund contributions by employee and period.",
-    "statStatements": "Statements",
-    "statEmployees": "Employees",
-    "statTotalContributions": "Total Contributions",
-    "statPeriods": "Periods",
+    "statStatements": "Statements (listed below)",
+    "statEmployees": "Employees (listed below)",
+    "statTotalContributions": "Total Contributions (listed below)",
+    "statPeriods": "Periods Covered (listed below)",
     "lastPeriodLabel": "Last Period Contribution",
     "periodValue": "Period: {period}",
     "trendCardTitle": "Contribution Trend (last 6 periods)",
@@ -3834,7 +3872,8 @@
     "emptyMessageFiltered": "No General Provident Fund records match your filter.",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} no contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "GPF Statements"
+    "loadingHeading": "GPF Statements",
+    "ledgerLimitNote": "Only the first {limit} statements are loaded, so the counts and totals above cover those statements only, not the full history."
   },
   "gratuity": {
     "ceilingNote": "Payment of Gratuity Act ceiling: {amount}. Government (CCS Pension Rules) DCRG follows separate rules and ceilings, so this cap does not apply to every row.",
@@ -4117,8 +4156,8 @@
     "incomeTaxDesc": "Monthly TDS computation and history",
     "tdsReturns": "TDS Returns",
     "tdsReturnsDesc": "Form 24Q / 26Q quarterly e-TDS",
-    "taxConfig": "Tax Config",
-    "taxConfigDesc": "TDS slabs and deduction limits",
+    "taxConfig": "Tax Reference",
+    "taxConfigDesc": "Read-only TDS slabs and deduction limits",
     "salaryRevisions": "Salary Revisions",
     "salaryRevisionsDesc": "Increment and revision records",
     "salaryCorrections": "Salary Corrections",
@@ -4141,8 +4180,8 @@
     "payrollRegisterDesc": "Department-wise payroll summary",
     "comparison": "Comparison",
     "comparisonDesc": "Month-on-month payroll variance",
-    "payrollPeriod": "Payroll Period",
-    "payrollPeriodDesc": "Period closing and control",
+    "payrollPeriod": "Payroll Runs by Period",
+    "payrollPeriodDesc": "Monthly payroll run history and status",
     "disbursement": "Disbursement",
     "disbursementDesc": "Bank file and payment dispatch",
     "benefits": "Benefits",
@@ -4320,6 +4359,7 @@
     "statTotal": "Total",
     "statFinalized": "Finalized",
     "statPending": "Pending",
+    "statOther": "Other",
     "statDepartments": "Departments",
     "colEmployee": "Employee",
     "colDepartment": "Department",
@@ -4334,6 +4374,8 @@
       "submitted": "Submitted",
       "pending": "Pending",
       "draft": "Draft",
+      "verified": "Verified",
+      "approved": "Approved",
       "finalized": "Finalized",
       "completed": "Completed"
     },
@@ -4931,10 +4973,10 @@
     "frequencyYearly": "Yearly"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} already has an LWF configuration. Amounts or frequency you enter replace the stored values; blank fields keep the current value.",
+    "overwriteWarning": "{state} already has an LWF configuration. Saving replaces the stored values you changed; the others are kept.",
     "formTitle": "Add / Update LWF Configuration",
     "stateCodeLabel": "State Code",
-    "stateCodePlaceholder": "e.g. KA",
+    "stateCodePlaceholder": "Select a state / UT",
     "employeeContributionLabel": "Employee Contribution (₹)",
     "employerContributionLabel": "Employer Contribution (₹)",
     "submitBtn": "Save LWF Configuration",
@@ -4946,12 +4988,16 @@
     "savedMessage": "LWF configuration saved for {state}.",
     "frequencyLabel": "Frequency",
     "frequencyKeepCurrent": "Keep current frequency",
+    "frequencyUseDefault": "Default ({frequency})",
     "frequencyMonthly": "Monthly",
     "frequencyQuarterly": "Quarterly",
     "frequencyHalfYearly": "Half-yearly",
     "frequencyYearly": "Yearly",
-    "blankKeepsCurrentHint": "Leave a field blank to keep the value already saved for this state.",
-    "unchangedValue": "unchanged"
+    "unchangedValue": "unchanged",
+    "amountRequiredError": "Enter the amount in rupees. Type 0 if no contribution applies.",
+    "amountInvalidError": "Enter a valid amount in rupees (at most 2 decimal places).",
+    "noChangesError": "Nothing has changed from the saved configuration.",
+    "amountsRequiredHint": "Both amounts are required; type 0 if no contribution applies. For a state that is already configured, the saved values are filled in and only the values you change are updated."
   },
   "medicalClaims": {
     "title": "Medical Claims",
@@ -5187,7 +5233,9 @@
     "totalContributionsLabel": "Total Contributions",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} a missing contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "NPS Statements"
+    "loadingHeading": "NPS Statements",
+    "colContributionBase": "Contribution base",
+    "contributionBaseNote": "Contribution base: the Basic + DA that the employee and employer percentages were applied to (for a suspended employee, only the regular days' share). Statements from before the base was recorded show —."
   },
   "offCycle": {
     "loadingAriaLabel": "Loading…",
@@ -5328,8 +5376,13 @@
     "statTotalRuns": "Total Runs",
     "statEmployeesPaid": "Employees Paid",
     "statTotalGross": "Total Gross",
-    "statPending": "Pending",
-    "runsCardTitle": "Payroll Runs"
+    "runsCardTitle": "Payroll Runs",
+    "statPaid": "Paid",
+    "statInProgress": "In Progress",
+    "statAwaitingDisbursement": "Awaiting Disbursement",
+    "statFailed": "Failed",
+    "statEmployeesPaidPeriod": "Employees Paid, regular runs ({period})",
+    "statTotalGrossPeriod": "Total Gross, all paid runs ({period})"
   },
   "payrollRunsTable": {
     "colPeriod": "Period",
@@ -5351,6 +5404,30 @@
       "disbursed": "Disbursed",
       "failed": "Failed"
     }
+  },
+  "payrollRouteError": {
+    "backToHr": "Back to HR",
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToMyPayslips": "Back to My Payslips",
+    "areaHr": "HR page",
+    "areaSalarySlip": "Salary Slip",
+    "areaPayrollComparison": "Payroll Comparison",
+    "areaCostAllocation": "Cost Allocation",
+    "areaCtcConfiguration": "CTC Configuration",
+    "areaDdoManagement": "DDO Management",
+    "areaFlexBenefits": "Flex Benefits",
+    "areaFullAndFinal": "Full & Final Settlement",
+    "areaPayGroups": "Pay Groups",
+    "areaPayrollRegister": "Payroll Register",
+    "areaReimbursements": "Reimbursements",
+    "areaPayStructures": "Pay Structures",
+    "areaTaxConfiguration": "Tax Configuration",
+    "areaIncomeTaxReference": "Income Tax Reference",
+    "areaTdsReturns": "TDS Returns"
+  },
+  "routeError": {
+    "backToDashboard": "Back to dashboard"
   },
   "payrollLoans": {
     "loadingAriaLabel": "Loading…",
@@ -5384,8 +5461,8 @@
     "recoveryColClosing": "Closing"
   },
   "payrollTaxConfig": {
-    "title": "Income Tax Configuration",
-    "subtitle": "The income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine actually applies, for the selected financial year.",
+    "title": "Income Tax Reference",
+    "subtitle": "A read-only view of the income-tax slabs, deduction limits and surcharge bands your organisation's payroll engine applies for the selected financial year.",
     "backLabel": "Payroll",
     "fyCardTitle": "Financial Year",
     "fyLabel": "Financial year",
@@ -5410,8 +5487,13 @@
     "footerNote": "These figures are read live from the payroll engine's per-tenant, per-FY configuration — they are what a run for this financial year applies.",
     "footerLink": "View the income-tax rollup",
     "loadErrorMessage": "Couldn't load the tax configuration — showing nothing",
-    "loadingTitle": "Tax Configuration",
-    "loadingSubtitle": "Tax rules and slab setup."
+    "loadingTitle": "Tax Reference",
+    "loadingSubtitle": "Tax slabs and limits the payroll engine applies.",
+    "thNewRegime": "New regime",
+    "thOldRegime": "Old regime",
+    "surchargeCapNote": "New regime: the highest surcharge rate configured is {rate}%, so surcharge under the new regime never exceeds that rate.",
+    "marginalReliefNote": "Marginal relief applies at every surcharge threshold: tax plus surcharge never exceeds the tax at the threshold plus the income above it.",
+    "readOnlyNote": "This page is a read-only reference and does not change any rate or limit."
   },
   "pensioners": {
     "ppoMaskedNote": "PPO numbers are shown masked. Open a record to see its details; payroll officers can reveal the full number there (the reveal is audited).",
@@ -5473,7 +5555,7 @@
     "statFinancialYear": "Financial Year",
     "form12baCardTitle": "Form 12BA",
     "selectEmployeeFyTitle": "Select an employee and financial year",
-    "selectEmployeeFyMessage": "Enter an employee ID and financial year above to view their Form 12BA statement of perquisites.",
+    "selectEmployeeFyMessage": "Select an employee and financial year above to view their Form 12BA statement of perquisites.",
     "noForm12baTitle": "No Form 12BA data",
     "noForm12baMessage": "No perquisite data found for the given employee and FY {fy}.",
     "employerLabel": "Employer",
@@ -5498,7 +5580,10 @@
     "deleteDescription": "The {nature} component is removed from this employee's Form 12BA. The deletion is audited with the values removed.",
     "deleteConfirm": "Delete component",
     "deleteReasonLabel": "Reason for deleting",
-    "deleteFailed": "Could not delete the component. Please try again."
+    "deleteFailed": "Could not delete the component. Please try again.",
+    "subtitleFor": "Perquisites and Form 12BA for {name}, FY {fy}.",
+    "invalidFyMessage": "The financial year in the address is not valid. Choose a financial year below.",
+    "panMaskedAriaLabel": "PAN (masked)"
   },
   "perquisiteComponentForm": {
     "formTitle": "Add Perquisite Component",
@@ -5523,14 +5608,16 @@
     "submitBtn": "Save Component",
     "valueInvalidError": "Value by employer must be a valid rupee amount.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "Perquisite component \"{nature}\" saved for {employeeId}.",
+    "savedMessage": "Perquisite component \"{nature}\" saved for {employee}.",
     "confirmTitle": "Save this perquisite component?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}.",
-    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
+    "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}.",
+    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employee}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
     "updateBtn": "Update component",
     "cancelEdit": "Cancel",
-    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts."
+    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts.",
+    "employeeUnnamed": "Selected employee",
+    "fyInvalidError": "The financial year is not valid. Look the employee up again with a valid financial year."
   },
   "pf": {
     "selectPeriodLabel": "Period",
@@ -5660,7 +5747,8 @@
     "payeeAccountNoConfirmLabel": "Re-enter account number",
     "payeeAccountNoMismatch": "Account numbers do not match.",
     "billSearchLabel": "Search bills",
-    "billSearchPlaceholder": "Search by bill number or vendor…"
+    "billSearchPlaceholder": "Search by bill number or vendor…",
+    "payeeFromBill": "Filled from the bill's vendor. Check it matches the account holder's name before you continue."
   },
   "pfmsPaymentStatusLookup": {
     "title": "Check Payment Status",
@@ -5922,7 +6010,8 @@
     "contractsPage": {
       "viewPo": "View PO",
       "filteredBy": "Showing {status} contracts only.",
-      "clearFilter": "Show all contracts"
+      "clearFilter": "Show all contracts",
+      "poColumn": "Linked PO"
     },
     "emdBg": {
       "filterExpiring": "Expiring within 30 days",
@@ -5989,7 +6078,12 @@
         "value": "Value",
         "requestedBy": "Requested by",
         "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
-        "dialogValue": "Value: {value}."
+        "dialogValue": "Value: {value}.",
+        "moreMayExist": "Showing the first {count} pending tasks — more may exist and are not loaded here.",
+        "noneLoadedMoreExist": "None of the first {count} pending tasks loaded are procurement approvals, but more pending tasks exist that are not loaded yet.",
+        "loadMore": "Load more",
+        "loadingMore": "Loading…",
+        "loadMoreFailed": "Couldn’t load more tasks. Try again."
       },
       "escalation": {
         "referenceOnlyTitle": "Reference only.",
@@ -7042,7 +7136,7 @@
     "historyCardTitle": "Salary Revision History",
     "filterPlaceholder": "Filter by employee or order no…",
     "emptyTitle": "No salary revisions yet",
-    "emptyMessage": "Revisions recorded upstream in HRMS pay-fixation will appear here.",
+    "emptyMessage": "Salary revisions will appear here once they are recorded.",
     "colEmployee": "Employee",
     "colEffectiveDate": "Effective Date",
     "colRevisionType": "Revision Type",
@@ -7623,7 +7717,8 @@
     "windowOpenUntil": "Declarations are open until {date}.",
     "windowClosed": "Declarations for {fy} closed on {date}. Contact payroll to change your declaration.",
     "windowNotOpen": "Declarations open on {date}.",
-    "lastUpdatedLabel": "Last updated {date}"
+    "lastUpdatedLabel": "Last updated {date}",
+    "lockedNotice": "This declaration has been verified or approved by payroll and is read-only. Contact payroll if it needs to change."
   },
   "verifyForm16Form": {
     "cardTitle": "Verify a Form-16",
@@ -8463,14 +8558,15 @@
     "rejectReasonLabel": "Reason for rejection"
   },
   "payrollPeriod": {
-    "title": "Payroll Periods",
+    "title": "Payroll Runs by Period",
     "subtitle": "Monthly payroll run history and processing status.",
     "loadErrorMessage": "Couldn't load payroll periods — showing nothing",
     "statTotal": "Total",
-    "statCompleted": "Completed",
-    "statProcessing": "Processing",
-    "statEmployees": "Total Employees",
-    "cardTitle": "Payroll Periods",
+    "statPaid": "Paid",
+    "statInProgress": "In progress",
+    "statFailed": "Failed",
+    "statEmployeesLatest": "Employees (latest run)",
+    "cardTitle": "Run history",
     "colMonth": "Month",
     "colRunDate": "Run Date",
     "colEmployees": "Employees",
@@ -8479,8 +8575,8 @@
     "colDeductions": "Deductions",
     "colStatus": "Status",
     "filterPlaceholder": "Filter by period or status…",
-    "emptyTitle": "No payroll periods yet",
-    "emptyMessage": "Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll page to generate a period record.",
+    "emptyTitle": "No payroll runs yet",
+    "emptyMessage": "Each payroll run appears here under its pay period. Create your first run from the Payroll page.",
     "loadingAriaLabel": "Loading…"
   },
   "payrollRuns": {
@@ -9450,7 +9546,8 @@
     "salarySlipsTitle": "Salary Slips ({count})",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "exceptionSalaryCalcFailed": "Salary calculation failed for this employee. Open their record to review the cause.",
-    "viewRegisterLink": "View department register"
+    "viewRegisterLink": "View department register",
+    "backLabel": "Payroll Runs"
   },
   "payrollRunActions": {
     "disburseChannelDefault": "the finance EFT / PFMS bridge",
@@ -9476,7 +9573,16 @@
     "revertConfirmTitle": "Revert this run to draft?",
     "revertReasonLabel": "Reason for revert",
     "revertConfirmLabel": "Revert to draft",
-    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed."
+    "revertDescription": "The payroll run for <strong>{period}</strong> will be reverted to draft status so it can be corrected and reprocessed. No funds have been disbursed.",
+    "makerCheckerApproveHint": "You created this run, so a different approver must approve it (maker-checker).",
+    "makerCheckerDisburseHint": "You approved this run, so a different officer must disburse it (maker-checker).",
+    "makerCheckerDisburseError": "You approved this run, so you cannot disburse it. Another officer needs to disburse it."
+  },
+  "payrollCommon": {
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToHr": "Back to HR",
+    "backToPensioners": "Back to Pensioners"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# payroll exception requires attention} other {# payroll exceptions require attention}}",
@@ -9781,8 +9887,6 @@
     "confirmSubmitForApproval": "Submit this settlement for manager approval?",
     "actionFinanceApprove": "Finance Approve",
     "confirmFinanceApprove": "Mark this settlement as finance-approved?",
-    "actionMarkDisbursed": "Mark Disbursed",
-    "confirmMarkDisbursed": "Mark this settlement as disbursed?",
     "statusDraft": "Draft",
     "statusManagerApproved": "Manager Approved",
     "statusFinanceApproved": "Finance Approved",
@@ -10011,7 +10115,8 @@
     "clear": "Clear",
     "clearAriaLabel": "Clear selected employee",
     "searchFailed": "Could not load employees. Check your connection and try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "noDirectoryAccess": "Your role cannot search the employee directory, so an officer cannot be chosen here. Ask your administrator for access."
   },
   "directoryPicker": {
     "placeholder": {
@@ -10235,7 +10340,7 @@
   "fnfSettlementActions": {
     "submitBtn": "Submit for approval",
     "approveBtn": "Finance approve",
-    "disburseBtn": "Mark disbursed",
+    "disburseBtn": "Record payment",
     "rejectBtn": "Reject",
     "cancelBtn": "Cancel",
     "submitAriaLabel": "Submit the settlement for {name} for finance approval",
@@ -10266,7 +10371,9 @@
     "selfApprovalError": "You computed or submitted this settlement, so you cannot approve or reject it.",
     "selfDisbursalError": "You computed, submitted or approved this settlement, so you cannot record its payment or reject it.",
     "forbiddenError": "Your role does not allow this step.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "paymentReasonLabel": "Reason for recording this payment",
+    "paymentReasonShort": "Enter at least {min} characters."
   },
   "financeBillForm": {
     "pageTitle": "New Bill",
@@ -10319,11 +10426,14 @@
     "confirmDescription": "Releasing initiates an outward {mode} disbursement of {amount} to {vendor} against bill {billNo}. A different officer from the bill's creator must make this payment (maker-checker). This is irreversible once submitted to the gateway.",
     "fallbackVendor": "the vendor",
     "confirmLabel": "Release payment",
+    "reasonLabel": "Authorising officer and reason for this payment",
+    "hiddenBills": "Passed bills not listed: {count}. You created or passed them, so a different officer must release their payments.",
     "err": {
       "billRequired": "Choose a passed bill to pay.",
       "ddoRequired": "Choose a DDO (6-12 letters or digits).",
       "modeRequired": "Choose a payment mode.",
-      "amountMissing": "The bill has no payable amount."
+      "amountMissing": "The bill has no payable amount.",
+      "reasonRequired": "Give the reason for this payment (10 to 500 characters)."
     }
   },
   "financeVendorForm": {
@@ -12456,6 +12566,8 @@
     "reveal": "Reveal",
     "hide": "Hide",
     "maskedAria": "{label} (masked)",
+    "revealAria": "Reveal {label} for {context}",
+    "hideAria": "Hide {label} for {context}",
     "title": "Reveal {label}?",
     "description": "Showing the {label} is recorded in the audit trail with your name and the reason below. It is hidden again after 30 seconds.",
     "confirm": "Reveal",
@@ -12495,6 +12607,7 @@
     "approveTitle": "Approve {name}?",
     "approveDescription": "The vendor becomes active and can be chosen for bills and payments. Check the PAN and bank details first: a wrong account diverts payments.",
     "approveConfirm": "Approve",
+    "approveReasonLabel": "Reason for approving (what you checked)",
     "approvalSubmitted": "Approval submitted. The vendor will show as active in a moment.",
     "rejectLabel": "Reject vendor",
     "rejectTitle": "Reject {name}?",
@@ -12513,6 +12626,7 @@
     "approveTitle": "Approve the bank change for {name}?",
     "approveDescription": "Future payments to this vendor go to the new account. Confirm the proposal against the vendor's signed letter first.",
     "approveConfirm": "Approve change",
+    "approveReasonLabel": "Reason for approving (what you checked)",
     "approved": "Approval submitted. The bank details will update in a moment.",
     "rejectLabel": "Reject change",
     "rejectTitle": "Reject the bank change for {name}?",
@@ -12713,6 +12827,53 @@
     "shown": "Showing the draft you selected: {dfaNo} — {subject}.",
     "missing": "The draft you selected isn't in this view — switch to “All” or another status to find it."
   },
+  "estabApprovalMatrix": {
+    "rolesPickerLabel": "Approver roles, in approval order",
+    "rolesPickerEmpty": "No approver chosen yet. Add at least one role below.",
+    "roleMoveEarlier": "Move {role} earlier in the approval order",
+    "roleMoveLater": "Move {role} later in the approval order",
+    "roleRemove": "Remove {role} from the approval order",
+    "roleEarlier": "Earlier",
+    "roleLater": "Later",
+    "roleRemoveBtn": "Remove",
+    "roleAddSelect": "Approver role to add",
+    "roleAddPlaceholder": "— choose a role —",
+    "roleAllAdded": "All available roles added",
+    "roleAddBtn": "Add approver",
+    "rolesFormatHint": "No approver role list is set up for this office yet, so role codes are checked for format only: lowercase letters, digits and underscore.",
+    "errRolesRequired": "Choose at least one approver role.",
+    "errRolesFormat": "Enter at least one approver role as lowercase codes (letters, digits, underscore), comma-separated.",
+    "errRoleUnknown": "{role} is not an approver role this office uses. Choose a role from the list.",
+    "errLabelRequired": "Enter a rule label.",
+    "errMinAmount": "Minimum amount must be a number with at most two decimals.",
+    "errMaxAmount": "Maximum amount must be a number with at most two decimals.",
+    "errMaxGtMin": "Maximum amount must be greater than the minimum amount.",
+    "ruleSubmitted": "Rule “{label}” submitted. It shows as Pending until it is processed.",
+    "ruleCreated": "Rule “{label}” added to the matrix.",
+    "toggleSubmitted": "Change to rule “{label}” submitted. It shows as Pending until it is processed.",
+    "ruleActivated": "Rule “{label}” activated.",
+    "ruleDeactivated": "Rule “{label}” deactivated.",
+    "stillProcessing": "Still processing — refresh in a moment to see the change."
+  },
+  "estabApprovals": {
+    "colNote": "Note",
+    "noNoteAvailable": "No note available",
+    "openNoteNewTab": "Open note in a new tab",
+    "classifiedSubject": "[Classified]",
+    "classifiedNote": "The note of a classified file is not shown here. Open the file to read it.",
+    "openNoteNewTabFor": "Open note in a new tab, file {fileNo}",
+    "dialogLatestNote": "Latest note on this file:",
+    "dialogSubmittedNote": "Note submitted for approval:",
+    "targetFile": "file {fileNo}",
+    "targetNoting": "the noting",
+    "approvalSubmitted": "Approval recorded for {target}. Checking where the noting goes next…",
+    "approvalRecorded": "Approval recorded for {target}.",
+    "approvalFinal": "Final approval recorded for {target}. No further approval step is pending.",
+    "approvalForwarded": "Approval recorded for {target}. The noting has been forwarded to {roles} for the next approval.",
+    "approvalForwardedAny": "Approval recorded for {target}. The noting has been forwarded for the next approval.",
+    "approvalNotApplied": "Approval recorded for {target}, but the workflow has not applied it yet. Refresh in a moment to see where the noting is.",
+    "rejectionRecorded": "Rejection recorded for {target}. The noting is returned to draft on the file."
+  },
   "estabW2": {
     "dismiss": "Dismiss",
     "loading": "Loading…",
@@ -12726,7 +12887,7 @@
     "dept": "Department",
     "deptSelect": "— select a department —",
     "deptNone": "No department list is available yet. Type the department name.",
-    "deptLoadFailed": "Departments could not be loaded. Type the department name, or refresh and try again.",
+    "deptLoadFailed": "Departments could not be loaded, so a department cannot be chosen right now. Refresh the page to try again.",
     "classification": "Classification",
     "classSelect": "— select —",
     "classPublic": "Public",
@@ -12756,6 +12917,7 @@
     "dakRegisterBtn": "Register DAK",
     "dakRegisteredNo": "DAK {dakNo} registered. Its barcode appears in the register below once it is processed.",
     "dakRegisteredAuto": "DAK registered. Its DAK number and barcode appear in the register below once it is processed.",
+    "dakRegisteredWithBarcode": "DAK {dakNo} registered. Barcode {barcode}.",
     "dakErrFromRequired": "Enter the sender (From).",
     "dakErrSubjectRequired": "Enter the subject.",
     "dakErrDateInvalid": "Enter the received date as a valid date.",
@@ -12806,9 +12968,16 @@
     "dispatchAckReason": "POD / Speed-post number / remarks",
     "dashActiveFiles": "Active Files",
     "dashActiveFilesHint": "Files with status Active. This is the same count as Active Files on the File Register.",
-    "dashActiveFilesSnapshot": "Active files",
+    "listActiveFilesHint": "Files with status Active. This is the same count as Active Files on the Dashboard.",
+    "listActiveFilesLoaded": "Active Files (loaded)",
+    "listAvgPendencyLoaded": "Avg Pendency (loaded)",
+    "listOfficeFiguresRestricted": "Your role cannot open the Dashboard, so Active Files and Avg Pendency here count only the files loaded in the register below, not the whole office.",
+    "listOfficeFiguresUnavailable": "The office-wide Active Files and Avg Pendency could not be loaded. Refresh the page to try again.",
     "dashSlaHint": "Open files across the office whose due date has passed (IST calendar day). My Desk counts only the files with you.",
     "dashAvgPendencyHint": "Average days that open files have been open (IST calendar days).",
+    "dashSnapshotOpenFiles": "Open files (all stages)",
+    "dashSnapshotOldestOpen": "Oldest open file (days)",
+    "dashSnapshotVehicles": "Vehicles in use",
     "inboxOverdue": "Overdue on my desk",
     "inboxOverdueHint": "Files on your desk whose due date has passed. The dashboard's SLA Breached counts the whole office.",
     "parentSelected": "Selected",
@@ -12832,7 +13001,31 @@
     "quarterOrgUnit": "Org Unit",
     "quarterOrgUnitNone": "— none —",
     "quarterSubmitted": "Quarter {quarterNo} submitted to the inventory. It appears in the list once it is processed.",
-    "errDakUnknown": "Choose the DAK from the list of DAK entries that are not yet linked to a file."
+    "errDakUnknown": "Choose the DAK from the list of DAK entries that are not yet linked to a file.",
+    "fileCreatedOpening": "File created with an opening yellow note. Opening it now…",
+    "fileCreatedRegister": "File created. Find it in the file register.",
+    "fileCreatedBanner": "File {fileNo} has been created. Note this file number for your records.",
+    "fileCreatingTitle": "Creating your file…",
+    "fileCreatingMessage": "Your file is being created. Its file number is assigned as soon as it is processed; refresh in a moment to see it.",
+    "fileCreatingRefresh": "Refresh",
+    "inboxNotOperatorTitle": "You are not enrolled as an eOffice operator",
+    "inboxNotOperatorMessage": "Files can only be forwarded to enrolled operators, so none can be on your desk. Ask your division administrator to enrol you.",
+    "ghSubtitleNew": "Reserve a room for a guest. The booking is added to the register and confirmed once it is processed; check-in and check-out are recorded from the register.",
+    "ghRoomsLoading": "Loading rooms…",
+    "ghRoomSelect": "Select a room…",
+    "ghRoomOption": "{roomNo} · {type} ({capacity}-bed)",
+    "ghRoomsNone": "No rooms are registered yet, so a booking cannot be made. Ask an establishment administrator to add the guest house rooms.",
+    "ghRoomsNoneAvailable": "None of the registered rooms is available for booking right now.",
+    "ghRoomsFailed": "The room list could not be loaded, so a room cannot be chosen right now. Refresh the page to try again.",
+    "ghCheckoutCharges": "Charges collected (₹)",
+    "ghCheckoutChargesHelp": "Enter the amount charged for this stay in rupees, or 0 if nothing is charged. It is recorded as entered; no tariff is applied here.",
+    "ghChargesInvalid": "Enter the charges as an amount in rupees with at most two decimals, for example 1500 or 1500.50, or enter 0.",
+    "hoCountLoading": "Checking how many files this officer holds…",
+    "hoCountFailed": "We couldn't check how many files this officer holds, so the handover can't be started yet.",
+    "hoCountRetry": "Check again",
+    "hoNoActiveFiles": "This officer has no active files on their desk, so there is nothing to hand over.",
+    "hoWillMove": "{count, plural, one {# file will be reassigned.} other {# files will be reassigned.}}",
+    "hoStaysBehind": "{count, plural, one {# other file stays} other {# other files stay}} with this officer: a charge handover moves only files in Active status, not drafts or closed files."
   },
   "estabScannedDocuments": {
     "area": "scanned documents",
@@ -14062,10 +14255,6 @@
     "leaveConfirm": "Leave without saving",
     "leaveStay": "Stay on this page",
     "area": "matching rules"
-  },
-  "crmAccountLinkError": {
-      "inactive": "This account has been merged or deactivated, so nothing can be linked to it. Choose the active account it was merged into, or clear the account, and try again.",
-      "notFound": "The selected account could not be found. Choose a different account or clear the account, and try again."
   },
   "crmEditContactForm": {
     "leadStatus": "Lead status",
@@ -16099,12 +16288,41 @@
       "submittedTo": "(submitted to {to})"
     },
     "tsNew": {
-      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker."
+      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Works that are not DAO-finalized are listed in the Work picker but cannot be chosen.",
+      "bannerEligible": "The selected work is DAO-finalized, so a technical sanction can be entered for it.",
+      "bannerBlocked": "The selected work is not DAO-finalized, so a technical sanction cannot be entered for it yet. Choose a DAO-finalized work.",
+      "notDaoFinalized": "Not DAO-finalized",
+      "workPlaceholder": "Search works by number or description…",
+      "workSearchFailed": "Could not load the works. Check your connection and try again.",
+      "selectToContinue": "Choose a work and a TS authority to continue."
+    },
+    "measurementNew": {
+      "closedBooks": "{count, plural, one {# measurement book is not listed because it is no longer a draft.} other {# measurement books are not listed because they are no longer drafts.}} Measurements can only be recorded while a measurement book is a draft."
+    },
+    "approvalNames": {
+      "idLabel": "ID {id}",
+      "unknownOfficer": "Unknown officer ({id})"
+    },
+    "boqNew": {
+      "duplicateByCode": "This item code is already on the BoQ for this work. Use a different code, or edit the existing line.",
+      "duplicateByDescription": "A line with this description is already on the BoQ for this work. Change the description, or edit the existing line."
+    },
+    "contractors": {
+      "partialHint": "Counted over the {shown} contractors shown.",
+      "showingFirst": "Showing the first {shown} contractors. Refine the filter to find more.",
+      "showingFirstOfTotal": "Showing the first {shown} of {total} contractors. Refine the filter to find the others."
+    },
+    "contractorRating": {
+      "workLabel": "Work this rating is about (optional)",
+      "workPlaceholder": "Search by work number…",
+      "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",
-      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first."
+      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first.",
+      "belowAvailable": "This gross is less than the value still billable against this measurement book ({available}).",
+      "duplicateBillNumber": "This bill number is already used for this work. Choose a different number."
     },
     "hub": {
       "title": "Works & Billing",
@@ -16345,6 +16563,9 @@
     "confirmLabel": "Submit review",
     "commentLabel": "Comment (optional)"
   },
+  "pluginInstalled": {
+    "disableReasonLabel": "Reason for disabling (recorded in the audit log)"
+  },
   "pluginMarketplace": {
     "install": "Install",
     "installed": "Installed",
@@ -16547,6 +16768,9 @@
     "allotNotApplied": "Not applied yet — the server may have rejected this action (for example, you cannot allot your own application). Check the current status and try again.",
     "dfaLinkFileLabel": "Link to an eOffice file (optional)",
     "dfaLinkFilePlaceholder": "Search by file number or subject…",
+    "dfaRefreshing": "Refreshing…",
+    "dfaStillProcessing": "Still processing — refresh the list in a moment.",
+    "fileReadOnlyNotice": "This file is {status, select, closed {closed} archived {archived} disposed {disposed} other {closed}}; no further noting, submission, signing or referral is possible.",
     "allotSelfApplicant": "You cannot allot a quarter you applied for (maker-checker policy). Another officer must allot it."
   },
   "auditW2": {
@@ -16699,5 +16923,160 @@
     "searching": "Searching…",
     "searchError": "Couldn’t load accounts. Please try again.",
     "unnamedAccount": "Unnamed account"
+  },
+  "financeGeneralLedger": {
+    "total": "Total",
+    "filteredTotal": "Filtered total ({count, plural, one {# entry} other {# entries}})",
+    "cardsNoteFiltered": "The cards above show the whole FY {fy} ledger. The totals at the foot of the table cover only the entries matching your tab or search.",
+    "cardsNoteUnavailable": "Ledger-wide totals are not available for this view, so the cards show a dash. The totals at the foot of the table cover only the entries matching your tab or search."
+  },
+  "financeBudgetFormulation": {
+    "tabAll": "All",
+    "tabOther": "Other",
+    "status": {
+      "active": "Active",
+      "exhausted": "Exhausted",
+      "draft": "Draft",
+      "pending": "Pending",
+      "submitted": "Submitted",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    },
+    "highlightAdded": "Estimate added: {head} (FY {fy}). It is listed under the {tab} tab.",
+    "highlightPending": "Your new estimate is still being processed and will appear in this list shortly. Refresh in a moment."
+  },
+  "financeChartOfAccounts": {
+    "levelMajor": "Major head",
+    "levelMinor": "Minor head",
+    "levelSub": "Sub-minor head",
+    "colLevel": "Level",
+    "colParent": "Parent",
+    "parentNotListed": "Not in this list",
+    "emptyReadOnly": "Your chart of accounts lists every head you record money against, like a bank account or an expense category. No heads have been added yet; a finance officer can add them."
+  },
+  "financeChartOfAccountsNew": {
+    "parentSearchLabel": "Find a parent head by code or name",
+    "parentSearchPlaceholder": "e.g. 2110 or Creditors",
+    "searching": "Searching…",
+    "parentNoMatch": "No head at the right level matches that search.",
+    "searchFailed": "Could not search the heads. Check your connection and try again.",
+    "parentTruncated": "Showing the heads from the first {limit} loaded. Search by code or name to find any other parent.",
+    "createdMajor": "Head of account \"{code}\" created as a major head.",
+    "createdPath": "Head of account \"{code}\" created. It sits at: {path}."
+  },
+  "crmAccountLinkError": {
+    "inactive": "This account has been merged or deactivated, so nothing can be linked to it. Choose the active account it was merged into, or clear the account, and try again.",
+    "notFound": "The selected account could not be found. Choose a different account or clear the account, and try again."
+  },
+  "inspectionReview": {
+    "submitLabel": "Submit review",
+    "confirmTitle": "Submit this inspection for review?",
+    "confirmDescription": "Choose the reviewing officer. The reviewer must not be an inspector who conducted this inspection.",
+    "reviewerLabel": "Reviewing officer",
+    "reviewerPlaceholder": "Search by name",
+    "reviewerNoResults": "No matching people",
+    "reviewerSearching": "Searching…",
+    "reviewerSearchError": "Could not search people. Please try again."
+  },
+  "documentsDak": {
+    "acknowledge": "Acknowledge",
+    "acknowledged": "Acknowledged",
+    "ackTitle": "Acknowledge this dak?",
+    "ackDescription": "This records that you have received and seen this dak. It cannot be undone.",
+    "forward": "Forward",
+    "forwardTitle": "Forward this dak",
+    "forwardDescription": "This assigns the dak to the user whose ID you entered. They will see it in their inbox.",
+    "assigneeLabel": "Assign to (user ID)",
+    "assigneeHint": "Paste the user ID of the person to assign this dak to.",
+    "assigneeInvalid": "Enter a valid user ID (UUID)."
+  },
+  "workflowDelegations": {
+    "title": "My delegations",
+    "tabsAria": "Delegation lists",
+    "tabMine": "My delegations",
+    "tabToMe": "Delegated to me",
+    "colDelegator": "Delegated by",
+    "emptyToMeMessage": "Nobody has delegated a role to you right now. Delegations handed to you will be listed here.",
+    "subtitle": "Let a colleague act on your behalf for a fixed period. A delegation passes on only the roles you pick, and only while you still hold them.",
+    "legacyLink": "Legacy delegations",
+    "formTitle": "New delegation",
+    "rolesLabel": "Roles to delegate",
+    "rolesHelp": "You can only delegate roles you currently hold.",
+    "rolesNone": "You do not currently hold any role you can delegate.",
+    "delegateLabel": "Delegate",
+    "delegatePlaceholder": "Search people by name…",
+    "delegateSearching": "Searching…",
+    "delegateNoResults": "No people found",
+    "delegateSearchError": "Couldn’t search people. Please try again.",
+    "fromLabel": "Start date",
+    "toLabel": "End date",
+    "toHelp": "Required. At most {max} days after the start date.",
+    "reasonLabel": "Reason (optional)",
+    "reasonHelp": "Up to {max} characters.",
+    "submit": "Create delegation",
+    "submitting": "Creating…",
+    "rolesRequired": "Choose at least one role to delegate.",
+    "rolesTooMany": "Choose at most {max} roles.",
+    "roleNotHeld": "You can only delegate roles you hold. Remove the role you do not hold.",
+    "delegateRequired": "Search for and select the person who will act for you.",
+    "delegateSelf": "You cannot delegate to yourself. Choose someone else.",
+    "fromRequired": "Enter a start date.",
+    "fromInvalid": "Enter a valid start date.",
+    "toRequired": "Enter an end date. Delegations cannot be open-ended.",
+    "toInvalid": "Enter a valid end date.",
+    "toBeforeFrom": "The end date must be on or after the start date.",
+    "toTooLong": "A delegation can last at most {max} days. Choose an end date on or before {latest}.",
+    "reasonTooLong": "The reason must be {max} characters or fewer.",
+    "err_DELEGATION_ROLE_NOT_HELD": "You can only delegate roles you currently hold. Your access may have changed. Refresh the page and choose again.",
+    "err_DELEGATION_TOO_LONG": "A delegation can last at most {max} days. Shorten the period and try again.",
+    "err_DELEGATION_BAD_RANGE": "The end date must be on or after the start date. Correct the dates and try again.",
+    "createdMessage": "Delegation received. It will show in the list once it has been applied.",
+    "activeTitle": "Active and upcoming",
+    "historyTitle": "Expired and revoked",
+    "loading": "Loading your delegations…",
+    "loadError": "We couldn’t load your delegations.",
+    "loadErrorNext": "This is usually temporary. Try again in a moment.",
+    "retry": "Try again",
+    "emptyActiveTitle": "No active delegations",
+    "emptyActiveMessage": "You have not delegated anything right now. Use the form above to hand over a role for a fixed period.",
+    "emptyHistoryTitle": "Nothing expired or revoked yet",
+    "emptyHistoryMessage": "Past delegations will be listed here.",
+    "colDelegate": "Delegate",
+    "colRoles": "Roles",
+    "colFrom": "From",
+    "colTo": "Until",
+    "colReason": "Reason",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "status_active": "Active",
+    "status_upcoming": "Upcoming",
+    "status_expired": "Expired",
+    "status_revoked": "Revoked",
+    "unknownPerson": "Unknown person ({id})",
+    "revoke": "Revoke",
+    "revokeAria": "Revoke delegation to {name}",
+    "revokeTitle": "Revoke this delegation?",
+    "revokeDescription": "{name} will no longer be able to act on your behalf with the delegated roles. You can create a new delegation later.",
+    "revokeConfirm": "Revoke delegation",
+    "revokedMessage": "Revocation received. The delegation will move to the expired and revoked list once it has been applied.",
+    "err_NOT_FOUND": "This delegation no longer exists. Refresh the list.",
+    "legacyTitle": "Legacy delegations",
+    "legacySubtitle": "Delegations created before role scoping. They carry no roles, so they pass on nothing until re-issued.",
+    "legacyBack": "Back to my delegations",
+    "legacyIntro": "Each row below needs its creator to issue a new delegation from My delegations, choosing the roles to pass on. The old delegation can then be revoked.",
+    "legacyLoading": "Loading legacy delegations…",
+    "legacyLoadError": "We couldn’t load the legacy delegations.",
+    "legacyEmptyTitle": "No legacy delegations",
+    "legacyEmptyMessage": "Every active delegation already has a role scope.",
+    "legacyColCreator": "Created by",
+    "legacyColDelegate": "Delegate",
+    "legacyColFrom": "From",
+    "legacyColTo": "Until",
+    "legacyColCreated": "Created",
+    "legacyColReason": "Reason",
+    "legacyOpenEnded": "No end date",
+    "legacyShown": "Showing {count} of {total}.",
+    "legacyForbiddenTitle": "You do not have access to this report.",
+    "legacyForbiddenNext": "Only workflow administrators can see legacy delegations."
   }
 }

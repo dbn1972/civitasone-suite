@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -45,6 +45,13 @@ async function fillValidForm() {
   fireEvent.change(screen.getByLabelText(/^Old Gross/), { target: { value: "80000" } });
   fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "88000" } });
   fireEvent.change(screen.getByLabelText(/^Order No/), { target: { value: "ORD/2026/17" } });
+}
+
+/** GAP-PAYROLL-SALARY-REVISIONS-02: the confirmation now REQUIRES the maker's reason (>= 10 chars). */
+async function confirmWithReason(reason = "Sanctioned per order ORD/2026/17") {
+  const dialog = await screen.findByRole("alertdialog");
+  fireEvent.change(within(dialog).getByLabelText("Reason for this revision"), { target: { value: reason } });
+  fireEvent.click(within(dialog).getByRole("button", { name: "Record revision" }));
 }
 
 describe("CreateSalaryRevisionForm", () => {
@@ -95,7 +102,7 @@ describe("CreateSalaryRevisionForm", () => {
     expect(screen.queryByText(/Old basic must be entered/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Old gross must be entered/)).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Record revision"));
+    await confirmWithReason();
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const call = fetchSpy.mock.calls.find(([url]) => String(url).includes("v1/payroll/salary-revisions"));
     const body = JSON.parse((call![1] as RequestInit).body as string);
@@ -165,7 +172,7 @@ describe("CreateSalaryRevisionForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
 
     await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Record revision"));
+    await confirmWithReason();
 
     await waitFor(() => {
       // PR #1756 review: the write is async (202 + consumer), so the copy
@@ -191,6 +198,72 @@ describe("CreateSalaryRevisionForm", () => {
     expect(body.oldGrossMinor).toBe(8000000);
     expect(body.newGrossMinor).toBe(8800000);
     expect(body.revisionType).toBe("annual_increment");
+    // the maker's reason travels with the command (it is written to the audit trail)
+    expect(body.reason).toBe("Sanctioned per order ORD/2026/17");
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: the confirm button stays disabled, and nothing is POSTed, until a reason of at least 10 characters is typed", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    renderForm();
+    await fillValidForm();
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Record revision" });
+    expect(confirm).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText("Reason for this revision"), { target: { value: "too short" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(fetchSpy.mock.calls.some(([url]) => String(url).includes("v1/payroll/salary-revisions"))).toBe(false);
+
+    fireEvent.change(within(dialog).getByLabelText("Reason for this revision"), { target: { value: "Order ORD/2026/17 refers" } });
+    expect(confirm).toBeEnabled();
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: a sub-paisa amount is rejected, never rounded into the POST", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderForm();
+    await fillValidForm();
+    fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "44000.005" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    expect(screen.getByText("New basic must be a positive value in rupees.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // Review hardening: the wire carries JSON numbers (doubles), so a paise figure above 2^53-1 would be rounded silently.
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: an amount above 2^53-1 paise is refused before the dialog opens, never rounded onto the wire", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderForm();
+    await fillValidForm();
+    // 90,071,992,547,409.92 rupees = 9,007,199,254,740,992 paise = 2^53: the first figure a double cannot hold exactly
+    fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "90071992547409.92" } });
+    fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "90071992547409.92" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    expect(screen.getByText("Amount is too large to record. Check the figure and try again.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: the largest exact figure (2^53-1 paise) is accepted and POSTed exactly", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    renderForm();
+    await fillValidForm();
+    // 90,071,992,547,409.91 rupees = 9,007,199,254,740,991 paise = Number.MAX_SAFE_INTEGER
+    fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "90071992547409.91" } });
+    fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "90071992547409.91" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
+    await confirmWithReason();
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes("v1/payroll/salary-revisions"));
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.newBasicMinor).toBe(9007199254740991);
+    expect(body.newGrossMinor).toBe(9007199254740991);
   });
 
   it("with the tenant's second-approver switch OFF the confirmation keeps the 'appears shortly' copy", async () => {
@@ -201,7 +274,7 @@ describe("CreateSalaryRevisionForm", () => {
     await fillValidForm();
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
     await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Record revision"));
+    await confirmWithReason();
     await waitFor(() => {
       expect(screen.getByText(/Salary revision to .* for employee e1 submitted\. It is saved in the background and will appear/)).toBeInTheDocument();
     });
@@ -216,7 +289,7 @@ describe("CreateSalaryRevisionForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
 
     await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Record revision"));
+    await confirmWithReason();
 
     await waitFor(() => {
       expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();

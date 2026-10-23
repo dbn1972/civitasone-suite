@@ -109,7 +109,7 @@ describe("ForecastPage — GoI redesign", () => {
   // GAP-CRM-FORECAST-03: a chosen FY quarter is resolved to a close-date window
   // passed to the loader, and named in the subtitle.
   it("passes the period's close-date window to the loader and names it in the subtitle", async () => {
-    render(await ForecastPage({ searchParams: { period: "fy2026-q2" } }));
+    render(await ForecastPage({ searchParams: Promise.resolve({ period: "fy2026-q2" }) }));
     expect(mockedForecast).toHaveBeenCalledWith(
       undefined,
       { closeDateFrom: "2026-07-01", closeDateTo: "2026-09-30" },

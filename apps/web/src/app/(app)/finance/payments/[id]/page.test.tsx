@@ -57,20 +57,20 @@ describe("PaymentDetailPage", () => {
   // GAP-FINANCE-PAYMENTS-DETAIL-03
   it.each(["released", "failed", "pending_approval"])("does not offer 'Raise for approval' for a %s payment", async (status) => {
     getByIdMock.mockResolvedValue(payment({ status }));
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.queryByText("Raise for approval")).not.toBeInTheDocument();
   });
 
   it("offers 'Raise for approval' for an open (initiated) payment", async () => {
     getByIdMock.mockResolvedValue(payment({ status: "initiated" }));
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText("Raise for approval")).toBeInTheDocument();
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-04
   it("shows the status once, plus the bill link and created date", async () => {
     getByIdMock.mockResolvedValue(payment({ status: "released" }));
-    const { container } = render(await PaymentDetailPage({ params: { id: ID } }));
+    const { container } = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getAllByText("Released")).toHaveLength(1);
     expect(screen.getByRole("link", { name: "View bill" })).toHaveAttribute(
       "href",
@@ -82,45 +82,45 @@ describe("PaymentDetailPage", () => {
 
   it("renders a dash for a missing bill / date", async () => {
     getByIdMock.mockResolvedValue(payment({ billId: undefined, createdAt: undefined }));
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.queryByRole("link", { name: "View bill" })).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-07
   it("colours a released payment's header pill green", async () => {
     getByIdMock.mockResolvedValue(payment({ status: "released" }));
-    const { container } = render(await PaymentDetailPage({ params: { id: ID } }));
+    const { container } = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(container.querySelector(".pill.good")?.textContent).toBe("Released");
   });
 
   it("colours pending_approval amber", async () => {
     getByIdMock.mockResolvedValue(payment({ status: "pending_approval" }));
-    const { container } = render(await PaymentDetailPage({ params: { id: ID } }));
+    const { container } = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(container.querySelector(".pill.warn")?.textContent).toBe("Pending Approval");
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-06
   it("shows the same reference the register shows (eftRef), else the PAY- fragment", async () => {
     getByIdMock.mockResolvedValue(payment({ eftRef: "EFT-2026-0042" }));
-    const a = render(await PaymentDetailPage({ params: { id: ID } }));
+    const a = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(a.container.querySelector(".mono")?.textContent).toBe("EFT-2026-0042");
     a.unmount();
 
     getByIdMock.mockResolvedValue(payment({ eftRef: null }));
-    const b = render(await PaymentDetailPage({ params: { id: ID } }));
+    const b = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(b.container.querySelector(".mono")?.textContent).toBe("PAY-00ABCD");
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-05
   it("hands a real 404 to the route-level not-found page", async () => {
     getByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(PaymentDetailPage({ params: { id: ID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(PaymentDetailPage({ params: Promise.resolve({ id: ID }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it("a failed load (500) is an error state, not 'not found'", async () => {
     getByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
   });
@@ -142,7 +142,7 @@ describe("PaymentDetailPage", () => {
       },
     });
     getNamesMock.mockResolvedValue({ "11111111-1111-4111-8111-111111111111": "Asha Rao", "22222222-2222-4222-8222-222222222222": "Dev Menon" });
-    const { container } = render(await PaymentDetailPage({ params: { id: ID } }));
+    const { container } = render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByRole("link", { name: "M/s Acme Traders" })).toHaveAttribute("href", "/finance/vendors/v-9");
     expect(screen.getByRole("link", { name: "BILL/2026/17" })).toHaveAttribute("href", "/finance/expenditure/bills/b1b1b1b1-0000-4000-8000-000000000001");
     const timeline = screen.getByRole("list", { name: "Payment status history" });
@@ -157,7 +157,7 @@ describe("PaymentDetailPage", () => {
 
   it("missing beneficiary / bill / approver show a dash, and an empty history is its own empty state", async () => {
     getByIdMock.mockResolvedValue(payment({ billId: undefined }));
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     const beneficiary = screen.getByText("Beneficiary").closest(".field")!;
     expect(beneficiary).toHaveTextContent("—");
     expect(screen.getByText("Approved by").closest(".field")).toHaveTextContent("—");
@@ -167,7 +167,7 @@ describe("PaymentDetailPage", () => {
   it("a failed context lookup is a load error for the history only; the payment itself still renders", async () => {
     getByIdMock.mockResolvedValue(payment({ status: "initiated" }));
     getContextMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    render(await PaymentDetailPage({ params: { id: ID } }));
+    render(await PaymentDetailPage({ params: Promise.resolve({ id: ID }) }));
     expect(screen.getByText(/We couldn't load the payment history because of a problem on our side\./)).toBeInTheDocument();
     expect(screen.queryByText("No history recorded")).not.toBeInTheDocument();
     expect(screen.getAllByText("₹1,00,00,000.00").length).toBeGreaterThan(0);

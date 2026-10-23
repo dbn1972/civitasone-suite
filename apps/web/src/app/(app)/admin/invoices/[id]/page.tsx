@@ -7,7 +7,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // GAP-ADMIN-INVOICES-06: opens one invoice from the register (line items, approval history, print).
 // Offline payment (maker-checker) and reminders live in InvoiceOpsPanel; the page itself stays read-only.
-export default async function InvoiceDetailPage({ params }: { params: { id: string } }) {
+export default async function InvoiceDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!sessionHasAnyRole(BILLING_INVOICE_READER_ROLES)) {
     return <AdminAccessDenied title="Invoice" area="billing invoices" roles={BILLING_INVOICE_READER_ROLES} />;
   }

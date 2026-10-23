@@ -28,7 +28,7 @@ export async function statusAwareGet(path: string): Promise<StatusFetchResult> {
   const baseUrl = getGatewayBaseUrl();
   if (!baseUrl) return { kind: "unavailable" };
 
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) return { kind: "unavailable" };
 
   const normalized = path.startsWith("/") ? path : `/${path}`;

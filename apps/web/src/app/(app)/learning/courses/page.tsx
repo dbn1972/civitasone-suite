@@ -9,7 +9,8 @@ const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 type Search = { [k: string]: string | string[] | undefined };
 type Row = { id: string; code: string; title: string; category: string; creditHours: string; myStatus: string; status: string };
 
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const q = typeof searchParams?.q === "string" ? searchParams.q : undefined;
   const statusParam = typeof searchParams?.status === "string" ? searchParams.status : undefined;
   const roles = getSessionRoles();

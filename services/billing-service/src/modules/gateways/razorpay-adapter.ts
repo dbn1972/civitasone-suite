@@ -18,6 +18,7 @@ import type {
   OrderMetadata,
 } from "./types.js";
 import { GatewayError } from "./types.js";
+import { stringifyWithBigInt } from "../../shared/money.js";
 
 const BASE_URL = process.env.RAZORPAY_BASE_URL ?? "https://api.razorpay.com/v1";
 const TIMEOUT_MS = Number(process.env.PAYMENT_TIMEOUT_MS ?? "10000");
@@ -64,8 +65,8 @@ export const razorpayAdapter: PaymentGateway = {
         Authorization: authHeader(),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        amount: Number(amount),
+      body: stringifyWithBigInt({
+        amount,
         currency,
         receipt,
         notes: metadata,
@@ -216,14 +217,14 @@ export const razorpayAdapter: PaymentGateway = {
       throw new GatewayError("No captured payment found for refund", "GATEWAY_NO_PAYMENT", "razorpay", 404);
     }
 
-    const refundAmount = amountPaise != null ? Number(amountPaise) : payment.amount;
+    const refundAmount = amountPaise != null ? amountPaise : BigInt(payment.amount);
     const res = await fetchWithTimeout(`${BASE_URL}/payments/${payment.id}/refund`, {
       method: "POST",
       headers: {
         Authorization: authHeader(),
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ amount: refundAmount }),
+      body: stringifyWithBigInt({ amount: refundAmount }),
     });
 
     if (!res.ok) {

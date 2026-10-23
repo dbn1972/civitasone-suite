@@ -47,7 +47,7 @@ describe("TsDetailPage", () => {
 
   it("fetches by id and renders the record", async () => {
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/works/approvals/ts/ts-1",
@@ -55,17 +55,50 @@ describe("TsDetailPage", () => {
       expect.objectContaining({ telemetryKey: "works.approvals.ts.detail" }),
     );
     expect(screen.getAllByText("TS/2026-27/001").length).toBeGreaterThan(0);
-    const workLink = screen.getByRole("link", { name: /123e4567…/ });
+    // No work number and no officer name could be resolved: the work is labelled as an ID (never a bare hash), the
+    // authority reads "Unknown officer (<short id>)", and both keep the full id as a tooltip.
+    const workLink = screen.getByRole("link", { name: "ID 123e4567…" });
     expect(workLink).toHaveAttribute("title", RECORD.workId);
+    expect(workLink).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
+    const authority = screen.getByText("Unknown officer (223e4567…)");
+    expect(authority).toHaveAttribute("title", RECORD.tsAuthorityId);
+    expect(screen.queryByText("223e4567…")).not.toBeInTheDocument();
+  });
+
+  it("when the officer lookup fails the authority falls back to 'Unknown officer (<short id>)', not a bare hash (TS-DETAIL-03)", async () => {
+    fetchJsonMock.mockImplementation(async (url: string) => {
+      if (url.includes("/identity/users/directory")) return { data: [], source: "error", status: 500 };
+      return { data: RECORD, source: "api" };
+    });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
+    renderUI(ui);
+    expect(screen.getByText("Unknown officer (223e4567…)")).toBeInTheDocument();
+  });
+
+  it("looks the officer up in the tenant user directory by id, not the admin-only users list", async () => {
+    fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
+    await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
+    const urls = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(urls).toContain(`/v1/identity/users/directory?ids=${RECORD.tsAuthorityId}`);
+    expect(urls.some((u) => /\/identity\/users\?/.test(u))).toBe(false);
+  });
+
+  it("uses the work number and authority name the API already returns, with no extra lookups", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { ...RECORD, workNumber: "WK/2026/007", authorityName: "Anita Rao" }, source: "api" });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
+    renderUI(ui);
+    expect(screen.getByRole("link", { name: "WK/2026/007" })).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
+    expect(screen.getByText("Anita Rao")).toBeInTheDocument();
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
   });
 
   it("resolves the work number (linked to the proposal) and the officer NAME web-side (GAP-WORKS-APPROVALS-DETAIL-03)", async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.includes("/works/proposals/")) return { data: { workNumber: "WK-2026-0042", description: "Canal" }, source: "api" };
-      if (url.includes("/identity/users")) return { data: { [RECORD.tsAuthorityId]: "Superintending Engineer" }, source: "api" };
+      if (url.includes("/identity/users/directory")) return { data: [[RECORD.tsAuthorityId, "Superintending Engineer"]], source: "api" };
       return { data: RECORD, source: "api" };
     });
-    const ui = await TsDetailPage({ params: { id: "x-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "x-1" }) });
     renderUI(ui);
     const workLink = screen.getByRole("link", { name: "WK-2026-0042" });
     expect(workLink).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
@@ -76,12 +109,12 @@ describe("TsDetailPage", () => {
 
   it("calls notFound() only for a definitive 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(TsDetailPage({ params: { id: "missing" } })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(TsDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("shows a retryable load-error state (NOT a 404) when the fetch fails for a non-404 reason", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     expect(screen.getByText(/could not load this record/i)).toBeInTheDocument();
   });
@@ -89,7 +122,7 @@ describe("TsDetailPage", () => {
   it("disables Finalize for a user without an approver role", async () => {
     rolesMock.mockReturnValue(["works_viewer"]);
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await TsDetailPage({ params: { id: "ts-1" } });
+    const ui = await TsDetailPage({ params: Promise.resolve({ id: "ts-1" }) });
     renderUI(ui);
     const btn = screen.getByRole("button", { name: "Finalize TS" }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);

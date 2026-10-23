@@ -38,7 +38,7 @@ describe("GenerateBillForm", () => {
 
   it("generates a bill on confirm (happy path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "bill-1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+      new Response(JSON.stringify({ data: { messageId: "msg-1" } }), { status: 202 }),
     );
 
     render(<GenerateBillForm assesseeId="a1" demands={demands} />);
@@ -49,7 +49,7 @@ describe("GenerateBillForm", () => {
     fireEvent.click(screen.getByText("Generate bill"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Bill generation submitted/)).toBeInTheDocument();
+      expect(screen.getByText(/Bill generation submitted \(ref msg-1\)/)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
   });
@@ -68,6 +68,23 @@ describe("GenerateBillForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
+  });
+
+  it("does not claim success when the server rejects a duplicate bill with 409", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "BILL_ALREADY_EXISTS", message: "exists" } }), { status: 409 }),
+    );
+
+    render(<GenerateBillForm assesseeId="a1" demands={demands} />);
+    fireEvent.change(screen.getByLabelText(/^Demand/), { target: { value: "d1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
+
+    await waitFor(() => expect(screen.getByText("Generate this bill?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Generate bill"));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.queryByText(/Bill generation submitted/)).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 
   it("excludes a demand whose assessment already has an issued bill (GAP-REVENUE-BILLS-01)", () => {

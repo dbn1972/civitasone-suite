@@ -3,6 +3,7 @@
  * Handles: HBA, Motor Car, Computer, Festival, Personal loans + salary advances.
  * EMI recovery is fed into payroll via the LOAN_EMI component code.
  */
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
@@ -208,10 +209,10 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const deptMap = await batchDepartments(ctx.tenantId, [...empMap.values()].map((e) => e.departmentId));
     return reply.send({ data: rows.map((r) => ({
       ...r,
-      sanctionedAmountMinor: Number(r.sanctionedAmountMinor),
-      disbursedAmountMinor: Number(r.disbursedAmountMinor),
-      outstandingMinor: Number(r.outstandingMinor),
-      emiMinor: Number(r.emiMinor),
+      sanctionedAmountMinor: minorToSafeNumber(r.sanctionedAmountMinor),
+      disbursedAmountMinor: minorToSafeNumber(r.disbursedAmountMinor),
+      outstandingMinor: minorToSafeNumber(r.outstandingMinor),
+      emiMinor: minorToSafeNumber(r.emiMinor),
       employeeName: empMap.get(r.employeeId)?.fullName,
       employeeNo: empMap.get(r.employeeId)?.employeeNo,
       department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? ""),
@@ -283,9 +284,9 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
     return reply.send({ data: rows.map((r) => ({
       ...r,
-      amountMinor: Number(r.amountMinor),
-      emiMinor: Number(r.emiMinor),
-      recoveredMinor: Number(r.recoveredMinor),
+      amountMinor: minorToSafeNumber(r.amountMinor),
+      emiMinor: minorToSafeNumber(r.emiMinor),
+      recoveredMinor: minorToSafeNumber(r.recoveredMinor),
       employeeName: empMap.get(r.employeeId)?.fullName,
       employeeNo: empMap.get(r.employeeId)?.employeeNo,
     })) });

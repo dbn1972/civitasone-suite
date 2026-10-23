@@ -48,26 +48,26 @@ beforeEach(() => {
 
 describe("TrainingDetailPage — GAP-HR-TRAINING-01", () => {
   it("renders the programme (the Enroll link target is a real page, not a 404)", async () => {
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.getByRole("heading", { name: "Data Protection Basics" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enroll me" })).toBeInTheDocument();
   });
 
   it("an employee gets self-enrol only: no Nominate-an-employee picker", async () => {
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.queryByRole("form", { name: "Nominate an employee" })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it("a manager gets self-enrol only too (the server pins non-HR callers to themselves)", async () => {
     mockRoles = ["manager"];
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   });
 
   it.each(["hr_admin", "hr_officer", "super_admin"])("%s gets the Nominate-an-employee picker as well as Enroll me", async (role) => {
     mockRoles = [role];
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.getByRole("form", { name: "Nominate an employee" })).toBeInTheDocument();
     expect(screen.getByRole("combobox")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Nominate" })).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("TrainingDetailPage — GAP-HR-TRAINING-01", () => {
   it("an HR user with no linked employee record can still nominate, and is not told to 'contact HR'", async () => {
     mockRoles = ["hr_admin"];
     getMyProfileMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.getByRole("form", { name: "Nominate an employee" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enroll me" })).not.toBeInTheDocument();
     expect(screen.queryByText(/contact HR to enrol/i)).not.toBeInTheDocument();
@@ -85,14 +85,14 @@ describe("TrainingDetailPage — GAP-HR-TRAINING-01", () => {
 
   it("a non-HR user with no linked record still gets the 'contact HR' explanation", async () => {
     getMyProfileMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.getByText(/contact HR to enrol/i)).toBeInTheDocument();
   });
 
   it("neither control is offered for a programme that is full or not upcoming", async () => {
     mockRoles = ["hr_admin"];
     getProgramsMock.mockResolvedValue({ data: [{ ...PROGRAM, enrolledCount: 10 }], source: "api" });
-    await render(TrainingDetailPage({ params: { id: "prog-1" } }));
+    await render(TrainingDetailPage({ params: Promise.resolve({ id: "prog-1" }) }));
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Enroll me" })).not.toBeInTheDocument();
     expect(screen.getByText(/fully enrolled/i)).toBeInTheDocument();

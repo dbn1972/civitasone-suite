@@ -266,6 +266,8 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const q = wonLostQuery.parse(req.query);
     const trunc = periodTrunc(q.period);
+    const reasonPattern = q.reason ? `%${q.reason}%` : null;
+    const competitorPattern = q.competitor ? `%${q.competitor}%` : null;
 
     const data = await scopedRead(async (tx) => {
       return tx.execute(sql`
@@ -280,8 +282,8 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
         FROM crm.deals d
         WHERE d.tenant_id = ${ctx.tenantId}
           AND d.close_outcome IN ('won', 'lost')
-          ${q.reason ? sql`AND d.close_reason ILIKE ${"%" + q.reason + "%"}` : sql``}
-          ${q.competitor ? sql`AND d.close_competitor::text ILIKE ${"%" + q.competitor + "%"}` : sql``}
+          ${reasonPattern ? sql`AND d.close_reason ILIKE ${reasonPattern}` : sql``}
+          ${competitorPattern ? sql`AND d.close_competitor::text ILIKE ${competitorPattern}` : sql``}
         GROUP BY 1, 2, 3
         ORDER BY 1 DESC, count DESC
       `) as unknown as Array<{

@@ -244,7 +244,7 @@ async function inspectGrn(
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { grnId, poRef: grn.poRef, vendorId: grn.vendorId },
       });
-      // R7: transport money as exact strings, never Number(bigint paise).
+      // R7: transport money as exact strings, never a float coercion of bigint paise.
       const grossMinorStr = po ? minorString(po.totalMinor) : "0";
 
       // Derive the authoritative PO and GRN(accepted) values server-side from
@@ -261,9 +261,12 @@ async function inspectGrn(
       // Persist a server-DERIVED three-way match (PO vs GRN). The payment gate
       // reads this table.
       if (po) {
-        const variancePct = poAmountMinor > 0n
-          ? Number((poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor) / 100
-          : 0;
+        // Variance is a PERCENTAGE ratio (not money): exact bigint basis points, then a small
+        // dimensionless integer to a float percent for the tolerance bands below.
+        const varianceBps = poAmountMinor > 0n
+          ? (poAmountMinor > grnAmountMinor ? poAmountMinor - grnAmountMinor : grnAmountMinor - poAmountMinor) * 10000n / poAmountMinor
+          : 0n;
+        const variancePct = Number(varianceBps) / 100;
         const matchStatus = variancePct <= 2 ? "matched" : variancePct <= 5 ? "matched" : "mismatch";
         const { upsertDerivedMatch } = await import("../three-way-match/repo.js");
         await upsertDerivedMatch(tx, {
@@ -290,6 +293,9 @@ async function inspectGrn(
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           grnId, poRef: grn.poRef, vendorId: grn.vendorId, grossMinor: grossMinorStr,
+          // Human PO number (e.g. "PO-2026-014") so finance can show it beside the opaque poRef on the bill it drafts
+          // (GAP-FINANCE-EXPENDITURE-BILLS-06). Absent when the PO row cannot be read; never a fabricated value.
+          ...(po?.poNo ? { poNo: po.poNo } : {}),
           // R5: paise as strings so > 2^53 stays exact across the queue boundary.
           poAmountMinor: poAmountMinor.toString(),
           grnAmountMinor: grnAmountMinor.toString(),

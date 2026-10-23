@@ -8,11 +8,12 @@ import LeaveHistoryClient from "./LeaveHistoryClient";
  * accordingly (employees see only their own history; admins/managers
  * get the full employee picker).
  */
-export default async function LeaveHistoryPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string>;
-}) {
+export default async function LeaveHistoryPage(
+  props: {
+    searchParams?: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const profile = await getMyProfile();
   // GAP-HR-LEAVE-BALANCE-04 (applies to history too, per that item's own

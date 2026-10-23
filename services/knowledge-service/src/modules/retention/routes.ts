@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { createRetentionPolicyBody, updateRetentionPolicyBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
@@ -28,7 +29,7 @@ export async function retentionRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/retention-policies/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const policy = await repo.getById(ctx.tenantId, id);
     if (!policy) throw new HttpError(404, "NOT_FOUND", "retention policy not found");
     return reply.send(policy);
@@ -44,7 +45,7 @@ export async function retentionRoutes(app: FastifyInstance): Promise<void> {
   app.put("/v1/knowledge/retention-policies/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = updateRetentionPolicyBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.retentionPolicyUpdate(ctx, id, body));
   });
@@ -52,7 +53,7 @@ export async function retentionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/retention-policies/:id/apply", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.retentionPolicyApply(ctx, id));
   });
 

@@ -44,6 +44,17 @@ describe("UtilizationTable", () => {
     refreshMock.mockReset();
   });
 
+  // GAP-GRANTS-UTILIZATION-02 acceptance: a validated/verified UC shows a
+  // green "Verified" pill (never the raw "Validated") and no action buttons.
+  it.each(["validated", "verified"])("renders status %s as a good 'Verified' pill with no actions", (status) => {
+    const row = { ...SUBMITTED, status } as unknown as GrantUtilization;
+    render(<UtilizationTable ucs={[row]} source="api" canVerify />);
+    const pill = screen.getByText("Verified");
+    expect(pill.className).toContain("good");
+    expect(screen.queryByText("Validated")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+  });
+
   it("verifies a submitted UC against the correct proxied endpoint and refreshes on success", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 200 }));
 

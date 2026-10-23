@@ -18,9 +18,25 @@ export async function getDraft(ctx: RequestContext, id: string) {
   return draft;
 }
 
-export async function listDrafts(ctx: RequestContext, suppliedCitizenId?: string) {
+export async function listDrafts(
+  ctx: RequestContext,
+  suppliedCitizenId?: string,
+  filter: intakeRepo.DraftListFilter = {},
+) {
   const citizenId = resolveCitizenId(ctx, suppliedCitizenId);
-  return intakeRepo.listDraftsByCitizen(ctx.tenantId, citizenId);
+  return intakeRepo.listDraftsByCitizen(ctx.tenantId, citizenId, filter);
+}
+
+/**
+ * Discard (delete) a draft. Owner-scoped, STRICTER than getDraft (which lets any
+ * officer read): only the citizen who owns the draft, or the officer who
+ * created it on their behalf (assistedBy), may discard it.
+ */
+export async function getDraftForDiscard(ctx: RequestContext, id: string) {
+  const draft = await intakeRepo.findDraftById(id, ctx.tenantId);
+  if (!draft) return null;
+  const owns = draft.citizenId === ctx.actorId || (draft.assistedBy != null && draft.assistedBy === ctx.actorId);
+  return owns ? draft : null;
 }
 
 /** Public-ish acknowledgement lookup by tracking number (officer/citizen scoped). */

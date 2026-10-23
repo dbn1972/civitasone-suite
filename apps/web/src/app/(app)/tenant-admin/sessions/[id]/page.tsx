@@ -32,7 +32,8 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default async function SessionDetailPage({ params }: { params: { id: string } }) {
+export default async function SessionDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getSessionById(params.id);
   const { data: session, source, status } = result;
 

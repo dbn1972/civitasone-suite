@@ -15,6 +15,7 @@
 import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
 import { GatewayError } from "./types.js";
 import { withRetry } from "./retry.js";
+import { stringifyWithBigInt } from "../../shared/money.js";
 
 // ── Config ────────────────────────────────────────────────────────
 
@@ -148,9 +149,9 @@ export async function registerUpiMandate(params: {
           Authorization: `Bearer ${UPI_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+        body: stringifyWithBigInt({
           vpa: params.vpa,
-          maxAmount: Number(params.maxAmountPaise),
+          maxAmount: params.maxAmountPaise,
           frequency: params.frequency,
           tenantId: params.tenantId,
         }),
@@ -194,8 +195,8 @@ export async function executeUpiPayment(params: {
           Authorization: `Bearer ${UPI_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          amount: Number(params.amountPaise),
+        body: stringifyWithBigInt({
+          amount: params.amountPaise,
           tenantId: params.tenantId,
         }),
       });
@@ -279,10 +280,10 @@ export async function registerEmandate(params: {
           Authorization: `Bearer ${EMANDATE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+        body: stringifyWithBigInt({
           accountNumber: params.accountNumber,
           ifsc: params.ifsc,
-          maxAmount: Number(params.maxAmountPaise),
+          maxAmount: params.maxAmountPaise,
           frequency: params.frequency,
           tenantId: params.tenantId,
         }),
@@ -327,8 +328,8 @@ export async function executeEmandateDebit(params: {
           Authorization: `Bearer ${EMANDATE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          amount: Number(params.amountPaise),
+        body: stringifyWithBigInt({
+          amount: params.amountPaise,
           tenantId: params.tenantId,
         }),
       });

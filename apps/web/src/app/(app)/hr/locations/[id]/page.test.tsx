@@ -47,7 +47,7 @@ function route(hier: unknown, emps: unknown) {
 async function renderPage(sp: Record<string, string> = {}) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await LocationDetailPage({ params: { id: "L2" }, searchParams: sp })}
+      {await LocationDetailPage({ params: Promise.resolve({ id: "L2" }), searchParams: Promise.resolve(sp) })}
     </NextIntlClientProvider>,
   );
 }

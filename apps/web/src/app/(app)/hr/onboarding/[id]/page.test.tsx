@@ -102,7 +102,7 @@ describe("OnboardingDetailPage overdue uses the IST date", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-02T18:29:00Z")); // 23:59 IST on 2 Aug == due date (1 Aug + 1 day)
     mockWith(PENDING_DAY_ONE);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.queryByLabelText("has overdue tasks")).not.toBeInTheDocument();
   });
 
@@ -110,7 +110,7 @@ describe("OnboardingDetailPage overdue uses the IST date", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-08-02T18:40:00Z")); // 00:10 IST on 3 Aug; UTC date still 2 Aug
     mockWith(PENDING_DAY_ONE);
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByLabelText("has overdue tasks")).toBeInTheDocument();
   });
 });
@@ -118,7 +118,7 @@ describe("OnboardingDetailPage overdue uses the IST date", () => {
 describe("OnboardingDetailPage", () => {
   it("renders the employee's real onboarding tasks, not invented placeholder progress", async () => {
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
 
     // Real task titles appear once in the checklist panel and once in the task
     // calendar panel — both are legitimate, so assert presence, not uniqueness.
@@ -135,18 +135,18 @@ describe("OnboardingDetailPage", () => {
   // GAP-HR-ONBOARDING-02
   it("offers 'apply a template' to start onboarding for a joinee with no tasks, and to top up one who has some", async () => {
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(path.includes("/onboarding-tasks") ? { data: [], source: "api" } : mockFor(path)));
-    const { unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    const { unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByTestId("apply-template")).toHaveAttribute("data-has-tasks", "false");
     unmount();
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByTestId("apply-template")).toHaveAttribute("data-has-tasks", "true");
   });
 
   // GAP-HR-ONBOARDING-DETAIL-04
   it("shows honest placeholders, not fabricated specifics, when the API has no manager/location on file", async () => {
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
 
     expect(screen.queryByText("Department Head")).not.toBeInTheDocument();
     expect(screen.queryByText(/Head Office, New Delhi/)).not.toBeInTheDocument();
@@ -160,7 +160,7 @@ describe("OnboardingDetailPage", () => {
       if (path.includes("/onboarding-documents")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: employeeDetail({ reportingTo: "Anita Rao", postingLocation: "Bhubaneswar HQ" }), source: "api" });
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
 
     expect(screen.getByText("Anita Rao")).toBeInTheDocument();
     expect(screen.getByText("Bhubaneswar HQ")).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("OnboardingDetailPage", () => {
 
   it("GAP-HR-ONBOARDING-DETAIL-04: formats the joining date instead of printing the raw ISO string", async () => {
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.queryByText(/Joining 2026-08-01/)).not.toBeInTheDocument();
   });
 
@@ -178,7 +178,7 @@ describe("OnboardingDetailPage", () => {
     fetchJsonMock.mockImplementation((path: string) =>
       Promise.resolve(path.includes("/onboarding-tasks") ? { data: [], source: "api" } : mockFor(path)),
     );
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
 
     expect(screen.getByText(/no onboarding tasks set up yet/i)).toBeInTheDocument();
     expect(screen.queryByText("Documents Submitted")).not.toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("OnboardingDetailPage", () => {
     fetchJsonMock.mockImplementation((path: string) =>
       Promise.resolve(path.includes("/onboarding-tasks") ? { data: [], source: "api" } : mockFor(path)),
     );
-    const ui = await OnboardingDetailPage({ params: { id: "emp-1" } });
+    const ui = await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>); // does not throw NEXT_NOT_FOUND_MARKER
     expect(screen.getByText(/Onboarding — Priya Nair/)).toBeInTheDocument();
   });
@@ -202,7 +202,7 @@ describe("OnboardingDetailPage", () => {
       if (path.includes("/employees/")) return Promise.resolve({ data: null, source: "error", status: 404 });
       return Promise.resolve(mockFor(path));
     });
-    await expect(OnboardingDetailPage({ params: { id: "does-not-exist" } })).rejects.toThrow("NEXT_NOT_FOUND_MARKER");
+    await expect(OnboardingDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) })).rejects.toThrow("NEXT_NOT_FOUND_MARKER");
   });
 
   it("GAP-HR-ONBOARDING-DETAIL-05: shows a refresh-suggesting error state (not notFound) when the employee fetch fails for another reason", async () => {
@@ -210,7 +210,7 @@ describe("OnboardingDetailPage", () => {
       if (path.includes("/employees/")) return Promise.resolve({ data: null, source: "error", status: 500 });
       return Promise.resolve(mockFor(path));
     });
-    const ui = await OnboardingDetailPage({ params: { id: "emp-1" } });
+    const ui = await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     // This early-return branch (the employee fetch itself failed) renders
     // RefreshErrorState directly rather than the normal page body with a
@@ -228,7 +228,7 @@ describe("OnboardingDetailPage", () => {
           : mockFor(path),
       ),
     );
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
@@ -240,7 +240,7 @@ describe("OnboardingDetailPage", () => {
           : mockFor(path),
       ),
     );
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByRole("status")).toBeInTheDocument();
   });
 
@@ -254,7 +254,7 @@ describe("OnboardingDetailPage", () => {
       if (path.includes("/onboarding-tasks")) return Promise.resolve({ data: REAL_TASKS, source: "api" });
       return Promise.resolve(mockFor(path));
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
 
     expect(screen.getByText("Government ID Proof")).toBeInTheDocument();
     expect(screen.getAllByText("Uploaded")).toHaveLength(1);
@@ -269,7 +269,7 @@ describe("OnboardingDetailPage", () => {
       if (path.includes("/onboarding-tasks")) return Promise.resolve({ data: REAL_TASKS, source: "api" });
       return Promise.resolve(mockFor(path));
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-2" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-2" }) })}</NextIntlClientProvider>);
 
     expect(screen.getAllByText("Verified")).toHaveLength(1);
     expect(screen.getAllByText("Rejected")).toHaveLength(1);
@@ -282,7 +282,7 @@ describe("OnboardingDetailPage", () => {
 
   it("GAP-HR-ONBOARDING-DETAIL-01: still wires the checklist to a real 'Mark done' action", async () => {
     fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(
       screen.getByRole("button", { name: /mark "collect department id badge" as complete/i }),
     ).toBeInTheDocument();
@@ -295,7 +295,7 @@ describe("OnboardingDetailPage", () => {
   it("shows PermissionDenied instead of fetching anything for a role outside HR", async () => {
     getSessionRolesMock.mockReturnValueOnce(["employee"]);
     fetchJsonMock.mockClear();
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
@@ -303,7 +303,7 @@ describe("OnboardingDetailPage", () => {
   describe("GAP-HR-ONBOARDING-DETAIL-02/03: document wiring", () => {
     it("shows a DPDP notice above the document upload list", async () => {
       fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
       expect(screen.getByRole("note")).toHaveTextContent(/visible only to hr/i);
     });
 
@@ -317,7 +317,7 @@ describe("OnboardingDetailPage", () => {
         }
         return Promise.resolve(mockFor(path));
       });
-      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
       expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
@@ -325,7 +325,7 @@ describe("OnboardingDetailPage", () => {
 
     it("does not offer View/Verify/Reject for a document nobody has uploaded yet", async () => {
       fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
-      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) })}</NextIntlClientProvider>);
       expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
     });

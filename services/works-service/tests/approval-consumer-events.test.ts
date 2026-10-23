@@ -120,3 +120,58 @@ describe("Approval consumer events + audit", () => {
     expect(emitted(EVENTS.aaCreated)).toBe(false);
   });
 });
+
+describe("Approval consumer — date and amount sanity for commands that bypassed the route (W2 works rescan cluster 01)", () => {
+  const aaPayload = (over: Record<string, unknown> = {}) => ({
+    ...queueMessage(TENANT_A, ACTOR_A, "msg-aa-bad"),
+    payload: {
+      id: "aa-bad", workId: "w-1", aaNumber: "AA/2026/009", aaDate: "2026-01-01",
+      approvingAuthorityId: "auth-1", approvedAmountMinor: "5000000", approvalType: "original", ...over,
+    },
+  });
+  const tsPayload = (over: Record<string, unknown> = {}) => ({
+    ...queueMessage(TENANT_A, ACTOR_A, "msg-ts-bad"),
+    payload: {
+      id: "ts-bad", workId: "w-1", tsNumber: "TS/2026/009", tsDate: "2026-01-01",
+      tsAuthorityId: "auth-1", tsAmountMinor: "5000000", sanctionType: "original", ...over,
+    },
+  });
+
+  it("aaCreate dead-letters an unparseable date instead of inserting an Invalid Date", async () => {
+    const h = await approvalHandlers();
+    await expect(h[COMMANDS.aaCreate](aaPayload({ aaDate: "not-a-date" }))).rejects.toThrow(/INVALID_AA_DATE/);
+    expect(mockInserted).toHaveLength(0);
+    expect(emitted(EVENTS.aaCreated)).toBe(false);
+  });
+
+  for (const amount of ["0", "-5000000"]) {
+    it(`aaCreate rejects an approved amount of ${amount}`, async () => {
+      const h = await approvalHandlers();
+      await expect(h[COMMANDS.aaCreate](aaPayload({ approvedAmountMinor: amount }))).rejects.toThrow(/INVALID_AMOUNT/);
+      expect(mockInserted).toHaveLength(0);
+    });
+  }
+
+  it("tsCreate dead-letters an unparseable date instead of inserting an Invalid Date", async () => {
+    const h = await approvalHandlers();
+    await expect(h[COMMANDS.tsCreate](tsPayload({ tsDate: "31/02/2026" }))).rejects.toThrow(/INVALID_TS_DATE/);
+    expect(mockInserted).toHaveLength(0);
+    expect(emitted(EVENTS.tsCreated)).toBe(false);
+  });
+
+  for (const amount of ["0", "-1"]) {
+    it(`tsCreate rejects a sanctioned amount of ${amount}`, async () => {
+      const h = await approvalHandlers();
+      await expect(h[COMMANDS.tsCreate](tsPayload({ tsAmountMinor: amount }))).rejects.toThrow(/INVALID_AMOUNT/);
+      expect(mockInserted).toHaveLength(0);
+    });
+  }
+
+  it("a valid date-only AA and TS still persist", async () => {
+    const h = await approvalHandlers();
+    await h[COMMANDS.aaCreate](aaPayload());
+    await h[COMMANDS.tsCreate](tsPayload());
+    expect(mockInserted).toContain(administrativeApprovals);
+    expect(mockInserted).toContain(technicalSanctions);
+  });
+});

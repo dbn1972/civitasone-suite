@@ -174,7 +174,7 @@ describe("ApplyPage (window gating)", () => {
       source: "api",
     });
     const ApplyPage = await loadPage();
-    render(await ApplyPage({ params: { id: "scheme-1" } }));
+    render(await ApplyPage({ params: Promise.resolve({ id: "scheme-1" }) }));
     expect(screen.getByText(/Applications are closed/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Submit Application" })).not.toBeInTheDocument();
   });

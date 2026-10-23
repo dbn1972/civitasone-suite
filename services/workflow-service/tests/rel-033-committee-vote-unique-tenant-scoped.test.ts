@@ -62,7 +62,10 @@ const PGHOST = process.env["PGHOST"] ?? "localhost";
 const PGPORT = process.env["PGPORT"] ?? "5435";
 const PGUSER = process.env["PGUSER"] ?? "civitas";
 const PGPASSWORD = process.env["PGPASSWORD"] ?? "civitas_test";
-const SUPERUSER_DSN = `postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${WORKFLOW_DB}`;
+const SUPERUSER_URL = new URL(`postgres://${PGHOST}:${PGPORT}/${WORKFLOW_DB}`);
+SUPERUSER_URL.username = PGUSER;
+SUPERUSER_URL.password = PGPASSWORD;
+const SUPERUSER_DSN = SUPERUSER_URL.toString();
 
 /** Cheap connectivity probe, used only to decide skip vs run -- same convention as
  * this directory's other rel-032/rel-033 test files. */

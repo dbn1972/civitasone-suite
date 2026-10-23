@@ -37,8 +37,8 @@ const MISSING = "00000000-0000-4000-8000-0000000000ff";
 
 const DOC_INTERNAL = "c1000000-0000-4000-8000-0000000000d1";
 const DOC_CONFIDENTIAL = "c2000000-0000-4000-8000-0000000000d1";
-const DOC_SECRET = "c3000000-0000-4000-8000-0000000000d1";
-const DOC_TOPSECRET = "c4000000-0000-4000-8000-0000000000d1";
+const DOC_CLS_SEC = "c3000000-0000-4000-8000-0000000000d1";
+const DOC_CLS_TOPSEC = "c4000000-0000-4000-8000-0000000000d1";
 const DOC_V1 = "c5000000-0000-4000-8000-0000000000d1";
 const DOC_V2 = "c5000000-0000-4000-8000-0000000000d2";
 
@@ -93,8 +93,8 @@ beforeAll(async () => {
 
   await seedDoc(DOC_INTERNAL, "internal");
   await seedDoc(DOC_CONFIDENTIAL, "confidential");
-  await seedDoc(DOC_SECRET, "secret");
-  await seedDoc(DOC_TOPSECRET, "top_secret");
+  await seedDoc(DOC_CLS_SEC, "secret");
+  await seedDoc(DOC_CLS_TOPSEC, "top_secret");
   await seedDoc(DOC_V1, "internal", { versionNum: 1 });
   await seedDoc(DOC_V2, "internal", { versionNum: 2, previousVersionId: DOC_V1 });
 
@@ -198,8 +198,8 @@ describe("GET /v1/meetings/:meetingId/documents", () => {
     });
     expect(res.statusCode).toBe(200);
     const ids = (res.json().data as Array<{ id: string }>).map((r) => r.id);
-    expect(ids).toContain(DOC_SECRET);
-    expect(ids).toContain(DOC_TOPSECRET);
+    expect(ids).toContain(DOC_CLS_SEC);
+    expect(ids).toContain(DOC_CLS_TOPSEC);
   });
 
   it("200 filters out classified rows for an observer (clearance = internal)", async () => {
@@ -212,7 +212,7 @@ describe("GET /v1/meetings/:meetingId/documents", () => {
     const ids = (res.json().data as Array<{ id: string }>).map((r) => r.id);
     expect(ids).toContain(DOC_INTERNAL);
     expect(ids).not.toContain(DOC_CONFIDENTIAL);
-    expect(ids).not.toContain(DOC_SECRET);
+    expect(ids).not.toContain(DOC_CLS_SEC);
   });
 
   it("401 without a token", async () => {
@@ -263,7 +263,7 @@ describe("GET /v1/meetings/:meetingId/documents/:documentId", () => {
   it("404 for a secret document viewed by an unauthorized observer (no existence leak)", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/meetings/${MEETING}/documents/${DOC_SECRET}`,
+      url: `/v1/meetings/${MEETING}/documents/${DOC_CLS_SEC}`,
       headers: auth(["observer"]),
     });
     expect(res.statusCode).toBe(404);
@@ -272,7 +272,7 @@ describe("GET /v1/meetings/:meetingId/documents/:documentId", () => {
   it("200 for a secret document viewed by a cleared secretary", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/meetings/${MEETING}/documents/${DOC_SECRET}`,
+      url: `/v1/meetings/${MEETING}/documents/${DOC_CLS_SEC}`,
       headers: auth(["committee_secretary"]),
     });
     expect(res.statusCode).toBe(200);
@@ -317,7 +317,7 @@ describe("GET /v1/meetings/:meetingId/documents/:documentId/download", () => {
   it("403 for a top_secret document (view-only, no download) even when cleared", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/meetings/${MEETING}/documents/${DOC_TOPSECRET}/download`,
+      url: `/v1/meetings/${MEETING}/documents/${DOC_CLS_TOPSEC}/download`,
       headers: auth(["committee_secretary"]),
     });
     expect(res.statusCode).toBe(403);
@@ -326,7 +326,7 @@ describe("GET /v1/meetings/:meetingId/documents/:documentId/download", () => {
   it("404 for a secret document downloaded by an unauthorized observer", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/meetings/${MEETING}/documents/${DOC_SECRET}/download`,
+      url: `/v1/meetings/${MEETING}/documents/${DOC_CLS_SEC}/download`,
       headers: auth(["observer"]),
     });
     expect(res.statusCode).toBe(404);

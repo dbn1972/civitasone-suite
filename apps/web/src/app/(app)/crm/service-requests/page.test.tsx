@@ -79,7 +79,7 @@ beforeEach(() => {
 describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-01 (server pagination)", () => {
   it("requests the given page with a server limit and derives pageCount from the real total", async () => {
     mockRows(15, 132);
-    render(withIntl(await Page({ searchParams: { page: "2" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ page: "2" }) })));
     expect(getList).toHaveBeenCalledWith(expect.objectContaining({ limit: 15, page: 2 }));
     // 132 / 15 = 9 pages
     expect(screen.getByTestId("table").dataset.pageCount).toBe("9");
@@ -89,13 +89,13 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-01 (server pagination
 
   it("forwards status/search filters to the loader", async () => {
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: { status: "pending", search: "water" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ status: "pending", search: "water" }) })));
     expect(getList).toHaveBeenCalledWith(expect.objectContaining({ status: "pending", search: "water", page: 1, limit: 15 }));
   });
 
   it("defaults to page 1 for an invalid ?page", async () => {
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: { page: "-3" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ page: "-3" }) })));
     expect(getList).toHaveBeenCalledWith(expect.objectContaining({ page: 1 }));
   });
 });
@@ -104,7 +104,7 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-05 (summary tiles)", 
   it("shows server-side status counts that sum to the total, with no '(this page)' labels and a Cancelled tile", async () => {
     // 15 loaded but a register of 132: counts come from the server, not the page.
     mockRows(15, 132, { open: 40, in_progress: 20, pending: 30, resolved: 12, closed: 20, cancelled: 10 });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
 
     // Open/In Progress = 40+20 = 60; Pending = 30; Closed/Resolved = 20+12 = 32; Cancelled = 10.
     // 60 + 30 + 32 + 10 = 132 = total.
@@ -121,14 +121,14 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-05 (summary tiles)", 
 describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-02 (export role gate)", () => {
   it("does NOT allow export for a plain crm_user", async () => {
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: {} })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({}) })));
     expect(screen.getByTestId("table").dataset.canExport).toBe("false");
   });
 
   it("allows export for crm_admin", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: {} })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({}) })));
     expect(screen.getByTestId("table").dataset.canExport).toBe("true");
   });
 });
@@ -139,7 +139,7 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-03 (owner names, over
 
   it("forwards assignedTo, overdue=true and sort=dueAt to the loader and the offline cache key", async () => {
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: { assignedTo: ME, overdue: "true", sort: "dueAt" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ assignedTo: ME, overdue: "true", sort: "dueAt" }) })));
     expect(getList).toHaveBeenCalledWith(expect.objectContaining({ assignedTo: ME, overdue: true, sort: "dueAt" }));
     const key = screen.getByTestId("table").dataset.queryKey ?? "";
     expect(key).toContain(`assignedTo=${ME}`);
@@ -149,7 +149,7 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-03 (owner names, over
 
   it("ignores a malformed owner id, an unknown sort and overdue values other than 'true' instead of sending them", async () => {
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: { assignedTo: "not-a-uuid", overdue: "yes", sort: "citizenName" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ assignedTo: "not-a-uuid", overdue: "yes", sort: "citizenName" }) })));
     const arg = getList.mock.calls[0]![0] as Record<string, unknown>;
     expect(arg).not.toHaveProperty("assignedTo");
     expect(arg).not.toHaveProperty("overdue");
@@ -164,7 +164,7 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-03 (owner names, over
     ];
     getList.mockResolvedValue({ data: { rows, total: 3, statusCounts: {} }, source: "api" });
     resolveUsersMock.mockResolvedValue(new Map([[ANITA, "Anita Desai"]]));
-    render(withIntl(await Page({ searchParams: {} })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({}) })));
     expect(resolveUsersMock).toHaveBeenCalledTimes(1);
     expect([...(resolveUsersMock.mock.calls[0]![0] as Iterable<string>)]).toEqual([ANITA, ANITA]);
     expect(JSON.parse(screen.getByTestId("table").dataset.assigneeNames ?? "{}")).toEqual({ [ANITA]: "Anita Desai" });
@@ -173,7 +173,7 @@ describe("ServiceRequestsPage — GAP-CRM-SERVICE-REQUESTS-03 (owner names, over
   it("passes the signed-in user id to the filter bar (for the 'Assigned to me' toggle)", async () => {
     mockUserId.mockReturnValue(ME);
     mockRows(1, 1);
-    render(withIntl(await Page({ searchParams: { assignedTo: ME, overdue: "true" } })));
+    render(withIntl(await Page({ searchParams: Promise.resolve({ assignedTo: ME, overdue: "true" }) })));
     const bar = screen.getByTestId("filter-bar");
     expect(bar.dataset.currentUser).toBe(ME);
     expect(bar.dataset.assignedTo).toBe(ME);

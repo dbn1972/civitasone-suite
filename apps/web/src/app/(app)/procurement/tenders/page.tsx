@@ -59,11 +59,12 @@ type TenderRow = {
   bidWindow: string;
 } & Record<string, unknown>;
 
-export default async function TendersPage({
-  searchParams,
-}: {
-  searchParams?: { type?: string; status?: string };
-}) {
+export default async function TendersPage(
+  props: {
+    searchParams?: Promise<{ type?: string; status?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: tenders, source } = await getProcurementTenders();
 
   const published = tenders.filter((t) => t.status === "published").length;

@@ -19,19 +19,25 @@ const BASE = (() => {
 const OUT = process.env.UAT_OUT ?? "/tmp/civitasone-frontend-uat";
 mkdirSync(OUT, { recursive: true });
 
+const DEMO_PASSWORD = process.env.UAT_DEMO_PASSWORD;
+if (!DEMO_PASSWORD) {
+  console.error("UAT_DEMO_PASSWORD must be set in the environment (no credentials are stored in this script).");
+  process.exit(2);
+}
+
 /** ERP personas — role, responsibility, dev login */
 const PERSONAS = {
   superadmin: {
     label: "Platform Super Admin",
     username: "superadmin",
-    password: "Civitas@123",
+    password: DEMO_PASSWORD,
     responsibility: "Tenant config, break-glass, all-module oversight",
     expectedModules: ["finance", "procurement", "hr", "audit", "tenant-admin"],
   },
   officer: {
     label: "Department Officer (Finance/HR/Procurement)",
     username: "officer",
-    password: "Civitas@123",
+    password: DEMO_PASSWORD,
     responsibility: "Budget, sanctions, indents, leave, payments processing",
     expectedModules: ["finance", "procurement", "hr"],
     deniedPaths: ["/tenant-admin/breakglass"],
@@ -39,7 +45,7 @@ const PERSONAS = {
   auditor: {
     label: "Internal Auditor / Legal Officer",
     username: "auditor",
-    password: "Civitas@123",
+    password: DEMO_PASSWORD,
     responsibility: "Audit observations, legal cases, compliance read-only",
     expectedModules: ["audit", "legal"],
     deniedPaths: ["/finance/payments", "/tenant-admin/users"],

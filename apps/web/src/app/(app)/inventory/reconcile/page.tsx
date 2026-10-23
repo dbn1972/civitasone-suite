@@ -53,11 +53,12 @@ async function loadStockItemNames(wanted: Set<string>): Promise<Map<string, { it
   return names;
 }
 
-export default async function InventoryReconcilePage({
-  searchParams,
-}: {
-  searchParams?: { from?: string; to?: string };
-}) {
+export default async function InventoryReconcilePage(
+  props: {
+    searchParams?: Promise<{ from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const from = isoDate(searchParams?.from);
   const to = isoDate(searchParams?.to);
   // GAP-INVENTORY-RECONCILE-05: the service default page is only 100 rows, so
@@ -96,16 +97,14 @@ export default async function InventoryReconcilePage({
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <Link href="/inventory">Inventory</Link>
       </nav>
-
       {/* GAP-INVENTORY-RECONCILE-01: this page sums ledger movements; it never compared them to a
           physical count or the item balance (the ledger is per-warehouse and the item balance is
           not), so it is titled for what it computes. Physical variances live under Cycle Counts. */}
       <PageHeader
         title="Stock Movements Summary"
         subtitle="Totals of receipts, issues and adjustments from the stock ledger. This is a movement summary, not a comparison with a physical count; see Cycle Counts for counted variances."
-        actions={source === "error" ? <DataSourceBadge source={source} /> : <PrintExportButton label="Export / Print" documentTitle="Stock Movements Summary" />}
+        actions={source === "error" ? <DataSourceBadge source={source} /> : <PrintExportButton label="Print" documentTitle="Stock Movements Summary" />}
       />
-
       <form method="get" aria-label="Filter by posting date" style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", margin: "0 0 12px" }}>
         <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
           From
@@ -118,14 +117,13 @@ export default async function InventoryReconcilePage({
         <button type="submit" className="btn">Apply</button>
         {from || to ? <Link href="/inventory/reconcile">Clear dates</Link> : null}
       </form>
-
       {source === "error" ? (
         // UX-013: previously `entries.length === 0 && source !== "error"`
         // was false on any load failure (second operand false regardless of
         // length), which fell through to the ELSE branch below and rendered
         // a full, silently-zeroed StatGrid + an empty ledger table -- pixel
         // identical to a genuinely reconciled, zero-movement ledger.
-        <RefreshErrorState error={toHumanError("load", { area: "stock ledger" })} />
+        (<RefreshErrorState error={toHumanError("load", { area: "stock ledger" })} />)
       ) : !hasEntries ? (
         <EmptyState
           icon="📦"

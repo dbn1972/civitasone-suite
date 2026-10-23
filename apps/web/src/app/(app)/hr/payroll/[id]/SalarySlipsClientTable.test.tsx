@@ -15,9 +15,10 @@ function renderTable(props: React.ComponentProps<typeof SalarySlipsClientTable>)
   );
 }
 
+// GAP-PAYROLL-HOME-01: amounts are integer-paise strings (Rs 80,000.00 gross etc.).
 const SLIPS = [
-  { id: "s1", employeeId: "E1", employeeName: "Asha Rao", gross: 80000, deductions: 12000, net: 68000, status: "generated" },
-  { id: "s2", employeeId: "E2", employeeName: "Vikram Shah", gross: 95000, deductions: 15000, net: 80000, status: "generated" },
+  { id: "s1", employeeId: "E1", employeeName: "Asha Rao", grossMinor: "8000000", deductionsMinor: "1200000", netMinor: "6800000", status: "generated" },
+  { id: "s2", employeeId: "E2", employeeName: "Vikram Shah", grossMinor: "9500000", deductionsMinor: "1500000", netMinor: "8000000", status: "generated" },
 ];
 
 // UX-008 tranche 2: "Run Payroll" (ad hoc inline styling with a hand-rolled
@@ -45,9 +46,9 @@ describe("SalarySlipsClientTable", () => {
       id: `s${i}`,
       employeeId: `E${i}`,
       employeeName: `Employee ${i}`,
-      gross: 50000,
-      deductions: 5000,
-      net: 45000,
+      grossMinor: "5000000",
+      deductionsMinor: "500000",
+      netMinor: "4500000",
       status: "generated",
     }));
     renderTable({ slips: manySlips, payPeriod: "2026-09" });
@@ -60,5 +61,80 @@ describe("SalarySlipsClientTable", () => {
     fireEvent.click(nextBtn);
     expect(screen.getByText("Employee 50")).toBeInTheDocument();
     expect(prevBtn).toBeEnabled();
+  });
+
+  // GAP-PAYROLL-HOME-01: the table and the slip preview render from paise, exactly.
+  it("renders gross / deductions / net from the paise strings in the table and the preview", () => {
+    renderTable({ slips: SLIPS, payPeriod: "2026-09" });
+    const row = screen.getByText("Asha Rao").closest("tr")!;
+    expect(within(row).getByText("₹80,000.00")).toBeInTheDocument();
+    expect(within(row).getByText("₹12,000.00")).toBeInTheDocument();
+    expect(within(row).getByText("₹68,000.00")).toBeInTheDocument();
+    // never the 100x-smaller reading of the same paise
+    expect(screen.queryByText("₹800.00")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Preview Slip" })[0]);
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("₹80,000.00")).toBeInTheDocument();
+    expect(within(dialog).getByText("₹12,000.00")).toBeInTheDocument();
+    expect(within(dialog).getByText("₹68,000.00")).toBeInTheDocument();
+    expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("warns, exactly to the paisa, when gross minus deductions does not foot to net", () => {
+    // 80,000.00 - 12,000.00 = 68,000.00, but the slip says 68,000.01
+    renderTable({
+      slips: [{ id: "s9", employeeId: "E9", employeeName: "Meena Das", grossMinor: "8000000", deductionsMinor: "1200000", netMinor: "6800001", status: "generated" }],
+      payPeriod: "2026-09",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview Slip" }));
+    expect(within(screen.getByRole("dialog")).getByRole("alert")).toBeInTheDocument();
+  });
+
+  it("shows a dash, not ₹0.00, for an amount the payload did not carry", () => {
+    renderTable({ slips: [{ id: "s8", employeeId: "E8", employeeName: "Ravi Kumar", status: "generated" }], payPeriod: "2026-09" });
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// GAP-PAYROLL-RUNS-01: per-slip money is exact paise (the API's *Minor strings), with the
+// rupee float only as a legacy fallback, and the footing check is exact integer arithmetic.
+describe("SalarySlipsClientTable — exact paise", () => {
+  it("renders the paise strings through formatMoney, in preference to the rupee floats", () => {
+    renderTable({
+      slips: [{ id: "s1", employeeId: "E1", employeeName: "Asha Rao", gross: 1, deductions: 1, net: 1, grossMinor: "12345678", deductionsMinor: "345678", netMinor: "12000000", status: "generated" }],
+      payPeriod: "2026-09",
+    });
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹3,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹1,20,000.00")).toBeInTheDocument();
+  });
+
+  it("falls back to the legacy rupee floats for an older payroll-service", () => {
+    renderTable({ slips: SLIPS, payPeriod: "2026-09" });
+    // s1 gross (80,000) is also s2's net, so assert on the first slip's distinct figures.
+    expect(screen.getByText("₹68,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹12,000.00")).toBeInTheDocument();
+    expect(screen.getAllByText("₹80,000.00")).toHaveLength(2);
+  });
+
+  it("does not raise a false float mismatch for a slip that foots exactly (1234.56 - 100.10 = 1134.46)", () => {
+    // In IEEE-754, 1234.56 - 100.1 !== 1134.46 -- the old float check would have cried wolf here.
+    renderTable({
+      slips: [{ id: "s1", employeeId: "E1", employeeName: "Asha Rao", gross: 1234.56, deductions: 100.1, net: 1134.46, status: "generated" }],
+      payPeriod: "2026-09",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview Slip" }));
+    expect(within(screen.getByRole("dialog")).queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("warns when gross - deductions does not equal net by even one paisa", () => {
+    renderTable({
+      slips: [{ id: "s1", employeeId: "E1", employeeName: "Asha Rao", gross: 0, deductions: 0, net: 0, grossMinor: "100000", deductionsMinor: "10000", netMinor: "90001", status: "generated" }],
+      payPeriod: "2026-09",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preview Slip" }));
+    expect(within(screen.getByRole("dialog")).getByRole("alert")).toBeInTheDocument();
   });
 });

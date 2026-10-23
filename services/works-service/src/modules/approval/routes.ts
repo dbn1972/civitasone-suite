@@ -7,7 +7,7 @@ import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import { resolveApprovalType, canFinalize, canEnterTS, isSelfApproval } from "./domain.js";
 import { countAaForWork, countTsForWork, countAa, countTs, getAa, getTs, listAa, listTs } from "./repo.js";
-import { getProposal } from "../proposal/repo.js";
+import { getProposal, getWorkHeaders } from "../proposal/repo.js";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo"];
@@ -15,6 +15,21 @@ const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admi
 
 const aaAcceptedSchema = acceptedResponseSchema.extend({ approvalType: z.string() });
 const tsAcceptedSchema = acceptedResponseSchema.extend({ sanctionType: z.string() });
+
+/**
+ * GAP-WORKS-APPROVALS-01 / TS-DETAIL-03: the registers and by-id reads used to return opaque ids only, so every client had
+ * to join work numbers itself. The proposal module owns work_proposals, so this stitches the human work number onto each row
+ * in application code (getWorkHeaders: one batched, tenant-scoped read, no cross-module SQL join, same pattern as the
+ * execution routes). A row whose work cannot be resolved gets workNumber null; the authority NAME lives in identity-service
+ * and is resolved by the web through the tenant user directory.
+ */
+async function withWorkNumbers<T extends { workId: string }>(
+  tenantId: string,
+  rows: T[],
+): Promise<Array<T & { workNumber: string | null }>> {
+  const headers = await getWorkHeaders(tenantId, rows.map((r) => r.workId));
+  return rows.map((r) => ({ ...r, workNumber: headers.get(r.workId)?.workNumber ?? null }));
+}
 
 export async function approvalRoutes(app: FastifyInstance): Promise<void> {
   // Tenant-wide AA register (paginated) — the FE approvals list page.
@@ -28,7 +43,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     ]);
     // GAP2-WORKS-APPROVALS-05: report the REAL tenant total (not data.length,
     // which caps at pageSize and makes the register + stat cards undercount).
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
+    return reply.send({ data: await withWorkNumbers(ctx.tenantId, data), meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Tenant-wide TS register (paginated) — the FE approvals list page.
@@ -41,7 +56,7 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
       countTs(ctx.tenantId),
     ]);
     // GAP2-WORKS-APPROVALS-05: report the REAL tenant total (see aa route).
-    return reply.send({ data, meta: { page: query.page, pageSize: query.pageSize, total } });
+    return reply.send({ data: await withWorkNumbers(ctx.tenantId, data), meta: { page: query.page, pageSize: query.pageSize, total } });
   });
 
   // Single AA by id (tenant-scoped) — the FE AA detail page. Added so a record
@@ -53,7 +68,8 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const { id } = v.idParamSchema.parse(req.params);
     const aa = await getAa(ctx.tenantId, id);
     if (!aa) throw new HttpError(404, "NOT_FOUND", "AA not found");
-    return reply.send({ data: aa });
+    const [enriched] = await withWorkNumbers(ctx.tenantId, [aa]);
+    return reply.send({ data: enriched });
   });
 
   // Single TS by id (tenant-scoped) — the FE TS detail page. Same rationale as
@@ -64,7 +80,8 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const { id } = v.idParamSchema.parse(req.params);
     const ts = await getTs(ctx.tenantId, id);
     if (!ts) throw new HttpError(404, "NOT_FOUND", "TS not found");
-    return reply.send({ data: ts });
+    const [enriched] = await withWorkNumbers(ctx.tenantId, [ts]);
+    return reply.send({ data: enriched });
   });
 
   // Create AA
@@ -72,6 +89,10 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createAaSchema.parse(req.body);
+    // The cited work must exist in this tenant (the TS create below does the same): without it the AA was accepted
+    // with 202 and then orphaned against a work id that resolves to nothing.
+    const proposal = await getProposal(ctx.tenantId, body.workId);
+    if (!proposal) throw new HttpError(404, "NOT_FOUND", "work proposal not found");
     const count = await countAaForWork(ctx.tenantId, body.workId);
     const approvalType = resolveApprovalType(count);
     return sendValidated(reply, aaAcceptedSchema, await commands.createAaCommand(ctx, body, approvalType), 202);

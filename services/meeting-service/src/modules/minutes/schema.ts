@@ -54,6 +54,10 @@ export const minutes = meetingSchema.table("minutes", {
   storageKey:         text("storage_key"),
   submissionDeadline: timestamp("submission_deadline", { withTimezone: true }),
   aiGenerated:        boolean("ai_generated").notNull().default(false),
+  // Migration 0013: why / when / by whom the chairperson sent the draft back.
+  rejectionComments:  text("rejection_comments"),
+  rejectedAt:         timestamp("rejected_at", { withTimezone: true }),
+  rejectedBy:         uuid("rejected_by"),
   createdAt:          timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:          timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:          uuid("created_by").notNull(),

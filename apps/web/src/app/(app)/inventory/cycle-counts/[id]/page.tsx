@@ -15,7 +15,8 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Rejected",
 };
 
-export default async function CycleCountDetailPage({ params }: { params: { id: string } }) {
+export default async function CycleCountDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getCycleCountById(params.id);
   const { data: cycleCount } = result;
 

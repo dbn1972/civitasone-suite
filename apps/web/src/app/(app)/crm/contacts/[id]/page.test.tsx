@@ -58,13 +58,13 @@ beforeEach(() => {
 describe("Contact detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", () => {
   it("passes canVerify=false for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("false");
   });
 
   it("passes canVerify=true for crm_admin", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
   });
 
@@ -72,13 +72,13 @@ describe("Contact detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
   // clear the broader CRM admin gate but are 403'd, so they must not be offered Verify / Reject.
   it.each(["admin", "platform_admin"])("passes canVerify=false for %s (the verify route answers 403)", async (role) => {
     mockRoles.mockReturnValue(["crm_user", role]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("false");
   });
 
   it.each(["super_admin", "tenant_admin"])("passes canVerify=true for %s (the verify route admits it)", async (role) => {
     mockRoles.mockReturnValue([role]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
   });
 });
@@ -89,7 +89,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
   it("masks phone/email for a base crm_user and keeps the clear value out of the DOM", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mContact.mockResolvedValue({ data: pii, source: "api" });
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
     expect(screen.getByText("a***@e******.c**")).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("9876543210");
@@ -99,7 +99,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
   it("gives a base crm_user no reveal control", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mContact.mockResolvedValue({ data: pii, source: "api" });
-    renderWithIntl(await Page({ params: { id: "c-1" } }));
+    renderWithIntl(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
@@ -108,7 +108,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
   it("masks phone/email for crm_admin too, with a Reveal control per value and no clear value in the DOM", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     mContact.mockResolvedValue({ data: pii, source: "api" });
-    renderWithIntl(await Page({ params: { id: "c-1" } }));
+    renderWithIntl(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText("98XXXXX210")).toBeInTheDocument();
     expect(screen.getByText("a***@e******.c**")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(2);
@@ -125,7 +125,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
       status: 200,
       json: async () => ({ data: { resourceType: "contact", field: "phone", value: "9876543210" } }),
     } as unknown as Response);
-    renderWithIntl(await Page({ params: { id: "c-1" } }));
+    renderWithIntl(await Page({ params: Promise.resolve({ id: "c-1" }) }));
 
     const phoneRow = screen.getByText("Phone").closest(".fld") as HTMLElement;
     fireEvent.click(within(phoneRow).getByRole("button", { name: "Reveal" }));
@@ -150,7 +150,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
   it("does not double-mask a value crm-service already redacted for a crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mContact.mockResolvedValue({ data: { ...(pii as object), phone: "******3210", email: "a***@example.com" } as never, source: "api" });
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText("******3210")).toBeInTheDocument();
     expect(screen.getByText("a***@example.com")).toBeInTheDocument();
   });
@@ -158,7 +158,7 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
   it("no longer renders a bare Yes/No marketing-consent row", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     mContact.mockResolvedValue({ data: pii, source: "api" });
-    renderWithIntl(await Page({ params: { id: "c-1" } }));
+    renderWithIntl(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.queryByText("Marketing Consent")).not.toBeInTheDocument();
   });
 });
@@ -166,13 +166,13 @@ describe("Contact detail PII masking (GAP-CRM-CONTACTS-DETAIL-02)", () => {
 describe("Contact detail delete gating (GAP-CRM-CONTACTS-DETAIL-03)", () => {
   it("canDelete=false for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("actions").dataset.canDelete).toBe("false");
   });
 
   it("canDelete=true for crm_admin", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByTestId("actions").dataset.canDelete).toBe("true");
   });
 });
@@ -184,7 +184,7 @@ describe("Contact detail duplicate cards removed (GAP-CRM-CONTACTS-DETAIL-04)", 
       data: { ...(contact as object), deals: [{ id: "d1", dealName: "Deal A", stage: "won", amount: 100 }], activityTimeline: [{ id: "a1", type: "call", subject: "Rang", status: "completed" }] } as never,
       source: "api",
     });
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.queryByRole("heading", { name: "Related Deals" })).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Activity Timeline" })).not.toBeInTheDocument();
   });
@@ -194,14 +194,14 @@ describe("Contact detail failure vs not-found (GAP-CRM-CONTACTS-DETAIL-05)", () 
   it("a 500 shows a retry/error state, not 'does not exist'", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mContact.mockResolvedValue({ data: null, source: "error", status: 500 } as never);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.queryByText(/does not exist or has been removed/)).not.toBeInTheDocument();
   });
 
   it("a 404 shows the not-found copy", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     mContact.mockResolvedValue({ data: null, source: "error", status: 404 } as never);
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText(/does not exist or has been removed/)).toBeInTheDocument();
   });
 });
@@ -213,7 +213,7 @@ describe("Contact detail status/classification labels (GAP-CRM-CONTACTS-DETAIL-0
       data: { ...(contact as object), leadStatus: "disqualified", temperature: "hot", priority: "high" } as never,
       source: "api",
     });
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText("Disqualified")).toBeInTheDocument();
     expect(screen.queryByText("disqualified")).not.toBeInTheDocument();
   });
@@ -224,7 +224,7 @@ describe("Contact detail status/classification labels (GAP-CRM-CONTACTS-DETAIL-0
       data: { ...(contact as object), temperature: "hot", priority: "high" } as never,
       source: "api",
     });
-    render(await Page({ params: { id: "c-1" } }));
+    render(await Page({ params: Promise.resolve({ id: "c-1" }) }));
     expect(screen.getByText(/Temperature: Hot/)).toBeInTheDocument();
     expect(screen.getByText(/Priority: High/)).toBeInTheDocument();
   });

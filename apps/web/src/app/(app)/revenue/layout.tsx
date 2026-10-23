@@ -16,14 +16,14 @@ import { ModuleGate } from "../ModuleGate";
  * REVENUE_ROLES gets the same "access restricted" treatment on direct
  * navigation, not a silent blank or a misleading "couldn't load".
  *
- * Fails OPEN (renders normally) when roles can't be determined at all (empty
- * roles array), matching Sidebar.tsx / moduleVisibility.ts "unknown -> show
- * all". This layer is advisory; the backend enforces the real boundary.
+ * Fails CLOSED when roles can't be determined at all (empty roles array): a
+ * session with no roles holds no revenue permission, so it gets the same
+ * "access restricted" treatment rather than the module. The backend still
+ * enforces the real boundary; this just never shows the screens on a guess.
  */
 export default function RevenueLayout({ children }: { children: ReactNode }) {
 	const roles = getSessionRoles();
-	const hasRevenuePermission =
-		roles.length === 0 || roles.some((r) => (REVENUE_ROLES as readonly string[]).includes(r));
+	const hasRevenuePermission = roles.some((r) => (REVENUE_ROLES as readonly string[]).includes(r));
 
 	if (!hasRevenuePermission) {
 		return <PermissionDenied module="revenue" requiredRoles={[...REVENUE_ROLES]} />;

@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatCard, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
@@ -85,11 +86,12 @@ const valueStyle: React.CSSProperties = {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function AaDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function AaDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   // GET-by-id (GAP-WORKS-APPROVALS-AA-DETAIL-01): fetch the single record so a
   // record beyond the first list page is reachable. The backend returns
   // { data: <record> }; a genuinely missing id is a 404, every other failure
@@ -134,13 +136,16 @@ export default async function AaDetailPage({
 
   const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
 
-  // The API returns opaque ids only; resolve the work number and officer name web-side (degrades to a short id).
+  // works-service returns the work number with the record; the officer NAME lives in identity-service and is resolved
+  // from the tenant user directory. Each lookup is skipped when the record already carries the value, and degrades to a
+  // labelled short id (never a bare hash) when it cannot be found.
+  const t = await getTranslations("works.approvalNames");
   const [workHeader, officerNames] = await Promise.all([
-    aa.workId ? getWorkHeader(aa.workId) : null,
-    getOfficerNameMap(),
+    aa.workId && !aa.workNumber ? getWorkHeader(aa.workId) : null,
+    aa.approvingAuthorityId && !aa.authorityName ? getOfficerNameMap([aa.approvingAuthorityId]) : null,
   ]);
   const workNumber = aa.workNumber ?? workHeader?.data.workNumber ?? null;
-  const authorityName = aa.authorityName ?? (aa.approvingAuthorityId ? officerNames.data[aa.approvingAuthorityId] : undefined) ?? null;
+  const authorityName = aa.authorityName ?? (aa.approvingAuthorityId ? officerNames?.data[aa.approvingAuthorityId] : undefined) ?? null;
 
   const detailRows: Array<[string, React.ReactNode]> = [
     ["AA Number", aa.aaNumber ?? "—"],
@@ -149,7 +154,7 @@ export default async function AaDetailPage({
       "Work",
       aa.workId != null ? (
         <Link href={`/works/proposals/${aa.workId}`} title={aa.workId}>
-          {workNumber ?? aa.workId.slice(0, 8) + "…"}
+          {workNumber ?? t("idLabel", { id: aa.workId.slice(0, 8) + "…" })}
         </Link>
       ) : (
         "—"
@@ -159,7 +164,7 @@ export default async function AaDetailPage({
       "Approving Authority",
       aa.approvingAuthorityId != null ? (
         <span title={aa.approvingAuthorityId} style={{ fontFamily: authorityName ? undefined : "var(--font-mono, monospace)" }}>
-          {authorityName ?? aa.approvingAuthorityId.slice(0, 8) + "…"}
+          {authorityName ?? t("unknownOfficer", { id: aa.approvingAuthorityId.slice(0, 8) + "…" })}
         </span>
       ) : (
         "—"

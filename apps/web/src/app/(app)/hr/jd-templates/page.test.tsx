@@ -22,7 +22,7 @@ const TEMPLATE = (over: Record<string, unknown> = {}) => ({
 });
 
 async function renderPage(searchParams: { type?: string; created?: string } = {}) {
-  const ui = await JdTemplatesPage({ searchParams });
+  const ui = await JdTemplatesPage({ searchParams: Promise.resolve(searchParams) });
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

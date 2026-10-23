@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, inArray, sql, desc, asc, gte, lte } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsTrainings, hrmsNominations, type NominationRow } from "./schema.js";
 import { trainingSessions } from "../training-admin/schema.js";
@@ -79,9 +79,35 @@ export async function findNominationByTrainingAndEmployee(
   return rows[0];
 }
 
-export async function listTrainingsByTenant(tenantId: string, limit = 100) {
+/**
+ * Programmes for a tenant, newest-relevant first: programmes that are upcoming or
+ * ongoing (soonest start first) come before programmes that have ended or were
+ * cancelled (most recently started first), then id for a total order so a LIMIT
+ * is deterministic. "Ended" uses the IST calendar day, matching mapTrainingStatus().
+ *
+ * The optional [from, to] window is applied in SQL (overlap rule: the programme
+ * ends on/after `from` and starts on/before `to`) BEFORE the LIMIT, so a
+ * programme inside the window is never cut off by the row cap.
+ */
+export async function listTrainingsByTenant(
+  tenantId: string,
+  limit = 100,
+  window?: { from?: string | undefined; to?: string | undefined },
+) {
+  const istToday = sql`(now() at time zone 'Asia/Kolkata')::date`;
+  const ended = sql`(${hrmsTrainings.status} = 'cancelled' or ${hrmsTrainings.toDate} < ${istToday})`;
   return scopedRead((tx) => tx.select().from(hrmsTrainings)
-    .where(eq(hrmsTrainings.tenantId, tenantId))
+    .where(and(
+      eq(hrmsTrainings.tenantId, tenantId),
+      window?.from ? gte(hrmsTrainings.toDate, window.from) : undefined,
+      window?.to ? lte(hrmsTrainings.fromDate, window.to) : undefined,
+    ))
+    .orderBy(
+      asc(sql`case when ${ended} then 1 else 0 end`),
+      asc(sql`case when ${ended} then null else ${hrmsTrainings.fromDate} end`),
+      desc(hrmsTrainings.fromDate),
+      asc(hrmsTrainings.id),
+    )
     .limit(limit));
 }
 

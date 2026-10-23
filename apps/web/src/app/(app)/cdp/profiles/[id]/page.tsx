@@ -26,7 +26,8 @@ type IdentityRow = { id: string; identifierType: string; confidence: string; lin
 type EventRow = { id: string; eventType: string; occurredAt: string };
 type LineageRow = { id: string; source: string; sourceId: string; recordedAt: string; supplied: string };
 
-export default async function CustomerProfilePage({ params }: { params: { id: string } }) {
+export default async function CustomerProfilePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [
     { data: profile, source },
     { data: identities, source: identitySource },
@@ -155,7 +156,6 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
           hint="Distinct source systems that have appended a lineage entry to this profile."
         />
       </StatGrid>
-
       <Card title="Attributes and their source of record">
         <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }}>
           Each value is attributed to the system that last supplied it. An attribute shows as
@@ -182,7 +182,6 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
           emptyMessage="This profile has been created but no system has contributed attribute values to it."
         />
       </Card>
-
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <Card title="Source Lineage">
@@ -204,10 +203,10 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
             {eventsSource === "error" ? (
               // GAP-CDP-PROFILES-DETAIL-03: a failed timeline load must not read
               // as "No events yet" — show a real, retryable error instead.
-              <RefreshErrorState
+              (<RefreshErrorState
                 error={toHumanError("load", { area: "events" })}
                 source={{ area: "events" }}
-              />
+              />)
             ) : (
               <DataTable<EventRow>
                 columns={[
@@ -228,10 +227,10 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
             {identitySource === "error" ? (
               // GAP-CDP-PROFILES-DETAIL-03: a failed identity load must not read
               // as "No linked identifiers" — show a real, retryable error.
-              <RefreshErrorState
+              (<RefreshErrorState
                 error={toHumanError("load", { area: "linked identifiers" })}
                 source={{ area: "linked identifiers" }}
-              />
+              />)
             ) : (
               <DataTable<IdentityRow>
                 columns={[
@@ -252,11 +251,11 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
 
           <Card title="Contributing Systems">
             {systems.length === 0 ? ( // ux-001-ok: `systems` is derived purely from `profile.sourceLineage`, and `profile` is only reachable past the earlier `if (!profile) return` guard above (source==="error" implies a null profile per the loader contract) -- this can only be a genuinely lineage-free profile, never a masked fetch failure
-              <EmptyState
+              (<EmptyState
                 icon="🛰️"
                 title="No contributors"
                 message="No system has appended a lineage entry to this profile."
-              />
+              />)
             ) : (
               <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
                 {systems.map((system) => (

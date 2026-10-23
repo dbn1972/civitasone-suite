@@ -50,7 +50,7 @@ describe("PayGroupDetailPage", () => {
 
   it("details tab shows schedule, DDO, translated bill type and the deactivate control", async () => {
     mockApi();
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: {} })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({}) })));
     expect(screen.getByText("Finance DDO (DDO-1)")).toBeInTheDocument();
     expect(screen.getByText("Gazetted")).toBeInTheDocument();
     expect(screen.getByText("28th")).toBeInTheDocument();
@@ -62,7 +62,7 @@ describe("PayGroupDetailPage", () => {
 
   it("members tab lists members with Move / End for admins and history links", async () => {
     mockApi();
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: { tab: "members" } })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({ tab: "members" }) })));
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
     expect(screen.getByText("Current")).toBeInTheDocument();
     expect(screen.getByText("Open-ended")).toBeInTheDocument();
@@ -78,34 +78,34 @@ describe("PayGroupDetailPage", () => {
   it("read-only roles get the members but no mutation controls", async () => {
     rolesMock.mockReturnValue(["finance_officer"]);
     mockApi();
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: { tab: "members" } })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({ tab: "members" }) })));
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Move|End membership|Assign employee|Bulk assign/ })).not.toBeInTheDocument();
   });
 
   it("a failed members load is an error, not 'no current members'", async () => {
     mockApi({ members: { data: { data: [], total: 0 }, source: "error" } });
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: { tab: "members" } })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({ tab: "members" }) })));
     expect(screen.queryByText("No current members")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
 
   it("an empty successful members load shows the empty state", async () => {
     mockApi({ members: { data: { data: [], total: 0 }, source: "api" } });
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: { tab: "members", history: "true" } })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({ tab: "members", history: "true" }) })));
     expect(screen.getByText("No membership history")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Hide history" })).toBeInTheDocument();
   });
 
   it("an unknown pay group reads as not found", async () => {
     mockApi({ group: { data: null, source: "error", status: 404 } });
-    render(withIntl(await PayGroupDetailPage({ params: { id: "nope" }, searchParams: {} })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "nope" }), searchParams: Promise.resolve({}) })));
     expect(screen.getByText(/could not be found/)).toBeInTheDocument();
   });
 
   it("denies non-payroll roles without fetching", async () => {
     rolesMock.mockReturnValue(["employee"]);
-    render(withIntl(await PayGroupDetailPage({ params: { id: "g1" }, searchParams: {} })));
+    render(withIntl(await PayGroupDetailPage({ params: Promise.resolve({ id: "g1" }), searchParams: Promise.resolve({}) })));
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });

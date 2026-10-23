@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeIST } from "@/lib/formatters";
 import { useState } from "react";
 import { Button, EmptyState, Field, Input, Modal, ConfirmDialog, StatusPill, RefreshErrorState, useToast } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
@@ -279,7 +280,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
               <tbody>
                 {deliveries.map((d) => (
                   <tr key={d.id}>
-                    <td>{new Date(d.deliveredAt).toLocaleString("en-IN")}</td>
+                    <td>{formatDateTimeIST(new Date(d.deliveredAt))}</td>
                     <td><code style={{ fontSize: 11 }}>{d.eventType}</code></td>
                     <td>{statusCodeBadge(d.statusCode)}</td>
                     {/* GAP-WEBHOOKS-06: use the API's max attempts when present,

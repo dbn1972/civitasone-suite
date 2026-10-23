@@ -11,6 +11,8 @@ import { canWrite } from "@/lib/finance/writeRoles";
 
 /** finance-service TDS return filing is recorded by these roles (tds/filings-routes.ts FINANCE_ROLES). */
 const TDS_FILING_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+/** finance-service tds/routes.ts: POST /v1/finance/vendor-tds/:id/pan/reveal (audited) is open to these roles only. */
+const TDS_PAN_REVEAL_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 
 /**
  * GAP-FINANCE-STATUTORY-TDS-RETURNS-01: this reads the per-deduction vendor TDS
@@ -18,7 +20,8 @@ const TDS_FILING_ROLES = ["finance_officer", "finance_admin", "super_admin"] as 
  * filed returns (Form 26Q per FY + quarter), so it is titled and labelled as
  * deductions. A real returns source needs a product decision (TDS-RETURNS-04).
  */
-export default async function TDSReturnsPage({ searchParams }: { searchParams?: { fy?: string } }) {
+export default async function TDSReturnsPage(props: { searchParams?: Promise<{ fy?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data, source } = await getFinanceTDSReturns();
   // GAP-FINANCE-STATUTORY-TDS-RETURNS-04: the filing register is per FY; ?fy= is validated against
   // the selectable list, never forwarded raw.
@@ -59,7 +62,7 @@ export default async function TDSReturnsPage({ searchParams }: { searchParams?: 
         )}
       </Card>
       <Card title="TDS Deductions">
-        <TDSReturnsTable returns={deductions} source={source === "error" ? "error" : "api"} />
+        <TDSReturnsTable returns={deductions} source={source === "error" ? "error" : "api"} canReveal={canWrite(getSessionRoles(), TDS_PAN_REVEAL_ROLES)} />
       </Card>
     </div>
   );

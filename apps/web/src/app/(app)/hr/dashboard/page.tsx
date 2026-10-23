@@ -11,6 +11,7 @@ import {
 import { getSessionName, getSessionRoles } from "../../../../lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour, formatInIST } from "@/lib/formatters";
+import { payrollDaysLeft } from "./payrollDaysLeft";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { MyKPIStrip } from "./_components/MyKPIStrip";
@@ -81,12 +82,6 @@ type EmpRow = {
 // convention.
 const AVATAR_BG = ["var(--dash-avatar-bg-1)", "var(--dash-avatar-bg-2)", "var(--dash-avatar-bg-3)", "var(--dash-avatar-bg-4)", "var(--dash-avatar-bg-5)", "var(--dash-avatar-bg-6)"];
 const AVATAR_FG = ["var(--dash-avatar-fg-1)", "var(--dash-avatar-fg-2)", "var(--dash-avatar-fg-3)", "var(--dash-avatar-fg-4)", "var(--dash-avatar-fg-5)", "var(--dash-avatar-fg-6)"];
-
-function payrollDaysLeft(): number {
-  const now = new Date();
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return lastDay.getDate() - now.getDate();
-}
 
 function formatToday(): { today: string; dayName: string; monthName: string } {
   const d = new Date();

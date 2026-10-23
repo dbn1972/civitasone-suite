@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { createTranslator } from "next-intl";
+import en from "@/messages/en.json";
+
+// Server component: resolve namespaced keys against the real en messages.
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (ns: string) => createTranslator({ locale: "en", messages: en as never, namespace: ns as never }),
+}));
 
 // Loader mocks — the page fetches the contract, its three child resources and
 // the vendor master in parallel.
@@ -44,20 +51,20 @@ describe("ContractDetailPage error/not-found distinction (GAP-CONTRACTS-DETAIL-0
 
   it("a non-404 failure shows a retryable load error, NOT 'Contract not found'", async () => {
     getContractByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await ContractDetailPage({ params: { id: "c1" } }));
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.queryByText("Contract not found")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /try again|retry/i }).length).toBeGreaterThan(0);
   });
 
   it("a 404 shows the honest 'Contract not found' state", async () => {
     getContractByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await ContractDetailPage({ params: { id: "c1" } }));
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByText("Contract not found")).toBeInTheDocument();
   });
 
   it("a clean null from the API (source=api) is treated as not found", async () => {
     getContractByIdMock.mockResolvedValue({ data: null, source: "api", status: 200 });
-    render(await ContractDetailPage({ params: { id: "c1" } }));
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByText("Contract not found")).toBeInTheDocument();
   });
 });
@@ -75,7 +82,7 @@ describe("ContractDetailPage vendor name + status (GAP-CONTRACTS-DETAIL-04)", ()
       source: "api",
       status: 200,
     });
-    render(await ContractDetailPage({ params: { id: "c1" } }));
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(screen.getByText("Acme Infra Pvt Ltd")).toBeInTheDocument();
     // The full 36-char UUID must not appear anywhere in the DOM.
     expect(screen.queryByText(VENDOR_ID)).not.toBeInTheDocument();
@@ -84,8 +91,37 @@ describe("ContractDetailPage vendor name + status (GAP-CONTRACTS-DETAIL-04)", ()
   it("colours an approved contract with the 'good' StatusPill tone", async () => {
     getContractByIdMock.mockResolvedValue({ data: CONTRACT, source: "api", status: 200 });
     getVendorOptionsMock.mockResolvedValue({ data: [], source: "api", status: 200 });
-    render(await ContractDetailPage({ params: { id: "c1" } }));
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     const pill = screen.getByText("Approved");
     expect(pill.className).toContain("good");
+  });
+});
+
+describe("ContractDetailPage linked PO (GAP-PROCUREMENT-CONTRACTS-05)", () => {
+  const PO_ID = "5b8e1c2a-9d3f-4e6a-8c1b-7a2d4f6e8b90";
+  beforeEach(() => {
+    getContractByIdMock.mockReset();
+    getVendorOptionsMock.mockReset();
+    getVendorOptionsMock.mockResolvedValue({ data: [], source: "api", status: 200 });
+  });
+
+  it("links a PO uuid reference to the purchase order", async () => {
+    getContractByIdMock.mockResolvedValue({ data: { ...CONTRACT, poRef: `procurement_po:${PO_ID}` }, source: "api", status: 200 });
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
+    expect(screen.getByText("Linked PO")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View PO" })).toHaveAttribute("href", `/procurement/orders/${PO_ID}`);
+  });
+
+  it("shows free-text references as typed, without a link", async () => {
+    getContractByIdMock.mockResolvedValue({ data: { ...CONTRACT, poRef: "PO/2026/0042" }, source: "api", status: 200 });
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
+    expect(screen.getByText("PO/2026/0042")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View PO" })).not.toBeInTheDocument();
+  });
+
+  it("omits the Linked PO field when the contract has no PO", async () => {
+    getContractByIdMock.mockResolvedValue({ data: { ...CONTRACT, poRef: null }, source: "api", status: 200 });
+    render(await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) }));
+    expect(screen.queryByText("Linked PO")).not.toBeInTheDocument();
   });
 });

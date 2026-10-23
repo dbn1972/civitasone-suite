@@ -7,6 +7,7 @@
  * (payroll/commands.ts) and return 202; the write happens in the idempotent
  * consumer (payroll/consumer.ts), tenant-scoped via runWithTenant in worker.ts.
  */
+import { minorFromDb, minorToWireNumber, toSafeInt } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
@@ -29,6 +30,20 @@ import { PAY_GROUP_BILL_TYPES, todayIst } from "./pay-group-domain.js";
 import { assertActiveDdo } from "./pay-group-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+/**
+ * Who may CHANGE statutory state rules (LWF employee/employer contribution and
+ * frequency) through POST /v1/payroll/statutory/state-rules. Every change is
+ * audited with its before/after values (payroll consumer, stateRulesUpsert).
+ *
+ * OWNER DECISION PENDING (GAP-PAYROLL-STATUTORY-LWF-01): today this is the
+ * whole payroll staff tier -- payroll_officer included -- which is what the
+ * route has always allowed. The sibling PT-rule writes (pt-versions-routes.ts
+ * PT_ADMIN_ROLES) are payroll_admin + super_admin only. Whether LWF rule
+ * changes should be narrowed to that admin pair too is a policy call this
+ * code does not make: narrowing it removes an existing workflow from officers.
+ * It is a named constant so that decision is a one-line change.
+ */
+export const STATE_RULE_WRITER_ROLES = PAYROLL_ROLES;
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const ALL_ROLES = [...READER_ROLES, "employee"];
 const ALL_STAFF_ROLES = staffRolesOf(ALL_ROLES);
@@ -93,14 +108,15 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
 
     const threshold = 20; // % variance flag threshold
     const results = slips.map((s) => {
-      const netMinor = BigInt(s.net_pay_minor);
+      const netMinor = minorFromDb(s.net_pay_minor);
       const prev = prevMap.get(s.employee_id) ?? 0n;
-      const variance = prev > 0n ? Number((netMinor - prev) * 100n / prev) : 0;
+      // Whole-percent variance (a percentage, not money): exact bigint division, then a safe-int conversion.
+      const variance = prev > 0n ? toSafeInt((netMinor - prev) * 100n / prev) : 0;
       return {
         employeeId: s.employee_id, employeeNo: s.employee_no,
-        grossMinor: Number(s.gross_minor), deductionsMinor: Number(s.total_deductions_minor),
-        netMinor: Number(s.net_pay_minor), tdsMinor: Number(s.tds_minor),
-        previousNetMinor: Number(prev), variancePct: Math.round(variance * 100) / 100,
+        grossMinor: minorToWireNumber(minorFromDb(s.gross_minor)), deductionsMinor: minorToWireNumber(minorFromDb(s.total_deductions_minor)),
+        netMinor: minorToWireNumber(netMinor), tdsMinor: minorToWireNumber(minorFromDb(s.tds_minor)),
+        previousNetMinor: minorToWireNumber(prev), variancePct: Math.round(variance * 100) / 100,
         flagged: Math.abs(variance) > threshold,
       };
     });
@@ -550,10 +566,10 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
 
     const suggestions: Array<{ section: string; headroom: number; suggestion: string }> = [];
     if (remaining80c > 0n) {
-      suggestions.push({ section: "80C", headroom: Number(remaining80c), suggestion: "Invest in PPF/ELSS/NSC/LIC to utilize remaining 80C headroom" });
+      suggestions.push({ section: "80C", headroom: minorToWireNumber(remaining80c), suggestion: "Invest in PPF/ELSS/NSC/LIC to utilize remaining 80C headroom" });
     }
     if (remaining80d > 0n) {
-      suggestions.push({ section: "80D", headroom: Number(remaining80d), suggestion: "Health insurance premium (self/family/parents) can reduce taxable income" });
+      suggestions.push({ section: "80D", headroom: minorToWireNumber(remaining80d), suggestion: "Health insurance premium (self/family/parents) can reduce taxable income" });
     }
     // DOM-034: headroom is the resolved cap itself, not cap-minus-used --
     // payroll_tax_declarations has no section_80ccd_1b (or equivalent)
@@ -566,12 +582,12 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // could silently disagree with a tenant-overridden headroom) -- removed
     // rather than interpolated, matching the 80C/80D suggestion strings
     // above, neither of which embeds a cap figure either.
-    suggestions.push({ section: "80CCD(1B)", headroom: Number(sec80ccd1bCapMinor), suggestion: "Additional NPS (Tier-I) contribution to utilize 80CCD(1B) headroom, deductible beyond 80C" });
+    suggestions.push({ section: "80CCD(1B)", headroom: minorToWireNumber(sec80ccd1bCapMinor), suggestion: "Additional NPS (Tier-I) contribution to utilize 80CCD(1B) headroom, deductible beyond 80C" });
 
     return reply.send({
       employeeId, fy, regime: dec?.regime ?? "new",
-      used80cMinor: Number(used80c), used80dMinor: Number(used80d),
-      remaining80cMinor: Number(remaining80c), remaining80dMinor: Number(remaining80d),
+      used80cMinor: minorToWireNumber(used80c), used80dMinor: minorToWireNumber(used80d),
+      remaining80cMinor: minorToWireNumber(remaining80c), remaining80dMinor: minorToWireNumber(remaining80d),
       suggestions,
     });
   });
@@ -671,7 +687,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 4: Multi-State PT/LWF (CRUD for state rules) ────────────────────
   app.post("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, PAYROLL_ROLES);
+    requireRole(ctx, STATE_RULE_WRITER_ROLES);
     // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated, immutable versions now --
     // they are created through POST /v1/payroll/statutory/pt/versions, never overwritten
     // here. Refuse loudly rather than silently dropping them.

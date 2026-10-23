@@ -12,19 +12,26 @@ import {
   recoveryReferralListQuery,
   createWaiverBody,
   waiverDecideBody,
+    listWaiversQuery,
   listWriteOffsQuery,
 } from "./validators.js";
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
 
 export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
-  app.setErrorHandler((error, _req, reply) => {
+  app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
       return reply.code(400).send({ error: { code: "VALIDATION_FAILED", message: error.message } });
     }
     if (error instanceof HttpError) {
       return reply.code(error.status).send({ error: { code: error.code, message: error.message } });
     }
+    // Fastify-native 4xx (malformed JSON, 413, 415, 429 ...) are client errors, not 500s. Generic message only.
+    const sc = (error as { statusCode?: number }).statusCode;
+    if (typeof sc === "number" && sc >= 400 && sc < 500) {
+      return reply.code(sc).send({ error: { code: "BAD_REQUEST", message: "bad request" } });
+    }
+    req.log.error({ err: error }, "unhandled error");
     return reply.code(500).send({ error: { code: "INTERNAL", message: "internal server error" } });
   });
 
@@ -171,6 +178,30 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     const body = createWaiverBody.parse(req.body);
     return reply.code(202).send({ data: await commands.createWaiver(ctx, body as unknown as Record<string, unknown>) });
   });
+
+  // ── GET /v1/revenue/waivers ─────────────────────────────────────────────────
+  // Tenant-scoped, paginated list so a checker can DISCOVER pending waivers
+  // (?status=pending) instead of pasting a UUID from the maker. Role-guarded
+  // like every other arrears route. Declared before /waivers/:id.
+
+  app.get(
+    "/v1/revenue/waivers",
+    { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, REVENUE_ROLES);
+      const q = listWaiversQuery.parse(req.query);
+      const { rows, total } = await repo.listWaivers(ctx.tenantId, {
+        ...(q.status ? { status: q.status } : {}),
+        limit: q.limit,
+        offset: q.offset,
+      });
+      return reply.send({
+        data: rows,
+        meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+      });
+    },
+  );
 
   // ── GET /v1/revenue/waivers/:id ─────────────────────────────────────────────
   // GAP-REVENUE-WAIVERS-03: tenant-scoped single-record fetch so the

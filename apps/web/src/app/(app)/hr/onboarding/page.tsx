@@ -81,11 +81,12 @@ function parseStepsCompleted(value: string | number): number {
 // WCAG 2.4.2 (Page Titled): without this the tab title fell back to the generic app name.
 export const metadata = { title: "Onboarding Tracker — CivitasOne HRMS" };
 
-export default async function OnboardingPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string>;
-}) {
+export default async function OnboardingPage(
+  props: {
+    searchParams?: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("onboarding");
   const statusFilter: StatusFilter = isStatusFilter(searchParams?.status) ? (searchParams!.status as StatusFilter) : "active";
   const page = Math.max(0, parseInt(searchParams?.page ?? "0", 10) || 0);

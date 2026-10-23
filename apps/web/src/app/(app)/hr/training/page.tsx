@@ -19,11 +19,12 @@ const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function TrainingPage({
-  searchParams,
-}: {
-  searchParams?: { created?: string | string[] };
-}) {
+export default async function TrainingPage(
+  props: {
+    searchParams?: Promise<{ created?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("training");
   const { data: programs, source } = await getTrainingPrograms();
   const roles = getSessionRoles();

@@ -12,7 +12,8 @@ function formatTrailTimestamp(ts: string | null | undefined): string {
   return formatIndianDateTime(ts);
 }
 
-export default async function SanctionDetailPage({ params }: { params: { id: string } }) {
+export default async function SanctionDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceSanctionById(params.id);
   const { data: sanction, source, status } = result;
 
@@ -53,7 +54,6 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         <a href="/finance/budget/sanctions">Sanctions</a> <span aria-hidden="true">›</span>{" "}
         <span aria-current="page">{sanction.sanctionNo}</span>
       </nav>
-
       <PageHeader
         title={sanction.sanctionNo}
         subtitle={sanction.subject}
@@ -62,14 +62,12 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
           <StatusPill status={sanction.status} />
         }
       />
-
       <StatGrid>
         <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(sanction.amount)} />
         <StatCard icon="📋" tone="info" label="Status" value={sanction.status.replace(/_/g, " ")} />
         <StatCard icon="👤" tone="neutral" label="Sanctioned By" value={sanction.sanctionedBy} />
         <StatCard icon="📅" tone="warn" label="Date" value={formatIndianDate(sanction.date)} />
       </StatGrid>
-
       <Card title="Sanction details" padding>
         <div className="fields">
           <div className="field"><span className="label">Sanction No</span><span className="mono">{sanction.sanctionNo}</span></div>
@@ -86,7 +84,6 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
           )}
         </div>
       </Card>
-
       <SanctionApprovalPanel
         id={params.id}
         isPending={isPending}
@@ -100,7 +97,6 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         classification="confidential"
         notifyPath={`/api/proxy/v1/finance/sanctions/${params.id}/submit-approval`}
       />
-
       {sanction.lineItems.length > 0 && (
         <Card title="Line items">
           <SanctionLineItemsTable
@@ -108,7 +104,6 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
           />
         </Card>
       )}
-
       {sanction.approvalTrail.length > 0 && (
         <Card title="Approval trail" padding>
           <ol className="tl">

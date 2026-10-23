@@ -10,7 +10,8 @@ import { AmendForm } from "./AmendForm";
 // (amendment-domain.ts): approved / dispatched / partial_grn / gem_placed.
 const AMENDABLE_STATUSES = new Set(["approved", "dispatched", "partial_grn", "gem_placed"]);
 
-export default async function POAmendPage({ params }: { params: { id: string } }) {
+export default async function POAmendPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: po, source } = await getProcurementPOById(params.id);
 
   if (!po) {

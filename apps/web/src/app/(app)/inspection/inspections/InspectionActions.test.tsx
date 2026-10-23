@@ -1,9 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The reviewer hand-off dialog is translated client-side, so every render needs a provider.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: refreshMock }),
+}));
+
+vi.mock("@/lib/directory/searchUsers", () => ({
+  searchDirectoryUsers: vi.fn(async () => [{ id: "99999999-2222-4333-8444-555555555555", label: "Rita Reviewer" }]),
+  resolveDirectoryUsers: vi.fn(async () => []),
 }));
 
 import { InspectionRowAction } from "./InspectionActions";
@@ -134,5 +146,30 @@ describe("InspectionRowAction", () => {
 
     rerender(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="in_progress" />);
     expect(screen.queryByText(/status will update shortly/i)).not.toBeInTheDocument();
+  });
+
+  it("Submit review POSTs { reviewerId } to /submit-review (never /transition) once a reviewer is chosen", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="completed" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit review" }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirmBtn = within(dialog).getByRole("button", { name: "Submit review" });
+    expect(confirmBtn).toBeDisabled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "Rita" } });
+    fireEvent.mouseDown(await within(dialog).findByText("Rita Reviewer"));
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument());
+    expect(fetchSpy.mock.calls[0]![0]).toContain("/inspections/11111111-2222-4333-8444-555555555555/submit-review");
+    expect(fetchSpy.mock.calls[0]![0]).not.toContain("/transition");
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      reviewerId: "99999999-2222-4333-8444-555555555555",
+    });
   });
 });

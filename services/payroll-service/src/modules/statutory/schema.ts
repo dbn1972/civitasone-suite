@@ -105,6 +105,9 @@ export const payrollNps = statutorySchema.table("payroll_nps", {
   employeeId:       uuid("employee_id").notNull(),
   runId:            uuid("run_id").notNull(),
   basicMinor:       bigint("basic_minor", { mode: "bigint" }).notNull().default(0n),
+  // 0159 (GAP-PAYROLL-STATUTORY-NPS-05): the base the percentages below were applied to
+  // (Basic + DA, or the FR 53 suspension-adjusted base). NULL on rows written before 0159.
+  pensionBaseMinor: bigint("pension_base_minor", { mode: "bigint" }),
   empContribPct:    numeric("emp_contrib_pct", { precision: 5, scale: 2 }).notNull().default("10"),
   erContribPct:     numeric("er_contrib_pct", { precision: 5, scale: 2 }).notNull().default("14"),
   empContribMinor:  bigint("emp_contrib_minor", { mode: "bigint" }).notNull().default(0n),

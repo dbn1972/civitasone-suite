@@ -22,7 +22,8 @@ const WAREHOUSE_COLUMNS = (t: (k: string) => string) => [
  * so the two masters read as ONE item. An unlinked item says so plainly and, for admins, offers the
  * exact-code suggestion or a manual link.
  */
-export default async function InventoryItemDetailPage({ params }: { params: { id: string } }) {
+export default async function InventoryItemDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("inventoryLink");
   const [itemRes, linkRes] = await Promise.all([getInventoryItemDetail(params.id), getItemStockLink(params.id)]);
 

@@ -17,7 +17,13 @@ export const stageViewSchema = z.object({
   stepNumber: z.number().int(),
   description: z.string().nullable(),
   status: z.string(),
+  isRequired: z.boolean().optional(),
+  completedAt: z.string().nullable().optional(),
+  errorMessage: z.string().nullable().optional(),
   version: z.number().int(),
 });
 
 export const stagesListSchema = paginatedSchema(stageViewSchema);
+
+/** Step lifecycle verbs accepted by PATCH /v1/install/steps/:id/:verb. */
+export const stepVerbParam = idParam.extend({ verb: z.enum(["run", "skip", "retry"]) });

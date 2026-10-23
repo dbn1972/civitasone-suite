@@ -118,8 +118,15 @@ export async function documentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey is not in this tenant's namespace");
     }
 
-    if (requireObjectOnConfirm() && !(await objectExists(b.storageKey))) {
-      throw new HttpError(422, "OBJECT_NOT_FOUND", "no uploaded object at storageKey");
+    if (requireObjectOnConfirm()) {
+      let exists: boolean;
+      try {
+        exists = await objectExists(b.storageKey);
+      } catch {
+        // CLOS2-S6-06: could not tell (403/timeout/5xx) is not "missing".
+        throw new HttpError(503, "STORAGE_UNAVAILABLE", "document storage could not be checked right now");
+      }
+      if (!exists) throw new HttpError(422, "OBJECT_NOT_FOUND", "no uploaded object at storageKey");
     }
 
     // If superseding, the prior document must exist for this tenant + same subject.

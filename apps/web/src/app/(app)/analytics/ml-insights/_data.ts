@@ -6,16 +6,22 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 // --- Types ---
 
+/**
+ * One row of GET /v1/ml/evaluations -> { data: { domains: [...] } }. These are the
+ * ONLY per-domain fields ml-service emits (evaluations/routes.ts): domain,
+ * totalPredictions, avgConfidence, fallbackRate. There is no model version,
+ * training date, top factor or true accuracy/AUC/MAPE, so none is modelled here.
+ */
 export type MLDomainSummary = {
   domain: string;
   totalPredictions: number;
-  /** Nullable: a genuine 0 is distinct from "no value reported" (shows "—"). */
-  accuracy: number | null;
+  /**
+   * Mean prediction CONFIDENCE (0..1) — NOT accuracy/AUC-ROC/precision/MAPE.
+   * Nullable: a genuine 0 is distinct from "no value reported" (shows "—").
+   */
+  avgConfidence: number | null;
   /** Nullable: a genuine 0% fallback (the ideal) is distinct from missing. */
   fallbackRate: number | null;
-  topFactor: string;
-  modelVersion: number | null;
-  lastTrainedAt: string | null;
 };
 
 export type MLDomainEvaluation = {
@@ -90,18 +96,14 @@ export async function getMLDomainOverview(): Promise<LoaderResult<MLDomainSummar
       telemetryKey: "ml_insights.overview",
       mapResponse: (payload) => {
         if (!isRecord(payload)) return [];
-        const domains = Array.isArray(payload.data) ? payload.data : Array.isArray(payload.domains) ? payload.domains : [];
+        // Real shape: { data: { window, totalPredictions, ..., domains: [...] } }.
+        const data = isRecord(payload.data) ? payload.data : payload;
+        const domains = Array.isArray(data.domains) ? data.domains : [];
         return domains.filter(isRecord).map((d) => ({
           domain: String(d.domain ?? "unknown"),
           totalPredictions: toNumber(d.totalPredictions),
-          // The ms-service evaluations endpoint reports the headline quality
-          // as `avgConfidence`; accept an explicit `accuracy` first if a
-          // future payload sends one. Nullable so a missing value shows "—".
-          accuracy: toNullableNumber(d.accuracy ?? d.avgConfidence),
+          avgConfidence: toNullableNumber(d.avgConfidence),
           fallbackRate: toNullableNumber(d.fallbackRate),
-          topFactor: String(d.topFactor ?? "—"),
-          modelVersion: typeof d.modelVersion === "number" ? d.modelVersion : null,
-          lastTrainedAt: toText(d.lastTrainedAt),
         }));
       },
     },

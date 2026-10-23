@@ -61,6 +61,28 @@ describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
   });
 });
 
+describe("UsersTable (InviteUserDialog) — CLOS2-S3-06 network failure", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockSearch = "";
+  });
+
+  it("shows catalogued connection copy, never the raw 'Failed to fetch', when offline", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    renderWithToast(<UsersTable users={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Invite User" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Full name/i), { target: { value: "Asha Verma" } });
+    fireEvent.change(within(dialog).getByLabelText(/^Email/i), { target: { value: "asha@gov.in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send invite" }));
+
+    await waitFor(() => expect(dialog.textContent).toMatch(/couldn.t connect/i));
+    expect(dialog.textContent).not.toContain("Failed to fetch");
+  });
+});
+
 describe("UsersTable — duplicate invite (GAP-TENANT-ADMIN-USERS-07)", () => {
   beforeEach(() => { vi.restoreAllMocks(); mockSearch = ""; });
 

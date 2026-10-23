@@ -11,10 +11,11 @@ import { countInProgress } from "../_data/records";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { serviceKey: string };
+  params: Promise<{ serviceKey: string }>;
 };
 
-export default async function MunicipalServiceHomePage({ params }: Props) {
+export default async function MunicipalServiceHomePage(props: Props) {
+  const params = await props.params;
   const config = getMunicipalService(params.serviceKey);
   if (!config) notFound();
 

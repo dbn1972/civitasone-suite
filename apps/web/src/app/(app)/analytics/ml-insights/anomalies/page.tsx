@@ -21,7 +21,6 @@ export default async function AnomaliesInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Transactions Scored",
-        accuracy: "Precision",
         // Backend `fallbackRate` is the rule-based fallback share, NOT a false
         // positive rate — relabelled honestly. GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-06.
         fallbackRate: "Fallback Rate",

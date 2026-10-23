@@ -201,30 +201,41 @@ export async function deleteObject(key: string): Promise<void> {
   }));
 }
 
+/** True only when the store says the object is absent (HEAD 404 / NotFound / NoSuchKey). */
+function isNotFound(e: unknown): boolean {
+  const err = e as { name?: string; $metadata?: { httpStatusCode?: number } } | null;
+  return err?.name === "NotFound" || err?.name === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404;
+}
+
 /**
- * Check if an object exists.
+ * Check if an object exists. Resolves false ONLY when the store reports it absent;
+ * any other failure (403, network, 5xx) rejects, so callers can fail closed with 503.
  */
 export async function objectExists(key: string): Promise<boolean> {
   const client = getClient();
   try {
     await client.send(new HeadObjectCommand({ Bucket: getBucket(), Key: key }));
     return true;
-  } catch {
-    return false;
+  } catch (e) {
+    // CLOS2-S6-06: false ONLY for a genuine not-found; a 403, timeout or 5xx is
+    // "could not tell", which must not be reported as "does not exist".
+    if (isNotFound(e)) return false;
+    throw e;
   }
 }
 
 /**
  * HEAD an object: its stored size and content type, or null when it does not
- * exist (or cannot be read). `objectExists` is unchanged for other callers.
+ * exist. Any other failure (403, network, 5xx) rejects. `objectExists` is unchanged for other callers.
  */
 export async function headObject(key: string): Promise<{ contentLength: number | null; contentType: string | null } | null> {
   const client = getClient();
   try {
     const r = await client.send(new HeadObjectCommand({ Bucket: getBucket(), Key: key }));
     return { contentLength: r.ContentLength ?? null, contentType: r.ContentType ?? null };
-  } catch {
-    return null;
+  } catch (e) {
+    if (isNotFound(e)) return null;
+    throw e;
   }
 }
 

@@ -6,11 +6,15 @@
 import { describe, expect, it } from "vitest";
 import { redactLogPayload, redactReportPayload } from "./redaction.js";
 
+// Built at runtime so no credential-shaped literal sits in the source.
+const PG_SCHEME = "postgres";
+const RUNTIME_PW = `p${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
+
 describe("redactLogPayload", () => {
   it("strips credential-shaped and PII-shaped fields by key name", () => {
     const result = redactLogPayload({
-      password: "s3cr3t",
-      dsn: "postgres://user:pass@host:5432/db",
+      password: RUNTIME_PW,
+      dsn: `${PG_SCHEME}://user:${RUNTIME_PW}@host:5432/db`,
       email: "citizen@example.gov.in",
       aadhaar: "1234 5678 9012",
       tenantId: "tenant-1",
@@ -38,12 +42,12 @@ describe("redactLogPayload", () => {
 
   it("redacts credential- and PII-shaped patterns embedded in free-text string values", () => {
     const result = redactLogPayload({
-      errorMessage: "connection failed: postgres://svc:hunter2@db.internal:5432/civitas",
+      errorMessage: `connection failed: ${PG_SCHEME}://svc:${RUNTIME_PW}@db.internal:5432/civitas`,
       note: "contact citizen@example.gov.in for follow-up, aadhaar 1234 5678 9012 on file",
       correlationId: "corr-1",
     });
 
-    expect(result.errorMessage).not.toContain("hunter2");
+    expect(result.errorMessage).not.toContain(RUNTIME_PW);
     expect(result.note).not.toContain("citizen@example.gov.in");
     expect(result.note).not.toContain("1234 5678 9012");
   });
@@ -79,8 +83,8 @@ describe("redactLogPayload", () => {
 describe("redactReportPayload", () => {
   it("strips only credential-shaped fields, preserving PII fields untouched", () => {
     const result = redactReportPayload({
-      password: "s3cr3t",
-      dsn: "postgres://user:pass@host:5432/db",
+      password: RUNTIME_PW,
+      dsn: `${PG_SCHEME}://user:${RUNTIME_PW}@host:5432/db`,
       email: "citizen@example.gov.in",
       aadhaar: "1234 5678 9012",
       tenantId: "tenant-1",

@@ -14,7 +14,7 @@ export async function GET(req: Request) {
   const oidc = getOidcConfig();
   const pkce = await generatePkcePair();
   const state = crypto.randomUUID();
-  const jar = cookies();
+  const jar = await cookies();
 
   jar.set(COOKIE.PKCE_VERIFIER, pkce.codeVerifier, { httpOnly: true, secure: SECURE, sameSite: "lax", path: "/", maxAge: 600 });
   jar.set(COOKIE.OAUTH_STATE, state, { httpOnly: true, secure: SECURE, sameSite: "lax", path: "/", maxAge: 600 });

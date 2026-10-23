@@ -71,8 +71,10 @@ const MODULE_ICONS: Record<string, string> = {
   payroll_run: "💸",
 };
 
-function formatRelativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
+export function formatRelativeTime(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const diff = Date.now() - t;
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;

@@ -174,6 +174,33 @@ export function isValidRecipientToken(token: string): boolean {
   return /[0-9._-]/.test(t) || t.length >= 8;
 }
 
+const CONTACT_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** True when `token` is a CRM contact id (a UUID). */
+export function isContactId(token: string): boolean {
+  return CONTACT_ID_RE.test(token.trim());
+}
+
+/**
+ * Validate campaign recipients. A campaign is a marketing send: notification-service
+ * stores each recipient as a CRM *contact id*, and the marketing-consent check
+ * (crm-consent-client) only looks up UUIDs in crm-service -- an email, phone or
+ * free-form handle never resolves, so the campaign would be created and then
+ * never send. CRM keeps contact email/phone encrypted (email is matchable only
+ * through a blind index, phone not at all), so they cannot be resolved to ids
+ * server-side either. The form therefore accepts contact ids only (picked from
+ * the CRM contact lookup). `invalid` is every non-id token, in input order.
+ */
+export function validateContactRecipients(
+  tokens: readonly string[],
+  limit = CAMPAIGN_RECIPIENT_LIMIT,
+): RecipientValidation {
+  return {
+    invalid: tokens.filter((t) => !isContactId(t)),
+    overLimit: tokens.length > limit,
+  };
+}
+
 /** Max recipients a single campaign may be created with from the form. */
 export const CAMPAIGN_RECIPIENT_LIMIT = 1000;
 

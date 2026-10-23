@@ -41,4 +41,17 @@ describe("GAP-TENANT-ADMIN-INSTALL-05 — steps are a 1:1 view of stages", () =>
     expect(stageToStep({ id: "x", stepNumber: 1, name: "n", description: null, status: "pending" }).description).toBeUndefined();
     expect(stageToStep({ id: "x", stepNumber: 1, name: "n", description: "d", status: "pending" }).description).toBe("d");
   });
+
+  it("reports a failed stage as failed with its errorMessage (was collapsed to pending)", () => {
+    const step = stageToStep({ id: "f", stepNumber: 2, name: "n", status: "failed", errorMessage: "boom", completedAt: null });
+    expect(step.status).toBe("failed");
+    expect(step.errorMessage).toBe("boom");
+    expect(step.completedAt).toBeUndefined();
+  });
+
+  it("passes completedAt and isRequired through", () => {
+    const step = stageToStep({ id: "c", stepNumber: 1, name: "n", status: "completed", completedAt: "2026-10-01T00:00:00.000Z", isRequired: false });
+    expect(step.completedAt).toBe("2026-10-01T00:00:00.000Z");
+    expect(step.isRequired).toBe(false);
+  });
 });

@@ -9,9 +9,12 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { salarySlipStatusLabel, isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
+import { slipBackTarget } from "./_backTarget";
 
-export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
+export default async function PayslipDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("salarySlipDashboard");
+  const tNav = await getTranslations("payrollRouteError");
   const roles = getSessionRoles();
   // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
   // employee got "Access restricted" on their OWN payslip -- there was no
@@ -21,14 +24,15 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   // to stop blocking a plain employee before that check ever runs, and
   // handle the 403 it can now legitimately get back for someone else's slip.
   const canAttempt = roles.some((r) => SALARY_ADMIN_ROLES.includes(r)) || roles.includes("employee");
-  const isAdmin = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
-  // GAP-PAYROLL-SLIPS-DETAIL-06: the list this page's own back-link pointed
-  // to (/hr/payroll/salary-slips) is admin-only -- an employee following it
-  // would land on a 403, even though THIS detail page admits them. There is
-  // no self-service "my payslips" list yet (GAP-PAYROLL-SALARY-SLIPS-04), so
-  // /hr/payroll is the one back-target every role here can actually open.
-  const backHref = isAdmin ? "/hr/payroll/salary-slips" : "/hr/payroll";
-  const backLabel = isAdmin ? "Back to Salary Slips" : "Back to Payroll";
+  // GAP-PAYROLL-SLIPS-DETAIL-06: the list this page's own back-link used to point
+  // to (/hr/payroll/salary-slips) is admin-only, and /hr/payroll (the previous
+  // employee fallback) is READER_ROLES-only -- an employee following either
+  // landed on "Access restricted". slipBackTarget() sends admins to the org-wide
+  // list and everyone else to "My payslips" (which they may open); the route
+  // error boundary (error.tsx) uses the same function.
+  const back = slipBackTarget(roles);
+  const backHref: string = back.href;
+  const backLabel = tNav(back.labelKey);
 
   if (!canAttempt) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
@@ -173,7 +177,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
           </div>
           <div className="field">
             <span className="lbl">{t("fieldDepartment")}</span>
-            <span className="val">{slip.department ?? "—"}</span>
+            <span className="val">{slip.department?.trim() || "—"}</span>
           </div>
           <div className="field">
             <span className="lbl">{t("fieldPayPeriod")}</span>

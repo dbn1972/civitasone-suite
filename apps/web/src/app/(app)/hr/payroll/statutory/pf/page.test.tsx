@@ -104,12 +104,12 @@ describe("PfStatutoryPage", () => {
 
   it("GAP-PAYROLL-STATUTORY-PF-03: forwards a valid ?period= to the summary and drops a malformed one", async () => {
     mockLedger(summary({ period: "2026-07" }), [row({ period: "2026-07" })]);
-    renderPage(await PfStatutoryPage({ searchParams: { period: "2026-07" } }));
+    renderPage(await PfStatutoryPage({ searchParams: Promise.resolve({ period: "2026-07" }) }));
     expect(String(fetchJsonMock.mock.calls[0][0])).toBe("/api/v1/payroll/statutory/pf/summary?period=2026-07");
     expect(screen.getByText("Total PF contribution (EPF + EPS) — 2026-07")).toBeInTheDocument();
 
     fetchJsonMock.mockClear();
-    renderPage(await PfStatutoryPage({ searchParams: { period: "2026-13" } }));
+    renderPage(await PfStatutoryPage({ searchParams: Promise.resolve({ period: "2026-13" }) }));
     expect(String(fetchJsonMock.mock.calls[0][0])).toBe("/api/v1/payroll/statutory/pf/summary");
   });
 

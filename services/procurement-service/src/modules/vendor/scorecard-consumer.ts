@@ -147,8 +147,9 @@ async function recordAndRecompute(
   // Serialize recompute per (tenant, vendor) so concurrent event handlers each
   // observe prior committed events — the tally + upsert would otherwise race on
   // a stale snapshot. Transaction-scoped: released automatically at commit.
+  const lockKey = `${args.tenantId}:${args.vendorId}`;
   await (tx as unknown as typeof db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${args.tenantId + ":" + args.vendorId}, 0))`,
+    sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`,
   );
   if (args.eventType) {
     await repo.insertPerfEvent(tx, {

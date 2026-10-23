@@ -3,7 +3,8 @@ import { PageHeader } from "../../../../../_components/ds";
 import { EditOpportunityClient } from "./EditOpportunityClient";
 
 /** OP-003 — edit an existing opportunity (GAP-CRM-OPPORTUNITIES-06). */
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("crm.editOpportunity");
   return (
     <>

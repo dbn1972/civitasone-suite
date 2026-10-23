@@ -68,7 +68,8 @@ async function getOvertimeRequests(offset: number): Promise<LoaderResult<Overtim
   );
 }
 
-export default async function OvertimePage({ searchParams }: { searchParams?: { offset?: string } }) {
+export default async function OvertimePage(props: { searchParams?: Promise<{ offset?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("overtime");
   const roles = getSessionRoles();
   const canDecide = roles.some((r) => OVERTIME_DECIDE_ROLES.includes(r));
@@ -120,12 +121,12 @@ export default async function OvertimePage({ searchParams }: { searchParams?: { 
           <RefreshErrorState error={toHumanError("load", { area: "overtime requests" })} backHref="/hr" />
         ) : requests.length === 0 && total > 0 ? (
           // A page past the end (stale link / list shrank): not "no requests".
-          <EmptyState
+          (<EmptyState
             icon="⏱️"
             title={t("pageEmptyTitle")}
             message={t("pageEmptyMessage")}
             action={<Link href="/hr/overtime" className="btn primary">{t("backToFirstPage")}</Link>}
-          />
+          />)
         ) : requests.length === 0 ? (
           <EmptyState
             icon="⏱️"

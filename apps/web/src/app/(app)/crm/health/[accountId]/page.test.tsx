@@ -59,7 +59,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getBreakdownMock.mockResolvedValue({ data: breakdown(), source: "api" });
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel Ltd")], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(withIntl(ui));
 
     expect(screen.getByRole("heading", { name: "Bharat Steel Ltd" })).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getBreakdownMock.mockResolvedValue({ data: breakdown(), source: "api" });
     getAccountsMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(withIntl(ui));
 
     expect(screen.getByRole("heading", { name: /Account health · 11111111/ })).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getBreakdownMock.mockResolvedValue({ data: null, source: "error", status: 500 });
     getAccountsMock.mockResolvedValue({ data: [], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(ui);
 
     expect(screen.queryByText(/has not been scored/i)).not.toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getBreakdownMock.mockResolvedValue({ data: null, source: "error", status: 404 });
     getAccountsMock.mockResolvedValue({ data: [], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(ui);
 
     expect(screen.getByText("No health score yet")).toBeInTheDocument();
@@ -120,7 +120,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     });
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(ui);
 
     expect(screen.getByText(/\+18 pts/)).toBeInTheDocument();
@@ -143,7 +143,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     });
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(ui);
 
     expect(screen.getByText("72 out of 100")).toBeInTheDocument();
@@ -158,8 +158,8 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel Ltd")], source: "api" });
 
     const ui = await AccountHealthDetailPage({
-      params: { accountId: ACCOUNT_ID },
-      searchParams: { followUp: "1" },
+      params: Promise.resolve({ accountId: ACCOUNT_ID }),
+      searchParams: Promise.resolve({ followUp: "1" }),
     });
     render(ui);
 
@@ -172,7 +172,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     getBreakdownMock.mockResolvedValue({ data: breakdown(), source: "api" });
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel Ltd")], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     render(ui);
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -187,7 +187,7 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     });
     getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
 
-    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    const ui = await AccountHealthDetailPage({ params: Promise.resolve({ accountId: ACCOUNT_ID }) });
     const { container } = render(ui);
 
     expect(screen.getByText("Score Recomputed From Signals")).toBeInTheDocument();

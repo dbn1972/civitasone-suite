@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -141,7 +142,7 @@ export function PaymentPanel({
                 const body = await res.json() as { applicationId: string };
                 setApplicationId(body.applicationId ?? "");
               } catch (e) {
-                setResolveError(e instanceof Error ? e.message : t("resolveError"));
+                setResolveError(e instanceof UserFacingError ? e.message : t("resolveError"));
               } finally {
                 setResolving(false);
               }

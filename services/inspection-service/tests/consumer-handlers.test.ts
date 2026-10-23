@@ -554,6 +554,25 @@ describe("Execution consumers", () => {
     expect(isNonRetryable(caught)).toBe(false);
   });
 
+  it("generic transition to under_review/finalized is refused with the target in the message", async () => {
+    const { findInspectionByIdTx } = await import("../src/modules/execution/repo.js");
+    const { isNonRetryable } = await import("@civitasone/queue");
+    const handler = handlers.get("inspection.inspection.transition");
+    for (const [target, cmd] of [["under_review", "submit-review"], ["finalized", "finalize"]] as const) {
+      (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        id: "insp-1", state: "completed", version: 1, tenantId: TENANT_ID,
+      });
+      let caught: unknown;
+      try {
+        await handler!(makeMsg("inspection.inspection.transition", { inspectionId: "insp-1", targetState: target }));
+      } catch (e) {
+        caught = e;
+      }
+      expect((caught as Error).message).toBe(`Cannot transition to ${target} via generic transition; use ${cmd}`);
+      expect(isNonRetryable(caught)).toBe(true);
+    }
+  });
+
   it("handles inspectionSubmitReview", async () => {
     const { findInspectionByIdTx } = await import("../src/modules/execution/repo.js");
     (findInspectionByIdTx as ReturnType<typeof vi.fn>).mockResolvedValueOnce({

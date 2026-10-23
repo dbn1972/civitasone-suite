@@ -1,3 +1,4 @@
+import { minorToRupees, minorToWireNumber } from "../../shared/money.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
@@ -85,17 +86,17 @@ export async function getSlip(id: string, tenantId: string) {
     // list view. Provide both rather than picking one and leaving the
     // other page broken; the two frontend surfaces should eventually be
     // consolidated onto one shape (see PR notes).
-    netMinor: Number(row.netPayMinor),
-    net: Number(row.netPayMinor),
+    netMinor: minorToWireNumber(row.netPayMinor),
+    net: minorToWireNumber(row.netPayMinor),
     // netPayMinor itself (the raw DB column name) stays in the spread above
     // purely because nothing downstream reads it by that name -- converted
     // here too so a stray unconverted bigint never rides along under it.
-    netPayMinor: Number(row.netPayMinor),
-    grossMinor: Number(row.grossMinor),
-    gross: Number(row.grossMinor),
-    basicMinor: Number(row.basicMinor),
-    totalDeductionsMinor: Number(row.totalDeductionsMinor),
-    deductions: Number(row.totalDeductionsMinor),
+    netPayMinor: minorToWireNumber(row.netPayMinor),
+    grossMinor: minorToWireNumber(row.grossMinor),
+    gross: minorToWireNumber(row.grossMinor),
+    basicMinor: minorToWireNumber(row.basicMinor),
+    totalDeductionsMinor: minorToWireNumber(row.totalDeductionsMinor),
+    deductions: minorToWireNumber(row.totalDeductionsMinor),
     // Pre-existing bug, found while adding this function's enrichment: these
     // seven columns are drizzle bigint-mode (real JS `bigint`s on `row`) and
     // were never converted like basicMinor/grossMinor/etc. above. Over HTTP
@@ -107,13 +108,13 @@ export async function getSlip(id: string, tenantId: string) {
     // cache serializes bigint -> string), and any in-process caller that
     // JSON.stringify()s a cold-cache result throws outright. Converting here
     // makes the shape numeric on every path, like the fields above.
-    pfEmployeeMinor: Number(row.pfEmployeeMinor),
-    pfEmployerMinor: Number(row.pfEmployerMinor),
-    gpfMinor: Number(row.gpfMinor),
-    npsEmployeeMinor: Number(row.npsEmployeeMinor),
-    npsEmployerMinor: Number(row.npsEmployerMinor),
-    esiMinor: Number(row.esiMinor),
-    tdsMinor: Number(row.tdsMinor),
+    pfEmployeeMinor: minorToWireNumber(row.pfEmployeeMinor),
+    pfEmployerMinor: minorToWireNumber(row.pfEmployerMinor),
+    gpfMinor: minorToWireNumber(row.gpfMinor),
+    npsEmployeeMinor: minorToWireNumber(row.npsEmployeeMinor),
+    npsEmployerMinor: minorToWireNumber(row.npsEmployerMinor),
+    esiMinor: minorToWireNumber(row.esiMinor),
+    tdsMinor: minorToWireNumber(row.tdsMinor),
   };
 }
 
@@ -162,15 +163,21 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
       runDate: new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
       payPeriod: r.month,
       employeeCount: agg.employeeCount,
-      grossAmount: Number(agg.grossMinor) / 100,
-      netAmount: Number(agg.netMinor) / 100,
-      deductions: Math.max(0, Number(agg.grossMinor - agg.netMinor) / 100),
+      grossAmount: minorToRupees(agg.grossMinor),
+      netAmount: minorToRupees(agg.netMinor),
+      deductions: Math.max(0, minorToRupees(agg.grossMinor - agg.netMinor)),
       // GAP-PAYROLL-DISBURSEMENT-08: the authoritative integer-paise totals
       // (strings, bigint-safe) next to the rupee numbers above, so money
       // screens can render with formatMoney instead of re-deriving paise
       // from a float. Additive: the rupee fields are unchanged.
       ...minorTotals(agg.grossMinor, agg.netMinor),
       status: mapRunStatus(r.status),
+      // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+      // arrears | pensioner). Supplementary / arrears / pensioner runs coexist
+      // with the regular run of the same month and re-pay (or add) employees, so
+      // a headcount summed over the list must be able to tell them apart.
+      // Additive: nothing else on the row changes.
+      runType: r.runType,
       // payroll-critical fix: surface why, for a failed run, alongside the
       // now-distinct 'failed' status above (migration 0046). null for every
       // other status and for a failed run that predates this column.
@@ -204,31 +211,43 @@ export async function getRunDetail(id: string, tenantId: string) {
     runDate: new Date(run.createdAt as unknown as string).toISOString().slice(0, 10),
     payPeriod: run.month,
     employeeCount: runSlips.length,
-    grossAmount: Number(grossMinor) / 100,
-    netAmount: Number(netMinor) / 100,
-    deductions: Math.max(0, Number(grossMinor - netMinor) / 100),
+    grossAmount: minorToRupees(grossMinor),
+    netAmount: minorToRupees(netMinor),
+    deductions: Math.max(0, minorToRupees(grossMinor - netMinor)),
     ...minorTotals(grossMinor, netMinor),
     status: mapRunStatus(run.status),
     // payroll-critical fix: see the matching field in listRuns above.
     failureReason: run.status === "failed" ? (run.lastError ?? null) : null,
-    // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
-    // already rupees (/100 of the minor-unit column), and the frontend's
-    // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
-    // slip fields with formatRupees(), not formatMoney() — i.e. it already
-    // expects rupees here too. The old `Number(s.grossMinor)` (raw paise, no
-    // /100) was a 100x mismatch against both the sibling run-level fields in
-    // this same response and what the frontend actually does with the value.
+    // GAP-PAYROLL-DETAIL-02: who made and who checked this run (user ids, no
+    // names/PII), so the web tier can disable Approve for the maker and
+    // Disburse for the approver with an explanation instead of letting them
+    // click into a guaranteed 403. approvedBy is null until the run is approved.
+    createdBy: run.createdBy,
+    approvedBy: run.approvedBy ?? null,
+    // The rupee fields on each slip below (gross/deductions/net) are the legacy
+    // wire shape: RUPEES (/100 of the minor-unit column), consistent with the
+    // sibling run-level grossAmount/netAmount/deductions above (BUG-2 fixed an
+    // earlier raw-paise mismatch). The web tier no longer renders them: the run
+    // detail table reads the integer-paise strings (grossMinor / deductionsMinor /
+    // netMinor, GAP-PAYROLL-HOME-01) and formats them with formatMoney. They stay
+    // on the wire, unchanged, for older clients.
     // NOT touched: listSalarySlips()/GET /v1/payroll/salary-slips below is a
-    // different endpoint, correctly consumed via formatMoney() (paise) by
-    // SalarySlipsTable.tsx's DataTable — that convention is independently
-    // correct and out of scope here.
+    // different endpoint, consumed via formatMoney() (paise) by
+    // SalarySlipsTable.tsx's DataTable.
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,
       employeeName: empNames.get(s.employeeId)?.fullName ?? s.employeeNo,
-      gross: Number(s.grossMinor) / 100,
-      deductions: Number(s.totalDeductionsMinor) / 100,
-      net: Number(s.netPayMinor) / 100,
+      gross: minorToRupees(s.grossMinor),
+      deductions: minorToRupees(s.totalDeductionsMinor),
+      net: minorToRupees(s.netPayMinor),
+      // GAP-PAYROLL-HOME-01: the authoritative integer-paise values (bigint
+      // strings) next to the rupee numbers above, so the run-detail table
+      // renders with formatMoney instead of re-deriving paise from a float.
+      // Additive: the rupee fields are unchanged.
+      grossMinor: s.grossMinor.toString(),
+      deductionsMinor: s.totalDeductionsMinor.toString(),
+      netMinor: s.netPayMinor.toString(),
       status: s.status,
       issues: readiness.get(s.employeeId) ?? [],
     })),
@@ -253,9 +272,9 @@ function toSlipSummary(r: SlipListRow, empMap: Awaited<ReturnType<typeof fetchEm
     employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeNo,
     department: empMap.get(r.employeeId)?.departmentName ?? "—",
     payPeriod: formatPayPeriod(r.month),
-    gross: Number(r.grossMinor),
-    deductions: Number(r.totalDeductionsMinor),
-    net: Number(r.netPayMinor),
+    gross: minorToWireNumber(r.grossMinor),
+    deductions: minorToWireNumber(r.totalDeductionsMinor),
+    net: minorToWireNumber(r.netPayMinor),
     status: (r.status === "paid" ? "paid" : r.status === "finalized" ? "finalized" : "draft") as "draft" | "finalized" | "paid",
   };
 }

@@ -77,4 +77,11 @@ describe("DataSourceBadge", () => {
       expect(screen.getByRole("status")).toHaveTextContent("Couldn't load payroll runs — showing nothing");
     });
   });
+  describe("cachedAt timestamp is rendered in IST (CLOS-S3-06)", () => {
+    it("shows the IST wall-clock time regardless of the viewer's zone", () => {
+      render(<DataSourceBadge provenance="cached" cachedAt="2026-10-22T10:00:00Z" />);
+      expect(screen.getByRole("status")).toHaveTextContent("3:30 pm IST");
+    });
+  });
+
 });

@@ -31,7 +31,8 @@ type SP = {
   accountName?: string;
 };
 
-export default async function Page({ searchParams }: { searchParams?: SP }) {
+export default async function Page(props: { searchParams?: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crmContactsPage");
   const { data: contacts, source } = await getCrmContacts({
     search: searchParams?.search,

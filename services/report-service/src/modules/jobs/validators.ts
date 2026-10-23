@@ -5,6 +5,8 @@ import { paginatedSchema } from "@civitasone/schemas/common";
 export const createJobBody = z.object({
   name: z.string().min(1).max(200),
   reportType: z.string().min(1).max(64).optional(),
+  // Request parameters shown on the job detail screen (filters, period, ...).
+  parameters: z.record(z.string().min(1).max(64), z.string().max(256)).refine((p) => Object.keys(p).length <= 20, "at most 20 parameters").optional(),
 });
 export type CreateJobBody = z.infer<typeof createJobBody>;
 

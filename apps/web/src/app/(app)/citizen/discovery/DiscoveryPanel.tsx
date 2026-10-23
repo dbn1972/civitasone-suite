@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
@@ -84,7 +85,7 @@ export function DiscoveryPanel({ serviceNames = {} }: { serviceNames?: Record<st
       setMessage(t("consentRecorded"));
       await loadConsentAndMatches(citizenId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("consentFailed"));
+      setError(e instanceof UserFacingError ? e.message : t("consentFailed"));
     } finally { setBusy(false); }
   }
 
@@ -100,7 +101,7 @@ export function DiscoveryPanel({ serviceNames = {} }: { serviceNames?: Record<st
       setMessage(t("consentWithdrawn"));
       await loadConsentAndMatches(citizenId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("consentFailed"));
+      setError(e instanceof UserFacingError ? e.message : t("consentFailed"));
     } finally { setBusy(false); }
   }
 
@@ -110,20 +111,20 @@ export function DiscoveryPanel({ serviceNames = {} }: { serviceNames?: Record<st
     try {
       let parsed: unknown = {};
       if (profile.trim() !== "") {
-        try { parsed = JSON.parse(profile); } catch { throw new Error(t("profileInvalid")); }
+        try { parsed = JSON.parse(profile); } catch { throw new UserFacingError(t("profileInvalid")); }
       }
       const res = await fetch("/api/proxy/v1/citizen/discovery/run", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ citizenId, profile: parsed }),
       });
-      if (res.status === 403) throw new Error(t("consentRequired"));
+      if (res.status === 403) throw new UserFacingError(t("consentRequired"));
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save", "discovery");
       const body = (await res.json()) as { matches?: Match[]; notified?: number };
       const found = Array.isArray(body.matches) ? body.matches : [];
       setMatches(found);
       setMessage(t("runResult", { matched: found.length, notified: body.notified ?? 0 }));
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("discoveryFailed"));
+      setError(e instanceof UserFacingError ? e.message : t("discoveryFailed"));
     } finally { setBusy(false); }
   }
 

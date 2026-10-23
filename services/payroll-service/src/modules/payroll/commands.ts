@@ -13,6 +13,7 @@ import { headObject } from "@civitasone/storage";
 import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
+import { MAKER_CHECKER_VIOLATION, runMakerCheckerDenial, type RunMakerCheckerAction } from "./run-maker-checker.js";
 import { createPayGroupRuns, isPayGroupRun } from "./pay-group-commands.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
@@ -48,7 +49,13 @@ async function assertReceipts(ctx: RequestContext, category: string, keys: strin
   if (!keys || keys.length === 0) return;
   // HEAD every object: it must exist, be within the size cap and be a PDF / JPEG /
   // PNG as stored (the presign signs both, but the stored object is what counts).
-  const heads = await Promise.all(keys.map((k) => headObject(k)));
+  let heads: Awaited<ReturnType<typeof headObject>>[];
+  try {
+    heads = await Promise.all(keys.map((k) => headObject(k)));
+  } catch {
+    // CLOS2-S6-06: headObject rejects on anything but not-found; that is "could not check", not "not uploaded".
+    throw new HttpError(503, "STORAGE_UNAVAILABLE", "receipt storage could not be checked right now");
+  }
   if (heads.some((h) => h === null)) {
     throw new HttpError(400, "ATTACHMENT_NOT_UPLOADED", "a receipt was not uploaded; upload it again before submitting");
   }
@@ -194,34 +201,72 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function approveRun(ctx: RequestContext, id: string): Promise<Accepted> {
+const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * GAP-PAYROLL-DETAIL-02: synchronous maker-checker for approve / disburse.
+ *
+ * The consumer used to be the only place the rule lived, so a self-approval got
+ * a 202, the UI showed a success toast, and the run silently stayed where it
+ * was. The caller now gets a 403 MAKER_CHECKER_VIOLATION, and the blocked
+ * attempt is itself audited (outcome "denied", with the actor, the run and any
+ * reason the caller typed). An unknown run is NOT rejected here (there is
+ * nobody to compare against; the consumer fails it as before); the consumer
+ * re-asserts the same rule inside its transaction either way.
+ */
+async function assertRunMakerChecker(
+  ctx: RequestContext,
+  action: RunMakerCheckerAction,
+  id: string,
+  reason: string | undefined,
+): Promise<void> {
+  const run = await repo.findRunById(id, ctx.tenantId);
+  if (!run) return;
+  const denial = runMakerCheckerDenial(action, ctx.actorId, { createdBy: run.createdBy, approvedBy: run.approvedBy });
+  if (!denial) return;
+  await queue.publish(AUDIT_TOPIC, {
+    messageId: randomUUID(),
+    type: AUDIT_TOPIC,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: {
+      service: "payroll", action, resourceType: "payroll_run", resourceId: id,
+      outcome: "denied", denialCode: MAKER_CHECKER_VIOLATION, status: run.status,
+      ...(reason ? { reason } : {}),
+    },
+  });
+  throw new HttpError(403, MAKER_CHECKER_VIOLATION, denial);
+}
+
+export async function approveRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
+  await assertRunMakerChecker(ctx, "approve", id, reason);
   await queue.publish(COMMANDS.runApprove, {
     messageId: deterministicUuid(`payroll-approve:${id}`),
     type: COMMANDS.runApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId },
+    payload: { id, tenantId: ctx.tenantId, approvedBy: ctx.actorId, ...(reason ? { reason } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function disburseRun(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function disburseRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
+  await assertRunMakerChecker(ctx, "disburse", id, reason);
   await queue.publish(COMMANDS.runDisburse, {
     messageId: deterministicUuid(`payroll-disburse:${id}`),
     type: COMMANDS.runDisburse,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId },
+    payload: { id, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revertRun(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function revertRun(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.runRevert, {
     messageId: deterministicUuid(`payroll-revert:${id}`),
     type: COMMANDS.runRevert,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId },
+    payload: { id, tenantId: ctx.tenantId, revertedBy: ctx.actorId, ...(reason ? { reason } : {}) },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "payroll_run", id));
   return { id, status: "accepted", correlationId: ctx.correlationId };

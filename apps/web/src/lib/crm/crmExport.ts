@@ -9,6 +9,7 @@
  */
 import { downloadCsvFile } from "@/lib/export/csvExport";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { todayIST } from "@/lib/formatters";
 
 /** A download that was triggered, with the row count the server reported (if any). */
 export interface ExportResult {
@@ -35,7 +36,7 @@ export async function downloadServerCsv(
   if (!res.ok) throw new Error(await errorMessageFromResponse(res, undefined, "export"));
 
   const csv = await res.text();
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = todayIST();
   const filename = `${filenameBase}-${stamp}.csv`;
   downloadCsvFile(filename, csv);
   return { filename };

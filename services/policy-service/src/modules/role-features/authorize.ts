@@ -1,7 +1,7 @@
 import type { RequestContext } from "@civitasone/types";
 import { HttpError } from "../../shared/context.js";
 import { readScoped } from "../../shared/db.js";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { roleFeatureGrants } from "./schema.js";
 import { isPlatformCaller, isPlatformFeature, mayManageFeature } from "./authority.js";
 
@@ -10,7 +10,7 @@ export async function loadCallerFeatures(ctx: RequestContext): Promise<Set<strin
   if (ctx.roles.length === 0) return new Set();
   const rows = await readScoped(ctx.tenantId, (tx) =>
     tx.select({ featureKey: roleFeatureGrants.featureKey }).from(roleFeatureGrants).where(
-      and(eq(roleFeatureGrants.tenantId, ctx.tenantId), inArray(roleFeatureGrants.roleName, [...ctx.roles]), eq(roleFeatureGrants.granted, true)),
+      and(eq(roleFeatureGrants.tenantId, ctx.tenantId), inArray(roleFeatureGrants.roleName, [...ctx.roles]), eq(roleFeatureGrants.granted, true), isNull(roleFeatureGrants.revokedAt)),
     ),
   );
   return new Set(rows.map((r) => r.featureKey));
@@ -20,7 +20,7 @@ export async function loadCallerFeatures(ctx: RequestContext): Promise<Set<strin
 export async function findGrantFeatureKey(ctx: RequestContext, grantId: string): Promise<string | null> {
   const rows = await readScoped(ctx.tenantId, (tx) =>
     tx.select({ featureKey: roleFeatureGrants.featureKey }).from(roleFeatureGrants).where(
-      and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.id, grantId)),
+      and(eq(roleFeatureGrants.tenantId, ctx.tenantId), eq(roleFeatureGrants.id, grantId), isNull(roleFeatureGrants.revokedAt)),
     ),
   );
   return rows[0]?.featureKey ?? null;

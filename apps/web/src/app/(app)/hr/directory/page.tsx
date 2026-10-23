@@ -51,7 +51,8 @@ async function getData(q: string | undefined, offset: number): Promise<LoaderRes
   })
 }
 
-export default async function DirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
+export default async function DirectoryPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("directory");
   const roles = getSessionRoles();
   const canViewProfiles = roles.some((r) => PROFILE_LINK_ROLES.includes(r));
@@ -91,13 +92,13 @@ export default async function DirectoryPage({ searchParams }: { searchParams?: R
         // combination. <a href> already has the correct native "link"
         // semantics (and an accessible name from its own text), so no
         // explicit role is needed at all.
-        <a
+        (<a
           href={`/hr/directory?${new URLSearchParams({ ...(q ? { q } : {}), page: String(page + 1) }).toString()}`}
           className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
           style={{ marginBottom: 12, textDecoration: 'underline' }}
         >
           {t("hasMoreWarning", { count: items.length })}
-        </a>
+        </a>)
       )}
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--infobg)" label={hasMore ? t("statEmployeesShown") : t("statTotalEmployees")} value={errored ? null : items.length} />
@@ -115,5 +116,5 @@ export default async function DirectoryPage({ searchParams }: { searchParams?: R
         )}
       </Card>
     </div>
-  )
+  );
 }

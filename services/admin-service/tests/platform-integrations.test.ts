@@ -106,7 +106,9 @@ async function rowOf(tenantId: string, key: string) {
 // Same fields, none marked sensitive: the domain must then treat every field as sensitive.
 const SCHEMA_UNMARKED = { fields: SCHEMA.fields.map((f) => { const { sensitive: _s, ...rest } = f as Record<string, unknown>; return rest; }) };
 
-const FULL_SANDBOX = { config: { orgId: "ORG1" }, secrets: { apiKey: "plain-api-key-1" } }; // gitleaks:allow
+// Built at runtime so no credential-shaped literal sits in the source.
+const PLAIN_KEY = `k${randomUUID()}`;
+const FULL_SANDBOX = { config: { orgId: "ORG1" }, secrets: { apiKey: PLAIN_KEY } };
 
 async function put(key: string, body: Record<string, unknown>, actor = MAKER, tenantId = TENANT_A, headers: Record<string, string> = {}) {
   const res = await app.inject({ method: "PUT", url: `${BASE}/tenant/records/${key}`, headers: adm(actor, tenantId, headers), payload: body });
@@ -124,7 +126,7 @@ async function post(url: string, body: Record<string, unknown>, actor = MAKER, t
 async function configure(key: string, opts: { prodReady?: boolean; tenantId?: string; actor?: string } = {}) {
   const tenantId = opts.tenantId ?? TENANT_A;
   const actor = opts.actor ?? MAKER;
-  const created = await put(key, { config: { orgId: "ORG1", ...(opts.prodReady ? { prodOnly: "P1" } : {}) }, secrets: { apiKey: "plain-api-key-1" } }, actor, tenantId); // gitleaks:allow
+  const created = await put(key, { config: { orgId: "ORG1", ...(opts.prodReady ? { prodOnly: "P1" } : {}) }, secrets: { apiKey: PLAIN_KEY } }, actor, tenantId);
   expect(created.statusCode).toBe(202);
   return (await rowOf(tenantId, key))!;
 }
@@ -252,7 +254,7 @@ describe("tenant config: schema-driven form with write-only secrets", () => {
     const row = (await rowOf(TENANT_A, KEY_A))!;
     expect(row.environment).toBe("sandbox"); // default environment
     expect(row.secrets.apiKey?.startsWith("enc:v2:")).toBe(true);
-    expect(JSON.stringify(row)).not.toContain("plain-api-key-1"); // gitleaks:allow
+    expect(JSON.stringify(row)).not.toContain(PLAIN_KEY);
     expect(row.config).toEqual({ orgId: "ORG1", sandboxScenario: "success" });
 
     const bodies = [
@@ -262,7 +264,7 @@ describe("tenant config: schema-driven form with write-only secrets", () => {
       res.body,
     ];
     for (const b of bodies) {
-      expect(b).not.toContain("plain-api-key-1"); // gitleaks:allow
+      expect(b).not.toContain(PLAIN_KEY);
       expect(b).not.toContain("enc:v2:");
     }
     const rec = (await getRecord(KEY_A)).json().data;
@@ -277,7 +279,7 @@ describe("tenant config: schema-driven form with write-only secrets", () => {
     const acts = await audits(TENANT_A);
     expect(acts.some((a) => a.action === "tenant_integration.create" && a.outcome === "success")).toBe(true);
     const raw = await sqlClient`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT_A} AND topic = 'audit.event.record'`;
-    expect(JSON.stringify(raw)).not.toContain("plain-api-key-1"); // gitleaks:allow
+    expect(JSON.stringify(raw)).not.toContain(PLAIN_KEY);
     expect(JSON.stringify(raw)).not.toContain("ORG1");
   });
 
@@ -291,7 +293,7 @@ describe("tenant config: schema-driven form with write-only secrets", () => {
     expect(v1.secrets.apiKey).toBe(sealedBefore);
     expect(v1.config).toEqual({ orgId: "ORG2" });
     // supply an extra secret + new apiKey
-    await put(KEY_A, { config: { orgId: "ORG2" }, secrets: { apiKey: "rotated-key", extraSecret: "extra-1" }, expectedVersion: v1.version }); // gitleaks:allow
+    await put(KEY_A, { config: { orgId: "ORG2" }, secrets: { apiKey: `k${randomUUID()}`, extraSecret: "extra-1" }, expectedVersion: v1.version });
     const v2 = (await rowOf(TENANT_A, KEY_A))!;
     expect(v2.secrets.apiKey).not.toBe(sealedBefore);
     expect(Object.keys(v2.secrets).sort()).toEqual(["apiKey", "extraSecret"]);
@@ -592,11 +594,11 @@ describe("production switch: consumer is the authority (races, bypassed routes, 
     await publishAdminCommand(
       { tenantId: TENANT_A, actorId: MAKER, correlationId: randomUUID(), roles: ["tenant_admin"], actorType: "user", sessionId: "s" } as never,
       COMMANDS.tenantIntegrationSave, id,
-      { actorRoles: ["tenant_admin"], providerKey: KEY_BETA, category: "dsc", newId: id, expectedVersion: null, enabled: true, config: {}, sealedPatch: { apiKey: "plaintext-secret" }, clearSecrets: [] }, // gitleaks:allow
+      { actorRoles: ["tenant_admin"], providerKey: KEY_BETA, category: "dsc", newId: id, expectedVersion: null, enabled: true, config: {}, sealedPatch: { apiKey: PLAIN_KEY }, clearSecrets: [] },
     );
     await drain();
     expect(await rowOf(TENANT_A, KEY_BETA)).toBeUndefined();
-    const stored = await sqlClient`SELECT 1 FROM platform_integrations.tenant_integrations WHERE secrets::text LIKE '%plaintext-secret%'`; // gitleaks:allow
+    const stored = await sqlClient`SELECT 1 FROM platform_integrations.tenant_integrations WHERE secrets::text LIKE ${`%${PLAIN_KEY}%`}`;
     expect(stored).toHaveLength(0);
   });
 });
@@ -781,7 +783,7 @@ describe("production edits: a sensitive edit never leaves the record live withou
     await toProduction(KEY_E);
     // a secret edit
     const cur = (await rowOf(TENANT_A, KEY_E))!;
-    const res = await edit(KEY_E, { config: cur.config, secrets: { apiKey: "rotated-api-key" } }); // gitleaks:allow
+    const res = await edit(KEY_E, { config: cur.config, secrets: { apiKey: `k${randomUUID()}` } });
     expect(res.statusCode).toBe(202);
     expect(res.json().revertsToSandbox).toBe(true);
     let after = (await rowOf(TENANT_A, KEY_E))!;

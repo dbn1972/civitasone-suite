@@ -25,14 +25,14 @@ describe("GrievanceDetailPage", () => {
 
   it("blocks non-HR roles without fetching", async () => {
     mockRoles = ["manager"];
-    render(await GrievanceDetailPage({ params: { id: "g1" } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
   it("shows the description (detail-only), assignee name and history, and actions while open", async () => {
     fetchJsonMock.mockResolvedValue({ data: BASE, source: "api" });
-    render(await GrievanceDetailPage({ params: { id: "g1" } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.getAllByText("GRV/2026/0007").length).toBeGreaterThan(0);
     expect(screen.getByText("My DA arrears for March are missing.")).toBeInTheDocument();
     expect(screen.getAllByText(/R\. Singh/).length).toBeGreaterThan(0);
@@ -42,7 +42,7 @@ describe("GrievanceDetailPage", () => {
 
   it("hides the Assign/Dispose actions once disposed", async () => {
     fetchJsonMock.mockResolvedValue({ data: { ...BASE, status: "disposed", disposition: "resolved", disposalRemarks: "Arrears paid." }, source: "api" });
-    render(await GrievanceDetailPage({ params: { id: "g1" } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: "g1" }) }));
     expect(screen.queryByTestId("actions")).not.toBeInTheDocument();
     expect(screen.getByText("Arrears paid.")).toBeInTheDocument();
     expect(screen.getByText("Resolved")).toBeInTheDocument();
@@ -50,7 +50,7 @@ describe("GrievanceDetailPage", () => {
 
   it("does not report a failed load as not-found data: a 404 shows the not-found state", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await GrievanceDetailPage({ params: { id: "nope" } }));
+    render(await GrievanceDetailPage({ params: Promise.resolve({ id: "nope" }) }));
     expect(screen.getByRole("heading", { name: "Grievance not found" })).toBeInTheDocument();
   });
 });

@@ -124,13 +124,61 @@ export async function listDraftsForService(serviceId: string): Promise<Applicati
  * every draft's form fields for a banner.
  */
 export async function firstDraftIdForService(serviceId: string): Promise<string | null> {
-  const res = await fetch("/api/proxy/v1/citizen/intake/drafts", { cache: "no-store" });
+  // Server-side filter (serviceId + status) and `summary=true` (no formData): the
+  // banner probe downloads at most one id-only row instead of every draft with
+  // all its form answers. The server filter is authoritative; the client check
+  // below only guards against an older server that ignores the query params.
+  const qs = new URLSearchParams({ serviceId, status: "draft", summary: "true", limit: "1" });
+  const res = await fetch(`/api/proxy/v1/citizen/intake/drafts?${qs.toString()}`, { cache: "no-store" });
   if (!res.ok) return null;
   const payload = (await res.json()) as { data?: unknown[] };
   const match = (payload.data ?? [])
     .filter(isRecord)
     .find((d) => str(d.serviceId) === serviceId && str(d.status) === "draft");
   return match ? str(match.id) : null;
+}
+
+/** Discard (delete) the applicant's own draft. Owner-scoped server-side; 202 = accepted. */
+export async function discardDraft(draftId: string): Promise<void> {
+  const res = await fetch(`/api/proxy/v1/citizen/intake/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" });
+  if (!(res.ok || res.status === 202 || res.status === 404)) throw new Error(await readErrorMessage());
+}
+
+export interface FeeBreakup {
+  baseMinor: number;
+  payableMinor: number;
+  exemptionLabel: string | null;
+  currency: string;
+}
+
+/**
+ * The fee breakup the service computes (POST /v1/citizen/fees/compute: base
+ * amount, any exemption applied, payable amount). Returns null when the service
+ * has no active fee schedule or the call fails -- the caller then falls back to
+ * the single published-fee line, never a made-up breakup.
+ */
+export async function computeFeeBreakup(serviceId: string, subject: Record<string, unknown>): Promise<FeeBreakup | null> {
+  try {
+    const res = await fetch("/api/proxy/v1/citizen/fees/compute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ serviceId, subject }),
+    });
+    if (!res.ok) return null;
+    const body: unknown = await res.json();
+    if (!isRecord(body)) return null;
+    const base = num(body.baseAmount);
+    const payable = num(body.amount);
+    if (base == null || payable == null) return null;
+    return {
+      baseMinor: base,
+      payableMinor: payable,
+      exemptionLabel: body.exemptionApplied ? str(body.exemptionLabel ?? body.exemptionApplied) : null,
+      currency: str(body.currency) || "INR",
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function saveDraft(payload: {
@@ -515,7 +563,38 @@ export interface DemandLine {
 }
 
 /** Citizen fee screen demand lines from published service fee (no payment gateway). */
-export function buildDemandLines(service: Pick<PublishedServiceRuntime, "feeFromMinor" | "feeCurrency" | "name">): DemandLine[] {
+export interface DemandLineLabels {
+  base: string;
+  /** Receives the exemption's own label. */
+  exemption: (label: string) => string;
+  payable: string;
+}
+
+const DEFAULT_DEMAND_LABELS: DemandLineLabels = {
+  base: "Base fee",
+  exemption: (label) => `Exemption — ${label}`,
+  payable: "Amount payable",
+};
+
+export function buildDemandLines(
+  service: Pick<PublishedServiceRuntime, "feeFromMinor" | "feeCurrency" | "name">,
+  breakup: FeeBreakup | null = null,
+  labels: DemandLineLabels = DEFAULT_DEMAND_LABELS,
+): DemandLine[] {
+  if (breakup) {
+    const lines: DemandLine[] = [
+      { id: "base-fee", label: labels.base, amountLabel: feeAmount(breakup.baseMinor, breakup.currency) },
+    ];
+    if (breakup.exemptionLabel && breakup.payableMinor < breakup.baseMinor) {
+      lines.push({
+        id: "exemption",
+        label: labels.exemption(breakup.exemptionLabel),
+        amountLabel: `−${feeAmount(breakup.baseMinor - breakup.payableMinor, breakup.currency)}`,
+      });
+    }
+    lines.push({ id: "payable", label: labels.payable, amountLabel: feeAmount(breakup.payableMinor, breakup.currency) });
+    return lines;
+  }
   return [
     {
       id: "application-fee",

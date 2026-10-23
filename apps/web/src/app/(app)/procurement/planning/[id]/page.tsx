@@ -46,7 +46,8 @@ const LINE_COLUMNS: { key: keyof LineRow & string; label: string; align?: "left"
   { key: "timelineQuarter", label: "Quarter" },
 ];
 
-export default async function AnnualPlanDetailPage({ params }: { params: { id: string } }) {
+export default async function AnnualPlanDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: plan, source } = await getProcurementAnnualPlanById(params.id);
 
   if (!plan) {

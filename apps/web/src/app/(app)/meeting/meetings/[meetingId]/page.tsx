@@ -18,11 +18,12 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function MeetingConsolePage({
-  params,
-}: {
-  params: { meetingId: string };
-}) {
+export default async function MeetingConsolePage(
+  props: {
+    params: Promise<{ meetingId: string }>;
+  }
+) {
+  const params = await props.params;
   const { meetingId } = params;
   const [meeting, agenda, attendance, activeVotes] = await Promise.all([
     getMeeting(meetingId),

@@ -132,6 +132,45 @@ describe("ConfirmDialog", () => {
     expect(screen.getByText("Confirm")).toBeDisabled();
   });
 
+  // GAP-PAYROLL-DETAIL-02: maker-checker dialogs raise the bar from the default of
+  // 1 character to a real sentence; the gate counts the TRIMMED reason.
+  describe("minReasonLength", () => {
+    it("keeps Confirm disabled for 'ok' and enables it at exactly 10 characters", () => {
+      render(<ConfirmDialog {...baseProps} requireReason minReasonLength={10} />);
+      const textarea = screen.getByLabelText("Reason");
+      expect(screen.getByText("Confirm")).toBeDisabled();
+
+      fireEvent.change(textarea, { target: { value: "ok" } });
+      expect(screen.getByText("Confirm")).toBeDisabled();
+
+      fireEvent.change(textarea, { target: { value: "123456789" } }); // 9
+      expect(screen.getByText("Confirm")).toBeDisabled();
+
+      fireEvent.change(textarea, { target: { value: "1234567890" } }); // 10
+      expect(screen.getByText("Confirm")).not.toBeDisabled();
+    });
+
+    it("counts the trimmed reason, so padding with spaces does not satisfy the minimum", () => {
+      render(<ConfirmDialog {...baseProps} requireReason minReasonLength={10} />);
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "   ok       " } });
+      expect(screen.getByText("Confirm")).toBeDisabled();
+    });
+
+    it("shows the 'at least N characters' hint with the running count once the user has typed too little", () => {
+      render(<ConfirmDialog {...baseProps} requireReason minReasonLength={10} />);
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "short" } });
+      expect(screen.getByText(/At least 10 characters required \(5\/10\)/)).toBeInTheDocument();
+    });
+
+    it("sends the trimmed reason to onConfirm once the minimum is met", () => {
+      const onConfirm = vi.fn();
+      render(<ConfirmDialog {...baseProps} requireReason minReasonLength={10} onConfirm={onConfirm} />);
+      fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "  Register checked  " } });
+      fireEvent.click(screen.getByText("Confirm"));
+      expect(onConfirm).toHaveBeenCalledWith("Register checked");
+    });
+  });
+
   it("displays error message in alert region", () => {
     render(<ConfirmDialog {...baseProps} errorMessage="Server error" />);
     expect(screen.getByRole("alert")).toHaveTextContent("Server error");

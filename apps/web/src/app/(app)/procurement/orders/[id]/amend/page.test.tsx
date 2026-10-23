@@ -34,7 +34,7 @@ describe("POAmendPage — AMEND-01 loads the PO", () => {
 
   it("shows the PO number and vendor, not the raw UUID", async () => {
     mockLoad.mockResolvedValue({ data: po(), source: "api" });
-    render(await POAmendPage({ params: { id: PO_UUID } }));
+    render(await POAmendPage({ params: Promise.resolve({ id: PO_UUID }) }));
     expect(screen.getByText("PO/2026/0042")).toBeInTheDocument();
     expect(screen.getAllByText("Acme Supplies").length).toBeGreaterThanOrEqual(1);
     // The raw UUID is not shown as the subtitle any more.
@@ -44,14 +44,14 @@ describe("POAmendPage — AMEND-01 loads the PO", () => {
 
   it("shows a not-amendable message (no form) for a cancelled PO", async () => {
     mockLoad.mockResolvedValue({ data: po({ status: "cancelled" }), source: "api" });
-    render(await POAmendPage({ params: { id: PO_UUID } }));
+    render(await POAmendPage({ params: Promise.resolve({ id: PO_UUID }) }));
     expect(screen.getByText("This PO cannot be amended")).toBeInTheDocument();
     expect(screen.queryByTestId("amend-form")).not.toBeInTheDocument();
   });
 
   it("shows an error state (not 'not found') when the load errored", async () => {
     mockLoad.mockResolvedValue({ data: null, source: "error" });
-    render(await POAmendPage({ params: { id: PO_UUID } }));
+    render(await POAmendPage({ params: Promise.resolve({ id: PO_UUID }) }));
     expect(screen.queryByText("Purchase order not found")).not.toBeInTheDocument();
   });
 });

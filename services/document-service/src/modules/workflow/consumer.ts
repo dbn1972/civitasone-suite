@@ -1,5 +1,4 @@
 import type { Queue } from "@civitasone/queue";
-import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -8,6 +7,11 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 type TxParam = Parameters<typeof enqueue>[0];
+
+/** A command rejected at consume time (stale holder, self-approval, already decided) is audited as denied, never dropped silently. */
+async function auditDenied(tx: TxParam, msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string, reason: string): Promise<void> {
+  await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "document", action, resourceType, resourceId, outcome: "denied", details: { reason } } });
+}
 
 export function registerWorkflowConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
@@ -30,19 +34,26 @@ export function registerWorkflowConsumers(rawQueue: Queue): void {
     });
   });
 
-  queue.subscribe<{ dakId: string; assignedTo: string }>(COMMANDS.dakForward, async (msg) => {
+  queue.subscribe<{ dakId: string; assignedTo: string; asAdmin?: boolean }>(COMMANDS.dakForward, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.forwardDak(tx, msg.tenantId, msg.payload.dakId, msg.payload.assignedTo, msg.actorId);
+      // Re-check the current holder at consume time; a stale holder's command is dropped.
+      if (!(await repo.forwardDak(tx, msg.tenantId, msg.payload.dakId, msg.payload.assignedTo, msg.actorId, msg.payload.asAdmin === true))) {
+        await auditDenied(tx as TxParam, msg, "forward", "dak", msg.payload.dakId, "not_current_holder");
+        return;
+      }
       await enqueue(tx as TxParam, { topic: EVENTS.dakForwarded, eventType: EVENTS.dakForwarded, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { dakId: msg.payload.dakId } });
       await enqueue(tx as TxParam, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "document", action: "forward", resourceType: "dak", resourceId: msg.payload.dakId, outcome: "success" } });
     });
   });
 
-  queue.subscribe<{ dakId: string }>(COMMANDS.dakAcknowledge, async (msg) => {
+  queue.subscribe<{ dakId: string; asAdmin?: boolean }>(COMMANDS.dakAcknowledge, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.acknowledgeDak(tx, msg.tenantId, msg.payload.dakId, msg.actorId);
+      if (!(await repo.acknowledgeDak(tx, msg.tenantId, msg.payload.dakId, msg.actorId, msg.payload.asAdmin === true))) {
+        await auditDenied(tx as TxParam, msg, "acknowledge", "dak", msg.payload.dakId, "not_current_holder");
+        return;
+      }
       await enqueue(tx as TxParam, { topic: EVENTS.dakAcknowledged, eventType: EVENTS.dakAcknowledged, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { dakId: msg.payload.dakId } });
       await enqueue(tx as TxParam, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "document", action: "acknowledge", resourceType: "dak", resourceId: msg.payload.dakId, outcome: "success" } });
     });
@@ -55,18 +66,20 @@ export function registerWorkflowConsumers(rawQueue: Queue): void {
     });
   });
 
-  queue.subscribe<{ dakId: string }>(COMMANDS.approvalSubmit, async (msg) => {
+  queue.subscribe<{ dakId: string; approvalId?: string }>(COMMANDS.approvalSubmit, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const id = randomUUID();
+      const id = msg.payload.approvalId ?? msg.messageId;
       await repo.insertApproval(tx, { id, tenantId: msg.tenantId, dakId: msg.payload.dakId, status: "pending", createdBy: msg.actorId });
     });
   });
 
-  queue.subscribe<{ approvalId: string; decision: string; remarks?: string }>(COMMANDS.approvalDecide, async (msg) => {
+  queue.subscribe<{ approvalId: string; decision: string; remarks?: string; asAdmin?: boolean }>(COMMANDS.approvalDecide, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.decideApproval(tx, msg.tenantId, msg.payload.approvalId, msg.payload.decision, msg.payload.remarks ?? null, msg.actorId);
+      if (!(await repo.decideApproval(tx, msg.tenantId, msg.payload.approvalId, msg.payload.decision, msg.payload.remarks ?? null, msg.actorId, msg.payload.asAdmin === true))) {
+        await auditDenied(tx as TxParam, msg, "decide", "approval", msg.payload.approvalId, "not_pending_or_not_holder_or_self_approval");
+      }
     });
   });
 }

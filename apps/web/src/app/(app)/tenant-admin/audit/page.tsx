@@ -7,7 +7,8 @@ import { countLast24h } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { AuditLogTable } from "./AuditLogTable";
 
-export default async function TenantAuditPage({ searchParams }: { searchParams?: { entity?: string } }) {
+export default async function TenantAuditPage(props: { searchParams?: Promise<{ entity?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("tenantAdminW2.audit");
   const [result, summaryResult] = await Promise.all([getTenantAuditLog(), getTenantAuditSummary()]);
   const { data: events, source } = result;

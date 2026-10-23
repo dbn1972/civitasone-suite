@@ -35,7 +35,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 import TrainingPage from "./page";
 
 async function renderPage(searchParams?: { created?: string | string[] }) {
-  const ui = await TrainingPage({ searchParams });
+  const ui = await TrainingPage({ searchParams: Promise.resolve(searchParams ?? {}) });
   const messages = state.locale === "hi" ? hiMessages : enMessages;
   return rtlRender(<NextIntlClientProvider locale={state.locale} messages={messages}>{ui}</NextIntlClientProvider>);
 }

@@ -69,9 +69,14 @@ describe("VendorBankChange (GAP-FINANCE-VENDORS-DETAIL-04)", () => {
     render(<VendorBankChange vendorId="v1" vendorName="Acme" pending={pending()} canPropose canDecide />);
     fireEvent.click(screen.getByRole("button", { name: "Approve change" }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Approve change" }));
+    // GAP-FINANCE-VENDORS-DETAIL-04: the approver states what they checked; Confirm stays disabled without it.
+    const confirm = within(dialog).getByRole("button", { name: "Approve change" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText("Reason for approving (what you checked)"), { target: { value: "Matches the signed bank letter" } });
+    fireEvent.click(confirm);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect((fetchMock.mock.calls[0] as [string, RequestInit])[0]).toBe("/api/proxy/v1/finance/vendors/v1/bank-change/c1/approve");
+    expect(JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string)).toEqual({ reason: "Matches the signed bank letter" });
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
   });
 });

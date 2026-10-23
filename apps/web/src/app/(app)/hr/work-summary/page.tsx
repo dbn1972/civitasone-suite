@@ -101,11 +101,12 @@ async function getData(offset: number): Promise<LoaderResult<WorkSummaryApiPage>
   });
 }
 
-export default async function WorkSummaryPage({
-  searchParams,
-}: {
-  searchParams?: { offset?: string };
-}) {
+export default async function WorkSummaryPage(
+  props: {
+    searchParams?: Promise<{ offset?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("workSummary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();

@@ -44,7 +44,8 @@ function tliClass(itemIndex: number, currentIndex: number): "done" | "cur" | "to
   return "todo";
 }
 
-export default async function LegalCaseDetailPage({ params }: { params: { id: string } }) {
+export default async function LegalCaseDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: caseData, source, status } = await getLegalCaseById(params.id);
 
   // GAP-LEGAL-CASES-DETAIL-02: distinguish genuine 404 from a service outage.

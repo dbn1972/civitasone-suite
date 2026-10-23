@@ -9,7 +9,8 @@ import { GRANTS_MAKER_ROLES } from "../../roles";
 import { schemeWindowState } from "../../schemeWindow";
 import { CloseSchemeButton } from "./CloseSchemeButton";
 
-export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
+export default async function SchemeDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: scheme, source, status } = await getSchemeById(params.id);
 
   // GAP-GRANTS-SCHEMES-DETAIL-03: a network/5xx failure must show a retry state,

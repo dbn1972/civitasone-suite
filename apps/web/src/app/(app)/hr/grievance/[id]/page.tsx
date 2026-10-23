@@ -22,7 +22,8 @@ type Detail = {
  * audited read server-side. Assign / Dispose act through the grievance
  * commands; the history below is the append-only event log.
  */
-export default async function GrievanceDetailPage({ params }: { params: { id: string } }) {
+export default async function GrievanceDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("grievanceDetail");
   const roles = getSessionRoles();
   if (!roles.some((r: string) => GRIEVANCE_ROLES.includes(r))) {

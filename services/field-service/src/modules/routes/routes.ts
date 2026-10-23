@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, isFieldSupervisor, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import { optimizeRouteOrder, scoreRoute, type Waypoint } from "./domain.js";
 import * as commands from "./commands.js";
@@ -76,7 +76,7 @@ export async function routeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FIELD_ROLES);
     const q = listQuery.parse(req.query);
 
-    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
+    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
     const page = Math.floor(q.offset / q.limit) + 1;
 
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
@@ -87,6 +87,9 @@ export async function routeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FIELD_ROLES);
     const q = routeQuery.parse(req.query);
+    if (!isFieldSupervisor(ctx) && q.assigneeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "field agents may only view their own routes");
+    }
 
     const route = await repo.findByAssigneeAndDate(q.assigneeId, q.date, ctx.tenantId);
     if (!route) {
@@ -117,7 +120,7 @@ export async function routeRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
 
     const route = await repo.findById(id, ctx.tenantId);
-    if (!route) {
+    if (!route || (!isFieldSupervisor(ctx) && route.assigneeId !== ctx.actorId)) {
       throw new HttpError(404, "NOT_FOUND", "route not found");
     }
 

@@ -243,7 +243,7 @@ export function WizardShell({
             type="button"
             disabled={!canSubmit || submitBusy}
             onClick={onSubmit}
-            title={canSubmit ? undefined : "Pass the latest sandbox test before submitting"}
+            title={canSubmit ? undefined : "Pass the sandbox test on the current design before submitting"}
           >
             {submitBusy ? "Submitting…" : "Submit for Approval"}
           </Button>

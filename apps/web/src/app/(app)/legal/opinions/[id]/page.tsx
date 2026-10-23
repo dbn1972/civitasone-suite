@@ -13,7 +13,8 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
   return "—";
 }
 
-export default async function LegalOpinionDetailPage({ params }: { params: { id: string } }) {
+export default async function LegalOpinionDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: opinion, source, status } = await getLegalOpinionById(params.id);
 
   // GAP-LEGAL-OPINIONS-DETAIL-02: an outage (5xx / 401 / network) must NOT read

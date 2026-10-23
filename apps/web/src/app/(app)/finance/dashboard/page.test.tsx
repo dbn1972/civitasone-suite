@@ -9,7 +9,7 @@ vi.mock("@/app/_data/apiClient", async () => {
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key,
 }));
-vi.mock("./BudgetChart", () => ({ BudgetChart: () => <div>budget-chart</div> }));
+vi.mock("./BudgetChart", () => ({ BudgetChart: (p: { categoryBreakdown?: unknown }) => <div>budget-chart {p.categoryBreakdown ? `categories=${JSON.stringify(p.categoryBreakdown)}` : "no-categories"}</div> }));
 vi.mock("../_components/PrintExportButton", () => ({ PrintExportButton: ({ label }: { label?: string }) => <button>{label ?? "export"}</button> }));
 vi.mock("../_components/FyFilter", () => ({ FyFilter: () => <div>fy-filter</div> }));
 
@@ -65,7 +65,7 @@ describe("FinanceDashboardPage", () => {
   // GAP-FINANCE-DASHBOARD-02: the FY selector must actually drive the loader.
   it("passes the selected fiscal year to the dashboard endpoint and shows it", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
-    render(await FinanceDashboardPage({ searchParams: { fy: "2025-26" } }));
+    render(await FinanceDashboardPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
     expect(paths.some((p) => p.includes("/api/v1/finance/dashboard?fy=2025-26"))).toBe(true);
     expect(screen.getByText(/FY 2025-26/)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("FinanceDashboardPage", () => {
 
   it("ignores an unrecognised fy value instead of forwarding it", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
-    render(await FinanceDashboardPage({ searchParams: { fy: "1999-00; drop" } }));
+    render(await FinanceDashboardPage({ searchParams: Promise.resolve({ fy: "1999-00; drop" }) }));
     const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
     expect(paths.some((p) => p.includes("drop"))).toBe(false);
   });
@@ -100,7 +100,19 @@ describe("FinanceDashboardPage", () => {
   it("a healthy load still renders the chart", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
     render(await FinanceDashboardPage({}));
-    expect(screen.getByText("budget-chart")).toBeInTheDocument();
+    expect(screen.getByText(/^budget-chart/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-DASHBOARD-01: the service's category split reaches the chart; none means none.
+  it("hands the service's categoryBreakdown to the chart, and nothing when there is none", async () => {
+    const breakdown = [{ label: "Works", amountMinor: "123456" }];
+    mockFinanceLoader({ data: { ...MOCK_DASHBOARD, categoryBreakdown: breakdown }, source: "api" });
+    const { unmount } = render(await FinanceDashboardPage({}));
+    expect(screen.getByText(`budget-chart categories=${JSON.stringify(breakdown)}`)).toBeInTheDocument();
+    unmount();
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await FinanceDashboardPage({}));
+    expect(screen.getByText("budget-chart no-categories")).toBeInTheDocument();
   });
 
   // GAP-FINANCE-DASHBOARD-06

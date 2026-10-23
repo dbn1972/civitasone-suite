@@ -7,11 +7,12 @@ import { getInstances, getAnalyticsSummary, inProgressCount } from "../_data/wor
 
 const LIST_LIMIT = 200;
 
-export default async function WorkflowInstancesPage({
-  searchParams,
-}: {
-  searchParams?: { definitionId?: string };
-}) {
+export default async function WorkflowInstancesPage(
+  props: {
+    searchParams?: Promise<{ definitionId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 — honor the per-definition filter the
   // definition detail page's "View instances" link sends. Previously this page
   // ignored ?definitionId entirely and rendered every tenant instance, so the
@@ -63,14 +64,12 @@ export default async function WorkflowInstancesPage({
         back="/workflow"
         actions={source === "error" || !analyticsOk ? <DataSourceBadge source="error" /> : null}
       />
-
       <StatGrid>
         <StatCard icon="🧩" tone="info" label="Total" value={filtered ? instances.length : total} />
         <StatCard icon="⏳" tone="warn" label="In progress" value={filtered ? null : active} />
         <StatCard icon="✅" tone="good" label="Completed" value={filtered ? null : completed} />
         <StatCard icon="🚫" tone="bad" label="Cancelled" value={filtered ? null : cancelled} />
       </StatGrid>
-
       {filtered ? (
         <div className="pad" style={{ paddingBottom: 0 }}>
           <span
@@ -84,15 +83,14 @@ export default async function WorkflowInstancesPage({
           </span>
         </div>
       ) : null}
-
       <div style={{ marginTop: 18 }}>
         <Card title="Instances">
           {source === "error" ? (
             // GAP-WORKFLOW-LIST-02 — a real retry (RefreshErrorState → router.refresh),
             // not a dead-end warning EmptyState.
-            <div className="pad">
+            (<div className="pad">
               <RefreshErrorState error={toHumanError("load", { area: "instances" })} source={{ area: "instances", status: 500 }} />
-            </div>
+            </div>)
           ) : instances.length === 0 ? (
             <div className="pad">
               <EmptyState icon="🧩" title="No instances yet" message="Process instances will appear here once workflows are started." />

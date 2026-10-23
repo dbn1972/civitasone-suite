@@ -84,10 +84,13 @@ export function registerDfaConsumers(queue: Queue): void {
   });
 
   // Status transitions share a helper.
+  type DfaCurrent = NonNullable<Awaited<ReturnType<typeof repo.findDfaById>>>;
   const transition = (
     topic: string,
     to: DfaStatus,
-    apply?: (p: { id: string; tenantId: string } & Record<string, unknown>, cur: NonNullable<Awaited<ReturnType<typeof repo.findDfaById>>>) => Partial<Parameters<typeof repo.updateDfa>[2]>,
+    apply?: (p: { id: string; tenantId: string } & Record<string, unknown>, cur: DfaCurrent) => Partial<Parameters<typeof repo.updateDfa>[2]>,
+    // A guard throws to refuse the transition (the message dead-letters and the DFA stays put).
+    guard?: (cur: DfaCurrent, msg: { actorId: string }) => void,
   ) => {
     queue.subscribe(topic, async (msg) => {
       const p = msg.payload as { id: string; tenantId: string } & Record<string, unknown>;
@@ -95,6 +98,7 @@ export function registerDfaConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
         if (!cur || !canTransition(cur.status, to)) return;
+        guard?.(cur, msg);
         const patch: Parameters<typeof repo.updateDfa>[2] = {
           status: to, updatedBy: msg.actorId, version: cur.version + 1,
           ...(apply?.(p, cur) ?? {}),
@@ -107,7 +111,18 @@ export function registerDfaConsumers(queue: Queue): void {
   };
 
   transition(COMMANDS.dfaSubmit, "pending_approval");
-  transition(COMMANDS.dfaSign, "signed", (p) => ({ signedBy: String(p.signedBy ?? ""), signedAt: new Date() }));
+  // K3 maker-checker, defence in depth: the route already 403s a drafter signing their own DFA
+  // (GAP-ESTAB-DFA-02); the consumer refuses it too, as it does for approve, so a command that
+  // reaches the queue by any other path cannot let the maker sign.
+  transition(
+    COMMANDS.dfaSign, "signed",
+    (p) => ({ signedBy: String(p.signedBy ?? ""), signedAt: new Date() }),
+    (cur, msg) => {
+      if (cur.createdBy === msg.actorId) {
+        throw new Error("MAKER_CHECKER_VIOLATION: a DFA cannot be signed by its drafter");
+      }
+    },
+  );
 
   // Return for revision — records the reviewer's reason AND snapshots it as a
   // revision comment in the version history (R3).
@@ -136,7 +151,7 @@ export function registerDfaConsumers(queue: Queue): void {
   // one who drafted it. Self-approval is rejected (throws → message dead-letters,
   // DFA stays pending_approval).
   queue.subscribe(COMMANDS.dfaApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; modality?: string; conditions?: string };
+    const p = msg.payload as { id: string; tenantId: string; modality?: string; conditions?: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cur = await repo.findDfaByIdTx(tx, p.id, p.tenantId);
@@ -154,7 +169,11 @@ export function registerDfaConsumers(queue: Queue): void {
         ...(p.conditions ? { decisionConditions: p.conditions } : {}),
         updatedBy: msg.actorId, version: cur.version + 1,
       });
-      await enqueue(tx, audit(msg, "dfa.approved", p.id, { modality, hasConditions: Boolean(p.conditions) }));
+      // GAP-ESTAB-DFA-02: the approver's remarks are part of the audit record of the decision.
+      const reason = typeof p.reason === "string" ? p.reason.trim() : "";
+      await enqueue(tx, audit(msg, "dfa.approved", p.id, {
+        modality, hasConditions: Boolean(p.conditions), ...(reason ? { reason } : {}),
+      }));
     });
     await cache.invalidate(cache.makeKey(p.tenantId, "dfa", p.id));
   });

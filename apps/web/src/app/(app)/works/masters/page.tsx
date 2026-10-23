@@ -31,11 +31,12 @@ async function fetchMaster(type: MasterType) {
   );
 }
 
-export default async function MastersPage({
-  searchParams,
-}: {
-  searchParams?: { type?: string };
-}) {
+export default async function MastersPage(
+  props: {
+    searchParams?: Promise<{ type?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const rawType = searchParams?.type ?? "authorities";
   if (!isMasterType(rawType)) notFound();
   const type: MasterType = rawType;

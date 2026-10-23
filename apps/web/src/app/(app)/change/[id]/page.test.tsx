@@ -33,14 +33,14 @@ describe("change detail page (GAP-CHANGE-DETAIL-03 / -04)", () => {
 
   it("DETAIL-03: requester renders via UserRef (short id with full id in a tooltip)", async () => {
     getChangeRequest.mockResolvedValue({ data: detail(), source: "api" });
-    render(await Page({ params: { id: "x" } }));
+    render(await Page({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("aaaaaaaa")).toBeInTheDocument();
     expect(screen.getByTitle(REQ)).toBeInTheDocument();
   });
 
   it("DETAIL-03: warns when the approver is the same person as the requester", async () => {
     getChangeRequest.mockResolvedValue({ data: detail({ approvedBy: REQ, status: "scheduled" }), source: "api" });
-    render(await Page({ params: { id: "x" } }));
+    render(await Page({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText(/maker-checker not satisfied/i)).toBeInTheDocument();
   });
 
@@ -49,7 +49,7 @@ describe("change detail page (GAP-CHANGE-DETAIL-03 / -04)", () => {
       data: detail({ status: "scheduled", windowStart: "2026-09-14T16:30:00.000Z", windowEnd: "2026-09-14T20:30:00.000Z" }),
       source: "api",
     });
-    render(await Page({ params: { id: "x" } }));
+    render(await Page({ params: Promise.resolve({ id: "x" }) }));
     // 16:30Z = 22:00 IST on the 14th; 20:30Z = 02:00 IST on the 15th.
     expect(screen.getByText(/14 Sep 2026, 10:00 pm.*15 Sep 2026, 02:00 am/)).toBeInTheDocument();
   });

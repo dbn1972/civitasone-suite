@@ -35,7 +35,7 @@ describe("SchemeDetailPage", () => {
   it("fetches the scheme by the route id and renders real data", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: SCHEME, source: "api" });
 
-    const ui = await SchemeDetailPage({ params: { id: "s1" } });
+    const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) });
     render(ui);
 
     expect(getFinanceSchemeByIdMock).toHaveBeenCalledWith("s1");
@@ -52,7 +52,7 @@ describe("SchemeDetailPage", () => {
   it("shows an honest empty state instead of fake data when no record is found", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: null, source: "api" });
 
-    const ui = await SchemeDetailPage({ params: { id: "does-not-exist" } });
+    const ui = await SchemeDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) });
     render(ui);
 
     expect(getFinanceSchemeByIdMock).toHaveBeenCalledWith("does-not-exist");
@@ -64,17 +64,17 @@ describe("SchemeDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-02
   it("flags over-utilisation and stays exact above 2^53 paise", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "100", utilisedMinor: "120" }, source: "api" });
-    const { unmount } = render(await SchemeDetailPage({ params: { id: "s1" } }));
+    const { unmount } = render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getByText("120% · Over-utilised")).toBeInTheDocument();
     unmount();
     getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "9007199254740993", utilisedMinor: "9007199254740993" }, source: "api" });
-    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getByText("100%")).toBeInTheDocument();
   });
 
   it("shows a dash, not 0%, when there is no outlay", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "0", utilisedMinor: "500" }, source: "api" });
-    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
@@ -82,7 +82,7 @@ describe("SchemeDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-03
   it("humanizes the status in the stat card and the pill", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, status: "on_hold" }, source: "api" });
-    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText("on_hold")).not.toBeInTheDocument();
     expect(screen.getAllByText("On Hold").length).toBe(2);
   });
@@ -90,14 +90,31 @@ describe("SchemeDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-04
   it("a failed fetch shows the retryable error state, not 'not available'", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText("Scheme detail not available")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
   });
 
   it("flags 100.3% on the exact comparison", async () => {
     getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, outlayMinor: "1000", utilisedMinor: "1003" }, source: "api" });
-    render(await SchemeDetailPage({ params: { id: "s1" } }));
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getByText("100.3% · Over-utilised")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: related records link to routes that exist, narrowed by the scheme CODE.
+  it("links the related UC register by the scheme code and the fund releases register", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: { ...SCHEME, code: "PMAY G/1", name: "Housing Scheme" }, source: "api" });
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(screen.getByRole("link", { name: "Utilization certificates for this scheme" })).toHaveAttribute(
+      "href",
+      "/finance/expenditure/utilization-certificates?scheme=PMAY%20G%2F1",
+    );
+    expect(screen.getByRole("link", { name: "Fund releases register" })).toHaveAttribute("href", "/finance/budget/fund-releases");
+  });
+
+  it("shows no related-record links when the scheme could not be loaded", async () => {
+    getFinanceSchemeByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
+    render(await SchemeDetailPage({ params: Promise.resolve({ id: "s1" }) }));
+    expect(screen.queryByRole("link", { name: "Utilization certificates for this scheme" })).not.toBeInTheDocument();
   });
 });

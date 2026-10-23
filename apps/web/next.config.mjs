@@ -87,6 +87,11 @@ const nextConfig = {
       // and their orphaned components were deleted.
       { source: '/finance/expenses', destination: '/hr/expenses', permanent: true },
       { source: '/finance/loans', destination: '/hr/loans', permanent: true },
+      // GAP-FINANCE-MEDICAL-02: finance/medical/page.tsx redirect()s too, but only
+      // after finance/layout.tsx's role gate, so an employee / manager / HR user
+      // with an old bookmark saw PermissionDenied instead of landing on /hr/medical.
+      // This config redirect runs before any layout and keeps the query string.
+      { source: '/finance/medical', destination: '/hr/medical', permanent: true },
       // GAP-BILLING-HOME-02 / GAP-BILLING-LIST-01: /billing/list was an orphan
       // duplicate of /billing/plans (same getBillingPlans loader, same
       // "Billing — Plans" title) that was never linked from the hub, sidebar or

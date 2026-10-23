@@ -10,14 +10,25 @@ function mapObservationType(category: string): "internal" | "cag" | "statutory" 
   return "internal";
 }
 
-function mapSeverity(riskLevel: string): "critical" | "major" | "minor" | "observation" {
-  if (riskLevel === "critical" || riskLevel === "high") return "critical";
-  if (riskLevel === "major" || riskLevel === "medium") return "major";
-  if (riskLevel === "minor" || riskLevel === "low") return "minor";
+// Round-trips exactly with the web labels (apps/web/src/lib/audit/observationLabels.ts):
+//   critical -> "Critical", major -> "High", minor -> "Medium", observation -> "Low".
+// So the write-side risk levels map high->major, medium->minor, low->observation
+// (previously high->critical / medium->major / low->minor, which showed a logged
+// "High" as "Critical").
+export function mapSeverity(riskLevel: string): "critical" | "major" | "minor" | "observation" {
+  if (riskLevel === "critical") return "critical";
+  if (riskLevel === "major" || riskLevel === "high") return "major";
+  if (riskLevel === "minor" || riskLevel === "medium") return "minor";
   return "observation";
 }
 
-function mapObservationRow(row: ObservationRow) {
+type Extras = { auditPeriod?: string | undefined; para?: string | undefined };
+
+function formatPeriod(p: { from: string; to: string } | undefined): string | undefined {
+  return p ? `${p.from} to ${p.to}` : undefined;
+}
+
+function mapObservationRow(row: ObservationRow, extras: Extras = {}) {
   return {
     id: row.id,
     observationNo: row.obsNo,
@@ -25,9 +36,30 @@ function mapObservationRow(row: ObservationRow) {
     type: mapObservationType(row.category),
     severity: mapSeverity(row.riskLevel),
     department: row.auditeeRef,
+    auditPeriod: extras.auditPeriod,
     raisedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
+    dueDate: row.dueDate ?? undefined,
     status: toReadModelStatus(row.status),
+    para: extras.para,
+    // PAISE (minor units) — the web formatMoney() contract.
+    amount: Number(row.amountInvolvedMinor ?? 0n),
   };
+}
+
+async function loadExtras(tenantId: string, rows: ObservationRow[]): Promise<Map<string, Extras>> {
+  const planIds = [...new Set(rows.map((r) => r.planId).filter((x): x is string => !!x))];
+  const [periods, paras] = await Promise.all([
+    repo.lookupPlanPeriods(tenantId, planIds),
+    repo.lookupParaNumbers(tenantId, rows.map((r) => r.id)),
+  ]);
+  const out = new Map<string, Extras>();
+  for (const r of rows) {
+    out.set(r.id, {
+      auditPeriod: formatPeriod(r.planId ? periods.get(r.planId) : undefined),
+      para: paras.get(r.id),
+    });
+  }
+  return out;
 }
 
 export async function getObservation(id: string, tenantId: string): Promise<ObservationRow | null> {
@@ -42,11 +74,27 @@ export async function listObservationSummaries(tenantId: string, limit: number) 
     cache.makeKey(tenantId, "observations", `list:${limit}`),
     () => repo.listObservationsByTenant(tenantId, limit),
   );
-  return (rows ?? []).map(mapObservationRow);
+  const list = rows ?? [];
+  const extras = await loadExtras(tenantId, list);
+  return list.map((r) => mapObservationRow(r, extras.get(r.id)));
 }
 
 export async function getObservationDetail(id: string, tenantId: string) {
   const row = await getObservation(id, tenantId);
   if (!row || row.tenantId !== tenantId) return null;
-  return { ...mapObservationRow(row), replies: [] };
+  const [extras, replies] = await Promise.all([
+    loadExtras(tenantId, [row]),
+    repo.listReplies(id, tenantId),
+  ]);
+  return {
+    ...mapObservationRow(row, extras.get(row.id)),
+    description: row.finding,
+    replies: replies.map((r) => ({
+      id: r.id,
+      repliedBy: r.respondedByRef,
+      content: r.replyText,
+      repliedAt: new Date(r.createdAt as unknown as string).toISOString(),
+      acceptedByAuditor: r.decision == null ? undefined : r.decision === "accepted",
+    })),
+  };
 }

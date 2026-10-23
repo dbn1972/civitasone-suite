@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import {
@@ -34,7 +35,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/faqs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const faq = await queries.getFaq(ctx.tenantId, id);
     // Same visibility rule as the list: non-editors never see draft/retired FAQs, even by id.
     if (!faq || (!ADMIN_ROLES.some((r) => ctx.roles.includes(r)) && faq["status"] !== "published")) {
@@ -53,7 +54,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.put("/v1/knowledge/faqs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = updateFaqBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateFaq(ctx, id, body));
   });
@@ -61,7 +62,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/knowledge/faqs/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.deleteFaq(ctx, id));
   });
 
@@ -78,7 +79,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/guided-flows/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const flow = await queries.getFlow(ctx.tenantId, id);
     if (!flow || (!ADMIN_ROLES.some((r) => ctx.roles.includes(r)) && flow["status"] !== "published")) {
       throw new HttpError(404, "NOT_FOUND", "guided flow not found");
@@ -96,7 +97,7 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
   app.put("/v1/knowledge/guided-flows/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = updateFlowBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateFlow(ctx, id, body));
   });

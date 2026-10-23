@@ -5,7 +5,8 @@ import { LoadErrorState } from "../../../../../_components/ds/LoadErrorState";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import EditContactForm from "./EditContactForm";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: contact, source, status, errorMessage } = await getContactById(params.id);
   if (!contact) {
     // GAP-CRM-CONTACTS-DETAIL-EDIT-04: an API outage used to render the same

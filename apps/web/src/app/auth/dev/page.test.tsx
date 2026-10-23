@@ -14,19 +14,19 @@ describe("DevLoginPage", () => {
     vi.unstubAllEnvs();
   });
 
-  it("DEV-01: never renders the DEV_LOGIN_PASSWORD value anywhere in the HTML", () => {
-    const { container } = render(<DevLoginPage searchParams={{}} />);
+  it("DEV-01: never renders the DEV_LOGIN_PASSWORD value anywhere in the HTML", async () => {
+    const { container } = render(await DevLoginPage({ searchParams: Promise.resolve({}) }));
     expect(container.innerHTML).not.toContain("super-secret-demo-pw");
   });
 
-  it("DEV-03: shows a prominent TEST ENVIRONMENT banner (role=note)", () => {
-    render(<DevLoginPage searchParams={{}} />);
+  it("DEV-03: shows a prominent TEST ENVIRONMENT banner (role=note)", async () => {
+    render(await DevLoginPage({ searchParams: Promise.resolve({}) }));
     const note = screen.getByRole("note");
     expect(note.textContent).toMatch(/test environment/i);
   });
 
-  it("DEV-06: auditor description does not claim 'Legal'", () => {
-    const { container } = render(<DevLoginPage searchParams={{}} />);
+  it("DEV-06: auditor description does not claim 'Legal'", async () => {
+    const { container } = render(await DevLoginPage({ searchParams: Promise.resolve({}) }));
     expect(container.textContent).toContain("auditor");
     expect(container.textContent).not.toMatch(/Audit · Legal/);
   });

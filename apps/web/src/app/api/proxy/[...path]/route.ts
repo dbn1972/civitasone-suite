@@ -6,24 +6,24 @@ const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_
 
 const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token", "x-idempotency-key", "if-match"];
 
-export async function GET(req: Request, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params.path, "GET");
+export async function GET(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path, "GET");
 }
 
-export async function POST(req: Request, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params.path, "POST");
+export async function POST(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path, "POST");
 }
 
-export async function PATCH(req: Request, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params.path, "PATCH");
+export async function PATCH(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path, "PATCH");
 }
 
-export async function PUT(req: Request, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params.path, "PUT");
+export async function PUT(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path, "PUT");
 }
 
-export async function DELETE(req: Request, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params.path, "DELETE");
+export async function DELETE(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
+  return proxy(req, (await ctx.params).path, "DELETE");
 }
 
 // Response headers safe to pass back to the browser (download metadata only).
@@ -46,7 +46,7 @@ async function proxy(req: Request, segments: string[], method: string) {
   if (segments.some(s => decodeURIComponent(s) === '..' || decodeURIComponent(s) === '.')) {
     return NextResponse.json({ code: 'BAD_REQUEST', message: 'Invalid path' }, { status: 400 });
   }
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
 
   const subpath = segments.join("/");

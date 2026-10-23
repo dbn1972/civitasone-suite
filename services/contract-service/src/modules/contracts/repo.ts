@@ -30,6 +30,45 @@ export async function listContractsByTenant(tenantId: string, limit: number): Pr
     .limit(limit));
 }
 
+export interface ContractExpirySummary {
+  /** Every contract of the tenant (not just the listed page). */
+  total: number;
+  in30: number;
+  in60: number;
+  in90: number;
+  /** Past expiry and not yet closed / terminated / cancelled. */
+  expiredOpen: number;
+}
+
+/**
+ * Whole-tenant expiry buckets, computed in SQL so the Contracts hub no longer
+ * counts the rows of one default list page. Buckets are cumulative windows from
+ * today in IST (in30 <= in60 <= in90) over ALL statuses, exactly the semantics
+ * the hub previously computed client-side; `expiredOpen` excludes already
+ * closed contracts.
+ */
+export async function expirySummaryByTenant(tenantId: string): Promise<ContractExpirySummary> {
+  const today = sql`(now() at time zone 'Asia/Kolkata')::date`;
+  const rows = await scopedRead((tx) => tx
+    .select({
+      total: sql<number>`count(*)::int`,
+      in30: sql<number>`count(*) filter (where ${contractContracts.expiry} >= ${today} and ${contractContracts.expiry} <= ${today} + 30)::int`,
+      in60: sql<number>`count(*) filter (where ${contractContracts.expiry} >= ${today} and ${contractContracts.expiry} <= ${today} + 60)::int`,
+      in90: sql<number>`count(*) filter (where ${contractContracts.expiry} >= ${today} and ${contractContracts.expiry} <= ${today} + 90)::int`,
+      expiredOpen: sql<number>`count(*) filter (where ${contractContracts.expiry} < ${today} and lower(${contractContracts.status}) not in ('closed', 'terminated', 'cancelled'))::int`,
+    })
+    .from(contractContracts)
+    .where(eq(contractContracts.tenantId, tenantId)));
+  const r = rows[0];
+  return {
+    total: Number(r?.total ?? 0),
+    in30: Number(r?.in30 ?? 0),
+    in60: Number(r?.in60 ?? 0),
+    in90: Number(r?.in90 ?? 0),
+    expiredOpen: Number(r?.expiredOpen ?? 0),
+  };
+}
+
 /** Read model: active contracts in force. */
 export async function listActiveByTenant(tenantId: string, limit: number): Promise<ContractRow[]> {
   return scopedRead((tx) => tx.select().from(contractContracts)

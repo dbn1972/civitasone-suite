@@ -41,8 +41,11 @@ export async function findByTaskId(
   tenantId: string,
   limit: number,
   offset: number,
+  agentId?: string,
 ): Promise<{ rows: VisitRow[]; total: number }> {
-  const where = and(eq(visits.taskId, taskId), eq(visits.tenantId, tenantId));
+  const where = agentId
+    ? and(eq(visits.taskId, taskId), eq(visits.tenantId, tenantId), eq(visits.agentId, agentId))
+    : and(eq(visits.taskId, taskId), eq(visits.tenantId, tenantId));
 
   const rows = await scopedRead((tx) =>
     tx.select().from(visits).where(where).orderBy(desc(visits.checkInAt)).limit(limit).offset(offset),
@@ -100,16 +103,20 @@ export async function listRecent(
   tenantId: string,
   limit: number,
   offset: number,
+  agentId?: string,
 ): Promise<{ rows: VisitRow[]; total: number }> {
+  const where = agentId
+    ? and(eq(visits.tenantId, tenantId), eq(visits.agentId, agentId))
+    : eq(visits.tenantId, tenantId);
   const rows = await scopedRead((tx) =>
     tx.select().from(visits)
-      .where(eq(visits.tenantId, tenantId))
+      .where(where)
       .orderBy(desc(visits.checkInAt))
       .limit(limit)
       .offset(offset),
   );
   const counted = await scopedRead((tx) =>
-    tx.select({ total: sql<number>`count(*)::int` }).from(visits).where(eq(visits.tenantId, tenantId)),
+    tx.select({ total: sql<number>`count(*)::int` }).from(visits).where(where),
   );
   return { rows, total: counted[0]?.total ?? 0 };
 }

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, FileUpload, type UploadedFileMeta } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { formatIndianDate } from "@/lib/formatters";
 
 type Attachment = {
   id: string;
@@ -135,7 +136,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
                   {downloadingId === a.id ? "Opening…" : a.fileName}
                 </button>
                 <span style={{ color: "var(--mut)", marginInlineStart: 8 }}>
-                  {Math.max(1, Math.ceil((a.size || 0) / 1024))} KB · {a.uploadedAt.slice(0, 10)}
+                  {Math.max(1, Math.ceil((a.size || 0) / 1024))} KB · {formatIndianDate(a.uploadedAt)}
                 </span>
               </li>
             ))}

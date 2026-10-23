@@ -62,7 +62,7 @@ describe("disciplinary case detail: locale-aware breadcrumbs and loading text (G
   });
 
   it("renders English breadcrumbs as real links in en", async () => {
-    render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     const nav = screen.getByRole("navigation", { name: "Breadcrumb" });
     expect(nav).toHaveTextContent("HR");
     expect(nav).toHaveTextContent("Disciplinary");
@@ -73,7 +73,7 @@ describe("disciplinary case detail: locale-aware breadcrumbs and loading text (G
 
   it("translates the breadcrumbs, heading and empty state when the locale is hi", async () => {
     mockLocale = "hi";
-    render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+    render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
     const nav = screen.getByRole("navigation", { name: hi.disciplinaryDetail.breadcrumbLabel });
     expect(nav).toHaveTextContent(hi.disciplinaryDetail.crumbDisciplinary);
     expect(nav).toHaveTextContent(hi.disciplinaryDetail.crumbNotFound);
@@ -160,14 +160,14 @@ describe("disciplinary case detail: breadcrumb navigation label comes from messa
   for (const { name, caseResult } of STATES) {
     it(`${name}: en nav is named from en.json`, async () => {
       mockCaseLoaders(caseResult);
-      render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+      render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
       expect(screen.getByRole("navigation", { name: en.disciplinaryDetail.breadcrumbLabel })).toBeInTheDocument();
     });
 
     it(`${name}: hi nav is named from hi.json and the English literal is gone`, async () => {
       mockLocale = "hi";
       mockCaseLoaders(caseResult);
-      render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+      render(await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "c1" }) }));
       expect(screen.getByRole("navigation", { name: hi.disciplinaryDetail.breadcrumbLabel })).toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).not.toBeInTheDocument();
       expect(document.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();

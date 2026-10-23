@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 
 type SP = { entity?: string };
 
-export default async function MetadataFieldsPage({ searchParams }: { searchParams?: SP }) {
+export default async function MetadataFieldsPage(props: { searchParams?: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   // GAP-METADATA-FIELDS-02/-03: this page used to call getMetadataEntities()
   // and label entity rows as "Fields"; the metadata-service only lists fields
   // entity-scoped (GET /v1/metadata/entities/:entityId/fields), so the real

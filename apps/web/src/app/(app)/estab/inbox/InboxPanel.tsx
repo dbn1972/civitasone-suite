@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import { OfficerName } from "../files/[id]/OfficerName";
-import { computeSla, type Sla } from "@/lib/estab/sla";
+import { computeSla, isClosedStatus, type Sla } from "@/lib/estab/sla";
 
 export type InboxRow = {
   id: string;
@@ -30,7 +30,7 @@ export function InboxPanel({ rows }: { rows: InboxRow[] }) {
   // Active then pending then everything else (grouping cue).
   const ordered = useMemo(() => {
     const rank = (r: InboxRow) =>
-      r.statusRaw === "active" ? 0 : r.statusRaw === "pending" ? 1 : 2;
+      isClosedStatus(r.statusRaw) ? 2 : r.statusRaw === "pending" ? 1 : 0;
     return [...rows].sort((a, b) => rank(a) - rank(b));
   }, [rows]);
 
@@ -38,7 +38,7 @@ export function InboxPanel({ rows }: { rows: InboxRow[] }) {
   // with files awaiting receipt isn't shown an empty desk (GAP-ESTAB-INBOX-05).
   const filtered = useMemo(() => {
     if (seg === "Pending") return ordered.filter((r) => r.statusRaw === "pending");
-    if (seg === "Active") return ordered.filter((r) => r.statusRaw === "active" || r.statusRaw === "pending");
+    if (seg === "Active") return ordered.filter((r) => !isClosedStatus(r.statusRaw));
     return ordered;
   }, [ordered, seg]);
 
@@ -62,7 +62,8 @@ export function InboxPanel({ rows }: { rows: InboxRow[] }) {
             key: "dueDate",
             label: "SLA",
             render: (r) => {
-              const sla = computeSla(r.dueDate);
+              // A finished file has no SLA: show it neutral, never as overdue (lib/estab/sla.ts).
+              const sla: Sla = isClosedStatus(r.statusRaw) ? { label: "—", tone: "mut" } : computeSla(r.dueDate);
               return <span className={`pill ${TONE_CLASS[sla.tone]}`}>{sla.label}</span>;
             },
           },

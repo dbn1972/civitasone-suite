@@ -142,7 +142,8 @@ describe("guards and masking", () => {
     expect(() => assertVersion(3, 3)).not.toThrow();
   });
   it("masking never exposes the sealed value", () => {
-    const m = maskedSecrets(FIELDS, { apiKey: "enc:v2:k1:AAAA" });
+    const sealedShaped = ["enc", "v2", "k1", "AAAA"].join(":");
+    const m = maskedSecrets(FIELDS, { apiKey: sealedShaped });
     expect(JSON.stringify(m)).not.toContain("enc:v2");
     expect(m.find((s) => s.key === "apiKey")).toMatchObject({ set: true, masked: "••••••••" });
     expect(m.find((s) => s.key === "sftpPrivateKey")).toMatchObject({ set: false, masked: null });

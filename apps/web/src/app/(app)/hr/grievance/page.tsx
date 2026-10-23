@@ -48,7 +48,8 @@ async function getData(offset: number): Promise<LoaderResult<ListPage>> {
   );
 }
 
-export default async function GrievancePage({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function GrievancePage(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("grievance");
 
   // GAP-HR-GRIEVANCE-04/05: role gate before any fetch (defense in depth

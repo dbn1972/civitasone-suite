@@ -3,7 +3,7 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Button, PageHeader, StatusPill, DataTable, EmptyState, ErrorState, EntityPicker,
   ConfirmDialog, // GAP-ESTAB-DAK-01: confirmation before opening file
@@ -16,17 +16,19 @@ import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 import { ESTAB_FILES_WRITE_ROLES } from "@/lib/estab/roles";
 import { useEstabT } from "@/lib/estab/useEstabT";
 import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
+import { deptFieldMode } from "@/lib/estab/deptField";
 import { usePagedRegister } from "@/lib/estab/usePagedRegister";
-import { DAK_MODES, EMPTY_DAK_FORM, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
+import { startBoundedPoll } from "@/lib/estab/boundedPoll";
+import { DAK_MODES, EMPTY_DAK_FORM, dakLookupTerm, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
 const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
-const CLASS_KEY: Record<(typeof CLASSIFICATIONS)[number], string> = {
-  public: "classPublic",
-  confidential: "classConfidential",
-  secret: "classSecret",
-  top_secret: "classTopSecret",
-};
+const CLASS_KEY = Object.fromEntries([
+  ["public", "classPublic"],
+  ["confidential", "classConfidential"],
+  ["secret", "classSecret"],
+  ["top_secret", "classTopSecret"],
+]) as Record<(typeof CLASSIFICATIONS)[number], string>;
 
 /** Rows fetched per request; the register is paged and searched on the server (GAP-ESTAB-DAK-04). */
 const PAGE_SIZE = 50;
@@ -61,6 +63,7 @@ export default function DakRegistryPage() {
   // without dead write controls. The service stays the authority.
   const canWrite = identity.roles.some((r) => ESTAB_FILES_WRITE_ROLES.includes(r));
   const depts = useEstabDivisions();
+  const deptMode = deptFieldMode(depts);
 
   const reg = usePagedRegister<InwardRow>("/api/proxy/v1/estab/inward", PAGE_SIZE);
   const { rows, total, loading, failed: loadError, hasMore } = reg;
@@ -72,6 +75,46 @@ export default function DakRegistryPage() {
   const [openFileDialog, setOpenFileDialog] = useState<OpenFileForm | null>(null);
   const [openFileBusy, setOpenFileBusy] = useState(false);
   const [openFileError, setOpenFileError] = useState("");
+
+  // GAP-ESTAB-DAK-03: polls that look up the number and barcode of an accepted registration; cancelled on unmount.
+  const cancels = useRef<Array<() => void>>([]);
+  const mounted = useRef(true);
+  // The latest reload (it follows the current search term), for callbacks that outlive a render.
+  const reloadRef = useRef(reg.reload);
+  reloadRef.current = reg.reload;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancels.current.forEach((cancel) => cancel());
+      cancels.current = [];
+    };
+  }, []);
+
+  /**
+   * GAP-ESTAB-DAK-03: the 202 carries only the row id, because the DAK number and barcode are
+   * allocated when the service processes the registration. Look the row up by that id a bounded
+   * number of times, and put the number and barcode in the message once it is there. `term` is
+   * what the register search finds the row by (dakLookupTerm: the typed number, else the start of
+   * the subject, cut to the 100 characters the search accepts), whatever its received date.
+   */
+  function watchRegistration(rowId: string, term: string) {
+    const cancel = startBoundedPoll<InwardRow>({
+      check: async () => {
+        const res = await fetch(`/api/proxy/v1/estab/inward?limit=${PAGE_SIZE}&q=${encodeURIComponent(term)}`);
+        if (!res.ok) return null;
+        const body = (await res.json()) as { data?: InwardRow[] };
+        return (body.data ?? []).find((r) => r.id === rowId) ?? null;
+      },
+      onResolved: (row) => {
+        if (!mounted.current) return;
+        setMessage(t("dakRegisteredWithBarcode", { dakNo: row.dakNo, barcode: row.barcode ?? "—" }));
+        void reloadRef.current();
+      },
+      onExhausted: () => { /* the message already says the number appears in the register once processed */ },
+    });
+    cancels.current.push(cancel);
+  }
 
   // A failed "Load more" keeps the rows on screen and says so.
   useEffect(() => {
@@ -99,11 +142,21 @@ export default function DakRegistryPage() {
         body: JSON.stringify(checked.payload),
       });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-      // The register is written asynchronously (202), so the DAK number and barcode the
-      // service assigns are not in the response; they show in the register once processed.
+      // The register is written asynchronously (202), so the DAK number and barcode the service
+      // assigns are not in the response. Say what is known now, then replace it with the
+      // allocated number and barcode as soon as the row exists (watchRegistration).
+      let rowId: string | null = null;
+      try {
+        const accepted = (await res.json()) as { id?: unknown };
+        if (typeof accepted.id === "string") rowId = accepted.id;
+      } catch {
+        /* the body is optional */
+      }
       setForm({ ...EMPTY_DAK_FORM });
       setMessage(form.dakNo.trim() ? t("dakRegisteredNo", { dakNo: form.dakNo.trim() }) : t("dakRegisteredAuto"));
       await reg.reload();
+      const term = dakLookupTerm(checked.payload);
+      if (rowId && term) watchRegistration(rowId, term);
     } catch (err) {
       setActionError(formError.fromException("save", err).message);
     }
@@ -140,7 +193,8 @@ export default function DakRegistryPage() {
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json() as { id?: string };
       setOpenFileDialog(null);
-      if (body.id) router.push(`/estab/files/${body.id}`);
+      // ?created=1 makes the file page show the number the service allocated once it is processed.
+      if (body.id) router.push(`/estab/files/${encodeURIComponent(body.id)}?created=1`);
       else {
         setMessage(t("fileOpeningRefresh"));
         await reg.reload();
@@ -342,8 +396,9 @@ export default function DakRegistryPage() {
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
               <span>{t("dept")} <span style={{ color: "var(--bad)" }}>*</span></span>
               {/* GAP-ESTAB-FILES-NEW-03: a pick-list of real departments, never free text. */}
-              {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed is surfaced by the note below; both states fall back to typed entry */ ? (
-                /* No pick-list available (list not readable by this role, or no operators enrolled yet): type it. */
+              {deptMode === "typed" ? (
+                /* No department master exists to pick from (no operators enrolled yet, or this role cannot read the
+                   directory), so there is nothing to validate a typed name against: type it. */
                 <input
                   type="text"
                   value={openFileDialog.dept}
@@ -356,14 +411,17 @@ export default function DakRegistryPage() {
                   value={openFileDialog.dept}
                   onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
                   required
-                  disabled={!depts.loaded}
+                  disabled={deptMode !== "pick"}
                 >
                   <option value="">{t("deptSelect")}</option>
                   {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               )}
-              {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
-                <span role="note" style={{ color: "var(--mut)", fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
+              {deptMode === "typed" ? (
+                <span role="note" style={{ color: "var(--mut)", fontSize: 12 }}>{t("deptNone")}</span>
+              ) : null}
+              {deptMode === "blocked" ? (
+                <span role="alert" style={{ color: "var(--bad)", fontSize: 12 }}>{t("deptLoadFailed")}</span>
               ) : null}
             </label>
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>

@@ -71,13 +71,19 @@ async function psql(db, query) {
 const NORM = "(CASE WHEN jsonb_typeof(payload)='string' THEN (payload #>> '{}')::jsonb ELSE payload END)";
 
 // ── token ───────────────────────────────────────────────────────────────────
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) throw new Error(`${name} must be set in the environment (no credentials are stored in this script)`);
+  return v;
+}
+
 async function mintToken() {
   const body = new URLSearchParams({
     grant_type: "password",
     client_id: "civitasone-admin-cli",
-    client_secret: "civitas_admin_cli_secret_dev",
+    client_secret: requireEnv("VERIFY_FLOWS_CLIENT_SECRET"),
     username: "dev-superadmin",
-    password: "Verify@2026Live",
+    password: requireEnv("VERIFY_FLOWS_PASSWORD"),
   });
   const res = await fetch(`${KEYCLOAK}/realms/civitasone/protocol/openid-connect/token`, {
     method: "POST",

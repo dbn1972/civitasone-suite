@@ -1,4 +1,6 @@
-import { cookies } from "next/headers";
+// Next 15: cookies() is async. This synchronous helper has many callers, so it uses the
+// supported transitional UnsafeUnwrappedCookies cast (sync access is removed in Next 16).
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE } from "./config";
 import { BILLING_INVOICE_READER_ROLES } from "./adminRoles";
@@ -25,7 +27,7 @@ function decodeJwtPayload(token: string): JwtPayload {
 }
 
 export function getSessionRoles(): string[] {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return [];
   const payload = decodeJwtPayload(token);
   return Array.isArray(payload.roles) ? payload.roles : [];
@@ -33,7 +35,7 @@ export function getSessionRoles(): string[] {
 
 /** The current office (tenant) id from the session, or null when not signed in. */
 export function getSessionTenantId(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.tid === "string" && payload.tid.length > 0 ? payload.tid : null;
@@ -41,7 +43,7 @@ export function getSessionTenantId(): string | null {
 
 /** Display name from the session token, or null when not signed in. */
 export function getSessionName(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.name === "string" && payload.name.length > 0 ? payload.name : null;
@@ -54,7 +56,7 @@ export function getSessionName(): string | null {
  * the server remains the authority. Null when not signed in.
  */
 export function getSessionUserId(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
@@ -167,6 +169,7 @@ export const PROJECT_WRITE_ROLES = ["project_manager", "project_officer", "super
  * others); this gate stops a user who would be 403'd from loading PII.
  */
 export const PROJECT_READER_ROLES = [
+  "project_manager",
   "project_officer",
   "project_admin",
   "finance_officer",
@@ -808,6 +811,13 @@ export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
 export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
 
 /**
+ * Roles permitted to open the tenant-wide field agent roster. Mirrors field-service's
+ * GET /v1/field/agents gate (supervisors only); the server stays the authority, this
+ * only decides whether the hub offers the tile.
+ */
+export const FIELD_AGENT_ROSTER_ROLES = ["field_admin", "super_admin"];
+
+/**
  * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
  * visitor policy (/visitor/admin). Mirrors visitor-service config-registry
  * CONFIG_WRITE_ROLES exactly (modules/config-registry/routes.ts) — only
@@ -824,12 +834,14 @@ export const VISITOR_ADMIN_ROLES = ["tenant_admin", "super_admin"];
  * (roster read) and GATE_ROLES/WRITE_ROLES (verify / check-in / check-out)
  * (modules/check-in/routes.ts) MINUS the plain `employee` role: owner decision
  * (W2) removed `employee` from the gate roles, and a console whose verify /
- * admit / check-out calls would all 403 must not be offered to them. Pinned
+ * admit / check-out calls would all 403 must not be offered to them. The same
+ * holds for `protocol_officer`: the service lets it READ the roster but not
+ * verify / check in / check out, so it is not offered the console either. Pinned
  * against the backend source by tests/contract/visitor-guard-roles.contract.test.ts.
  * The guard console is also reachable by the gate-terminal service account.
  * Defence-in-depth; the service is the gate.
  */
-export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "tenant_admin", "super_admin"];
+export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "tenant_admin", "super_admin"];
 
 /**
  * GAP-LOYALTY-ACCRUALS-02 / MEMBERS-02 / HOME-03: roles permitted to READ
@@ -1045,6 +1057,13 @@ export const DESIGNER_AUTHOR_ROLES = ["citizen_admin", "super_admin"];
 export const WORKFLOW_DESIGNER_AUTHOR_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
 /**
+ * Roles permitted to read the admin legacy-delegations report. Mirrors workflow-service's delegations
+ * ADMIN_ROLES (modules/delegations/routes.ts: workflow_admin, super_admin, tenant_admin) on
+ * GET /v1/workflow/delegations/legacy-report. UI gating only; the service enforces the same.
+ */
+export const WORKFLOW_DELEGATION_ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
+
+/**
  * GAP2-ANALYTICS-ROLES-01: roles permitted to READ the analytics module
  * (KPI library, Data Warehouse, AI Insights, Dashboards, Queries, Exports).
  * MUST mirror analytics-service's canonical ANALYTICS_READ_ROLES
@@ -1124,3 +1143,21 @@ export const ESTAB_DFA_DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_a
  * can READ acknowledgements but is NOT an approver there.
  */
 export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"];
+
+/**
+ * Roles admitted somewhere in inspection-service. Derived from the union of the
+ * `*_ROLES` constants in services/inspection-service/src/modules/**\/routes.ts
+ * (re-derive with `grep -rn "_ROLES = \[" ...` if the service changes). The
+ * service stays the authority; this gate only stops a role with no inspection
+ * permission from landing on a hub whose every call 403s.
+ */
+export const INSPECTION_ROLES = [
+  "inspector",
+  "reviewing_officer",
+  "supervising_officer",
+  "planning_officer",
+  "audit_officer",
+  "inspection_admin",
+  "tenant_admin",
+  "super_admin",
+];

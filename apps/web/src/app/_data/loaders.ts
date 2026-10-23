@@ -307,7 +307,6 @@ import {
   GrantReleaseListSchema,
   GrantUtilizationListSchema,
   EstabDashboardSchema,
-  EstabFileDetailSchema,
   MeetingSummaryListSchema,
   MeetingDetailSchema,
   VehicleSummaryListSchema,
@@ -374,6 +373,8 @@ import {
   mapDealSummaries,
   mapEstabFileSummaries,
   mapEstabFileDetail,
+  mapEstabDesk,
+  type EstabDesk,
   mapHelpdeskTicketList,
   mapHelpdeskTicketDetail,
   mapLegalCaseSummaries,
@@ -781,10 +782,12 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
     if (status !== "active" && status !== "inactive") continue;
     const id = toText(row.id);
     const parentId = toText(row.parentId);
+    const level = row.level === 0 || row.level === 1 || row.level === 2 ? row.level : undefined;
     mapped.push({
       code, name, type, currency, balanceDisplay, status,
       ...(id ? { id } : {}),
       ...(parentId ? { parentId } : {}),
+      ...(level !== undefined ? { level } : {}),
       ...(row.isControl === true ? { isControl: true } : {}),
     });
   }
@@ -1730,9 +1733,11 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
 }
 
 
-function formatTimeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
+export function formatTimeAgo(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "—";
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60_000));
+  if (mins < 1) return "Just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -2323,12 +2328,41 @@ export function computeContractExpirySummary(
   return summary;
 }
 
+/**
+ * The hub's figures must describe EVERY contract, not the rows of one default
+ * list page (50). contract-service now returns whole-tenant aggregates as
+ * `meta.expiry` on GET /v1/contract/contracts; use them when present. Only an
+ * older server that omits `meta.expiry` falls back to bucketing the rows it
+ * returned (which is then capped at one page — the previous behaviour).
+ * Returns null when the payload is not a recognisable contract list at all, so
+ * the hub shows dashes rather than a fabricated zero.
+ */
+export function mapContractExpirySummary(payload: unknown): ContractExpirySummary | null {
+  if (isRecord(payload) && isRecord(payload.meta) && isRecord(payload.meta.expiry)) {
+    const e = payload.meta.expiry;
+    const n = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+    const in30 = n(e.in30);
+    const in60 = n(e.in60);
+    const in90 = n(e.in90);
+    const expired = n(e.expiredOpen);
+    if (in30 !== null && in60 !== null && in90 !== null && expired !== null) {
+      return { in30, in60, in90, expired };
+    }
+  }
+  const rows = mapContractsListRows(payload) as ContractListRow[] | null;
+  return rows ? computeContractExpirySummary(rows) : null;
+}
+
 export async function getContractExpirySummary(): Promise<LoaderResult<ContractExpirySummary | null>> {
-  const result = await getContracts();
+  const result = await fetchJson<unknown, ContractExpirySummary | null>("/api/v1/contract/contracts", null, {
+    revalidateSeconds: 30,
+    telemetryKey: "contract.expirySummary",
+    mapResponse: mapContractExpirySummary,
+  });
   if (result.source === "error") {
     return { data: null, source: "error", ...(result.status != null ? { status: result.status } : {}) };
   }
-  return { data: computeContractExpirySummary(result.data), source: "api" };
+  return { data: result.data, source: "api" };
 }
 
 export async function getContractById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
@@ -2392,8 +2426,25 @@ export const getWorkflowInstances = moduleLoader("/api/v1/workflow/instances", "
 
 // Finance loaders
 
+/**
+ * GAP-FINANCE-DASHBOARD-01: the category split is all-or-nothing. One malformed entry (no label, an amount that is not
+ * a base-10 paise string) drops the whole breakdown rather than drawing a partial split that looks complete.
+ */
+function mapCategoryBreakdown(raw: unknown): FinanceDashboard["categoryBreakdown"] {
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: NonNullable<FinanceDashboard["categoryBreakdown"]> = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) return undefined;
+    const label = toText(entry.label)?.trim();
+    if (!label || typeof entry.amountMinor !== "string" || !/^\d+$/.test(entry.amountMinor)) return undefined;
+    out.push({ label, amountMinor: entry.amountMinor });
+  }
+  return out;
+}
+
 function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
   if (!isRecord(payload)) return null;
+  const categoryBreakdown = mapCategoryBreakdown(payload.categoryBreakdown);
   return {
     // Preserve null (no sanctioned budget on record, UX-006) distinctly from
     // a malformed/missing field defaulting to 0 — collapsing both to 0 would
@@ -2406,6 +2457,7 @@ function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
     ...(typeof payload.sanctionedMinor === "string" && /^\d+$/.test(payload.sanctionedMinor)
       ? { sanctionedMinor: payload.sanctionedMinor }
       : {}),
+    ...(categoryBreakdown ? { categoryBreakdown } : {}),
   };
 }
 
@@ -2904,7 +2956,18 @@ export async function getFinanceActorNames(ids: readonly (string | null | undefi
 }
 
 export type GlPageParams = { fy?: string | undefined; type?: string | undefined; q?: string | undefined; page: number; pageSize: number };
-export type GlPageData = { entries: GLEntrySummary[]; pagination: GlLinesPagination; totals: GlLinesTotals | null };
+export type GlPageData = {
+  entries: GLEntrySummary[];
+  pagination: GlLinesPagination;
+  /** Totals over the FILTERED set (fiscal year + type tab + search). */
+  totals: GlLinesTotals | null;
+  /**
+   * Totals over the whole fiscal-year ledger, ignoring the tab and the search
+   * (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04). `null` = unknown (older server, or
+   * a malformed amount outside the filtered view): shown as a dash, never as zero.
+   */
+  ledgerTotals: GlLinesTotals | null;
+};
 
 /** GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: one server-filtered page of ledger lines with whole-set totals. */
 export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<GlPageData>> {
@@ -2912,7 +2975,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
   if (p.fy) qs.set("fy", p.fy);
   if (p.type) qs.set("type", p.type);
   if (p.q) qs.set("q", p.q);
-  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null };
+  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null, ledgerTotals: null };
   return fetchJson<unknown, GlPageData>(`/api/v1/finance/journals/lines?${qs.toString()}`, empty, {
     telemetryKey: "finance.gl.page",
     mapResponse: (raw) => {
@@ -2923,6 +2986,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
         entries: parsed.data as GLEntrySummary[],
         pagination: raw.pagination as unknown as GlLinesPagination,
         totals: isRecord(raw.totals) ? (raw.totals as unknown as GlLinesTotals) : null,
+        ledgerTotals: isRecord(raw.ledgerTotals) ? (raw.ledgerTotals as unknown as GlLinesTotals) : null,
       };
     },
   });
@@ -3384,6 +3448,11 @@ export type ProcurementListQuery = {
   q?: string;
   /** GAP-PROCUREMENT-VENDORS-DETAIL-04: restrict a list to one vendor (server-side). */
   vendorId?: string;
+  /**
+   * GAP-PROCUREMENT-DASHBOARD-02: restrict the indents list to these raw service
+   * statuses (comma-separated, e.g. "draft,pending"), applied before paging.
+   */
+  status?: string;
 };
 
 function buildListPath(base: string, query?: ProcurementListQuery): string {
@@ -3393,6 +3462,7 @@ function buildListPath(base: string, query?: ProcurementListQuery): string {
   if (query.offset != null) params.set("offset", String(query.offset));
   if (query.q?.trim()) params.set("q", query.q.trim());
   if (query.vendorId) params.set("vendorId", query.vendorId);
+  if (query.status) params.set("status", query.status);
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -4442,7 +4512,7 @@ export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[
 
 // Helpdesk detail loaders
 
-function mapTicketDetails(payload: unknown): TicketDetail[] | null {
+export function mapTicketDetails(payload: unknown): TicketDetail[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: TicketDetail[] = [];
@@ -4474,8 +4544,8 @@ function mapTicketDetails(payload: unknown): TicketDetail[] | null {
       slaStatus: slaStatus as TicketDetail["slaStatus"],
       status: status as TicketDetail["status"],
       channel: (["web", "email", "phone", "walk_in"] as const).find((c) => c === row.channel),
-      createdAt: toText(row.createdAt) ?? new Date().toISOString(),
-      updatedAt: toText(row.updatedAt) ?? new Date().toISOString(),
+      createdAt: toText(row.createdAt) ?? null,
+      updatedAt: toText(row.updatedAt) ?? null,
       resolvedAt: toText(row.resolvedAt) ?? undefined,
       comments: [],
     });
@@ -4904,25 +4974,32 @@ export async function getGrantUtilization(): Promise<LoaderResult<GrantUtilizati
 // Establishment loaders
 
 const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
-  filesPending: 0,
+  filesActive: 0,
   meetingsToday: 0,
   vehiclesInUse: 0,
   complianceItemsDue: 0,
   slaBreached: 0,
   dakPending: 0,
   avgPendencyDays: 0,
+  openFiles: 0,
+  oldestPendencyDays: 0,
 };
 
 function mapEstabDashboard(payload: unknown): EstabDashboard | null {
   if (!isRecord(payload)) return null;
   return {
-    filesPending: typeof payload.filesPending === "number" ? payload.filesPending : 0,
+    // filesActive is the field name; filesPending is the deprecated alias older services still send.
+    filesActive: typeof payload.filesActive === "number"
+      ? payload.filesActive
+      : typeof payload.filesPending === "number" ? payload.filesPending : 0,
     meetingsToday: typeof payload.meetingsToday === "number" ? payload.meetingsToday : 0,
     vehiclesInUse: typeof payload.vehiclesInUse === "number" ? payload.vehiclesInUse : 0,
     complianceItemsDue: typeof payload.complianceItemsDue === "number" ? payload.complianceItemsDue : 0,
     slaBreached: typeof payload.slaBreached === "number" ? payload.slaBreached : 0,
     dakPending: typeof payload.dakPending === "number" ? payload.dakPending : 0,
     avgPendencyDays: typeof payload.avgPendencyDays === "number" ? payload.avgPendencyDays : 0,
+    openFiles: typeof payload.openFiles === "number" ? payload.openFiles : 0,
+    oldestPendencyDays: typeof payload.oldestPendencyDays === "number" ? payload.oldestPendencyDays : 0,
   };
 }
 
@@ -4945,22 +5022,29 @@ export async function getEstabFiles(): Promise<LoaderResult<EstabFileSummary[]>>
 
 /**
  * GAP-ESTAB-INBOX-01: files currently on the authenticated officer's desk
- * ("My Desk"), filtered server-side by the backend (currentWith = actor) at
- * /api/v1/estab/files/mine — never the whole register.
+ * ("My Desk"), filtered server-side by the backend (the files held under the
+ * officer's own id or their hrms employee id) at /api/v1/estab/files/mine,
+ * never the whole register. `notEnrolled` is true when the tenant uses the
+ * operator model and this officer is not an enrolled operator.
  */
-export async function getEstabDeskFiles(): Promise<LoaderResult<EstabFileSummary[]>> {
-  return fetchJson<unknown, EstabFileSummary[]>("/api/v1/estab/files/mine", [], {
+export async function getEstabDeskFiles(): Promise<LoaderResult<EstabDesk>> {
+  return fetchJson<unknown, EstabDesk>("/api/v1/estab/files/mine", { files: [], notEnrolled: false }, {
     revalidateSeconds: 30,
     telemetryKey: "estab.files.mine",
-    mapResponse: mapEstabFileSummaries,
+    mapResponse: mapEstabDesk,
   });
 }
 
 export async function getEstabFileById(id: string): Promise<LoaderResult<EstabFileDetail | null>> {
+  // No `responseSchema` here on purpose. EstabFileDetailSchema describes the web-normalised shape (a
+  // five-value classification enum, createdBy/createdDate, a string currentHolder), not what
+  // estab-service sends: its DTO carries classification "public", status "draft"/"closed", a null
+  // currentHolder and createdAt, so validating the RAW payload against it rejected every real file and
+  // the page read "couldn't load file" for a file that had just been created. mapEstabFileDetail is the
+  // tolerant boundary: it requires id, fileNo and subject and normalises the rest.
   return fetchJson<unknown, EstabFileDetail | null>(`/api/v1/estab/files/${id}`, null, {
     revalidateSeconds: 30,
     telemetryKey: "estab.file.detail",
-    responseSchema: EstabFileDetailSchema,
     mapResponse: (p) => mapEstabFileDetail(p),
   });
 }
@@ -6225,8 +6309,10 @@ export async function getNotificationDeliveries(): Promise<LoaderResult<Notifica
 // GAP-PAYROLL-GPF-02 / NPS-02: employeeCode is the real HR employee number
 // payroll-service now enriches from hrms (null when unresolved), and
 // pranLast4 (NPS only) is the last four characters of the PRAN -- the full
-// PRAN never leaves hrms-service.
-export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; employeeCode?: string | null; pranLast4?: string | null; period: string; empContribMinor?: number | null; erContribMinor?: number | null; basicMinor?: number; reconciliation?: { status: "match" | "mismatch" | "no_hrms_account" | "hrms_unavailable" } | null };
+// PRAN never leaves hrms-service. GAP-PAYROLL-STATUTORY-NPS-05: pensionBaseMinor
+// (NPS only) is the Basic + DA base the contribution percentages were applied
+// to (null for rows written before payroll recorded it).
+export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; employeeCode?: string | null; pranLast4?: string | null; period: string; empContribMinor?: number | null; erContribMinor?: number | null; basicMinor?: number; pensionBaseMinor?: number | null; reconciliation?: { status: "match" | "mismatch" | "no_hrms_account" | "hrms_unavailable" } | null };
 
 export async function getGpfStatements(): Promise<LoaderResult<StatutoryRow[]>> {
   return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/gpf", [], {
@@ -7656,16 +7742,26 @@ export async function getServiceRequest(id: string): Promise<LoaderResult<Servic
         const r = raw as Record<string, unknown>;
         if (typeof r.id !== "string") return null;
         const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-        const history = Array.isArray(r.stageHistory)
-          ? r.stageHistory
-              .filter((e): e is Record<string, unknown> => !!e && typeof e === "object")
+        const objs = (v: unknown): Record<string, unknown>[] =>
+          Array.isArray(v) ? v.filter((e): e is Record<string, unknown> => !!e && typeof e === "object") : [];
+        // helpdesk-service sends `stageEvents` ({toStage, at, note}) and `approvals`
+        // ({decision, comment, decidedAt}); the rejection reason is the comment of
+        // the (latest) rejected approval.
+        const history = Array.isArray(r.stageEvents)
+          ? objs(r.stageEvents)
               .map((e) => ({
-                stage: typeof e.stage === "string" ? e.stage : "",
-                enteredAt: typeof e.enteredAt === "string" ? e.enteredAt : "",
+                stage: typeof e.toStage === "string" ? e.toStage : "",
+                enteredAt: typeof e.at === "string" ? e.at : "",
                 note: typeof e.note === "string" ? e.note : null,
               }))
               .filter((e) => e.stage !== "")
           : undefined;
+        const rejected = objs(r.approvals).filter((a) => a.decision === "rejected");
+        const lastRejected = rejected[rejected.length - 1];
+        const rejectionReason =
+          lastRejected && typeof lastRejected.comment === "string" && lastRejected.comment.trim() !== ""
+            ? lastRejected.comment
+            : null;
         return {
           id: r.id,
           offeringId: str(r.offeringId) ?? "",
@@ -7677,7 +7773,7 @@ export async function getServiceRequest(id: string): Promise<LoaderResult<Servic
           resolutionDeadline: str(r.resolutionDeadline),
           breachEscalatedAt: str(r.breachEscalatedAt),
           createdAt: str(r.createdAt) ?? "",
-          rejectionReason: str(r.rejectionReason),
+          rejectionReason,
           stageHistory: history,
         } satisfies ServiceRequestDetail;
       },

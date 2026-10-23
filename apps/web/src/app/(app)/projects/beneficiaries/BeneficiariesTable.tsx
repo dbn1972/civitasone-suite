@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeIST } from "@/lib/formatters";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -59,7 +60,7 @@ export function BeneficiariesTable({ rows, source = "api", canExport = false }: 
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   return (

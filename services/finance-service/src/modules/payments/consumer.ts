@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { normalisePoNumber, assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, assertPayerNotPasser, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
@@ -109,9 +109,11 @@ export function registerPaymentsConsumers(queue: Queue): void {
       id: string; tenantId: string; billNo: string; vendorId: string; headId: string;
       ddoCode?: string; paoCode?: string;
       sanctionRef?: string; grossMinor: number; currency?: string; deductions: Deduction[];
-      netMinor: number; poRef?: string; grnRef?: string; billDate?: string;
+      netMinor: number; poRef?: string; poNumber?: string; grnRef?: string; billDate?: string;
       poAmountMinor?: string; grnAmountMinor?: string;
     };
+    // GAP-FINANCE-EXPENDITURE-BILLS-06: display snapshot of the human PO number (grn.accepted carries it).
+    const poNumber = normalisePoNumber(p.poNumber);
     // B1: when the producer (e.g. grn.accepted integration handler) omits ddoCode,
     // fall back to FINANCE_DEFAULT_DDO_CODE env var, then the tenant PFMS config
     // defaultDdo, then the constant DDO000001 (prevents dead-lettering every GRN bill).
@@ -202,7 +204,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         sanctionRef: p.sanctionRef ?? null,
         grossMinor: BigInt(p.grossMinor), currency: p.currency ?? "INR",
         deductions: p.deductions, netMinor,
-        poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
+        poRef: p.poRef ?? null, poNumber, grnRef: p.grnRef ?? null,
         ...(poAmountMinor != null ? { poAmountMinor } : {}),
         ...(grnAmountMinor != null ? { grnAmountMinor } : {}),
         billDate,
@@ -405,6 +407,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
       amountMinor: number | string | bigint; currency?: string; eftRef?: string; bankAccountId?: string;
+      // Optional here (a command queued before `reason` became mandatory at the
+      // route must still process); the route enforces it for every new request.
+      reason?: string;
     };
     assertValidDdoCode(p.ddoCode);
     const paymentAmount = BigInt(p.amountMinor);
@@ -490,7 +495,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
         receiptMinor: 0n, paymentMinor: payAmount, bankOrCash: "bank",
         reference: `payment:${p.id}`, actorId: msg.actorId,
       });
-      await audit(tx, msg, "initiate", "payment", p.id);
+      // GAP-FINANCE-PAYMENTS-01: the audit event carries what was authorised (the exact
+      // paise amount, mode, bill, DDO) and why (the officer's reason); the actor is on
+      // the envelope. Paise are a decimal string (bigint-safe, no JSON number).
+      await audit(tx, msg, "initiate", "payment", p.id, "success", {
+        billId: p.billId, ddoCode: p.ddoCode.toUpperCase(), mode: p.mode,
+        amountMinor: paymentAmount.toString(), currency: p.currency ?? "INR",
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
     // BUG FIX (cache poisoning): previously cached a PARTIAL placeholder
     // ({id, status}) with no tenantId field. getPayment()'s tenant-isolation
@@ -525,7 +537,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
 
   sub(COMMANDS.advanceCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string;
+      id: string; tenantId: string; advanceNo: string; purpose: string; payee?: string; payeeId?: string;
       type?: string; amountMinor: number; currency?: string; dueDate?: string;
       sanctionAuthority?: string; reason?: string;
     };
@@ -540,6 +552,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
         await repo.insertAdvance(tx, {
           id: p.id, tenantId: p.tenantId, advanceNo: p.advanceNo,
           beneficiary,
+          payeeId: p.payeeId ?? null,
           type: p.type ?? "employee",
           amountMinor: BigInt(p.amountMinor), currency: p.currency ?? "INR",
           disbursedDate: today,
@@ -570,7 +583,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
 
   sub(COMMANDS.ucCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string; grantee?: string;
+      id: string; tenantId: string; ucNo: string; purpose: string; scheme?: string; schemeCode?: string; grantee?: string;
       grantRef?: string; amountMinor: number | string; currency?: string; periodFrom?: string; periodTo?: string;
       declaration?: boolean;
     };
@@ -580,10 +593,16 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const grantee = (p.grantee ?? "").trim();
     if (!grantee) throw new NonRetryableError("[finance/payments] ucCreate SCHEMA_VIOLATION: grantee is required");
     const grantRef = p.grantRef ?? p.scheme ?? null;
+    // The scheme is linked by its Scheme Tracking code, independent of the grant reference (which used to carry it and
+    // lost it whenever a grant reference was typed as well).
+    const schemeCode = p.schemeCode?.trim() || null;
     const amountMinor = BigInt(p.amountMinor);
     assertUCPeriodValid(p.periodFrom, p.periodTo);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if (schemeCode && !(await ucRepo.findSchemeByCode(tx, p.tenantId, schemeCode))) {
+        throw new NonRetryableError(`[finance/payments] ucCreate UNKNOWN_SCHEME: ${schemeCode} is not a scheme of this tenant`);
+      }
       // Over-claim guard (race-safe): when the grant reference is an approved
       // sanction's number, lock that sanction row so concurrent UCs for it are
       // serialised, then require sum(other claiming UCs) + this <= sanctioned.
@@ -596,6 +615,7 @@ export function registerPaymentsConsumers(queue: Queue): void {
       await repo.insertUC(tx, {
         id: p.id, tenantId: p.tenantId, ucNo: p.ucNo,
         grantRef,
+        schemeCode,
         grantee,
         amountMinor, currency: p.currency ?? "INR",
         periodFrom: p.periodFrom ?? today,

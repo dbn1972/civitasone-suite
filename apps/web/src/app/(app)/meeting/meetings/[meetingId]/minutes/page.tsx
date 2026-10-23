@@ -20,11 +20,12 @@ const monoStyle: React.CSSProperties = {
   fontVariantNumeric: "tabular-nums",
 };
 
-export default async function MinutesPage({
-  params,
-}: {
-  params: { meetingId: string };
-}) {
+export default async function MinutesPage(
+  props: {
+    params: Promise<{ meetingId: string }>;
+  }
+) {
+  const params = await props.params;
   const { meetingId } = params;
   const [meeting, minutes, resolutions] = await Promise.all([
     getMeeting(meetingId),

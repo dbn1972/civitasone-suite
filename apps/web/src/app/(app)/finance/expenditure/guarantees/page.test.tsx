@@ -8,11 +8,13 @@ vi.mock("./GuaranteesTable", () => ({ GuaranteesTable: () => <div>guarantees-tab
 import GuaranteesPage from "./page";
 
 describe("GuaranteesPage", () => {
-  // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: the register is read-only; point at the real entry point.
-  it("links to the Procurement EMD / BG screen where these instruments are managed", async () => {
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: the register is read-only; the link goes to the Procurement register (a route
+  // that exists), worded as that separate register rather than as where these guarantees are managed.
+  it("links to the separate Procurement EMD / BG register", async () => {
     loaderMock.mockResolvedValue({ data: [], source: "api" });
     render(await GuaranteesPage());
-    expect(screen.getByRole("link", { name: /EMD & bank guarantees/i })).toHaveAttribute("href", "/procurement/emd-bg");
+    const link = screen.getByRole("link", { name: /EMD & bank guarantees register \(Procurement\)/i });
+    expect(link).toHaveAttribute("href", "/procurement/emd-bg");
   });
 
   // GAP-FINANCE-EXPENDITURE-GUARANTEES-03 (fixed in #1786): regression guard.
@@ -23,12 +25,15 @@ describe("GuaranteesPage", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
   });
 
-  // GAP2-FINANCE-GUARANTEES-COPY-08: the copy must make the read-only,
-  // Procurement-managed nature unambiguous and not imply any Finance action.
-  it("states the register is a read-only mirror of Procurement-managed instruments", async () => {
+  // GAP2-FINANCE-GUARANTEES-COPY-08: the copy must make the read-only nature unambiguous and not imply any action here.
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: it must also not claim the rows are a mirror of Procurement's register -- the only
+  // writer of finance_guarantees is finance-service's own create command, nothing is copied in from Procurement.
+  it("states the register is read-only and does not claim to mirror Procurement", async () => {
     loaderMock.mockResolvedValue({ data: [], source: "api" });
-    render(await GuaranteesPage());
-    expect(screen.getByText(/read-only mirror of Procurement-managed/i)).toBeInTheDocument();
+    const { container } = render(await GuaranteesPage());
+    expect(screen.getByText(/cannot be recorded, released or invoked from this screen yet/i)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/mirror/i);
+    expect(container.textContent).not.toMatch(/Procurement-managed/i);
     // The old subtitle "Bank guarantees, performance securities, and earnest money deposits." is gone.
     expect(screen.queryByText("Bank guarantees, performance securities, and earnest money deposits.")).not.toBeInTheDocument();
   });

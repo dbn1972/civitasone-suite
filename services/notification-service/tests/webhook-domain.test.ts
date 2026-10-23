@@ -84,7 +84,7 @@ describe("POST /v1/webhooks — route tests", () => {
   const validBody = {
     name: "My Webhook",
     url: "https://api.example.com/webhooks/notify",
-    secret: "a-very-secure-secret-key-minimum-16",
+    secret: globalThis.crypto.randomUUID(),
   };
 
   it("202 for valid webhook creation by admin", async () => {

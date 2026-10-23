@@ -7,6 +7,8 @@
  * server-only loaders into the browser bundle.
  */
 export const INVENTORY_LIST_LIMIT = 200;
+/** inventory-service low-stock page ceiling (lowStockQueryParams max); its default is only 100. Rows come most-urgent-first, so a full page still leads with the worst shortfalls. */
+export const LOW_STOCK_LIMIT = 500;
 export const INVENTORY_LEDGER_LIMIT = 500;
 /** stock-service ledger page ceiling (its ledgerQueryParams max); its default is only 100 (GAP-INVENTORY-RECONCILE-05). */
 export const STOCK_LEDGER_LIMIT = 500;

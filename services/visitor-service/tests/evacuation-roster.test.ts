@@ -8,7 +8,13 @@
  *
  * Requirements: 17.1, 17.2
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { warn } = vi.hoisted(() => ({ warn: vi.fn() }));
+vi.mock("pino", () => {
+  const pino = () => ({ warn, info: vi.fn(), error: vi.fn(), debug: vi.fn() });
+  return { default: pino, pino };
+});
 import {
   addToRoster,
   getFullRoster,
@@ -135,5 +141,23 @@ describe("tenant/location isolation", () => {
     expect(await getVisitorCount(TENANT_A, LOCATION_A)).toBe(1);
     expect(await getVisitorCount(TENANT_A, LOCATION_B)).toBe(1);
     expect((await getFullRoster(TENANT_A, LOCATION_A))[0]?.passId).toBe("pass-1");
+  });
+});
+
+describe("getFullRoster — corrupt hash entry (CLOS2-S6-08)", () => {
+  it("skips a non-JSON entry, returns the valid ones, and warns without logging the raw value", async () => {
+    const store = {
+      hgetall: async () => ({ a: '{"ok":1}', b: "not-json-SECRET-PII" }),
+    };
+    setRosterStoreForTests(store as unknown as Parameters<typeof setRosterStoreForTests>[0]);
+    warn.mockClear();
+    const roster = await getFullRoster(TENANT_A, LOCATION_A);
+    expect(roster).toEqual([{ ok: 1 }]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(warn.mock.calls[0]);
+    expect(logged).toContain(TENANT_A);
+    expect(logged).toContain(LOCATION_A);
+    expect(logged).toContain('"b"');
+    expect(logged).not.toContain("SECRET-PII");
   });
 });

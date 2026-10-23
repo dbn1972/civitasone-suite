@@ -34,7 +34,7 @@ const base = {
   job: { id: "j", title: "Junior Engineer", refNo: "REF-1", location: null, description: null, payRange: null, vacancies: 0, closesAt: "2099-12-31" },
 };
 
-const render_ = async () => render(await ApplicationDetailPage({ params: { id: base.id } }));
+const render_ = async () => render(await ApplicationDetailPage({ params: Promise.resolve({ id: base.id }) }));
 const stub = (status: number, body: unknown = base) => vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status })));
 
 describe("candidate portal application detail page", () => {
@@ -43,12 +43,12 @@ describe("candidate portal application detail page", () => {
 
   it("redirects to sign-in when there is no cookie", async () => {
     H.cookie = undefined;
-    await expect(ApplicationDetailPage({ params: { id: base.id } })).rejects.toThrow("NEXT_REDIRECT:/careers/portal/login");
+    await expect(ApplicationDetailPage({ params: Promise.resolve({ id: base.id }) })).rejects.toThrow("NEXT_REDIRECT:/careers/portal/login");
   });
 
   it("redirects an expired / rejected session (401) back to login instead of a 404", async () => {
     stub(401, {});
-    await expect(ApplicationDetailPage({ params: { id: base.id } })).rejects.toThrow("NEXT_REDIRECT:/careers/portal/login?expired=1");
+    await expect(ApplicationDetailPage({ params: Promise.resolve({ id: base.id }) })).rejects.toThrow("NEXT_REDIRECT:/careers/portal/login?expired=1");
   });
 
   it("shows a retry card (not a 404) when the service fails", async () => {
@@ -60,7 +60,7 @@ describe("candidate portal application detail page", () => {
 
   it("keeps notFound() for a real 404", async () => {
     stub(404, {});
-    await expect(ApplicationDetailPage({ params: { id: base.id } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(ApplicationDetailPage({ params: Promise.resolve({ id: base.id }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("renders no stray '0' for zero vacancies and no invented 'India' location", async () => {

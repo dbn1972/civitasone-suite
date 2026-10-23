@@ -44,6 +44,19 @@ export function registerDelegationConsumers(queue: Queue): void {
     } catch (err) { log.error({ err, messageId: msg.messageId }, "revokeDelegation failed"); throw err; }
   });
 
+  // Audit-only: the route refused a revoke by a non-owner; record it durably.
+  queue.subscribe(COMMANDS.refuseDelegationRevoke, async (msg) => {
+    const p = msg.payload as { id: string };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await enqueue(tx, { topic: AUDIT, eventType: AUDIT, tenantId: msg.tenantId, actorId: msg.actorId,
+          correlationId: msg.correlationId, payload: { service: "workflow", action: "revoke",
+            resourceType: "delegation", resourceId: p.id, outcome: "denied", reason: "not_delegator_or_admin" } });
+      });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "refuseDelegationRevoke failed"); throw err; }
+  });
+
   registerRoleRevokedConsumer(queue);
 }
 

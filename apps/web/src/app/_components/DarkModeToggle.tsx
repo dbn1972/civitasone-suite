@@ -4,11 +4,32 @@ import React, { useState, useEffect } from "react";
 
 type Theme = "light" | "dark" | "system";
 
+const STORAGE_KEY = "civitas-theme";
+
+// Storage can throw (SecurityError with site data blocked) or hold a junk value;
+// neither may unmount the tree, so React state alone drives the in-session theme.
+function readStored(): Theme | null {
+  try {
+    const v = localStorage.getItem(STORAGE_KEY);
+    return v === "light" || v === "dark" || v === "system" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(v: Theme): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, v);
+  } catch {
+    /* storage blocked: keep the in-session theme only */
+  }
+}
+
 export function DarkModeToggle() {
   const [theme, setTheme] = useState<Theme>("light");
 
   useEffect(() => {
-    const stored = localStorage.getItem("civitas-theme") as Theme | null;
+    const stored = readStored();
     if (stored) {
       setTheme(stored);
       applyTheme(stored);
@@ -37,7 +58,7 @@ export function DarkModeToggle() {
     const next = order[(order.indexOf(theme) + 1) % order.length];
     setTheme(next);
     applyTheme(next);
-    localStorage.setItem("civitas-theme", next);
+    writeStored(next);
   };
 
   const icon = theme === "dark" ? "🌙" : theme === "light" ? "☀️" : "💻";

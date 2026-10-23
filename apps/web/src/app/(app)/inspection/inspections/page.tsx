@@ -53,11 +53,12 @@ function inspectorCell(inspectors: string[] | undefined): string {
   return inspectors.length > 1 ? `${first} +${inspectors.length - 1}` : first;
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams?: { page?: string };
-}) {
+export default async function Page(
+  props: {
+    searchParams?: Promise<{ page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const pageParam = Number(searchParams?.page ?? "1");
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 

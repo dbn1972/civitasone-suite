@@ -36,6 +36,22 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
     sessionRoles = ["helpdesk_admin"];
   });
 
+  it("CLOS2-S3-11: a ticket with no createdAt sorts last and shows a dash, not a made-up date", async () => {
+    getSlaTicketsMock.mockResolvedValue({
+      source: "api",
+      data: [
+        ticket({ id: "none", ticketNo: "NO-DATE", priority: "medium", slaStatus: "breached", createdAt: null }),
+        ticket({ id: "dated", ticketNo: "HAS-DATE", priority: "medium", slaStatus: "breached", createdAt: "2026-06-01T00:00:00Z" }),
+      ],
+    });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
+    render(ui);
+    const dated = screen.getByText("HAS-DATE");
+    const none = screen.getByText("NO-DATE");
+    expect(dated.compareDocumentPosition(none) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
   it("SLAS-03: Critical overdue ranks above an older Low ticket", async () => {
     getSlaTicketsMock.mockResolvedValue({
       source: "api",
@@ -45,7 +61,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       ],
     });
 
-    const ui = await Page({ searchParams: {} });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // Both should appear
@@ -69,7 +85,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       ],
     });
 
-    const ui = await Page({ searchParams: { bucket: "due_soon" } });
+    const ui = await Page({ searchParams: Promise.resolve({ bucket: "due_soon" }) });
     render(ui);
 
     expect(screen.getByText("DUESOON-1")).toBeInTheDocument();
@@ -85,7 +101,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       ],
     });
 
-    const ui = await Page({ searchParams: {} });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("BREACH-1")).toBeInTheDocument();
@@ -99,7 +115,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       data: [ticket({ id: "b1", ticketNo: "BREACH-1", slaStatus: "breached" })],
     });
 
-    const ui = await Page({ searchParams: {} });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText(/CSV/)).toBeInTheDocument();
@@ -112,7 +128,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       data: [ticket({ id: "b1", ticketNo: "BREACH-1", slaStatus: "breached" })],
     });
 
-    const ui = await Page({ searchParams: {} });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("BREACH-1")).toBeInTheDocument();
@@ -128,7 +144,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       bucketSources: { breached: "api", due_soon: "error", within_sla: "api" },
     });
 
-    const ui = await Page({ searchParams: { bucket: "breached" } });
+    const ui = await Page({ searchParams: Promise.resolve({ bucket: "breached" }) });
     render(ui);
 
     // Breached table still renders.
@@ -146,7 +162,7 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
       bucketSources: { breached: "api", due_soon: "error", within_sla: "api" },
     });
 
-    const ui = await Page({ searchParams: { bucket: "due_soon" } });
+    const ui = await Page({ searchParams: Promise.resolve({ bucket: "due_soon" }) });
     render(ui);
 
     // On the failed bucket, show the retryable error, not a stale/empty table.

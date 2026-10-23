@@ -165,7 +165,7 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
   // aggregate is recomputed server-side for it. The server's filters are ISO INSTANTS (a bare
   // yyyy-mm-dd is a 400), so the day range is sent as the IST day's first and last instants.
   it("passes the ?from/?to window to the loader as ISO instants the server accepts", async () => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01", to: "2026-09-30" } })));
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: Promise.resolve({ from: "2026-09-01", to: "2026-09-30" }) })));
     expect(mockedSummary).toHaveBeenCalledTimes(1);
     expect(mockedSummary).toHaveBeenCalledWith({ from: "2026-08-31T18:30:00.000Z", to: "2026-09-30T18:29:59.999Z" });
     expect(screen.getByText(/Window: 2026-09-01 to 2026-09-30/)).toBeInTheDocument();
@@ -178,13 +178,13 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
   });
 
   it("a half-open window sends only the side it has", async () => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01" } })));
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: Promise.resolve({ from: "2026-09-01" }) })));
     expect(mockedSummary).toHaveBeenCalledWith({ from: "2026-08-31T18:30:00.000Z" });
   });
 
   // The download must cover exactly the window on screen - same conversion, same instants.
   it("exports exactly the same window as the figures", async () => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-01", to: "2026-09-30" } })));
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: Promise.resolve({ from: "2026-09-01", to: "2026-09-30" }) })));
     const summaryWindow = mockedSummary.mock.calls[0]![0];
     const exp = screen.getByTestId("export");
     expect(exp).toHaveAttribute("data-from", summaryWindow!.from);
@@ -194,7 +194,7 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
   // An invalid window must NOT be sent to the server, and must NOT quietly show the all-time
   // answer to a question the reader did not ask: say so, fetch nothing, leave the control to fix it.
   it("an inverted range (from > to) shows a validation message and fetches nothing", async () => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: { from: "2026-09-30", to: "2026-09-01" } })));
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: Promise.resolve({ from: "2026-09-30", to: "2026-09-01" }) })));
     expect(mockedSummary).not.toHaveBeenCalled();
     expect(mockedRatings).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/isn.t valid/i);
@@ -210,7 +210,7 @@ describe("VoiceOfCitizenPage — GoI redesign", () => {
     ["month 13", { from: "2026-13-01" }],
     ["garbage", { to: "yesterday" }],
   ])("a %s is invalid too: no fetch, no crash", async (_label, sp) => {
-    render(withIntl(await VoiceOfCitizenPage({ searchParams: sp })));
+    render(withIntl(await VoiceOfCitizenPage({ searchParams: Promise.resolve(sp) })));
     expect(mockedSummary).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/isn.t valid/i);
   });

@@ -13,12 +13,14 @@ export function psqlInvocation(db) {
     const port = process.env.PGPORT ?? "5432";
     const user = process.env.PGUSER ?? "civitas";
     return {
-      cmd: `psql -h ${host} -p ${port} -U ${user} -d ${db} -v ON_ERROR_STOP=1`,
+      file: "psql",
+      args: ["-h", host, "-p", String(port), "-U", user, "-d", db, "-v", "ON_ERROR_STOP=1"],
       env: { ...process.env, PGPASSWORD: process.env.PGPASSWORD ?? "" },
     };
   }
   return {
-    cmd: `docker exec -i civitasone-postgres psql -U civitas_admin -d ${db} -v ON_ERROR_STOP=1`,
+    file: "docker",
+    args: ["exec", "-i", "civitasone-postgres", "psql", "-U", "civitas_admin", "-d", db, "-v", "ON_ERROR_STOP=1"],
     env: process.env,
   };
 }

@@ -33,7 +33,7 @@ describe("BillingDetailPage (WORKID-05/06)", () => {
       source: "api",
       data: [row({ id: "b1" }), row({ id: "b2", billNo: "RA-02", gross: "1", rawStatus: "do_finalized" })],
     });
-    const ui = await BillingDetailPage({ params: { workId: "11111111-1111-1111-1111-111111111111" } });
+    const ui = await BillingDetailPage({ params: Promise.resolve({ workId: "11111111-1111-1111-1111-111111111111" }) });
     render(ui);
     // 9007199254740993 + 1 = 9007199254740994 paise = ₹9,00,71,99,25,47,409.94 (exact; a float sum would lose the last digit).
     expect(screen.getByText(/9,00,71,99,25,47,409\.94/)).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("BillingDetailPage (WORKID-05/06)", () => {
       source: "api",
       data: [row({ id: "b1", rawStatus: "do_finalized" }), row({ id: "b2", rawStatus: "submitted" }), row({ id: "b3", rawStatus: "submitted" })],
     });
-    const ui = await BillingDetailPage({ params: { workId: "11111111-1111-1111-1111-111111111111" } });
+    const ui = await BillingDetailPage({ params: Promise.resolve({ workId: "11111111-1111-1111-1111-111111111111" }) });
     render(ui);
     const statText = (label: string) => screen.getAllByText(label)[0].parentElement!.textContent ?? "";
     expect(statText("Finalized")).toMatch(/1/);
@@ -59,7 +59,7 @@ describe("BillingDetailPage (WORKID-05/06)", () => {
       source: "api",
       data: [row({ id: "b1", billNo: "RA-01" }), row({ id: "b2", billNo: "RA-02" })],
     });
-    const ui = await BillingDetailPage({ params: { workId: "11111111-1111-1111-1111-111111111111" }, searchParams: { bill: "b2" } });
+    const ui = await BillingDetailPage({ params: Promise.resolve({ workId: "11111111-1111-1111-1111-111111111111" }), searchParams: Promise.resolve({ bill: "b2" }) });
     render(ui);
     expect(screen.getByRole("note")).toHaveTextContent(/bill RA-02 is listed first/);
     const cells = screen.getAllByText(/RA-0[12]/).map((c) => c.textContent);

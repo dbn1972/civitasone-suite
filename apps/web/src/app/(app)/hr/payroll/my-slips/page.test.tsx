@@ -18,7 +18,7 @@ import MySlipsPage from "./page";
 
 const slip = (id: string, payPeriod: string) => ({ id, employeeId: "e1", employeeName: "Asha", department: "Fin", payPeriod, gross: 10000, deductions: 2000, net: 8000, status: "paid" });
 const renderPage = async (sp: { page?: string } = {}) =>
-  render(<NextIntlClientProvider locale="en" messages={enMessages}>{await MySlipsPage({ searchParams: sp })}</NextIntlClientProvider>);
+  render(<NextIntlClientProvider locale="en" messages={enMessages}>{await MySlipsPage({ searchParams: Promise.resolve(sp) })}</NextIntlClientProvider>);
 
 describe("MySlipsPage (GAP-PAYROLL-SALARY-SLIPS-04)", () => {
   beforeEach(() => {

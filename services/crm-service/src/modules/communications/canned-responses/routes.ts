@@ -62,7 +62,10 @@ export async function cannedResponseRoutes(app: FastifyInstance): Promise<void> 
     const conditions = [sql`tenant_id = ${ctx.tenantId}`];
     if (query.category) conditions.push(sql`category = ${query.category}`);
     if (query.channel) conditions.push(sql`channel = ${query.channel}`);
-    if (query.search) conditions.push(sql`(title ILIKE ${"%" + query.search + "%"} OR body ILIKE ${"%" + query.search + "%"})`);
+    if (query.search) {
+      const pattern = `%${query.search}%`;
+      conditions.push(sql`(title ILIKE ${pattern} OR body ILIKE ${pattern})`);
+    }
 
     const where = sql.join(conditions, sql` AND `);
     const rows = await scopedRead((tx) => tx.execute(sql`

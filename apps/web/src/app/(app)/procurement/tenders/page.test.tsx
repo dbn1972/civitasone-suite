@@ -31,7 +31,7 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
 
   it("TENDERS-01: subtitle names single-source; a single_source row shows a warn 'Single Source' pill", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: {} }));
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/single-source/i)).toBeInTheDocument();
     const pill = screen.getAllByText("Single Source").find((el) => el.classList.contains("pill"));
     expect(pill).toBeDefined();
@@ -40,14 +40,14 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
 
   it("TENDERS-02: Technical Eval and Financial Eval are counted on separate tiles", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: {} }));
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Technical Eval").closest(".stat")).toHaveTextContent("1");
     expect(screen.getByText("Financial Eval").closest(".stat")).toHaveTextContent("1");
   });
 
   it("TENDERS-01/04: stat tiles are links to filtered views", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: {} }));
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
     const singleTile = screen.getAllByText("Single Source").map((el) => el.closest("a.stat")).find(Boolean);
     expect(singleTile).toHaveAttribute("href", expect.stringContaining("type=single_source"));
     const published = screen.getAllByText("Published").map((el) => el.closest("a.stat")).find(Boolean);
@@ -56,14 +56,14 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
 
   it("TENDERS-03: a published tender past its close with 0 bids shows the 'Closed — 0 bids' cue", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: {} }));
+    render(await TendersPage({ searchParams: Promise.resolve({}) }));
     const cue = screen.getByText("Closed — 0 bids");
     expect(cue).toHaveClass("pill", "bad");
   });
 
   it("TENDERS-03: a Type filter reduces the rows", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: { type: "single_source" } }));
+    render(await TendersPage({ searchParams: Promise.resolve({ type: "single_source" }) }));
     expect(screen.getByText("Laptops")).toBeInTheDocument();
     expect(screen.queryByText("Printers")).not.toBeInTheDocument();
     expect(screen.queryByText("Desks")).not.toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("TendersPage (GAP-PROCUREMENT-TENDERS-01/02/03/04)", () => {
 
   it("TENDERS-03: a Status filter reduces the rows", async () => {
     route(TENDERS);
-    render(await TendersPage({ searchParams: { status: "financial_evaluation" } }));
+    render(await TendersPage({ searchParams: Promise.resolve({ status: "financial_evaluation" }) }));
     expect(screen.getByText("Chairs")).toBeInTheDocument();
     expect(screen.queryByText("Laptops")).not.toBeInTheDocument();
   });

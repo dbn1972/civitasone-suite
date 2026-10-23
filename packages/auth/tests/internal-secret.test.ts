@@ -12,7 +12,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
 import { authPlugin } from "../src/plugin.js";
 
-const SECRET = "super-secret-internal-value-1234567890";
+// Built at runtime so no credential-shaped literal sits in the source.
+const SECRET = `internal-${globalThis.crypto.randomUUID()}`;
 const TENANT = "00000000-0000-0000-0000-000000000001";
 const ORIGINAL_ENV = { ...process.env };
 

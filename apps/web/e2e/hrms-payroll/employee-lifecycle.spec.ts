@@ -123,6 +123,15 @@ test.describe('Employee Lifecycle', () => {
 
     test('shows transfer order table', async ({ page }) => {
       await page.goto('/hr/transfer');
+      // b56fccd90 (#2128): the page now opens on its "Cards" view and offers the
+      // table behind a Cards/Table view toggle; switch to Table to assert the rows.
+      // The toggle is client state: a click that lands before hydration is dropped, so
+      // click until the tab reports selected (hydration wait, not a test retry).
+      const tableTab = page.getByRole('tab', { name: 'Table' });
+      await expect(async () => {
+        await tableTab.click();
+        await expect(tableTab).toHaveAttribute('aria-selected', 'true', { timeout: 1000 });
+      }).toPass();
       await expect(page.locator('tbody tr').first()).toBeVisible();
     });
 

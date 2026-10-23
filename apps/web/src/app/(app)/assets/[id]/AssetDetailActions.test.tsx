@@ -203,4 +203,13 @@ describe("AssetDetailActions", () => {
     expect(screen.getByText(/Use letters, digits and - _ \/ \. only/)).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("CLOS2-S1-12: tagging offline shows the standard offline copy, never the raw 'Failed to fetch'", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<AssetDetailActions assetId={ASSET_ID} status="active" roles={WRITER} />);
+    fireEvent.change(screen.getByPlaceholderText("Barcode / QR code"), { target: { value: "TAG-100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tag" }));
+    await waitFor(() => expect(document.body.textContent).toMatch(/connect|offline|internet|network/i));
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+  });
 });

@@ -107,7 +107,8 @@ async function getReceipts(assesseeId: string): Promise<LoaderResult<Array<Recei
   );
 }
 
-export default async function RefundDecidePage({ params }: { params: { id: string } }) {
+export default async function RefundDecidePage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const refundId = params.id;
   const currentUserId = getSessionUserId();
   const { data: refund, source, status } = await getRefund(refundId);

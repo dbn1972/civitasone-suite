@@ -1,7 +1,8 @@
 import { PageHeader } from "../../../../_components/ds";
 import { CreateReportForm } from "./CreateReportForm";
 
-export default function NewReportPage({ searchParams }: { searchParams: { reportType?: string } }) {
+export default async function NewReportPage(props: { searchParams: Promise<{ reportType?: string }> }) {
+  const searchParams = await props.searchParams;
   const reportType = typeof searchParams.reportType === "string" ? searchParams.reportType : "";
   const isKpiTarget = reportType === "kpi-target";
 

@@ -12,6 +12,8 @@
  *   />
  */
 import { useCallback, useState, type ReactNode } from "react";
+import { humanErrorFromFailure } from "@/lib/messages";
+import { isNetworkFailure } from "@/lib/userFacingError";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export interface UseConfirmActionOptions {
@@ -46,7 +48,13 @@ export function useConfirmAction({ onConfirm, onSuccess }: UseConfirmActionOptio
         setOpen(false);
         onSuccess?.();
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Action failed. Please try again.");
+        if (isNetworkFailure(e)) {
+          // A bare-fetch onConfirm rejects with TypeError("Failed to fetch"): never show that raw string.
+          const h = humanErrorFromFailure({ kind: "save", forceKind: "network" });
+          setError(`${h.what} ${h.next}`);
+        } else {
+          setError(e instanceof Error ? e.message : "Action failed. Please try again.");
+        }
       } finally {
         setBusy(false);
       }
@@ -79,6 +87,10 @@ export interface ActionButtonProps {
   minReasonLength?: number;
   /** Forwarded to ConfirmDialog — see its doc comment. Unset by default (no cap). */
   maxReasonLength?: number;
+  /** Forwarded to ConfirmDialog: extra form controls (e.g. a picker) rendered inside the dialog. */
+  children?: ReactNode;
+  /** Forwarded to ConfirmDialog: extra caller-owned gate on Confirm (e.g. a required picker still empty). */
+  blockConfirm?: boolean;
 }
 
 export function ActionButton({
@@ -97,6 +109,8 @@ export function ActionButton({
   reasonLabel,
   minReasonLength,
   maxReasonLength,
+  children,
+  blockConfirm,
 }: ActionButtonProps) {
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
     onConfirm,
@@ -126,10 +140,13 @@ export function ActionButton({
         {...(minReasonLength !== undefined ? { minReasonLength } : {})}
         {...(maxReasonLength !== undefined ? { maxReasonLength } : {})}
         busy={busy}
+        {...(blockConfirm !== undefined ? { blockConfirm } : {})}
         errorMessage={error}
         onConfirm={confirm}
         onCancel={cancel}
-      />
+      >
+        {children}
+      </ConfirmDialog>
     </>
   );
 }

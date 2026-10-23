@@ -112,11 +112,12 @@ function asRecapitulation(o: Record<string, unknown>): Recapitulation {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default async function BoqDetailPage({
-  params,
-}: {
-  params: { workId: string };
-}) {
+export default async function BoqDetailPage(
+  props: {
+    params: Promise<{ workId: string }>;
+  }
+) {
+  const params = await props.params;
   const { workId } = params;
 
   const [itemsResult, recapResult, headerResult] = await Promise.all([

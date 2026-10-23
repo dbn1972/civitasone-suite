@@ -22,11 +22,12 @@ function headcountDelta(a: number, b: number): string {
   return d > 0 ? `+${d}` : d < 0 ? `−${Math.abs(d)}` : "0";
 }
 
-export default async function PayrollComparisonPage({
-  searchParams,
-}: {
-  searchParams?: { period1?: string; period2?: string };
-}) {
+export default async function PayrollComparisonPage(
+  props: {
+    searchParams?: Promise<{ period1?: string; period2?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollComparison");
 
   // GAP-PAYROLL-COMPARISON-03: org-wide gross/net/headcount must not reach

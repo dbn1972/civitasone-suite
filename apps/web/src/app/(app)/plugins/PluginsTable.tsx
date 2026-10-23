@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable, StatusPill } from "../../_components/ds";
-import { PluginActions } from "./PluginActions";
+import { PluginActions, type PluginActionLabels } from "./PluginActions";
 
 type PluginRow = {
 	id?: string;
@@ -16,7 +16,7 @@ type PluginRow = {
  * label and keeps unknown statuses as-is with an honest tone, so an errored
  * plugin reads "Error", not "Disabled".
  */
-export function PluginsTable({ rows, canManage = true }: { rows: PluginRow[]; canManage?: boolean }) {
+export function PluginsTable({ rows, canManage = true, labels }: { rows: PluginRow[]; canManage?: boolean; labels?: PluginActionLabels }) {
 	return (
 		<DataTable<PluginRow>
 			sortable
@@ -37,7 +37,7 @@ export function PluginsTable({ rows, canManage = true }: { rows: PluginRow[]; ca
 					label: "Actions",
 					sortable: false,
 					align: "right",
-					render: (row) => <PluginActions plugin={row} canManage={canManage} />,
+					render: (row) => <PluginActions plugin={row} canManage={canManage} {...(labels ? { labels } : {})} />,
 				},
 			]}
 			rows={rows}

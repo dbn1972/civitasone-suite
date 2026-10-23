@@ -61,7 +61,7 @@ describe("EmployeeDetailPage", () => {
       errorMessage: "managers may only view their own direct reports' records",
     });
 
-    const ui = await EmployeeDetailPage({ params: { id: "emp-not-mine" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "emp-not-mine" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("EmployeeDetailPage", () => {
   it("still shows the generic 'couldn't load, try again' message for a genuine transient failure (no status -- e.g. a network error)", async () => {
     getEmployeeByIdMock.mockResolvedValue({ data: null, source: "error" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "emp-1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "emp-1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("EmployeeDetailPage", () => {
   it("shows an honest not-found message (no Try again) for a real 404", async () => {
     getEmployeeByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
 
-    const ui = await EmployeeDetailPage({ params: { id: "emp-gone" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "emp-gone" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Employee not found.")).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("EmployeeDetailPage", () => {
     mockRoles = ["manager"];
     getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: Edit is now a plain Link to
@@ -118,7 +118,7 @@ describe("EmployeeDetailPage", () => {
     mockRoles = ["hr_admin"];
     getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: Edit is now a plain Link to the
@@ -140,7 +140,7 @@ describe("EmployeeDetailPage", () => {
   it("still shows the Quick Actions card for a deputation employee", async () => {
     getEmployeeByIdMock.mockResolvedValue({ data: { ...BASE_EMPLOYEE, status: "deputation" }, source: "api" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByRole("heading", { name: "Quick Actions" })).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe("EmployeeDetailPage", () => {
   it("shows a muted explanation, no Quick Actions card, for an exited employee", async () => {
     getEmployeeByIdMock.mockResolvedValue({ data: { ...BASE_EMPLOYEE, status: "separated" }, source: "api" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.queryByRole("heading", { name: "Quick Actions" })).not.toBeInTheDocument();
@@ -161,7 +161,7 @@ describe("EmployeeDetailPage", () => {
   it("never renders a status with a visible underscore (StatusPill's own humanizer, no manual override)", async () => {
     getEmployeeByIdMock.mockResolvedValue({ data: { ...BASE_EMPLOYEE, status: "on_leave" }, source: "api" });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.queryByText(/on_leave/i)).not.toBeInTheDocument();
@@ -177,7 +177,7 @@ describe("EmployeeDetailPage", () => {
   describe("arriving from an accepted edit (?updated=1)", () => {
     it("reads the employee fresh and shows a dismissible 'being applied' banner", async () => {
       getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
-      const ui = await EmployeeDetailPage({ params: { id: "e1" }, searchParams: { updated: "1" } });
+      const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }), searchParams: Promise.resolve({ updated: "1" }) });
       render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
       expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1", { fresh: true });
@@ -188,7 +188,7 @@ describe("EmployeeDetailPage", () => {
 
     it("uses the normal cached read, and shows no banner, on an ordinary visit", async () => {
       getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
-      const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+      const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
       render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
       expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1");
@@ -197,7 +197,7 @@ describe("EmployeeDetailPage", () => {
 
     it("ignores any other ?updated= value", async () => {
       getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
-      const ui = await EmployeeDetailPage({ params: { id: "e1" }, searchParams: { updated: "yes" } });
+      const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }), searchParams: Promise.resolve({ updated: "yes" }) });
       render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
       expect(getEmployeeByIdMock).toHaveBeenCalledWith("e1");
       expect(screen.queryByText(/being applied/)).not.toBeInTheDocument();
@@ -212,7 +212,7 @@ describe("EmployeeDetailPage", () => {
       source: "api",
     });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByRole("heading", { name: "Statutory & Bank" })).toBeInTheDocument();
@@ -228,7 +228,7 @@ describe("EmployeeDetailPage", () => {
       source: "api",
     });
 
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.queryByRole("heading", { name: "Statutory & Bank" })).not.toBeInTheDocument();
@@ -246,7 +246,7 @@ describe("EmployeeDetailPage", () => {
         history: [],
       },
     });
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(payGroupMock).toHaveBeenCalledWith("e1");
     expect(screen.getByRole("link", { name: "Gazetted Staff" })).toHaveAttribute("href", "/hr/payroll/pay-groups/g1");
@@ -256,7 +256,7 @@ describe("EmployeeDetailPage", () => {
     mockRoles = ["hr_admin"];
     getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
     payGroupMock.mockResolvedValue({ source: "error", data: null });
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText("Pay group details couldn't be loaded right now.")).toBeInTheDocument();
     expect(screen.queryByText("Not in any pay group.")).not.toBeInTheDocument();
@@ -266,7 +266,7 @@ describe("EmployeeDetailPage", () => {
     mockRoles = ["manager"];
     payGroupMock.mockReset();
     getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
-    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(payGroupMock).not.toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "Pay group" })).not.toBeInTheDocument();

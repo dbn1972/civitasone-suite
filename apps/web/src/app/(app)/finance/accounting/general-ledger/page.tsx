@@ -6,11 +6,12 @@ import { PrintHeader } from "../../_components/PrintHeader";
 import { FyFilter } from "../../_components/FyFilter";
 import { GL_PAGE_SIZE, GL_TAB_TYPE, parseGlView } from "./glPage";
 
-export default async function GeneralLedgerPage({
-  searchParams,
-}: {
-  searchParams?: { posted?: string; state?: string; fy?: string; type?: string; q?: string; page?: string };
-}) {
+export default async function GeneralLedgerPage(
+  props: {
+    searchParams?: Promise<{ posted?: string; state?: string; fy?: string; type?: string; q?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-02: a just-posted voucher is announced
   // here (the voucher form hands over ?posted=<voucherNo>&state=queued|posted).
   const posted = searchParams?.posted?.trim().slice(0, 64) || null;
@@ -50,7 +51,7 @@ export default async function GeneralLedgerPage({
       {result.source === "error" ? (
         <LoadErrorState result={result} area="general ledger" backHref="/finance" />
       ) : (
-        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} view={view} />
+        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} />
       )}
     </>
   );

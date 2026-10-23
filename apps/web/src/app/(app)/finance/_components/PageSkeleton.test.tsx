@@ -15,10 +15,10 @@ describe("finance route loading skeletons", () => {
     expect(container.querySelectorAll(".card")).toHaveLength(2); // form card + table card
   });
 
-  it("gst: labelled status region with 4 stat cards, the period card before them, and a table", () => {
+  it("gst: labelled status region with 6 stat cards (as many as the page), the period card before them, and a table", () => {
     const { container } = render(<GstLoading />);
     expect(screen.getByRole("status", { name: "Loading GST console" })).toBeInTheDocument();
-    expect(container.querySelectorAll(".grid.g-4 > div")).toHaveLength(4);
+    expect(container.querySelectorAll(".grid.g-4 > div")).toHaveLength(6);
     const cards = Array.from(container.querySelectorAll(".card, .grid.g-4"));
     expect(cards[0]!.className).toContain("card"); // period selector card precedes the stat grid
     expect(cards[1]!.className).toContain("g-4");

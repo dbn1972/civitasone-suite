@@ -45,7 +45,7 @@ describe("CasesListPage", () => {
 
   it("shows the TRUE total (not the capped page length) and a Showing X–Y of N line (CASES-01)", async () => {
     mocked.mockResolvedValue(pageResult({ cases: [makeCase()], total: 250, limit: 25, offset: 0 }));
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("All cases (250)")).toBeInTheDocument();
     expect(screen.getByText(/Showing 1–1 of 250/)).toBeInTheDocument();
     // Next is available (more than one page), Previous is not on page 1.
@@ -55,7 +55,7 @@ describe("CasesListPage", () => {
 
   it("passes status + offset through to the loader for page 2 (CASES-01)", async () => {
     mocked.mockResolvedValue(pageResult({ cases: [makeCase()], total: 60, limit: 25, offset: 25 }));
-    await CasesListPage({ searchParams: { page: "2", status: "pending" } });
+    await CasesListPage({ searchParams: Promise.resolve({ page: "2", status: "pending" }) });
     expect(mocked).toHaveBeenCalledWith({ status: "pending", q: undefined, limit: 25, offset: 25 });
   });
 
@@ -69,7 +69,7 @@ describe("CasesListPage", () => {
         total: 2,
       }),
     );
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     const overdueRow = screen.getByText("Overdue matter").closest("tr") as HTMLElement;
     expect(within(overdueRow).getByText("Overdue")).toBeInTheDocument();
     const closedRow = screen.getByText("Closed matter").closest("tr") as HTMLElement;
@@ -78,7 +78,7 @@ describe("CasesListPage", () => {
 
   it("renders a retry error state and '—' count on loader error, not '(0)' (CASES-03)", async () => {
     mocked.mockResolvedValue(pageResult({}, "error"));
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("All cases (—)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
     expect(screen.queryByText("All cases (0)")).not.toBeInTheDocument();
@@ -86,13 +86,13 @@ describe("CasesListPage", () => {
 
   it("gives the actions column header an accessible name (CASES-04)", async () => {
     mocked.mockResolvedValue(pageResult({ cases: [makeCase()], total: 1 }));
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("columnheader", { name: "Actions" })).toBeInTheDocument();
   });
 
   it("still shows a genuine empty state for a real zero total", async () => {
     mocked.mockResolvedValue(pageResult({ cases: [], total: 0 }));
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("No cases yet")).toBeInTheDocument();
   });
 
@@ -103,7 +103,7 @@ describe("CasesListPage", () => {
         total: 1,
       }),
     );
-    render(await CasesListPage({ searchParams: {} }));
+    render(await CasesListPage({ searchParams: Promise.resolve({}) }));
     const row = screen.getByText("Untitled matter").closest("tr") as HTMLElement;
     expect(within(row).getByText("DLHC019999992026")).toBeInTheDocument();
     expect(within(row).getByText("Filing F-2026-99")).toBeInTheDocument();

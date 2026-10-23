@@ -27,11 +27,12 @@ function parseGroupBy(raw: string | string[] | undefined): GroupBy {
   return groupBySchema.parse(Array.isArray(raw) ? raw[0] : raw);
 }
 
-export default async function WorkforcePage({
-  searchParams,
-}: {
-  searchParams: { groupBy?: string | string[] };
-}) {
+export default async function WorkforcePage(
+  props: {
+    searchParams: Promise<{ groupBy?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   requireAnyRole(WORKFORCE_READER_ROLES);
   const t = await getTranslations("workforce");
   const groupBy = parseGroupBy(searchParams.groupBy);

@@ -37,7 +37,7 @@ describe("BFF proxy response passthrough", () => {
     }));
     const res = await POST(
       new Request("http://localhost/api/proxy/v1/payroll/runs/r1/bank-file", { method: "POST", body: "{}" }),
-      { params: { path: ["v1", "payroll", "runs", "r1", "bank-file"] } },
+      { params: Promise.resolve({ path: ["v1", "payroll", "runs", "r1", "bank-file"] }) },
     );
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     expect(res.headers.get("content-type")).toBe("application/zip");
@@ -54,7 +54,7 @@ describe("BFF proxy response passthrough", () => {
 
   it("still passes JSON through unchanged", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "content-type": "application/json" } }));
-    const res = await GET(new Request("http://localhost/api/proxy/v1/x"), { params: { path: ["v1", "x"] } });
+    const res = await GET(new Request("http://localhost/api/proxy/v1/x"), { params: Promise.resolve({ path: ["v1", "x"] }) });
     expect(await res.json()).toEqual({ ok: true });
   });
 });
@@ -75,7 +75,7 @@ describe("BFF proxy idempotency header allow-list", () => {
       new Request("http://localhost/api/proxy/v1/asset/bulk/import", {
         method: "POST", body: "{}", headers: { "x-idempotency-key": "k-12345678", "idempotency-key": "dropped-1234" },
       }),
-      { params: { path: ["v1", "asset", "bulk", "import"] } },
+      { params: Promise.resolve({ path: ["v1", "asset", "bulk", "import"] }) },
     );
     const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
     expect(sent["x-idempotency-key"]).toBe("k-12345678");
@@ -100,7 +100,7 @@ describe("BFF proxy If-Match header allow-list", () => {
       new Request("http://localhost/api/proxy/v1/crm/grievances/g-1/resolve", {
         method: "PATCH", body: "{}", headers: { "If-Match": "7" },
       }),
-      { params: { path: ["v1", "crm", "grievances", "g-1", "resolve"] } },
+      { params: Promise.resolve({ path: ["v1", "crm", "grievances", "g-1", "resolve"] }) },
     );
     const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
     expect(sent["if-match"]).toBe("7");

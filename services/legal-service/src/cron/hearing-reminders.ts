@@ -7,7 +7,8 @@ import { and, lte, isNull, eq, gte } from "drizzle-orm";
 
 const NOTIFICATION_TOPIC = "notification.send";
 
-export function startHearingReminderCron(): void {
+/** Starts the daily hearing-reminder cron. Returns stop(), which cancels both timers (CLOS-S5-04). */
+export function startHearingReminderCron(): () => void {
   const run = async () => {
     try {
       const now = new Date();
@@ -61,14 +62,20 @@ export function startHearingReminderCron(): void {
 
   // Run at startup, then daily at 08:00 UTC
   void run();
-  const scheduleDailyUtc = () => {
-    const now = new Date();
-    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 8, 0, 0));
-    const delay = next.getTime() - now.getTime();
-    setTimeout(() => {
-      void run();
-      setInterval(run, 24 * 60 * 60 * 1000);
-    }, delay);
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let interval: ReturnType<typeof setInterval> | undefined;
+  const now = new Date();
+  const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 8, 0, 0));
+  timeout = setTimeout(() => {
+    void run();
+    interval = setInterval(run, 24 * 60 * 60 * 1000);
+    interval.unref();
+  }, next.getTime() - now.getTime());
+  timeout.unref();
+  return () => {
+    if (timeout) clearTimeout(timeout);
+    if (interval) clearInterval(interval);
+    timeout = undefined;
+    interval = undefined;
   };
-  scheduleDailyUtc();
 }

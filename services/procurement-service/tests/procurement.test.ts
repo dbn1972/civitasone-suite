@@ -499,6 +499,12 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     ));
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.grnAccepted);
+
+    // GAP-FINANCE-EXPENDITURE-BILLS-06: the event carries the human PO number beside the opaque poRef, so finance can show
+    // "PO-GRN-0002" on the bill it drafts instead of a shortened id.
+    const accepted = rows.find((r) => r.eventType === EVENTS.grnAccepted && (r.payload as { grnId?: string }).grnId === GRN_2);
+    expect((accepted?.payload as { poNo?: string; poRef?: string })?.poRef).toBe(`procurement_po:${PO_GRN_2}`);
+    expect((accepted?.payload as { poNo?: string })?.poNo).toBe("PO-GRN-0002");
   });
 
   it("SoD: the same actor cannot both create and accept the same GRN — self-inspection is rejected", async () => {

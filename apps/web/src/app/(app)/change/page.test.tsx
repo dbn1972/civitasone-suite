@@ -29,7 +29,7 @@ describe("change home page (GAP-CHANGE-HOME-03 / -02 error state)", () => {
 
   it("HOME-03: ?status=submitted shows only submitted rows and the count matches the stat", async () => {
     getChangeRequests.mockResolvedValue({ data: ROWS, source: "api" });
-    render(await Page({ searchParams: { status: "submitted" } }));
+    render(await Page({ searchParams: Promise.resolve({ status: "submitted" }) }));
     // The 'Awaiting CAB' stat value is 2.
     const awaitingTab = screen.getByRole("tab", { name: /Awaiting CAB \(2\)/ });
     expect(awaitingTab).toHaveAttribute("aria-selected", "true");
@@ -42,14 +42,14 @@ describe("change home page (GAP-CHANGE-HOME-03 / -02 error state)", () => {
 
   it("HOME-03: the 'Awaiting CAB' stat card links to ?status=submitted", async () => {
     getChangeRequests.mockResolvedValue({ data: ROWS, source: "api" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     const link = screen.getByRole("link", { name: /Awaiting CAB/ });
     expect(link).toHaveAttribute("href", "/change?status=submitted");
   });
 
   it("error state renders '—' for the stat values, never a reassuring 0", async () => {
     getChangeRequests.mockResolvedValue({ data: [], source: "error" });
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText("0")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

@@ -12,8 +12,8 @@ import { useMemo, useState } from "react";
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable, Segmented, ErrorState, Button } from "../../../_components/ds";
 import type { PillVariant } from "../../../_components/ds/StatusPill";
 import { useOfflineResource } from "@/lib/sync/resource";
-import { formatSecondsDuration } from "@/lib/formatters";
-import { summariseCalls } from "@/lib/telephony/callSummary";
+import { formatSecondsDuration, formatDateTimeIST } from "@/lib/formatters";
+import { callMetricsPath, metricsToSummary, toCallMetrics, type CallMetrics } from "@/lib/telephony/callMetrics";
 import { toHumanError } from "@/lib/messages";
 
 type CallRow = {
@@ -134,9 +134,18 @@ export default function TelephonyCallsPage() {
     { map: toCalls, initialData: [] },
   );
 
+  // KPI cards come from the server-side aggregate for the same window — NOT from
+  // counting the rows of the (default 50-row) list page above.
+  const metricsRes = useOfflineResource<unknown, CallMetrics | null>(
+    `telephony.callmetrics:${range}`,
+    callMetricsPath(from),
+    { map: toCallMetrics, initialData: null },
+  );
+  const metrics = metricsRes.data;
+  const s = metrics ? metricsToSummary(metrics) : null;
+
   const hasData = calls.length > 0;
   const showingCache = (offline || source === "cache") && cachedAt !== null;
-  const s = summariseCalls(calls);
 
   const header = (
     <PageHeader
@@ -165,15 +174,17 @@ export default function TelephonyCallsPage() {
 
   const pending = loading && !hasData;
   const cacheNote = showingCache
-    ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+    ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
     : pending
       ? "Loading calls…"
       : "";
 
   // GAP-TELEPHONY-CALLS-02: SLA is "—" when nothing is scored (and while
   // loading), never a fabricated 100%.
-  const num = (v: number) => (pending ? "—" : v.toLocaleString("en-IN"));
-  const slaValue: string = pending ? "—" : s.slaPct === null ? "—" : `${s.slaPct}%`;
+  // Unknown (still loading, or the metrics call failed) is a dash, never a zero.
+  const kpiUnknown = pending || s === null;
+  const num = (v: number | undefined) => (kpiUnknown || v === undefined ? "—" : v.toLocaleString("en-IN"));
+  const slaValue: string = kpiUnknown || s.slaPct === null ? "—" : `${s.slaPct}%`;
 
   return (
     <>
@@ -192,17 +203,17 @@ export default function TelephonyCallsPage() {
             icon="📞"
             tone="info"
             label="Total Calls"
-            value={num(s.total)}
-            hint={pending ? undefined : `${s.live.toLocaleString("en-IN")} live (queued/ringing)`}
+            value={num(s?.total)}
+            hint={kpiUnknown ? undefined : `${s.live.toLocaleString("en-IN")} live (queued/ringing)`}
           />
-          <StatCard icon="✅" tone="good" label="Answered" value={num(s.answered)} />
-          <StatCard icon="📉" tone="bad" label="Abandoned" value={num(s.abandoned)} />
+          <StatCard icon="✅" tone="good" label="Answered" value={num(s?.answered)} />
+          <StatCard icon="📉" tone="bad" label="Abandoned" value={num(s?.abandoned)} />
           <StatCard
             icon="⏱"
             tone="good"
             label="SLA Answered"
             value={slaValue}
-            hint={pending ? undefined : s.slaScored === 0 ? "No calls scored for SLA" : `${s.slaScored.toLocaleString("en-IN")} scored`}
+            hint={kpiUnknown ? undefined : s.slaScored === 0 ? "No calls scored for SLA" : `${s.slaScored.toLocaleString("en-IN")} scored`}
           />
         </StatGrid>
         <div className="card">

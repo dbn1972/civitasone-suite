@@ -51,7 +51,7 @@ describe("WaiversPage — pending waivers list (GAP-REVENUE-WAIVERS-03)", () => 
 
   it("shows 'No pending waivers' when the pending list is empty", async () => {
     route({ pending: { data: [], source: "api" } });
-    render(await WaiversPage({ searchParams: {} }));
+    render(await WaiversPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("No pending waivers")).toBeInTheDocument();
   });
 
@@ -64,7 +64,7 @@ describe("WaiversPage — pending waivers list (GAP-REVENUE-WAIVERS-03)", () => 
       status: "pending",
     };
     route({ pending: { data: [pendingRow], source: "api" } });
-    render(await WaiversPage({ searchParams: {} }));
+    render(await WaiversPage({ searchParams: Promise.resolve({}) }));
 
     // Row is rendered with the human-readable amount
     expect(screen.getByText("Flood relief waiver")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("WaiversPage — pending waivers list (GAP-REVENUE-WAIVERS-03)", () => 
 
   it("shows an error state when the pending list fetch fails, not an empty state", async () => {
     route({ pending: { data: [], source: "error" } });
-    render(await WaiversPage({ searchParams: {} }));
+    render(await WaiversPage({ searchParams: Promise.resolve({}) }));
     // RefreshErrorState renders in the Pending waivers card — both the card
     // heading and the error area mention "pending waivers"; just verify that
     // at least one such element exists (multiple is expected) and that the

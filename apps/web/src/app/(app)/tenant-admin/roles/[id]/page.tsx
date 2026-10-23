@@ -7,7 +7,8 @@ import { notFound } from "next/navigation";
 import { PermissionGrid } from "./PermissionGrid";
 import { EditRoleButton } from "./EditRoleButton";
 
-export default async function AdminRoleDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminRoleDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getAdminRoleById(params.id);
   const { data: role, source } = result;
 

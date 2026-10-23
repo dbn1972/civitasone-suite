@@ -93,7 +93,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVAL-MATRIX-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab rescan: partly done. BUILT: the approver-role catalogue is read from deployment configuration (ESTAB_APPROVER_ROLES, services/estab-service/src/modules/approval-rules/roleCatalogue.ts) and served with GET /v1/estab/approval-rules as approverRoles; POST and PATCH refuse a chain naming a role outside it (422 UNKNOWN_APPROVER_ROLE); the matrix shows an ordered picker (Earlier / Later / Remove) limited to those roles and falls back to format-checked text when no list is configured. Tests: approval-rules-role-catalogue.test.ts, ApproverChainPicker.test.tsx, ApprovalMatrixPanel.roles-and-polling.test.tsx. NOT BUILT (OWNER DECISIONS): (1) which role list is authoritative for the tenant: ESTAB_APPROVER_ROLES ships empty, so until it is set an unknown but well-formed role is still accepted; (2) whether overlapping bands must be rejected server-side: approval-rules/resolver.ts deliberately resolves overlaps by precedence, while the web blocks them when a rule is created. For (1), a candidate source is the identity RBAC role list (GET /v1/admin/roles); ESTAB_APPROVER_ROLES is deployment-wide, not per tenant. Validation errors in the matrix form are announced with role=alert.)
 - **W2 estab note:** REOPENED in W2 (was an unverified W0 tick). The web part holds (validateBands blocks overlap, gap warns; bands.test.ts) but the acceptance 'an unknown role is not selectable or produces an error' is not met: approver roles are still free text checked only by a lowercase-token regex, and estab-service accepts any role string. NEEDS OWNER DECISION: which list of approver roles is authoritative, and whether overlapping bands should be rejected server-side (approval-rules/resolver.ts deliberately resolves overlaps by precedence).
 - **First-pass claim:** Approver roles are free-text CSV, turned into labels by string-casing (panel:105-109); a typo yields a chain that no one can satisfy, and there is no overlap/gap check between amount bands.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx:105-109 (submit) splits rolesCsv by comma and builds label by string casing; role is sent as-typed with no check against a role list. Nothing in the panel compares min/max between existing rules of the same sourceType, so overlaps and gaps are undetected client-side. Server-side validation cannot be verified (estab service absent). Theme 'PII' is wrong.
@@ -143,7 +143,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVAL-MATRIX-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: bounded poll + optimistic Pending row + timers cleared on unmount; ApprovalMatrixPanel.test.tsx 'shows a Pending row immediately and replaces it once the rule appears')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: bounded poll + optimistic Pending row + timers cleared on unmount; ApprovalMatrixPanel.test.tsx 'shows a Pending row immediately and replaces it once the rule appears') — W2 estab rescan evidence: the Pending row now stays across polls (kept apart from the server rows and matched by the id the service accepted), the tables stay on screen during polls (no Loading swap, a failed poll is ignored), poll side effects no longer run inside a state updater, a toggle shows Pending until the new flag lands, and timers are cancelled on unmount; ApprovalMatrixPanel.roles-and-polling.test.tsx covers the 3rd-poll replace and the still-processing message after the limit. (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Create and toggle are asynchronous ("queued") with a fixed 800 ms reload (panel:134-136,157): the new rule frequently will not be visible yet, with no pending row.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx:134-136 (submit) sets message 'queued. It will appear once processed.' then setTimeout(load, 800); toggleActive :157 does the same. If the write is asynchronous the row can be absent (or stale active flag) after the fixed delay; there is no pending row/optimistic entry, and the timeout is never cleared on unmount. Whether backend is actually async cannot be verified (service absent); the 'queued' wording implies it.
 - **Files to change:** `apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx`
@@ -180,7 +180,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVALS-02  ·  HIGH  ·  confirmed  ·  theme COPY (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1916, verified on main 9c5e9e9e9) — W2 estab rescan evidence: one shared sentence (DSC_NOT_APPLIED_COPY in estab/_shared/signatureCopy.ts) now feeds the Approvals dialog, DfaPanel's Sign dialog (was inline 'arrives in Phase 2') and the file-detail Sign-note dialog (was 'e-signature'); the register banner says 'signed note sheets'; signatureCopy.test.tsx pins the parity and scans estab sources for DSC e-sign / Phase 2 claims. The owner should still confirm the wording (DSC is not applied yet). Rework 2: the file detail's Notes column called a signed note 'e-Signed'; it now reads 'Signed (hash-chained note)' (NOTE_SIGNED_LABEL in estab/_shared/signatureCopy.ts), matching the Sign-note dialog, and the test pins it. The estab-service printed note sheet (files/note-sheet-print/routes.ts) still prints 'e-Signed' for green notes: left for the owner, not changed here. (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Approval dialog and success text claim a "DSC e-signature" / "DSC e-Signed" (panel:67,119) while DfaPanel states cryptographic e-Sign/DSC "arrives in Phase 2" (dfa/DfaPanel.tsx:153) — the same product makes contradictory legal claims about what the signature is.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx:119 dialog text 'records your DSC e-signature' and :67 'DSC e-Signed', button 'Approve & e-Sign' (:116), page subtitle 'approve yellow notes to green (e-Signed)' (apps/web/src/app/(app)/estab/approvals/page.tsx:9); estab/dfa/DfaPanel.tsx:153 says 'Cryptographic e-Sign/DSC arrives in Phase 2.' Nothing in this panel invokes a DSC/signing step: complete() (:53-76) just POSTs decision+reason to /workflow/tasks/:id/complete. Contradictory legal claim confirmed. (Reason is already required via requireReason.)
 - **Files to change:** `apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx`, `apps/web/src/app/(app)/estab/approvals/page.tsx`, `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`
@@ -195,7 +195,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVALS-03  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9) — W2 estab rescan evidence: GET /v1/estab/files/:id answers a bare file DTO (not wrapped in { data }), which the old panel and its test got wrong, so File and Subject always fell back to a UUID slice and a dash. The panel now reads fileNo, subject and noteSheets from the real shape, shows the latest note (excerpt, author, date) in the row, quotes it in the Approve dialog, and each row has 'Open note in a new tab'; EstabApprovalsPanel.context.test.tsx uses the real shape. Rework after review: a secret or top-secret file shows its number and '[Classified]' with no subject, note excerpt or author in the row and no quoted note in the Approve dialog (lib/estab/classification.ts, shared with the register; a DTO without a classification is treated as classified); the 'Open note in a new tab' link is named with its file number. Still open for the owner: the per-row GET /v1/estab/files/:id publishes the break-glass read_top_secret audit for every top-secret file each time the queue loads (the fetch was already there); a lighter source for file number and classification would avoid that. Rework 2: the note shown is the one under approval, the newest note with noteStatus submitted, not a later draft or rejected note (latestNoteOf); the dialog labels it 'Note submitted for approval', and only when no note is submitted does the newest note stand in, labelled 'Latest note on this file'. (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Approver decides blind: a row shows only task name, an 8-char file id and a raw role (panel:95-108). File number, subject and note text are not shown, yet the action is irreversible ("This cannot be undone").
 - **Verified evidence:** apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx:95-108 columns: Task name, File (link to /estab/files/{refId} showing first 8 chars, :100-105), Role. So file details are one click away and the link exists, but the row has no file number, subject or note text, so the dialog decision (:118-135 'cannot be undone') is taken without context unless the approver leaves the page. WorkflowTask type (:9-16) has no such fields; whether the API returns them cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx`, `apps/web/src/app/(app)/estab/approvals/FilePreview.tsx (new, optional)`
@@ -226,7 +226,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVALS-05  ·  MEDIUM  ·  confirmed  ·  theme LOGIC (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9) — W2 estab rescan evidence: no role or task-name matching and no guessed message: after the 202 the panel reads the workflow's own record (GET /v1/workflow/tasks?instanceId= lists every task of the instance, any role) and says 'Final approval' when the approver's task is completed with nothing else pending, 'forwarded to <role>' when another step is pending, and 'not applied yet' after 5 polls; approvalOutcome.ts and EstabApprovalsPanel.context.test.tsx (a renamed role gives the same result). No workflow-service change was needed. (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Final-approval wording depends on string matching role/task name for "deputy" (panel:66); a renamed role gives "forwarded to next level" on a final approval.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx:66 (in complete()) decides 'final approval' by role.includes('deputy_secretary') || task.name.toLowerCase().includes('deputy'); otherwise message says 'forwarded to next level'. A renamed role/task changes the wording; the message is only UI, not the actual workflow outcome. Theme I18N is wrong (logic).
 - **Files to change:** `apps/web/src/app/(app)/estab/approvals/EstabApprovalsPanel.tsx`
@@ -372,7 +372,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-03  ·  MEDIUM  ·  partly  ·  theme FORM (was DATEFMT)
 
-- [x] **Status** (W2 estab: closed by #2042)
+- [~] **Status** (W2 estab rescan: partly done. BUILT: the success message now names the DAK number and barcode the service allocates (the row is looked up by the id the 202 returned, searching by the typed DAK number or else the first 100 characters of the subject because the register search refuses a longer term, over the first 50 matches only; bounded poll, cancelled on unmount); dak/page.test.tsx 'DAK-03: the allocated DAK number and barcode reach the success message'. NOT BUILT (OWNER DECISION): a Classification input at registration. registerInwardBody has no such field and classification is chosen, with the department, when the file is opened. Should an inward DAK carry a security classification at registration (new field, column and clearance semantics), or stay chosen at open-file?)
 - **W2 estab note:** Form now carries Mode, Received date, Urgency, Addressee officer (EntityPicker -> assignedTo) and Source section, validated with zod (lib/estab/dakForm.ts) before POST, keys identical to registerInwardBody. Not applicable: the barcode is allocated by the async consumer so it cannot be in the 202 (the message says it appears in the register once processed), and registerInwardBody has no classification field.
 - **W0 note:** partly fixed by #1916 — Mode/received date/urgency added; no addressee, no zod, barcode not in success msg.
 - **First-pass claim:** Register captures only number, sender and subject; there is no received date, mode, addressee section or classification, although the table later shows Barcode and Source columns that this form cannot populate (page.tsx:133-152,166-168).
@@ -406,7 +406,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-05  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1916, verified on main 9c5e9e9e9) — W2 estab rescan evidence: dak/page.test.tsx 'DAK-05' asserts the humanised 'File Opened' label, an em dash for an empty source section, and a success message that names the typed DAK number and, once processed, the allocated number and barcode. (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Status shows raw values with underscores replaced; "Source" defaults to the literal "manual" (page.tsx:167-173); success text "DAK registered." does not say which number.
 - **Verified evidence:** apps/web/src/app/(app)/estab/dak/page.tsx:172 StatusPill label={r.status.replace(/_/g,' ')} (lowercase, overriding humanizeStatus), :168 `r.sourceSection ?? 'manual'` invents a literal, :70 message 'DAK registered.' omits the number. Theme FABRICATED is a stretch; 'manual' is a default, not fake data.
 - **Files to change:** `apps/web/src/app/(app)/estab/dak/page.tsx`
@@ -442,7 +442,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-01  ·  HIGH  ·  partly  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W2 estab: closed by #2042)
+- [x] **Status** (W2 estab: closed by #2042) — W2 estab rescan evidence: mapEstabFileSummaries keeps the service status (draft and closed were folded into active, so My Desk counted closed past-due files the dashboard excludes) and resolves due and created instants to their IST day; the register's Active Files and Avg Pendency tiles read the dashboard's service counts (one pendency number: all open files); Closed counts closed, archived and disposed; 'Active on desk' counts open files that are not awaiting receipt; real-DB IST-boundary tests added; estabSlaParity.test.ts pushes the real-DB seed through the mapper and gets the same numbers. The owner should confirm the definition (open = not closed / archived / disposed, so a 'transferred' file counts as open). Rework after review: the register's Due highlight and Closed chip (list/FilesTable.tsx) and the My Desk SLA pill (inbox/InboxPanel.tsx) now go through lib/estab/sla.ts (isOverdue, isClosedStatus), so a closed past-due file is neutral in all three places and listed under the Closed chip; FilesTable.test.tsx and InboxPanel.test.tsx. (W2 estab rescan: completed by #2132)
 - **W2 estab note:** One definition: open = not closed/archived/disposed, overdue = open and due IST day before today IST, pendency = IST days since creation over open files. estab-service dashboard/queries.ts now uses it (it counted only status='active' and compared the raw timestamp to the server clock), lib/estab/sla.ts treats 'closed' the same, My Desk tile is 'Overdue on my desk' with a hint saying the dashboard counts the whole office. Real-DB test: tests/dashboard-sla-pendency-real-db.test.ts. NOTE: this changes reported numbers (draft/pending open files past due now count; closed files no longer do).
 - **W0 note:** partly fixed by #1916 — Shared lib/estab/sla.ts (isOverdue/pendencyDays) used; no On my desk relabel/estabSla.ts.
 - **First-pass claim:** Two SLA stories: dashboard shows an "SLA Breached" tile from the API (dashboard/page.tsx:49) while File Register removed its SLA tile because "there is no due-date/SLA field here" (list/page.tsx:89-93) and My Desk computes SLA from dueDate client-side (inbox/page.tsx:8-15). Officers get three different overdue numbers.
@@ -462,7 +462,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W2 estab: closed by #2042)
+- [x] **Status** (W2 estab: closed by #2042) — W2 estab rescan evidence: the register's Active Files tile now shows the dashboard's service count with the same hint (it was a count over the first 50 rows with closed and draft folded into active); the service returns filesActive (filesPending kept as a deprecated alias) and the web reads filesActive; list/page.test.tsx, loaders.estabDashboard.test.ts and the real-DB dashboard test. The register tile's hint is its own text ('same count as Active Files on the Dashboard'), not the dashboard's. Rework 2: EstabDashboardSchema no longer defaults filesActive and filesPending to 0, because that default hid the filesPending fallback (new web against an estab-service not yet redeployed showed 0 Active Files); loaders.estabDashboard.test.ts now runs the real fetchJson, schema included. GET /v1/estab/dashboard is gated to estab_officer, estab_admin, section_officer and super_admin, while the register is also open to the Deputy Secretary and audit_officer, who get a 403 there: their register tiles read 'Active Files (loaded)' and 'Avg Pendency (loaded)' over the loaded rows with a visible notice, and a failed dashboard read for anyone else reads a dash with a notice (list/page.test.tsx). The dashboard role gate was not widened; whether those roles should see the office-wide figures is an owner decision. (W2 estab rescan: completed by #2132)
 - **W2 estab note:** The service's filesPending counts status='active' (dashboard/queries.ts), exactly the File Register's 'Active Files' tile, so the tile is now 'Active Files' on both. The W0 test that asserted 'Files Pending' encoded the wrong label and was replaced.
 - **W0-10 note:** review found the W0 tick wrong — Dashboard label renamed to "Files Pending" (estab/dashboard/page.tsx:61,112) but backend filesPending counts status='active' (estab-service dashboard/queries.ts:19); register list/page.tsx:29,105,107 shows Active Files=active and Pending=status pending, so same-named tiles still disagree and the label is now wrong; step 3 (rename to filesOpen / keep Active Files) not done
 - **First-pass claim:** "Active Files" tile is data.filesPending (page.tsx:48) but File Register counts status "active" and "pending" separately (list/page.tsx:9-10) — label and field disagree.
@@ -494,7 +494,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was UUID)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order'; W2 estab rescan evidence: estab-service now orders the register list newest-first before the limit (modules/files/repo.ts listFilesByTenant; real-DB test files-read-only-detail-contract-real-db.test.ts), dashboard page.test.tsx covers the 8-cap, dash-last and same-day order; the 60 s cached register list is dropped by the file create, open-from-DAK, open volume/part, module-raise and close consumers, so a new file is first on the next read: invalidateFileLists in modules/files/queries.ts, same real-DB test) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** "Recent files" is the first 8 of the register response with no sort (page.tsx:24); it is only recent if the API happens to order by creation time.
 - **Verified evidence:** dashboard/page.tsx:24 takes files.slice(0,8) from getEstabFiles() (loaders.ts:3658, no sort/limit params, GET /api/v1/estab/files). No client sort by createdDate, and EstabFileSummary rows expose createdDate, so ordering is whatever the API returns. DataTable sortable only reorders after render.
 - **Files to change:** `apps/web/src/app/(app)/estab/dashboard/page.tsx`
@@ -548,7 +548,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W2 PQ: closed by #2037)
+- [x] **Status** (W2 PQ: closed by #2037; W2 estab rescan evidence: the approver's remarks reach the service and the dfa.approved audit event (dfa-approve-remarks-real-db.test.ts), consumer-level maker-checker on sign, DfaPanel.test.tsx asserts Confirm stays disabled until remarks are typed and that { reason } is posted) (W2 estab rescan: completed by #2132)
 - **W0 note:** partly fixed by #1949 — Approve requireReason added; no createdBy/canApprove from server; maker-checker backend unverified.
 - **First-pass claim:** Approve and Sign are offered to whoever opens the page; nothing in the UI separates drafter from approver or signer (DfaPanel.tsx:128-171). Approve has no remarks field, only a confirm. Server enforcement cannot be verified (estab-service absent).
 - **Verified evidence:** DfaPanel.tsx actionsFor (:143-181) renders Approve/Return for every viewer when status is pending_approval, Sign for approved, with no role/actor check; Dfa type (:22-31) carries no drafter/approver id so UI cannot compare. Approve uses ActionButton with confirm only (:156-158), no requireReason (Return has it :159). Sign confirm exists (:166-169) already. Server-side maker!=checker cannot be verified (estab-service absent).
@@ -616,7 +616,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9; W2 estab rescan evidence: bounded, abortable, single-owner poll with a Refreshing indicator that also works inside status tabs; DfaPanel.poll.test.tsx covers a 1.5 s lagging read, the filtered tab, give-up, supersede, unmount and tab switch) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Create then reload uses a fixed 800 ms timeout for an eventually-consistent write (DfaPanel.tsx:103,125); the new draft may not appear.
 - **Verified evidence:** DfaPanel.tsx:118 (create) and :140 (act) use setTimeout(() => void load(), 800) after the POST returns; not cleared on unmount, and if the read model lags more than 800 ms the draft/status change is not shown. Whether writes are eventually consistent (CQRS) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`
@@ -704,7 +704,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme STATE (was OTHER)
 
-- [x] **Status** (W1 SF-06 re-confirmed on this branch (FileDetailActions.tsx no longer guards on the dead 'closed' status; FileDetailActions.test.tsx terminal-state tests pass): closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (FileDetailActions.tsx no longer guards on the dead 'closed' status; FileDetailActions.test.tsx terminal-state tests pass): closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: closed (what the service writes on close) is read-only in the UI and the register keeps it distinct; the service answers 409 FILE_READ_ONLY on noting/submit/sign/move for closed/archived files and its consumers refuse them too (files-read-only-detail-contract-real-db.test.ts); FileDetailActions.test.tsx, page.test.tsx) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Write actions are hidden only for status "closed" (FileDetailActions.tsx:183) but the register vocabulary is active/pending/archived/disposed (list/page.tsx:9-11); archived and disposed files still offer Sign, Submit and Refer, and "closed" may never occur.
 - **Verified evidence:** FileDetailActions.tsx:183 `if (status === "closed") return null;` but mapEstabFileSummaries (_data/apiMappers.ts:726-731) normalises status to only active|pending|archived|disposed, so 'closed' can never occur and archived/disposed files always render Save note, Submit, Sign and Refer. Server rejection for such files cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/FileDetailActions.tsx`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -735,7 +735,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the draft Submit/Sign act on is the latest yellow DRAFT by timestamp (page.test.tsx covers several drafts, submitted and green notes); Submit/Sign on a closed or archived file are refused (see FILES-DETAIL-01). Not done: server allowedActions (canSubmit/canSign) and any current-approver/author check on POST /v1/estab/files/:id/notings/:notingId/sign (today any estab role may sign any draft), because who may sign directly is an approval-chain policy decision. OWNER QUESTION: may a yellow draft be signed directly by (a) its author, (b) only the current approver of the SO > US > DS workflow task, or (c) any estab officer as today? And is Submit for the author only? Once answered: add canSubmit/canSign to GET /v1/estab/files/:id and gate the route and the notingSign consumer on the same rule.)
 - **W2 note:** W2 estab re-check: still decision-first (who may sign directly vs submit; server allowedActions). Draft selection is already latest-first. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Helper text clarified, draft chosen explicitly; no server allowedActions.
 - **First-pass claim:** Submit for approval and Sign note both act on the first draft yellow note (page.tsx:51-53). "Sign at your level" (FileDetailActions.tsx:209-211) lets one officer create a green note without the workflow task, so it is unclear which path is the approved chain.
@@ -772,7 +772,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: estab-service now sends each note's signedAt, the When column shows date and time, EstabFileDetailSchema no longer rejects or strips the real payload (loaders.estab.test.ts; service contract test parses the live response with it)) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Note sheet rows show content and officer only — no timestamp, no e-sign hash/time (page.tsx:69-80,143-150); Officer is the raw ns.author.
 - **Verified evidence:** page.tsx:70-80 builds NoteRow with idx, content, author, type, status only; mapper already supplies timestamp (apiMappers.ts:769) but it is unused; e-sign is only a ' · e-Signed' suffix (:77) with no signer time/hash (mapper does not carry them). author is ns.author raw (:76) and is not passed through <OfficerName>; whether it is a UUID or name is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -789,7 +789,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme TYPES (was OTHER)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: EstabFileDetailSchema now covers noteType/noteStatus/eSigned/signedAt/dakNo/dueBy/movementHistory and matches the wire shape; mapper unit tests apiMappers.estabFile.test.ts and loader test loaders.estab.test.ts) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Page reads noteType, noteStatus, eSigned, movementHistory, dakNo, dueBy through casts (page.tsx:51-67) because EstabFileDetail lacks them — type drift that hides API-shape changes.
 - **Verified evidence:** page.tsx:51-53, 56-68, 71 cast noteSheets and the file to ad-hoc shapes for noteType, noteStatus, eSigned, dakNo, dueBy, movementHistory; the mapper also builds them and returns via an `as` cast (_data/apiMappers.ts:~809-815). EstabFileDetail is imported from @civitasone/types but that package is not in this snapshot (only packages/ui-kit), so the canonical type cannot be inspected.
 - **Files to change:** `packages/types (EstabFileDetail, not in snapshot)`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -828,7 +828,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-01  ·  HIGH  ·  confirmed  ·  theme CLASSIFICATION (was CAP)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: only the four server tiers offered, selected value posted unchanged)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the form posts the selected value unchanged (no CLASS_MAP) and the DAK open-file dialog no longer hard-codes public; files/new/page.test.tsx asserts payload.classification === selected option. Not done: the acceptance "creating a Restricted file stores/returns restricted" - estab-service's classification enum, its DB CHECK (migrations/0001_init.sql) and the clearance ranks (operators/eligibility.ts CLASSIFICATION_RANK public=1 < confidential=2 < secret=3 < top_secret=4, with desk clearance_level 1..4) have no restricted tier, so the form offers only the four server tiers. OWNER QUESTION: is a restricted tier required (the web register labels already name it)? If yes, where does it sit in the clearance ladder (between public and confidential?), who may open restricted files, how are existing desk clearance levels renumbered, and how are files already stored as confidential that were meant as Restricted to be re-marked (not recoverable automatically)? Until decided, nothing is added: a new tier is an access-control change.)
 - **First-pass claim:** Classification is remapped client-side: Unclassified→public, Restricted→confidential, Confidential→confidential (CLASS_MAP, files/new/page.tsx:8-14). Restricted and Confidential become indistinguishable in the stored file, and the label "public" for an internal government file is never shown to the officer.
 - **Verified evidence:** files/new/page.tsx:8-14 CLASS_MAP sends unclassified->public, restricted->confidential, confidential->confidential (used at :42), so Restricted is lost. On read, mapEstabFileSummaries (apiMappers.ts:719-725) maps public->unclassified and also accepts a stored 'restricted', which suggests the API vocabulary includes restricted; the accepted server enum is cannot-verify (estab-service absent). dak/page.tsx:89 also hard-codes classification 'public'.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`, `apps/web/src/app/(app)/estab/dak/page.tsx`, `estab-service classification enum (not in snapshot)`
@@ -861,7 +861,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  partly  ·  theme MASTERDATA (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: on new-file and DAK open-file the department is a pick-list of the enrolled operator divisions; the typed-in fallback now appears ONLY when no master exists to pick from (no operators enrolled yet, or the role cannot read the directory), never after a network/server failure (a disabled select plus an alert instead). Remaining: (a) which master is authoritative, operator divisions or hrms departments (GET /v1/hrms/departments is HR-role gated, so estab roles cannot read it), and (b) whether estab-service must reject a dept outside the master once operators are adopted (greenfield tenants would stay unrestricted, as for the other operator checks). Typo departments can still be created through the API or in a tenant with no operators.)
+- **Previous status:** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. The department on new-file and on DAK open-file is now a pick-list of the enrolled operator divisions (useEstabDivisions) with no free-text fallback and no silent 'ADMIN'. Still open: (a) which master is authoritative (operator divisions vs hrms departments) and (b) whether estab-service must reject a dept outside it. Not built because rejecting would block greenfield tenants that have no operators yet.
 - **W0-10 note:** review found the W0 tick partly — department select built from operators' divisions (files/new/page.tsx:74) but free-text input fallback remains (:416) so typos possible; dak/page.tsx:316 open-file dept still free text 'e.g. ADMIN'; no master dept endpoint/backend validation; still falls back to 'ADMIN' (:154)
 - **First-pass claim:** Department is a free-text input defaulting to "ADMIN" (page.tsx:20,41); the register filters and dak/open-file also hard-code ADMIN, so typos create orphan departments.
@@ -911,7 +912,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number) (W2 estab rescan: completed by #2132)
+- **W2 estab rescan note:** Create now sends the officer straight to the file with ?created=1 and the file page shows 'File {fileNo} has been created' (the 202 ack carries no fileNo: the gapless number is allocated when the command is processed, so none is invented); the detail loader no longer validates the raw DTO against a schema it never matched (public/draft/null holder/createdAt), so the page loads for a fresh file. Tests: files/new/page.test.tsx (real 202 ack), files/[id]/page.test.tsx (banner + being-created), _data/loaders.estabFiles.test.ts (real service DTO).
 - **First-pass claim:** Success message omits the allocated file number and redirects after 800 ms (page.tsx:57-62); an officer who is redirected away cannot copy the number from the banner.
 - **Verified evidence:** files/new/page.tsx:56-62 reads only body.id and shows a fixed message without the file number, then redirects after 800 ms. The response may carry fileNo but that is cannot-verify. Theme I18N is wrong; it is copy.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`
@@ -947,7 +949,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (closed by #2104, verified implementation present in codebase)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: stale pending-approval copy on the new-booking page replaced (bookings are confirmed once processed); check-out no longer hard-codes chargesMinor 0, the officer states the charges (exact integer paise, blank is not 0, no tariff assumed). Remaining: no approve/reject step or endpoint exists. Owner: is a booking approval step wanted (who approves, maker-checker so the requester cannot approve), and should check-out charges come from a tariff rather than being entered?)
+- **Previous status:** (closed by #2104, verified implementation present in codebase)
 - **W2 PQ-A note (#2037):** no approval step or endpoint exists for room bookings (estab-service facilities has only book/checkin/checkout); check-in/out are now shown only to estab officer roles and the subtitle no longer claims approvals. Needs owner decision: is a booking approval step wanted (new endpoint plus maker-checker)?
 - **W0-10 note:** review found the W0 tick partly — Check-in/check-out with ConfirmDialog added (BookingsTable.tsx:44-113) but no approve/reject, no role/approver gating, subtitle still says 'Room booking and approvals.' (guesthouse/page.tsx:32; fix step 5 unmet), checkout hard-codes chargesMinor:0 (BookingsTable.tsx:~50)
 - **First-pass claim:** Page advertises "approvals" and counts "Pending Approval" (page.tsx:33,43) but offers no way to approve, reject, check in or check out — nothing in guesthouse/ mutates a booking; a pending request is a dead end.
@@ -967,7 +970,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #2132)
+- **W2 estab rescan note:** The service now sends the full check-in/out instants (facilities/queries.ts) instead of YYYY-MM-DD cut from them, so the register shows the booked time (01 Oct 14:00 IST) and an early-morning IST booking lands on the right day; the page never renders a time for a bare date. Tests: estab-cluster03-real-db.test.ts (real DB, IST boundary), guesthouse/page.test.tsx.
 - **First-pass claim:** Table omits sponsoring department and timing; Dates show dd/mm/yyyy only although check-in/out are datetime values (page.tsx:19-22, new/page.tsx:205-235).
 - **Verified evidence:** page.tsx:23 renders dates via formatIndianDate (lib/formatters.ts:2-8), which is dd/mm/yyyy date-only in the server's locale timezone, so time-of-day is dropped although the form collects datetime (new/page.tsx:206-236). BookingRow (BookingsTable.tsx:6-14) has no sponsor-department column; whether the summary type carries sponsorDept is unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/page.tsx`, `apps/web/src/app/(app)/estab/guesthouse/BookingsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1018,7 +1022,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the free-text Room ID field is gone; the room is always chosen by name (101 · deluxe (2-bed)) from the directory, with distinct states for loading, directory failed (alert), no rooms registered and none available; tests submit the id chosen from the picker. Remaining: nothing in estab-service or the web creates estab_rooms (only scripts/dev/seed-all.mjs), so a real tenant has no rooms to pick. Owner: who maintains the room directory and how, an in-app add-room screen for an establishment administrator (needs a guesthouse list and an add-room command) or a per-tenant import?)
+- **Previous status:** (W1 SF-06 re-confirmed on this branch (guesthouse/new/page.test.tsx NEW-01..05 pass): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Officers must type a room UUID (new/page.tsx:36-40,139-160); the page itself admits the picker is "pending a rooms directory API". A clerk cannot know a room's UUID, so the form is unusable without out-of-band data.
 - **Verified evidence:** guesthouse/new/page.tsx:8-9,37-40 require roomId to match UUID_RE; input at :139-151 is a free-text 'Room UUID' field; help text at :152-155 says 'A room picker is pending a rooms directory API'. No rooms list loader exists in _data/loaders.ts and hrms-service has no guesthouse code, so the rooms endpoint is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ds/RoomPicker.tsx (new) or generic EntityPicker`
@@ -1125,7 +1130,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #2132)
+- **W2 estab rescan note:** held-count now returns count (live files) and movableCount (exactly the files the handover consumer reassigns, one shared predicate HANDOVER_MOVES_STATUS); the dialog and preview state movableCount and say how many other files stay; the handover cannot start while the count is loading, failed or 0 ('Check again' retries). estab_division_admin, whom the handover screen admits, can now read the count. Tests: estab-cluster03-real-db.test.ts (count == files moved), HandoverPanel.test.tsx. Owner question remaining as a note, not a blocker: drafts and closed files are not moved today (see OWNER DECISION in the cluster report).
 - **First-pass claim:** The confirm dialog never says how many files will move (HandoverPanel.tsx:173-183); fileCount is only known after the fact in history.
 - **Verified evidence:** ConfirmDialog description (HandoverPanel.tsx:173-183) says 'every file' but shows no count; fileCount exists only on history rows (type at :14, column at :165). No count preview endpoint is visible.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1154,7 +1160,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-05  ·  LOW  ·  partly  ·  theme LOADERROR (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9) (W2 estab rescan: completed by #2132)
+- **W2 estab rescan note:** load() settles the roster and the history independently: a history-only 500 leaves the officer pickers populated and Hand over reachable, an operators-only 500 blocks the form while the history still loads. Tests: HandoverPanel.test.tsx (history 500 leaves form usable; roster 500 blocks form but history loads; both fail).
 - **First-pass claim:** Load-error copy: the specific messages built at :44-45 are discarded and a generic ErrorState is shown (HandoverPanel.tsx:155); the form stays usable with empty pickers.
 - **Verified evidence:** load() builds specific messages (:42-43) and stores err.message in loadError (:49), but the render uses toHumanError('load',{area:'handover history'}) (:155), discarding them. However the 'form usable' claim is overstated: pickers are empty so the Hand over button (:143) stays disabled until officers are selected. The error covers both operators and history yet is placed only in the history card; the shared RefreshErrorState is not used.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1189,7 +1196,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263)) (W2 estab rescan: completed by #2132)
+- **W2 estab rescan note:** GET /v1/estab/files/mine now matches a file held under the officer's login id OR their hrms employee id (resolveActorEmployeeId bridge, fails closed with 503), excludes everyone else's and other tenants' files, and reports { operator: { adopted, enrolled } }; My Desk shows an explanation (not 'Nothing on your desk') for a non-enrolled user. Tests: estab-cluster03-real-db.test.ts (real DB: own + forwarded + others excluded + 503), inbox/page.test.tsx, _data/loaders.estabFiles.test.ts.
 - **First-pass claim:** "My Desk" is not filtered to the signed-in officer: it uses getEstabFiles() for every file and counts status "active" as "Active on desk" (inbox/page.tsx:9,30,51). The register page even says this page is "the real per-desk view" (list/FilesTable.tsx:19-21) — but nothing compares currentHolder to the user.
 - **Verified evidence:** inbox/page.tsx:18 calls getEstabFiles() (all files, /api/v1/estab/files, loaders.ts:3658); :30 'Active on desk' = every status 'active' file; InboxPanel.tsx:48-55 filters only by status. currentHolder is mapped (apiMappers.ts:740) and shown but never compared to the user. list/FilesTable.tsx:17-19 comment states inbox is the per-desk view. The signed-in identity is available only via /api/auth/session (userId); whether userId equals the operator employeeId is unverified.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2722,7 +2730,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-05  ·  LOW  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated; W2 estab rescan evidence: the pendency snapshot repeats none of the stat tiles any more: it shows Open files (all stages), Oldest open file (days) and Vehicles in use, the first two new on GET /v1/estab/dashboard; real-DB test dashboard-sla-pendency-real-db.test.ts, page.test.tsx) (W2 estab rescan: completed by #2132)
 - **First-pass claim:** Pendency snapshot repeats four of the six tiles (page.tsx:99-102), and vehiclesInUse is loaded but never displayed.
 - **Service:** `estab-service`  ·  **Endpoint(s):** `['GET /api/v1/estab/dashboard']`
 - **Question:** 
@@ -2734,7 +2742,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: POST /v1/estab/handovers stays admin-only (estab_officer 403, covered), the web layout mirrors it (new layout test), from == to is refused (400), the bulk custody move (only the files counted by the preview), one movement per file and one audit event per batch are now covered by a real-DB consumer test. Remaining: any estab_division_admin can still move any officer's files tenant-wide; fromOfficerId is not checked against the caller's authority. Owner: should a division admin be limited to officers of their own division(s) (estab_admin and super_admin staying tenant-wide), taken from the caller's operator desk, and what happens for a division admin who is not enrolled as an operator?)
+- **Previous status:** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
 - **First-pass claim:** A page that bulk-moves custody of every file on a desk has no role gate (page.tsx:6-12, HandoverPanel.tsx:20-186); it depends wholly on server-side authorisation that is not in the snapshot.
 - **Service:** `estab-service`  ·  **Endpoint(s):** `['GET /v1/estab/operators', 'GET /v1/estab/handovers', 'POST /v1/estab/handovers']`
 - **Question:** Does POST handovers restrict bulk custody transfer to a supervisor/admin role and limit source desk to the caller's authority, with audit?

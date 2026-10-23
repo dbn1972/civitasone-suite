@@ -158,6 +158,11 @@ export async function updateVendor(
   expectedVersion: number,
   patch: VendorPatch,
   actorId: string,
+  /**
+   * Runs inside the same transaction, only when the guarded UPDATE matched, so the audit event
+   * (GAP-FINANCE-VENDORS-DETAIL-04) commits or rolls back together with the change it records.
+   */
+  onUpdated?: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], row: VendorRow) => Promise<void>,
 ): Promise<VendorRow | null> {
   return db.transaction(async (tx) => {
     const updated = await tx.update(financeVendors)
@@ -173,7 +178,9 @@ export async function updateVendor(
         eq(financeVendors.version, expectedVersion),
       ))
       .returning();
-    return updated[0] ?? null;
+    const row = updated[0] ?? null;
+    if (row && onUpdated) await onUpdated(tx, row);
+    return row;
   });
 }
 

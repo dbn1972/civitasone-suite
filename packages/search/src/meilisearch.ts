@@ -53,10 +53,11 @@ export class MeilisearchEngine implements SearchEngine {
   }
 
   async index(doc: SearchDocument): Promise<void> {
-    await this.fetch(`/indexes/${this.indexName}/documents`, {
+    const res = await this.fetch(`/indexes/${this.indexName}/documents`, {
       method: "POST",
       body: JSON.stringify([this.toMeiliDoc(doc)]),
     });
+    if (!res.ok) throw new Error(`Meilisearch index failed: ${res.status}`);
   }
 
   async bulkIndex(docs: SearchDocument[]): Promise<void> {
@@ -64,10 +65,11 @@ export class MeilisearchEngine implements SearchEngine {
     const BATCH = 1000;
     for (let i = 0; i < docs.length; i += BATCH) {
       const batch = docs.slice(i, i + BATCH).map((d) => this.toMeiliDoc(d));
-      await this.fetch(`/indexes/${this.indexName}/documents`, {
+      const res = await this.fetch(`/indexes/${this.indexName}/documents`, {
         method: "POST",
         body: JSON.stringify(batch),
       });
+      if (!res.ok) throw new Error(`Meilisearch bulkIndex failed: ${res.status}`);
     }
   }
 
@@ -126,21 +128,23 @@ export class MeilisearchEngine implements SearchEngine {
 
   async remove(tenantId: string, documentId: string): Promise<void> {
     // Meilisearch deletion by filter requires v1.2+
-    await this.fetch(`/indexes/${this.indexName}/documents/delete`, {
+    const res = await this.fetch(`/indexes/${this.indexName}/documents/delete`, {
       method: "POST",
       body: JSON.stringify({
         filter: `tenantId = "${this.escape(tenantId)}" AND documentId = "${this.escape(documentId)}"`,
       }),
     });
+    if (!res.ok) throw new Error(`Meilisearch remove failed: ${res.status}`);
   }
 
   async removeAll(tenantId: string): Promise<void> {
-    await this.fetch(`/indexes/${this.indexName}/documents/delete`, {
+    const res = await this.fetch(`/indexes/${this.indexName}/documents/delete`, {
       method: "POST",
       body: JSON.stringify({
         filter: `tenantId = "${this.escape(tenantId)}"`,
       }),
     });
+    if (!res.ok) throw new Error(`Meilisearch removeAll failed: ${res.status}`);
   }
 
   async healthy(): Promise<boolean> {

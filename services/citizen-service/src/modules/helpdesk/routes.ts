@@ -36,6 +36,10 @@ const ticketListQuerySchema = z.object({
   slaStatus: z.enum(["within_sla", "due_soon", "breached"]).optional(),
 });
 
+const analyticsQuerySchema = z.object({
+  period: z.enum(["mtd", "qtd", "fy"]).optional(),
+});
+
 export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/tickets", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -74,7 +78,8 @@ export async function helpdeskRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/tickets/analytics", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
-    sendValidated(reply, TicketAnalyticsSchema, await queries.getTicketAnalytics(ctx.tenantId));
+    const { period } = analyticsQuerySchema.parse(req.query);
+    sendValidated(reply, TicketAnalyticsSchema, await queries.getTicketAnalytics(ctx.tenantId, period));
   });
 
   app.post("/v1/citizen/tickets/:id/notes", async (req, reply) => {

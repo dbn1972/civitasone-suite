@@ -16,14 +16,14 @@ describe("Municipal per-service applications list page", () => {
       data: { rows: [], meta: { page: 1, pageSize: 20, total: 0 } },
       source: "api",
     });
-    render(await Page({ params: { serviceKey: "trade" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "trade" }) }));
     expect(screen.getByRole("heading", { name: /Trade Licence — Applications/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Citizen apply" })).toHaveAttribute(
       "href",
       "/citizen/services/trade-license/apply",
     );
     // GAP-...-APPLICATIONS-04: no gateway path in the rendered page.
-    const { container } = render(await Page({ params: { serviceKey: "trade" } }));
+    const { container } = render(await Page({ params: Promise.resolve({ serviceKey: "trade" }) }));
     expect(container.textContent).not.toContain("/api/");
   });
 
@@ -32,7 +32,7 @@ describe("Municipal per-service applications list page", () => {
       data: { rows: [], meta: { page: 1, pageSize: 20, total: 0 } },
       source: "api",
     });
-    render(await Page({ params: { serviceKey: "building" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "building" }) }));
     expect(screen.getByRole("heading", { name: /Building Plan — Applications/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Citizen apply" })).not.toBeInTheDocument();
   });
@@ -43,10 +43,10 @@ describe("Municipal per-service applications list page", () => {
       source: "error",
       status: 500,
     });
-    render(await Page({ params: { serviceKey: "trade" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "trade" }) }));
     expect(screen.getByRole("button", { name: /Try again/i })).toBeInTheDocument();
     // No old role/gateway blame copy.
-    const { container } = render(await Page({ params: { serviceKey: "trade" } }));
+    const { container } = render(await Page({ params: Promise.resolve({ serviceKey: "trade" }) }));
     expect(container.textContent).not.toMatch(/behind the gateway/i);
   });
 
@@ -56,7 +56,7 @@ describe("Municipal per-service applications list page", () => {
       source: "error",
       status: 403,
     });
-    render(await Page({ params: { serviceKey: "trade" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "trade" }) }));
     expect(screen.getByText(/don't have permission/i)).toBeInTheDocument();
   });
 
@@ -74,7 +74,7 @@ describe("Municipal per-service applications list page", () => {
       },
       source: "api",
     });
-    render(await Page({ params: { serviceKey: "trade" }, searchParams: { page: "1" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "trade" }), searchParams: Promise.resolve({ page: "1" }) }));
     expect(screen.getByText(/Showing 1–20 of 214/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Next/i })).toHaveAttribute(
       "href",
@@ -87,7 +87,7 @@ describe("Municipal per-service applications list page", () => {
       data: { rows: [], meta: { page: 1, pageSize: 20, total: 0 } },
       source: "api",
     });
-    render(await Page({ params: { serviceKey: "trade" }, searchParams: { status: "approved" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "trade" }), searchParams: Promise.resolve({ status: "approved" }) }));
     expect(mocked).toHaveBeenCalledWith(
       expect.objectContaining({ serviceKey: "trade" }),
       expect.objectContaining({ status: "approved", page: 1 }),
@@ -108,7 +108,7 @@ describe("Municipal per-service applications list page", () => {
       data: { rows: [], meta: { page: 1, pageSize: 20, total: 0 } },
       source: "api",
     });
-    render(await Page({ params: { serviceKey: "animal" } }));
+    render(await Page({ params: Promise.resolve({ serviceKey: "animal" }) }));
     expect(screen.getByRole("tab", { name: "Action Taken" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Reported" })).toBeInTheDocument();
     expect(screen.queryByRole("tab", { name: /issued/i })).not.toBeInTheDocument();

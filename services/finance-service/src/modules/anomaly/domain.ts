@@ -7,6 +7,8 @@
  * Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7
  */
 
+import { minorToSafeNumber } from "@civitasone/schemas/money";
+
 export type AnomalyType = "zscore" | "duplicate" | "cost_center_pattern" | "user_behavior";
 export type AnomalySeverity = "low" | "medium" | "high";
 export type AnomalyStatus = "open" | "reviewed" | "dismissed";
@@ -69,7 +71,7 @@ export function scoreTransactionZScore(
   // Never flag when std is 0 (no variance = consistent spend)
   if (stats.std === 0) return null;
 
-  const amount = Number(amountPaise);
+  const amount = minorToSafeNumber(amountPaise); // z-score is an IEEE-754 statistic; strict (throws >2^53) not silently rounded
   const zScore = (amount - stats.mean) / stats.std;
   const absZ = Math.abs(zScore);
 

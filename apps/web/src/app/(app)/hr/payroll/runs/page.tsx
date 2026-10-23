@@ -9,6 +9,7 @@ import { getTranslations } from "next-intl/server";
 
 export default async function PayrollRunsPage() {
   const t = await getTranslations("payrollRuns");
+  const tNav = await getTranslations("payrollRouteError");
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
@@ -21,7 +22,7 @@ export default async function PayrollRunsPage() {
   if (!canView) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Payroll" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
         <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
     );
@@ -48,7 +49,7 @@ export default async function PayrollRunsPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr/payroll"
-        backLabel="Payroll"
+        backLabel={tNav("backToPayroll")}
       />
 
       {errored ? (

@@ -1,3 +1,4 @@
+import { minorFromDb, minorToWireNumber, minorToRupees, toSafeInt, roundMinorToRupees } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -18,6 +19,7 @@ import { createTaxDeclarationBody, taxDeclarationWindowBody, LANDLORD_PAN_RENT_T
 import { maskPan } from "../../shared/pii-mask.js";
 import { encryptPii } from "../../shared/pii-crypto.js";
 import { currentFyWindow } from "./declaration-window.js";
+import { isDeclarationLocked } from "./declaration-lock.js";
 import * as commands from "./commands.js";
 import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
 import { computeHraClaimedMinor } from "./consumer.js";
@@ -99,7 +101,7 @@ async function resolveDeductionCapsRupees(tenantId: string, startYear: number): 
   // exactly why every read in this file, this one included, goes through
   // scopedRead() rather than opening one itself.
   const cfg = await scopedRead((tx) => resolveRunStatutoryConfig(tx, tenantId, `${startYear + 1}-03`));
-  return { sec80cCapRupees: Number(cfg.sec80cCapMinor) / 100, sec80dCapRupees: Number(cfg.sec80dCapMinor) / 100 };
+  return { sec80cCapRupees: minorToRupees(minorFromDb(cfg.sec80cCapMinor)), sec80dCapRupees: minorToRupees(minorFromDb(cfg.sec80dCapMinor)) };
 }
 
 export async function taxRoutes(app: FastifyInstance): Promise<void> {
@@ -131,10 +133,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     const slips = runIds.length === 0 ? [] : await scopedRead((tx) => tx.select().from(payrollSlips)
       .where(and(eq(payrollSlips.tenantId, ctx.tenantId), inArray(payrollSlips.runId, runIds))));
 
-    const grossByEmployee = new Map<string, number>();
+    // Accumulated as exact bigint paise; converted to rupees once per employee below.
+    const grossByEmployee = new Map<string, bigint>();
     for (const slip of slips) {
       if (scopedEmployeeId && slip.employeeId !== scopedEmployeeId) continue;
-      grossByEmployee.set(slip.employeeId, (grossByEmployee.get(slip.employeeId) ?? 0) + Number(slip.grossMinor) / 100);
+      grossByEmployee.set(slip.employeeId, (grossByEmployee.get(slip.employeeId) ?? 0n) + minorFromDb(slip.grossMinor));
     }
 
     const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
@@ -184,7 +187,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       try { exemptions += stdDeduction(regime, startYear, ctx.tenantId); }
       catch (err) { if (err instanceof UnconfiguredFyError) throw new HttpError(422, "FY_NOT_CONFIGURED", err.message); throw err; }
 
-      const grossIncome = Math.round(grossByEmployee.get(employeeId) ?? 0);
+      const grossIncome = toSafeInt(roundMinorToRupees(grossByEmployee.get(employeeId) ?? 0n));
       const taxableIncome = Math.round(Math.max(0, grossIncome - exemptions) / 10) * 10;
       let tax;
       try { tax = computeTax(taxableIncome, regime, startYear, ctx.tenantId); }
@@ -193,6 +196,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       const identity = identityById.get(employeeId);
       data.push({
         id: dec?.id ?? employeeId,
+        // GAP-PAYROLL-INCOME-TAX-03: `id` above is the declaration id when one
+        // exists but the employee id when none does (a mixed id space), so it
+        // cannot name a drill-in target. The employee id is always the
+        // hrms_employees.id the row was keyed on -- the same id every other
+        // payroll list links to /hr/employees/{id} with. Additive field.
+        employeeId,
         employee: identity?.fullName ?? employeeId,
         department: identity?.departmentId ?? "-",
         grossIncome: String(grossIncome),
@@ -237,9 +246,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     // inArray() query for all 12 months' runs, then one inArray() query for
     // all those runs' slips for this employee — 2 queries total regardless
     // of how many runs/slips exist in the FY.
-    let annualGross = 0;
-    let annualBasic = 0;
-    let annualPfEmployee = 0;
+    let annualGrossMinor = 0n;
 
     const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
@@ -254,10 +261,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
           )))
       : [];
     for (const slip of slips) {
-      annualGross += Number(slip.grossMinor) / 100;
-      annualBasic += Number(slip.basicMinor) / 100;
-      annualPfEmployee += Number(slip.pfEmployeeMinor) / 100;
+      annualGrossMinor += minorFromDb(slip.grossMinor);
     }
+    const annualGross = minorToRupees(annualGrossMinor);
 
     // Fetch declarations for exemptions under old regime
     let exemptions = 0;
@@ -390,6 +396,12 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "DECLARATION_WINDOW_CLOSED",
         win.state === "not_open" ? `declarations for ${body.fy} open on ${win.opensOn}` : `declarations for ${body.fy} closed on ${win.closesOn}; contact payroll to change it`);
     }
+    // GAP-PAYROLL-TAX-DECLARATION-05: a verified / approved declaration is read-only for
+    // everyone (staff included) -- no role can overwrite what payroll already relied on.
+    if (existingRow && isDeclarationLocked(existingRow.status)) {
+      throw new HttpError(409, "DECLARATION_LOCKED",
+        `the ${body.fy} declaration is ${existingRow.status} and can no longer be changed; contact payroll`);
+    }
     if (regime === "old" && body.rentPaidMinor > LANDLORD_PAN_RENT_THRESHOLD_MINOR && !body.landlordPan && !existingRow?.landlordPan) {
       throw new HttpError(400, "LANDLORD_PAN_REQUIRED", "landlord PAN is required when annual rent exceeds Rs 1,00,000");
     }
@@ -443,10 +455,10 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       section80c: Number(dec.section80c),
       section80d: Number(dec.section80d),
       otherDeductions: Number(dec.otherDeductions),
-      rentPaidMinor: Number(dec.rentPaidMinor),
-      prevEmployerSalaryMinor: Number(dec.prevEmployerSalaryMinor),
-      otherSourcesIncomeMinor: Number(dec.otherSourcesIncomeMinor),
-      perquisitesMinor: Number(dec.perquisitesMinor),
+      rentPaidMinor: minorToWireNumber(minorFromDb(dec.rentPaidMinor)),
+      prevEmployerSalaryMinor: minorToWireNumber(minorFromDb(dec.prevEmployerSalaryMinor)),
+      otherSourcesIncomeMinor: minorToWireNumber(minorFromDb(dec.otherSourcesIncomeMinor)),
+      perquisitesMinor: minorToWireNumber(minorFromDb(dec.perquisitesMinor)),
       status: dec.status,
       createdAt: dec.createdAt,
       updatedAt: dec.updatedAt,

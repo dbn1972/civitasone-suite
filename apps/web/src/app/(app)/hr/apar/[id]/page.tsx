@@ -120,11 +120,12 @@ function provisionalWeightedScore(scores: Score[]): number | null {
   return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : null;
 }
 
-export default async function AparDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function AparDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const t = await getTranslations("aparDetail");
   const result = await getApar(params.id);
   const detail = result.data;

@@ -140,23 +140,55 @@ describe("DfaPanel — GAP-ESTAB-DFA-05 (human labels)", () => {
 describe("DfaPanel — GAP-ESTAB-DFA-02 (approve needs remarks)", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("the Approve dialog requires a reason (remarks)", async () => {
-    const dfa = {
-      id: "dfa-a", dfaNo: "DFA-A01", communicationType: "letter", subject: "Approve me",
-      status: "pending_approval", editable: false, recipientName: null, updatedAt: "2026-10-01T00:00:00Z",
-      fileId: null,
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
+  const pending = {
+    id: "dfa-a", dfaNo: "DFA-A01", communicationType: "letter", subject: "Approve me",
+    status: "pending_approval", editable: false, recipientName: null, updatedAt: "2026-10-01T00:00:00Z",
+    fileId: null,
+  };
+
+  async function openApproveDialog() {
     render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
-    const approveBtn = await screen.findByRole("button", { name: "Approve" });
-    fireEvent.click(approveBtn);
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
     const dialog = await screen.findByRole("alertdialog");
-    // The dialog must have a reason/textarea
-    const textarea = dialog.querySelector("textarea");
+    const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Approve") as HTMLButtonElement;
+    return { dialog, confirmBtn, textarea: dialog.querySelector("textarea") as HTMLTextAreaElement };
+  }
+
+  it("the Approve dialog cannot be confirmed until remarks are entered (blank or whitespace does not count)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [pending] }));
+    const { dialog, confirmBtn, textarea } = await openApproveDialog();
     expect(textarea).toBeTruthy();
-    // Confirm button should be disabled until reason is filled (requireReason)
-    const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Approve");
-    expect(confirmBtn).toBeTruthy();
+    expect(dialog.textContent).toContain("Approval remarks");
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "    " } });
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "Within delegated powers." } });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(confirmBtn).toBeDisabled();
+  });
+
+  it("caps the remarks at the 1000 characters the service accepts", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [pending] }));
+    const { textarea } = await openApproveDialog();
+    expect(textarea.maxLength).toBe(1000);
+  });
+
+  it("posts the typed remarks with the approval, trimmed, as { reason }", async () => {
+    const calls: Array<{ url: string; method: string; body: string }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      calls.push({ url: String(input), method: init?.method ?? "GET", body: String(init?.body ?? "") });
+      return init?.method === "POST"
+        ? jsonResponse({ id: "dfa-a", status: "accepted", correlationId: "c" }, 202)
+        : jsonResponse({ data: [pending] });
+    });
+    const { confirmBtn, textarea } = await openApproveDialog();
+    fireEvent.change(textarea, { target: { value: "  Approved subject to the file note.  " } });
+    fireEvent.click(confirmBtn);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    const post = calls.find((c) => c.method === "POST");
+    expect(post?.url).toMatch(/\/dfa\/dfa-a\/approve$/);
+    expect(JSON.parse(post?.body ?? "{}")).toEqual({ reason: "Approved subject to the file note." });
   });
 });
 
@@ -276,5 +308,39 @@ describe("DfaPanel — GAP-ESTAB-DFA-02 (role + actor gating)", () => {
     render(<DfaPanel canApprove canDraft={false} viewerId="x" />);
     await screen.findByText("DFA-G01");
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
+  });
+});
+
+describe("DfaPanel — CLOS2-S1-08 linked-file search failure", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function openPicker() {
+    fireEvent.click(screen.getByRole("button", { name: "+ New draft" }));
+    const input = screen.getByPlaceholderText("Search by file number or subject…");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "FILE-12" } });
+  }
+
+  it("shows the search-error text, not 'No matches', when the file search returns 500", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/estab/files/search")) return new Response("{}", { status: 500 });
+      return jsonResponse({ data: [] });
+    });
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
+    await screen.findByRole("button", { name: "+ New draft" });
+    openPicker();
+    await waitFor(() => expect(screen.getAllByText(/load results/i).length).toBeGreaterThan(0));
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
+  it("still shows 'No matches' when the search succeeds with an empty list", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ data: [] }));
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
+    await screen.findByRole("button", { name: "+ New draft" });
+    openPicker();
+    await waitFor(() => expect(screen.getAllByText("No matches").length).toBeGreaterThan(0));
   });
 });

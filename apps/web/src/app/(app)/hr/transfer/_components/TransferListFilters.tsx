@@ -20,6 +20,7 @@ import { Button, Card, DataTable, Segmented } from "@/app/_components/ds";
 import { runAuditedCsvExport } from "@/lib/export/csvExport";
 import { useTableExportGuard } from "@/lib/export/useTableExportGuard";
 import { transferStatusLabel, transferStatusLabels, transferStatusTones } from "@/lib/hr/transferStatus";
+import { istDateKey } from "@/lib/formatters";
 
 interface Props {
   transfers: TransferRow[];
@@ -131,7 +132,7 @@ export function TransferListFilters({ transfers }: Props) {
     const verdict = await runAuditedCsvExport({
       guard: exportGuard,
       rowCount: filtered.length,
-      filename: `transfers-${new Date().toISOString().split("T")[0]}.csv`,
+      filename: `transfers-${istDateKey(new Date())}.csv`,
       build: buildCsv,
     });
     if (!verdict.ok) setExportError(verdict.message);

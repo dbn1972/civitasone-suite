@@ -19,7 +19,7 @@ beforeEach(() => vi.clearAllMocks());
 describe("movement detail (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05)", () => {
   it("shows the movement, its lines by item name, the store name and the poster by name", async () => {
     inv.getInventoryMovementById.mockResolvedValue({ source: "api", data: movement });
-    render(await MovementDetailPage({ params: { id: "m-1" } }));
+    render(await MovementDetailPage({ params: Promise.resolve({ id: "m-1" }) }));
     expect(screen.getByRole("heading", { name: /Stock adjustment/ })).toBeInTheDocument();
     expect(screen.getByText("T-1 · Toner")).toBeInTheDocument();
     expect(screen.getByText("Central Store")).toBeInTheDocument();
@@ -29,11 +29,11 @@ describe("movement detail (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05)", () => {
 
   it("a real 404 reads 'not found'; an outage reads as a load error, not 'not found'", async () => {
     inv.getInventoryMovementById.mockResolvedValue({ source: "error", status: 404, data: null });
-    const { unmount } = render(await MovementDetailPage({ params: { id: "x" } }));
+    const { unmount } = render(await MovementDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText(/Stock movement not found/)).toBeInTheDocument();
     unmount();
     inv.getInventoryMovementById.mockResolvedValue({ source: "error", status: 503, data: null });
-    render(await MovementDetailPage({ params: { id: "x" } }));
+    render(await MovementDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByText(/Stock movement not found/)).not.toBeInTheDocument();
   });
 });

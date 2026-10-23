@@ -6,7 +6,8 @@ import { EditBookForm } from "./EditBookForm";
 import { CurrentLoansCard } from "./CurrentLoansCard";
 import Link from "next/link";
 
-export default async function LibraryBookDetailPage({ params }: { params: { id: string } }) {
+export default async function LibraryBookDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: book, source, status } = await getLibraryBookById(params.id);
 
   if (!book) {

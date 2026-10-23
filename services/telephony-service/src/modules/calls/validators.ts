@@ -95,6 +95,13 @@ export const listCallsQuery = z.object({
 });
 export type ListCallsQuery = z.infer<typeof listCallsQuery>;
 
+/** GET /v1/telephony/calls/metrics — optional queue and createdAt window (same semantics as the list). */
+export const callMetricsQuery = z.object({
+  queueId: z.string().uuid().optional(),
+  from: z.string().datetime({ offset: true }).optional(),
+  to: z.string().datetime({ offset: true }).optional(),
+});
+
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const callSummarySchema = z.object({

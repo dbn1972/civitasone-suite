@@ -30,7 +30,8 @@ describe("NewTicketForm (citizen-facing)", () => {
   // priority enum is lowercase (unlike helpdesk-service's Capitalized one).
   it("submits to citizen-service with a lowercased priority", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "t1", status: "accepted" } }), { status: 202 }),
+      // REAL citizen-service ack: flat id plus the data envelope carrying the ticket number.
+      new Response(JSON.stringify({ id: "t1", status: "accepted", correlationId: "c-1", data: { id: "t1", ticketNo: "HD-AAAA1111" } }), { status: 202 }),
     );
 
     render(<NewTicketForm />);
@@ -39,8 +40,8 @@ describe("NewTicketForm (citizen-facing)", () => {
     fireEvent.change(screen.getByLabelText(/priority/i), { target: { value: "High" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets"));
-    expect(toastSuccess).toHaveBeenCalled();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets/t1"));
+    expect(toastSuccess).toHaveBeenCalledWith("Ticket HD-AAAA1111 submitted.");
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
@@ -121,6 +122,32 @@ describe("NewTicketForm (GAP-HELPDESK-TICKETS-NEW batch 2)", () => {
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets"));
     expect(toastSuccess).toHaveBeenCalledWith("Ticket submitted successfully.");
+  });
+
+  it("sends the requester name as its own field and leaves the description untouched", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "t3", status: "accepted", correlationId: "c", data: { id: "t3", ticketNo: "HD-T3" } }), { status: 202 }),
+    );
+    render(<NewTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Walk-in" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Water supply issue" } });
+    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "  Asha Verma " } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.requesterName).toBe("Asha Verma");
+    expect(body.description).toBe("Water supply issue");
+  });
+
+  it("a flat-only ack (no data envelope) still deep-links by id", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "t4", status: "accepted", correlationId: "c" }), { status: 202 }),
+    );
+    render(<NewTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "x" } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "y" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit ticket" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/helpdesk/tickets/t4"));
   });
 
   it("NEW-03: no #fff or #b91c1c or #047857 hex in rendered output (uses CSS tokens)", () => {

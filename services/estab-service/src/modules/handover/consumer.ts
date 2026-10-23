@@ -4,7 +4,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { insertFileMovement } from "../files/repo.js";
+import { insertFileMovement, HANDOVER_MOVES_STATUS } from "../files/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -28,10 +28,13 @@ export function registerHandoverConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
 
-      // Find the active files currently held by the outgoing officer.
+      // Find the files a handover moves that the outgoing officer currently holds. The status
+      // predicate is shared with the held-count preview (HANDOVER_MOVES_STATUS) so the number the
+      // confirm dialog shows is the number moved here.
       const rows = await tx.execute(sql`
         SELECT id FROM files.estab_files
-        WHERE tenant_id = ${p.tenantId} AND current_with = ${p.fromOfficerId} AND status = 'active'
+        WHERE tenant_id = ${p.tenantId} AND current_with = ${p.fromOfficerId}
+          AND status = ${HANDOVER_MOVES_STATUS}
       `);
       const fileIds = (rows as unknown as Array<{ id: string }>).map((r) => r.id);
 

@@ -17,6 +17,7 @@ import {
   linkCallBody,
   recordingBody,
   listCallsQuery,
+  callMetricsQuery,
   idParam,
   callsListSchema,
 } from "./validators.js";
@@ -62,10 +63,14 @@ export async function callRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/telephony/calls/metrics", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TELEPHONY_ROLES);
-    const queueId = typeof (req.query as { queueId?: string }).queueId === "string"
-      ? (req.query as { queueId?: string }).queueId
-      : undefined;
-    return reply.send(await queries.callMetrics(ctx.tenantId, queueId));
+    const q = callMetricsQuery.parse(req.query);
+    return reply.send(
+      await queries.callMetrics(ctx.tenantId, {
+        ...(q.queueId ? { queueId: q.queueId } : {}),
+        ...(q.from ? { from: q.from } : {}),
+        ...(q.to ? { to: q.to } : {}),
+      }),
+    );
   });
 
   app.get("/v1/telephony/calls/:id", async (req, reply) => {

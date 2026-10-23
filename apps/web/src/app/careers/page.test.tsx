@@ -22,7 +22,7 @@ function stub(list: V[] | "error") {
     : new Response(JSON.stringify({ data: list }), { status: 200 })));
 }
 async function renderPage(sp: { type?: string; q?: string; page?: string } = {}) {
-  const el = await CareersPage({ searchParams: sp });
+  const el = await CareersPage({ searchParams: Promise.resolve(sp) });
   return render(el);
 }
 const chip = (name: RegExp) => within(screen.getByRole("navigation", { name: /filter by vacancy type/i })).queryByRole("link", { name });
@@ -102,5 +102,33 @@ describe("careers home", () => {
     const { container } = await renderPage();
     const footer = container.querySelector("footer")!;
     expect(footer.getAttribute("style")).not.toMatch(/94a3b8|148, 163, 184/i);
+  });
+});
+
+// The vacancies API pages its result (max 100 per request, plus `total`); the home page must follow the pages so a
+// tenant with more than 100 open vacancies is never silently truncated.
+describe("careers home pagination of the vacancies API", () => {
+  it("fetches every page until total is reached and counts all vacancies", async () => {
+    const all = Array.from({ length: 150 }, (_, i) => vac({ id: String(i + 1), vacancyType: "deputation" }));
+    const fetchMock = vi.fn(async (url: string) => {
+      const m = /offset=(\d+)/.exec(String(url));
+      const offset = m ? Number(m[1]) : 0;
+      return new Response(JSON.stringify({ data: all.slice(offset, offset + 100), total: all.length, limit: 100, offset }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    await renderPage();
+    const vacancyCalls = fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes("/careers/vacancies"));
+    expect(vacancyCalls).toHaveLength(2);
+    expect(vacancyCalls[1]).toContain("offset=100");
+    expect(chip(/^Deputation/)!.textContent).toContain("150");
+  });
+
+  it("a failure on a later page is an error state, not a silently shortened list", async () => {
+    const first = Array.from({ length: 100 }, (_, i) => vac({ id: String(i + 1) }));
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (/offset=/.test(String(url))
+      ? new Response("{}", { status: 503 })
+      : new Response(JSON.stringify({ data: first, total: 150 }), { status: 200 }))));
+    await renderPage();
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
   });
 });

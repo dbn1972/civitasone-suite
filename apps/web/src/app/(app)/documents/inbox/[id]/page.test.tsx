@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// DakActions (client) reads the documentsDak i18n namespace.
+const render = (ui: ReactElement) => rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -18,7 +24,7 @@ describe("DakDetailPage", () => {
 
   it("renders the dak with Acknowledge/Forward actions on success", async () => {
     getDak.mockResolvedValue({ data: { id: UUID, subject: "Tax file", priority: "urgent", status: "pending", assignedTo: null, dueDate: "2026-10-01", createdAt: "2026-09-01T00:00:00Z", body: "Please review." }, source: "api", status: 200 });
-    render(await DakDetailPage({ params: { id: UUID } }));
+    render(await DakDetailPage({ params: Promise.resolve({ id: UUID }) }));
     expect(screen.getByRole("heading", { name: "Tax file" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Acknowledge" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Forward" })).toBeInTheDocument();
@@ -27,12 +33,12 @@ describe("DakDetailPage", () => {
 
   it("INBOX-01: a real 404 renders the not-found page", async () => {
     getDak.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(DakDetailPage({ params: { id: UUID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(DakDetailPage({ params: Promise.resolve({ id: UUID }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("a non-404 failure shows a retry state, not a 404", async () => {
     getDak.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await DakDetailPage({ params: { id: UUID } }));
+    render(await DakDetailPage({ params: Promise.resolve({ id: UUID }) }));
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 });

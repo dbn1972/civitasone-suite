@@ -32,13 +32,13 @@ describe("BudgetMonitoringPage always sends the required fy", () => {
   });
 
   it("defaults to the current financial year when the URL has no fy", async () => {
-    await BudgetMonitoringPage({ searchParams: {} });
+    await BudgetMonitoringPage({ searchParams: Promise.resolve({}) });
     expect(getSummary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
     expect(getLines).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
   });
 
   it("honours an explicit fy from the URL", async () => {
-    await BudgetMonitoringPage({ searchParams: { fy: "2024-25" } });
+    await BudgetMonitoringPage({ searchParams: Promise.resolve({ fy: "2024-25" }) });
     expect(getSummary).toHaveBeenCalledWith("2024-25");
     expect(getLines).toHaveBeenCalledWith("2024-25");
   });
@@ -58,7 +58,7 @@ describe("BudgetMonitoringPage error states (GAP-FINANCE-BUDGET-MONITORING-01)",
   async function show(summary: unknown, lines: unknown) {
     getSummary.mockReset().mockResolvedValue(summary);
     getLines.mockReset().mockResolvedValue(lines);
-    render(await BudgetMonitoringPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetMonitoringPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
   }
 
   it("lines error + summary ok: error state in the table area, never the empty-lines copy", async () => {
@@ -89,7 +89,7 @@ describe("BudgetMonitoringPage -- exact money, on-track, committed, FY validatio
   async function show(totals: Record<string, unknown>) {
     getSummary.mockReset().mockResolvedValue(summary(totals));
     getLines.mockReset().mockResolvedValue({ data: [], source: "api" });
-    render(await BudgetMonitoringPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetMonitoringPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
   }
   const card = (label: string) => screen.getByText(label).parentElement!.textContent ?? "";
 
@@ -123,11 +123,11 @@ describe("BudgetMonitoringPage -- exact money, on-track, committed, FY validatio
   it("?fy=abc falls back to a valid current FY and the loaders are called with it", async () => {
     getSummary.mockReset().mockResolvedValue(EMPTY_SUMMARY);
     getLines.mockReset().mockResolvedValue(EMPTY_LINES);
-    await BudgetMonitoringPage({ searchParams: { fy: "abc" } });
+    await BudgetMonitoringPage({ searchParams: Promise.resolve({ fy: "abc" }) });
     expect(getSummary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
     expect(getSummary).not.toHaveBeenCalledWith("abc");
     getSummary.mockClear();
-    await BudgetMonitoringPage({ searchParams: { fy: "2026-99" } });
+    await BudgetMonitoringPage({ searchParams: Promise.resolve({ fy: "2026-99" }) });
     expect(getSummary).not.toHaveBeenCalledWith("2026-99");
   });
 });

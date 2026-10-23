@@ -482,7 +482,8 @@ describe("Registry routes — happy paths", () => {
   it("POST /v1/plugins/:id/disable → 202 accepted", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/plugins/${FAKE_ID}/disable`,
-      headers: headers(["plugin_admin"]),
+      headers: { ...headers(["plugin_admin"]), "content-type": "application/json" },
+      payload: { reason: "decommissioning legacy plugin" },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");

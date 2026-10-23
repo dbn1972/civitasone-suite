@@ -201,9 +201,9 @@ export async function processOvstayDetectionCycle(
               validUntil: pass.validUntil.toISOString(),
               detectedAt: now.toISOString(),
               hostEmployeeId: visit?.hostEmployeeId ?? "",
-              escalationReason: "visitor_overstay_exceeds_2h",
+              escalationReason: "visitor_overstay_exceeds_escalation_window",
               severity: "high",
-              message: `Visitor has overstayed more than 2 hours past approved time. Immediate action required.`,
+              message: `Visitor has overstayed more than ${Math.round((escalationMsFor(pass.tenantId) / MS_PER_HOUR) * 100) / 100} hour(s) past approved time. Immediate action required.`,
             },
           }),
         });

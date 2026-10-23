@@ -430,6 +430,26 @@ describe("GET /v1/payroll/statutory/nps", () => {
     expect(body[0]).toMatchObject({ id: "nps-1", empContribPct: 10, erContribPct: 14 });
   });
 
+  it("GAP-PAYROLL-STATUTORY-NPS-05 — carries the pension base (exact paise) the percentages were applied to; null for a row recorded before it", async () => {
+    H.listNpsMock.mockResolvedValue([
+      { ...npsRow, id: "nps-new", basicMinor: 1500000n, pensionBaseMinor: 2325000n, empContribMinor: 232500n, erContribMinor: 325500n },
+      { ...npsRow, id: "nps-legacy" },
+    ]);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/statutory/nps",
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body[0]).toMatchObject({ id: "nps-new", basicMinor: 1500000, pensionBaseMinor: 2325000, empContribMinor: 232500, erContribMinor: 325500 });
+    expect(body[1].id).toBe("nps-legacy");
+    expect(body[1].pensionBaseMinor).toBeNull();
+  });
+
   it("200 — returns empty array when no data", async () => {
     H.listNpsMock.mockResolvedValue([]);
     const app = await buildApp();

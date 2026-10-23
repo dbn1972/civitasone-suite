@@ -3,9 +3,25 @@
  */
 import { and, eq, count } from "drizzle-orm";
 import { db, readScoped } from "../../shared/db.js";
-import { jobs, type JobRow, type JobInsert, type JobView } from "./schema.js";
+import { jobs, type JobRow, type JobInsert, type JobView, type JobDetailView } from "./schema.js";
 
-function toView(r: JobRow): JobView {
+/** List/summary columns only: the heavy jsonb columns are loaded solely by findDetailById. */
+const viewColumns = {
+  id: jobs.id,
+  tenantId: jobs.tenantId,
+  name: jobs.name,
+  reportType: jobs.reportType,
+  status: jobs.status,
+  format: jobs.format,
+  rowCount: jobs.rowCount,
+  requestedBy: jobs.requestedBy,
+  completedAt: jobs.completedAt,
+  createdAt: jobs.createdAt,
+  downloadUrl: jobs.downloadUrl,
+  version: jobs.version,
+};
+
+function toView(r: JobView | JobRow): JobView {
   return {
     id: r.id,
     tenantId: r.tenantId,
@@ -24,7 +40,7 @@ function toView(r: JobRow): JobView {
 
 export async function findById(id: string, tenantId: string): Promise<JobView | null> {
   const rows = await readScoped(tenantId, (tx) =>
-    tx.select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.tenantId, tenantId))).limit(1));
+    tx.select(viewColumns).from(jobs).where(and(eq(jobs.id, id), eq(jobs.tenantId, tenantId))).limit(1));
   const row = rows[0];
   if (!row) return null;
   return toView(row);
@@ -32,7 +48,7 @@ export async function findById(id: string, tenantId: string): Promise<JobView | 
 
 /** ownerId set => only that requester's jobs (non-admin); undefined => tenant-wide. */
 export async function listByTenant(tenantId: string, limit: number, offset: number, ownerId?: string): Promise<JobView[]> {
-  const rows = await readScoped(tenantId, (tx) => tx.select().from(jobs)
+  const rows = await readScoped(tenantId, (tx) => tx.select(viewColumns).from(jobs)
     .where(ownerId ? and(eq(jobs.tenantId, tenantId), eq(jobs.requestedBy, ownerId)) : eq(jobs.tenantId, tenantId))
     .limit(limit)
     .offset(offset));
@@ -54,6 +70,20 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 export async function insert(tx: Writer, row: JobInsert): Promise<void> {
   await tx.insert(jobs).values(row);
+}
+
+/** Job row + stored parameters / result preview, for the detail screen. */
+export async function findDetailById(id: string, tenantId: string): Promise<JobDetailView | null> {
+  const rows = await readScoped(tenantId, (tx) =>
+    tx.select().from(jobs).where(and(eq(jobs.id, id), eq(jobs.tenantId, tenantId))).limit(1));
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    ...toView(row),
+    parameters: row.parameters ?? {},
+    resultColumns: row.resultColumns ?? [],
+    resultRows: row.resultRows ?? [],
+  };
 }
 
 export { toView };

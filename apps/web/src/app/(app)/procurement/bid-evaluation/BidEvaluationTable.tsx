@@ -62,9 +62,17 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
   }, [rows]);
 
   // GAP-PROCUREMENT-BID-EVALUATION-04: mark L1 (lowest/best rank) and ties.
+  // Ranks are assigned PER TENDER (the register lists bids of many tenders), so a
+  // tie is two bids of the SAME tender sharing a rank -- two tenders that each
+  // have their own rank-1 bid are not a tie. A rank of 0 means "not ranked yet"
+  // (the API reports a missing rank as 0 until the tender is awarded) and is
+  // never a tie or L1.
+  const rankKey = (e: BidEvaluation) => JSON.stringify([e.tenderId ?? e.tender, e.rank]);
   const rankCounts = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const e of rows) m.set(e.rank, (m.get(e.rank) ?? 0) + 1);
+    const m = new Map<string, number>();
+    for (const e of rows) {
+      if (e.rank > 0) m.set(rankKey(e), (m.get(rankKey(e)) ?? 0) + 1);
+    }
     return m;
   }, [rows]);
 
@@ -80,7 +88,7 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
         totalScore: fmtScore(e.totalScore),
         rank: e.rank,
         isL1: e.rank === 1,
-        isTie: (rankCounts.get(e.rank) ?? 0) > 1,
+        isTie: e.rank > 0 && (rankCounts.get(rankKey(e)) ?? 0) > 1,
         status: e.status,
       })),
     [rows, rankCounts],
@@ -141,7 +149,7 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
                 align: "center",
                 render: (row) => (
                   <span>
-                    {row.rank}
+                    {row.rank > 0 ? row.rank : "—"}
                     {row.isL1 ? <span title="Lowest / best rank" style={{ marginInlineStart: 4, color: "var(--good)", fontWeight: 600 }}>L1</span> : null}
                     {row.isTie ? <span title="Tied rank" style={{ marginInlineStart: 4, color: "var(--warn)" }}>(tie)</span> : null}
                   </span>

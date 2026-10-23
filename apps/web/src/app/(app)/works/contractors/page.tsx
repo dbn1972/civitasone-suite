@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "@/app/_components/ds";
 import { maskPan, maskPhone } from "@/app/_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -28,9 +29,11 @@ export type ContractorRow = {
   activeStatus: string;
 };
 
-/** Loader result + the server-reported total (meta.limit/offset), for the "first N of M" hint. */
-type ContractorListResult = LoaderResult<ContractorRow[]> & { total: number | null };
+/** The mapped rows plus the server-reported size of the whole register (meta.total), for the "first N of M" hint. */
+type ContractorList = { rows: ContractorRow[]; total: number | null };
+type ContractorListResult = LoaderResult<ContractorList>;
 
+/** works-service honours ?pageSize= (max 200) and reports the true register size in meta.total. */
 const PAGE_SIZE = 100;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -70,16 +73,29 @@ function mapContractors(payload: unknown): ContractorRow[] | null {
   });
 }
 
+/** meta.total from the list envelope, or null when the API did not send a usable one. */
+function readServerTotal(payload: unknown): number | null {
+  if (!isRecord(payload)) return null;
+  const meta = (payload as { meta?: unknown }).meta;
+  if (!isRecord(meta)) return null;
+  const total = (meta as { total?: unknown }).total;
+  return typeof total === "number" && Number.isInteger(total) && total >= 0 ? total : null;
+}
+
+function mapContractorList(payload: unknown): ContractorList | null {
+  const rows = mapContractors(payload);
+  return rows ? { rows, total: readServerTotal(payload) } : null;
+}
+
 async function getContractors(): Promise<ContractorListResult> {
-  const result = await fetchJson<unknown, ContractorRow[]>(
+  return fetchJson<unknown, ContractorList>(
     `/api/v1/works/contractors?pageSize=${PAGE_SIZE}`,
-    [],
+    { rows: [], total: null },
     {
       telemetryKey: "works.contractors",
-      mapResponse: mapContractors,
+      mapResponse: mapContractorList,
     },
   );
-  return { ...result, total: null };
 }
 
 const columns: {
@@ -100,7 +116,8 @@ export default async function ContractorsPage() {
   const roles = getSessionRoles();
   const canWrite = canWriteContractors(roles);
 
-  const { data: contractors, source, status, errorMessage } = await getContractors();
+  const t = await getTranslations("works.contractors");
+  const { data: list, source, status, errorMessage } = await getContractors();
 
   // GAP-WORKS-CONTRACTORS-03 (FAILMASK): a failed fetch must not look like an
   // empty, healthy register (zeroed stat cards + "No contractors registered").
@@ -123,11 +140,16 @@ export default async function ContractorsPage() {
     );
   }
 
-  const total      = contractors.length;
+  const contractors = list.rows;
+  const shown        = contractors.length;
+  // The register size comes from the server (meta.total). Without one, a full page is the only sign there may be more.
+  const total        = Math.max(list.total ?? shown, shown);
+  const truncated    = total > shown || (list.total === null && shown >= PAGE_SIZE);
   const activeCount  = contractors.filter((c) => c.activeStatus === "active").length;
   const ratedCount   = contractors.filter((c) => c.ratingValue != null).length;
-  const unratedCount = total - ratedCount;
-  const atPageLimit  = total >= PAGE_SIZE;
+  const unratedCount = shown - ratedCount;
+  // Active / Rated / Unrated are counted over the rows actually loaded; say so when that is not the whole register.
+  const partialHint  = truncated ? t("partialHint", { shown }) : undefined;
 
   return (
     <div className="page-main wrap">
@@ -151,15 +173,15 @@ export default async function ContractorsPage() {
 
       <StatGrid>
         <StatCard icon="🏢" iconBg="var(--infobg)"  label="Total"    value={total} />
-        <StatCard icon="✅" iconBg="var(--goodbg)"  label="Active"   value={activeCount} />
-        <StatCard icon="⭐" iconBg="var(--warnbg)"  label="Rated"    value={ratedCount} />
-        <StatCard icon="🔲" iconBg="var(--panel)"   label="Unrated"  value={unratedCount} />
+        <StatCard icon="✅" iconBg="var(--goodbg)"  label="Active"   value={activeCount} hint={partialHint} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)"  label="Rated"    value={ratedCount} hint={partialHint} />
+        <StatCard icon="🔲" iconBg="var(--panel)"   label="Unrated"  value={unratedCount} hint={partialHint} />
       </StatGrid>
 
-      <Card title={`Contractors (${total}${atPageLimit ? "+" : ""})`}>
-        {atPageLimit && (
+      <Card title={`Contractors (${total}${total === shown && truncated ? "+" : ""})`}>
+        {truncated && (
           <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 8px" }}>
-            Showing the first {PAGE_SIZE} contractors. Refine the filter to find more.
+            {total > shown ? t("showingFirstOfTotal", { shown, total }) : t("showingFirst", { shown })}
           </p>
         )}
         <DataTable<ContractorRow>

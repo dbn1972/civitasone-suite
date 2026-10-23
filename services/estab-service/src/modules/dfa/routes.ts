@@ -99,7 +99,9 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const body = approveDfaBody.parse(req.body ?? {});
     await assertNotDrafter(ctx, id, "approved");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id, { modality: body.modality, conditions: body.conditions }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id, {
+      modality: body.modality, conditions: body.conditions, reason: body.reason,
+    }));
   });
 
   app.post("/v1/estab/dfa/:id/return", async (req, reply) => {

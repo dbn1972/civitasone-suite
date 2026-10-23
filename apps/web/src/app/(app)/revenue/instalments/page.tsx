@@ -11,12 +11,6 @@ export type AssesseeOption = {
   assesseeType: string;
 };
 
-export type DemandLite = {
-  id: string;
-  netMinor: string;
-  status: string | null;
-};
-
 export type InstalmentPlanRow = {
   id: string;
   totalMinor: string;
@@ -90,36 +84,34 @@ async function getInstalmentPlans(assesseeId: string): Promise<LoaderResult<Inst
   );
 }
 
-function mapDemands(payload: unknown): DemandLite[] | null {
-  const rows = arrayFromPayload(payload);
-  if (!rows) return null;
-  const mapped: DemandLite[] = [];
-  for (const raw of rows) {
-    if (!isRecord(raw)) continue;
-    const id = raw.id;
-    if (typeof id !== "string") continue;
-    mapped.push({
-      id,
-      netMinor: String(raw.netMinor ?? 0),
-      status: typeof raw.status === "string" ? raw.status : null,
-    });
-  }
-  return mapped;
+/**
+ * The outstanding arrears the SERVICE will plan against: revenue-service's DCB
+ * summary exposes `outstandingMinor` (sum of the latest running balance per
+ * demand) — the same figure the instalment consumer uses. It is NOT the sum of
+ * demand net amounts, which ignores collections, refunds, waivers and
+ * adjustments and so disagreed with the plan the service actually created.
+ */
+function mapOutstanding(payload: unknown): string | null {
+  const data = isRecord(payload) ? (payload as { data?: unknown }).data : null;
+  const v = isRecord(data) ? (data as { outstandingMinor?: unknown }).outstandingMinor : null;
+  if (typeof v !== "string" || !/^-?\d+$/.test(v)) return null;
+  return v;
 }
 
-async function getDemands(assesseeId: string): Promise<LoaderResult<DemandLite[]>> {
-  return fetchJson<unknown, DemandLite[]>(
-    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/demands`,
-    [],
-    { telemetryKey: "revenue.instalments.demands", mapResponse: mapDemands },
+async function getOutstanding(assesseeId: string): Promise<LoaderResult<string>> {
+  return fetchJson<unknown, string>(
+    `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/dcb`,
+    "0",
+    { telemetryKey: "revenue.instalments.outstanding", mapResponse: mapOutstanding },
   );
 }
 
-export default async function InstalmentsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function InstalmentsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();
@@ -127,9 +119,9 @@ export default async function InstalmentsPage({
   const plansResult = assesseeId
     ? await getInstalmentPlans(assesseeId)
     : ({ data: [] as InstalmentPlanRow[], source: "api" as const });
-  const demandsResult = assesseeId
-    ? await getDemands(assesseeId)
-    : ({ data: [] as DemandLite[], source: "api" as const });
+  const outstandingResult = assesseeId
+    ? await getOutstanding(assesseeId)
+    : ({ data: "0", source: "api" as const });
 
   const plans = plansResult.data;
 
@@ -137,17 +129,9 @@ export default async function InstalmentsPage({
 
   const activePlans = plans.filter((p) => p.status === "active").length;
 
-  // GAP-REVENUE-INSTALMENTS-01: outstanding arrears = sum of non-paid demand
-  // net amounts, BigInt only (never float).
-  let outstandingMinor = 0n;
-  for (const d of demandsResult.data) {
-    if (d.status === "paid") continue;
-    try {
-      outstandingMinor += BigInt(d.netMinor);
-    } catch {
-      /* skip unparseable */
-    }
-  }
+  // GAP-REVENUE-INSTALMENTS-01: outstanding arrears come from the service's
+  // own DCB figure (BigInt string, never float) — see getOutstanding.
+  const outstandingMinor = outstandingResult.data;
   const selectedAssessee = assessees.find((a) => a.id === assesseeId) ?? null;
   const assesseeLabel = selectedAssessee
     ? `${selectedAssessee.ownerName} (${selectedAssessee.identifierNo})`
@@ -243,8 +227,8 @@ export default async function InstalmentsPage({
           <CreateInstalmentPlanForm
             assesseeId={assesseeId}
             assesseeLabel={assesseeLabel}
-            outstandingMinor={outstandingMinor.toString()}
-            demandsFailed={demandsResult.source === "error"}
+            outstandingMinor={outstandingMinor}
+            demandsFailed={outstandingResult.source === "error"}
           />
 
           <Card title="Instalment Plans">

@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 
-export default async function Page({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const { data, source } = await getLoyaltyRedemptions({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
   const canManage = hasAnyRole(getSessionRoles(), LOYALTY_ADMIN_ROLES);

@@ -49,7 +49,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("renders only the resolved bank-account tail, never a fixed-length prefix over a value it never received", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText(/•••• 9012/)).toBeInTheDocument();
     expect(screen.queryByText(/XXXX-XXXX-/)).not.toBeInTheDocument();
@@ -57,7 +57,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("shows '—' for the bank account when the backend resolved no tail (e.g. HRMS unavailable)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ bankAccountLast4: null }), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.queryByText(/9012/)).not.toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe("SalarySlipPage (printable slip)", () => {
   // "Government of India" unconditionally for every tenant.
   it("does not claim 'Government of India' in the print letterhead", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.queryByText(/Government of India/)).not.toBeInTheDocument();
   });
@@ -75,7 +75,7 @@ describe("SalarySlipPage (printable slip)", () => {
   // with no way back to the slips list.
   it("shows a card with a back link instead of the framework 404 when the slip genuinely doesn't exist", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: null, source: "api", status: 200 });
-    const ui = await SalarySlipPage({ params: { id: "missing" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "missing" }) });
     renderPage(ui);
     expect(screen.getByText(/may have been removed or you may not have access/i)).toBeInTheDocument();
     expect(screen.getByText("Back to Salary Slips")).toBeInTheDocument();
@@ -84,21 +84,21 @@ describe("SalarySlipPage (printable slip)", () => {
   // GAP-PAYROLL-SALARY-SLIPS-05: a draft/computed slip must not be printable.
   it("disables the print button for a draft slip and enables it for a finalized one", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "draft" }), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Print / Save PDF").closest("button")).toBeDisabled();
   });
 
   it("enables the print button for a finalized slip", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ status: "finalized" }), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Print / Save PDF").closest("button")).not.toBeDisabled();
   });
 
   it("formats paidDate and payPeriod instead of printing them raw", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("August 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-08")).not.toBeInTheDocument();
@@ -106,7 +106,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("shows 'Not yet paid' rather than a bare dash for an unpaid finalized slip", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ paidDate: null }), source: "api" });
-    const ui = await SalarySlipPage({ params: { id: "slip-1" } });
+    const ui = await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
     expect(screen.getByText("Not yet paid")).toBeInTheDocument();
   });
@@ -123,7 +123,7 @@ describe("SalarySlipPage (printable slip)", () => {
       }),
       source: "api",
     });
-    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.getByText("Employer PF")).toBeInTheDocument();
     expect(screen.getByText("Other components (not part of net pay)")).toBeInTheDocument();
     expect(screen.getByText(/do not add up to the Gross/)).toBeInTheDocument();
@@ -131,14 +131,14 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("GAP-PAYROLL-SALARY-SLIPS-DETAIL-03: a slip whose lines reconcile shows no discrepancy note and no Other block", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ grossMinor: 50000 }), source: "api" });
-    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText(/do not add up to the Gross/)).not.toBeInTheDocument();
     expect(screen.queryByText("Other components (not part of net pay)")).not.toBeInTheDocument();
   });
 
   it("GAP-PAYROLL-SALARY-SLIPS-DETAIL-03 (L1): no discrepancy note when the slip has no component lines at all", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ components: [] }), source: "api" });
-    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "s1" }) }));
     expect(screen.queryByText(/do not add up to the Gross/)).not.toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("DETAIL-02: prints the tenant's own organisation, department, DDO and address -- and never a platform name or 'Government of India'", async () => {
     mockApi(baseSlip(), LH);
-    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getByText("Directorate of Urban Affairs")).toBeInTheDocument();
     expect(screen.getByText("Accounts Wing")).toBeInTheDocument();
     expect(screen.getByText("DDO: R. Menon (DDO-114)")).toBeInTheDocument();
@@ -163,7 +163,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("DETAIL-02: two tenants print their own names (tenant B differs from tenant A)", async () => {
     mockApi(baseSlip(), { ...LH, orgName: "Nagar Palika Parishad, Rewa", department: null, ddoName: null, ddoCode: null, address: null, showSignatureBlock: false });
-    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getByText("Nagar Palika Parishad, Rewa")).toBeInTheDocument();
     expect(screen.queryByText("Directorate of Urban Affairs")).not.toBeInTheDocument();
     expect(screen.queryByText(/^DDO:/)).not.toBeInTheDocument();
@@ -171,7 +171,7 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("DETAIL-02: with no letterhead configured the slip prints no authority line at all", async () => {
     mockApi(baseSlip(), null);
-    const { container } = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    const { container } = renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(container.querySelector(".slip-letterhead")).toBeNull();
     expect(screen.queryByText(/Government of India|CivitasOne|HR Management System/)).not.toBeInTheDocument();
     expect(screen.getByText(/system-generated salary slip/)).toBeInTheDocument();
@@ -179,25 +179,25 @@ describe("SalarySlipPage (printable slip)", () => {
 
   it("DETAIL-02: a configured signature block replaces the 'no signature required' footer", async () => {
     mockApi(baseSlip(), LH);
-    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getByText("Drawing & Disbursing Officer")).toBeInTheDocument();
     expect(screen.queryByText(/No signature required/)).not.toBeInTheDocument();
   });
 
   it("DETAIL-02: only payroll_admin / super_admin get the letterhead editor", async () => {
     mockApi(baseSlip(), LH);
-    const first = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    const first = renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.getByText("Slip letterhead (issuing organisation)")).toBeInTheDocument();
     first.unmount();
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
-    renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     expect(screen.queryByText("Slip letterhead (issuing organisation)")).not.toBeInTheDocument();
   });
 
   // ── GAP-PAYROLL-SALARY-SLIPS-DETAIL-04: header actions are PageHeader's, not a hand-built row ──
   it("DETAIL-04: the dashboard link and Print button sit inside the page header's actions", async () => {
     mockApi(baseSlip(), null);
-    const { container } = renderPage(await SalarySlipPage({ params: { id: "slip-1" } }));
+    const { container } = renderPage(await SalarySlipPage({ params: Promise.resolve({ id: "slip-1" }) }));
     const header = container.querySelector("header, .ph, [class*='page-header']") ?? container;
     const link = screen.getByRole("link", { name: "Dashboard View" });
     const print = screen.getByText("Print / Save PDF").closest("button")!;

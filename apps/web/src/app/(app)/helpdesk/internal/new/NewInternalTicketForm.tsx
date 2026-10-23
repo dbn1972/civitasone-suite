@@ -88,17 +88,24 @@ export function NewInternalTicketForm() {
         return;
       }
       // GAP-HELPDESK-INTERNAL-NEW-04: read the POST response for a ticket id/number
-      const payload = (await res.json().catch(() => null)) as { data?: { id?: unknown; ticketNo?: unknown } } | null;
+      // helpdesk-service answers 202 { id, status, correlationId, data: { id } }
+      // (flat id, plus the nested envelope). The gapless ticketNo is allocated
+      // asynchronously by the worker, so it is not in this response.
+      const payload = (await res.json().catch(() => null)) as
+        | { id?: unknown; data?: { id?: unknown; ticketNo?: unknown } }
+        | null;
+      const createdId =
+        typeof payload?.data?.id === "string" ? payload.data.id : typeof payload?.id === "string" ? payload.id : null;
       const ticketRef =
         payload?.data?.ticketNo && typeof payload.data.ticketNo === "string"
           ? payload.data.ticketNo
-          : payload?.data?.id && typeof payload.data.id === "string"
-            ? `INT-${(payload.data.id as string).slice(0, 8).toUpperCase()}`
+          : createdId
+            ? `INT-${createdId.slice(0, 8).toUpperCase()}`
             : null;
 
       toast.success(ticketRef ? `Ticket ${ticketRef} created.` : "Ticket created.");
-      if (ticketRef && payload?.data?.id && typeof payload.data.id === "string") {
-        router.push(`/helpdesk/internal/${payload.data.id}`);
+      if (createdId) {
+        router.push(`/helpdesk/internal/${encodeURIComponent(createdId)}`);
       } else {
         router.push("/helpdesk/internal");
       }

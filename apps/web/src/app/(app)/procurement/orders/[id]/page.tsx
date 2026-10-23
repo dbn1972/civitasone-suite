@@ -68,7 +68,8 @@ const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left"
   { key: "grnQty", label: "GRN Qty", align: "right" },
 ];
 
-export default async function PODetailPage({ params }: { params: { id: string } }) {
+export default async function PODetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: po, source } = await getProcurementPOById(params.id);
 
   if (!po) {

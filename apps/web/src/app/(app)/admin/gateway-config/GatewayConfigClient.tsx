@@ -123,7 +123,7 @@ export function GatewayConfigClient() {
 
   const fetchConfig = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/v1/admin/platform-config/gateway", { signal });
+      const res = await fetch("/api/proxy/v1/admin/platform-config/gateway", { signal });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
         setError(resolved.message);
@@ -174,7 +174,7 @@ export function GatewayConfigClient() {
       // records both, with the before/after values, in the audit log).
       const patch: Record<string, unknown> = { reason };
       for (const c of changes) patch[c.key] = config[c.key];
-      const res = await fetch("/api/v1/admin/platform-config/gateway", {
+      const res = await fetch("/api/proxy/v1/admin/platform-config/gateway", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),

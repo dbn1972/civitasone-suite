@@ -203,7 +203,7 @@ describe("integration-settings — test-connection fail-closed", () => {
 
   it("records a real failure (never a fake success) against an unreachable endpoint", async () => {
     // 127.0.0.1:1 refuses immediately → deterministic, fast.
-    await propose("email_smtp", "prod", { config: { host: "127.0.0.1", port: 1, user: "u", password: "pw_x", from: "a@b.com" } });
+    await propose("email_smtp", "prod", { config: { host: "127.0.0.1", port: 1, user: "u", password: globalThis.crypto.randomUUID(), from: "a@b.com" } });
     await approve("email_smtp", "prod", APPROVER);
     const res = await app.inject({ method: "POST", url: "/v1/admin/integrations/email_smtp/prod/test", headers: auth(APPROVER), payload: {} });
     expect(res.statusCode).toBe(200);

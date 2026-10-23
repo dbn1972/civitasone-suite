@@ -48,7 +48,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: [claimRow], source: "api" })
       .mockResolvedValueOnce({ data: "AST-1 · Laptop", source: "api" });
 
-    const ui = await PolicyDetailPage({ params: { id: "p1" } });
+    const ui = await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
 
     expect(screen.getAllByText(/POL-2026-001/).length).toBeGreaterThan(0);
@@ -61,7 +61,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
 
-    const ui = await PolicyDetailPage({ params: { id: "p1" } });
+    const ui = await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
 
     expect(screen.getByText("No claims filed")).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    render(await PolicyDetailPage({ params: { id: "missing" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "missing" }) }));
 
     expect(screen.getByText("This policy does not exist or the link is incorrect.")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/lapsed/i);
@@ -84,7 +84,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: null, source: "error", status: 500 })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
 
     expect(screen.queryByText("This policy does not exist or the link is incorrect.")).not.toBeInTheDocument();
     expect(screen.queryByText("Policy not found")).not.toBeInTheDocument();
@@ -96,7 +96,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: null, source: "error", status: 403, errorMessage: "insufficient role" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
 
     expect(screen.queryByRole("button", { name: /retry|try again/i })).not.toBeInTheDocument();
     expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: { ...policyDetail, status: "expired" }, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getAllByText(/POL-2026-001/).length).toBeGreaterThan(0);
   });
 
@@ -126,7 +126,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: rest, source: "api", status: 200 })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    const first = render(await PolicyDetailPage({ params: { id: "p1" } }));
+    const first = render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     // fetchJson is mocked, so the mapper is not applied -- feed the mapped shape.
     first.unmount();
     fetchJsonMock.mockReset();
@@ -134,7 +134,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: { ...policyDetail, renewalReminderDays: null }, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    const second = render(await PolicyDetailPage({ params: { id: "p1" } }));
+    const second = render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("Not set")).toBeInTheDocument();
     second.unmount();
     fetchJsonMock.mockReset();
@@ -142,7 +142,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: { ...policyDetail, renewalReminderDays: 15 }, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("15 days before expiry")).toBeInTheDocument();
   });
 
@@ -152,7 +152,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
       .mockResolvedValueOnce({ data: [claimRow], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     const links = screen.getAllByRole("link").filter((l) => l.getAttribute("href") === "/assets/insurance/claims/c1");
     expect(links.length).toBeGreaterThan(0);
   });
@@ -162,7 +162,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "error", status: 500 })
       .mockResolvedValueOnce({ data: null, source: "api" });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getAllByRole("button", { name: /retry|try again/i })).toHaveLength(1);
     expect(screen.queryByText("No claims filed")).not.toBeInTheDocument();
   });
@@ -173,7 +173,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: "AST-1 · Laptop", source: "api" });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     const link = screen.getByRole("link", { name: "AST-1 · Laptop" });
     expect(link).toHaveAttribute("href", "/assets/a1");
   });
@@ -183,7 +183,7 @@ describe("PolicyDetailPage", () => {
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: null, source: "error", status: 500 });
-    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    render(await PolicyDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getAllByText(/POL-2026-001/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: "View asset" })).toHaveAttribute("href", "/assets/a1");
   });

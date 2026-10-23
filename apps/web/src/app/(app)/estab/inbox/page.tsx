@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDeskFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, RefreshErrorState, EmptyState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { daysLeft, isClosedStatus, isOverdue } from "@/lib/estab/sla";
 import { getTranslations } from "next-intl/server";
@@ -9,7 +9,8 @@ import { InboxPanel, type InboxRow } from "./InboxPanel";
 
 export default async function EstabInboxPage() {
   const t = await getTranslations("estabW2");
-  const { data: files, source } = await getEstabDeskFiles();
+  const { data: desk, source } = await getEstabDeskFiles();
+  const files = desk.files;
   // A failed fetch must NOT read as "nothing on your desk" (GAP-ESTAB-INBOX-02):
   // show "—" stats and a retryable error state instead of fabricated zeros.
   const errored = source === "error";
@@ -24,7 +25,8 @@ export default async function EstabInboxPage() {
     dueDate: f.dueDate,
   }));
 
-  const active = files.filter((f) => f.status === "active").length;
+  // Open files with the officer that are not awaiting receipt: draft and active alike (a closed file is not "active").
+  const active = files.filter((f) => !isClosedStatus(f.status) && f.status !== "pending").length;
   // Pending = in-transit / awaiting receipt on the desk (GAP-ESTAB-INBOX-05).
   const awaitingReceipt = files.filter((f) => f.status === "pending").length;
   let overdue = 0;
@@ -59,6 +61,10 @@ export default async function EstabInboxPage() {
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "your desk" })} />
           </div>
+        ) : desk.notEnrolled && files.length === 0 ? (
+          // Not an enrolled eOffice operator, so no file can be forwarded to this officer: say so, rather
+          // than the generic "nothing on your desk", which reads as a quiet day.
+          <EmptyState icon="🪪" title={t("inboxNotOperatorTitle")} message={t("inboxNotOperatorMessage")} />
         ) : (
           <InboxPanel rows={rows} />
         )}

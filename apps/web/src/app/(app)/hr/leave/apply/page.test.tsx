@@ -102,7 +102,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     // too — this admin viewer has no employee record of their own here.
     getMyProfileMock.mockResolvedValue({ data: null, source: "api" });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     // GAP-HR-LEAVE-APPLY-03 + GAP-HR-LEAVE-ALLOCATE-04: HR gets the searchable
     // type-ahead picker (no longer a <select> listing the first page of the
@@ -126,7 +126,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     });
     getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "Priya Nair" }, source: "api" });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: /apply for myself/i }));
@@ -149,7 +149,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     // the manager (emp-mgr) is NOT in their own direct-report roster
     getMyProfileMock.mockResolvedValue({ data: { id: "emp-mgr", name: "Meena Rao", department: "dept-uuid", employeeNo: "E7", status: "active", designation: "d" }, source: "api" });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     fireEvent.click(screen.getByRole("button", { name: /apply for myself/i }));
     expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Meena Rao");
@@ -164,7 +164,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
       source: "api",
     });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     const select = screen.getByRole("combobox", { name: /employee/i });
     expect(select).toHaveValue("emp-self");
@@ -182,7 +182,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     getEmployeesMock.mockResolvedValue({ data: [], source: "error", status: 403 });
     getMyProfileMock.mockResolvedValue({ data: null, source: "api", status: 404 });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText(/no employee record is linked to your account/i)).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /employee/i })).not.toBeInTheDocument();
@@ -194,7 +194,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     getEmployeesMock.mockResolvedValue({ data: [], source: "error", status: 500 });
     getMyProfileMock.mockResolvedValue({ data: null, source: "error" });
 
-    await render(ApplyLeavePage({ searchParams: {} }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({}) }));
 
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
     expect(screen.queryByText(/no employee record is linked to your account/i)).not.toBeInTheDocument();
@@ -212,7 +212,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
     });
     getMyProfileMock.mockResolvedValue({ data: null, source: "api" });
 
-    await render(ApplyLeavePage({ searchParams: { empId: "emp-2" } }));
+    await render(ApplyLeavePage({ searchParams: Promise.resolve({ empId: "emp-2" }) }));
 
     expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Rahul Singh");
   });

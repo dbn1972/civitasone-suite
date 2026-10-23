@@ -47,7 +47,8 @@ async function getAllotmentsForQuarter(quarterId: string): Promise<LoaderResult<
   );
 }
 
-export default async function QuarterDetailPage({ params }: { params: { id: string } }) {
+export default async function QuarterDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tFallback = await getTranslations("employeeFallback");
   const { data: quarter, source: quarterSource } = await getQuarter(params.id);
 
@@ -89,7 +90,6 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
         back="/estab/quarters"
         actions={<StatusPill status={quarter.status} />}
       />
-
       <Card title="Quarter details" padding>
         <dl style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", margin: 0 }}>
           <div><dt style={{ fontSize: 12, color: "var(--ink2)" }}>Address</dt><dd style={{ margin: 0 }}>{quarter.address ?? "—"}</dd></div>
@@ -100,7 +100,6 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
           <div><dt style={{ fontSize: 12, color: "var(--ink2)" }}>Org unit</dt><dd style={{ margin: 0 }}>{quarter.orgUnit ?? "—"}</dd></div>
         </dl>
       </Card>
-
       {/* GAP-ESTAB-QUARTERS-DETAIL-05: explain why the form is absent for non-vacant quarters */}
       {quarter.status === "vacant" ? (
         <ApplyAllotmentForm quarterId={quarter.id} />
@@ -112,7 +111,6 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
           </p>
         </Card>
       )}
-
       <Card title="Allotment history for this quarter">
         {errored && quarterAllotments.length === 0 ? (
           <div className="pad">

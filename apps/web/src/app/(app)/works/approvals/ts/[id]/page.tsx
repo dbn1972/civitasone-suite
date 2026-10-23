@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatCard, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
@@ -83,11 +84,12 @@ const valueStyle: React.CSSProperties = {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function TsDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function TsDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   // GET-by-id (GAP-WORKS-APPROVALS-TS-DETAIL-01): fetch the single record so a
   // record beyond the first list page is reachable. The backend returns
   // { data: <record> }; a genuinely missing id is a 404, every other failure
@@ -129,13 +131,16 @@ export default async function TsDetailPage({
 
   const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
 
-  // The API returns opaque ids only; resolve the work number and officer name web-side (degrades to a short id).
+  // works-service returns the work number with the record; the officer NAME lives in identity-service and is resolved
+  // from the tenant user directory. Each lookup is skipped when the record already carries the value, and degrades to a
+  // labelled short id (never a bare hash) when it cannot be found.
+  const t = await getTranslations("works.approvalNames");
   const [workHeader, officerNames] = await Promise.all([
-    ts.workId ? getWorkHeader(ts.workId) : null,
-    getOfficerNameMap(),
+    ts.workId && !ts.workNumber ? getWorkHeader(ts.workId) : null,
+    ts.tsAuthorityId && !ts.authorityName ? getOfficerNameMap([ts.tsAuthorityId]) : null,
   ]);
   const workNumber = ts.workNumber ?? workHeader?.data.workNumber ?? null;
-  const authorityName = ts.authorityName ?? (ts.tsAuthorityId ? officerNames.data[ts.tsAuthorityId] : undefined) ?? null;
+  const authorityName = ts.authorityName ?? (ts.tsAuthorityId ? officerNames?.data[ts.tsAuthorityId] : undefined) ?? null;
 
   const detailRows: Array<[string, React.ReactNode]> = [
     ["TS Number", ts.tsNumber ?? "—"],
@@ -144,7 +149,7 @@ export default async function TsDetailPage({
       "Work",
       ts.workId != null ? (
         <Link href={`/works/proposals/${ts.workId}`} title={ts.workId}>
-          {workNumber ?? ts.workId.slice(0, 8) + "…"}
+          {workNumber ?? t("idLabel", { id: ts.workId.slice(0, 8) + "…" })}
         </Link>
       ) : (
         "—"
@@ -154,7 +159,7 @@ export default async function TsDetailPage({
       "TS Authority",
       ts.tsAuthorityId != null ? (
         <span title={ts.tsAuthorityId} style={{ fontFamily: authorityName ? undefined : "var(--font-mono, monospace)" }}>
-          {authorityName ?? ts.tsAuthorityId.slice(0, 8) + "…"}
+          {authorityName ?? t("unknownOfficer", { id: ts.tsAuthorityId.slice(0, 8) + "…" })}
         </span>
       ) : (
         "—"

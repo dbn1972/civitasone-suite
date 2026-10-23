@@ -104,6 +104,51 @@ function safeEqualHex(a: string, b: string): boolean {
   }
 }
 
+// ── Short-lived, requester-bound download tokens ──────────────────
+//
+// The download token is NOT stored. It is a stateless HMAC minted on demand when
+// the requester reads export status/list, and bound to (exportId, tenantId, actorId,
+// expiry). It lives EXPORT_DOWNLOAD_TTL_SECONDS (default 15 min), so a token that
+// leaks via a URL/query string/log is useless for any other caller and soon useless
+// for the requester too.
+
+const DEFAULT_DOWNLOAD_TTL_SECONDS = 900;
+
+export function downloadTtlSeconds(): number {
+  const n = Number(process.env.EXPORT_DOWNLOAD_TTL_SECONDS);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_DOWNLOAD_TTL_SECONDS;
+}
+
+type DownloadBinding = { exportId: string; tenantId: string; actorId: string };
+
+function downloadMac(b: DownloadBinding, expSec: number): string {
+  return createHmac("sha256", signingSecret())
+    .update(`export-download-v1|${b.exportId}|${b.tenantId}|${b.actorId}|${expSec}`)
+    .digest("hex");
+}
+
+export function mintDownloadToken(
+  b: DownloadBinding,
+  nowMs: number = Date.now(),
+): { token: string; expiresAt: Date } {
+  const expSec = Math.floor(nowMs / 1000) + downloadTtlSeconds();
+  return { token: `${expSec}.${downloadMac(b, expSec)}`, expiresAt: new Date(expSec * 1000) };
+}
+
+export type DownloadTokenCheck = "ok" | "invalid" | "expired";
+
+export function verifyDownloadToken(
+  token: string,
+  b: DownloadBinding,
+  nowMs: number = Date.now(),
+): DownloadTokenCheck {
+  const m = /^(\d{1,12})\.([0-9a-f]{64})$/.exec(token);
+  if (!m) return "invalid";
+  const expSec = Number(m[1]);
+  if (!safeEqualHex(downloadMac(b, expSec), m[2]!)) return "invalid";
+  return expSec * 1000 < nowMs ? "expired" : "ok";
+}
+
 // ── PKI / DSC (Digital Signature Certificate) path ────────────────
 //
 // When EXPORT_SIGNING_MODE=pki, uses RSA/ECDSA private key signing instead of HMAC.

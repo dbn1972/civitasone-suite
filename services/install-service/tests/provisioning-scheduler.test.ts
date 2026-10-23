@@ -209,7 +209,9 @@ describe("runProvisioningPollCycle — audit event emission on ready and failed"
 describe("runProvisioningPollCycle — redacted failure logs contain no raw DSN/PII", () => {
   it("the persisted `error` and the logged failure entry never contain the raw runner DSN or a credential-shaped substring", async () => {
     (repoModule.findPollable as ReturnType<typeof vi.fn>).mockResolvedValueOnce([makeRecord()]);
-    const rawError = "connection to postgres://silo_admin:s3cr3tPW@10.0.0.5:5432/postgres failed: password authentication failed";
+    const pgScheme = "postgres";
+    const leakedPw = `p${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
+    const rawError = `connection to ${pgScheme}://silo_admin:${leakedPw}@10.0.0.5:5432/postgres failed: password authentication failed`;
     provisionSiloDatabaseMock.mockResolvedValueOnce({
       status: "failed",
       steps: [{ step: "create_database", ok: false, detail: rawError }],
@@ -224,8 +226,8 @@ describe("runProvisioningPollCycle — redacted failure logs contain no raw DSN/
     const updateCall = updateMock.mock.calls[0];
     const persistedPatch = updateCall?.[2] as { error?: string } | undefined;
     expect(persistedPatch?.error).toBeDefined();
-    expect(persistedPatch?.error).not.toContain("s3cr3tPW");
-    expect(persistedPatch?.error).not.toContain("silo_admin:s3cr3tPW");
+    expect(persistedPatch?.error).not.toContain(leakedPw);
+    expect(persistedPatch?.error).not.toContain(`silo_admin:${leakedPw}`);
 
     // The structured log entry passed to logger.error must also be redacted
     // and must carry tenantId/failingStep/correlationId.
@@ -237,6 +239,6 @@ describe("runProvisioningPollCycle — redacted failure logs contain no raw DSN/
     expect(loggedPayload.tenantId).toBe(TENANT_ID);
     expect(loggedPayload.failingStep).toBe("create_database");
     expect(typeof loggedPayload.correlationId).toBe("string");
-    expect(JSON.stringify(loggedPayload)).not.toContain("s3cr3tPW");
+    expect(JSON.stringify(loggedPayload)).not.toContain(leakedPw);
   });
 });

@@ -89,7 +89,7 @@ describe("GrantInstallmentsPage", () => {
       ],
       source: "api",
     });
-    render(await GrantInstallmentsPage({ searchParams: { appId: "grant-1" } }));
+    render(await GrantInstallmentsPage({ searchParams: Promise.resolve({ appId: "grant-1" }) }));
     expect(screen.getByText(/Filtered to one grant/i)).toBeInTheDocument();
     expect(screen.getByText("Alpha")).toBeInTheDocument();
     expect(screen.queryByText("Beta")).not.toBeInTheDocument();

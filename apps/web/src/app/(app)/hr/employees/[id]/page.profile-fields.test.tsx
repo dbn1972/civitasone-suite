@@ -31,7 +31,7 @@ async function renderPage(roles: string[]) {
     }
     return { data: fallback, source: "api" };
   });
-  const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+  const ui = await EmployeeDetailPage({ params: Promise.resolve({ id: "e1" }) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

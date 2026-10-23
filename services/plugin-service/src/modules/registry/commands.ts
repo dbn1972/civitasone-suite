@@ -52,7 +52,7 @@ export async function pluginEnable(ctx: RequestContext, pluginId: string): Promi
   return { id: pluginId, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function pluginDisable(ctx: RequestContext, pluginId: string): Promise<Accepted> {
+export async function pluginDisable(ctx: RequestContext, pluginId: string, reason: string): Promise<Accepted> {
   const msgId = randomUUID();
   await queue.publish(COMMANDS.pluginDisable, {
     messageId: msgId,
@@ -61,7 +61,7 @@ export async function pluginDisable(ctx: RequestContext, pluginId: string): Prom
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { pluginId, tenantId: ctx.tenantId },
+    payload: { pluginId, tenantId: ctx.tenantId, reason },
   });
   return { id: pluginId, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -41,7 +41,7 @@ describe("BoqDetailPage", () => {
       { data: [], source: "error", status: 500 },
       { data: null, source: "error", status: 500 },
     );
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText(/couldn't load the BoQ items/i)).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("BoqDetailPage", () => {
       { data: [], source: "error", status: 404 },
       { data: null, source: "error", status: 404 },
     );
-    await expect(BoqDetailPage({ params: { workId: WORK } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BoqDetailPage({ params: Promise.resolve({ workId: WORK }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
   });
 
@@ -75,7 +75,7 @@ describe("BoqDetailPage", () => {
         source: "api",
       },
     );
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText("Contingency")).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("BoqDetailPage", () => {
       ], source: "api" },
       { data: null, source: "error", status: 404 }, // no recap computed yet
     );
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     expect(notFoundMock).not.toHaveBeenCalled();
     // 9007199254740993 + 1 = 9007199254740994 paise -> exact only via BigInt.
@@ -104,7 +104,7 @@ describe("BoqDetailPage", () => {
 
   it("GAP-WORKS-BOQ-WORKID-04: the subtitle shows the work number and description, not a UUID prefix", async () => {
     mockResults({ data: [], source: "api" }, { data: null, source: "api" });
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     expect(screen.getByText(/WK-2026-0042 — Canal lining/)).toBeInTheDocument();
     expect(screen.queryByText(/11111111/)).not.toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("BoqDetailPage", () => {
       { data: [{ id: "item-1", workId: WORK, itemDescription: "PCC", itemCode: "SR-1", unit: "cum", rate: "12500", quantity: "2", amountMinor: "2500000", scopeId: "", srItemId: "" }], source: "api" },
       { data: null, source: "api" },
     );
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     const link = screen.getByRole("link", { name: /Record measurement for SR-1/ });
     expect(link).toHaveAttribute("href", `/works/billing/measurements/new?workId=${WORK}&boqItemId=item-1`);
@@ -128,7 +128,7 @@ describe("BoqDetailPage", () => {
       { data: [{ id: "item-1", workId: WORK, itemDescription: "PCC", itemCode: "SR-1", unit: "cum", rate: "12500", quantity: "2", amountMinor: "2500000", scopeId: "", srItemId: "" }], source: "api" },
       { data: null, source: "api" },
     );
-    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    const ui = await BoqDetailPage({ params: Promise.resolve({ workId: WORK }) });
     render(ui);
     expect(screen.queryByRole("link", { name: /Record measurement/ })).not.toBeInTheDocument();
   });

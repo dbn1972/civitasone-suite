@@ -11,11 +11,13 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, maskAdvanceBeneficiaries } from "./domain.js";
+import { DomainError, assertBillRejectable, assertBillApprovable, assertPaymentSubmittable, assertPayerNotPasser, assertDistinctMakerChecker, maskAdvanceBeneficiaries } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 import * as ucRepo from "./uc-repo.js";
 import { assertUCWithinSanction, assertUCPeriodValid } from "./uc-domain.js";
 import { scopedRead } from "../../shared/db.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
+import { actorsQuery } from "./validators.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -81,7 +83,35 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/advances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const body = createAdvanceBody.parse(req.body);
+    const parsed = createAdvanceBody.parse(req.body);
+    // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: a payee picked from a master list arrives with its id. An "other"
+    // payee has no master record, so it cannot carry one. A vendor id must be an active vendor of THIS tenant, and the
+    // register then shows the vendor's master name rather than whatever display text the client sent. An employee id is
+    // an opaque reference into another service (nothing here can check it, and nothing is trusted from it but the id).
+    // It is accepted as any UUID: it is NOT checked against the employee master or against this tenant, because the
+    // employee master lives in payroll-service (no FK, no cross-service read here). It is stored in payee_id and never
+    // returned. Anything that later acts on it (for example a payroll recovery of an outstanding advance) MUST resolve
+    // the id against the employee master and check it belongs to the same tenant before using it; do not treat a stored
+    // payee_id as a verified employee reference.
+    let payee = parsed.payee;
+    if (parsed.payeeId) {
+      if (parsed.type === "other") {
+        throw new HttpError(400, "ADVANCE_PAYEE_ID_NOT_ALLOWED", "an advance to another payee has no master record, so it cannot carry a payee id", [
+          { field: "payeeId", message: "A payee of type Other is typed, not picked from a list." },
+        ]);
+      }
+      if (parsed.type === "vendor") {
+        const vendor = await mastersRepo.getVendorById(ctx.tenantId, parsed.payeeId);
+        if (!vendor) {
+          throw new HttpError(404, "VENDOR_NOT_FOUND", "vendor not found", [{ field: "payeeId", message: "This vendor was not found. Pick a vendor from the list." }]);
+        }
+        if (!vendor.isActive) {
+          throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated", [{ field: "payeeId", message: "This vendor is deactivated. Pick an active vendor." }]);
+        }
+        payee = vendor.name;
+      }
+    }
+    const body = { ...parsed, payee };
     // Advance numbers are typed by hand and (tenant_id, advance_no) is UNIQUE:
     // without this pre-check a duplicate got a 202 and then failed silently in
     // the async consumer. The unique index stays the authority for a true race
@@ -103,6 +133,14 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message, [{ field: "periodTo", message: "The period end must not be before the period start." }]);
       throw err;
+    }
+    // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03: a scheme code must be one of this tenant's schemes. The
+    // consumer repeats the check in its own transaction.
+    if (body.schemeCode) {
+      const schemeCode = body.schemeCode;
+      if (!(await scopedRead((tx) => ucRepo.findSchemeByCode(tx, ctx.tenantId, schemeCode)))) {
+        throw new HttpError(400, "UNKNOWN_SCHEME", "scheme not found for this office", [{ field: "schemeCode", message: "Choose one of the schemes set up in Scheme Tracking." }]);
+      }
     }
     // Over-claim pre-check (GAP-...-UTILIZATION-CERTIFICATES-NEW-02). The consumer repeats it
     // under a row lock on the sanction, which is what makes it race-safe.
@@ -169,6 +207,10 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const bill = await repo.findBillByIdAndTenant(id, ctx.tenantId);
     if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
     try {
+      // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: the maker cannot pass their own bill. The consumer enforces the same
+      // rule authoritatively; checking it here too means a self-approval is an immediate 409 the officer sees, not a
+      // 202 that only fails later in the queue. Same order as the consumer (maker-checker, then status/stage).
+      assertDistinctMakerChecker(bill.createdBy, ctx.actorId);
       assertBillApprovable(bill.status, bill.stage ?? "section");
     } catch (err) { toDomain(err, 409); }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveBill(ctx, id, body, bill.stage ?? "section"));
@@ -178,11 +220,15 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = initiateEftBody.parse(req.body);
-    // Synchronous pre-check of the passer != payer rule (the consumer stays
-    // authoritative): the common case gets an immediate 409, not a silent 202.
+    // Synchronous pre-check of the segregation-of-duties rules (the consumer stays authoritative): the common case
+    // gets an immediate 409, not a silent 202. The payer must be neither the officer who lodged the bill (maker !=
+    // checker) nor the officer who passed it (passer != payer).
     const bill = await repo.findBillByIdAndTenant(body.billId, ctx.tenantId);
     if (bill) {
-      try { assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId); } catch (err) { toDomain(err, 409); }
+      try {
+        assertDistinctMakerChecker(bill.createdBy, ctx.actorId);
+        assertPayerNotPasser(bill.status, bill.updatedBy, ctx.actorId);
+      } catch (err) { toDomain(err, 409); }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.initiatePayment(ctx, body));
   });
@@ -207,6 +253,19 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       createdBy: payment.createdBy,
       createdAt: payment.createdAt,
     });
+  });
+
+  // Actor id -> display name for the finance detail and register pages (payments, vendors, cheques, audit paras,
+  // reconciliation exceptions), so a clerk reads "Asha Rao", never a raw user id. The web loader
+  // (getFinanceActorNames) has always asked for this route. Display enrichment only: tenant-scoped, returns just
+  // {id, name} for the (at most 50) ids asked for, and fails OPEN to an empty list when identity-service is
+  // unreachable (the web then shows "User 1a2b3c4d").
+  app.get("/v1/finance/actors", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...FINANCE_ROLES, "audit_officer"]);
+    const { ids } = actorsQuery.parse(req.query);
+    const names = await fetchUserNames(ctx.tenantId, ids);
+    return reply.send({ data: [...names].map(([id, name]) => ({ id, name })) });
   });
 
   // GAP-FINANCE-PAYMENTS-DETAIL-04: the decision context the detail page needs and the base payment

@@ -10,7 +10,7 @@
  *
  * The create dialog uses the shared ds <Modal> (focus trap + restore + inert +
  * ESC), warns before discarding a dirty form, and validates each recipient
- * token (email / Indian mobile / handle) with a visible cap and a consent
+ * token (a CRM contact id, picked via the contact lookup) with a visible cap and a consent
  * notice — personal data typed by hand must not go out unchecked
  * (GAP-NOTIFICATIONS-CAMPAIGNS-02 / -04).
  *
@@ -27,13 +27,15 @@ import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import {
   CAMPAIGN_RECIPIENT_LIMIT,
-  validateRecipientTokens,
+  validateContactRecipients,
 } from "@/lib/form-validation";
 import {
   getCampaigns,
   getCampaignTemplates,
   getCampaignSegments,
   createCampaign,
+  searchCampaignContacts,
+  type CampaignContactHit,
   campaignStatusLabel,
   CAMPAIGN_STATUSES,
   type Campaign,
@@ -237,6 +239,11 @@ function CreateCampaignDialog({
   const formError = useFormError("campaign");
   const [error, setError] = useState("");
   const [discardOpen, setDiscardOpen] = useState(false);
+  // Contact lookup (recipients are CRM contact ids, not raw emails/phones).
+  const [contactQuery, setContactQuery] = useState("");
+  const [contactHits, setContactHits] = useState<CampaignContactHit[] | null>(null);
+  const [contactSearching, setContactSearching] = useState(false);
+  const [contactSearchFailed, setContactSearchFailed] = useState(false);
 
   const [templates, setTemplates] = useState<CampaignTemplate[]>([]);
   const [templateSource, setTemplateSource] = useState<Source | "loading">("loading");
@@ -256,6 +263,9 @@ function CreateCampaignDialog({
     setAttempted(false);
     setError("");
     setDiscardOpen(false);
+    setContactQuery("");
+    setContactHits(null);
+    setContactSearchFailed(false);
     let live = true;
     void (async () => {
       setTemplateSource("loading");
@@ -290,7 +300,26 @@ function CreateCampaignDialog({
         .filter((r) => r.length > 0),
     [recipients],
   );
-  const recipientCheck = useMemo(() => validateRecipientTokens(recipientList), [recipientList]);
+  const recipientCheck = useMemo(() => validateContactRecipients(recipientList), [recipientList]);
+
+  async function findContacts() {
+    if (contactQuery.trim().length === 0) return;
+    setContactSearching(true);
+    setContactSearchFailed(false);
+    const hits = await searchCampaignContacts(contactQuery);
+    setContactSearching(false);
+    if (hits === null) {
+      setContactHits(null);
+      setContactSearchFailed(true);
+    } else {
+      setContactHits(hits);
+    }
+  }
+
+  function addContact(id: string) {
+    if (recipientList.includes(id)) return;
+    setRecipients((prev) => (prev.trim().length === 0 ? id : `${prev.trim().replace(/[,\s]+$/, "")}\n${id}`));
+  }
 
   const nameMissing = name.trim().length === 0;
   const templateMissing = template.trim().length === 0;
@@ -387,7 +416,7 @@ function CreateCampaignDialog({
             error={attempted && (recipientsMissing || recipientsInvalid)
               ? recipientCheck.overLimit
                 ? "Reduce the number of recipients before sending."
-                : "Each recipient must be a valid email, Indian mobile number, or user handle."
+                : "Each recipient must be a CRM contact ID. Use Find contacts to look people up — emails and phone numbers cannot be used directly."
               : undefined}
           >
             <Textarea
@@ -395,8 +424,51 @@ function CreateCampaignDialog({
               onChange={(e) => setRecipients(e.target.value)}
               style={{ minHeight: 64, resize: "vertical" }}
               rows={3}
-              placeholder="One recipient per line, or comma-separated"
+              placeholder="CRM contact IDs, one per line or comma-separated"
             />
+            <div style={{ display: "grid", gap: 6, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Input
+                  value={contactQuery}
+                  onChange={(e) => setContactQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void findContacts();
+                    }
+                  }}
+                  placeholder="Search CRM contacts by name or company"
+                  aria-label="Search CRM contacts"
+                />
+                <Button type="button" variant="secondary" disabled={contactSearching || contactQuery.trim().length === 0} onClick={() => void findContacts()}>
+                  {contactSearching ? "Searching…" : "Find contacts"}
+                </Button>
+              </div>
+              {contactSearchFailed ? (
+                <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>
+                  Contact search is unavailable (it needs CRM access). Paste contact IDs instead.
+                </p>
+              ) : null}
+              {contactHits && contactHits.length === 0 ? (
+                <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>No matching contacts.</p>
+              ) : null}
+              {contactHits && contactHits.length > 0 ? (
+                <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
+                  {contactHits.map((h) => (
+                    <li key={h.id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", fontSize: 13 }}>
+                      <span>
+                        {h.name}
+                        {h.company ? ` · ${h.company}` : ""}
+                        {h.email || h.phone ? <span style={{ color: "var(--muted)" }}> ({[h.email, h.phone].filter(Boolean).join(", ")})</span> : null}
+                      </span>
+                      <Button type="button" variant="ghost" disabled={recipientList.includes(h.id)} onClick={() => addContact(h.id)} aria-label={`Add ${h.name}`}>
+                        {recipientList.includes(h.id) ? "Added" : "Add"}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
             <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>{recipientHelp}</p>
             {/* GAP-NOTIFICATIONS-CAMPAIGNS-02: DPDP consent notice beside the raw personal-data field. */}
             <p id={consentNoteId} style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 0" }}>

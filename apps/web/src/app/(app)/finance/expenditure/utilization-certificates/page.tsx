@@ -1,23 +1,28 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
-import { getFinanceUCs } from "../../../../_data/loaders";
+import { getFinanceUCs, getFinanceSchemes } from "../../../../_data/loaders";
 import { UCsTable } from "./UCsTable";
-import { ucMatchesScheme } from "./ucScheme";
+import { ucMatchesScheme, resolveSchemeRef } from "./ucScheme";
 import { formatMoney } from "@/lib/formatters";
 import { ucStats } from "@/lib/finance/expenditureStats";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 
-export default async function UCsPage({ searchParams }: { searchParams?: { scheme?: string } }) {
+export default async function UCsPage(props: { searchParams?: Promise<{ scheme?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("expenditureUtilizationCertificates");
-  const result = await getFinanceUCs();
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: ?scheme= carries a Scheme Tracking code; the schemes are read only
+  // when the register is being narrowed, to turn the code into the scheme's name (for the note and for older certificates).
+  const schemeParam = searchParams?.scheme?.trim() || undefined;
+  const [result, schemesResult] = await Promise.all([getFinanceUCs(), schemeParam ? getFinanceSchemes() : Promise.resolve(null)]);
   const { data: ucs, source } = result;
 
   // Failed load with nothing to show must not read as zero UCs / ₹0.00
   // (GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-02).
   const failed = result.source === "error" && ucs.length === 0;
-  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: ?scheme= narrows the register to one scheme
-  // (linked from the scheme detail page); the stats and the table both follow it.
-  const scheme = searchParams?.scheme?.trim() || undefined;
+  // ?scheme= narrows the register to one scheme (linked from the scheme detail page); the stats and the table both follow it.
+  const scheme = schemeParam
+    ? resolveSchemeRef(schemeParam, schemesResult && schemesResult.source !== "error" ? schemesResult.data : null)
+    : undefined;
   const shown = scheme ? ucs.filter((u) => ucMatchesScheme(u, scheme)) : ucs;
   const stats = ucStats(shown);
   const roles = getSessionRoles();
@@ -59,7 +64,7 @@ export default async function UCsPage({ searchParams }: { searchParams?: { schem
         <Card title={t("cardTitle")}>
           {scheme ? (
             <p style={{ padding: "8px 16px", fontSize: 13 }}>
-              {t("schemeFilterNote", { scheme })} <a href="/finance/expenditure/utilization-certificates">{t("schemeFilterClear")}</a>
+              {t("schemeFilterNote", { scheme: scheme.name || scheme.code })} <a href="/finance/expenditure/utilization-certificates">{t("schemeFilterClear")}</a>
             </p>
           ) : null}
           <UCsTable ucs={ucs} source={source} scheme={scheme} viewerId={getSessionUserId()} canVerify={canVerify} canResubmit={canResubmit} />

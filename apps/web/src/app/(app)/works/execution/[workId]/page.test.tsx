@@ -37,7 +37,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
 
-    render(await ExecutionDetailPage({ params: { workId: "3f9a1c20-aaaa-bbbb-cccc-dddddddddddd" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "3f9a1c20-aaaa-bbbb-cccc-dddddddddddd" }) }));
 
     expect(screen.getByText(/W-2025-014 — Village road/)).toBeInTheDocument();
     expect(screen.queryByText(/Work 3f9a1c20…/)).toBeNull();
@@ -50,7 +50,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
 
-    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "w1" }) }));
     expect(screen.getByText("30%")).toBeInTheDocument();
   });
 
@@ -61,7 +61,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [{ id: "i1", workId: "w1", description: "x", status: "open" }], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "w1" }) }));
     expect(screen.queryByText("Priority")).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "api" });
 
-    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "w1" }) }));
     expect(screen.getByText("No issues raised")).toBeInTheDocument();
     expect(screen.queryByText("No open issues")).toBeNull();
   });
@@ -84,7 +84,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [], source: "error" })
       .mockResolvedValueOnce({ data: [{ scopeId: SCOPE_A.scopeId, percentage: 30 }], source: "api" });
 
-    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "w1" }) }));
 
     // Scopes still render.
     expect(screen.getByText("Bituminous surfacing")).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("ExecutionDetailPage (GAP-WORKS-EXECUTION-WORKID-01/03/04/05/06)", () =
       .mockResolvedValueOnce({ data: [], source: "api" })
       .mockResolvedValueOnce({ data: [], source: "error" });
 
-    render(await ExecutionDetailPage({ params: { workId: "w1" } }));
+    render(await ExecutionDetailPage({ params: Promise.resolve({ workId: "w1" }) }));
     // Achieved cell shows an em dash, never 0%.
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(screen.queryByText("0%")).toBeNull();

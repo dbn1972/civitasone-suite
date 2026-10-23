@@ -77,7 +77,7 @@ function message(over: Record<string, unknown> = {}) {
 }
 
 async function renderPage() {
-  const el = await Page({ params: { id: ID } });
+  const el = await Page({ params: Promise.resolve({ id: ID }) });
   render(el as React.ReactElement);
 }
 

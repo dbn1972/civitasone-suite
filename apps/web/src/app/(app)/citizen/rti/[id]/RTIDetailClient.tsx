@@ -1,5 +1,7 @@
 "use client";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { browserFetch } from "@/lib/api/browserClient";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -91,7 +93,7 @@ export function RTIDetailClient({
       setRti((await res.json()) as RtiDetail);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
-      setLoadError(e instanceof Error ? e.message : t("loadErrorFallback"));
+      setLoadError(e instanceof UserFacingError ? e.message : t("loadErrorFallback"));
     } finally {
       setLoading(false);
     }
@@ -117,11 +119,10 @@ export function RTIDetailClient({
   async function respond(reason?: string) {
     const responseUrl = (reason ?? "").trim();
     if (!/^https?:\/\//i.test(responseUrl)) {
-      throw new Error(t("invalidResponseUrl"));
+      throw new UserFacingError(t("invalidResponseUrl"));
     }
-    const res = await fetch(`/api/proxy/v1/citizen/rti/${id}/respond`, {
+    const res = await browserFetch(`v1/citizen/rti/${id}/respond`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
       body: JSON.stringify({ responseUrl }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
@@ -142,7 +143,7 @@ export function RTIDetailClient({
       setAppeal({ appealType: "first", grounds: "" });
       afterMutate(t("noticeAppealSubmitted"));
     } catch (e) {
-      setFormError(e instanceof Error ? e.message : t("appealErrorFallback"));
+      setFormError(e instanceof UserFacingError ? e.message : t("appealErrorFallback"));
     } finally {
       setBusy(false);
     }

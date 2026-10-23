@@ -144,6 +144,11 @@ vi.mock("@fastify/cors", () => ({ default: async () => {} }));
 // ─── Repo mocks ─────────────────────────────────────────────────
 vi.mock("../src/modules/jobs/repo.js", () => ({
   findById: async () => mockState.queryResult[0] ?? null,
+  // Detail read (stored parameters / result preview); defaults mirror an unfilled row.
+  findDetailById: async () => {
+    const r = mockState.queryResult[0];
+    return r ? { parameters: {}, resultColumns: [], resultRows: [], ...r } : null;
+  },
   listByTenant: async () => mockState.queryResult,
   // GAP2-REPORTS-PAGINATION-01: meta.total now comes from a count query.
   countByTenant: async () => mockState.countResult,

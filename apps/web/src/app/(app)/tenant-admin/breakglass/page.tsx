@@ -5,6 +5,7 @@ import { getBreakglassLog } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { istDateKey } from "@/lib/formatters";
 import { BreakglassTable } from "./BreakglassTable";
 
 export default async function BreakglassPage() {
@@ -19,11 +20,9 @@ export default async function BreakglassPage() {
   const total = events.length;
   const activeNow = events.filter((e) => e.status === "active").length;
   const ended = events.filter((e) => e.status === "ended").length;
-  const thisMonth = events.filter((e) => {
-    const d = new Date(e.startedAt);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
-  }).length;
+  // IST calendar month (the host runs UTC, so local getMonth() is the UTC month).
+  const nowMonth = istDateKey(new Date()).slice(0, 7);
+  const thisMonth = events.filter((e) => istDateKey(new Date(e.startedAt)).slice(0, 7) === nowMonth).length;
 
   return (
     <div className="page-main wrap">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildCreateBillRequest, buildInitiatePaymentRequest } from "./billForm";
+import { attachPaymentReason, buildCreateBillRequest, buildInitiatePaymentRequest } from "./billForm";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 const base = { billNo: "INV-1", vendorId: UUID, headId: UUID, ddoCode: "ddo123", amountRupees: "1,20,000.50", billDate: "", poRef: "", grnRef: "" };
@@ -40,5 +40,26 @@ describe("buildInitiatePaymentRequest", () => {
     const r = buildInitiatePaymentRequest({ billId: "", ddoCode: "DDO123", mode: "", amountMinor: "0" });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(Object.keys(r.errors).sort()).toEqual(["amountMinor", "billId", "mode"]);
+  });
+});
+
+// GAP-FINANCE-PAYMENTS-01: the officer's reason goes to the payment's audit event.
+describe("attachPaymentReason", () => {
+  const body = { billId: UUID, ddoCode: "DDO123", mode: "NEFT" as const, amountMinor: "1500000", currency: "INR" as const };
+  it("adds the trimmed reason to the initiate body, leaving the paise amount untouched", () => {
+    expect(attachPaymentReason(body, "  Sanction order 14/2026 dated 02-09-2026  ")).toEqual({
+      ok: true,
+      body: { ...body, reason: "Sanction order 14/2026 dated 02-09-2026" },
+    });
+  });
+  it("rejects a missing, blank or too-short reason (finance-service requires 10 to 500 characters)", () => {
+    for (const reason of [undefined, "", "   ", "too short", "         x"]) {
+      expect(attachPaymentReason(body, reason), String(reason)).toEqual({ ok: false, error: "reasonRequired" });
+    }
+  });
+  it("accepts exactly 10 and 500 characters, rejects 501", () => {
+    expect(attachPaymentReason(body, "a".repeat(10)).ok).toBe(true);
+    expect(attachPaymentReason(body, "a".repeat(500)).ok).toBe(true);
+    expect(attachPaymentReason(body, "a".repeat(501)).ok).toBe(false);
   });
 });

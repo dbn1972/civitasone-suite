@@ -24,7 +24,7 @@ describe("DebtDetailPage (GAP-FINANCE-DEBT-01)", () => {
 
   it("shows the lender, principal, outstanding, rate, maturity and the schedule", async () => {
     getDebtById.mockResolvedValue({ data: DEBT, source: "api" });
-    render(await DebtDetailPage({ params: { id: "d1" } }));
+    render(await DebtDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("NABARD")).toBeInTheDocument();
     expect(screen.getByText("Principal", { selector: ".lab" }).closest(".stat")).toHaveTextContent("₹12,00,000.00");
     expect(screen.getByText("Outstanding principal", { selector: ".lab" }).closest(".stat")).toHaveTextContent("₹9,00,000.00");
@@ -35,27 +35,27 @@ describe("DebtDetailPage (GAP-FINANCE-DEBT-01)", () => {
 
   it("a loan with no repayment position shows a dash for outstanding, not ₹0.00", async () => {
     getDebtById.mockResolvedValue({ data: { ...DEBT, outstandingMinor: null, schedule: [] }, source: "api" });
-    render(await DebtDetailPage({ params: { id: "d1" } }));
+    render(await DebtDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("Outstanding principal", { selector: ".lab" }).closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("No repayment schedule")).toBeInTheDocument();
   });
 
   it("only a real 404 is 'not found'", async () => {
     getDebtById.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await DebtDetailPage({ params: { id: "nope" } }));
+    render(await DebtDetailPage({ params: Promise.resolve({ id: "nope" }) }));
     expect(screen.getByText("Loan not found")).toBeInTheDocument();
   });
 
   it("a failed load (500) is a retry state, never 'not found'", async () => {
     getDebtById.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await DebtDetailPage({ params: { id: "d1" } }));
+    render(await DebtDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.queryByText("Loan not found")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /try again|retry|refresh/i })).toBeInTheDocument();
   });
 
   it("shows whether the loan receipt journal is posted or still awaiting posting", async () => {
     getDebtById.mockResolvedValue({ data: { ...DEBT, receiptGlStatus: "pending" }, source: "api" });
-    render(await DebtDetailPage({ params: { id: "d1" } }));
+    render(await DebtDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("The loan receipt journal is awaiting posting.")).toBeInTheDocument();
   });
 });

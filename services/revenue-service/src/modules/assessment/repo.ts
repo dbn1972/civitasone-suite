@@ -9,6 +9,8 @@ import { db } from "../../shared/db.js";
 import { assessments, demands, dcbEntries, remissions } from "./schema.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { SERVICE } from "../../topics.js";
+import { computeDcbSummary, dcbBalanceEffect, type DcbEntry } from "./domain.js";
+import { getAssesseeOutstanding } from "../arrears/outstanding.js";
 
 export async function findAssessment(tenantId: string, id: string) {
   const rows = await tenantTransaction(db, tenantId, async (tx) => {
@@ -127,21 +129,20 @@ export async function getDcbSummary(tenantId: string, assesseeId: string) {
         .where(and(eq(dcbEntries.tenantId, tenantId), eq(dcbEntries.assesseeId, assesseeId)));
     });
 
-    let totalDemand = 0n;
-    let totalCollected = 0n;
+    const { totalDemand, totalCollection, balance } = computeDcbSummary(entries as DcbEntry[]);
 
-    for (const entry of entries) {
-      if (entry.entryType === "demand") {
-        totalDemand += entry.amountMinor;
-      } else {
-        totalCollected += entry.amountMinor;
-      }
-    }
+    // The figure the instalment/arrears consumers actually plan against
+    // (sum of the latest running balance per demand), so a screen can show
+    // exactly what the service will use rather than re-deriving it.
+    const outstanding = await tenantTransaction(db, tenantId, async (tx) =>
+      getAssesseeOutstanding(tx, tenantId, assesseeId),
+    );
 
     return {
       totalDemand: totalDemand.toString(),
-      totalCollected: totalCollected.toString(),
-      balance: (totalDemand - totalCollected).toString(),
+      totalCollected: totalCollection.toString(),
+      balance: balance.toString(),
+      outstandingMinor: outstanding.toString(),
     };
   });
 }
@@ -157,11 +158,7 @@ export async function getDemandBalance(tenantId: string, demandId: string) {
 
   let balance = 0n;
   for (const entry of entries) {
-    if (entry.entryType === "demand") {
-      balance += entry.amountMinor;
-    } else {
-      balance -= entry.amountMinor;
-    }
+    balance += dcbBalanceEffect(entry);
   }
 
   return balance;

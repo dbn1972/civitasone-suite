@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
-import { formatRupees } from "@/lib/formatters";
+import { formatMinorString } from "@/lib/payroll/runMoney";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = {
@@ -13,25 +13,53 @@ type Props = {
   status: string;
   /** Context for the irreversible-action summaries. */
   employeeCount: number;
-  grossAmount: number;
-  netAmount: number;
+  /**
+   * GAP-PAYROLL-RUNS-01: the run's exact gross / net in integer PAISE (digit
+   * strings, from the API's grossMinor / netMinor). Rendered with formatMoney
+   * in the Approve / Disburse confirmations; null = unknown -> "—".
+   */
+  grossMinor: string | null;
+  netMinor: string | null;
   payPeriod: string;
   canAdminister?: boolean;
+  /**
+   * GAP-PAYROLL-DETAIL-02 (maker-checker): the signed-in user's id and the run's
+   * maker / checker ids. The maker cannot approve their own run and the approver
+   * cannot disburse it; the buttons disable with an explanation instead of
+   * letting the user click into a guaranteed 403. The server is the authority
+   * (403 MAKER_CHECKER_VIOLATION); this is the hint, never the only control.
+   */
+  currentUserId?: string | null;
+  createdBy?: string | null;
+  approvedBy?: string | null;
   /** GAP-PAYROLL-DETAIL-05: employees with unresolved pre-disbursement issues; shown as a warning in the Approve / Disburse confirmations. */
   exceptionCount?: number;
 };
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
 
+/** True when a failed response carries the maker-checker `code`. Reads a clone, so the body stays available to useFormError; never throws. */
+async function isMakerCheckerViolation(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown } | null;
+    return body?.code === "MAKER_CHECKER_VIOLATION";
+  } catch {
+    return false;
+  }
+}
+
 export function PayrollRunActions({
   runId,
   status,
   employeeCount,
-  grossAmount,
-  netAmount,
+  grossMinor,
+  netMinor,
   payPeriod,
   canAdminister = false,
   exceptionCount = 0,
+  currentUserId = null,
+  createdBy = null,
+  approvedBy = null,
 }: Props) {
   const t = useTranslations("payrollRunActions");
   const router = useRouter();
@@ -50,6 +78,8 @@ export function PayrollRunActions({
   const [settledAction, setSettledAction] = useState<PendingAction>(null);
   const { toast } = useToast();
   const formError = useFormError("payroll run");
+  const approveHintId = useId();
+  const disburseHintId = useId();
 
   useEffect(() => {
     setSettledAction(null);
@@ -71,6 +101,14 @@ export function PayrollRunActions({
         body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
+        // The shared catalogue words MAKER_CHECKER_VIOLATION as "needs approval from
+        // someone other than the person who made it", which is right for approve but
+        // wrong for disburse (the rule there is: the approver cannot disburse). Only
+        // reachable when the hint above was bypassed or the page state was stale.
+        if (action === "disburse" && res.status === 403 && (await isMakerCheckerViolation(res))) {
+          setError(t("makerCheckerDisburseError"));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         setError(resolved.message);
         return;
@@ -80,14 +118,14 @@ export function PayrollRunActions({
         action === "approve"
           ? t("approvedMessage", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedMessage", { amount: formatRupees(netAmount), count: employeeCount })
+            ? t("disbursementInitiatedMessage", { amount: formatMinorString(netMinor), count: employeeCount })
             : t("revertedMessage", { period: payPeriod }),
       );
       toast.success(
         action === "approve"
           ? t("approvedToast", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedToast", { amount: formatRupees(netAmount) })
+            ? t("disbursementInitiatedToast", { amount: formatMinorString(netMinor) })
             : t("revertedToast"),
       );
       setPending(null);
@@ -119,6 +157,13 @@ export function PayrollRunActions({
 
   if (!canApprove && !canDisburse && !canRevert) return null;
 
+  // GAP-PAYROLL-DETAIL-02: maker-checker. Unknown ids (null) never block here;
+  // the server enforces the same rule either way.
+  const isMaker = currentUserId !== null && createdBy !== null && currentUserId === createdBy;
+  const isApprover = currentUserId !== null && approvedBy !== null && currentUserId === approvedBy;
+  const approveBlocked = canApprove && isMaker;
+  const disburseBlocked = canDisburse && isApprover;
+
   return (
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
@@ -129,6 +174,8 @@ export function PayrollRunActions({
           {canApprove && (
             <Button
               style={{ minHeight: 44 }}
+              disabled={approveBlocked}
+              aria-describedby={approveBlocked ? approveHintId : undefined}
               onClick={() => { setError(undefined); setPending("approve"); }}
             >
               {t("approveRunBtn")}
@@ -137,6 +184,8 @@ export function PayrollRunActions({
           {canDisburse && (
             <Button
               style={{ minHeight: 44 }}
+              disabled={disburseBlocked}
+              aria-describedby={disburseBlocked ? disburseHintId : undefined}
               onClick={() => { setError(undefined); setPending("disburse"); }}
             >
               {t("disburseRunBtn")}
@@ -152,6 +201,17 @@ export function PayrollRunActions({
             </Button>
           )}
         </div>
+
+        {approveBlocked && (
+          <p id={approveHintId} role="note" className="pill warn" style={{ marginTop: 14 }}>
+            {t("makerCheckerApproveHint")}
+          </p>
+        )}
+        {disburseBlocked && (
+          <p id={disburseHintId} role="note" className="pill warn" style={{ marginTop: 14 }}>
+            {t("makerCheckerDisburseHint")}
+          </p>
+        )}
 
         {message && (
           <p role="status" aria-live="polite" className={`pill ${messageTone}`} style={{ marginTop: 14 }}>
@@ -183,7 +243,7 @@ export function PayrollRunActions({
             {t.rich("approveDescription", {
               period: payPeriod,
               count: employeeCount,
-              amount: formatRupees(grossAmount),
+              amount: formatMinorString(grossMinor),
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
             {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
@@ -207,7 +267,7 @@ export function PayrollRunActions({
         description={(
           <>
             {t.rich("disburseDescription", {
-              amount: formatRupees(netAmount),
+              amount: formatMinorString(netMinor),
               count: employeeCount,
               period: payPeriod,
               // GAP-PAYROLL-DETAIL-06: the channel is a translated, replaceable

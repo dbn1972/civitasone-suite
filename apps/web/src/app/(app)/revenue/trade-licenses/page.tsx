@@ -84,6 +84,7 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
       ]}
       rows={licenses}
       sortable
+      filterable
       filterKeys={["businessName", "licenseNo", "proprietorName", "businessType", "category", "status"]}
       pageSize={20}
       emptyIcon="📋"

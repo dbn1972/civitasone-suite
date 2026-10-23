@@ -6,7 +6,8 @@ import { formatIndianDate, formatInternalRef, humanizeStatus } from "@/lib/forma
 import { toHumanError } from "@/lib/messages";
 import { DakActions } from "../DakActions";
 
-export default async function DakDetailPage({ params }: { params: { id: string } }) {
+export default async function DakDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: dak, source, status } = await getDak(params.id);
 
   // A real "not found" (the row doesn't exist) is a 404 page; any other

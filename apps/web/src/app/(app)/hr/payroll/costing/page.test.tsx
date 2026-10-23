@@ -33,7 +33,7 @@ function routeFetch(r: Routes) {
 }
 
 async function renderPage(searchParams: { period?: string }) {
-  const ui = await CostingPage({ searchParams });
+  const ui = await CostingPage({ searchParams: Promise.resolve(searchParams) });
   render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 

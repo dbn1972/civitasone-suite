@@ -17,7 +17,8 @@ type Loc = {
   addressLine: string | null; city: string | null; postalCode: string | null; lgdCode: string | null;
 };
 
-export default async function EditLocationPage({ params }: { params: { id: string } }) {
+export default async function EditLocationPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("addLocationForm");
   const roles = getSessionRoles();
   if (!roles.some((r) => HR_LOCATION_ADMIN_ROLES.includes(r))) {

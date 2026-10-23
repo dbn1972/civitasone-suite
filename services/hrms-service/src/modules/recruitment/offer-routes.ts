@@ -1,3 +1,4 @@
+import { parseMinor } from "@civitasone/schemas/money";
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 /**
@@ -62,7 +63,7 @@ const compBody = {
   joiningDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 };
 
-function comp(body: { basicMinor: number; joiningBonusMinor: number; relocationMinor: number; variablePayMinor: number }) {
+function comp(body: { basicMinor: number | bigint; joiningBonusMinor: number | bigint; relocationMinor: number | bigint; variablePayMinor: number | bigint }) {
   return computeCompensation({
     basicMinor: BigInt(body.basicMinor), joiningBonusMinor: BigInt(body.joiningBonusMinor),
     relocationMinor: BigInt(body.relocationMinor), variablePayMinor: BigInt(body.variablePayMinor),
@@ -234,10 +235,10 @@ export async function offerRoutes(app: FastifyInstance): Promise<void> {
     if (prev.status === "accepted") throw new HttpError(409, "WRONG_STATE", "an accepted offer cannot be revised");
     if (prev.status === "revised") throw new HttpError(409, "WRONG_STATE", "this offer is already superseded; revise the latest version");
     const merged = {
-      basicMinor: Number(body.basicMinor ?? prev.basicMinor),
-      joiningBonusMinor: Number(body.joiningBonusMinor ?? prev.joiningBonusMinor),
-      relocationMinor: Number(body.relocationMinor ?? prev.relocationMinor),
-      variablePayMinor: Number(body.variablePayMinor ?? prev.variablePayMinor),
+      basicMinor: parseMinor(body.basicMinor ?? prev.basicMinor),
+      joiningBonusMinor: parseMinor(body.joiningBonusMinor ?? prev.joiningBonusMinor),
+      relocationMinor: parseMinor(body.relocationMinor ?? prev.relocationMinor),
+      variablePayMinor: parseMinor(body.variablePayMinor ?? prev.variablePayMinor),
     };
     const c = comp(merged);
     const newId = randomUUID();

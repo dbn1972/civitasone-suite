@@ -36,7 +36,7 @@ describe("RefundsPage", () => {
 
   it("prompts for an assessee when none is selected", async () => {
     fetchJsonMock.mockResolvedValue({ data: [ASSESSEE], source: "api" });
-    const ui = await RefundsPage({ searchParams: {} });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("RefundsPage", () => {
       if (path.includes("/receipts")) return Promise.resolve({ data: [RECEIPT], source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByRole("heading", { name: "Raise Refund" })).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("RefundsPage", () => {
 
   it("shows the data-source badge instead of fabricating data on error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
-    const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
@@ -69,7 +69,7 @@ describe("RefundsPage", () => {
       if (path.includes("/refunds?status=pending")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await RefundsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByText("Receipts on record")).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("RefundsPage", () => {
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
 
-    const ui = await RefundsPage({ searchParams: {} });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Pending approval")).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe("RefundsPage", () => {
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
 
-    const ui = await RefundsPage({ searchParams: {} });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe("RefundsPage", () => {
 
   it("no longer leaks developer BACKEND FOLLOW-UPS text to end users (GAP-REVENUE-REFUNDS-03)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    const ui = await RefundsPage({ searchParams: {} });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();

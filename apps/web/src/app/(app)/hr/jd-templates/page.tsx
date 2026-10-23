@@ -52,7 +52,8 @@ async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>
  */
 const JD_TEMPLATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
-export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string; created?: string } }) {
+export default async function JdTemplatesPage(props: { searchParams: Promise<{ type?: string; created?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("jdTemplates");
 
   // GAP-HR-JD-TEMPLATES-01: every jd-templates route (including the list

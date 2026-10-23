@@ -58,7 +58,10 @@ export function registerBillingConsumers(rawQueue: Queue): void {
 
       const billSequence = existingBills.length + 1;
 
-      const billDate = new Date().toISOString().split("T")[0]!;
+      // CLOS2-S6-13: the bill date is the IST calendar date (en-CA formats as
+      // YYYY-MM-DD), not the UTC date — a bill raised 00:00-05:30 IST must not
+      // be dated the previous day.
+      const billDate = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
 
       // Generate the bill using the domain function
       const billData = generateBillFromDemand(

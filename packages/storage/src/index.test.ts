@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { presignedPutUrl, presignedGetUrl, headObject, resetClient } from "./index.js";
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { S3Client } from "@aws-sdk/client-s3";
+import { presignedPutUrl, presignedGetUrl, headObject, objectExists, resetClient } from "./index.js";
 
 // Set test env before importing
 beforeAll(() => {
@@ -62,12 +63,46 @@ describe("presignedPutUrl contentLength (GAP-PAYROLL-REIMBURSEMENTS-03)", () => 
     expect(decodeURIComponent(url)).not.toMatch(/X-Amz-SignedHeaders=[^&]*content-length/i);
   });
 
-  it("headObject is null for an object that cannot be read", async () => {
+  it("headObject rejects (does not report 'missing') when the store cannot be reached", async () => {
     process.env.AWS_ENDPOINT_URL = "http://127.0.0.1:1"; // nothing listens here
     resetClient();
-    expect(await headObject("does/not/exist.pdf")).toBeNull();
+    await expect(headObject("does/not/exist.pdf")).rejects.toBeDefined();
     process.env.AWS_ENDPOINT_URL = "http://localhost:4566";
     resetClient();
+  });
+});
+
+/** CLOS2-S6-06: only a genuine not-found means "absent"; every other failure propagates. */
+describe("objectExists / headObject error discrimination (CLOS2-S6-06)", () => {
+  const fail = (e: Record<string, unknown>) =>
+    vi.spyOn(S3Client.prototype, "send").mockRejectedValue(Object.assign(new Error("boom"), e) as never);
+  afterEach(() => vi.restoreAllMocks());
+
+  it("a 403 AccessDenied rejects instead of looking like a missing object", async () => {
+    fail({ name: "Forbidden", $metadata: { httpStatusCode: 403 } });
+    await expect(objectExists("k")).rejects.toThrow();
+    await expect(headObject("k")).rejects.toThrow();
+  });
+
+  it("a 5xx rejects", async () => {
+    fail({ name: "InternalError", $metadata: { httpStatusCode: 503 } });
+    await expect(objectExists("k")).rejects.toThrow();
+    await expect(headObject("k")).rejects.toThrow();
+  });
+
+  it("a NotFound / 404 / NoSuchKey is still false / null", async () => {
+    for (const e of [{ name: "NotFound" }, { name: "NoSuchKey" }, { name: "Unknown", $metadata: { httpStatusCode: 404 } }]) {
+      fail(e);
+      expect(await objectExists("k")).toBe(false);
+      expect(await headObject("k")).toBeNull();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it("an existing object is still true / its metadata", async () => {
+    vi.spyOn(S3Client.prototype, "send").mockResolvedValue({ ContentLength: 5, ContentType: "application/pdf" } as never);
+    expect(await objectExists("k")).toBe(true);
+    expect(await headObject("k")).toEqual({ contentLength: 5, contentType: "application/pdf" });
   });
 });
 

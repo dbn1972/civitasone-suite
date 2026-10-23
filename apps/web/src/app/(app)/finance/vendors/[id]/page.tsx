@@ -46,7 +46,8 @@ function rawArray(data: Record<string, unknown>, ...keys: string[]): Record<stri
 // amount / tds stay raw paise strings (undefined when absent) so the DataTable formats and sorts them numerically.
 type BillRow = { id?: string; billNo: string; date: string; amount?: string; tds?: string; status: string; [k: string]: unknown };
 
-export default async function VendorDetailPage({ params }: { params: { id: string } }) {
+export default async function VendorDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceVendorById(params.id);
   const { data: vendor } = result;
 

@@ -15,6 +15,7 @@
  *   EXOTEL_API_TOKEN      — Exotel API token
  *   EXOTEL_SUBDOMAIN      — Exotel subdomain (e.g. api.exotel.com)
  *   CARRIER_WEBHOOK_BASE  — public URL for inbound webhooks
+ *   CARRIER_HTTP_TIMEOUT_MS — per-request HTTP timeout to the carrier (default 10000)
  */
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -56,6 +57,9 @@ export class CarrierAdapterError extends Error {
 
 type CarrierType = "mock" | "twilio" | "exotel";
 const CARRIER = (process.env.TELEPHONY_CARRIER ?? "mock") as CarrierType;
+
+/** Upper bound for a single carrier HTTP round-trip (distinct from the ring `timeout` sent to the carrier). */
+const httpTimeoutMs = (): number => Number(process.env.CARRIER_HTTP_TIMEOUT_MS ?? 10000);
 const WEBHOOK_BASE = process.env.CARRIER_WEBHOOK_BASE ?? "https://api.civitasone.in";
 
 function assertConfigured(): void {
@@ -105,6 +109,7 @@ async function twilioDial(req: DialRequest): Promise<DialResponse> {
       "Authorization": `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
     },
     body: params.toString(),
+    signal: AbortSignal.timeout(httpTimeoutMs()),
   });
 
   if (!res.ok) {
@@ -145,6 +150,7 @@ async function exotelDial(req: DialRequest): Promise<DialResponse> {
       "Authorization": `Basic ${Buffer.from(`${apiKey}:${apiToken}`).toString("base64")}`,
     },
     body: params.toString(),
+    signal: AbortSignal.timeout(httpTimeoutMs()),
   });
 
   if (!res.ok) {
@@ -187,6 +193,7 @@ export async function hangup(req: HangupRequest): Promise<void> {
         "Authorization": `Basic ${Buffer.from(`${sid}:${token}`).toString("base64")}`,
       },
       body: "Status=completed",
+      signal: AbortSignal.timeout(httpTimeoutMs()),
     });
   }
   // Exotel doesn't have a standard hangup API — calls end via IVR flow

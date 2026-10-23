@@ -20,7 +20,7 @@ const CONTRACT = { id: "c1", vendorName: "SecureGuard Services", serviceCategory
 const STATS = { contracts: 1, vendors: 1, activeContracts: 1, expiringIn60Days: 0, totalHeadcount: 12 };
 
 async function renderPage(sp?: { offset?: string }) {
-  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OutsourcedPage({ searchParams: sp })}</NextIntlClientProvider>);
+  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OutsourcedPage({ searchParams: Promise.resolve(sp ?? {}) })}</NextIntlClientProvider>);
 }
 
 beforeEach(() => {

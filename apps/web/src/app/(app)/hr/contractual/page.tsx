@@ -144,7 +144,8 @@ async function getContractual(page: number): Promise<LoaderResult<ContractsPage>
   });
 }
 
-export default async function ContractualPage({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function ContractualPage(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   requireAnyRole(HR_STAFF_MANAGER_ROLES);
   const t = await getTranslations("contractual");
   const page = parsePage(searchParams?.page);

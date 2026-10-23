@@ -43,7 +43,8 @@ const ITEM_COLUMNS: { key: keyof ItemRow; label: string; align?: "left" | "right
   { key: "unit", label: "Unit" },
 ];
 
-export default async function GRNDetailPage({ params }: { params: { id: string } }) {
+export default async function GRNDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const [{ data: grn, source }, { data: srn, source: srnSource, status: srnStatus }] = await Promise.all([
     getProcurementGRNById(params.id),
     getSrnByGrn(params.id),
@@ -119,7 +120,6 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           </>
         }
       />
-
       <Card title="GRN details" padding>
         <div className="fields">
           <div className="field">
@@ -151,7 +151,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
             ) : (
               // GAP-PROCUREMENT-GRN-DETAIL-02 — neutral, not red: the match has not
               // been computed because the GRN has not been inspected yet.
-              <span style={{ color: "var(--muted)", fontWeight: 600 }}>Pending inspection</span>
+              (<span style={{ color: "var(--muted)", fontWeight: 600 }}>Pending inspection</span>)
             )}
           </div>
           <div className="field">
@@ -167,10 +167,10 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
                 // offer "Create SRN" (a GRN may already have a signed SRN we just
                 // couldn't read — creating a second one would be a duplicate on a
                 // payment gate).
-                <>
+                (<>
                   <StatusPill status="pending" label="Unavailable" />
                   <span style={{ fontSize: "0.8125rem", color: "var(--muted)" }}>Couldn&apos;t check SRN — refresh</span>
-                </>
+                </>)
               ) : (
                 <>
                   <StatusPill status="draft" label="Not created" />
@@ -187,7 +187,6 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           ) : null}
         </div>
       </Card>
-
       {grn.inspection ? (
         <Card title="Quality inspection" padding>
           <div className="fields">
@@ -213,11 +212,10 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
         // created it must accept or reject it here; the server enforces
         // that separation (403 SOD_VIOLATION otherwise), this is just the UI
         // entry point.
-        <Card title="Inspection required" padding>
+        (<Card title="Inspection required" padding>
           <InspectGrnForm grnId={grn.id} grnNo={grn.grnNo} isCreator={isCreator} />
-        </Card>
+        </Card>)
       ) : null}
-
       {grn.items.length > 0 && canAmendGrn(grn.status) ? (
         <Card title="Amend received items" padding>
           <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted)" }}>

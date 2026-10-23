@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, istDateKey } from "@/lib/formatters";
 import { PeriodSelector } from "./PeriodSelector";
 import { IngestChallanForm } from "./IngestChallanForm";
 import { toHumanError } from "@/lib/messages";
@@ -12,6 +12,8 @@ import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type ChallanRow = {
   cin: string;
+  /** GAP-PAYROLL-STATUTORY-CHALLANS-04: "24Q" | "26Q"; absent from an older payroll-service (filled from the selected form below). */
+  formType?: string;
   bsrCode: string;
   challanSerial: string;
   depositDate: string;
@@ -46,8 +48,8 @@ type ReconcileResponse = {
 };
 
 function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // CLOS2-S2-03: IST calendar month, not the (UTC) host clock.
+  return istDateKey(new Date()).slice(0, 7);
 }
 
 async function getChallans(period: string, formType: string): Promise<LoaderResult<ChallanRow[]>> {
@@ -72,7 +74,8 @@ async function getReconciliation(period: string, formType: string): Promise<Load
   );
 }
 
-export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string; formType?: string } }) {
+export default async function ChallansPage(props: { searchParams?: Promise<{ period?: string; formType?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("challans");
   // GAP-PAYROLL-STATUTORY-CHALLANS-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API (TDS challans) is READER_ROLES-only in
@@ -107,17 +110,35 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
     no_challan: "reconcileNoChallan",
     pending_finalisation: "reconcilePendingFinalisation",
   };
-  const rawReconcileStatus = reconciliation?.perPeriod?.length ? reconciliation.perPeriod[0].status : null;
-  const reconcileStatusLabel = rawReconcileStatus && RECONCILE_STATUS_KEY[rawReconcileStatus]
-    ? t(RECONCILE_STATUS_KEY[rawReconcileStatus])
-    : t("unknownStatus");
 
-  // GAP-PAYROLL-STATUTORY-CHALLANS-03: the tile icon reads the same
-  // top-level reconciliation.matched flag the filing-blocked banner uses.
-  const reconciliationMatched = reconciliation?.matched ?? null;
+  // GAP-PAYROLL-STATUTORY-CHALLANS-03: ONE verdict drives the Reconciliation
+  // Status tile's text AND its icon (they used to read two different
+  // variables -- perPeriod[0].status for the text, the top-level `matched` for
+  // the icon -- so a payload where they disagreed showed green "Matched" text
+  // next to a warning icon). The period is reconciled only when the top-level
+  // flag AND every per-period row say so; any other state is "not reconciled"
+  // and shows the first period that is NOT matched (the one blocking the
+  // filing), else a generic "Not matched".
+  const periodRows = reconciliation?.perPeriod ?? [];
+  const reconciled: boolean | null = reconciliation
+    ? reconciliation.matched === true && periodRows.length > 0 && periodRows.every((p) => p.status === "matched")
+    : null;
+  const blockingStatus = periodRows.find((p) => p.status !== "matched")?.status ?? null;
+  const reconcileStatusLabel = reconciled === null
+    ? t("unknownStatus")
+    : reconciled
+      ? t("reconcileMatched")
+      : blockingStatus && RECONCILE_STATUS_KEY[blockingStatus]
+        ? t(RECONCILE_STATUS_KEY[blockingStatus])
+        : t("reconcileNotMatched");
+
+  // Each row names its form (24Q/26Q); an older payroll-service omits the field, in which case
+  // the list was already filtered to the selected form so that is the row's form.
+  const rows: ChallanRow[] = challans.map((c) => ({ ...c, formType: c.formType ?? formType }));
 
   const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" | "date" }[] = [
     { key: "cin", label: t("colCin") },
+    { key: "formType", label: t("colFormType") },
     { key: "bsrCode", label: t("colBsrCode") },
     { key: "challanSerial", label: t("colSerial") },
     { key: "depositDate", label: t("colDepositDate"), cellType: "date" },
@@ -160,7 +181,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         >
           <strong>{t("filingBlockedHeading", { formType })}</strong>
           <p style={{ margin: "4px 0 0" }}>
-            {rawReconcileStatus === "pending_finalisation"
+            {blockingStatus === "pending_finalisation"
               ? t("filingBlockedPendingBody", { formType, period })
               : t("filingBlockedMismatchBody", { formType, period })}
           </p>
@@ -168,10 +189,10 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       )}
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : challans.length} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : rows.length} />
         <StatCard
-          icon={reconciliationMatched ? "✅" : "⚠️"}
-          iconBg={reconciliationMatched ? "var(--goodbg)" : "var(--badbg)"}
+          icon={reconciled ? "✅" : "⚠️"}
+          iconBg={reconciled ? "var(--goodbg)" : "var(--badbg)"}
           label={t("statReconciliationStatus")}
           value={errored ? "—" : reconcileStatusLabel}
         />
@@ -189,7 +210,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         ) : (
           <DataTable<ChallanRow>
           columns={columns}
-          rows={challans}
+          rows={rows}
           sortable
           filterable
           filterPlaceholder={t("filterPlaceholder")}

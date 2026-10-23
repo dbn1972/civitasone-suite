@@ -16,7 +16,8 @@ type Search = { [k: string]: string | string[] | undefined };
  * GAP-LEARNING-ASSESSMENTS-VERIFY-04: dates use formatIndianDate for
  *   consistency; status uses StatusPill instead of raw string.
  */
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const token = typeof searchParams?.token === "string" ? searchParams.token.trim() : "";
 
   // Client-side length check before calling (VERIFY-02: format error)

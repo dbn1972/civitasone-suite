@@ -70,7 +70,7 @@ describe("GrievancePage (real register)", () => {
 
   it("steps to the next server batch via ?page=", async () => {
     fetchJsonMock.mockResolvedValue({ data: { items: [ROW], total: 120, counts: COUNTS }, source: "api" });
-    render(await GrievancePage({ searchParams: { page: "2" } }));
+    render(await GrievancePage({ searchParams: Promise.resolve({ page: "2" }) }));
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("offset=50");
     expect(screen.getByRole("link", { name: /Previous/ })).toHaveAttribute("href", "/hr/grievance?page=1");
     expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/hr/grievance?page=3");

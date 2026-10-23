@@ -88,7 +88,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("renders a real deal instead of a false 'not found', normalizing the backend's Capitalized stage", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
@@ -109,21 +109,21 @@ describe("Deal detail page (getDealById regression)", () => {
     const { probability: _omit, ...withoutProbability } = RAW_DEAL;
     void _omit;
     rawPayload.mockReturnValue(withoutProbability);
-    const first = render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    const first = render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
     const probabilityField = () => screen.getByText("Probability").parentElement as HTMLElement;
     expect(probabilityField()).toHaveTextContent("—");
     expect(probabilityField()).not.toHaveTextContent("0%");
     first.unmount();
 
     rawPayload.mockReturnValue({ ...RAW_DEAL, probability: 0 });
-    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
     expect(probabilityField()).toHaveTextContent("0%");
   });
 
   // The server close endpoint is admin-only; the UI must not offer Won/Lost to crm_user.
   it("offers Mark Won / Mark Lost to CRM admins", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);
-    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
     expect(screen.getByRole("button", { name: /mark won/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /mark lost/i })).toBeInTheDocument();
   });
@@ -131,7 +131,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("hides Mark Won / Mark Lost from a plain crm_user", async () => {
     sessionRoles = ["crm_user"];
     rawPayload.mockReturnValue(RAW_DEAL);
-    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
     expect(screen.queryByRole("button", { name: /mark won/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /mark lost/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /log activity/i })).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("Deal detail page (getDealById regression)", () => {
     rawPayload.mockReturnValue(null);
     nextStatus = 404; // backend's own 404 for a missing deal
 
-    const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000000" }) });
     render(ui);
 
     expect(screen.getByText("Engagement not found")).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("Deal detail page (getDealById regression)", () => {
     rawPayload.mockReturnValue(null);
     nextStatus = 200;
 
-    const ui = await DealDetailPage({ params: { id: "00000000-0000-0000-0000-000000000000" } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: "00000000-0000-0000-0000-000000000000" }) });
     render(ui);
 
     expect(screen.getByText("Engagement not found")).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("Deal detail page (getDealById regression)", () => {
     rawPayload.mockReturnValue(undefined);
     nextStatus = 500;
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
@@ -181,7 +181,7 @@ describe("Deal detail page (getDealById regression)", () => {
     rawPayload.mockReturnValue(undefined);
     nextStatus = 500;
 
-    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
 
     expect(screen.getByRole("heading", { name: "Engagement Detail" })).toBeInTheDocument();
     expect(screen.queryByText(/Deal Detail/i)).not.toBeInTheDocument();
@@ -192,7 +192,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("renders the labels, headings and subtitle from the catalogue with no 'deal' wording", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);
 
-    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    render(await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) }));
 
     const ns = enMessages.crmDealDetail;
     expect(screen.getByRole("heading", { name: ns.detailsHeading })).toBeInTheDocument();
@@ -210,7 +210,7 @@ describe("Deal detail page (getDealById regression)", () => {
     rawPayload.mockReturnValue(undefined);
     nextStatus = undefined;
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     expect(screen.queryByText("Engagement not found")).not.toBeInTheDocument();
@@ -223,7 +223,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("a lost deal shows Closed Lost as current with no Closed Won entry", async () => {
     rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Lost", status: "lost", probability: 0 });
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     // No 'Closed Won' step must exist at all.
@@ -247,7 +247,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("a won deal shows Closed Won as current with no Closed Lost entry", async () => {
     rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Won", status: "won", probability: 100 });
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     expect(screen.queryByText("Closed Lost")).not.toBeInTheDocument();
@@ -260,7 +260,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("an open deal keeps its open stage current and shows a neutral Closed step", async () => {
     rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "Negotiation", status: "active" });
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     expect(screen.queryByText("Closed Won")).not.toBeInTheDocument();
@@ -276,7 +276,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("links the contact/organisation to its record and shows Owner once", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     const link = screen.getByRole("link", { name: RAW_DEAL.contactName });
@@ -295,7 +295,7 @@ describe("Deal detail page (getDealById regression)", () => {
   it("a qualification-stage deal shows a current step, never all-todo", async () => {
     rawPayload.mockReturnValue({ ...RAW_DEAL, stage: "qualification", status: "active" });
 
-    const ui = await DealDetailPage({ params: { id: RAW_DEAL.id } });
+    const ui = await DealDetailPage({ params: Promise.resolve({ id: RAW_DEAL.id }) });
     render(ui);
 
     const current = document.querySelector('li[aria-current="step"]');

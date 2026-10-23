@@ -33,6 +33,7 @@ export async function createScheduledReport(
     recipients: body.recipients,
     format: body.format,
     enabled: true,
+    status: "active",
     lastRunAt: null,
     nextRunAt,
     version: 1,
@@ -78,6 +79,10 @@ export async function updateScheduledReport(
   if (body.enabled !== undefined) updates.enabled = body.enabled;
   if (body.cadence !== undefined) {
     updates.nextRunAt = computeNextRunAt(new Date(), body.cadence as ScheduledReportCadence);
+  } else if (body.enabled === true && !existing.enabled) {
+    // Re-enabling: the stored nextRunAt is from before it was disabled; keeping
+    // it would fire the schedule immediately. Restart the cadence from now.
+    updates.nextRunAt = computeNextRunAt(new Date(), existing.cadence);
   }
 
   await queue.publish(COMMANDS.updateScheduled, {
@@ -114,7 +119,7 @@ export async function disableScheduledReport(ctx: RequestContext, id: string): P
     payload: { id },
   });
 
-  await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), { ...existing, enabled: false });
+  await cache.put(cache.makeKey(ctx.tenantId, RESOURCE, id), { ...existing, enabled: false, status: "disabled" });
   await cache.invalidateResource(ctx.tenantId, RESOURCE);
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

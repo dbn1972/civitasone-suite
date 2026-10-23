@@ -48,7 +48,7 @@ describe("AnnualPlanDetailPage (GAP-PROCUREMENT-PLANNING-DETAIL-02/03/05)", () =
 
   it("renders an approval history card with approver + timestamp", async () => {
     loaderMock.mockResolvedValue({ data: PLAN, source: "api" });
-    render(await AnnualPlanDetailPage({ params: { id: PLAN.id } }));
+    render(await AnnualPlanDetailPage({ params: Promise.resolve({ id: PLAN.id }) }));
     expect(screen.getByText("Approval history")).toBeInTheDocument();
     expect(screen.getByText("Approved by")).toBeInTheDocument();
     expect(screen.getByText(PLAN.approvedBy)).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("AnnualPlanDetailPage (GAP-PROCUREMENT-PLANNING-DETAIL-02/03/05)", () =
 
   it("renders budget line / category columns and a tender link for a linked line", async () => {
     loaderMock.mockResolvedValue({ data: PLAN, source: "api" });
-    render(await AnnualPlanDetailPage({ params: { id: PLAN.id } }));
+    render(await AnnualPlanDetailPage({ params: Promise.resolve({ id: PLAN.id }) }));
     // Budget line value appears.
     expect(screen.getByText("2059-01")).toBeInTheDocument();
     // The line with a tenderId links to the tender detail.
@@ -66,7 +66,7 @@ describe("AnnualPlanDetailPage (GAP-PROCUREMENT-PLANNING-DETAIL-02/03/05)", () =
 
   it("formats money as paise-exact and shows no totals-mismatch when lines sum to the total", async () => {
     loaderMock.mockResolvedValue({ data: PLAN, source: "api" });
-    render(await AnnualPlanDetailPage({ params: { id: PLAN.id } }));
+    render(await AnnualPlanDetailPage({ params: Promise.resolve({ id: PLAN.id }) }));
     // 15000000 paise → ₹1,50,000.00
     expect(screen.getAllByText("₹1,50,000.00").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Totals mismatch/i)).not.toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("AnnualPlanDetailPage (GAP-PROCUREMENT-PLANNING-DETAIL-02/03/05)", () =
 
   it("flags a totals mismatch when the stored total disagrees with the line sum", async () => {
     loaderMock.mockResolvedValue({ data: { ...PLAN, totalEstimatedMinor: "99999999" }, source: "api" });
-    render(await AnnualPlanDetailPage({ params: { id: PLAN.id } }));
+    render(await AnnualPlanDetailPage({ params: Promise.resolve({ id: PLAN.id }) }));
     expect(screen.getByText(/Totals mismatch/i)).toBeInTheDocument();
   });
 });

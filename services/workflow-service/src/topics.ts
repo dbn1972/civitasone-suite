@@ -30,6 +30,8 @@ export const COMMANDS = {
   // F3 leftover CQRS — delegations/authority/finalization/quorum/sla/deviations/workbaskets
   createDelegation: "workflow.delegation.create",
   revokeDelegation: "workflow.delegation.revoke",
+  // Audit-only command: a revoke refused for ownership (not delegator / not admin).
+  refuseDelegationRevoke: "workflow.delegation.revoke.refused",
   createAuthorityLimit: "workflow.authority.limit.create",
   approveAuthorityLimit: "workflow.authority.limit.approve",
   revokeAuthorityLimit: "workflow.authority.limit.revoke",

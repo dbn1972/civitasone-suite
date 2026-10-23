@@ -421,8 +421,8 @@ const FIXTURES: Record<string, unknown> = {
   // fail that array schema outright and silently fall back to source:"error"
   // + empty, which is exactly what a `{ data: [] }` shape had been doing.
   '/api/v1/payroll/runs': [
-    { id: 'run-001', runDate: '2024-07-31', payPeriod: '2024-07', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'paid' },
-    { id: 'run-003', runDate: '2024-09-30', payPeriod: '2024-09', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'draft' },
+    { id: 'run-001', runDate: '2024-07-31', payPeriod: '2024-07', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, grossMinor: '15000000', netMinor: '13500000', deductionsMinor: '1500000', status: 'paid' },
+    { id: 'run-003', runDate: '2024-09-30', payPeriod: '2024-09', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, grossMinor: '15000000', netMinor: '13500000', deductionsMinor: '1500000', status: 'draft' },
   ],
   // REL-023: missing entirely -- /hr/payroll (create-run-form gating, via
   // getPayrollStructures()) and /hr/payroll/structures's own "Salary
@@ -717,7 +717,7 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/grants/utilization-certs': [],
   '/api/v1/grants/schemes': [],
 
-  '/api/v1/estab/dashboard': { filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
+  '/api/v1/estab/dashboard': { filesActive: 1, filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
   '/api/v1/estab/files': [
     {
       id: 'fil-001',
@@ -942,6 +942,15 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'step-002', stepNo: 2, title: 'Seed Master Data', description: 'Load initial lookup tables', isRequired: true, status: 'completed', completedAt: '2024-01-01T10:05:00Z' },
     { id: 'step-003', stepNo: 3, title: 'Configure SMTP', description: 'Email delivery settings', isRequired: false, status: 'pending' },
   ],
+  // GET /v1/plugins registry (plugin-service pluginsListSchema = paginatedSchema(pluginViewSchema));
+  // /plugins/installed reads this for plugin_admin/super_admin. Name lives in manifestJson.
+  '/api/v1/plugins': {
+    data: [
+      { id: 'b0000000-0000-4000-8000-000000000001', tenantId: '11111111-0000-0000-0000-000000000001', manifestJson: { name: 'PFMS Connector', version: '1.0.0' }, state: 'enabled', installedAt: '2024-01-01T00:00:00Z', enabledAt: '2024-01-02T00:00:00Z', disabledAt: null, config: null, version: 1 },
+      { id: 'b0000000-0000-4000-8000-000000000002', tenantId: '11111111-0000-0000-0000-000000000001', manifestJson: { name: 'Aadhaar eSign', version: '1.0.0' }, state: 'disabled', installedAt: '2024-01-01T00:00:00Z', enabledAt: null, disabledAt: '2024-01-03T00:00:00Z', config: null, version: 1 },
+    ],
+    pagination: PAGINATION,
+  },
   '/api/v1/plugins/items': [
     { name: 'PFMS Connector', status: 'enabled' },
     { name: 'Aadhaar eSign', status: 'disabled' },
@@ -1356,7 +1365,21 @@ function handler(req: http.IncomingMessage, res: http.ServerResponse) {
     return;
   }
 
-  const body = path in FIXTURES ? FIXTURES[path] : { data: [] };
+  let body: unknown = path in FIXTURES ? FIXTURES[path] : { data: [] };
+  // GAP-HR-LEAVE-03: the real GET /v1/hrms/leave-requests answers the opt-in
+  // ?withMeta=1 with a { data, meta } envelope (LeaveRequestPageSchema, built by
+  // services/hrms-service/src/modules/leave/routes.ts); only the bare-array
+  // form is returned without it. /hr/leave asks for the envelope, so serve it
+  // in the real shape or the page falls into its "couldn't load" error state.
+  if (path === '/api/v1/hrms/leave-requests' && Array.isArray(body) && /[?&]withMeta=1\b/.test(req.url ?? '')) {
+    const rows = body as Array<{ status: string }>;
+    const statusCounts: Record<string, number> = {};
+    for (const r of rows) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+    body = {
+      data: rows,
+      meta: { page: 1, pageSize: 100, offset: 0, total: rows.length, hasMore: false, statusCounts },
+    };
+  }
   res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
   res.end(JSON.stringify(body));
 }

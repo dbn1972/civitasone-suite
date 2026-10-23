@@ -48,7 +48,8 @@ function ScoreBar({ label, score, max = 100 }: { label: string; score: number | 
   );
 }
 
-export default async function VendorScorecardPage({ params }: { params: { id: string } }) {
+export default async function VendorScorecardPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("procurement.scorecard");
   const [{ data: scorecard, source }, { data: vendor }] = await Promise.all([
     getProcurementVendorScorecard(params.id),

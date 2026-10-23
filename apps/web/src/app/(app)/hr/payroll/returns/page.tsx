@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { maskPan } from "../../../../_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, istDateKey } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
@@ -68,8 +68,14 @@ type Deductee26Q = {
   pan: string;
   panFlag: string;
   section: string;
-  amountPaidMinor: string;
-  tdsDeductedMinor: string;
+  /**
+   * GAP-PAYROLL-RETURNS-06: integer paise as a JSON number, like every other
+   * amount in the 24Q / force-file / 26Q family. `string` is still tolerated
+   * (a payroll-service from before the unification sent bigint strings);
+   * sumMinor / formatMoney take either.
+   */
+  amountPaidMinor: number | string;
+  tdsDeductedMinor: number | string;
   periods: string[];
 };
 
@@ -79,7 +85,7 @@ type Form26Q = {
   quarter: Quarter;
   deducteeCount: number;
   deductees: Deductee26Q[];
-  totalTdsDeductedMinor: string;
+  totalTdsDeductedMinor: number | string;
   populated: boolean;
   reconciliation: { matched: boolean };
   note: string;
@@ -91,10 +97,10 @@ type Form24QLookup =
   | { state: "error" };
 
 function currentFyQuarter(): { fy: string; quarter: Quarter } {
-  const now = new Date();
-  const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // CLOS2-S2-01: IST calendar, not the (UTC) host clock.
+  const [yy, m] = istDateKey(new Date()).split("-").map(Number);
+  const y = m >= 4 ? yy : yy - 1;
   const fy = `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
-  const m = now.getMonth() + 1;
   const quarter: Quarter = m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4";
   return { fy, quarter };
 }
@@ -193,11 +199,12 @@ function quarterSummary(q: Quarter, lookup: Form24QLookup): QuarterSummaryRow {
   };
 }
 
-export default async function ReturnsPage({
-  searchParams,
-}: {
-  searchParams: { fy?: string; quarter?: string };
-}) {
+export default async function ReturnsPage(
+  props: {
+    searchParams: Promise<{ fy?: string; quarter?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollReturns");
   // GAP-PAYROLL-RETURNS-04: form24q/form26q and the force-file bypass are all
   // RETURN_FILER_ROLES in payroll-service (payroll_admin, payroll_officer,

@@ -53,7 +53,7 @@ function decodeJwtRole(token: string): string | undefined {
 }
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) redirect("/auth/login");
 
   const enabledModules = await getEnabledModules();

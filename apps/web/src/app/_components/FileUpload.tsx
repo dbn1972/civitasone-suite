@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { humanErrorForStatus } from "@/lib/messages";
 
 interface FileUploadProps {
@@ -22,6 +22,11 @@ export function FileUpload({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+  }, []);
+  useEffect(() => clearTimer, [clearTimer]);
 
   const handleFile = useCallback(
     (f: File) => {
@@ -36,19 +41,21 @@ export function FileUpload({
       setProgress(0);
 
       // Simulate upload progress
+      clearTimer();
       let p = 0;
       const interval = setInterval(() => {
         p += Math.random() * 30;
         if (p >= 100) {
           p = 100;
-          clearInterval(interval);
+          clearTimer();
           setUploading(false);
           onUpload?.(f);
         }
         setProgress(Math.min(p, 100));
       }, 200);
+      timerRef.current = interval;
     },
-    [maxSizeMB, onUpload]
+    [maxSizeMB, onUpload, clearTimer]
   );
 
   const handleDrop = useCallback(
@@ -67,6 +74,7 @@ export function FileUpload({
   };
 
   const remove = () => {
+    clearTimer();
     setFile(null);
     setProgress(0);
     setUploading(false);

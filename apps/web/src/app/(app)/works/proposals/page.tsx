@@ -3,11 +3,12 @@ import { PageHeader } from "@/app/_components/ds";
 import { getProposals, getWorkTypeNameMap } from "../_data/loaders";
 import { ProposalsView } from "./ProposalsView";
 
-export default async function ProposalsPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string>;
-}) {
+export default async function ProposalsPage(
+  props: {
+    searchParams?: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // Always fetch the FULL, unfiltered list. Stats, tab counts, the card title
   // and client-side filtering are all derived from this ONE list inside
   // ProposalsView (GAP-WORKS-PROPOSALS-02/03/04) — the page no longer filters

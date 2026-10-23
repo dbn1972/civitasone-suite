@@ -5,7 +5,8 @@ import { getAdminUserById } from "../../../../_data/loaders";
 import { UserSecurityActions } from "./UserSecurityActions";
 import { UserSessionsTable } from "./UserSessionsTable";
 
-export default async function AdminUserDetailPage({ params }: { params: { id: string } }) {
+export default async function AdminUserDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: user, source } = await getAdminUserById(params.id);
 
   // UX-013: `!user` used to be the only check here, so a real fetch failure

@@ -18,7 +18,7 @@ import WorkSummaryPage from "./page";
 async function renderPage(searchParams?: { offset?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await WorkSummaryPage({ searchParams })}
+      {await WorkSummaryPage({ searchParams: Promise.resolve(searchParams ?? {}) })}
     </NextIntlClientProvider>,
   );
 }

@@ -42,7 +42,8 @@ function matchesFilter(status: string, filter: string): boolean {
 
 const VALID_FILTERS = new Set(["all", "submitted", "scheduled", "open"]);
 
-export default async function Page({ searchParams }: { searchParams?: { status?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ status?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data: changes, source } = await getChangeRequests();
   const errored = source === "error";
 

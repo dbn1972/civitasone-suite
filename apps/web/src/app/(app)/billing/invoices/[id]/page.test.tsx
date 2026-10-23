@@ -51,7 +51,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: invoice, source: "api" })
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 }); // not generated yet
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
 
     expect(screen.getByText("Platform fee")).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe("InvoiceDetailPage", () => {
         source: "api",
       });
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     expect(screen.getByText("IRN12345")).toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 })
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 });
 
-    const ui = await InvoiceDetailPage({ params: { id: "missing" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "missing" }) });
     render(ui);
     expect(screen.getByText("This invoice may have been removed or the ID is invalid.")).toBeInTheDocument();
   });
@@ -96,7 +96,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: null, source: "error", status: 500 })
       .mockResolvedValueOnce({ data: null, source: "error", status: 500 });
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     expect(screen.queryByText("This invoice may have been removed or the ID is invalid.")).not.toBeInTheDocument();
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
@@ -111,7 +111,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: invoice, source: "api" })
       .mockResolvedValueOnce({ data: null, source: "error", status: 503 });
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     expect(screen.queryByText("No e-invoice generated")).not.toBeInTheDocument();
     expect(screen.getByText(/GSTN status unknown/i)).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: invoice, source: "api" })
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 });
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     expect(
       screen.queryByRole("button", { name: /generate e-invoice/i }),
@@ -152,7 +152,7 @@ describe("InvoiceDetailPage", () => {
       .mockResolvedValueOnce({ data: invoice, source: "api" })
       .mockResolvedValueOnce({ data: null, source: "error", status: 404 });
 
-    const ui = await InvoiceDetailPage({ params: { id: "inv-1" } });
+    const ui = await InvoiceDetailPage({ params: Promise.resolve({ id: "inv-1" }) });
     render(ui);
     // PageHeader renders a link with text "Back" only when the back prop is set.
     // It must be absent now that we rely on AutoBreadcrumb.

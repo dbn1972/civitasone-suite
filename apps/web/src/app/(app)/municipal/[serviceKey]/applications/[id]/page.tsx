@@ -13,10 +13,11 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  params: { serviceKey: string; id: string };
+  params: Promise<{ serviceKey: string; id: string }>;
 };
 
-export default async function MunicipalApplicationDetailPage({ params }: Props) {
+export default async function MunicipalApplicationDetailPage(props: Props) {
+  const params = await props.params;
   const config = getMunicipalService(params.serviceKey);
   if (!config) notFound();
 

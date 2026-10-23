@@ -26,7 +26,7 @@ describe("tenantDetailView", () => {
     for (const leak of ["p1", "k1", "d1", '"t"']) expect(dump).not.toContain(leak);
     expect(nested.find((r) => r.key === "Smtp")!.value).toContain('"host":"h"');
     expect(dump).toContain("G");
-    expect(settingsRows({ smtpPassword: "hunter2" })[0]!.value).toBe("••••••");
+    expect(settingsRows({ smtpPassword: globalThis.crypto.randomUUID() })[0]!.value).toBe("••••••");
   });
 
   // GAP2-ADMIN-TENANTS-DETAIL-01: structural/internal keys surfaced elsewhere

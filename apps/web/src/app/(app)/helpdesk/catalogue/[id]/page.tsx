@@ -7,7 +7,8 @@ import { formatMinutesDuration } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { RaiseRequestForm } from "./RaiseRequestForm";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: offering, source, status } = await getCatalogueOffering(params.id);
 
   // GAP-HELPDESK-CATALOGUE-DETAIL-01: a transient fetch failure must not read as

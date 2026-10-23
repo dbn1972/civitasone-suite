@@ -1,10 +1,11 @@
+import { minorFromDb, minorToWireNumber } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, requirePermissionKey, isSelfServiceEmployee, HttpError } from "../../shared/context.js";
-import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery } from "./validators.js";
+import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery, runActionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
@@ -89,21 +90,26 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     await requirePermissionKey(ctx, "payroll.run.approve");
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id));
+    const body = runActionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.approveRun(ctx, id, body.reason));
   });
 
   app.patch("/v1/payroll/runs/:id/disburse", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.disburseRun(ctx, id));
+    const body = runActionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.disburseRun(ctx, id, body.reason));
   });
 
   app.patch("/v1/payroll/runs/:id/revert", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id));
+    // GAP-PAYROLL-DETAIL-02: the web revert dialog collects a reason (>= 10 chars);
+    // it is carried on the command and recorded on the audit event, like approve.
+    const body = runActionBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id, body.reason));
   });
 
   /**
@@ -215,8 +221,8 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
       // GAP-PAYROLL-PENSIONERS-04: the register lists the PPO number MASKED;
       // the full value is only served by the audited reveal endpoint (fin03-routes.ts).
       id: r.id, ppoNo: maskPpoNo(String(r.ppo_no ?? "")), ppoNoMasked: true, fullName: r.full_name, dateOfBirth: r.date_of_birth,
-      basicPensionMinor: Number(r.basic_pension_minor), commutedPensionMinor: Number(r.commuted_pension_minor),
-      commutationDate: r.commutation_date, medicalAllowanceMinor: Number(r.medical_allowance_minor),
+      basicPensionMinor: minorToWireNumber(minorFromDb(r.basic_pension_minor)), commutedPensionMinor: minorToWireNumber(minorFromDb(r.commuted_pension_minor)),
+      commutationDate: r.commutation_date, medicalAllowanceMinor: minorToWireNumber(minorFromDb(r.medical_allowance_minor)),
       ddoCode: r.ddo_code, taxRegime: r.tax_regime, status: r.status,
     })));
   });

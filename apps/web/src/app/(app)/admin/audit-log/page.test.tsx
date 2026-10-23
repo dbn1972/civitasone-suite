@@ -48,7 +48,7 @@ describe("AuditLogPage", () => {
 
   it("forwards the offset to the loader and offers a way back to newer events", async () => {
     fetchJsonMock.mockResolvedValue({ data: [{ id: "e1", actor: "a", action: "x", resource: "", outcome: "success", timestamp: "2026-09-01T00:00:00Z" }], source: "api", status: 200 });
-    render(await AuditLogPage({ searchParams: { offset: "200" } }));
+    render(await AuditLogPage({ searchParams: Promise.resolve({ offset: "200" }) }));
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("limit=200&offset=200");
     expect(screen.getByRole("link", { name: "Show newer events" })).toHaveAttribute("href", "/admin/audit-log");
     expect(screen.queryByRole("link", { name: "Show older events" })).not.toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("AuditLogPage", () => {
 
   it("ignores a junk offset", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api", status: 200 });
-    render(await AuditLogPage({ searchParams: { offset: "-5x" } }));
+    render(await AuditLogPage({ searchParams: Promise.resolve({ offset: "-5x" }) }));
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("offset=0");
   });
 });

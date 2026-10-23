@@ -1,3 +1,4 @@
+import { minorToWireNumber } from "../../shared/money.js";
 import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED } from "../tax/verified-inputs.js";
@@ -32,6 +33,7 @@ import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type Pt
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
+import { MAKER_CHECKER_MESSAGES, MAKER_CHECKER_VIOLATION, runMakerCheckerDenial } from "./run-maker-checker.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -727,7 +729,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   }, { visibilityTimeout: 300 });
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; approvedBy: string };
+    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
@@ -783,17 +785,24 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           variables: { runId: p.id, month: run.month },
         }),
       });
-      await audit(tx, msg, "approve", "payroll_run", p.id);
+      await audit(tx, msg, "approve", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
 
   queue.subscribe(COMMANDS.runDisburse, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
+      // GAP-PAYROLL-DETAIL-02: maker-checker -- whoever approved the run cannot
+      // be the one who releases the money. commands.ts rejects this
+      // synchronously (403); this re-asserts it under the transaction so a
+      // replayed or racing command can never bypass it.
+      if (runMakerCheckerDenial("disburse", msg.actorId, { createdBy: run.createdBy, approvedBy: run.approvedBy })) {
+        throw new DomainError(MAKER_CHECKER_VIOLATION, MAKER_CHECKER_MESSAGES.disburse);
+      }
       assertRunStatusTransition(run.status, "disbursed");
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
@@ -825,20 +834,20 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           pfmsTxnId: `PAYROLL-${p.id.slice(0, 8)}`,
         },
       });
-      await audit(tx, msg, "disburse", "payroll_run", p.id);
+      await audit(tx, msg, "disburse", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
 
   queue.subscribe(COMMANDS.runRevert, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; revertedBy: string };
+    const p = msg.payload as { id: string; tenantId: string; revertedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
       assertRunStatusTransition(run.status, "draft");
       await repo.updateRun(tx, p.id, { status: "draft", updatedBy: msg.actorId });
-      await audit(tx, msg, "revert", "payroll_run", p.id);
+      await audit(tx, msg, "revert", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
@@ -1392,6 +1401,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      let lwfChange: { oldValue: Record<string, string> | null; newValue: Record<string, string> | null } | undefined;
       // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated versions written by
       // pt-versions-consumer.ts. A command still in flight from before versioning that
       // carries ptSlabs is NOT applied here -- slabs are no longer overwritten in place.
@@ -1404,26 +1414,46 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         const emp = p.lwfEmployee != null ? p.lwfEmployee.toString() : null;
         const er = p.lwfEmployer != null ? p.lwfEmployer.toString() : null;
         const freq = p.lwfFrequency ?? null;
-        await tx.execute(sql`
-          INSERT INTO payroll.payroll_lwf
-            (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor, frequency)
-          VALUES (${p.tenantId}::uuid, ${p.stateCode},
-            COALESCE(${emp}::bigint, 0),
-            COALESCE(${er}::bigint, 0),
-            COALESCE(${freq}::varchar, 'half_yearly'))
-          ON CONFLICT (tenant_id, state_code)
-          DO UPDATE SET
-            employee_contrib_minor = COALESCE(${emp}::bigint, payroll.payroll_lwf.employee_contrib_minor),
-            employer_contrib_minor = COALESCE(${er}::bigint, payroll.payroll_lwf.employer_contrib_minor),
-            frequency = COALESCE(${freq}::varchar, payroll.payroll_lwf.frequency)
-        `);
+        // GAP-PAYROLL-STATUTORY-LWF-01: a statutory-rate change is audited with what it
+        // changed FROM and TO. One statement, one snapshot: `prev` reads (and locks) the
+        // stored row, `up` is the unchanged upsert and RETURNs the stored result, so the
+        // before/after pair is exact even for a COALESCEd (partial) update. A first-ever
+        // row has no `prev` -> oldValue null. Amounts are paise strings.
+        const changed = (await tx.execute(sql`
+          WITH prev AS (
+            SELECT employee_contrib_minor::text AS "lwfEmployeeMinor",
+                   employer_contrib_minor::text AS "lwfEmployerMinor",
+                   frequency AS "lwfFrequency"
+              FROM payroll.payroll_lwf
+             WHERE tenant_id = ${p.tenantId}::uuid AND state_code = ${p.stateCode}
+               FOR UPDATE
+          ), up AS (
+            INSERT INTO payroll.payroll_lwf
+              (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor, frequency)
+            VALUES (${p.tenantId}::uuid, ${p.stateCode},
+              COALESCE(${emp}::bigint, 0),
+              COALESCE(${er}::bigint, 0),
+              COALESCE(${freq}::varchar, 'half_yearly'))
+            ON CONFLICT (tenant_id, state_code)
+            DO UPDATE SET
+              employee_contrib_minor = COALESCE(${emp}::bigint, payroll.payroll_lwf.employee_contrib_minor),
+              employer_contrib_minor = COALESCE(${er}::bigint, payroll.payroll_lwf.employer_contrib_minor),
+              frequency = COALESCE(${freq}::varchar, payroll.payroll_lwf.frequency)
+            RETURNING employee_contrib_minor::text AS "lwfEmployeeMinor",
+                      employer_contrib_minor::text AS "lwfEmployerMinor",
+                      frequency AS "lwfFrequency"
+          )
+          SELECT (SELECT to_jsonb(prev) FROM prev) AS before,
+                 (SELECT to_jsonb(up) FROM up) AS after
+        `)) as unknown as Array<{ before: Record<string, string> | null; after: Record<string, string> | null }>;
+        lwfChange = { oldValue: changed[0]?.before ?? null, newValue: changed[0]?.after ?? null };
       }
       await enqueue(tx, {
         topic: EVENTS.stateRulesUpserted, eventType: EVENTS.stateRulesUpserted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { stateCode: p.stateCode },
       });
-      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
+      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode, lwfChange);
     });
   });
 
@@ -1438,7 +1468,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; effectiveDate: string;
       oldBasicMinor: number; newBasicMinor: number; oldGrossMinor: number; newGrossMinor: number;
-      revisionType: string; orderNo?: string | null;
+      revisionType: string; orderNo?: string | null; reason?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1473,7 +1503,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
         });
       }
-      await audit(tx, msg, "create", "payroll_salary_revision", p.id, { newValue: { status } });
+      // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's reason and the sanctioning
+      // order go on the audit record (no free text lands anywhere else).
+      await audit(tx, msg, "create", "payroll_salary_revision", p.id, {
+        newValue: { status, ...(p.orderNo ? { orderNo: p.orderNo } : {}) },
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
   });
 
@@ -2267,7 +2302,7 @@ async function processPensionRun(
         employeeId: pen.id, employeeNo: pen.ppo_no,
         basicMinor: result.basicPensionMinor, grossMinor: result.grossMinor,
         totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
-        components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: Number(c.amountMinor) })),
+        components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor) })),
         tdsMinor: result.tdsMinor,
         status: result.netPayMinor < 0n ? "exception" : "computed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -2355,16 +2390,17 @@ export async function computeAndInsertSlip(
   // PAY-PROFILES: the EPF wage this slip's PF was computed on (pre-ceiling):
   // Basic + DA (consolidated pay has DA 0n). Only meaningful when PF applied.
   const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
-  const pfWageMinor = pfApplied
-    ? (params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor)
-    : null;
+  // The pension base computeSlip applied the GPF / NPS / EPF percentages to
+  // (domain.ts `pensionBase`): Basic + DA, or the FR 53 suspension-adjusted base.
+  const pensionBaseMinor = params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor;
+  const pfWageMinor = pfApplied ? pensionBaseMinor : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
     id: slipId, tenantId: params.tenantId, runId: params.runId,
     employeeId: params.employeeId, employeeNo: params.employeeNo,
     basicMinor: params.basicMinor, grossMinor: result.grossMinor,
     totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
-    components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: Number(c.amountMinor) })),
+    components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor) })),
     pfEmployeeMinor: result.pfEmployeeMinor, pfEmployerMinor: result.pfEmployerMinor,
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
     esiMinor: result.esiMinor, tdsMinor: result.tdsMinor,
@@ -2386,6 +2422,9 @@ export async function computeAndInsertSlip(
     await statutoryRepo.insertNps(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
       runId: params.runId, basicMinor: params.basicMinor,
+      // GAP-PAYROLL-STATUTORY-NPS-05: the base the 10% / 14% were applied to
+      // (basicMinor above is Basic only), so a ledger row can be checked by eye.
+      pensionBaseMinor,
       empContribPct: "10", erContribPct: "14",
       empContribMinor: result.npsEmployeeMinor, erContribMinor: result.npsEmployerMinor,
       currency: "INR", period: params.month,

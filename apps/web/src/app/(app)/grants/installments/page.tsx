@@ -7,11 +7,12 @@ import { getGrantInstallments } from "../../../_data/loaders";
 import { InstallmentsTable } from "./InstallmentsTable";
 import { ArrowLeft } from "lucide-react";
 
-export default async function GrantInstallmentsPage({
-  searchParams,
-}: {
-  searchParams?: { appId?: string };
-}) {
+export default async function GrantInstallmentsPage(
+  props: {
+    searchParams?: Promise<{ appId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { data: allInstallments, source } = await getGrantInstallments();
 
   // GAP-GRANTS-INSTALLMENTS-04: the applications detail "View installments" CTA

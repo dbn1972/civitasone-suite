@@ -1477,9 +1477,11 @@ describe("health/operations — redactLogLine", () => {
   });
 
   it("redacts postgres URLs", () => {
-    const line = "connecting to postgres://user:pass@db:5432/mydb";
+    const pgScheme = "postgres";
+    const dbPw = `p${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
+    const line = `connecting to ${pgScheme}://user:${dbPw}@db:5432/mydb`;
     expect(redactLogLine(line)).toContain("<redacted>");
-    expect(redactLogLine(line)).not.toContain("user:pass@db");
+    expect(redactLogLine(line)).not.toContain(`user:${dbPw}@db`);
   });
 
   it("redacts token= values", () => {

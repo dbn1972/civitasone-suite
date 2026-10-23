@@ -27,7 +27,7 @@ describe("AnnualProcurementPlanPage (GAP-PROCUREMENT-PLANNING-01/02/03/04/05)", 
 
   it("shows the human planNo (not a UUID fragment), an Items count, formatted money and a status label", async () => {
     loaderMock.mockResolvedValue({ data: [PLAN], source: "api" });
-    const ui = await AnnualProcurementPlanPage({ searchParams: {} });
+    const ui = await AnnualProcurementPlanPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // planNo visible; UUID fragment NOT shown.
@@ -46,21 +46,21 @@ describe("AnnualProcurementPlanPage (GAP-PROCUREMENT-PLANNING-01/02/03/04/05)", 
 
   it("passes the year filter from searchParams to the loader", async () => {
     loaderMock.mockResolvedValue({ data: [PLAN], source: "api" });
-    const ui = await AnnualProcurementPlanPage({ searchParams: { year: "2026" } });
+    const ui = await AnnualProcurementPlanPage({ searchParams: Promise.resolve({ year: "2026" }) });
     render(ui);
     expect(loaderMock).toHaveBeenCalledWith(expect.objectContaining({ year: 2026 }));
   });
 
   it("shows a filter-specific empty state when a filter matches nothing", async () => {
     loaderMock.mockResolvedValue({ data: [], source: "api" });
-    const ui = await AnnualProcurementPlanPage({ searchParams: { department: "Nope" } });
+    const ui = await AnnualProcurementPlanPage({ searchParams: Promise.resolve({ department: "Nope" }) });
     render(ui);
     expect(screen.getByText(/No plans match this filter/i)).toBeInTheDocument();
   });
 
   it("renders a RefreshErrorState on loader error (not a fabricated empty list)", async () => {
     loaderMock.mockResolvedValue({ data: [], source: "error" });
-    const ui = await AnnualProcurementPlanPage({ searchParams: {} });
+    const ui = await AnnualProcurementPlanPage({ searchParams: Promise.resolve({}) });
     const { container } = render(ui);
     expect(within(container).queryByText(/No plans yet/i)).not.toBeInTheDocument();
   });

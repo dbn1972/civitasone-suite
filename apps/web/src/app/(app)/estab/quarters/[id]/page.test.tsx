@@ -59,7 +59,7 @@ describe("QuarterDetailPage", () => {
     mockFetchJsonByKey({
       "estab.quarters.detail": { data: null, source: "error" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("QuarterDetailPage", () => {
     mockFetchJsonByKey({
       "estab.quarters.detail": { data: null, source: "api" },
     });
-    await expect(QuarterDetailPage({ params: { id: QUARTER.id } })).rejects.toThrow("NOT_FOUND");
+    await expect(QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) })).rejects.toThrow("NOT_FOUND");
   });
 
   // GAP-ESTAB-QUARTERS-DETAIL-04: no Version label, Condition humanised, carpet area formatted
@@ -80,7 +80,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: QUARTER, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.queryByText("Version")).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: QUARTER, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.getByRole("note")).toHaveTextContent(/Applications are only accepted for vacant quarters/);
@@ -110,7 +110,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: vacantQuarter, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "api" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     // Button text within the form
@@ -124,7 +124,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: QUARTER, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [withName], total: 1 }, source: "api" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.getByText("Kiran Bose")).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: QUARTER, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [ALLOTMENT], total: 120 }, source: "api" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.getByText(/Showing 1 of 120/)).toBeInTheDocument();
@@ -148,7 +148,7 @@ describe("QuarterDetailPage", () => {
       "estab.quarters.detail": { data: QUARTER, source: "api" },
       "estab.quarters.allotments.byQuarter": { data: { rows: [], total: 0 }, source: "error" },
     });
-    const ui = await QuarterDetailPage({ params: { id: QUARTER.id } });
+    const ui = await QuarterDetailPage({ params: Promise.resolve({ id: QUARTER.id }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();

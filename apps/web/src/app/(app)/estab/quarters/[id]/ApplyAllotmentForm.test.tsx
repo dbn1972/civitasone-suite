@@ -56,4 +56,26 @@ describe("ApplyAllotmentForm — GAP-ESTAB-QUARTERS-DETAIL-02", () => {
     expect(await screen.findByText(/could not be completed/)).toBeInTheDocument();
     expect(document.body.textContent).not.toContain("duplicate key");
   });
+
+  it.each(["1e2", "12.9", "3x", "-1"])("CLOS2-S1-06: seniority %s is rejected, not silently truncated, and blocks submit", (bad) => {
+    render(<ApplyAllotmentForm quarterId="q1" />);
+    fireEvent.click(screen.getByText("pick employee"));
+    fireEvent.change(screen.getByPlaceholderText("0"), { target: { value: bad } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply for allotment" }));
+    expect(screen.getByText("Seniority (months) must be zero or a positive whole number.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(browserJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("CLOS2-S1-06: seniority 12 is submitted as 12", async () => {
+    browserJsonMock.mockResolvedValue({ status: "accepted" });
+    render(<ApplyAllotmentForm quarterId="q1" />);
+    fireEvent.click(screen.getByText("pick employee"));
+    fireEvent.change(screen.getByPlaceholderText("0"), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Apply for allotment" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Submit application")!);
+    await waitFor(() => expect(browserJsonMock).toHaveBeenCalled());
+    expect(JSON.parse((browserJsonMock.mock.calls[0][1] as { body: string }).body).seniorityMonths).toBe(12);
+  });
 });

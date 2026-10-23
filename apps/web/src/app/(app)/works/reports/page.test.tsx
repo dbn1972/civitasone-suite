@@ -48,7 +48,7 @@ describe("WorksReportsPage", () => {
   });
 
   it("humanizes the Category token (REPORTS-06): 'regular' renders 'Regular'", async () => {
-    const ui = await WorksReportsPage({ searchParams: {} });
+    const ui = await WorksReportsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getAllByText("Regular").length).toBeGreaterThan(0);
     expect(screen.queryByText("regular")).not.toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("WorksReportsPage", () => {
 
   it("shows a per-block retry for a failed summary while the register still renders (REPORTS-02)", async () => {
     results.summary = { data: { totalWorks: 0, activeWorks: 0, closedWorks: 0 }, source: "error" };
-    const ui = await WorksReportsPage({ searchParams: {} });
+    const ui = await WorksReportsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     // The register still shows its rows...
     expect(screen.getByText("WRK/2026/001")).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("WorksReportsPage", () => {
 
   it("shows a per-block retry for a failed register, not an empty 'No works found'", async () => {
     results.works = { data: [], source: "error" };
-    const ui = await WorksReportsPage({ searchParams: {} });
+    const ui = await WorksReportsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText(/couldn't load works register/i)).toBeInTheDocument();
     expect(screen.queryByText("No works match the selected filters.")).not.toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("WorksReportsPage", () => {
   it("shows an 'Other / In progress' residual so Active + Closed + Other = Total (REPORTS-05)", async () => {
     // total 7, active 5, closed 2 => other 0; use a gap to prove the residual.
     results.summary = { data: envelope({ totalWorks: 10, activeWorks: 5, closedWorks: 2 }), source: "api" };
-    const ui = await WorksReportsPage({ searchParams: {} });
+    const ui = await WorksReportsPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getByText("Other / In progress")).toBeInTheDocument();
     // The residual value 10 - 5 - 2 = 3 is rendered.
