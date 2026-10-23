@@ -155,7 +155,11 @@ test.describe('Workforce Operations — S16', () => {
       // using this page's real copy ("Date of Overtime" / "Hours Requested",
       // not the orphan's "Hours Worked OT").
       // The employee is picked from a labelled "Employee" select (not a free-text "Employee ID" input).
-      await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
+      // The <Field> label reads "Employee" until the client-side directory load
+      // resolves, then "Employee *" (required={mode === "picker"}, OvertimeNewForm.tsx,
+      // b56fccd90 #2128) -- so exact text matching raced the load and flaked. Match both
+      // states (the aria-hidden "*" is the only difference); still not the "Employee ID" copy.
+      await expect(page.getByLabel(/^Employee(\s\*)?$/)).toBeVisible();
       await expect(page.getByLabel(/Date of Overtime/i)).toBeVisible();
       await expect(page.getByLabel(/Hours Requested/i)).toBeVisible();
     });
