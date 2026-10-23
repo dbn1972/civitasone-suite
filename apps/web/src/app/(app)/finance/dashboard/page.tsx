@@ -113,6 +113,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
               utilisationPct={data.budgetUtilisationPct}
               expenditure={data.totalExpenditure}
               sanctionedMinor={data.sanctionedMinor}
+              {...(data.categoryBreakdown ? { categoryBreakdown: data.categoryBreakdown } : {})}
             />
           )}
         </div>

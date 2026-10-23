@@ -1,16 +1,19 @@
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_TAX_READER_ROLES } from "@/lib/auth/workRoles";
+import { bucketIncomeTaxStatuses } from "@/lib/payroll/statusLabels";
 import { IncomeTaxTable } from "./IncomeTaxTable";
 
 type Row = {
   id: string;
+  /** hrms employee id (GAP-PAYROLL-INCOME-TAX-03); absent only on an older payroll-service. */
+  employeeId?: string;
   employee: string;
   department: string;
   grossIncome: string;
@@ -61,18 +64,18 @@ export default async function IncomeTaxPage() {
   // match instead); "pending" is the GET route's own literal default for an
   // employee with no declaration on file for the FY at all. "draft" was the
   // schema column's own default, tolerated here too in case a row is ever
-  // inserted outside today's one write path. With this corrected match,
-  // Finalized + Pending now actually sum to Total for every status the
-  // backend can currently produce.
-  const finalizedCount = errored ? null : items.filter((i) => i.status === "submitted" || i.status === "finalized" || i.status === "completed").length;
-  const pendingCount = errored ? null : items.filter((i) => i.status === "pending" || i.status === "draft").length;
+  // inserted outside today's one write path. The DB CHECK also allows
+  // "verified"/"approved" (no writer sets them yet), so the buckets are
+  // Finalized + Pending + Other, where Other is the remainder: the three
+  // always sum to Total for ANY status, known or not.
+  const buckets = errored ? null : bucketIncomeTaxStatuses(items);
 
   return (
     <div className="page-main wrap">
       {/* GAP-PAYROLL-INCOME-TAX-06: unified on /hr/payroll (where the page
-          header's own "Back to Payroll" link and RefreshErrorState below
+          header's own back-to-payroll link and RefreshErrorState below
           already went) instead of the header's previous "Back to HR" --
-          error.tsx's "Back to Payroll"/t("errorBackLabel") pairing is now
+          error.tsx's t("errorBackLabel") pairing is now
           what all three back targets on this page agree on. The "File tax
           declaration" action link (added in #1744) is kept as-is. */}
       <PageHeader
@@ -83,12 +86,16 @@ export default async function IncomeTaxPage() {
         actions={<Link href="/hr/payroll/tax-declaration">{t("fileDeclarationLink")}</Link>}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
-      <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalized")} value={finalizedCount} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={pendingCount} />
+      {/* Auto-fit (not the fixed 4-column StatGrid) so the conditional "Other" tile does not orphan a fifth card. */}
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={buckets ? buckets.total : null} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalized")} value={buckets ? buckets.finalized : null} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={buckets ? buckets.pending : null} />
+        {buckets !== null && buckets.other > 0 && (
+          <StatCard icon="📄" tone="neutral" label={t("statOther")} value={buckets.other} />
+        )}
         <StatCard icon="🏢" iconBg="var(--panel)" label={t("statDepartments")} value={errored ? null : new Set(items.map((i) => i.department)).size} />
-      </StatGrid>
+      </div>
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">

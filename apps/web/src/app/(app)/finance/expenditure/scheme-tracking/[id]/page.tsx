@@ -70,10 +70,11 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         </div>
       </Card>
 
-      {/* GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: links only to routes that exist. */}
+      {/* GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: links only to routes that exist. The UC register is
+          narrowed by the scheme's CODE (unique per office; certificates store it), not its name. */}
       <Card title={t("relatedTitle")} padding>
         <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li><Link href={ucRegisterHref(scheme.name)}>{t("relatedUcs")}</Link></li>
+          <li><Link href={ucRegisterHref(scheme.code)}>{t("relatedUcs")}</Link></li>
           <li><Link href="/finance/budget/fund-releases">{t("relatedFundReleases")}</Link></li>
         </ul>
       </Card>

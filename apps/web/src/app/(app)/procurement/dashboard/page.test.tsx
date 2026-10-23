@@ -3,6 +3,10 @@ import { render, screen } from "@testing-library/react";
 import { createTranslator } from "next-intl";
 import en from "@/messages/en.json";
 import { procurementTiles } from "../tiles";
+import {
+  PENDING_INDENT_STATUSES, PENDING_INDENTS_HREF, ACTIVE_PO_STATUS, ACTIVE_POS_HREF,
+  CONTRACTS_REGISTER_HREF, parseIndentStatusFilter, parsePoStatusParam,
+} from "../drillThrough";
 
 // Server component: resolve namespaced keys against the real en messages.
 vi.mock("next-intl/server", () => ({
@@ -76,10 +80,34 @@ describe("ProcurementDashboardPage", () => {
     render(await ProcurementDashboardPage());
     // Each counter tile is a snapshot of a pending-action queue, so the whole
     // tile must be a link into that queue. Previously they were plain divs.
-    expect(screen.getByText("Pending Indents").closest("a")).toHaveAttribute("href", "/procurement/indents?status=pending");
-    expect(screen.getByText("Active POs").closest("a")).toHaveAttribute("href", "/procurement/orders?status=active");
+    expect(screen.getByText("Pending Indents").closest("a")).toHaveAttribute("href", PENDING_INDENTS_HREF);
+    expect(screen.getByText("Active POs").closest("a")).toHaveAttribute("href", ACTIVE_POS_HREF);
     expect(screen.getByText("GRNs (MTD)").closest("a")).toHaveAttribute("href", "/procurement/grn");
-    expect(screen.getByText("Contract Renewals Due").closest("a")).toHaveAttribute("href", "/procurement/contracts?status=renewal_due");
+    expect(screen.getByText("Contract Renewals Due").closest("a")).toHaveAttribute("href", CONTRACTS_REGISTER_HREF);
+  });
+
+  it("GAP-PROCUREMENT-DASHBOARD-02: each filtered drill-through link is understood by the page it opens", async () => {
+    mockProcurementLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await ProcurementDashboardPage());
+
+    // Pending Indents counts draft + pending: the link's filter must parse back to exactly that set
+    // (the list page matches on the mapped status, where raw `pending` is `pending_approval`).
+    const indentsHref = screen.getByText("Pending Indents").closest("a")!.getAttribute("href")!;
+    const indentsUrl = new URL(indentsHref, "http://localhost");
+    expect(indentsUrl.pathname).toBe("/procurement/indents");
+    expect(parseIndentStatusFilter(indentsUrl.searchParams.get("status") ?? undefined)).toEqual([...PENDING_INDENT_STATUSES]);
+
+    // Active POs counts status=approved: the orders page must accept that value as a real status.
+    const ordersHref = screen.getByText("Active POs").closest("a")!.getAttribute("href")!;
+    const ordersUrl = new URL(ordersHref, "http://localhost");
+    expect(ordersUrl.pathname).toBe("/procurement/orders");
+    expect(parsePoStatusParam(ordersUrl.searchParams.get("status") ?? undefined)).toBe(ACTIVE_PO_STATUS);
+
+    // Contract Renewals opens the contracts register directly: /procurement/contracts only
+    // redirects there and drops any query string, so no filter is promised that is then lost.
+    const renewalsHref = screen.getByText("Contract Renewals Due").closest("a")!.getAttribute("href")!;
+    expect(renewalsHref).toBe("/contracts/list");
+    expect(renewalsHref).not.toContain("?");
   });
 
   it("GAP-PROCUREMENT-DASHBOARD-02: counters are NOT links when the load errored (nothing to act on)", async () => {

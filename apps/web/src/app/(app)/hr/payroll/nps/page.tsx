@@ -16,6 +16,10 @@ type NpsRow = {
   employeeName: string;
   pran: string;
   period: string;
+  // GAP-PAYROLL-STATUTORY-NPS-05: the pension base (Basic + DA) the employee and
+  // employer percentages were applied to; null for rows written before the
+  // payroll ledger recorded it (renders "—", never a guess).
+  base: number | null;
   // GAP-PAYROLL-NPS-03: null = no figure in the statement (DataTable's
   // formatMoney renders "—"); 0 = a real zero contribution.
   emp: number | null;
@@ -25,6 +29,7 @@ type NpsRow = {
 
 export default async function NpsStatementsPage() {
   const t = await getTranslations("npsStatements");
+  const tCommon = await getTranslations("payrollCommon");
   // GAP-PAYROLL-NPS-05: hr/layout.tsx admits employee/manager to every
   // /hr/payroll* route, and this ledger lists every subscriber's
   // contributions. Gate on payroll-service's own READER_ROLES for GET
@@ -50,6 +55,7 @@ export default async function NpsStatementsPage() {
     employeeName: r.employeeName ?? t("unknownEmployee"),
     pran: r.pranLast4 ? maskLast4(r.pranLast4) : "—",
     period: r.period,
+    base: r.pensionBaseMinor ?? null,
     reconciliation: t(reconciliationKey(r.reconciliation)),
     emp: r.empContribMinor ?? null,
     er: r.erContribMinor ?? null,
@@ -85,7 +91,7 @@ export default async function NpsStatementsPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
 
       <StatGrid>
@@ -154,6 +160,9 @@ export default async function NpsStatementsPage() {
       )}
 
       <Card title={t("ledgerCardTitle")}>
+        {!errored && tableRows.length > 0 && (
+          <p style={{ margin: "0 0 8px", padding: "0 16px", fontSize: 12, color: "var(--mut)" }}>{t("contributionBaseNote")}</p>
+        )}
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll" />
@@ -171,6 +180,7 @@ export default async function NpsStatementsPage() {
               { key: "employeeCode", label: t("colCode") },
               { key: "pran", label: t("colPran") },
               { key: "period", label: t("colPeriod") },
+              { key: "base", label: t("colContributionBase"), align: "right", cellType: "amount" },
               { key: "emp", label: t("colEmployeeContrib"), align: "right", cellType: "amount" },
               { key: "er", label: t("colEmployerContrib"), align: "right", cellType: "amount" },
               { key: "reconciliation", label: t("colReconciliation") },

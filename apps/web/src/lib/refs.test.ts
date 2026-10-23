@@ -27,6 +27,19 @@ describe("parseOpaqueRef / opaqueRefHref (GAP-PROCUREMENT-RFQ-02 / DETAIL-04)", 
     expect(opaqueRefHref("procurement_indent:ind-9")).toBe("/procurement/indents/ind-9");
   });
 
+  // GAP-FINANCE-EXPENDITURE-BILLS-06: a bill's PO reference links to the purchase order.
+  it("builds the purchase-order detail href for a procurement_po ref with a UUID id", () => {
+    expect(opaqueRefHref("procurement_po:5b1c2d3e-0000-4000-8000-000000000000")).toBe(
+      "/procurement/orders/5b1c2d3e-0000-4000-8000-000000000000",
+    );
+  });
+
+  it("gives a procurement_po ref that is not a UUID no link (there is no page to open)", () => {
+    expect(opaqueRefHref("procurement_po:abc-123")).toBeNull();
+    expect(opaqueRefHref("procurement_po:PO-2026-014")).toBeNull();
+    expect(opaqueRefHref("procurement_po:undefined")).toBeNull();
+  });
+
   it("returns null href for an unknown ref type (no dead link)", () => {
     expect(opaqueRefHref("procurement_widget:x")).toBeNull();
   });

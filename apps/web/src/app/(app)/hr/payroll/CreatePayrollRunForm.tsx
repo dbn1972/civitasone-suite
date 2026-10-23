@@ -17,6 +17,7 @@ import {
   type GroupOption,
   type RunScope,
 } from "./pay-groups/payGroupMembership";
+import { revalidatePayrollRunLists } from "./_actions";
 
 type Structure = { id: string; name: string };
 
@@ -143,6 +144,15 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
       setConfirmOpen(false);
       trackActivation("first_transaction");
       toast.success(t("createdToast", { month: MONTHS[selectedMonthIdx - 1], year: selectedYear }));
+      // GAP-PAYROLL-HOME-06: purge the client Router Cache BEFORE navigating, so
+      // Back from the new run refetches /hr/payroll instead of restoring the
+      // stale list. Best effort: the run exists already, so a failed purge must
+      // never block (or fail) the navigation below.
+      try {
+        await revalidatePayrollRunLists();
+      } catch {
+        /* the list is then only as fresh as the router cache; the run is created */
+      }
       if (scopeKind !== "tenant" && (created.runIds.length > 1 || created.skippedEmptyGroups.length > 0)) {
         // One run per pay group: list them all instead of jumping to one.
         setCreatedRunIds(created.runIds);

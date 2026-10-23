@@ -45,6 +45,25 @@ export type ListRunsQuery = z.infer<typeof listRunsQuery>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * GAP-PAYROLL-DETAIL-02: the optional body of PATCH /runs/:id/{approve,disburse,revert}.
+ * The web dialog collects a reason (>= 10 chars) for each irreversible step; it is
+ * recorded on the audit event. Absent is fine (older callers); present must be a real
+ * sentence, not a character.
+ *
+ * OWNER DECISION (open): `reason` is optional on the wire, so the 10-character rule
+ * is a web-dialog gate only -- a direct API call (script, other client) can still
+ * approve or disburse without a recorded reason. Maker-checker itself is enforced
+ * server-side regardless. Making `reason` required here (and on the F&F disburse
+ * body, fnf/routes.ts) is a one-line change, but it breaks every client that does not
+ * send one yet (e.g. scripts/dev/test-hr-payroll-flow.mjs), so it waits for the owner
+ * to confirm all API clients are updated.
+ */
+export const runActionBody = z.object({
+  reason: z.string().trim().min(10).max(1000).optional(),
+});
+export type RunActionBody = z.infer<typeof runActionBody>;
+
 // Multi-DDO admin
 export const createDdoBody = z.object({
   ddoCode: z.string().min(1).max(32),
@@ -225,13 +244,20 @@ export const reimbursementRejectBody = z.object({
 export const createSalaryRevisionBody = z.object({
   employeeId:    z.string().uuid(),
   effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  oldBasicMinor: z.number().int().nonnegative(),
-  newBasicMinor: z.number().int().positive(),
-  oldGrossMinor: z.number().int().nonnegative(),
-  newGrossMinor: z.number().int().positive(),
+  // .safe(): these arrive as JSON numbers (doubles); one above 2^53-1 paise would already have been
+  // rounded by JSON.parse, so it is refused rather than stored as a different amount.
+  oldBasicMinor: z.number().int().safe().nonnegative(),
+  newBasicMinor: z.number().int().safe().positive(),
+  oldGrossMinor: z.number().int().safe().nonnegative(),
+  newGrossMinor: z.number().int().safe().positive(),
   revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
   // GAP-PAYROLL-SALARY-REVISIONS-02: a revision rewrites HRMS basic pay, so it must cite its sanctioning order.
   orderNo:       z.string().trim().min(1).max(64),
+  // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's stated reason, written to the
+  // audit trail with the revision. Optional on the API (older clients / scripts
+  // keep working) but, when sent, it must be a real sentence -- the web form
+  // always sends it (ConfirmDialog requires >= 10 characters).
+  reason:        z.string().trim().min(10).max(512).optional(),
 }).superRefine((b, ctx) => {
   // GAP-PAYROLL-SALARY-REVISIONS-03: the same sanity rules the web form applies.
   const issue = revisionSanityIssue(b);

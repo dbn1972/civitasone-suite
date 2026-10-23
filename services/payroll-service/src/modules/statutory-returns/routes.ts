@@ -12,12 +12,13 @@ import { payrollTds, payrollNps, payrollTdsNonSalary, payrollTdsChallan } from "
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
-import { buildForm16, parseFy } from "../tax/form16.js";
+import { buildForm16WithMinor, parseFy, type Form16PartBMinor } from "../tax/form16.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import * as taxCommands from "../tax/commands.js";
+import { maskPan } from "../../shared/pii-mask.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -84,6 +85,63 @@ const employerIdentity = () => ({
  * record or misalign columns in 24Q / NPS-SCF files.
  */
 const pipeSafe = (v: unknown): string => String(v ?? "").replace(/[|\r\n]/g, " ").trim();
+
+/**
+ * GAP-PAYROLL-RETURNS-06: ONE money type across the statutory-return wire.
+ * Every `*Minor` amount in the 24Q payload, its force-file result and the 26Q
+ * payload is an exact integer count of PAISE sent as a JSON number (the 26Q
+ * used to send bigint strings while 24Q/force-file sent numbers, so a client
+ * had to know which endpoint it was reading). Totals are accumulated in bigint
+ * and converted once, here. A TDS figure cannot get near 2^53 paise (about
+ * Rs 9e13), but if one ever did this fails loudly instead of rounding.
+ */
+function minorToNumber(minor: bigint): number {
+  const n = Number(minor);
+  if (!Number.isSafeInteger(n)) {
+    throw new HttpError(500, "AMOUNT_OUT_OF_RANGE", "a statutory-return amount exceeds the exact-integer range of a JSON number");
+  }
+  return n;
+}
+
+/**
+ * The TRACES 24Q flat file carries whole rupees (rounded per record). Derived
+ * from the exact paise only here, at the file edge; never put on the JSON wire.
+ */
+function wholeRupees(minor: number): number {
+  return Math.round(minor / 100);
+}
+
+/**
+ * Form 16 Part B as it sits on the 24Q Annexure II wire: the exact-paise
+ * figures from buildForm16WithMinor, every amount a JSON number of paise under a
+ * `...Minor` key (the display-rupee Form 16 fields are NOT repeated beside them).
+ * Only `regime` is not an amount.
+ */
+type Form16PartBOnWire = { [K in Exclude<keyof Form16PartBMinor, "regime">]: number } & { regime: Form16PartBMinor["regime"] };
+
+type AnnexureIIRow = { employeeId: string; pan: string; name: string } & Form16PartBOnWire;
+
+function partBOnWire(p: Form16PartBMinor): Form16PartBOnWire {
+  const { regime, ...amounts } = p;
+  const wire = {} as Record<string, number>;
+  for (const [k, v] of Object.entries(amounts)) wire[k] = minorToNumber(v as bigint);
+  return { ...(wire as Omit<Form16PartBOnWire, "regime">), regime };
+}
+
+/**
+ * A Reconciliation as embedded in a return payload. The challan-reconcile
+ * endpoint (GET .../reconcile) keeps its paise as bigint strings, but inside a
+ * 24Q / force-file / 26Q payload the same figures sit next to numeric totals,
+ * so they are converted to numbers here (the variance can be negative).
+ */
+function reconciliationOnWire(r: Reconciliation) {
+  return {
+    ...r,
+    tdsDeductedMinor: minorToNumber(BigInt(r.tdsDeductedMinor)),
+    tdsDepositedMinor: minorToNumber(BigInt(r.tdsDepositedMinor)),
+    varianceMinor: minorToNumber(BigInt(r.varianceMinor)),
+  };
+}
 
 /** Deductee-wise TDS aggregate for a set of months (one row per employee). */
 async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<string, { tdsMinor: bigint; periods: Set<string> }>> {
@@ -198,10 +256,7 @@ async function buildForm24Q(
 
   const deductees = [...byEmp.entries()].map(([employeeId, agg]) => {
     const emp = master.get(employeeId);
-    // Whole-rupee figures are kept for the TRACES flat file below; the
-    // *Minor fields are the exact paise values every UI should display.
-    const tdsDeductedMinor = Number(agg.tdsMinor);
-    const tdsDeducted = Math.round(tdsDeductedMinor / 100);
+    const tdsDeductedMinor = minorToNumber(agg.tdsMinor);
     return {
       employeeId,
       pan: emp?.pan ?? "",
@@ -209,14 +264,11 @@ async function buildForm24Q(
       name: emp?.fullName ?? "",
       tdsDeductedMinor,
       tdsDepositedMinor: tdsDeductedMinor, // deposited == deducted in this model
-      tdsDeducted,
-      tdsDeposited: tdsDeducted, // deposited == deducted in this model
       periods: [...agg.periods].sort(),
     };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
-  const totalTdsDeducted = deductees.reduce((s, d) => s + d.tdsDeducted, 0);
-  const totalTdsDeductedMinor = deductees.reduce((s, d) => s + d.tdsDeductedMinor, 0);
+  const totalTdsDeductedMinor = minorToNumber([...byEmp.values()].reduce((s, a) => s + a.tdsMinor, 0n));
 
   // Challan summary: one challan per month (TDS deposited for that month),
   // restricted to approved/disbursed runs.
@@ -225,25 +277,29 @@ async function buildForm24Q(
   const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
-  const challans = months.map((month) => {
-    const tdsDepositedMinor = Number(challanTdsRows
+  const challanBigs = months.map((month) => ({
+    month,
+    minor: challanTdsRows
       .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
-      .reduce((s, t) => s + BigInt(t.tdsMinor), 0n));
-    return { month, tdsDepositedMinor, tdsDeposited: Math.round(tdsDepositedMinor / 100) };
+      .reduce((s, t) => s + BigInt(t.tdsMinor), 0n),
+  }));
+  const challans = challanBigs.map(({ month, minor }) => {
+    return { month, tdsDepositedMinor: minorToNumber(minor) };
   });
+  const totalTdsDepositedMinor = minorToNumber(challanBigs.reduce((s, c) => s + c.minor, 0n));
 
   // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
-  let annexureII: Array<Record<string, unknown>> | undefined;
+  let annexureII: AnnexureIIRow[] | undefined;
   if (q === "Q4") {
     annexureII = [];
     for (const d of deductees) {
       try {
-        const f16 = await buildForm16(ctx.tenantId, d.employeeId, fyRaw);
+        const { form16: f16, partBMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
         annexureII.push({
           employeeId: d.employeeId,
           pan: f16.form16PartA.deductee.pan,
           name: f16.form16PartA.deductee.name,
-          ...f16.form16PartB,
+          ...partBOnWire(partBMinor),
         });
       } catch (err) {
         // M4: never silently drop a deductee because HRMS is down — fail the export.
@@ -276,16 +332,22 @@ async function buildForm24Q(
     deducteeCount: deductees.length,
     deductees,
     challanSummary: challans,
-    totalTdsDeducted,
-    totalTdsDeposited: challans.reduce((s, c) => s + c.tdsDeposited, 0),
-    // GAP-PAYROLL-RETURNS-06: paise totals, so no client has to multiply a
-    // rupee figure back up (ForceFileButton used to do `* 100`).
+    // GAP-PAYROLL-RETURNS-06: the only TDS amounts on this payload are the
+    // exact-paise *Minor fields (a whole-rupee twin of each used to sit beside
+    // them -- tdsDeducted, tdsDeposited, totalTdsDeducted, totalTdsDeposited,
+    // challanSummary[].tdsDeposited -- which a client could mistake for paise,
+    // or multiply back up as ForceFileButton once did). Whole rupees now exist
+    // only inside the TRACES flat file, derived at that edge (wholeRupees()).
+    // annexureII (Q4) follows the same rule: its Form 16 Part B figures come
+    // from buildForm16WithMinor's exact paise (grossSalaryMinor,
+    // taxableIncomeMinor, totalTaxLiabilityMinor, totalTdsDeductedMinor ...),
+    // never from the display-rupee Form 16 fields.
     totalTdsDeductedMinor,
-    totalTdsDepositedMinor: challans.reduce((s, c) => s + c.tdsDepositedMinor, 0),
+    totalTdsDepositedMinor,
     ...(annexureII ? { annexureII } : {}),
     reconciliation: {
       matched: reconciled,
-      perPeriod: reconciliation,
+      perPeriod: reconciliation.map(reconciliationOnWire),
       ...(reconciled ? {} : { warning: "FILED WITH UNRECONCILED TDS (forced override)" }),
     },
     note: reconciled
@@ -313,28 +375,32 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     if (format !== "file") return reply.send(structured);
 
     // NSDL/EPFO-style pipe-delimited flat file (RPU-like line records).
-    const { deductees, challanSummary: challans, totalTdsDeducted, annexureII, fy: resolvedFy, quarter: q } = structured;
+    const { deductees, challanSummary: challans, annexureII, fy: resolvedFy, quarter: q } = structured;
     const emp = employerIdentity();
     const lines: string[] = [];
     // File Header (FH)
     lines.push(["FH", "24Q", resolvedFy, q, pipeSafe(emp.tan), pipeSafe(emp.pan), pipeSafe(emp.name), deductees.length].join("|"));
     // Challan records (CD): batch, month, deposited amount
     challans.forEach((c, i) => {
-      lines.push(["CD", i + 1, c.month, c.tdsDeposited.toFixed(2)].join("|"));
+      lines.push(["CD", i + 1, c.month, wholeRupees(c.tdsDepositedMinor).toFixed(2)].join("|"));
     });
     // Deductee records (DD): challan-linked deductee detail
     deductees.forEach((d, i) => {
-      lines.push(["DD", i + 1, pipeSafe(d.pan || d.panFlag), pipeSafe(d.name), d.tdsDeducted.toFixed(2), d.tdsDeposited.toFixed(2)].join("|"));
+      lines.push(["DD", i + 1, pipeSafe(d.pan || d.panFlag), pipeSafe(d.name), wholeRupees(d.tdsDeductedMinor).toFixed(2), wholeRupees(d.tdsDepositedMinor).toFixed(2)].join("|"));
     });
     if (annexureII) {
       annexureII.forEach((a, i) => {
+        // Whole rupees derived from the exact paise here, at the file edge
+        // (gross, taxable income and total tax are whole-rupee by construction,
+        // so this is exact and byte-identical to the previous A2 lines).
         lines.push(["A2", i + 1, pipeSafe(a.pan), pipeSafe(a.name),
-          Number(a.grossSalary ?? 0).toFixed(2), Number(a.taxableIncome ?? 0).toFixed(2),
-          Number(a.totalTaxLiability ?? 0).toFixed(2)].join("|"));
+          wholeRupees(a.grossSalaryMinor).toFixed(2), wholeRupees(a.taxableIncomeMinor).toFixed(2),
+          wholeRupees(a.totalTaxLiabilityMinor).toFixed(2)].join("|"));
       });
     }
     // File Trailer (FT)
-    lines.push(["FT", lines.length + 1, totalTdsDeducted.toFixed(2)].join("|"));
+    // Trailer total: the sum of the per-deductee whole-rupee figures above.
+    lines.push(["FT", lines.length + 1, deductees.reduce((sum, d) => sum + wholeRupees(d.tdsDeductedMinor), 0).toFixed(2)].join("|"));
 
     const filename = `24Q_${resolvedFy.replace("-", "")}_${q}.txt`;
     return reply
@@ -479,7 +545,11 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       fy,
       assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
       employer: employerIdentity(),
-      employee: { employeeId, pan, name, panFlag: pan ? "" : "PANNOTAVBL" },
+      // GAP-PAYROLL-STATUTORY-PERQUISITE-04: the PAN is DPDP-sensitive -- masked
+      // server-side (ABCDE****F), never sent in the clear to the browser. A staff
+      // member who needs the full value uses the audited reveal on the HRMS
+      // employee master (POST /v1/hrms/pii/reveal, reason required, audit first).
+      employee: { employeeId, pan: maskPan(pan), name, panFlag: pan ? "" : "PANNOTAVBL" },
       perquisites,
       totalPerquisitesMinor: totalPerqMinor,
       totalPerquisites: Math.round(totalPerqMinor / 100),
@@ -654,8 +724,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       pan: d.pan,
       panFlag: d.pan ? "" : "PANNOTAVBL",
       section: d.section,
-      amountPaidMinor: d.paid.toString(),
-      tdsDeductedMinor: d.tds.toString(),
+      amountPaidMinor: minorToNumber(d.paid),
+      tdsDeductedMinor: minorToNumber(d.tds),
       periods: [...d.periods].sort(),
     })).sort((a, b) => a.name.localeCompare(b.name) || a.section.localeCompare(b.section));
 
@@ -673,8 +743,8 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
       deductor: employerIdentity(),
       deducteeCount: deductees.length,
       deductees,
-      totalTdsDeductedMinor: totalTdsMinor.toString(),
-      reconciliation: { perPeriod: challanReco, matched: challanReco.every((r) => r.matched || r.status === "no_challan") },
+      totalTdsDeductedMinor: minorToNumber(totalTdsMinor),
+      reconciliation: { perPeriod: challanReco.map(reconciliationOnWire), matched: challanReco.every((r) => r.matched || r.status === "no_challan") },
       populated: rows.length > 0,
       note: rows.length > 0
         ? "Non-salary TDS sourced from payroll_tds_nonsalary. Verify challan BSR/CIN against TRACES before filing."

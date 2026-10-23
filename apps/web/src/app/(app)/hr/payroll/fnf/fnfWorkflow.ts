@@ -25,6 +25,12 @@ export type FnfWorkflowFields = {
 /** Server-side reference-format rule (fnf/routes.ts disburse body). */
 export const PAYMENT_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/-]{3,63}$/;
 export const REJECT_REASON_MIN = 10;
+/**
+ * GAP-PAYROLL-FNF-01: recording that a final settlement was paid is an
+ * irreversible, money-closing step, so it carries a written reason like a
+ * rejection does (>= 10 characters, trimmed). Recorded on the audit event.
+ */
+export const PAYMENT_REASON_MIN = 10;
 export const REASON_MAX = 512;
 
 const has = (viewer: FnfViewer, roles: readonly string[]) => roles.some((r) => viewer.roles.includes(r));

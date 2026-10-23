@@ -25,6 +25,8 @@ import { useTranslations } from "next-intl";
 import { Button, Field, Input, Select, StatusPill, type EntityOption } from "./ds";
 import { EmployeePicker } from "./EmployeePicker";
 import { useSelfEmployee } from "./useSelfEmployee";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { employeeDirectoryForRoles } from "@/lib/employeeDirectory";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
 import { isEofficeFileInFlight } from "./eofficeFileStatus";
@@ -155,6 +157,9 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   // can never be raised in another officer's name. The profile lookup here is display-only (and lets the
   // success message name the initiator); when it is unavailable the server still resolves the initiator.
   const self = useSelfEmployee(open);
+  // GAP-FINANCE-PAYMENTS-DETAIL-02: search the directory this role can actually reach (finance_officer
+  // is not on the HR directory's list; it uses the payroll lookup), or say there is none.
+  const directory = employeeDirectoryForRoles(useSessionIdentity().roles);
 
   const raisable = !file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status));
 
@@ -264,6 +269,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
               <EmployeePicker
                 value={currentWith}
                 onChange={(id, opt) => { setCurrentWith(id); setCurrentWithOption(opt); }}
+                directory={directory}
                 placeholder="Search by name or employee number…"
               />
             </Field>

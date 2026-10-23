@@ -4,6 +4,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { perquisiteComponents, taxDeclarations, taxDeclarationWindows } from "./schema.js";
+import { LOCKED_DECLARATION_STATUSES } from "./declaration-lock.js";
 import { sql } from "drizzle-orm";
 import { decryptPii } from "../../shared/pii-crypto.js";
 import { hraExemptionMinor } from "./engine.js";
@@ -66,7 +67,10 @@ export function registerTaxConsumers(queue: Queue): void {
         updatedBy: msg.actorId,
       };
 
-      await tx.insert(taxDeclarations).values({
+      // GAP-PAYROLL-TAX-DECLARATION-05: the upsert never touches a verified / approved
+      // declaration (the route refuses it with 409; this is the race-safe backstop for a
+      // command queued earlier, or published by another path). A blocked write is audited.
+      const written = await tx.insert(taxDeclarations).values({
         id: p.id,
         tenantId: p.tenantId,
         employeeId: p.employeeId,
@@ -77,7 +81,23 @@ export function registerTaxConsumers(queue: Queue): void {
       }).onConflictDoUpdate({
         target: [taxDeclarations.tenantId, taxDeclarations.employeeId, taxDeclarations.fy],
         set: { ...fields, status: "submitted" },
-      });
+        setWhere: sql`${taxDeclarations.status} NOT IN (${sql.join(LOCKED_DECLARATION_STATUSES.map((s) => sql`${s}`), sql`, `)})`,
+      }).returning({ id: taxDeclarations.id });
+
+      if (written.length === 0) {
+        await enqueue(tx, {
+          topic: AUDIT,
+          eventType: AUDIT,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            service: "payroll", action: "submit", resourceType: "tax_declaration", resourceId: p.id,
+            outcome: "denied", reason: "DECLARATION_LOCKED", employeeId: p.employeeId, fy: p.fy,
+          },
+        });
+        return;
+      }
 
       await audit(tx, msg, "submit", "tax_declaration", p.id);
     });

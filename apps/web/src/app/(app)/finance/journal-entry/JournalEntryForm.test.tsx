@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 
@@ -383,6 +383,67 @@ describe("JournalEntryForm account picker (GAP-FINANCE-JOURNAL-ENTRY-04)", () =>
   });
 });
 
+// GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06: the server refuses the entry because of a field's value.
+describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  async function submitAndConfirm(response: Response, props: { redirectTo?: string } = {}) {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
+    render(<JournalEntryForm accounts={accounts} {...props} />);
+    fillBalancedLines();
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    return fetchSpy;
+  }
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  it("a duplicate voucher number from the server shows under the input, keeps the form, focuses the field and does not redirect", async () => {
+    await submitAndConfirm(
+      json(409, { code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." }] }),
+      { redirectTo: "/finance/accounting/general-ledger" },
+    );
+    const input = screen.getByLabelText("Voucher Number", { selector: "input" });
+    await waitFor(() => expect(screen.getByText(/This voucher number already exists/)).toBeInTheDocument());
+    // under the input: the message is the field's described-by and the field is flagged invalid
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")).toBe("jv-voucher-srv-err");
+    expect(document.getElementById("jv-voucher-srv-err")).toHaveTextContent(/already exists/);
+    // the confirm dialog is closed so the message is not hidden behind it, and what was typed is kept
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    expect(input).toHaveValue("JV-TEST-001");
+    await waitFor(() => expect(input).toHaveFocus());
+    // no success panel, no link to the ledger: nothing was posted
+    expect(screen.queryByText(/Journal entry (posted|accepted)/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View in General Ledger" })).not.toBeInTheDocument();
+    // the whole form is still there to correct and resubmit
+    expect(screen.getByRole("button", { name: "Post Journal Entry" })).toBeEnabled();
+  });
+
+  it("a closed-period refusal (422 PERIOD_CLOSED) shows under the posting date, in plain words, and posts nothing", async () => {
+    await submitAndConfirm(
+      json(422, { code: "PERIOD_CLOSED", message: "cannot post to hard-closed period 2026-04", fieldErrors: [{ field: "postingDate", message: "This accounting period is closed. Choose a posting date in an open period." }] }),
+    );
+    const date = screen.getByLabelText("Posting Date");
+    await waitFor(() => expect(document.getElementById("jv-date-srv-err")).toHaveTextContent(/accounting period is closed/));
+    expect(date).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    await waitFor(() => expect(date).toHaveFocus());
+    // the summary line uses the catalogued copy, never the raw code or message
+    expect(document.getElementById("jv-form-error")).toHaveTextContent("This accounting period is closed, so nothing was posted. Choose a posting date in an open period.");
+    expect(document.body.textContent).not.toMatch(/PERIOD_CLOSED|hard-closed period 2026-04/);
+    expect(screen.queryByText(/Journal entry (posted|accepted)/)).not.toBeInTheDocument();
+  });
+
+  it("any other server failure still shows inside the confirm dialog, which stays open", async () => {
+    await submitAndConfirm(json(500, { code: "INTERNAL", message: "internal error" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    expect(document.getElementById("jv-voucher-srv-err")).toBeNull();
+  });
+});
+
 // GAP-FINANCE-JOURNAL-ENTRY-06
 describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () => {
   beforeEach(() => vi.restoreAllMocks());
@@ -399,5 +460,45 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.voucherNo).toBe("AUTO");
+  });
+
+  // finance-service answers 409 DUPLICATE_VOUCHER (with a voucherNo field error) before
+  // anything is queued, for a typed number that is already used in the tenant.
+  it("a 409 DUPLICATE_VOUCHER closes the dialog, shows the message under the voucher field and focuses it", async () => {
+    // Model the two browser behaviours that fireEvent.click + jsdom hide: (1) a real click focuses the
+    // trigger first, and Modal restores focus to that trigger when it closes; (2) the page behind an
+    // open Modal is `inert`, and a browser ignores focus() on an inert element. Focus must therefore
+    // land on the voucher field only AFTER the dialog has closed and torn both of those down.
+    const realFocus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, ...args: Parameters<HTMLElement["focus"]>) {
+      if (this.closest("[inert]")) return;
+      return realFocus.apply(this, args);
+    });
+    const serverMsg = "This voucher number is already in use. Enter a different number, or leave it blank to auto-number.";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: serverMsg }] }),
+        { status: 409 },
+      ),
+    );
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines(); // voucher "JV-TEST-001"
+    const trigger = screen.getByRole("button", { name: "Post Journal Entry" });
+    trigger.focus(); // a real click focuses the button before the click event
+    fireEvent.click(trigger);
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+
+    await waitFor(() => expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument());
+    const voucherInput = screen.getByLabelText("Voucher Number", { selector: "input" });
+    const fieldWrap = voucherInput.closest(".field") as HTMLElement;
+    expect(within(fieldWrap).getByText(serverMsg)).toHaveAttribute("role", "alert");
+    await waitFor(() => expect(voucherInput).toHaveFocus());
+    expect(trigger).not.toHaveFocus();
+    // The typed value is kept so the officer can correct it; nothing was posted or reset.
+    expect((voucherInput as HTMLInputElement).value).toBe("JV-TEST-001");
+    expect(screen.queryByText(/Journal entry accepted/)).not.toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

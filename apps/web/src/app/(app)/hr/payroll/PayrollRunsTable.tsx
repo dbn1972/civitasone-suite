@@ -6,10 +6,31 @@ import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatRupees } from "@/lib/formatters";
+import { formatRunMoney } from "@/lib/payroll/runMoney";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 
-export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
+type PayrollRunsTableProps = { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean };
+
+/**
+ * GAP-PAYROLL-HOME-06: useSeededResource keeps the rows in useState seeded
+ * from `runs` ONCE (its sync effect only re-runs on cacheKey/serverSource, not
+ * when the `runs` prop is replaced), so after CreatePayrollRunForm's
+ * router.refresh() -- the pay-group "created N runs" branch and the no-id
+ * fallback, both of which stay on this page -- the server re-rendered with the
+ * new run but this table kept showing the old rows. Keying the body on the
+ * data itself remounts it (re-seeding from the fresh props, and re-writing the
+ * offline copy) whenever the server hands over a different run list, without
+ * touching the shared hook that many other screens share. Same data in,
+ * same key: ordinary parent re-renders do not remount.
+ */
+export function PayrollRunsTable(props: PayrollRunsTableProps) {
+  const seedKey = props.runs
+    .map((r) => [r.id, r.payPeriod, r.status, r.employeeCount, r.grossAmount, r.netAmount].join(":"))
+    .join("|");
+  return <PayrollRunsTableBody key={seedKey} {...props} />;
+}
+
+function PayrollRunsTableBody({ runs, source = "api", canAdminister = false }: PayrollRunsTableProps) {
   const t = useTranslations("payrollRunsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
     "hr.payroll.runs",
@@ -18,13 +39,16 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
     (d) => d.length === 0,
   );
 
-  // grossAmount/netAmount come from the payroll-runs API already in RUPEES (not paise),
-  // so they must NOT use cellType:"amount" (which runs formatMoney and divides by 100).
+  // GAP-PAYROLL-RUNS-01: gross/net render through the shared run-money adapter
+  // (lib/payroll/runMoney.ts), which prefers the API's exact integer-paise
+  // grossMinor/netMinor strings and only falls back to the legacy rupee floats
+  // (grossAmount/netAmount) for an older payroll-service. They use `render`, not
+  // cellType:"amount", because the sort key stays the numeric rupee field.
   const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
     { key: "payPeriod", label: t("colPeriod") },
     { key: "employeeCount", label: t("colEmployees"), align: "right" },
-    { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossAmount) },
-    { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netAmount) },
+    { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRunMoney(r, "gross") },
+    { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRunMoney(r, "net") },
     // Hindi-locale finding: cellType:"status" rendered the raw backend enum
     // (draft/processing/completed/paid/disbursed/failed) verbatim -- no
     // i18n. `render` (checked before cellType by DataTable's cellValue())

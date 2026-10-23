@@ -3,7 +3,9 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { formatPayPeriodLabel } from "@/lib/payroll/period";
+import { latestPaidPeriodTotals, summariseRunStatuses } from "@/lib/payroll/runSummary";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
@@ -61,20 +63,29 @@ export default async function PayrollPage() {
   // The old "Employees Paid"/"Total Gross" tiles summed employeeCount/
   // grossAmount over EVERY paid-or-completed run ever: the same employees
   // counted again each month, and completed-but-unpaid runs folded into a
-  // tile literally labelled "Paid". Use only the single most recent
-  // ACTUALLY-paid run instead.
-  const paidRuns = errored ? [] : runs.filter((r) => r.status === "paid");
-  const latestPaidRun = paidRuns.length > 0
-    ? paidRuns.reduce((a, b) => (b.payPeriod > a.payPeriod ? b : a))
-    : null;
-
-  const totalRuns = errored ? null : runs.length;
-  const totalEmployeesPaid = errored ? null : (latestPaidRun?.employeeCount ?? 0);
-  const totalGross = errored ? null : (latestPaidRun?.grossAmount ?? 0);
-  // "Pending" now means every run not yet actually paid (draft, processing,
-  // completed-awaiting-disbursement, or failed) -- it and the paid-run
-  // count above always sum to totalRuns.
-  const pending = errored ? null : runs.length - paidRuns.length;
+  // tile literally labelled "Paid". Use only the paid runs of the LATEST paid
+  // period instead, and say which period it is. One period can hold several
+  // paid regular runs (pay-group runs make one per pay group), so those are
+  // added up within that period -- never across periods.
+  //
+  // GET /v1/payroll/runs also lists supplementary, arrears and pensioner runs
+  // (runType), which coexist with the regular run of the same month. Employees
+  // Paid counts the REGULAR runs only (a paid arrears run re-pays people the
+  // regular run already counted); Total Gross covers ALL the period's paid runs,
+  // and both tile labels say so.
+  //
+  // The status tiles come from summariseRunStatuses: Paid + In progress +
+  // Awaiting disbursement + Failed always sum to Total runs.
+  const counts = errored ? null : summariseRunStatuses(runs);
+  const latestPaid = errored ? null : latestPaidPeriodTotals(runs);
+  // The period as a readable month (September 2026) through lib/formatters, not the raw 2026-09.
+  const latestPeriod = latestPaid ? formatPayPeriodLabel(latestPaid.payPeriod) : null;
+  // Money is rendered from the API's integer-paise strings (GAP-PAYROLL-HOME-01),
+  // summed in bigint; a paid run whose payload lacks it makes the total "—"
+  // (unknown), never a made-up zero or a partial sum.
+  const totalGrossDisplay = errored ? "—" : latestPaid ? formatMoney(latestPaid.grossMinor) : formatMoney(0n);
+  // Before any run is paid this is a real zero (nothing has been paid); on a failed fetch it is unknown.
+  const employeesPaidDisplay = errored ? "—" : (latestPaid?.employeeCount ?? 0).toLocaleString("en-IN");
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
@@ -107,10 +118,23 @@ export default async function PayrollPage() {
         )
       )}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={totalRuns ?? "—"} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployeesPaid")} value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="var(--warnbg)" label={t("statTotalGross")} value={totalGross === null ? "—" : formatRupees(totalGross)} />
-        <StatCard icon="📄" iconBg="var(--panel)" label={t("statPending")} value={pending ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={counts?.total ?? "—"} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statPaid")} value={counts?.paid ?? "—"} />
+        <StatCard icon="📄" iconBg="var(--panel)" label={t("statInProgress")} value={counts?.inProgress ?? "—"} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statAwaitingDisbursement")} value={counts?.awaitingDisbursement ?? "—"} />
+        <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statFailed")} value={counts?.failed ?? "—"} />
+        <StatCard
+          icon="👥"
+          iconBg="var(--infobg)"
+          label={latestPeriod ? t("statEmployeesPaidPeriod", { period: latestPeriod }) : t("statEmployeesPaid")}
+          value={employeesPaidDisplay}
+        />
+        <StatCard
+          icon="🏛"
+          iconBg="var(--warnbg)"
+          label={latestPeriod ? t("statTotalGrossPeriod", { period: latestPeriod }) : t("statTotalGross")}
+          value={totalGrossDisplay}
+        />
       </StatGrid>
       <Card title={t("runsCardTitle")}>
         {errored ? (

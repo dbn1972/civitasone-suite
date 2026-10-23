@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { getFinanceEPayments } from "@/app/_data/loaders";
 import Link from "next/link";
 import { EPaymentsTable } from "./EPaymentsTable";
@@ -30,9 +30,8 @@ export default async function EPaymentsPage() {
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
           disagree with the table's own cache state (UX-002's pattern). */}
-      <Card title="Payment Orders">
-        <EPaymentsTable orders={orders} source={source === "error" ? "error" : "api"} />
-      </Card>
+      {/* The shared Payments register table brings its own card ("Payment Orders"). */}
+      <EPaymentsTable orders={orders} source={source === "error" ? "error" : "api"} />
     </div>
   );
 }

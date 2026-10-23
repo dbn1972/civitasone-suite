@@ -13,8 +13,10 @@ import { getTranslations } from "next-intl/server";
 /**
  * One payroll.payroll_register row (payroll-service world-class-routes.ts
  * GET /v1/payroll/register). Every `*_minor` field is PAISE (BIGINT, sent as
- * an integer string) -- unlike /hr/payroll, /runs, /period and /[id], whose
- * run-level amounts are rupees (GAP-PAYROLL-REGISTER-01).
+ * an integer string) (GAP-PAYROLL-REGISTER-01). The run-level pages
+ * (/hr/payroll, /runs, /period and /[id]) now render exact paise too, through
+ * lib/payroll/runMoney.ts (GAP-PAYROLL-RUNS-01), which falls back to the legacy
+ * rupee float only when an older API omits the `*Minor` strings.
  */
 type Row = {
   id: string;

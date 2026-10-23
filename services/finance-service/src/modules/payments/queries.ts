@@ -149,6 +149,20 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
   });
 }
 
+/**
+ * GAP-FINANCE-PAYMENTS-01: the maker (creator) and, once passed, the passer of a
+ * bill, as ids only (the web compares them with the signed-in user). They let the
+ * payment UI hide "Release payment" from an officer the server would refuse
+ * anyway (assertDistinctMakerChecker / assertPayerNotPasser in the initiate
+ * consumer stay the authority). The passer is `updatedBy` while status=passed.
+ */
+function billActors(row: { status: string; createdBy: string | null; updatedBy: string | null }): { createdBy?: string; passedBy?: string } {
+  return {
+    ...(row.createdBy ? { createdBy: row.createdBy } : {}),
+    ...(mapBillStatus(row.status) === "passed" && row.updatedBy ? { passedBy: row.updatedBy } : {}),
+  };
+}
+
 function mapBillStatus(status: string): "pending" | "passed" | "paid" | "rejected" | "on_hold" | "under_review" {
   if (status === "approved" || status === "passed") return "passed";
   if (status === "paid") return "paid";
@@ -182,7 +196,10 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
       dueDate: undefined,
       status: mapBillStatus(row.status),
       poRef: row.poRef ?? undefined,
+      // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number snapshotted from the GRN (absent on older / hand-lodged bills).
+      poNumber: row.poNumber ?? undefined,
       threeWayMatch: "na" as const,
+      ...billActors(row),
     };
   });
 }
@@ -241,6 +258,8 @@ export async function listUCs(tenantId: string, limit: number) {
     id: row.id,
     ucNo: row.ucNo,
     grantRef: row.grantRef ?? undefined,
+    // The Scheme Tracking code the certificate was raised against (absent on older certificates).
+    schemeCode: row.schemeCode ?? undefined,
     grantee: row.grantee,
     // H3: string to avoid 2^53 precision loss on large government UC amounts.
     amount: row.amountMinor.toString(),
@@ -276,8 +295,16 @@ export async function getBillDetail(id: string, tenantId: string) {
     submittedDate: new Date(row.createdAt as unknown as string).toISOString().slice(0, 10),
     status: mapBillStatus(row.status),
     poRef: row.poRef ?? undefined,
+    poNumber: row.poNumber ?? undefined,
     grnRef: row.grnRef ?? undefined,
     threeWayMatch,
+    // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: the actors the maker-checker rules compare against, so the web can stop
+    // offering "Pass bill" to the officer who lodged the bill and "Release payment" to the lodger or the passer. Ids
+    // only (the same identity the services stamp as created_by / updated_by); the server re-checks every action.
+    // The passer is the last approver recorded in updated_by while the bill is passed (see assertPayerNotPasser).
+    createdBy: row.createdBy,
+    passedBy: mapBillStatus(row.status) === "passed" ? row.updatedBy : undefined,
     lineItems: [],
+    ...billActors(row),
   };
 }

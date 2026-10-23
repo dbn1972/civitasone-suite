@@ -25,12 +25,17 @@ test.describe('Payroll Runs', () => {
       await expect(page.locator('#page-heading')).toBeVisible();
     });
 
-    test('shows KPI stat cards (total runs, employees paid, gross, pending)', async ({ page }) => {
+    test('shows KPI stat cards (total runs, status tiles, employees paid, gross)', async ({ page }) => {
       await page.goto('/hr/payroll');
       await expect(page.getByText(/total runs/i)).toBeVisible();
       await expect(page.getByText(/employees paid/i)).toBeVisible();
       await expect(page.getByText(/total gross/i)).toBeVisible();
-      await expect(page.getByText(/pending/i)).toBeVisible();
+      // Status tiles replaced the old Pending tile (55b0c55df, caee07c59, adb939eb8):
+      // Paid + In progress + Awaiting disbursement + Failed always sum to Total runs.
+      await expect(page.getByText("Paid", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("In Progress", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Awaiting Disbursement", { exact: true }).first()).toBeVisible();
+      await expect(page.getByText("Failed", { exact: true }).first()).toBeVisible();
     });
 
     test('displays payroll runs table', async ({ page }) => {

@@ -8,7 +8,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { UCSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
-import { ucMatchesScheme } from "./ucScheme";
+import { ucMatchesScheme, type UcSchemeRef } from "./ucScheme";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 // UX-017 (tranche 10): same tab-identity fix as AdvancesTable.tsx -- TABS
@@ -59,7 +59,8 @@ export function UCsTable({
   viewerId?: string | null;
   canVerify?: boolean;
   canResubmit?: boolean;
-  scheme?: string;
+  /** Narrow the register to one scheme: its Scheme Tracking code (or a resolved code + name). */
+  scheme?: string | UcSchemeRef;
 }) {
   const t = useTranslations("expenditureUtilizationCertificatesTable");
   const router = useRouter();

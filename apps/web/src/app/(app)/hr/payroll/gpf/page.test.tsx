@@ -34,7 +34,7 @@ describe("GpfStatementsPage", () => {
   it("renders the GPF ledger and real stat counts on success", async () => {
     mockGpf({ data: [{ id: "g1", employeeId: UUID, period: "2026-08", empContribMinor: 500000 }], source: "api" });
     render(await GpfStatementsPage());
-    const statLabel = screen.getAllByText("Statements").find((el) => el.classList.contains("lab"));
+    const statLabel = screen.getAllByText("Statements (listed below)").find((el) => el.classList.contains("lab"));
     expect(statLabel?.parentElement).toHaveTextContent("1");
   });
 
@@ -89,7 +89,7 @@ describe("GpfStatementsPage", () => {
     const { container } = render(await GpfStatementsPage());
     expect(screen.queryByText(/Accumulated Corpus/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Projected Value/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText("Total Contributions")).toHaveLength(1);
+    expect(screen.getAllByText("Total Contributions (listed below)")).toHaveLength(1);
     expect(screen.getByText("Employee GPF")).toBeInTheDocument();
     expect(container.textContent).not.toContain("(10%)");
   });
@@ -127,5 +127,37 @@ describe("GpfStatementsPage HRMS reconciliation (GAP-PAYROLL-STATUTORY-GPF-02)",
     render(await GpfStatementsPage());
     expect(screen.getByText("HRMS not checked")).toBeInTheDocument();
     expect(screen.queryByText(/differs from or has no matching HRMS account/)).not.toBeInTheDocument();
+  });
+
+  // GAP-PAYROLL-STATUTORY-GPF-05: the tiles count only what the ledger below lists (the list is paged), so each label
+  // says so -- never an unqualified "Total Contributions" that reads as all-time.
+  it("GPF-05: every tile label states its scope", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, period: "2026-08", empContribMinor: 500000 }], source: "api" });
+    render(await GpfStatementsPage());
+    const labels = Array.from(document.querySelectorAll(".lab")).map((e) => e.textContent);
+    for (const base of ["Statements", "Employees", "Total Contributions", "Periods Covered"]) {
+      expect(labels).toContain(`${base} (listed below)`);
+      expect(labels).not.toContain(base);
+    }
+  });
+
+  it("GPF-05: a full page of statements warns that the totals cover only the loaded statements", async () => {
+    const full = Array.from({ length: 50 }, (_, i) => ({ id: `g${i}`, employeeId: `${UUID.slice(0, -2)}${String(i).padStart(2, "0")}`, period: "2026-08", empContribMinor: 100 }));
+    mockGpf({ data: full, source: "api" });
+    render(await GpfStatementsPage());
+    expect(screen.getByText(/Only the first 50 statements are loaded/)).toBeInTheDocument();
+  });
+
+  it("GPF-05: a partial page has no truncation warning", async () => {
+    const few = Array.from({ length: 49 }, (_, i) => ({ id: `g${i}`, employeeId: `${UUID.slice(0, -2)}${String(i).padStart(2, "0")}`, period: "2026-08", empContribMinor: 100 }));
+    mockGpf({ data: few, source: "api" });
+    render(await GpfStatementsPage());
+    expect(screen.queryByText(/statements are loaded/)).not.toBeInTheDocument();
+  });
+
+  it("GPF-05: no truncation warning on a fetch failure", async () => {
+    mockGpf({ data: [], source: "error" });
+    render(await GpfStatementsPage());
+    expect(screen.queryByText(/statements are loaded/)).not.toBeInTheDocument();
   });
 });

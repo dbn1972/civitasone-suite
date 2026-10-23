@@ -103,6 +103,46 @@ describe("OrdersTable — status chips (GAP-PROCUREMENT-ORDERS-04)", () => {
   });
 });
 
+describe("OrdersTable — opens narrowed from a dashboard drill-through (GAP-PROCUREMENT-DASHBOARD-02)", () => {
+  beforeEach(() => { mockData = []; mockProvenance = "live"; });
+
+  const mixed = () => [
+    order({ id: "a", poNo: "PO/APPROVED", status: "approved" }),
+    order({ id: "b", poNo: "PO/DRAFT", status: "draft" }),
+    order({ id: "c", poNo: "PO/DISPATCHED", status: "dispatched" }),
+  ];
+
+  it("initialStatus=approved lists only approved POs, with that chip selected, and 'All' restores the rest", () => {
+    mockData = mixed();
+    render(<OrdersTable orders={mockData as never} source="api" initialStatus="approved" />);
+
+    expect(screen.getByText("PO/APPROVED")).toBeInTheDocument();
+    expect(screen.queryByText("PO/DRAFT")).not.toBeInTheDocument();
+    expect(screen.queryByText("PO/DISPATCHED")).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Approved \(1\)/ })).toHaveAttribute("aria-selected", "true");
+
+    fireEvent.click(screen.getByRole("tab", { name: /All \(3\)/ }));
+    expect(screen.getByText("PO/DRAFT")).toBeInTheDocument();
+    expect(screen.getByText("PO/DISPATCHED")).toBeInTheDocument();
+  });
+
+  it("an unknown initialStatus is ignored (shows everything, never an empty list)", () => {
+    mockData = mixed();
+    render(<OrdersTable orders={mockData as never} source="api" initialStatus="no_such_status" />);
+    expect(screen.getByText("PO/APPROVED")).toBeInTheDocument();
+    expect(screen.getByText("PO/DRAFT")).toBeInTheDocument();
+  });
+
+  it("a drill-through into a status that nothing is in still shows its chip and an honest empty message", () => {
+    mockData = [order({ id: "d", poNo: "PO/DRAFT", status: "draft" })];
+    render(<OrdersTable orders={mockData as never} source="api" initialStatus="approved" />);
+    expect(screen.getByText("No matching purchase orders")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Approved \(0\)/ })).toHaveAttribute("aria-selected", "true");
+    // The overall stat still counts every PO (the filter only narrows the table).
+    expect(screen.getByText("Total POs").closest(".stat")).toHaveTextContent("1");
+  });
+});
+
 describe("OrdersTable — GRN labels + overdue (GAP-PROCUREMENT-ORDERS-05)", () => {
   beforeEach(() => { mockData = []; mockProvenance = "live"; });
 

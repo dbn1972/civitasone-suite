@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { PageHeader, EmptyState, LoadErrorState, StatusPill } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { poHrefFromRef } from "@/lib/procurement-po-ref";
+import { getTranslations } from "next-intl/server";
 import { getContractById, getVendorOptions } from "../../../_data/loaders";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
 import { getContractMilestones, getContractBonds, getContractObligations } from "../../../_data/loaders";
@@ -68,8 +70,10 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   const {
     title, contractNo, parties, contractType, startDate, endDate,
-    status: contractStatus, statusLower, description, valueDisplay, dept, amountMinor,
+    status: contractStatus, statusLower, description, valueDisplay, dept, amountMinor, poRef,
   } = deriveContractDisplayFields(contract);
+  const t = await getTranslations("procurement.contractsPage");
+  const poHref = poRef !== "—" ? poHrefFromRef(poRef) : null;
 
   // GAP-CONTRACTS-DETAIL-04: resolve the vendor name from the vendor master
   // (contract-service stores only a raw vendorId). Fall back to the short id
@@ -106,6 +110,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
                 <div className="fld"><div className="l">Type</div><div className="v">{contractType}</div></div>
               )}
               <div className="fld"><div className="l">Value</div><div className="v">{valueDisplay}</div></div>
+              {/* GAP-PROCUREMENT-CONTRACTS-05: the PO this contract is linked to. A
+                  PO uuid opens the order; free text is shown as typed; hidden when none. */}
+              {poRef !== "—" && (
+                <div className="fld">
+                  <div className="l">{t("poColumn")}</div>
+                  <div className="v">{poHref ? <Link href={poHref} className="lnk">{t("viewPo")}</Link> : poRef}</div>
+                </div>
+              )}
               <div className="fld">
                 <div className="l">Status</div>
                 {/* GAP-CONTRACTS-DETAIL-04: StatusPill maps approved->good,

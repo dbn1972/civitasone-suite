@@ -73,6 +73,38 @@ describe("bills routes with passed / on_hold rows", () => {
     expect(body[0].vendor).not.toMatch(/^Vendor \(/);
   });
 
+  // GAP-FINANCE-PAYMENTS-01: ids (not names) of the bill's creator and, while passed, its passer, so the
+  // payment UI can stop offering "Release payment" to an officer the server would refuse.
+  it("GET /v1/finance/bills exposes createdBy, and passedBy only while the bill is passed", async () => {
+    const MAKER = "11111111-aaaa-4000-8000-0000000000b1";
+    const PASSER = "22222222-aaaa-4000-8000-0000000000b1";
+    listBillsByTenant.mockResolvedValue([
+      row("00000000-0000-4000-8000-000000000001", "passed", { createdBy: MAKER, updatedBy: PASSER }),
+      row("00000000-0000-4000-8000-000000000002", "pending", { createdBy: MAKER, updatedBy: MAKER }),
+      row("00000000-0000-4000-8000-000000000003", "paid", { createdBy: MAKER, updatedBy: PASSER }),
+    ]);
+    // limit=7 keeps this list out of the per-tenant cache entry the first test above filled (list:50:0).
+    const res = await (await app()).inject({ method: "GET", url: "/v1/finance/bills?limit=7", headers: hdr(["finance_officer"]) });
+    expect(res.statusCode).toBe(200);
+    const [passed, pending, paid] = JSON.parse(res.body);
+    expect(passed).toMatchObject({ status: "passed", createdBy: MAKER, passedBy: PASSER });
+    expect(pending.createdBy).toBe(MAKER);
+    expect(pending).not.toHaveProperty("passedBy");
+    expect(paid.createdBy).toBe(MAKER);
+    expect(paid).not.toHaveProperty("passedBy");
+  });
+
+  it("GET /v1/finance/bills/:id carries the same actor ids on the detail", async () => {
+    const MAKER = "11111111-aaaa-4000-8000-0000000000b1";
+    const PASSER = "22222222-aaaa-4000-8000-0000000000b1";
+    // A distinct bill id: the detail is cached per tenant+id, and the next test reads ...0001.
+    const id = "00000000-0000-4000-8000-0000000000a1";
+    findBillByIdAndTenant.mockResolvedValue(row(id, "passed", { createdBy: MAKER, updatedBy: PASSER }));
+    const res = await (await app()).inject({ method: "GET", url: `/v1/finance/bills/${id}`, headers: hdr(["finance_officer"]) });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({ status: "passed", createdBy: MAKER, passedBy: PASSER });
+  });
+
   it("GET /v1/finance/bills/:id serves a passed bill with threeWayMatch 'pending' (PO without GRN)", async () => {
     findBillByIdAndTenant.mockResolvedValue(row("00000000-0000-4000-8000-000000000001", "passed", { poRef: "PO-1" }));
     const res = await (await app()).inject({ method: "GET", url: "/v1/finance/bills/00000000-0000-4000-8000-000000000001", headers: hdr(["finance_officer"]) });

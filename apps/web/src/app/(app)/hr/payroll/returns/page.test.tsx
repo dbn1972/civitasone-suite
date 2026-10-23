@@ -253,4 +253,36 @@ describe("ReturnsPage", () => {
     fireEvent.click(btn);
     expect(screen.getByText("Download an unreconciled return?")).toBeInTheDocument();
   });
+  // GAP-PAYROLL-RETURNS-06: the 24Q / force-file amounts are paise NUMBERS and
+  // the 26Q used to be paise bigint STRINGS. TDS of Rs 35,000 is 3,500,000
+  // paise on both, and must read the same on both whichever type arrives.
+  it.each([
+    ["numbers (current payroll-service)", 3500000],
+    ["integer strings (a payroll-service from before the unification)", "3500000"],
+  ])("shows Rs 35,000.00 for 3500000 paise in BOTH the 24Q and the 26Q card, 26Q amounts as %s", async (_label, wire) => {
+    statusAwareGetMock.mockResolvedValue(ok24("Q1", {
+      deductees: [{ employeeId: "e1", pan: "ABCDE1234F", panFlag: "", name: "Asha Verma", tdsDeductedMinor: 3500000, tdsDepositedMinor: 3500000, periods: [] }],
+    }));
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        ...populated26Q,
+        populated: true,
+        deducteeCount: 1,
+        deductees: [{ deducteeRef: "v1", name: "Vendor One", pan: "AAAAA0000A", panFlag: "", section: "194C", amountPaidMinor: wire, tdsDeductedMinor: wire, periods: ["2025-04"] }],
+        totalTdsDeductedMinor: wire,
+      },
+    });
+    await renderPage({ fy: "2025-26", quarter: "Q1" });
+
+    const card24 = screen.getByText("Form-24Q — Salary TDS — FY 2025-26 Q1").closest("section, .card") as HTMLElement;
+    const card26 = screen.getByText("Form-26Q — Non-Salary TDS — FY 2025-26 Q1").closest("section, .card") as HTMLElement;
+    expect(within(card24).getAllByText("₹35,000.00").length).toBeGreaterThan(0);
+    expect(within(card26).getAllByText("₹35,000.00").length).toBeGreaterThan(0);
+    // 100x guards: neither card may show the paise figure as rupees or divide it twice.
+    for (const card of [card24, card26]) {
+      expect(within(card).queryByText("₹35,00,000.00")).not.toBeInTheDocument();
+      expect(within(card).queryByText("₹350.00")).not.toBeInTheDocument();
+    }
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -57,6 +57,41 @@ describe("ContractsTable", () => {
       />,
     );
     expect(screen.getByText("Expiring soon")).toBeInTheDocument();
+  });
+
+  it("GAP-PROCUREMENT-CONTRACTS-05: a contract linked to a PO shows a link to that order", () => {
+    const PO = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+    render(
+      <ContractsTable
+        rows={[
+          { ...rows[0]!, poRef: `procurement_po:${PO}` },
+          { ...rows[1]!, poRef: PO },
+        ]}
+        vendorNames={vendorNames}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Linked PO" })).toBeInTheDocument();
+    const links = screen.getAllByRole("link", { name: "View PO" });
+    expect(links).toHaveLength(2);
+    for (const l of links) expect(l).toHaveAttribute("href", `/procurement/orders/${PO}`);
+  });
+
+  it("GAP-PROCUREMENT-CONTRACTS-05: free-text poRef is shown as typed (never linked) and no poRef is a dash", () => {
+    render(
+      <ContractsTable
+        rows={[
+          { ...rows[0]!, poRef: "PO-2026-0042" },
+          { ...rows[1]!, poRef: undefined },
+        ]}
+        vendorNames={vendorNames}
+      />,
+    );
+    expect(screen.getByText("PO-2026-0042")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View PO" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "PO-2026-0042" })).not.toBeInTheDocument();
+    // Row 2 has no PO: its PO cell is a dash.
+    const row2 = screen.getByText("IT maintenance").closest("tr") as HTMLElement;
+    expect(within(row2).getAllByText("—").length).toBeGreaterThan(0);
   });
 
   it("GAP-CONTRACTS-LIST-03: typing in the filter narrows the rows", () => {
