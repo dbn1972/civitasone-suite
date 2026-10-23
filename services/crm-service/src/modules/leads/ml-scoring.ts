@@ -85,7 +85,8 @@ export function getCompanySizeBucket(employeeCount: number | null | undefined): 
  */
 export function getDealValueBucket(valuePaise: bigint | number | null | undefined): string {
   if (valuePaise == null) return "unknown";
-  const val = typeof valuePaise === "bigint" ? Number(valuePaise) : valuePaise;
+  // Compared natively: JS orders bigint against number exactly, so no coercion is needed.
+  const val = valuePaise;
   if (val <= 0) return "unknown";
   if (val <= 100_000_00) return "low"; // ≤ ₹1 lakh
   if (val <= 500_000_00) return "medium"; // ≤ ₹5 lakh

@@ -42,8 +42,8 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // GAP2-BILLING-CHECKOUT-01: keep the charged amount in BigInt paise. Previously
-    // this was `Number(plan.priceMinor) * (annual ? 12 : 1)` — IEEE-754 float math
-    // on money, which loses integer precision above Number.MAX_SAFE_INTEGER paise
+    // this multiplied a float-coerced price by (annual ? 12 : 1) — IEEE-754 float
+    // math on money, which loses integer precision above Number.MAX_SAFE_INTEGER paise
     // (CLAUDE.md §3.11 / §4). plan.priceMinor is a bigint; multiply with bigint
     // literals and serialise to a string only at the response/audit boundary.
     const amountPaise = BigInt(plan.priceMinor) * (body.billingCycle === "annual" ? 12n : 1n);

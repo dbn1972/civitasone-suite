@@ -1,3 +1,4 @@
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import { eq, and, or, ilike, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { contacts, accounts, contactImportBatches, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert, type ContactImportBatchInsert, type ContactImportBatchView } from "./schema.js";
@@ -111,7 +112,7 @@ export async function findDetail(id: string, tenantId: string): Promise<ContactD
       id: d.id,
       dealName: d.name,
       stage: d.stage,
-      amount: Number(d.valueMinor),
+      amount: minorToSafeNumber(d.valueMinor), // ContactDetailView.amount is a JSON number: exact or RangeError, never rounded
     })),
     activityTimeline: activityRows.map((a) => ({
       id: a.id,

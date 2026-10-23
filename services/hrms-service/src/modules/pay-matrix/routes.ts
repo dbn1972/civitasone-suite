@@ -1,3 +1,4 @@
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
@@ -255,7 +256,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
         continue;
       }
 
-      const currentBasicN = Number(emp.basicMinor);
+      const currentBasicN = minorToSafeNumber(emp.basicMinor);
       // Find current cell: exact match preferred, then nearest-upper-bound for imported data.
       let currentIdx = cells.indexOf(currentBasicN);
       if (currentIdx < 0) {

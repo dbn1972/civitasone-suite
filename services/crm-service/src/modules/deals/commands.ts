@@ -1,3 +1,4 @@
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { commandId } from "../../shared/idempotency.js";
@@ -10,7 +11,7 @@ const RESOURCE = "deal";
 export type Accepted = { id: string; status: string; correlationId: string };
 
 function formatValue(minor: bigint, currency: string): string {
-  const major = Number(minor) / 100;
+  const major = minorToMajorNumber(minor); // display text only
   if (major >= 1_00_00_000) return `Rs ${(major / 1_00_00_000).toFixed(1)} Cr`;
   if (major >= 1_00_000) return `Rs ${(major / 1_00_000).toFixed(0)} L`;
   return `${currency} ${major.toLocaleString("en-IN")}`;

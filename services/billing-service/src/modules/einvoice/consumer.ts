@@ -8,6 +8,7 @@ import * as repo from "./repo.js";
 import * as invoiceRepo from "../invoices/repo.js";
 import { generateIrn, cancelIrn, type EInvoicePayload } from "./nic-client.js";
 import { sql } from "drizzle-orm";
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import { einvoiceRequests } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -54,8 +55,8 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
       const items = await invoiceRepo.itemsByInvoice(invoiceId);
 
       // Build NIC payload — convert from paise (internal) to rupees (NIC API)
-      const totalRupees = Number(invoice.totalMinor) / 100;
-      const taxRupees = Number(invoice.taxMinor) / 100;
+      const totalRupees = minorToMajorNumber(invoice.totalMinor);
+      const taxRupees = minorToMajorNumber(invoice.taxMinor);
 
       const payload: EInvoicePayload = {
         version: "1.1",
@@ -83,7 +84,7 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
           pos: "07",
         },
         itemList: items.map((item, idx) => {
-          const amtRupees = Number(item.amountMinor) / 100;
+          const amtRupees = minorToMajorNumber(item.amountMinor);
           return {
             slNo: String(idx + 1),
             prdDesc: item.description,

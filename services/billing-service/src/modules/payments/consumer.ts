@@ -1,5 +1,6 @@
 import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import type { Queue } from "@civitasone/queue";
+import { parseMinor } from "@civitasone/schemas/money";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
@@ -135,7 +136,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
       if (event === "payment.captured" && entity) {
         const orderId = entity["order_id"] as string ?? "";
         const paymentId = entity["id"] as string ?? "";
-        const amountPaise = Number(entity["amount"] ?? 0);
+        const amountPaise = parseMinor((entity["amount"] ?? 0) as string | number | bigint);
         const tenantId = ((entity["notes"] as Record<string, unknown>)?.["tenantId"] as string) ?? msg.tenantId;
 
         const gwId = randomUUID();
@@ -154,7 +155,7 @@ export function registerPaymentsConsumers(rawQueue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.checkoutCompleted, eventType: EVENTS.checkoutCompleted,
           tenantId, actorId: SYSTEM_ACTOR_ID, correlationId: msg.correlationId,
-          payload: { razorpayOrderId: orderId, razorpayPaymentId: paymentId, amountPaise },
+          payload: { razorpayOrderId: orderId, razorpayPaymentId: paymentId, amountPaise: amountPaise.toString() },
         });
       } else if (event === "payment.failed" && entity) {
         await enqueue(tx, {
