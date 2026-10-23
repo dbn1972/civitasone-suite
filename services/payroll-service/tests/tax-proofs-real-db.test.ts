@@ -18,6 +18,7 @@ const H = vi.hoisted(() => ({
   objects: new Map<string, { contentLength: number; contentType: string }>(),
   deleted: [] as string[],
   failDelete: new Set<string>(),
+  headFails: false,
   puts: [] as Array<Record<string, unknown>>,
 }));
 
@@ -31,7 +32,11 @@ vi.mock("@civitasone/storage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@civitasone/storage")>()),
   presignedPutUrl: vi.fn(async (o: Record<string, unknown>) => { H.puts.push(o); return `https://s3.test/put?k=${String(o.key)}`; }),
   presignedGetUrl: vi.fn(async (o: { key: string; expiresIn?: number }) => `https://s3.test/get?k=${o.key}&e=${o.expiresIn}`),
-  headObject: vi.fn(async (key: string) => H.objects.get(key) ?? null),
+  headObject: vi.fn(async (key: string) => {
+    // CLOS2-S6-06: the real headObject rejects on anything but not-found.
+    if (H.headFails) throw Object.assign(new Error("AccessDenied"), { $metadata: { httpStatusCode: 403 } });
+    return H.objects.get(key) ?? null;
+  }),
   deleteObject: vi.fn(async (key: string) => { if (H.failDelete.has(key)) throw new Error("s3 down"); H.deleted.push(key); }),
 }));
 
@@ -207,6 +212,20 @@ describe("upload: presign + attach", () => {
     const missing = await app.inject({ method: "POST", url: "/v1/payroll/tax-proofs", headers: asA(), payload: { fy: FY, line: "rent", storageKey: key, filename: "a.pdf" } });
     expect(missing.statusCode).toBe(422);
     expect(missing.json().code).toBe("PROOF_FILE_MISSING");
+  });
+
+  it("a storage failure while checking the upload is 503 STORAGE_UNAVAILABLE, not PROOF_FILE_MISSING (CLOS2-S6-06)", async () => {
+    const ok = await app.inject({ method: "POST", url: "/v1/payroll/tax-proofs/presign", headers: asA(), payload: { fy: FY, line: "rent", filename: "a.pdf", contentType: "application/pdf", sizeBytes: 100 } });
+    const key = (ok.json() as { storageKey: string }).storageKey;
+    H.objects.set(key, { contentLength: 100, contentType: "application/pdf" });
+    H.headFails = true;
+    try {
+      const res = await app.inject({ method: "POST", url: "/v1/payroll/tax-proofs", headers: asA(), payload: { fy: FY, line: "rent", storageKey: key, filename: "a.pdf" } });
+      expect(res.statusCode).toBe(503);
+      expect(res.json().code).toBe("STORAGE_UNAVAILABLE");
+    } finally {
+      H.headFails = false;
+    }
   });
 
   it("rejects a foreign or forged storage key with 422 and writes nothing", async () => {
