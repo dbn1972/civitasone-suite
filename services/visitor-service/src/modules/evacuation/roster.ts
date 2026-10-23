@@ -48,7 +48,7 @@
  *       passes at the location, rather than returning a 500.
  */
 import { Redis } from "ioredis";
-import pino from "pino";
+import { pino } from "pino";
 
 const log = pino({ name: "evacuation-roster" });
 

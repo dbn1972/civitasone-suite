@@ -12,7 +12,7 @@
  * Requirements validated: 7.1, 7.9, 7.10
  */
 import { Redis } from "ioredis";
-import pino from "pino";
+import { pino } from "pino";
 
 const log = pino({ name: "turnstile-command-queue" });
 
