@@ -1,6 +1,6 @@
 "use client";
 
-import { UserFacingError } from "@/lib/userFacingError";
+import { UserFacingError, isNetworkFailure } from "@/lib/userFacingError";
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -327,7 +327,9 @@ export function MasterCreateForm({
       if (onCreated) onCreated(body);
       else void accepted.accept();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      if (err instanceof UserFacingError) setError(err.message);
+      else if (isNetworkFailure(err)) setError(formError.fromException("save", err).message);
+      else setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       submittingRef.current = false;
       setBusy(false);

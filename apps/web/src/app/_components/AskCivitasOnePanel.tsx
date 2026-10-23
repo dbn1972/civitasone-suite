@@ -24,19 +24,28 @@ interface AskCivitasOnePanelProps {
 }
 
 /** Simple markdown-to-HTML renderer (bold, italic, code, links, line breaks). */
-function renderMarkdown(text: string): string {
+export function renderMarkdown(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+    // Links run before the inline substitutions, and the href is entity-escaped, so a
+    // `*`, backtick or quote inside a link target can never become markup or break out
+    // of the attribute.
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, linkText, rawHref) => {
+      const href = /^https?:\/\//i.test(rawHref)
+        ? rawHref
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;")
+            .replace(/\*/g, "&#42;")
+            .replace(/`/g, "&#96;")
+        : "#";
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${linkText}</a>`;
+    })
     .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, rawHref) => {
-      const href = /^https?:\/\//i.test(rawHref) ? rawHref : '#';
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-    })
     .replace(/\n/g, "<br>");
 }
 

@@ -52,6 +52,26 @@ describe("MasterCreateForm — UX-016 clerk-safe errors", () => {
   });
 });
 
+describe("MasterCreateForm — CLOS2-S3-07 network failure", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("shows catalogued copy, never the raw 'Failed to fetch', when offline", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+
+    render(<MasterCreateForm masterType="work-types" />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Work Types" }));
+    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "Road" } });
+    fireEvent.change(screen.getByLabelText(/^Code/i), { target: { value: "RD" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn.t connect/i));
+    expect(alert.textContent).not.toContain("Failed to fetch");
+  });
+});
+
 describe("MasterCreateForm — GAP-WORKS-HOME-05 write gating", () => {
   it("renders the Add control by default (canWrite defaults true — existing callers unchanged)", () => {
     render(<MasterCreateForm masterType="work-types" />);
