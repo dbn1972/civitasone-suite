@@ -29,12 +29,15 @@ export function FileUpload({
   label = "Upload file",
   maxSizeMb = 10,
   onUploaded,
+  onCleared,
 }: {
   category?: "resume" | "attachment" | "document" | "photo";
   accept?: string;
   label?: string;
   maxSizeMb?: number;
   onUploaded?: (key: string, meta: UploadedFileMeta) => void;
+  /** Fired whenever a previously reported upload is no longer valid: the file was removed, replaced (new upload starting) or the new upload failed. */
+  onCleared?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const fileInputId = useId();
@@ -48,7 +51,9 @@ export function FileUpload({
 
   async function handleChange() {
     const file = fileRef.current?.files?.[0];
-    if (!file) return;
+    // Any change invalidates the key reported earlier; callers must not keep submitting a stale one.
+    onCleared?.();
+    if (!file) { setStatus("idle"); setMessage(""); return; }
 
     if (file.size > maxSizeMb * 1024 * 1024) {
       setStatus("error");

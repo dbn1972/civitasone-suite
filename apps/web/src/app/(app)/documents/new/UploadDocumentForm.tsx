@@ -110,6 +110,7 @@ export function UploadDocumentForm({
         category="document"
         label="File *"
         onUploaded={handleUploaded}
+        onCleared={() => { setUploaded(null); setStorageKey(null); }}
       />
       {fileError && (
         <span role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{fileError}</span>

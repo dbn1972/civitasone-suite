@@ -73,7 +73,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const body = forwardDakBody.parse(req.body);
     await loadHandleable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.forwardDak(ctx, id, body.assignedTo));
+    return sendAccepted(reply, acceptedResponseSchema, commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
   });
 
   app.post("/v1/documents/daks/:id/acknowledge", async (req, reply) => {
@@ -81,7 +81,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     await loadHandleable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.acknowledgeDak(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, commands.acknowledgeDak(ctx, id, isAdmin(ctx)));
   });
 
   // Notings
@@ -117,7 +117,20 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const body = approvalDecisionBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, commands.decideApproval(ctx, id, body.decision, body.remarks ?? null));
+    // Approver scoping: only an admin or the current holder of the underlying dak may decide, and never the
+    // submitter (segregation of duties). 404 for unknown/out-of-scope approvals so existence is not disclosed.
+    const approval = await repo.getApprovalById(ctx.tenantId, id);
+    const dak = approval ? await repo.getById(ctx.tenantId, approval.dakId) : null;
+    if (!approval || !dak || !(isAdmin(ctx) || (dak.assignedTo ?? dak.createdBy) === ctx.actorId)) {
+      throw new HttpError(404, "NOT_FOUND", "approval not found");
+    }
+    if (approval.createdBy === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "the submitter of an approval may not decide it");
+    }
+    if (approval.status !== "pending") {
+      throw new HttpError(409, "CONFLICT", "approval already decided");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, commands.decideApproval(ctx, id, body.decision, body.remarks ?? null, isAdmin(ctx)));
   });
 
   // Dashboard stats

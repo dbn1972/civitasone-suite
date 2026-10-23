@@ -186,7 +186,8 @@ describe("COMP-007: workflow -- notings and approval decisions (real DB)", () =>
 
     const decide = await app.inject({
       method: "POST", url: `/v1/documents/approvals/${approvalId}/decide`,
-      headers: authHeaders(["document_user"], tid),
+      // Approver scoping: the submitter cannot self-approve, so a different (admin) user decides.
+      headers: authHeaders(["document_admin"], tid),
       payload: { decision: "approved", remarks: "Verified against land records." },
     });
     expect(decide.statusCode).toBe(202);

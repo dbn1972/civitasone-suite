@@ -6,10 +6,13 @@
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue as appQueue } from "../src/shared/infra.js";
 import { registerWorkflowConsumers } from "../src/modules/workflow/consumer.js";
+import * as commands from "../src/modules/workflow/commands.js";
+import type { RequestContext } from "@civitasone/types";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -22,6 +25,9 @@ registerWorkflowConsumers(appQueue);
 await appQueue.start();
 const app = await buildApp();
 afterAll(async () => { await app.close(); await sqlClient.end(); });
+
+/** Minimal context for publishing a command straight to the queue, bypassing the route-level checks. */
+const ctxFor = (tenantId: string, actorId: string): RequestContext => ({ tenantId, actorId, correlationId: randomUUID() } as unknown as RequestContext);
 
 async function mkDak(tid: string, creator: string, extra: Record<string, unknown> = {}): Promise<string> {
   const res = await app.inject({ method: "POST", url: "/v1/documents/daks", headers: as(["document_user"], tid, creator), payload: { subject: "Confidential file", body: "secret body", ...extra } });
@@ -93,5 +99,86 @@ describe("file create storageKey linkage", () => {
       const res = await app.inject({ method: "POST", url: "/v1/documents/files", headers: h, payload: { name: "a.pdf", storageKey: bad } });
       expect(res.statusCode).toBe(400);
     }
+  });
+});
+
+describe("approval decide scoping (segregation of duties)", () => {
+  async function submit(tid: string, submitter: string, dakId: string): Promise<string> {
+    const res = await app.inject({ method: "POST", url: `/v1/documents/daks/${dakId}/approval`, headers: as(["document_user"], tid, submitter) });
+    expect(res.statusCode).toBe(202);
+    await appQueue.drain();
+    return res.json().id as string;
+  }
+  const decide = (tid: string, sub: string, roles: string[], approvalId: string, decision = "approved") =>
+    app.inject({ method: "POST", url: `/v1/documents/approvals/${approvalId}/decide`, headers: as(roles, tid, sub), payload: { decision } });
+  async function statusOf(tid: string, approvalId: string): Promise<string> {
+    const rows = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select status from document.approvals where tenant_id = ${tid} and id = ${approvalId}`);
+    return rows[0]?.status as string;
+  }
+
+  it("blocks an unrelated document_user, the submitter (route and consumer), and other tenants; allows the holder and admins", async () => {
+    const tid = randomUUID(); const owner = randomUUID(); const approver = randomUUID(); const stranger = randomUUID();
+    const dakId = await mkDak(tid, owner, { assignedTo: approver });
+    const approvalId = await submit(tid, owner, dakId);
+
+    // Unrelated user: not the holder -> 404, nothing changes.
+    expect((await decide(tid, stranger, ["document_user"], approvalId)).statusCode).toBe(404);
+    // Another tenant's admin cannot see it either.
+    expect((await decide(randomUUID(), randomUUID(), ["document_admin"], approvalId)).statusCode).toBe(404);
+    // Submitter may not decide their own approval, even as admin.
+    expect((await decide(tid, owner, ["document_user"], approvalId)).statusCode).toBe(404); // creator is not the holder once assigned
+    expect((await decide(tid, owner, ["document_admin"], approvalId)).statusCode).toBe(403);
+    await appQueue.drain();
+    expect(await statusOf(tid, approvalId)).toBe("pending");
+
+    // Consumer-side guard: a self-approval command published directly (bypassing the route) is dropped.
+    commands.decideApproval(ctxFor(tid, owner), approvalId, "approved", null, true);
+    // ...and so is one from a non-holder who claims no admin.
+    commands.decideApproval(ctxFor(tid, stranger), approvalId, "approved", null, false);
+    await appQueue.drain();
+    expect(await statusOf(tid, approvalId)).toBe("pending");
+
+    // The actual holder decides.
+    expect((await decide(tid, approver, ["document_user"], approvalId)).statusCode).toBe(202);
+    await appQueue.drain();
+    expect(await statusOf(tid, approvalId)).toBe("approved");
+
+    // Already decided: 409 from the route, and a replayed command cannot overwrite it.
+    expect((await decide(tid, randomUUID(), ["document_admin"], approvalId, "rejected")).statusCode).toBe(409);
+    commands.decideApproval(ctxFor(tid, randomUUID()), approvalId, "rejected", null, true);
+    await appQueue.drain();
+    expect(await statusOf(tid, approvalId)).toBe("approved");
+  });
+
+  it("an admin who did not submit may decide", async () => {
+    const tid = randomUUID(); const owner = randomUUID();
+    const dakId = await mkDak(tid, owner);
+    const approvalId = await submit(tid, owner, dakId);
+    expect((await decide(tid, randomUUID(), ["document_admin"], approvalId, "returned")).statusCode).toBe(202);
+    await appQueue.drain();
+    expect(await statusOf(tid, approvalId)).toBe("returned");
+  });
+});
+
+describe("consumer re-checks the current holder", () => {
+  it("drops forward/acknowledge commands from a stale holder", async () => {
+    const tid = randomUUID(); const owner = randomUUID(); const assignee = randomUUID(); const third = randomUUID();
+    const id = await mkDak(tid, owner);
+    expect((await app.inject({ method: "POST", url: `/v1/documents/daks/${id}/forward`, headers: as(["document_user"], tid, owner), payload: { assignedTo: assignee } })).statusCode).toBe(202);
+    await appQueue.drain();
+
+    // The owner passed the route check earlier, but is no longer the holder when the command is consumed.
+    commands.forwardDak(ctxFor(tid, owner), id, third, false);
+    commands.acknowledgeDak(ctxFor(tid, owner), id, false);
+    await appQueue.drain();
+    const [row] = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select assigned_to, status from document.daks where tenant_id = ${tid} and id = ${id}`);
+    expect(row.assigned_to).toBe(assignee);
+    expect(row.status).toBe("forwarded");
+
+    // The current holder's command still goes through.
+    commands.acknowledgeDak(ctxFor(tid, assignee), id, false);
+    await appQueue.drain();
+    const [after] = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select status from document.daks where tenant_id = ${tid} and id = ${id}`);
+    expect(after.status).toBe("acknowledged");
   });
 });
