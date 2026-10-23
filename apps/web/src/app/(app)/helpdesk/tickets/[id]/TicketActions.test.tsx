@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -85,5 +85,39 @@ describe("TicketActions (GAP-HELPDESK-TICKETS-DETAIL-01/03/04)", () => {
     expect(picker).toHaveAttribute("placeholder", "Search by agent name…");
     // Should NOT have a UUID placeholder
     expect(screen.queryByPlaceholderText(/550e8400/)).not.toBeInTheDocument();
+  });
+
+  describe("internal notes use a real isInternal flag (no [INTERNAL] body prefix)", () => {
+    const fetchMock = vi.fn();
+    beforeEach(() => {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValue({ ok: true, status: 202, json: async () => ({}) });
+      vi.stubGlobal("fetch", fetchMock);
+    });
+
+    async function send(kind: "citizen" | "internal", text: string) {
+      render(<TicketActions ticketId="t1" status="open" canAct={true} />);
+      fireEvent.click(screen.getByRole("button", { name: /reply/i }));
+      fireEvent.click(screen.getByDisplayValue(kind));
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: text } });
+      fireEvent.click(screen.getByRole("button", { name: kind === "internal" ? /add internal note/i : /send reply/i }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      return { url, method: init.method, body: JSON.parse(String(init.body)) as Record<string, unknown> };
+    }
+
+    it("an internal note posts isInternal: true with the body exactly as typed", async () => {
+      const call = await send("internal", "check with legal first");
+      expect(call.url).toBe("/api/proxy/v1/citizen/tickets/t1/notes");
+      expect(call.method).toBe("POST");
+      expect(call.body).toEqual({ body: "check with legal first", isInternal: true });
+      expect(String(call.body.body)).not.toMatch(/\[INTERNAL\]/);
+    });
+
+    it("a citizen reply sends no isInternal flag", async () => {
+      const call = await send("citizen", "we are looking into it");
+      expect(call.body).toEqual({ body: "we are looking into it" });
+      expect(call.body).not.toHaveProperty("isInternal");
+    });
   });
 });

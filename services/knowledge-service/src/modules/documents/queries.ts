@@ -85,6 +85,12 @@ export async function listDocumentsByCategory(tenantId: string, categoryId: stri
 // Left as a known, pre-existing staleness gap (present before this PR too,
 // since the write never really happened before) for whoever addresses cache
 // invalidation for this module properly.
+export async function publishDocument(
+  tenantId: string, id: string, actor: { actorId: string; correlationId: string }, published: boolean,
+): Promise<repo.PublishOutcome> {
+  return repo.setStatusAudited(tenantId, id, actor, published);
+}
+
 export async function setDocumentStatus(tenantId: string, id: string, status: string): Promise<boolean> {
   return repo.updateStatusDirect(tenantId, id, status);
 }

@@ -136,11 +136,22 @@ describe("POST /v1/install/stages", () => {
     expect(res.statusCode).toBe(202);
   });
 
-  it("202 with install_user role", async () => {
+  // SEC: install_user is read-only. This test previously asserted 202 (the
+  // insecure behaviour); it now asserts the 403.
+  it("403 with install_user role (read-only)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/install/stages",
       headers: authHeader(["install_user"]),
       payload: { name: "user-step", stepNumber: 4 },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("202 with install_admin role", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/install/stages",
+      headers: authHeader(["install_admin"]),
+      payload: { name: "admin-step", stepNumber: 4 },
     });
     expect(res.statusCode).toBe(202);
   });

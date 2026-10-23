@@ -61,7 +61,8 @@ export type GrantApplicationSummary = {
   totalAmount: number;
   disbursedAmount: number;
   pendingAmount: number;
-  sanctionDate: string;
+  /** null when the API sent no date: never fabricated as "now". */
+  sanctionDate: string | null;
   purpose?: string;
   /**
    * GAP-GRANTS-APPLICATIONS-01: application-stage status from the real
@@ -228,7 +229,7 @@ function mapGrantApplicationSummaries(payload: unknown): GrantApplicationSummary
       totalAmount: toNumber(row.totalAmount ?? row.total_amount),
       disbursedAmount: toNumber(row.disbursedAmount ?? row.disbursed_amount),
       pendingAmount: toNumber(row.pendingAmount ?? row.pending_amount),
-      sanctionDate: toText(row.sanctionDate ?? row.sanction_date ?? row.approvedAt) ?? new Date().toISOString(),
+      sanctionDate: toText(row.sanctionDate ?? row.sanction_date ?? row.approvedAt),
       purpose: toText(row.purpose) ?? undefined,
       status: safeStatus,
     });
@@ -284,7 +285,7 @@ export type GrantApplicationDetail = {
   approvedBy: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
-  createdAt: string;
+  createdAt: string | null;
   // GAP-GRANTS-APPLICATIONS-DETAIL-05: evaluation (latest score), when present.
   reviewerRef?: string | null;
   technicalScore?: number | null;
@@ -331,7 +332,7 @@ function mapApplicationDetail(payload: unknown): GrantApplicationDetail | null {
     approvedBy: toText(payload.approvedBy ?? payload.approved_by),
     submittedAt: toText(payload.submittedAt ?? payload.submitted_at),
     approvedAt: toText(payload.approvedAt ?? payload.approved_at),
-    createdAt: toText(payload.createdAt ?? payload.created_at) ?? new Date().toISOString(),
+    createdAt: toText(payload.createdAt ?? payload.created_at),
     reviewerRef: toText(payload.scoredReviewerRef ?? payload.reviewerRef ?? payload.reviewer_ref),
     technicalScore: payload.technicalScore != null ? toNumber(payload.technicalScore) : null,
     financialScore: payload.financialScore != null ? toNumber(payload.financialScore) : null,

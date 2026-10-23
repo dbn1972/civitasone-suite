@@ -128,6 +128,8 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
         return;
       }
       const body = await res.json();
+      // CLOS-S2-04: a superseded (aborted) load must not apply stale results.
+      if (signal?.aborted) return;
       setMarkers(normalizeMarkers(body));
       setTruncated((body as { meta?: { truncated?: unknown } })?.meta?.truncated === true);
       setUpdatedAt(new Date());
@@ -137,6 +139,7 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
         const sq = new URLSearchParams();
         if (domain) sq.set("domain", domain);
         const sres = await fetch(`${API}?${sq.toString()}`, { signal }).catch(() => null);
+        if (signal?.aborted) return;
         setSummary(sres?.ok ? normalizeMarkers(await sres.json()) : null);
       } else {
         setSummary(null);
@@ -145,7 +148,8 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load", err).message);
     } finally {
-      setLoading(false);
+      // CLOS-S2-04: the aborted call must not clear the flag its replacement set.
+      if (!signal?.aborted) setLoading(false);
     }
     // formError.fromResponse/fromException are stable (useCallback'd on a
     // fixed `area` string inside useFormError) even though the wrapping

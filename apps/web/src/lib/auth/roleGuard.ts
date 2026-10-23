@@ -532,8 +532,9 @@ export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platfor
 /**
  * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
  * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
- * 3 tenant provisioning). The orchestrator and stages routes accept the same
- * set for reads and writes, so this currently equals INSTALL_VIEW_ROLES; the
+ * 3 tenant provisioning). install_user is READ-ONLY: install-service rejects it
+ * with 403 on every mutation, so it is excluded here and operate buttons are
+ * hidden from it. This is INSTALL_VIEW_ROLES minus install_user; the other
  * exception is GET /v1/install/silo-provisions, whose READER_ROLES (see
  * INSTALL_SILO_READ_ROLES) include platform_admin and exclude tenant_admin.
  * It is kept as
@@ -542,7 +543,7 @@ export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platfor
  * mutation controls from a hypothetical read-only install role. The server
  * remains the authority.
  */
-export const INSTALL_OPERATE_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
+export const INSTALL_OPERATE_ROLES = ["install_admin", "super_admin", "tenant_admin"];
 
 /**
  * GAP-CDP-STEWARD-01: roles permitted to decide (approve/reject) profile-merge
@@ -679,6 +680,12 @@ export const BILLING_PLAN_ADMIN_ROLES = ["super_admin"];
 export const NOTIFICATION_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin", "tenant_admin"];
 /** Mirrors notification-service NOTIFY_READ_ROLES: send roles + audit_officer. */
 export const NOTIFICATION_READ_ROLES = [...NOTIFICATION_SEND_ROLES, "audit_officer"];
+/**
+ * Mirrors notification-service bulk/routes.ts `ADMIN`: the ONLY roles allowed to
+ * create / send / cancel a campaign. Deliberately NOT NOTIFICATION_SEND_ROLES -
+ * notification_admin may send single notifications but the campaign routes 403 it.
+ */
+export const NOTIFICATION_CAMPAIGN_MANAGE_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 export const NOTIFICATION_TEMPLATE_ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 
 /**
@@ -977,9 +984,9 @@ export const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_admin", "super_admin"]
 
 /**
  * GAP-HELPDESK-CATALOGUE-BREACHES-03: roles permitted to view the tenant-wide
- * SLA breach report (includes requestedBy and stage data). This UI gate is
- * deliberately stricter than the server (GET /v1/helpdesk/catalogue/requests/breaches
- * allows USER_ROLES); the server remains the authority.
+ * SLA breach report (includes requestedBy and stage data). Mirrors the server
+ * (GET /v1/helpdesk/catalogue/requests/breaches is helpdesk_admin / super_admin
+ * only and 403s anyone else); the server remains the authority.
  */
 export const HELPDESK_MANAGER_ROLES = ["helpdesk_admin", "super_admin"];
 

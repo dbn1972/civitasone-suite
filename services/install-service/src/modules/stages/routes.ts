@@ -11,6 +11,10 @@ import * as queries from "./queries.js";
 import { MUNICIPAL_ONBOARDING_PACK_KEYS } from "../orchestrator/domain-pack-constants.js";
 
 const ROLES = ["install_user","install_admin","super_admin","tenant_admin"];
+// SEC: install_user is READ-ONLY (provisioning treats it as reader-only). Every
+// mutation (create stage, run/skip/retry a step, activate a domain pack) is
+// restricted to the install admin roles.
+const MUTATE_ROLES = ["install_admin","super_admin","tenant_admin"];
 
 const STEP_STATUSES = ["pending", "in_progress", "completed", "failed", "skipped"] as const;
 type StepStatus = (typeof STEP_STATUSES)[number];
@@ -73,7 +77,7 @@ const domainPackActivateAcceptedSchema = z.object({
 export async function stagesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/install/stages", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const body = createStageBody.parse(req.body);
     sendAccepted(reply, acceptedResponseSchema, await commands.createStage(ctx, body));
   });
@@ -108,7 +112,7 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post("/v1/install/stages/3/domain-pack/activate", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const body = activateDomainPackBody.parse(req.body ?? {});
     const accepted = await domainPackCommands.activateDomainPackStage3(ctx, {
       domainPackKey: body.domainPackKey,
@@ -124,7 +128,7 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry) */
   app.patch("/v1/install/steps/:id/:verb", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, MUTATE_ROLES);
     const { id, verb } = stepVerbParam.parse(req.params);
     sendAccepted(reply, acceptedResponseSchema, await commands.transitionStage(ctx, id, verb));
   });

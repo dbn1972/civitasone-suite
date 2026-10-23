@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { READ_ROLES } from "../../shared/roles.js";
+import { READ_ROLES, canAccessOwned, hasTenantWideAiAccess } from "../../shared/roles.js";
 import * as repo from "./repo.js";
 import * as guardrailsRepo from "../guardrails/repo.js";
 import { evaluateRules } from "../guardrails/domain.js";
@@ -89,7 +89,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       ? await repo.findById(body.conversationId, ctx.tenantId)
       : null;
 
-    if (body.conversationId && !existing) {
+    if (body.conversationId && (!existing || !canAccessOwned(ctx, existing.createdBy))) {
       throw new HttpError(404, "NOT_FOUND", "conversation not found");
     }
     if (existing?.status === "handed_off") {
@@ -172,7 +172,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const body = handoffBody.parse(req.body ?? {});
 
     const existing = await repo.findById(conversationId, ctx.tenantId);
-    if (!existing) {
+    if (!existing || !canAccessOwned(ctx, existing.createdBy)) {
       throw new HttpError(404, "NOT_FOUND", "conversation not found");
     }
 
@@ -218,6 +218,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       ...(q.status !== undefined ? { status: q.status } : {}),
       ...(q.profileId !== undefined ? { profileId: q.profileId } : {}),
       ...(q.channelId !== undefined ? { channelId: q.channelId } : {}),
+      ...(hasTenantWideAiAccess(ctx.roles) ? {} : { createdBy: ctx.actorId }),
     });
 
     const page = Math.floor(q.offset / q.limit) + 1;
@@ -238,7 +239,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const { conversationId } = conversationIdParam.parse(req.params);
 
     const conversation = await repo.findById(conversationId, ctx.tenantId);
-    if (!conversation) {
+    if (!conversation || !canAccessOwned(ctx, conversation.createdBy)) {
       throw new HttpError(404, "NOT_FOUND", "conversation not found");
     }
 
@@ -252,7 +253,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const q = historyQuery.parse(req.query);
 
     const conversation = await repo.findById(conversationId, ctx.tenantId);
-    if (!conversation) {
+    if (!conversation || !canAccessOwned(ctx, conversation.createdBy)) {
       throw new HttpError(404, "NOT_FOUND", "conversation not found");
     }
 
@@ -273,7 +274,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     const body = endBody.parse(req.body ?? undefined) ?? {};
 
     const existing = await repo.findById(conversationId, ctx.tenantId);
-    if (!existing) {
+    if (!existing || !canAccessOwned(ctx, existing.createdBy)) {
       throw new HttpError(404, "NOT_FOUND", "conversation not found");
     }
 

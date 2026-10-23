@@ -15,6 +15,7 @@ import { hrmsTrainings, type NominationRow } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { canReadEmployeeRecord } from "../../shared/self-scope.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -27,18 +28,22 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
  * ctx.actorId (a different id space -- see employee/actor-link.ts). A bare
  * "employee" caller is forced onto their OWN linked hrms_employees record
  * (resolveEmployeeForActor: userRef + email-fallback) regardless of what
- * they requested. HR and manager roles pass the requested id through
- * unchanged -- this module has no existing "manager scoped to direct
- * reports" precedent of its own, the same judgment call
- * medical/routes.ts's resolveSelfScopedEmployeeId documents. Returns null
+ * they requested. HR passes the requested id through unchanged; a manager
+ * is limited to self + direct reports (owner decision 2, 2026-10-14; 403
+ * otherwise). Returns null
  * when a bare-employee caller has no resolvable employee link -- callers
  * MUST treat that as "nothing to show" (fails CLOSED).
  */
 async function resolveOwnEmployeeIdIfBareEmployee(
   ctx: RequestContext, req: FastifyRequest, requested: string,
 ): Promise<string | null> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return requested;
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
+  // Owner decision 2 (2026-10-14): a manager sees their own and direct
+  // reports' nominations only (403 otherwise).
+  if (ctx.roles.includes("manager") && !(await canReadEmployeeRecord(ctx, requested))) {
+    throw new HttpError(403, "FORBIDDEN", "you may only view nominations of yourself or your direct reports");
+  }
+  if (ctx.roles.includes("manager")) return requested;
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { lanesToBpmn, persistWorkflowDesign } from "./workflowBuilderApi";
+import { lanesToBpmn, persistWorkflowDesign, fetchTenantPositions } from "./workflowBuilderApi";
 import {
   defaultLanes,
   emptyWorkflowDesign,
@@ -107,5 +107,27 @@ describe("workflowBuilderApi — persistWorkflowDesign never leaks raw status or
 
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).not.toMatch(/\b500\b/);
+  });
+});
+
+describe("fetchTenantPositions (CLOS-S1-02)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([500, 403])("rejects with clerk-safe copy on HTTP %i so the consumers show their error + retry UI", async (status) => {
+    fetchMock.mockResolvedValue(new Response("", { status }));
+    const err = await fetchTenantPositions().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/couldn't load/i);
+    expect((err as Error).message).not.toContain(String(status));
+  });
+
+  it("still maps rows on success", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: [{ id: "p1", name: "Officer" }] }), { status: 200 }));
+    await expect(fetchTenantPositions()).resolves.toEqual([{ id: "p1", label: "Officer" }]);
   });
 });

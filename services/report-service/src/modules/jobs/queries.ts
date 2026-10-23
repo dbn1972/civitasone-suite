@@ -21,10 +21,11 @@ export async function getJobDetail(tenantId: string, id: string): Promise<JobDet
 export async function listJobs(
   tenantId: string,
   limit: number,
-  offset: number
+  offset: number,
+  ownerId?: string,
 ): Promise<{ data: JobView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${ownerId ?? "all"}:${limit}:${offset}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, ownerId);
     return {
       data: rows,
       pagination: {
@@ -40,10 +41,10 @@ export async function listJobs(
  * GAP2-REPORTS-PAGINATION-01: the true tenant-scoped job count for meta.total.
  * Cached under a distinct key so it does not collide with the paginated list.
  */
-export async function countJobs(tenantId: string): Promise<number> {
+export async function countJobs(tenantId: string, ownerId?: string): Promise<number> {
   const n = await cache.getOrLoad(
-    cache.makeKey(tenantId, RESOURCE, "count"),
-    () => repo.countByTenant(tenantId),
+    cache.makeKey(tenantId, RESOURCE, ownerId ? `count:${ownerId}` : "count"),
+    () => repo.countByTenant(tenantId, ownerId),
     60,
   );
   return n ?? 0;

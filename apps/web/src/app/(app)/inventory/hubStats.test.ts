@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { countBadge, pickMostBelowReorder } from "./hubStats";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { buildForecastSeries, countBadge, pickMostBelowReorder } from "./hubStats";
 
 const r = (name: string, onHandQty: number, reorderLevel: number) => ({
   itemId: name, storeId: "s", name, sku: null, onHandQty, reorderLevel, suggestedReorderQty: 1,
@@ -34,5 +34,16 @@ describe("countBadge (GAP-INVENTORY-HOME-03)", () => {
   it("warns only when the count is above zero", () => {
     expect(countBadge(3, "low")).toEqual({ text: "3 low", tone: "warn" });
     expect(countBadge(0, "low").tone).toBe("info");
+  });
+});
+
+// CLOS-S2-05: forecast day labels are IST calendar days, not UTC days.
+describe("buildForecastSeries (CLOS-S2-05)", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("labels day 0 with the IST date (19:30Z is already the next day in IST)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-21T19:30:00Z"));
+    expect(buildForecastSeries([5, 6, 7]).map((p) => p.date)).toEqual(["2026-10-22", "2026-10-23", "2026-10-24"]);
   });
 });

@@ -6,6 +6,7 @@ import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createActivityBody, updateActivityBody, idParam, activitiesListSchema, listActivitiesQuery, overdueTasksQuery, overdueTasksListSchema } from "./validators.js";
 import * as repo from "./repo.js";
+import { assertAccountLinkable } from "../contacts/account-guard.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { isActiveTenantUser } from "../../shared/identity-client.js";
@@ -41,6 +42,8 @@ export async function activityRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createActivityBody.parse(req.body);
+    // F5: a merged / inactive / unknown account is a synchronous 422, not a 202 the consumer drops.
+    await assertAccountLinkable(ctx.tenantId, body.accountId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createActivity(ctx, body));
   });
 

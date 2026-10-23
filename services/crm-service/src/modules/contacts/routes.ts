@@ -20,6 +20,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as leadFieldRules from "../leads/field-rules-repo.js";
 import { validateRequiredFields } from "../leads/field-rules-domain.js";
+import { assertAccountLinkable } from "./account-guard.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
@@ -33,6 +34,8 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createContactBody.parse(req.body);
+    // F5: a merged / inactive / unknown account is a synchronous 422, not a 202 the consumer drops.
+    await assertAccountLinkable(ctx.tenantId, body.accountId);
     // LM-001: the zod schema only knows the platform-wide minimum (name). Which
     // fields a *tenant* insists on is configuration, so it is checked here rather
     // than baked into the validator. 422 not 400: the payload is well formed, it
@@ -161,6 +164,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateContactBody.parse(req.body);
+    await assertAccountLinkable(ctx.tenantId, body.accountId);
     // P1-3 ownership authz: a non-admin may only modify contacts they own.
     if (!isAdmin(ctx.roles)) {
       const existing = await queries.getContact(id, ctx.tenantId, true);

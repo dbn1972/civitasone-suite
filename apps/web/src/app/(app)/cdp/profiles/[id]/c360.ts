@@ -44,19 +44,53 @@ export function displayValue(value: unknown): string {
  * worse than none (a false sense of logged access). Reveal is a backend-
  * dependent follow-up (see GAP-CDP-PROFILES-DETAIL-06 / HUMAN REVIEW).
  */
-const SENSITIVE_ATTRIBUTE_KEYS: Record<string, "email" | "phone" | "pan" | "aadhaar" | "generic"> = {
-  email: "email",
-  phone: "phone",
-  mobile: "phone",
-  contact: "phone",
+type SensitiveKind = "email" | "phone" | "pan" | "aadhaar" | "generic";
+
+// Pattern-based (mirrors cdp-service shared/pii.ts, which is the authority and
+// masks server-side for non-admins). Keys are split into camelCase / snake
+// tokens so `emailAddress`, `mobileNumber`, `panNumber` are caught; short tokens
+// (pan, uid, dob) match as whole tokens only so `company` / `guid` are not.
+const TOKEN_KIND: Record<string, SensitiveKind> = {
+  email: "email", emails: "email", mail: "email",
+  phone: "phone", phones: "phone", mobile: "phone", mobiles: "phone", contact: "phone", contacts: "phone", msisdn: "phone", tel: "phone",
   pan: "pan",
-  aadhaar: "aadhaar",
-  aadhar: "aadhaar",
-  uid: "aadhaar",
-  dob: "generic",
-  dateofbirth: "generic",
-  address: "generic",
+  aadhaar: "aadhaar", aadhar: "aadhaar", uid: "aadhaar",
+  dob: "generic", address: "generic", addresses: "generic",
 };
+const SUBSTRING_KIND: Array<[string, SensitiveKind]> = [
+  ["email", "email"], ["phone", "phone"], ["mobile", "phone"], ["aadhaar", "aadhaar"],
+  ["aadhar", "aadhaar"], ["dateofbirth", "generic"], ["birthdate", "generic"], ["address", "generic"],
+];
+
+function classifyKey(key: string): SensitiveKind | null {
+  const toks = key
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .toLowerCase()
+    .split(" ")
+    .filter(Boolean);
+  for (const t of toks) {
+    const k = TOKEN_KIND[t];
+    if (k) return k;
+  }
+  const compact = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const [frag, kind] of SUBSTRING_KIND) if (compact.includes(frag)) return kind;
+  return null;
+}
+
+function classifyValue(value: string): SensitiveKind | null {
+  const v = value.trim();
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "email";
+  if (/^\d{4}[\s-]?\d{4}[\s-]?\d{4}$/.test(v)) return "aadhaar";
+  if (/^[A-Z]{5}\d{4}[A-Z]$/.test(v)) return "pan";
+  if (/^(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}$|^\+\d{1,3}[\s-]?\d{6,14}$/.test(v)) return "phone";
+  return null;
+}
+
+/** A value the service already masked (contains mask glyphs) is shown as received. */
+function looksMasked(v: string): boolean {
+  return /\*{2,}|X{3,}|•{2,}/.test(v);
+}
 
 function maskGenericValue(value: string): string {
   const v = value.trim();
@@ -104,10 +138,10 @@ function maskAadhaarValue(value: string): string {
 export function maskAttribute(key: string, rawValue: unknown): { value: string; sensitive: boolean } {
   const shown = displayValue(rawValue);
   if (shown === "—") return { value: shown, sensitive: false };
-  const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
-  const kind = SENSITIVE_ATTRIBUTE_KEYS[normalized];
-  if (!kind) return { value: shown, sensitive: false };
   const str = typeof rawValue === "string" ? rawValue : shown;
+  const kind = classifyKey(key) ?? (typeof rawValue === "string" ? classifyValue(rawValue) : null);
+  if (!kind) return { value: shown, sensitive: false };
+  if (looksMasked(str)) return { value: shown, sensitive: true };
   switch (kind) {
     case "email":
       return { value: maskEmailValue(str), sensitive: true };

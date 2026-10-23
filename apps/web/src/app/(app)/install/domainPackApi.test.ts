@@ -124,4 +124,36 @@ describe("domainPackApi HTTP", () => {
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).not.toMatch(/forbidden for tenant/i);
   });
+
+  // CLOS-S2-03: an offline fetch / malformed 202 body must not leak raw exception text.
+  it("CLOS-S2-03: activateDomainPackStage3 maps a network failure to connection copy", async () => {
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+    let caught: unknown;
+    try {
+      await activateDomainPackStage3("municipal-in-v1");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toMatch(/couldn't connect/i);
+    expect((caught as Error).message).not.toMatch(/failed to fetch/i);
+  });
+
+  it("CLOS-S2-03: activateDomainPackStage3 hides the raw SyntaxError of a malformed 202 body", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 202,
+      json: async () => {
+        throw new SyntaxError("Unexpected token < in JSON at position 0");
+      },
+    } as unknown as Response);
+    let caught: unknown;
+    try {
+      await activateDomainPackStage3("municipal-in-v1");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).not.toMatch(/unexpected token/i);
+  });
 });

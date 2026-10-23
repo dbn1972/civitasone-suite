@@ -47,6 +47,7 @@ export async function listByTenant(
   tenantId: string,
   limit: number,
   offset: number,
+  ownerId?: string,
 ): Promise<ScheduledReportView[]> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
@@ -54,7 +55,7 @@ export async function listByTenant(
       .from(scheduledReports)
       // Disabled schedules are listed too (with status "disabled") so they stay
       // visible and can be re-enabled; only deleted ones are hidden.
-      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt)))
+      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt), ...(ownerId ? [eq(scheduledReports.createdBy, ownerId)] : [])))
       .limit(limit)
       .offset(offset),
   );
@@ -72,12 +73,12 @@ export async function insert(tx: Writer, row: ScheduledReportInsert): Promise<vo
  * reports (enabled AND disabled) — the same predicate listByTenant uses — so meta.total matches the
  * rows actually listed rather than the capped page length.
  */
-export async function countByTenant(tenantId: string): Promise<number> {
+export async function countByTenant(tenantId: string, ownerId?: string): Promise<number> {
   const rows = await readScoped(tenantId, (tx) =>
     tx
       .select({ value: count() })
       .from(scheduledReports)
-      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt))),
+      .where(and(eq(scheduledReports.tenantId, tenantId), isNull(scheduledReports.deletedAt), ...(ownerId ? [eq(scheduledReports.createdBy, ownerId)] : []))),
   );
   return Number(rows[0]?.value ?? 0);
 }

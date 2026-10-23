@@ -65,29 +65,29 @@ function toDetail(row: TicketRow, notes: Awaited<ReturnType<typeof repo.listNote
       author: n.authorId.slice(0, 8),
       content: n.body,
       createdAt: toIso(n.createdAt),
-      isInternal: false,
+      isInternal: n.isInternal,
     })),
   };
 }
 
-export async function getTicket(tenantId: string, id: string): Promise<TicketDetail | null> {
+export async function getTicket(tenantId: string, id: string, includeInternal = false): Promise<TicketDetail | null> {
   const ticket = await cache.getOrLoad<TicketRow | null>(
     cache.makeKey(tenantId, "ticket", id),
     () => repo.findTicketById(id),
   );
   if (!ticket || ticket.tenantId !== tenantId) return null;
-  const notes = await repo.listNotes(id);
+  const notes = await repo.listNotes(id, includeInternal);
   return toDetail(ticket, notes);
 }
 
 /** P0-1: ownership-aware fetch — returns the detail plus the owning citizenId. */
-export async function getTicketWithOwner(tenantId: string, id: string): Promise<{ detail: TicketDetail; citizenId: string } | null> {
+export async function getTicketWithOwner(tenantId: string, id: string, includeInternal = false): Promise<{ detail: TicketDetail; citizenId: string } | null> {
   const ticket = await cache.getOrLoad<TicketRow | null>(
     cache.makeKey(tenantId, "ticket", id),
     () => repo.findTicketById(id),
   );
   if (!ticket || ticket.tenantId !== tenantId) return null;
-  const notes = await repo.listNotes(id);
+  const notes = await repo.listNotes(id, includeInternal);
   return { detail: toDetail(ticket, notes), citizenId: ticket.citizenId };
 }
 
@@ -125,11 +125,13 @@ export async function listTicketDetails(
   limit: number,
   slaStatus?: string,
   citizenId?: string,
+  /** Staff-only notes are returned only when the caller is staff (default: never). */
+  includeInternal = false,
 ): Promise<TicketDetail[]> {
   const rows = await repo.listTicketsByTenant(tenantId, undefined, limit, slaStatus, citizenId);
 
   const ticketIds = rows.map((row) => row.id);
-  const notesByTicketId = await repo.listNotesByTicketIds(ticketIds);
+  const notesByTicketId = await repo.listNotesByTicketIds(ticketIds, includeInternal);
 
   return rows.map((row) => toDetail(row, notesByTicketId.get(row.id) ?? []));
 }

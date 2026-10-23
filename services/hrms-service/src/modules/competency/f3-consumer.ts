@@ -101,4 +101,17 @@ export function registerF3_competency_Consumers(queue: Queue): void {
       throw err;
     }
   });
+
+  // DPDP audit-on-read of another employee's competency data, published by
+  // routes.ts's assertEmployeeReadable.
+  queue.subscribe(COMMANDS.competencyEmployeeRead, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: msg.payload as Record<string, unknown>,
+      });
+    });
+  });
 }

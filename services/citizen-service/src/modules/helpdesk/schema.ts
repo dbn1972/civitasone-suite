@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, varchar, integer, timestamp,
+  pgSchema, uuid, text, varchar, integer, timestamp, boolean,
 } from "drizzle-orm/pg-core";
 
 export const helpdeskSchema = pgSchema("helpdesk");
@@ -32,6 +32,8 @@ export const citizenTicketNotes = helpdeskSchema.table("citizen_ticket_notes", {
   ticketId:  uuid("ticket_id").notNull(),
   authorId:  uuid("author_id").notNull(),
   body:      text("body").notNull(),
+  // Staff-only note: never returned on a citizen-facing read (migration 0038).
+  isInternal: boolean("is_internal").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),

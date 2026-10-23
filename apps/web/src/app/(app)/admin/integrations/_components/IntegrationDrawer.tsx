@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useCallback, useEffect, useState } from "react";
 import { Button, ConfirmDialog, Drawer, ErrorState, SkeletonBar, StatusPill, TabPanel, Tabs } from "@/app/_components/ds";
 import {
@@ -283,7 +284,7 @@ export function IntegrationDrawer({
             <span style={{ fontSize: 12.5, color: "var(--ink2)" }}>Secret set: {d.secretMasked}</span>
           )}
           {d?.lastTestedAt && (
-            <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {new Date(d.lastTestedAt).toLocaleString("en-IN")}</span>
+            <span style={{ fontSize: 12, color: "var(--mut)" }}>Tested {formatIndianDateTime(d.lastTestedAt)}</span>
           )}
         </div>
         {d?.lastError && (
@@ -376,7 +377,7 @@ export function IntegrationDrawer({
             <div className="pad" style={{ padding: 14, fontSize: 12.5 }}>
               <strong>Pending change awaiting approval</strong>
               <div style={{ color: "var(--ink2)", marginTop: 4 }}>
-                Proposed by {pending.proposedByName ?? "another admin"}{pending.createdAt ? ` on ${new Date(pending.createdAt).toLocaleString("en-IN")}` : ""}{pending.note ? ` — "${pending.note}"` : ""}
+                Proposed by {pending.proposedByName ?? "another admin"}{pending.createdAt ? ` on ${formatIndianDateTime(pending.createdAt)}` : ""}{pending.note ? ` — "${pending.note}"` : ""}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                 <Button size="sm" onClick={() => { setDecisionError(undefined); setDecision("approve"); }} disabled={busy}>Approve</Button>
@@ -403,8 +404,8 @@ export function IntegrationDrawer({
             <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0", display: "flex", flexDirection: "column", gap: 6 }}>
               {detail.history.map((h) => (
                 <li key={h.id} style={{ fontSize: 12, color: "var(--ink2)", borderLeft: "2px solid var(--line)", paddingLeft: 10 }}>
-                  <StatusBadge status={h.status} /> {h.createdAt ? new Date(h.createdAt).toLocaleString("en-IN") : ""}
-                  {h.proposedByName ? ` — proposed by ${h.proposedByName}` : ""}{h.approvedByName ? `, decided by ${h.approvedByName}` : ""}{h.approvedAt ? ` on ${new Date(h.approvedAt).toLocaleString("en-IN")}` : ""}{h.note ? ` — ${h.note}` : ""}{h.rejectedReason ? ` (${h.rejectedReason})` : ""}
+                  <StatusBadge status={h.status} /> {h.createdAt ? formatIndianDateTime(h.createdAt) : ""}
+                  {h.proposedByName ? ` — proposed by ${h.proposedByName}` : ""}{h.approvedByName ? `, decided by ${h.approvedByName}` : ""}{h.approvedAt ? ` on ${formatIndianDateTime(h.approvedAt)}` : ""}{h.note ? ` — ${h.note}` : ""}{h.rejectedReason ? ` (${h.rejectedReason})` : ""}
                 </li>
               ))}
             </ul>

@@ -89,7 +89,10 @@ export async function persistWorkflowDesign(design: WorkflowDesignState): Promis
 
 export async function fetchTenantPositions(): Promise<{ id: string; label: string }[]> {
   const res = await fetch("/api/proxy/v1/tenant/positions", { cache: "no-store" });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const human = toHumanError("load", { area: "positions" });
+    throw new Error(`${human.what} ${human.next}`);
+  }
   const payload = (await res.json()) as { data?: unknown[] };
   const rows = payload.data ?? (Array.isArray(payload) ? payload : []);
   return (rows as Record<string, unknown>[]).map((row, idx) => ({

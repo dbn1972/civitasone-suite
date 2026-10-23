@@ -1,5 +1,6 @@
 "use client";
 
+import { accountLinkErrorKey } from "@/lib/crm/accountLinkError";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -79,6 +80,7 @@ export default function NewContactPage() {
   // without both.
   const [consent, setConsent] = useState<ConsentValue>({ granted: false, purpose: "", channel: "" });
   const tConsent = useTranslations("crm.consent");
+  const tAccountLink = useTranslations("crmAccountLinkError");
   const [consentError, setConsentError] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState(false);
@@ -282,6 +284,12 @@ export default function NewContactPage() {
         if (missing.length > 0) {
           setMissingFields(missing);
           setError(t("missingMandatory", { fields: missing.map((f) => t(`fieldLabel.${f}`)).join(", ") }));
+          return;
+        }
+        // F5: the picked account was merged away / deactivated (or is unknown): say so inline.
+        const linkKey = accountLinkErrorKey(res.status, body?.code);
+        if (linkKey) {
+          setError(tAccountLink(linkKey));
           return;
         }
         // Anything else: the safe message from the HTTP status + any domain code

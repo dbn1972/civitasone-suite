@@ -31,6 +31,8 @@ export type EscalateTicketBody = z.infer<typeof escalateTicketBody>;
 
 export const ticketNoteBody = z.object({
   body: safeText({ max: 2000, multiline: true }),
+  // Staff-only note. The notes route is staff-gated; a citizen cannot reach it.
+  isInternal: z.boolean().optional(),
 });
 export type TicketNoteBody = z.infer<typeof ticketNoteBody>;
 

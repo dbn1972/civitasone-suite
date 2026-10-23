@@ -139,4 +139,6 @@ export const TASK_RESOURCE = "task";
 /** Events consumed from other services. */
 export const CONSUMED_EVENTS = {
   tenantCreated: "tenant.tenant.created",
+  /** identity-service: a role assignment was revoked from a user (payload: roleId, userId). */
+  identityRoleRevoked: "identity.rbac.role.revoked",
 } as const;

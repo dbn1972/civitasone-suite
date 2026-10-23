@@ -65,6 +65,8 @@ export interface ListFilters {
   status?: string;
   profileId?: string;
   channelId?: string;
+  /** Restrict to conversations created by this actor (plain ai_user scope). */
+  createdBy?: string;
 }
 
 export async function listByTenant(
@@ -77,6 +79,7 @@ export async function listByTenant(
   if (filters.status) conditions.push(eq(conversations.status, filters.status));
   if (filters.profileId) conditions.push(eq(conversations.profileId, filters.profileId));
   if (filters.channelId) conditions.push(eq(conversations.channelId, filters.channelId));
+  if (filters.createdBy) conditions.push(eq(conversations.createdBy, filters.createdBy));
   const where = and(...conditions);
 
   const rows = await scopedRead((tx) =>

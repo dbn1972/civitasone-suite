@@ -135,3 +135,33 @@ describe("campaign send/cancel authorization (GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL
     expect(res.statusCode).toBe(202);
   });
 });
+
+// Campaign READ routes (list / detail / metrics) were ungated: any authenticated
+// tenant user could read audience, budget and ROI. They now require a campaign
+// admin, notification_admin or audit_officer.
+describe("campaign read authorization", () => {
+  const DENIED = ["notification_viewer", "citizen", "workflow_user"];
+  const ALLOWED = ["tenant_admin", "notification_admin", "audit_officer"];
+
+  for (const role of DENIED) {
+    it(`GET list/detail/metrics -> 403 for ${role}`, async () => {
+      const id = randomUUID();
+      await seedCampaign(id, "draft");
+      for (const url of ["/notifications/campaigns", `/notifications/campaigns/${id}`, `/notifications/campaigns/${id}/metrics`]) {
+        const res = await app.inject({ method: "GET", url, headers: bearer([role]) });
+        expect(res.statusCode, url).toBe(403);
+      }
+    });
+  }
+
+  for (const role of ALLOWED) {
+    it(`GET list/detail/metrics -> 200 for ${role}`, async () => {
+      const id = randomUUID();
+      await seedCampaign(id, "draft");
+      for (const url of ["/notifications/campaigns", `/notifications/campaigns/${id}`, `/notifications/campaigns/${id}/metrics`]) {
+        const res = await app.inject({ method: "GET", url, headers: bearer([role]) });
+        expect(res.statusCode, url).toBe(200);
+      }
+    });
+  }
+});

@@ -15,7 +15,7 @@ async function pub(ctx: RequestContext, type: string, id: string, payload: Recor
 }
 
 export const createDelegation = (ctx: RequestContext, body: {
-  delegateId: string; fromDate: string; toDate?: string | null; reason?: string | null;
+  delegateId: string; roles: string[]; fromDate: string; toDate?: string | null; reason?: string | null;
 }) => pub(ctx, COMMANDS.createDelegation, randomUUID(), {
   ...body, delegatorId: ctx.actorId, toDate: body.toDate ?? null, reason: body.reason ?? null,
 });
