@@ -136,7 +136,8 @@ export async function activeContactsAmong(tenantId: string, ids: string[]): Prom
 
 /** Serialise concurrent status changes of one tenant's admins for the rest of this transaction. */
 export async function lockTenantAdmins(tx: Writer, tenantId: string): Promise<void> {
-  await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(sql`select pg_advisory_xact_lock(hashtext(${"tenant-admins:" + tenantId}))`);
+  const lockKey = `tenant-admins:${tenantId}`;
+  await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(sql`select pg_advisory_xact_lock(hashtext(${lockKey}))`);
 }
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;

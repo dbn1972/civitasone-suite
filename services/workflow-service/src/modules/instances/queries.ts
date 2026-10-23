@@ -94,7 +94,10 @@ export async function searchInstances(tenantId: string, filters: SearchFilters) 
   if (filters.definitionCode) query = sql`${query} AND d.code = ${filters.definitionCode}`;
   if (filters.from) query = sql`${query} AND i.created_at >= ${filters.from}::date`;
   if (filters.to) query = sql`${query} AND i.created_at < (${filters.to}::date + interval '1 day')`;
-  if (filters.q) query = sql`${query} AND i.name ILIKE ${'%' + filters.q + '%'}`;
+  if (filters.q) {
+    const namePattern = `%${filters.q}%`;
+    query = sql`${query} AND i.name ILIKE ${namePattern}`;
+  }
 
   if (filters.assignee) {
     query = sql`${query} AND EXISTS (

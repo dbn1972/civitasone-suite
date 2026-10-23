@@ -49,11 +49,12 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REPORT_ROLES);
     const q = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).default(new Date().toISOString().slice(0, 7)) }).parse(req.query);
+    const monthPrefix = `${q.month}%`;
     const rows = await scopedRead((tx) => tx.select().from(hrmsAttendance)
       .where(and(
         eq(hrmsAttendance.tenantId, ctx.tenantId),
         eq(hrmsAttendance.status, "absent"),
-        sql`${hrmsAttendance.attendanceDate}::text LIKE ${q.month + '%'}`
+        sql`${hrmsAttendance.attendanceDate}::text LIKE ${monthPrefix}`
       )));
     return reply.send({ month: q.month, absentCount: rows.length, records: rows.slice(0, 100).map(r => ({ employeeId: r.employeeId, date: r.attendanceDate })) });
   });

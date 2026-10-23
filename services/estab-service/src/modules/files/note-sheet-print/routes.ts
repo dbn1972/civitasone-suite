@@ -122,7 +122,7 @@ export async function noteSheetPrintRoutes(app: FastifyInstance): Promise<void> 
     // from the shared tenant registry if present in this service DB.
     let orgName = "";
     try {
-      const rows = await sqlClient`SELECT name FROM public.tenants WHERE id = ${ctx.tenantId} LIMIT 1`;
+      const rows = await sqlClient.unsafe("SELECT name FROM public.tenants WHERE id = $1 LIMIT 1", [ctx.tenantId]);
       orgName = (rows as unknown as Array<{ name?: string }>)[0]?.name ?? "";
     } catch {
       /* tenant registry not replicated in this DB — fall back below */

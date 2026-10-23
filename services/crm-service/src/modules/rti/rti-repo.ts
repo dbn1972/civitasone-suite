@@ -72,8 +72,9 @@ export async function getRtiList(
   const sectionF = opts.section
     ? sql`AND r.section = ${opts.section}`
     : sql``;
-  const deptF = opts.departmentRef
-    ? sql`AND r.department_ref ILIKE ${"%" + opts.departmentRef + "%"}`
+  const deptPattern = opts.departmentRef ? `%${opts.departmentRef}%` : null;
+  const deptF = deptPattern
+    ? sql`AND r.department_ref ILIKE ${deptPattern}`
     : sql``;
   const searchF = opts.search
     ? sql`AND (r.applicant_name ILIKE ${"%" + opts.search + "%"}

@@ -104,6 +104,11 @@ export function buildWhereClause(criteria: SegmentCriteria, tenantId: string): S
   return and(tenantCondition, combined)!;
 }
 
+/** ILIKE pattern for the "contains" operator; bound as a parameter, never spliced into SQL text. */
+function containsPattern(val: string): string {
+  return `%${val}%`;
+}
+
 function buildOperatorClause(field: SQL, operator: FilterOperator, value: unknown): SQL {
   const val = String(value);
   switch (operator) {
@@ -120,7 +125,7 @@ function buildOperatorClause(field: SQL, operator: FilterOperator, value: unknow
     case "lte":
       return sql`(${field})::numeric <= ${Number(value)}`;
     case "contains":
-      return sql`${field} ILIKE ${"%" + val + "%"}`;
+      return sql`${field} ILIKE ${containsPattern(val)}`;
     case "in": {
       if (Array.isArray(value)) {
         const values = value.map(String);
