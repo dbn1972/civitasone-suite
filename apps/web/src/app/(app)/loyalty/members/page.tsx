@@ -15,7 +15,8 @@ const PAGE_SIZE = 50;
  * (tracked for a future backend sprint: the enrolments list endpoint supports
  * only limit/offset/programId as of the current service version).
  */
-export default async function Page({ searchParams }: { searchParams?: { page?: string; programId?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ page?: string; programId?: string }> }) {
+  const searchParams = await props.searchParams;
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const { data, source } = await getLoyaltyMembers({
     limit: PAGE_SIZE,

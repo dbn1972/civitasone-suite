@@ -27,14 +27,14 @@ describe("GrantApplicationsPage", () => {
   });
 
   it("renders exactly one breadcrumb back-link to /grants", async () => {
-    render(await GrantApplicationsPage({ searchParams: {} }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({}) }));
     const backLinks = screen.getAllByRole("link", { name: "Grants" });
     expect(backLinks).toHaveLength(1);
     expect(backLinks[0]).toHaveAttribute("href", "/grants");
   });
 
   it("renders the heading and both applications when unfiltered", async () => {
-    render(await GrantApplicationsPage({ searchParams: {} }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("heading", { level: 1, name: "Grant Applications" })).toBeInTheDocument();
     expect(screen.getByText("Water supply")).toBeInTheDocument();
     expect(screen.getByText("Road repair")).toBeInTheDocument();
@@ -42,21 +42,21 @@ describe("GrantApplicationsPage", () => {
 
   // GAP-GRANTS-APPLICATIONS-02: ?status=approved lists only approved rows.
   it("filters rows by a valid ?status= param", async () => {
-    render(await GrantApplicationsPage({ searchParams: { status: "approved" } }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({ status: "approved" }) }));
     expect(screen.getByText("Road repair")).toBeInTheDocument();
     expect(screen.queryByText("Water supply")).not.toBeInTheDocument();
   });
 
   // GAP-GRANTS-APPLICATIONS-02: the bogus "pending" value is ignored (no filter).
   it("ignores an invalid status (e.g. legacy 'pending') and shows all rows", async () => {
-    render(await GrantApplicationsPage({ searchParams: { status: "pending" } }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({ status: "pending" }) }));
     expect(screen.getByText("Water supply")).toBeInTheDocument();
     expect(screen.getByText("Road repair")).toBeInTheDocument();
   });
 
   // GAP-GRANTS-APPLICATIONS-05: the title column heading reads "Title".
   it("labels the title column 'Title', not 'Purpose / Title'", async () => {
-    render(await GrantApplicationsPage({ searchParams: {} }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("columnheader", { name: "Title" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: /Purpose \/ Title/ })).not.toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe("GrantApplicationsPage", () => {
   // first-run "No grant applications yet" empty copy, and stat cards show "—".
   it("shows a retry state (not first-run empty) on a failed fetch", async () => {
     getGrantApplicationsMock.mockResolvedValue({ data: [], source: "error" });
-    render(await GrantApplicationsPage({ searchParams: {} }));
+    render(await GrantApplicationsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText(/No grant applications yet/)).not.toBeInTheDocument();
     const total = screen.getByText("Total").closest(".stat")!;
     expect(within(total as HTMLElement).getByText("—")).toBeInTheDocument();

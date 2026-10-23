@@ -127,13 +127,7 @@ export type ListFilters = {
   to?: string;
 };
 
-/** List always returns MASKED numbers — PII never leaks into collection reads. */
-export async function listByTenant(
-  tenantId: string,
-  limit: number,
-  offset: number,
-  filters: ListFilters = {},
-): Promise<CallSummary[]> {
+function listConditions(tenantId: string, filters: ListFilters): SQL[] {
   const conditions: SQL[] = [eq(calls.tenantId, tenantId)];
   if (filters.status) conditions.push(eq(calls.status, filters.status));
   if (filters.direction) conditions.push(eq(calls.direction, filters.direction));
@@ -143,6 +137,31 @@ export async function listByTenant(
   if (filters.to) conditions.push(sql`${calls.createdAt} < ${filters.to}`);
   // Exact caller lookup via blind index — the ciphertext column is never matched.
   if (filters.callerNumber) conditions.push(eq(calls.callerNumberIdx, blindIndex(filters.callerNumber)));
+  return conditions;
+}
+
+/**
+ * True total of calls matching the SAME filters as listByTenant, so the list can
+ * report pagination.total instead of callers counting one page (default 50).
+ */
+export async function countByTenant(tenantId: string, filters: ListFilters = {}): Promise<number> {
+  const rows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({ value: sql<number>`count(*)::int` })
+      .from(calls)
+      .where(and(...listConditions(tenantId, filters))),
+  );
+  return Number(rows[0]?.value ?? 0);
+}
+
+/** List always returns MASKED numbers — PII never leaks into collection reads. */
+export async function listByTenant(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  filters: ListFilters = {},
+): Promise<CallSummary[]> {
+  const conditions = listConditions(tenantId, filters);
 
   const rows = await readScoped(tenantId, (tx) =>
     tx
@@ -217,7 +236,17 @@ export async function appendIvrHit(
 export type CallMetrics = {
   total: number;
   byStatus: Record<CallStatus, number>;
+  /** queued + ringing — calls currently waiting / in progress. */
+  live: number;
   answered: number;
+  /** Calls with an SLA result (answered with a recorded wait) and how many met the queue target. */
+  slaScored: number;
+  slaMet: number;
+  /** Whole-percent SLA attainment over scored calls; null (not 100) when nothing is scored. */
+  slaPct: number | null;
+  /** Completed calls grouped by wrap-up code (null = completed without a code). */
+  completed: number;
+  dispositions: Array<{ disposition: string | null; count: number }>;
   abandoned: number;
   abandonmentRatePct: number;
   slaAnsweredPct: number;
@@ -225,10 +254,19 @@ export type CallMetrics = {
   avgTalkSeconds: number | null;
 };
 
-/** Aggregate SLA / abandonment metrics for a tenant (optionally one queue). */
-export async function metricsByTenant(tenantId: string, queueId?: string): Promise<CallMetrics> {
+export type MetricsWindow = { queueId?: string; from?: string; to?: string };
+
+/**
+ * Aggregate SLA / abandonment / disposition metrics for a tenant, over the whole
+ * (optionally queue- and createdAt-window-filtered) call set — server-side, so
+ * dashboards never derive KPIs from one default page of the list.
+ */
+export async function metricsByTenant(tenantId: string, queueIdOrWindow?: string | MetricsWindow): Promise<CallMetrics> {
+  const win: MetricsWindow = typeof queueIdOrWindow === "string" ? { queueId: queueIdOrWindow } : (queueIdOrWindow ?? {});
   const conditions: SQL[] = [eq(calls.tenantId, tenantId)];
-  if (queueId) conditions.push(eq(calls.queueId, queueId));
+  if (win.queueId) conditions.push(eq(calls.queueId, win.queueId));
+  if (win.from) conditions.push(sql`${calls.createdAt} >= ${win.from}`);
+  if (win.to) conditions.push(sql`${calls.createdAt} < ${win.to}`);
 
   const rows = await readScoped(tenantId, (tx) =>
     tx
@@ -237,6 +275,8 @@ export async function metricsByTenant(tenantId: string, queueId?: string): Promi
         count: sql<number>`count(*)::int`,
         answered: sql<number>`count(*) filter (where ${calls.answeredAt} is not null)::int`,
         withinSla: sql<number>`count(*) filter (where ${calls.answeredAt} is not null and ${calls.waitSeconds} <= coalesce(${queues.slaAnswerSeconds}, ${DEFAULT_SLA_ANSWER_SECONDS}))::int`,
+        // Same predicate as toSummary().slaAnswered !== null: answered with a recorded wait.
+        scored: sql<number>`count(*) filter (where ${calls.answeredAt} is not null and ${calls.waitSeconds} is not null)::int`,
         avgWait: sql<number | null>`avg(${calls.waitSeconds})`,
         avgTalk: sql<number | null>`avg(${calls.talkSeconds})`,
       })
@@ -253,6 +293,7 @@ export async function metricsByTenant(tenantId: string, queueId?: string): Promi
   let total = 0;
   let answered = 0;
   let withinSla = 0;
+  let scored = 0;
   let waitWeighted = 0;
   let talkWeighted = 0;
   let waitN = 0;
@@ -263,6 +304,7 @@ export async function metricsByTenant(tenantId: string, queueId?: string): Promi
     total += c;
     answered += Number(r.answered);
     withinSla += Number(r.withinSla);
+    scored += Number(r.scored);
     if (r.avgWait != null) {
       waitWeighted += Number(r.avgWait) * Number(r.answered || c);
       waitN += Number(r.answered || c);
@@ -273,11 +315,27 @@ export async function metricsByTenant(tenantId: string, queueId?: string): Promi
     }
   }
   const abandoned = byStatus.abandoned;
+  const dispositionRows = await readScoped(tenantId, (tx) =>
+    tx
+      .select({ disposition: calls.disposition, count: sql<number>`count(*)::int` })
+      .from(calls)
+      .where(and(...conditions, eq(calls.status, "completed")))
+      .groupBy(calls.disposition),
+  );
+  const dispositions = dispositionRows
+    .map((r) => ({ disposition: (r.disposition as string | null) ?? null, count: Number(r.count) }))
+    .sort((a, b) => b.count - a.count);
   const round1 = (n: number) => Math.round(n * 10) / 10;
   return {
     total,
     byStatus,
+    live: byStatus.queued + byStatus.ringing,
     answered,
+    slaScored: scored,
+    slaMet: withinSla,
+    slaPct: scored > 0 ? Math.round((withinSla / scored) * 100) : null,
+    completed: byStatus.completed,
+    dispositions,
     abandoned,
     abandonmentRatePct: total > 0 ? round1((abandoned / total) * 100) : 0,
     slaAnsweredPct: answered > 0 ? round1((withinSla / answered) * 100) : 100,

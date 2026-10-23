@@ -20,7 +20,8 @@ function isOverdue(status: string, updatedAt: string | null | undefined): boolea
   return ageDays > OVERDUE_STALE_DAYS;
 }
 
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const isPrivileged = roles.some((r: string) => PRIVILEGED_ROLES.includes(r));
   const queryEmployeeId = typeof searchParams?.employeeId === "string" ? searchParams.employeeId : "";

@@ -6,6 +6,7 @@
  * All monetary values in paise (bigint).
  */
 
+import { toSafeInt } from "../../shared/money.js";
 import {
   computeGratuityExemption,
   computeLeaveEncashExemption,
@@ -202,7 +203,7 @@ export function computeFnfSettlement(input: FnfInput): FnfResult {
   // float multiplication" — tax/engine.ts's file-level comment), instead of
   // float division/Math.round on a Number-converted paise value. annualTaxableMinor
   // is already clamped to >= 0n above, so no separate Math.max(0, ...) is needed.
-  const taxableRupees = Number(roundTenRupeesMinor(annualTaxableMinor) / 100n); // Sec 288A rounding
+  const taxableRupees = toSafeInt(roundTenRupeesMinor(annualTaxableMinor) / 100n); // Sec 288A rounding
   const taxResult = computeTax(taxableRupees, input.taxRegime, input.fyStartYear, input.tenantId);
   const annualTaxMinor = BigInt(taxResult.totalTax) * 100n;
 

@@ -1,3 +1,4 @@
+import { minorToWireNumber } from "../../shared/money.js";
 import * as repo from "./repo.js";
 import { fetchEmployeeSummaries, fetchNpsPranLast4 } from "../../shared/hrms-client.js";
 import { fetchRetirementAccounts } from "../../shared/hrms-retirement-client.js";
@@ -16,9 +17,9 @@ export async function listPfReport(tenantId: string, limit: number, period?: str
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
-    basicMinor: Number(r.basicMinor),
-    empContribMinor: Number(r.empContribMinor),
-    erContribMinor: Number(r.erContribMinor),
+    basicMinor: minorToWireNumber(r.basicMinor),
+    empContribMinor: minorToWireNumber(r.empContribMinor),
+    erContribMinor: minorToWireNumber(r.erContribMinor),
   }));
 }
 
@@ -31,9 +32,9 @@ export async function listEsiReport(tenantId: string, limit: number, period?: st
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
-    grossMinor: Number(r.grossMinor),
-    empContribMinor: Number(r.empContribMinor),
-    erContribMinor: Number(r.erContribMinor),
+    grossMinor: minorToWireNumber(r.grossMinor),
+    empContribMinor: minorToWireNumber(r.empContribMinor),
+    erContribMinor: minorToWireNumber(r.erContribMinor),
   }));
 }
 
@@ -43,8 +44,8 @@ export async function listTdsReport(tenantId: string, limit: number) {
     id: r.id,
     employeeId: r.employeeId,
     period: r.period,
-    taxableMinor: Number(r.taxableMinor),
-    tdsMinor: Number(r.tdsMinor),
+    taxableMinor: minorToWireNumber(r.taxableMinor),
+    tdsMinor: minorToWireNumber(r.tdsMinor),
   }));
 }
 
@@ -59,7 +60,7 @@ export async function listGratuityReport(tenantId: string, limit: number) {
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     yearsOfService: r.yearsOfService,
-    gratuityMinor: Number(r.gratuityMinor),
+    gratuityMinor: minorToWireNumber(r.gratuityMinor),
     status: r.status,
   }));
 }
@@ -88,12 +89,12 @@ export async function listGpfReport(tenantId: string, limit: number) {
     // HRMS has no match) -- replaces the web's fabricated UUID-prefix "code".
     employeeCode: empMap.get(r.employeeId)?.employeeNo ?? null,
     period: r.period,
-    basicMinor: Number(r.basicMinor),
+    basicMinor: minorToWireNumber(r.basicMinor),
     // payroll_gpf.contrib_pct is a Drizzle `numeric` column, which the
     // driver returns as a string ("10.00"); send a number so clients can
     // format it as a percent.
     contribPct: Number(r.contribPct),
-    empContribMinor: Number(r.empContribMinor),
+    empContribMinor: minorToWireNumber(r.empContribMinor),
     // GAP-PAYROLL-STATUTORY-GPF-02: flags divergence from the hrms-service GPF account.
     reconciliation: reconcileGpf(BigInt(r.empContribMinor), accounts?.gpf.get(r.employeeId), coverageOf(accounts, accounts?.gpfTruncated)),
   }));
@@ -115,14 +116,14 @@ export async function listNpsReport(tenantId: string, limit: number) {
     employeeCode: empMap.get(r.employeeId)?.employeeNo ?? null,
     pranLast4: pranMap.get(r.employeeId) ?? null,
     period: r.period,
-    basicMinor: Number(r.basicMinor),
+    basicMinor: minorToWireNumber(r.basicMinor),
     // GAP-PAYROLL-STATUTORY-NPS-05: the base the percentages were applied to
     // (Basic + DA). null for rows written before migration 0159 -- not guessed.
-    pensionBaseMinor: r.pensionBaseMinor == null ? null : Number(r.pensionBaseMinor),
+    pensionBaseMinor: r.pensionBaseMinor == null ? null : minorToWireNumber(r.pensionBaseMinor),
     empContribPct: r.empContribPct,
     erContribPct: r.erContribPct,
-    empContribMinor: Number(r.empContribMinor),
-    erContribMinor: Number(r.erContribMinor),
+    empContribMinor: minorToWireNumber(r.empContribMinor),
+    erContribMinor: minorToWireNumber(r.erContribMinor),
     // GAP-PAYROLL-STATUTORY-NPS-02: flags divergence from the hrms-service NPS account.
     reconciliation: reconcileNps(Number(r.empContribPct), Number(r.erContribPct), accounts?.nps.get(r.employeeId), coverageOf(accounts, accounts?.npsTruncated)),
   }));

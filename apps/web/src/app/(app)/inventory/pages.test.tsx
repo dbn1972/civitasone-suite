@@ -69,7 +69,7 @@ const { default: InventoryReceiptsPage } = await import("./receipts/page");
 const { default: InventoryHub } = await import("./page");
 const { INVENTORY_WRITE_ROLES } = await import("@/lib/auth/roleGuard");
 
-const params = { params: { id: "abc" } };
+const params = { params: Promise.resolve({ id: "abc" }) };
 const retryBtn = () => screen.queryByRole("button", { name: /try again|retry/i });
 
 beforeEach(() => {

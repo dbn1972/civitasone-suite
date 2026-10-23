@@ -3,7 +3,8 @@ import { getSessionRoles, hasAnyRole, CRM_KYC_APPROVER_ROLES } from "@/lib/auth/
 import { OnboardingDetail } from "./OnboardingDetail";
 
 /** P1-9 — Customer onboarding case detail (stage + KYC actions). */
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("crmOnboardingDetailPage");
   // GAP-CRM-ONBOARDING-DETAIL-03: recording a KYC outcome of verified/rejected
   // is an approver action (crm-service KYC_APPROVER_ROLES). Resolve it on the

@@ -47,14 +47,14 @@ describe("IndentDetailPage", () => {
 
   it("DETAIL-02: shows the purpose / justification text", async () => {
     route({ ...BASE, status: "pending" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.getByText(/Replace failed site survey equipment/)).toBeInTheDocument();
     expect(screen.getByText("Purpose / justification")).toBeInTheDocument();
   });
 
   it("DETAIL-03: renders the approval-trail timestamp in Indian date+time, not raw ISO", async () => {
     route({ ...BASE, status: "rejected" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     // 2026-09-01T09:30:00Z -> 01 Sep 2026, 03:00 pm (IST, +5:30)
     expect(screen.getByText(/01 Sep 2026, 03:00 pm/i)).toBeInTheDocument();
     // The raw ISO must not be shown.
@@ -63,13 +63,13 @@ describe("IndentDetailPage", () => {
 
   it("DETAIL-03: a rejected step shows an emphasised 'Reason:' prefix", async () => {
     route({ ...BASE, status: "rejected" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.getByText(/Reason: Budget head exhausted/)).toBeInTheDocument();
   });
 
   it("DETAIL-04: renders exactly one status pill and no hard-coded hex colours", async () => {
     route({ ...BASE, status: "approved" });
-    const { container } = render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    const { container } = render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     const pills = container.querySelectorAll('[class*="pill"]');
     expect(pills.length).toBe(1);
     expect(container.innerHTML).not.toMatch(/#818cf8|#1e293b|#64748b/i);
@@ -77,28 +77,28 @@ describe("IndentDetailPage", () => {
 
   it("DETAIL-01: an approved indent offers a 'Create purchase order' next step", async () => {
     route({ ...BASE, status: "approved" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     const link = screen.getByRole("link", { name: "Create purchase order" });
     expect(link).toHaveAttribute("href", "/procurement/orders/new");
   });
 
   it("DETAIL-01: a pending indent links to the approvals queue", async () => {
     route({ ...BASE, status: "pending" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     const link = screen.getByRole("link", { name: "View in approvals" });
     expect(link).toHaveAttribute("href", "/procurement/approvals");
   });
 
   it("DETAIL-01: a tender_required indent links to tender creation", async () => {
     route({ ...BASE, status: "tender_required" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     const link = screen.getByRole("link", { name: "Create tender" });
     expect(link).toHaveAttribute("href", "/procurement/tenders/new");
   });
 
   it("DETAIL-01: a closed indent offers no next-step action link", async () => {
     route({ ...BASE, status: "closed" });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.queryByRole("link", { name: "Create purchase order" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "View in approvals" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Create tender" })).not.toBeInTheDocument();
@@ -107,14 +107,14 @@ describe("IndentDetailPage", () => {
   // GAP-PROCUREMENT-INDENTS-DETAIL-05: the trail comes from the workflow engine.
   it("DETAIL-05: an unreachable decision source is reported, not rendered as an empty trail", async () => {
     route({ ...BASE, status: "approved", approvalTrail: [], approvalTrailAvailable: false });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.getByText(/approval trail could not be loaded just now/i)).toBeInTheDocument();
     expect(screen.queryByText("Approval trail")).toBeNull();
   });
 
   it("DETAIL-05: with the source available, decisions render and no 'unavailable' note appears", async () => {
     route({ ...BASE, status: "rejected", approvalTrailAvailable: true });
-    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    render(await IndentDetailPage({ params: Promise.resolve({ id: "ind-1" }) }));
     expect(screen.getByText("Approval trail")).toBeInTheDocument();
     expect(screen.queryByText(/approval trail could not be loaded/i)).toBeNull();
   });

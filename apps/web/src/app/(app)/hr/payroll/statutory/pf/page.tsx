@@ -23,7 +23,8 @@ type PfRow = {
   erContribMinor: number;
 } & Record<string, unknown>;
 
-export default async function PfStatutoryPage({ searchParams }: { searchParams?: { period?: string } }) {
+export default async function PfStatutoryPage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("pf");
   const tFallback = await getTranslations("employeeFallback");
   // GAP-PAYROLL-STATUTORY-PF-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*

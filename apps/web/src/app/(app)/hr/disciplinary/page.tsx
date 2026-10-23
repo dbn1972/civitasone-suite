@@ -64,11 +64,12 @@ async function getData(offset: number): Promise<LoaderResult<ListPage>> {
   );
 }
 
-export default async function DisciplinaryListPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string };
-}) {
+export default async function DisciplinaryListPage(
+  props: {
+    searchParams?: Promise<{ page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("disciplinary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();

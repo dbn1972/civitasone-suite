@@ -12,6 +12,7 @@
  * Schema: employee_id, claim_type (indoor/outdoor/reimbursement/advance), amount (paise),
  *         hospital_name, hospital_id, diagnosis, documents[], status, dependant_name, dependant_relation
  */
+import { minorToSafeNumber, parseMinor } from "@civitasone/schemas/money";
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type { RequestContext } from "@civitasone/types";
@@ -424,7 +425,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       if (
         body.status === "approved" &&
         body.approvedAmountMinor !== undefined &&
-        body.approvedAmountMinor > Number(existing.amount_minor)
+        BigInt(body.approvedAmountMinor) > parseMinor(existing.amount_minor)
       ) {
         throw new HttpError(
           400,
@@ -434,7 +435,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const amount = body.status === "approved"
-        ? (body.approvedAmountMinor ?? Number(existing.amount_minor))
+        ? (body.approvedAmountMinor ?? minorToSafeNumber(existing.amount_minor))
         : 0;
 
       // Race fix: the SELECT above only proves the claim was 'pending' at

@@ -35,14 +35,14 @@ describe("WorkflowDesignerPage — GAP2-DESIGNER-HOME-01 authoring gate", () => 
 
   it("passes canAuthor=false to the canvas for a non-admin role", async () => {
     getSessionRolesMock.mockReturnValue(["workflow_user"]);
-    render(await WorkflowDesignerPage({ searchParams: {} }));
+    render(await WorkflowDesignerPage({ searchParams: Promise.resolve({}) }));
     expect(capturedProps).toBeTruthy();
     expect(capturedProps?.canAuthor).toBe(false);
   });
 
   it("passes canAuthor=true to the canvas for a workflow_admin", async () => {
     getSessionRolesMock.mockReturnValue(["workflow_admin"]);
-    render(await WorkflowDesignerPage({ searchParams: {} }));
+    render(await WorkflowDesignerPage({ searchParams: Promise.resolve({}) }));
     expect(capturedProps?.canAuthor).toBe(true);
   });
 });

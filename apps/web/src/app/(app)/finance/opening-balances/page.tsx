@@ -87,11 +87,12 @@ async function getOpeningBalances(fyCode: string): Promise<LoaderResult<OpeningB
   );
 }
 
-export default async function OpeningBalancesPage({
-  searchParams,
-}: {
-  searchParams?: { fy?: string };
-}) {
+export default async function OpeningBalancesPage(
+  props: {
+    searchParams?: Promise<{ fy?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const selectedFy = searchParams?.fy?.trim() || "";
 
   const { data: fiscalYears, source: fySource } = await getFiscalYears();

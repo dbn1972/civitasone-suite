@@ -10,7 +10,8 @@ import { DealDetailActions } from "./DealDetailActions";
 import { getSessionRoles, hasAnyRole, CRM_OPPORTUNITY_CLOSE_ROLES } from "@/lib/auth/roleGuard";
 import { OPEN_STAGE_PATH } from "@/lib/crm/dealStages";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: deal, source, status } = await getDealById(params.id);
   const tNf = await getTranslations("crm.dealDetail");
 

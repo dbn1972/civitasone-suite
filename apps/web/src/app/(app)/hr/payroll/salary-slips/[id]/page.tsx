@@ -14,7 +14,8 @@ import { breakdownSlip } from "./slipComponents";
 import { getLetterhead } from "./letterhead";
 import { LetterheadForm } from "./LetterheadForm";
 
-export default async function SalarySlipPage({ params }: { params: { id: string } }) {
+export default async function SalarySlipPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("salarySlipDetail");
   const tFallback = await getTranslations("employeeFallback");
   const tCommon = await getTranslations("payrollCommon");

@@ -77,11 +77,12 @@ function asWorkIssue(r: unknown): WorkIssue {
   };
 }
 
-export default async function ExecutionDetailPage({
-  params,
-}: {
-  params: { workId: string };
-}) {
+export default async function ExecutionDetailPage(
+  props: {
+    params: Promise<{ workId: string }>;
+  }
+) {
+  const params = await props.params;
   const { workId } = params;
 
   const canManage = canManageWorkClosure(getSessionRoles());

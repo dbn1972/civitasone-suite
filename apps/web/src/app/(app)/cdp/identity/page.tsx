@@ -11,7 +11,8 @@ function parseOffset(value: string | string[] | undefined): number {
   return Number.isInteger(n) && n >= 0 ? n : 0;
 }
 
-export default async function Page({ searchParams }: { searchParams?: { offset?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ offset?: string }> }) {
+  const searchParams = await props.searchParams;
   const offset = parseOffset(searchParams?.offset);
   const { data, source } = await getCdpIdentityPage(offset);
 

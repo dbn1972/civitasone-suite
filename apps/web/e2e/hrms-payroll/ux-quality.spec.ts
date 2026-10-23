@@ -19,6 +19,10 @@ import { setupHrmsPage, mockLeaveContext } from './helpers';
 import * as fixtures from './fixtures';
 
 test.describe('UX Quality — Leave Application (Critical Journey)', () => {
+  // ?empId= must name someone on the SSR roster (global-setup.ts serves EMP-001 /
+  // EMP-002): since b56fccd90 (#2128, GAP-HR-LEAVE-APPLY-03) HR starts with nobody
+  // selected and the Leave Type select stays disabled until a listed employee is
+  // chosen, so the former lower-case 'emp-001' deep link matched no one.
   test.beforeEach(async ({ page }) => {
     await setupHrmsPage(page);
     // Mock the leave-context API (progressive loading on employee select)
@@ -67,7 +71,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   }
 
   test('form shows balance alongside leave type (prevents over-application)', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     // Wait for leave context to load
     await page.waitForLoadState('networkidle');
     // The leave type selector should show balance info ("Casual Leave (5 days balance)")
@@ -82,7 +86,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('shows calculated duration in real-time as dates are picked', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -93,7 +97,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('submit button is disabled while form is submitting (prevents double-submit)', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     await page.waitForLoadState('networkidle');
     // Fill form
     await fillValidRequest(page, '2024-08-12', '2024-08-12');
@@ -109,7 +113,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('shows success message with clear next action after submission', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -121,7 +125,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('form fields reset after successful submission (ready for next task)', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -135,7 +139,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('inline validation on invalid date range (to < from)', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     await page.waitForLoadState('networkidle');
     const fromDate = page.getByLabel(/from date/i);
     const toDate = page.getByLabel(/to date/i);
@@ -147,7 +151,7 @@ test.describe('UX Quality — Leave Application (Critical Journey)', () => {
   });
 
   test('clear breadcrumb navigation (user always knows where they are)', async ({ page }) => {
-    await page.goto('/hr/leave/apply?empId=emp-001');
+    await page.goto('/hr/leave/apply?empId=EMP-001');
     // Should have breadcrumb or back nav showing: HR > Leave > Apply
     const nav = page.getByRole('navigation', { name: /breadcrumb/i }).or(page.getByRole('link', { name: /leave/i })).first();
     await expect(nav).toBeVisible();

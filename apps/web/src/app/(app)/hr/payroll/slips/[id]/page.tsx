@@ -11,7 +11,8 @@ import { salarySlipStatusLabel, isPrintableSlipStatus } from "@/lib/payroll/stat
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 import { slipBackTarget } from "./_backTarget";
 
-export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
+export default async function PayslipDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("salarySlipDashboard");
   const tNav = await getTranslations("payrollRouteError");
   const roles = getSessionRoles();

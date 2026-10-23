@@ -2,7 +2,8 @@ import { getGrievanceDetail } from "../../_data/loaders";
 import { RequestDetailClient } from "./RequestDetailClient";
 import { getSessionRoles, hasAnyRole, CITIZEN_OFFICER_ROLES } from "@/lib/auth/roleGuard";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   // GAP-CITIZEN-REQUESTS-DETAIL-01: pass the caller's role so the client
   // component can hide officer actions from citizens. The backend is still
   // authoritative; this only prevents confusing 403s in the UI.

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, istDateKey } from "@/lib/formatters";
 import { PeriodSelector } from "./PeriodSelector";
 import { IngestChallanForm } from "./IngestChallanForm";
 import { toHumanError } from "@/lib/messages";
@@ -48,8 +48,8 @@ type ReconcileResponse = {
 };
 
 function currentPeriod(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  // CLOS2-S2-03: IST calendar month, not the (UTC) host clock.
+  return istDateKey(new Date()).slice(0, 7);
 }
 
 async function getChallans(period: string, formType: string): Promise<LoaderResult<ChallanRow[]>> {
@@ -74,7 +74,8 @@ async function getReconciliation(period: string, formType: string): Promise<Load
   );
 }
 
-export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string; formType?: string } }) {
+export default async function ChallansPage(props: { searchParams?: Promise<{ period?: string; formType?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("challans");
   // GAP-PAYROLL-STATUTORY-CHALLANS-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API (TDS challans) is READER_ROLES-only in

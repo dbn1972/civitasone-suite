@@ -12,6 +12,8 @@
  * References: IND-AS 36 paras 6, 18, 25-29, 30-57, 59-64, 114-123
  */
 
+import { minorToSafeNumber } from "@civitasone/schemas/money";
+
 export interface ImpairmentTestInput {
   /** Carrying amount (book value) at test date in minor units (paise). */
   carryingAmountMinor: bigint;
@@ -69,9 +71,13 @@ export function computeSimpleVIU(
 ): bigint {
   if (projectionYears <= 0 || discountRateBps <= 0) return 0n;
   const rate = discountRateBps / 10000; // bps → decimal
+  // The DCF is an IEEE-754 present-value calculation (fractional discount factors), so the
+  // cash flow enters it as a number; minorToSafeNumber rejects (rather than silently rounds)
+  // an amount above 2^53 minor units.
+  const cashFlow = minorToSafeNumber(annualCashFlowMinor);
   let pv = 0;
   for (let t = 1; t <= projectionYears; t++) {
-    pv += Number(annualCashFlowMinor) / Math.pow(1 + rate, t);
+    pv += cashFlow / Math.pow(1 + rate, t);
   }
   return BigInt(Math.round(pv));
 }

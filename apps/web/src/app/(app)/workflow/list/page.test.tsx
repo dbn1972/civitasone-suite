@@ -89,7 +89,7 @@ describe("WorkflowInstancesPage — GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 (definit
     });
     getAnalyticsSummaryMock.mockResolvedValue({ data: EMPTY_ANALYTICS, source: "api" });
 
-    render(await WorkflowInstancesPage({ searchParams: { definitionId: "D1" } }));
+    render(await WorkflowInstancesPage({ searchParams: Promise.resolve({ definitionId: "D1" }) }));
 
     // The loader must receive the filter (old page ignored searchParams entirely).
     expect(getInstancesMock).toHaveBeenCalledWith({ definitionId: "D1" });
@@ -109,7 +109,7 @@ describe("WorkflowInstancesPage — GAP2-WORKFLOW-DEFINITIONS-DETAIL-01 (definit
     });
     getAnalyticsSummaryMock.mockResolvedValue({ data: EMPTY_ANALYTICS, source: "api" });
 
-    render(await WorkflowInstancesPage({ searchParams: { definitionId: "D1" } }));
+    render(await WorkflowInstancesPage({ searchParams: Promise.resolve({ definitionId: "D1" }) }));
 
     expect(screen.getByText("Instance d1a")).toBeInTheDocument();
     expect(screen.getByText("Instance d1b")).toBeInTheDocument();

@@ -22,7 +22,8 @@ const PAGE_SIZE = 50;
 type Page = { rows: ApiContract[]; total: number; offset: number; stats: ApiStats };
 const EMPTY_STATS: ApiStats = { contracts: 0, vendors: 0, activeContracts: 0, expiringIn60Days: 0, totalHeadcount: 0 };
 
-export default async function OutsourcedPage({ searchParams }: { searchParams?: { offset?: string } }) {
+export default async function OutsourcedPage(props: { searchParams?: Promise<{ offset?: string }> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   if (!roles.some((r) => OUTSOURCED_ROLES.includes(r))) {
     return <PermissionDenied module="the outsourced workforce register" requiredRoles={OUTSOURCED_ROLES} backHref="/hr" backLabel="Back to HR" />;

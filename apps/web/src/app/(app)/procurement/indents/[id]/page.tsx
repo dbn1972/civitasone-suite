@@ -49,7 +49,8 @@ const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left"
   { key: "totalPrice", label: "Total", align: "right" },
 ];
 
-export default async function IndentDetailPage({ params }: { params: { id: string } }) {
+export default async function IndentDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tw = await getTranslations("procurement.w2b.indentDetail");
   const { data: indent, source } = await getProcurementIndentById(params.id);
 
@@ -100,7 +101,6 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
           </>
         }
       />
-
       <Card title="Indent details" padding>
         <div className="fields">
           <div className="field">
@@ -138,7 +138,6 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
               the PageHeader pill above; a second pill here was a duplicate. */}
         </div>
       </Card>
-
       {indent.lineItems.length > 0 && (
         <Card title="Line items">
           <DataTable<LineItemRow>
@@ -148,7 +147,6 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
           />
         </Card>
       )}
-
       {/* GAP-PROCUREMENT-INDENTS-DETAIL-05: the trail comes from the workflow engine.
           If it could not be asked, say so - an empty trail on an indent that WAS
           decided must not read as "no decisions". */}
@@ -157,7 +155,6 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
           {tw("trailUnavailable")}
         </div>
       )}
-
       {indent.approvalTrail.length > 0 && (
         <Card title="Approval trail" padding>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

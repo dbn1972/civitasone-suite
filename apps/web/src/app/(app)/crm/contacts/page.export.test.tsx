@@ -25,7 +25,7 @@ beforeEach(() => {
 
 async function canExportFor(roles: string[]): Promise<boolean> {
   mockRoles.mockReturnValue(roles);
-  render(await Page({ searchParams: {} }));
+  render(await Page({ searchParams: Promise.resolve({}) }));
   return (toolbarProps.mock.calls[0]![0] as ToolbarProps).canExport;
 }
 
@@ -49,7 +49,7 @@ describe("Contacts list export affordance matches the export endpoint's roles", 
 
   it("forwards the Mine / Recent view (segment) with the other active filters to the export", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    render(await Page({ searchParams: { segment: "mine", search: "rao", temperature: "hot" } }));
+    render(await Page({ searchParams: Promise.resolve({ segment: "mine", search: "rao", temperature: "hot" }) }));
     const props = toolbarProps.mock.calls[0]![0] as ToolbarProps;
     expect(props.exportQuery).toEqual({ segment: "mine", search: "rao", temperature: "hot" });
   });

@@ -34,7 +34,7 @@ describe("Form16Page — Hindi locale (GAP-PAYROLL-FORM16-08)", () => {
   });
 
   it("shows the translated back label in the header and on the permission-denied card, not the English one", async () => {
-    const ui = await Form16Page({ searchParams: {} });
+    const ui = await Form16Page({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="hi" messages={hiMessages}>{ui}</NextIntlClientProvider>);
     const links = screen.getAllByRole("link", { name: /पेरोल पर वापस जाएं/ });
     expect(links.length).toBeGreaterThanOrEqual(1);
@@ -59,7 +59,7 @@ describe("Form16Page — Hindi locale (GAP-PAYROLL-FORM16-08)", () => {
         createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
       } },
     });
-    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const ui = await Form16Page({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     const { container } = render(<NextIntlClientProvider locale="hi" messages={hiMessages}>{ui}</NextIntlClientProvider>);
     fireEvent.click(screen.getByText(/^विफलता विवरण \(/));
     expect(screen.getByText("EMP-0109: PDF को भंडारण में सहेजा नहीं जा सका।")).toBeInTheDocument();

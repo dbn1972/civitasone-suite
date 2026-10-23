@@ -4,13 +4,18 @@
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
-import type { JobView } from "./schema.js";
+import type { JobView, JobDetailView } from "./schema.js";
 
 export async function getJob(tenantId: string, id: string): Promise<JobView | null> {
   return cache.getOrLoad(
     cache.makeKey(tenantId, RESOURCE, id),
     () => repo.findById(id, tenantId),
   );
+}
+
+/** Uncached on purpose: the render consumer fills result columns/rows after the job row is first read. */
+export async function getJobDetail(tenantId: string, id: string): Promise<JobDetailView | null> {
+  return repo.findDetailById(id, tenantId);
 }
 
 export async function listJobs(

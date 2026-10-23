@@ -35,7 +35,7 @@ beforeEach(() => {
 });
 
 async function renderPage(search: Record<string, string> = {}) {
-  render(await MyLearningPage({ searchParams: search }));
+  render(await MyLearningPage({ searchParams: Promise.resolve(search) }));
 }
 
 describe("MyLearningPage — GAP-LEARNING-HOME-02", () => {

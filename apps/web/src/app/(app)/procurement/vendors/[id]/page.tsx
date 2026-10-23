@@ -28,12 +28,9 @@ const KYC_LABELS: Record<string, string> = {
   not_started: "Not started",
 };
 function kycLabel(status: string): string {
-  return (
-    KYC_LABELS[status] ??
-    status
-      .replace(/_/g, " ")
-      .replace(/^\w/, (c) => c.toUpperCase())
-  );
+  return (KYC_LABELS[status] ?? status
+    .replace(/_/g, " ")
+    .replace(/^\w/, (c) => c.toUpperCase()));
 }
 
 /** Whole days from `today` to `isoDate` (both YYYY-MM-DD); negative once past. */
@@ -42,7 +39,11 @@ function daysUntil(isoDate: string, today: string): number {
 }
 const EXPIRY_WARN_DAYS = 30;
 
-export default async function VendorDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { registered?: string } }) {
+export default async function VendorDetailPage(
+  props: { params: Promise<{ id: string }>; searchParams?: Promise<{ registered?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("procurement.w2.vendorDetail");
   // GAP-PROCUREMENT-VENDORS-DETAIL-04: the vendor's own purchase orders, fetched
   // alongside the profile. Each section reports its own failure - an error is

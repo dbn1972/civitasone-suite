@@ -112,4 +112,26 @@ describe("QuarterCreateForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add Quarter" }));
     expect(container.innerHTML).not.toMatch(/#c0392b/i);
   });
+
+  it.each(["450.75", "1e3", "20abc", "0"])("CLOS2-S1-05: carpet area %s is rejected, not silently truncated, and nothing is posted", (bad) => {
+    render(<QuarterCreateForm />);
+    fireEvent.change(screen.getByLabelText(/Quarter No\./), { target: { value: "B-14" } });
+    fireEvent.change(screen.getByLabelText(/Carpet Area/), { target: { value: bad } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Quarter" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Carpet area must be a positive whole number of sq. ft.");
+    expect(screen.queryByRole("button", { name: "Add quarter" })).not.toBeInTheDocument();
+    expect(browserJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("CLOS2-S1-05: a plain whole carpet area 450 is posted as 450", async () => {
+    browserJsonMock.mockResolvedValue({ status: "accepted" });
+    render(<QuarterCreateForm />);
+    fireEvent.change(screen.getByLabelText(/Quarter No\./), { target: { value: "B-14" } });
+    fireEvent.change(screen.getByLabelText(/Carpet Area/), { target: { value: "450" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add Quarter" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add quarter" }));
+    await waitFor(() => expect(browserJsonMock).toHaveBeenCalled());
+    const body = JSON.parse((browserJsonMock.mock.calls[0][1] as { body: string }).body);
+    expect(body.carpetAreaSqft).toBe(450);
+  });
 });

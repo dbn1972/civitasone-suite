@@ -42,7 +42,7 @@ test.describe('Authentication', () => {
     // invalid_credentials isn't one of LoginClient's two special-cased errors
     // (access_denied / session_expired), so it falls into the generic copy: a plain-language
     // sentence plus the raw code as a support "Reference".
-    await expect(page.getByText(/Sign-in didn't complete/)).toBeVisible();
+    await expect(page.getByText(/Sign-in didn’t complete/)).toBeVisible();
     await expect(page.getByText('Reference: invalid_credentials')).toBeVisible();
   });
 

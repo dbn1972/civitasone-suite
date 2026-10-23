@@ -9,7 +9,8 @@ import type { GranteeSummary } from "@civitasone/types";
 import { schemeWindowState } from "../../../schemeWindow";
 import { ApplyForm } from "./ApplyForm";
 
-export default async function ApplyPage({ params }: { params: { id: string } }) {
+export default async function ApplyPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const schemeId = params.id;
   const { data: scheme, source, status } = await getSchemeById(schemeId);
 

@@ -44,14 +44,14 @@ describe("PerquisitePage", () => {
 
   it("denies a role with no payroll/HR privilege before fetching anything", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.getByText(/don.t have permission/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
   it("prompts for employee and FY when none is selected", async () => {
-    const ui = await PerquisitePage({ searchParams: {} });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({}) });
     renderPage(ui);
     expect(screen.getByText("Select an employee and financial year")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ describe("PerquisitePage", () => {
       },
       source: "api",
     });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     // The name is shown in the Form 12BA card and (GAP-PAYROLL-STATUTORY-PERQUISITE-05) in the add-component form.
     expect(screen.getAllByText("Test Employee")).toHaveLength(2);
@@ -82,7 +82,7 @@ describe("PerquisitePage", () => {
 
   it("renders an empty state on a genuine 404 (no perquisites on file)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.getByText("No Form 12BA data")).toBeInTheDocument();
   });
@@ -94,7 +94,7 @@ describe("PerquisitePage", () => {
   // affordance with a retry, not the empty-state copy.
   it("renders the error affordance (not the empty-state copy) when the lookup fails", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await PerquisitePage({ searchParams: { employeeId: "e1", fy: "2026-27" } });
+    const ui = await PerquisitePage({ searchParams: Promise.resolve({ employeeId: "e1", fy: "2026-27" }) });
     renderPage(ui);
     expect(screen.queryByText("No Form 12BA data")).not.toBeInTheDocument();
     expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument();
@@ -124,7 +124,7 @@ describe("PerquisitePage PAN: masked, audited reveal only for the roles that may
 
   it("a payroll role sees the PAN masked with NO reveal control (it cannot reveal at the source)", async () => {
     fetchJsonMock.mockResolvedValue({ data: form12ba(), source: "api" });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(screen.getByText("ABCDE****F")).toBeInTheDocument();
     expect(revealButtons()).toHaveLength(0);
   });
@@ -134,7 +134,7 @@ describe("PerquisitePage PAN: masked, audited reveal only for the roles that may
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     const { container } = render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+        {await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) })}
       </NextIntlClientProvider>,
     );
     expect(container.innerHTML).not.toContain("ABCDE1234F");
@@ -150,7 +150,7 @@ describe("PerquisitePage PAN: masked, audited reveal only for the roles that may
         ? new Response(JSON.stringify({ data: { value: "ABCDE1234F" } }), { status: 200 })
         : new Response(JSON.stringify({ data: [] }), { status: 200 }));
     const revealCalls = () => fetchMock.mock.calls.filter((c) => String(c[0]).includes("pii/reveal"));
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(revealButtons()).toHaveLength(1);
     expect(revealCalls()).toHaveLength(0); // nothing is revealed until a reason is confirmed
 
@@ -171,7 +171,7 @@ describe("PerquisitePage PAN: masked, audited reveal only for the roles that may
     getSessionRolesMock.mockReturnValue(["super_admin"]);
     fetchJsonMock.mockResolvedValue({ data: form12ba(), source: "api" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN" }), { status: 403 }));
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     fireEvent.click(revealButtons()[0]!);
     fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "verify PAN for Form 12BA" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
@@ -182,7 +182,7 @@ describe("PerquisitePage PAN: masked, audited reveal only for the roles that may
   it("an employee without a PAN shows the PANNOTAVBL flag and no reveal control", async () => {
     getSessionRolesMock.mockReturnValue(["hr_admin"]);
     fetchJsonMock.mockResolvedValue({ data: form12ba({ employee: { employeeId: EMP_ID, pan: "", name: "Ravi Kumar", panFlag: "PANNOTAVBL" } }), source: "api" });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(screen.getByText("PANNOTAVBL")).toBeInTheDocument();
     expect(revealButtons()).toHaveLength(0);
   });
@@ -198,7 +198,7 @@ describe("PerquisitePage employee name and FY validation (GAP-PAYROLL-STATUTORY-
     fetchJsonMock.mockResolvedValue({ data: form12ba(), source: "api" });
     const { container } = render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+        {await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) })}
       </NextIntlClientProvider>,
     );
     expect(document.querySelector(".ph .sub")).toHaveTextContent("Perquisites and Form 12BA for Ravi Kumar, FY 2026-27.");
@@ -209,12 +209,12 @@ describe("PerquisitePage employee name and FY validation (GAP-PAYROLL-STATUTORY-
 
   it("without a successful lookup the header keeps the generic subtitle", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(document.querySelector(".ph .sub")).toHaveTextContent("Itemised perquisite components (Sec 17(2)) and the statutory Form 12BA statement.");
   });
 
   it.each(["2026", "2026-28", "26-27", "2026-2027"])("a hand-edited FY %s is refused with a message and nothing is fetched", async (badFy) => {
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: badFy } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: badFy }) }));
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent("The financial year in the address is not valid");
     // and the add-component form stays locked behind a fresh lookup
@@ -252,7 +252,7 @@ describe("PerquisitePage employee name when the Form 12BA response has none (GAP
     mockLookup({ data: [{ id: EMP_ID, name: "Ravi Kumar", employeeNo: "EMP-7", department: "Finance" }] });
     const { container } = render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+        {await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) })}
       </NextIntlClientProvider>,
     );
     expect(document.querySelector(".ph .sub")).toHaveTextContent("Perquisites and Form 12BA for Ravi Kumar (EMP-7), FY 2026-27.");
@@ -267,7 +267,7 @@ describe("PerquisitePage employee name when the Form 12BA response has none (GAP
 
   it("ignores a directory row for any other id (the label can only be the looked-up employee's)", async () => {
     mockLookup({ data: [{ id: "00000000-0000-4000-8000-000000000001", name: "Someone Else", employeeNo: "EMP-9" }] });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(screen.queryByText(/Someone Else/)).not.toBeInTheDocument();
     expect(screen.getByText("Selected employee")).toBeInTheDocument();
   });
@@ -276,7 +276,7 @@ describe("PerquisitePage employee name when the Form 12BA response has none (GAP
     mockLookup(null, "error");
     const { container } = render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        {await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } })}
+        {await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) })}
       </NextIntlClientProvider>,
     );
     expect(screen.getByText("Selected employee")).toBeInTheDocument();
@@ -287,12 +287,12 @@ describe("PerquisitePage employee name when the Form 12BA response has none (GAP
 
   it("does not read the directory when the Form 12BA response already carries the name, or when there is no lookup", async () => {
     fetchJsonMock.mockResolvedValue({ data: form12ba(), source: "api" });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(fetchJsonMock).toHaveBeenCalledTimes(1);
 
     fetchJsonMock.mockReset();
     fetchJsonMock.mockResolvedValue({ data: null, source: "api", status: 404 });
-    renderPage(await PerquisitePage({ searchParams: { employeeId: EMP_ID, fy: "2026-27" } }));
+    renderPage(await PerquisitePage({ searchParams: Promise.resolve({ employeeId: EMP_ID, fy: "2026-27" }) }));
     expect(directoryCalls()).toHaveLength(0);
   });
 });

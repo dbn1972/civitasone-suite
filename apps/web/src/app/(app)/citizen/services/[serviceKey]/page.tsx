@@ -8,12 +8,14 @@ import { classifyServiceLoad, loadService } from "../_data/loadService";
 import { ServicePageClient } from "../_components/ServicePageClient";
 
 interface Props {
-  params: { serviceKey: string };
-  searchParams: { counter?: string };
+  params: Promise<{ serviceKey: string }>;
+  searchParams: Promise<{ counter?: string }>;
 }
 
 /** FN-13 — published service landing page (mobile-first). */
-export default async function ServicePage({ params, searchParams }: Props) {
+export default async function ServicePage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("citizenServices");
   const outcome = classifyServiceLoad(
     await loadService(params.serviceKey, { revalidateSeconds: 30, telemetryKey: "citizen.runtime.service" }),

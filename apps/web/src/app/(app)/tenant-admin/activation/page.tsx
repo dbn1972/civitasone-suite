@@ -21,7 +21,7 @@ async function loadEvents(): Promise<{ events: ActivationEvent[]; platform: bool
   const roles = getSessionRoles();
   const platform = roles.some((r) => /platform_admin|super_admin/.test(r));
 
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   const base = (process.env.CIVITASONE_API_BASE_URL || "").replace(/\/$/, "");
   if (!token || !base) return { events: [], platform, failed: true };
 

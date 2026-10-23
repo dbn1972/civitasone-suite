@@ -62,7 +62,7 @@ describe("WorkProposalDetailPage", () => {
 
   it("renders RefreshErrorState (not notFound) on a 500 (DETAIL-01)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText(/couldn't load work proposal/i)).toBeInTheDocument();
@@ -70,13 +70,13 @@ describe("WorkProposalDetailPage", () => {
 
   it("calls notFound() on a real 404 (DETAIL-01)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(WorkProposalDetailPage({ params: { id: "p1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it("shows only Created and DAO Finalized timeline steps — no dead steps (DETAIL-02)", async () => {
     fetchJsonMock.mockResolvedValue({ data: PROPOSAL, source: "api", status: 200 });
-    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
     expect(screen.getByText("Proposal Created")).toBeInTheDocument();
     expect(screen.getByText("DAO Finalized")).toBeInTheDocument();
@@ -87,7 +87,7 @@ describe("WorkProposalDetailPage", () => {
 
   it("renders Charged/Voted, Habitation and Sector detail rows (DETAIL-06)", async () => {
     fetchJsonMock.mockResolvedValue({ data: PROPOSAL, source: "api", status: 200 });
-    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
     expect(screen.getByText("Charged / Voted")).toBeInTheDocument();
     expect(screen.getByText("Habitation")).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("WorkProposalDetailPage", () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: { ...PROPOSAL, workTypeId: "wt-1" }, source: "api", status: 200 })
       .mockResolvedValueOnce({ data: { "wt-1": "Rural Road" }, source: "api" });
-    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
     expect(screen.getByText("Work Type")).toBeInTheDocument();
     expect(screen.getByText("Rural Road")).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("WorkProposalDetailPage", () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: { ...PROPOSAL, workTypeId: "wt-9" }, source: "api", status: 200 })
       .mockResolvedValueOnce({ data: {}, source: "error" });
-    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    const ui = await WorkProposalDetailPage({ params: Promise.resolve({ id: "p1" }) });
     render(ui);
     expect(screen.queryByText("wt-9")).not.toBeInTheDocument();
   });

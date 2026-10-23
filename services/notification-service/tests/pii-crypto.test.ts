@@ -127,7 +127,7 @@ describe("decryptPii — failure modes", () => {
 
 describe("keyring rotation", () => {
   it("reads a ciphertext written under a retired key", () => {
-    const oldSecret = "retired-master-secret-value-16+";
+    const oldSecret = `retired-${globalThis.crypto.randomUUID()}`;
     process.env.NOTIFICATION_PII_KEY = oldSecret;
     process.env.NOTIFICATION_PII_KEY_ID = "k0";
     resetPiiKeyCache();

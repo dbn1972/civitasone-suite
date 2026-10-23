@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
  * redirects there (GAP-CRM-OPPORTUNITIES-06). Keeping this route avoids a 404
  * when something links to /crm/opportunities/:id directly.
  */
-export default function Page({ params }: { params: { id: string } }) {
-  redirect(`/crm/opportunities/${params.id}/edit`);
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+ const params = await props.params;
+ redirect(`/crm/opportunities/${params.id}/edit`);
 }

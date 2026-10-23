@@ -7,7 +7,8 @@ import { formatMoney } from "@/lib/formatters";
 import { ucStats } from "@/lib/finance/expenditureStats";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 
-export default async function UCsPage({ searchParams }: { searchParams?: { scheme?: string } }) {
+export default async function UCsPage(props: { searchParams?: Promise<{ scheme?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("expenditureUtilizationCertificates");
   // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: ?scheme= carries a Scheme Tracking code; the schemes are read only
   // when the register is being narrowed, to turn the code into the scheme's name (for the note and for older certificates).

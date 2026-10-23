@@ -182,7 +182,9 @@ describe("maker-checker rotation guard", () => {
 
   it("applyRotation moves the live secret into the grace slot", () => {
     const now = new Date("2026-07-25T12:00:00.000Z");
-    const out = applyRotation("old_secret", "new_secret", now);
-    expect(out).toEqual({ secret: "new_secret", previousSecret: "old_secret", secretRotatedAt: now });
+    const oldValue = globalThis.crypto.randomUUID();
+    const newValue = globalThis.crypto.randomUUID();
+    const out = applyRotation(oldValue, newValue, now);
+    expect(out).toEqual({ secret: newValue, previousSecret: oldValue, secretRotatedAt: now });
   });
 });

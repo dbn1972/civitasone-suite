@@ -1,3 +1,4 @@
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -61,7 +62,7 @@ export function registerEwayBillConsumers(queue: Queue): void {
 
     // Call NIC API (outside transaction — external call)
     try {
-      const totalValueRupees = Number(p.totalValueMinor) / 100;
+      const totalValueRupees = minorToMajorNumber(p.totalValueMinor); // NIC e-way-bill takes decimal rupees
       const result = await nicClient.generateEwb({
         supplyType: p.supplyType,
         subSupplyType: p.subSupplyType,

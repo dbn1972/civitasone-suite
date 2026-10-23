@@ -143,11 +143,12 @@ async function getBills(assesseeId: string): Promise<LoaderResult<BillRow[]>> {
   );
 }
 
-export default async function BillsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function BillsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

@@ -44,7 +44,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: null, source: "api" },
     );
 
-    await expect(TenderDetailPage({ params: { id: "does-not-exist" } })).rejects.toThrow(
+    await expect(TenderDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) })).rejects.toThrow(
       "NEXT_NOT_FOUND",
     );
     expect(notFoundMock).toHaveBeenCalled();
@@ -66,7 +66,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       },
     );
 
-    const ui = await TenderDetailPage({ params: { id: "t-valid" } });
+    const ui = await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) });
     render(<ToastProvider>{ui}</ToastProvider>);
 
     expect(notFoundMock).not.toHaveBeenCalled();
@@ -81,7 +81,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
         source: "api",
       },
     );
-    const ui = await TenderDetailPage({ params: { id: "t-valid" } });
+    const ui = await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) });
     const { container } = render(<ToastProvider>{ui}</ToastProvider>);
     expect(container.querySelector("#quotations")).not.toBeNull();
     const awarded = screen.getByText("Awarded").closest("a");
@@ -94,7 +94,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: null, source: "error" },
     );
 
-    const ui = await TenderDetailPage({ params: { id: "anything" } });
+    const ui = await TenderDetailPage({ params: Promise.resolve({ id: "anything" }) });
     render(<ToastProvider>{ui}</ToastProvider>);
     expect(notFoundMock).not.toHaveBeenCalled();
   });
@@ -106,7 +106,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: [{ id: "q1", tenderId: "t-valid", contractorId: null, contractorName: "ACME", method: "item_rate", quotedAmountMinor: "100", quotedPercentage: null, deviationPercent: null, status: "awarded", submittedAt: null, awardId: A }], source: "api" },
       { data: { id: "t-valid", workId: W, workNumber: "WRK-1", tenderType: "open", status: "open" }, source: "api" },
     );
-    const ui = await TenderDetailPage({ params: { id: "t-valid" } });
+    const ui = await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) });
     render(<ToastProvider>{ui}</ToastProvider>);
     expect(screen.getByRole("link", { name: "Issue MB" })).toHaveAttribute(
       "href",
@@ -119,7 +119,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: [], source: "api" },
       { data: { id: "t-valid", workId: "11111111-1111-4111-8111-111111111111", workNumber: "WRK-1", status: "open" }, source: "api" },
     );
-    const ui = await TenderDetailPage({ params: { id: "t-valid" } });
+    const ui = await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) });
     render(<ToastProvider>{ui}</ToastProvider>);
     expect(screen.queryByRole("link", { name: "Issue MB" })).not.toBeInTheDocument();
   });
@@ -145,7 +145,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: [quot({}), quot({ quotedAmountMinor: "500000" }), quot({ quotedAmountMinor: "300000" })], source: "api" },
       { data: TENDER, source: "api" },
     );
-    render(<ToastProvider>{await TenderDetailPage({ params: { id: "t-valid" } })}</ToastProvider>);
+    render(<ToastProvider>{await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) })}</ToastProvider>);
     expect(screen.getByText("Lowest Bid").parentElement!.textContent).toContain("₹3,000.00");
   });
 
@@ -154,7 +154,7 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: [quot({ quotedAmountMinor: "100000", status: "withdrawn" }), quot({ quotedAmountMinor: "500000" })], source: "api" },
       { data: TENDER, source: "api" },
     );
-    render(<ToastProvider>{await TenderDetailPage({ params: { id: "t-valid" } })}</ToastProvider>);
+    render(<ToastProvider>{await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) })}</ToastProvider>);
     const text = screen.getByText("Lowest Bid").parentElement!.textContent!;
     expect(text).toContain("₹5,000.00");
     expect(text).not.toContain("₹1,000.00");
@@ -165,20 +165,20 @@ describe("TenderDetailPage — reachability (L1)", () => {
       { data: [quot({ quotedAmountMinor: "100000", status: "rejected" }), quot({ method: "percentage_rate" })], source: "api" },
       { data: TENDER, source: "api" },
     );
-    render(<ToastProvider>{await TenderDetailPage({ params: { id: "t-valid" } })}</ToastProvider>);
+    render(<ToastProvider>{await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) })}</ToastProvider>);
     expect(screen.getByText("Lowest Bid").parentElement!.textContent).toContain("—");
   });
 
   it("an awarded tender shows an Awarded status tile, no placeholder dash tile (DETAIL-05)", async () => {
     mockFetches({ data: [quot({ awardId: "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa" })], source: "api" }, { data: TENDER, source: "api" });
-    render(<ToastProvider>{await TenderDetailPage({ params: { id: "t-valid" } })}</ToastProvider>);
+    render(<ToastProvider>{await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) })}</ToastProvider>);
     expect(screen.getByText("Tender Status").parentElement!.textContent).toMatch(/Awarded/);
   });
 
   it("the quotations table shows the contractor and no 8-char id prefix; the id is only a de-emphasised Technical ID (DETAIL-07)", async () => {
     const id = "abcdef12-0000-4000-8000-000000000000";
     mockFetches({ data: [quot({ id, quotedAmountMinor: "1000" })], source: "api" }, { data: TENDER, source: "api" });
-    render(<ToastProvider>{await TenderDetailPage({ params: { id: "t-valid" } })}</ToastProvider>);
+    render(<ToastProvider>{await TenderDetailPage({ params: Promise.resolve({ id: "t-valid" }) })}</ToastProvider>);
     expect(screen.getAllByText("ACME").length).toBeGreaterThan(0);
     expect(screen.queryByText("abcdef12")).not.toBeInTheDocument();
     expect(screen.queryByText("abcdef12…")).not.toBeInTheDocument();

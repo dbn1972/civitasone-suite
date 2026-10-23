@@ -24,6 +24,11 @@ async function assertDocumentVisible(ctx: RequestContext, documentId: string): P
   }
 }
 
+/** CLOS2-S5-02: documentId/versionId are uuid columns; reject malformed ids as 404 (not a 22P02 500). */
+function requireUuid(...ids: string[]): void {
+  if (ids.some((id) => !UUID_RE.test(id))) throw new HttpError(404, "NOT_FOUND", "version not found");
+}
+
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
 
 export async function versionRoutes(app: FastifyInstance): Promise<void> {
@@ -31,6 +36,7 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { documentId } = req.params as { documentId: string };
+    requireUuid(documentId);
     const q = listQuerySchema.parse(req.query);
     await assertDocumentVisible(ctx, documentId);
     const data = await repo.listByDocument(ctx.tenantId, documentId, q.limit, q.offset);
@@ -41,6 +47,7 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { documentId, versionId } = req.params as { documentId: string; versionId: string };
+    requireUuid(documentId, versionId);
     await assertDocumentVisible(ctx, documentId);
     const version = await repo.getById(ctx.tenantId, versionId);
     if (!version || version.documentId !== documentId) {
@@ -53,6 +60,7 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { documentId } = req.params as { documentId: string };
+    requireUuid(documentId);
     await assertDocumentVisible(ctx, documentId);
     const body = createVersionBody.parse({ ...(req.body as object), documentId });
     return sendAccepted(reply, acceptedResponseSchema, await commands.versionCreate(ctx, body));
@@ -62,6 +70,7 @@ export async function versionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { documentId, versionId } = req.params as { documentId: string; versionId: string };
+    requireUuid(documentId, versionId);
     await assertDocumentVisible(ctx, documentId);
     const rawBody = (req.body ?? {}) as Record<string, unknown>;
     const body = restoreVersionBody.parse({ documentId, versionId, ...rawBody });

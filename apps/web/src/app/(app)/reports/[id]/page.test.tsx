@@ -30,14 +30,14 @@ describe("ReportDetailPage", () => {
   // GAP-REPORTS-DETAIL-01
   it("500 fetch error -> retry state, NOT 'the ID is incorrect'", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
     expect(screen.queryByText(/the ID is incorrect/i)).not.toBeInTheDocument();
   });
 
   it("404 -> not-found copy, not the retry state", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText(/the ID is incorrect/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
@@ -45,7 +45,7 @@ describe("ReportDetailPage", () => {
   // GAP-REPORTS-DETAIL-05
   it("failed job -> 'Report failed' with a Queue again link, never 'once the report completes'", async () => {
     fetchJsonMock.mockResolvedValue({ data: baseJob({ status: "failed" }), source: "api", status: 200 });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText("Report failed")).toBeInTheDocument();
     expect(screen.queryByText(/once the report completes/i)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /queue again/i })).toHaveAttribute("href", "/reports/list/new?reportType=finance");
@@ -58,7 +58,7 @@ describe("ReportDetailPage", () => {
       source: "api",
       status: 200,
     });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText("From date")).toBeInTheDocument();
     expect(screen.getAllByText("01 Apr 2026").length).toBeGreaterThanOrEqual(1);
     // departmentId UUID is not shown raw
@@ -74,7 +74,7 @@ describe("ReportDetailPage", () => {
       source: "api",
       status: 200,
     });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText(/Showing the first/)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /download the full report/i })).toBeInTheDocument();
   });
@@ -90,7 +90,7 @@ describe("ReportDetailPage", () => {
       source: "api",
       status: 200,
     });
-    render(await ReportDetailPage({ params: { id: "job-1" } }));
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText("ABCDE****F")).toBeInTheDocument();
     expect(screen.queryByText("ABCDE1234F")).not.toBeInTheDocument();
     expect(screen.getByText("₹1,234.56")).toBeInTheDocument();

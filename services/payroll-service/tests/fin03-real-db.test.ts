@@ -17,6 +17,7 @@ import { runWithTenant, withTenantScope } from "@civitasone/db";
 
 const EMPLOYEE_BY_ACTOR = new Map<string, string>();
 const UPLOADED = new Map<string, { contentLength: number; contentType: string }>();
+const STORE = { headFails: false };
 const upload = (key: string, over: Partial<{ contentLength: number; contentType: string }> = {}) =>
   UPLOADED.set(key, { contentLength: 2048, contentType: "application/pdf", ...over });
 
@@ -32,7 +33,11 @@ vi.mock("@civitasone/storage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@civitasone/storage")>()),
   presignedPutUrl: vi.fn(async ({ key }: { key: string }) => `https://bucket.example/put/${key}?sig=1`),
   presignedGetUrl: vi.fn(async ({ key }: { key: string }) => `https://bucket.example/get/${key}?sig=2`),
-  headObject: vi.fn(async (key: string) => UPLOADED.get(key) ?? null),
+  headObject: vi.fn(async (key: string) => {
+    // CLOS2-S6-06: the real headObject rejects on anything but not-found.
+    if (STORE.headFails) throw Object.assign(new Error("AccessDenied"), { $metadata: { httpStatusCode: 403 } });
+    return UPLOADED.get(key) ?? null;
+  }),
 }));
 
 import { buildApp } from "../src/app.js";
@@ -499,6 +504,15 @@ describe("reimbursement receipts", () => {
     const early = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(EMP_USER, ["employee"]), payload: claim({ attachmentKeys: [key] }) });
     expect(early.statusCode).toBe(400);
     expect((early.json() as { code: string }).code).toBe("ATTACHMENT_NOT_UPLOADED");
+    // CLOS2-S6-06: a storage failure is "could not check" (503), not "not uploaded" (400)
+    STORE.headFails = true;
+    try {
+      const down = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(EMP_USER, ["employee"]), payload: claim({ attachmentKeys: [key] }) });
+      expect(down.statusCode).toBe(503);
+      expect((down.json() as { code: string }).code).toBe("STORAGE_UNAVAILABLE");
+    } finally {
+      STORE.headFails = false;
+    }
     // a key outside this tenant's prefix -> rejected
     const foreign = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(EMP_USER, ["employee"]), payload: claim({ attachmentKeys: [`payroll/${OTHER_TENANT}/reimbursements/x/y/bill.pdf`] }) });
     expect(foreign.statusCode).toBe(422);

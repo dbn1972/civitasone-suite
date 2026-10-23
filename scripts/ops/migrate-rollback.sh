@@ -228,7 +228,7 @@ if [ "$NO_BACKUP" -ne 1 ]; then
   STAMP="$(date +%Y%m%d%H%M%S)"
   SNAPSHOT="$BACKUP_DIR/rollback-pre-${SERVICE}-${MIGRATION}-${STAMP}.schema.sql"
   echo "→ Taking schema-only safety snapshot: $SNAPSHOT"
-  if PGPASSWORD="$RUN_PW" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$RUN_USER" -d "$DB" --schema-only > "$SNAPSHOT" 2>/dev/null; then
+  if env "PGPASSWORD=$RUN_PW" pg_dump -h "$PGHOST" -p "$PGPORT" -U "$RUN_USER" -d "$DB" --schema-only > "$SNAPSHOT" 2>/dev/null; then
     echo "  saved ($(wc -l < "$SNAPSHOT" | tr -d ' ') lines)"
   else
     echo "  ⚠ pg_dump snapshot failed -- proceeding anyway (this snapshot is a" >&2
@@ -239,7 +239,7 @@ if [ "$NO_BACKUP" -ne 1 ]; then
 fi
 
 echo "→ Applying down-migration inside a single transaction (auto-rollback on any error)..."
-if PGPASSWORD="$RUN_PW" psql -h "$PGHOST" -p "$PGPORT" -U "$RUN_USER" -d "$DB" \
+if env "PGPASSWORD=$RUN_PW" psql -h "$PGHOST" -p "$PGPORT" -U "$RUN_USER" -d "$DB" \
      -v ON_ERROR_STOP=1 -1 -f "$DOWN_FILE"; then
   echo ""
   echo "✅ Rolled back $SERVICE/$MIGRATION.sql against $PGHOST:$PGPORT/$DB"

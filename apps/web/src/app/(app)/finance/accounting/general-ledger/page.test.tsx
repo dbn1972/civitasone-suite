@@ -20,7 +20,7 @@ describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
   beforeEach(() => { getPage.mockReset(); getPage.mockResolvedValue(OK); });
 
   it("fetches one bounded page for the chosen fy / type / search / page, never the whole ledger", async () => {
-    render(await GeneralLedgerPage({ searchParams: { fy: "2025-26", type: "receipt", q: "V-1", page: "3" } }));
+    render(await GeneralLedgerPage({ searchParams: Promise.resolve({ fy: "2025-26", type: "receipt", q: "V-1", page: "3" }) }));
     expect(getPage).toHaveBeenCalledTimes(1);
     expect(getPage).toHaveBeenCalledWith({ fy: "2025-26", type: "receipt", q: "V-1", page: 3, pageSize: 25 });
     expect(screen.getByText("fy-filter")).toBeInTheDocument();
@@ -46,12 +46,12 @@ describe("GeneralLedgerPage (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", () => {
   it("hands the ledger-wide totals to the table alongside the filtered ones (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04)", async () => {
     const ledgerTotals = { entryLines: 9, vouchers: 3, accountsActive: 2, debitMinor: "5", creditMinor: "5" };
     getPage.mockResolvedValue({ ...OK, data: { ...OK.data, ledgerTotals } });
-    render(await GeneralLedgerPage({ searchParams: { q: "5100" } }));
+    render(await GeneralLedgerPage({ searchParams: Promise.resolve({ q: "5100" }) }));
     expect(screen.getByText(/ledger=\{"entryLines":9/)).toBeInTheDocument();
   });
 
   it("announces a just-posted voucher", async () => {
-    render(await GeneralLedgerPage({ searchParams: { posted: "JV-9", state: "queued" } }));
+    render(await GeneralLedgerPage({ searchParams: Promise.resolve({ posted: "JV-9", state: "queued" }) }));
     expect(screen.getByRole("status")).toHaveTextContent(/JV-9 accepted for processing/);
   });
 });

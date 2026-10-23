@@ -12,10 +12,11 @@ import { localizedPeriodLabel, resolvePeriod } from "./period";
 import { StageBreakdownTable } from "./StageBreakdownTable";
 
 interface PageProps {
-  searchParams?: { pipelineId?: string; period?: string };
+  searchParams?: Promise<{ pipelineId?: string; period?: string }>;
 }
 
-export default async function ForecastPage({ searchParams }: PageProps) {
+export default async function ForecastPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("crmForecastPeriod");
   // The link to the board uses the CRM hub's own label for that route, so the two can never drift apart.
   const tHub = await getTranslations("crm.hub");

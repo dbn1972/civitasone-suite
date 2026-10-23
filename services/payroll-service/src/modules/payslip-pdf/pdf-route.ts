@@ -7,6 +7,7 @@
  * puppeteer — for now the HTML download is the production deliverable since
  * browsers can print-to-PDF.
  */
+import { formatRupeesIN, minorFromDb } from "../../shared/money.js";
 import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
 import { loadLetterhead } from "../letterhead/routes.js";
 import type { FastifyInstance } from "fastify";
@@ -24,7 +25,7 @@ const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 const pathParamSchema = z.object({ id: z.string().uuid() });
 
 function formatAmount(minor: number | bigint): string {
-  return (Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatRupeesIN(minorFromDb(minor));
 }
 
 

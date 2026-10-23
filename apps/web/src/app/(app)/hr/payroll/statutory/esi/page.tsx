@@ -23,7 +23,8 @@ type EsiRow = {
   erContribMinor: number;
 } & Record<string, unknown>;
 
-export default async function EsiStatutoryPage({ searchParams }: { searchParams?: { period?: string } }) {
+export default async function EsiStatutoryPage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("esi");
   const tFallback = await getTranslations("employeeFallback");
   // GAP-PAYROLL-STATUTORY-ESI-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*

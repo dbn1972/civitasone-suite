@@ -12,7 +12,8 @@ import { formatMoneyIn } from "@/lib/formatters";
 // `INR {amount}`. This page reads the real fields, formats paise with
 // formatMoneyIn, and shows "—" (never a fabricated value) when a field is
 // genuinely absent.
-export default async function PlanDetailPage({ params }: { params: { id: string } }) {
+export default async function PlanDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: plan, source, status, errorMessage } = await getBillingPlanById(params.id);
 
   // GAP-BILLING-PLANS-DETAIL-03: a transient/permission failure must not read

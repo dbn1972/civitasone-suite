@@ -1,3 +1,4 @@
+import { minorFromDb, toSafeInt, roundMinorToRupees } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
@@ -59,22 +60,22 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
       const slip = slipById.get(pf.slipId);
       const emp = master.get(pf.employeeId);
 
-      const grossWages = slip ? Math.round(Number(slip.grossMinor) / 100) : 0;
-      const basicWages = slip ? Math.round(Number(slip.basicMinor) / 100) : 0;
+      const grossWages = slip ? toSafeInt(roundMinorToRupees(minorFromDb(slip.grossMinor))) : 0;
+      const basicWages = slip ? toSafeInt(roundMinorToRupees(minorFromDb(slip.basicMinor))) : 0;
       // DA lives in the slip components (no dedicated column on the slip row).
-      const components = (slip?.components ?? []) as Array<{ code: string; amountMinor: number }>;
-      const daWages = Math.round(components
+      const components = (slip?.components ?? []) as Array<{ code: string; amountMinor: number | string }>;
+      const daWages = toSafeInt(roundMinorToRupees(components
         .filter((c) => c.code === "DA")
-        .reduce((s, c) => s + c.amountMinor, 0) / 100);
+        .reduce((s, c) => s + minorFromDb(c.amountMinor), 0n)));
       const pensionableWages = computePensionableWage(basicWages, daWages);
       const epfWages = pensionableWages;
       const epsWages = pensionableWages;
       const edliWages = pensionableWages;
 
-      const epfEE = Math.round(Number(pf.empContribMinor) / 100);          // Employee 12%
+      const epfEE = toSafeInt(roundMinorToRupees(minorFromDb(pf.empContribMinor)));          // Employee 12%
       // Employer split from the persisted record (EPS capped at Rs 1,250).
-      const epsER = Math.round(Number(pf.epsContribMinor) / 100);
-      const epfER = Math.round(Number(pf.epfErContribMinor) / 100);
+      const epsER = toSafeInt(roundMinorToRupees(minorFromDb(pf.epsContribMinor)));
+      const epfER = toSafeInt(roundMinorToRupees(minorFromDb(pf.epfErContribMinor)));
       const ncpDays = 0;
       const refundAdvances = 0;
 

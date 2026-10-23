@@ -82,14 +82,14 @@ describe("reconcile page (GAP-INVENTORY-RECONCILE-01/-03/-04/-05)", () => {
 
   it("forwards valid from/to dates to the service and ignores malformed ones", async () => {
     loaders.getStockLedger.mockResolvedValue({ source: "api", data: [e("1", "receipt", 1)] });
-    render(await Page({ searchParams: { from: "2026-08-01", to: "not-a-date" } }));
+    render(await Page({ searchParams: Promise.resolve({ from: "2026-08-01", to: "not-a-date" }) }));
     expect(loaders.getStockLedger).toHaveBeenCalledWith({ limit: 500, from: "2026-08-01" });
     expect(screen.getByRole("link", { name: "Clear dates" })).toBeInTheDocument();
   });
 
   it("a date range with no movements says so (and a failed load is still an error, not that)", async () => {
     loaders.getStockLedger.mockResolvedValue({ source: "api", data: [] });
-    const { unmount } = render(await Page({ searchParams: { from: "2026-08-01" } }));
+    const { unmount } = render(await Page({ searchParams: Promise.resolve({ from: "2026-08-01" }) }));
     expect(screen.getByText("No stock movements in this period")).toBeInTheDocument();
     unmount();
     loaders.getStockLedger.mockResolvedValue({ source: "error", data: [] });

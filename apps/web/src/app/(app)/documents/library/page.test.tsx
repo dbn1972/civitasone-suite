@@ -52,7 +52,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [folder()], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: {} }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     const link = screen.getByRole("link", { name: /Budget/ });
     expect(link).toHaveAttribute("href", `/documents/library?folderId=${FOLDER_ID}`);
     const row = link.closest("tr")!;
@@ -64,7 +64,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file(), file({ id: "f2", name: "old.docx", status: "deleted" })], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: {} }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("doc.docx", { exact: false })).toBeInTheDocument();
     expect(screen.queryByText("old.docx", { exact: false })).not.toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Actions" })).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file({ id: "f2", name: "old.docx", status: "deleted" })], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: { showDeleted: "1" } }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({ showDeleted: "1" }) }));
     expect(screen.getByText("old.docx", { exact: false })).toBeInTheDocument();
   });
 
@@ -83,7 +83,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file()], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: {} }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Files in this folder")).toBeInTheDocument();
     expect(screen.getByText("Sub-folders")).toBeInTheDocument();
     expect(screen.getByText("Inbox (all)")).toBeInTheDocument();
@@ -91,21 +91,21 @@ describe("DocumentLibraryPage", () => {
   });
 
   it("LIBRARY-04: a malformed folderId renders the not-found page (notFound thrown)", async () => {
-    await expect(DocumentLibraryPage({ searchParams: { folderId: "bogus" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(DocumentLibraryPage({ searchParams: Promise.resolve({ folderId: "bogus" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("LIBRARY-04: an unknown but well-formed folderId 404s only when folders loaded", async () => {
     getDocumentFiles.mockResolvedValue({ data: [], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    await expect(DocumentLibraryPage({ searchParams: { folderId: FOLDER_ID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(DocumentLibraryPage({ searchParams: Promise.resolve({ folderId: FOLDER_ID }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("LIBRARY-04/05: a folders-fetch error is a retry card, NOT a 404", async () => {
     getDocumentFiles.mockResolvedValue({ data: [], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "error" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: { folderId: FOLDER_ID } }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({ folderId: FOLDER_ID }) }));
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 
@@ -113,7 +113,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file()], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "error" });
-    render(await DocumentLibraryPage({ searchParams: {} }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Counts unavailable.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /try again/i })).not.toBeInTheDocument();
   });
@@ -122,7 +122,7 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file()], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    render(await DocumentLibraryPage({ searchParams: {} }));
+    render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Word")).toBeInTheDocument();
     expect(screen.queryByText(WORD_MIME)).not.toBeInTheDocument();
     expect(mimeLabel(WORD_MIME)).toBe("Word");
@@ -135,12 +135,12 @@ describe("DocumentLibraryPage", () => {
     getDocumentFiles.mockResolvedValue({ data: [file()], source: "api" });
     getDocumentFolders.mockResolvedValue({ data: [], source: "api" });
     getDocumentStats.mockResolvedValue({ data: STATS, source: "api" });
-    const en = render(await DocumentLibraryPage({ searchParams: {} }));
+    const en = render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(en.getByRole("columnheader", { name: "Name" })).toBeInTheDocument();
     expect(en.getByText("Files in this folder")).toBeInTheDocument();
     en.unmount();
     messages = hiMsgs as Record<string, unknown>;
-    const hi = render(await DocumentLibraryPage({ searchParams: {} }));
+    const hi = render(await DocumentLibraryPage({ searchParams: Promise.resolve({}) }));
     expect(hi.getByRole("columnheader", { name: "नाम" })).toBeInTheDocument();
     expect(hi.getByText("इस फ़ोल्डर की फ़ाइलें")).toBeInTheDocument();
   });

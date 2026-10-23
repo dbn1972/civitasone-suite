@@ -8,7 +8,8 @@ import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
 import { QcInspectionForm } from "./QcInspectionForm";
 import { dispositionLabel } from "./qcMatrix";
 
-export default async function GoodsReturnDetailPage({ params }: { params: { id: string } }) {
+export default async function GoodsReturnDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getGoodsReturnById(params.id);
   const { data: goodsReturn } = result;
 

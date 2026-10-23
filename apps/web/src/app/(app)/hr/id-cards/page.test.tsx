@@ -20,7 +20,7 @@ import IdCardsPage from "./page";
 async function renderPage() {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      {await IdCardsPage({ searchParams: {} })}
+      {await IdCardsPage({ searchParams: Promise.resolve({}) })}
     </NextIntlClientProvider>,
   );
 }

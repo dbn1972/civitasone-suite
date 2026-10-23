@@ -213,4 +213,18 @@ describe("AdminUsersManager", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     expect(opener).toHaveFocus();
   });
+  // CLOS2-S1-01
+  it("a failed role load shows an error and Save stays disabled, so no empty full-set PATCH can wipe the user's roles", async () => {
+    fetchSpy.mockImplementation(async (input) => {
+      if (String(input).includes("/user-roles/")) return new Response(JSON.stringify({ error: "boom" }), { status: 500 });
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit Roles" }));
+    expect(await screen.findByText("Couldn't load this user's current roles.")).toBeInTheDocument();
+    // The admin ticks a role on top of the (wrongly empty) current set.
+    fireEvent.click(screen.getByRole("checkbox", { name: /Auditor/ }));
+    expect(screen.getByRole("button", { name: "Save roles" })).toBeDisabled();
+    expect(patches()).toHaveLength(0);
+  });
 });

@@ -38,7 +38,8 @@ async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow
   });
 }
 
-export default async function GstConsolePage({ searchParams }: { searchParams?: { period?: string } }) {
+export default async function GstConsolePage(props: { searchParams?: Promise<{ period?: string }> }) {
+  const searchParams = await props.searchParams;
   const requested = searchParams?.period;
   const periodValid = !!requested && PERIOD_PATTERN.test(requested);
   const period = periodValid ? requested : currentMonthPeriod();

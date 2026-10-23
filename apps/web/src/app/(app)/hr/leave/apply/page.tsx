@@ -4,11 +4,12 @@ import { getEmployees, getMyProfile } from "../../../../_data/loaders";
 import { ApplyLeaveForm } from "./ApplyLeaveForm";
 import { getTranslations } from "next-intl/server";
 
-export default async function ApplyLeavePage({
-  searchParams,
-}: {
-  searchParams?: { empId?: string };
-}) {
+export default async function ApplyLeavePage(
+  props: {
+    searchParams?: Promise<{ empId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("leaveApply");
   const tc = await getTranslations("common");
   // Try the admin employees list first (works for hr_admin / hr_officer / manager).

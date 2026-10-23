@@ -20,7 +20,7 @@ describe("bill detail failed-load copy comes from the message catalogue", () => 
 
   it("a 500 shows a readable header and names the area, not raw message keys", async () => {
     loaderMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const { container } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { container } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("heading", { name: "Bill Detail" })).toBeInTheDocument();
     expect(container.textContent).toMatch(/couldn.t load the bill details/i);
     expect(container.textContent).not.toContain("expenditureBillDetail.");
@@ -28,7 +28,7 @@ describe("bill detail failed-load copy comes from the message catalogue", () => 
 
   it("a 404 still says the bill was not found", async () => {
     loaderMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByText("Bill not found")).toBeInTheDocument();
   });
 

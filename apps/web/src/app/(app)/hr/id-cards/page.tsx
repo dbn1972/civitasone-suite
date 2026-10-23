@@ -45,7 +45,8 @@ async function getData(q: string | undefined, status: string | undefined, offset
 
 const STATUS_OPTIONS = ["", "active", "suspended", "revoked", "expired"] as const;
 
-export default async function IdCardsPage({ searchParams }: { searchParams?: Record<string, string> }) {
+export default async function IdCardsPage(props: { searchParams?: Promise<Record<string, string>> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("idCards");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();

@@ -62,7 +62,7 @@ describe("OpeningBalancesPage", () => {
   it("prompts to choose a fiscal year when none is selected", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" });
 
-    const ui = await OpeningBalancesPage({ searchParams: {} });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose a fiscal year")).toBeInTheDocument();
@@ -71,7 +71,7 @@ describe("OpeningBalancesPage", () => {
   it("renders opening balances for the selected fiscal year", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText(/1000/)).toBeInTheDocument();
@@ -80,7 +80,7 @@ describe("OpeningBalancesPage", () => {
   it("renders an empty state when there are no opening balances for the fiscal year", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText("No opening balances entered")).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe("OpeningBalancesPage", () => {
   it("a failed fiscal-years read shows a retry state instead of an empty select", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" }).mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText("We couldn't load fiscal years.")).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe("OpeningBalancesPage", () => {
   it("a failed balances read shows retry, — cards, no empty-state copy and NO entry form", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "error" });
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText("We couldn't load opening balances.")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("OpeningBalancesPage", () => {
   it("names the account beside its code in the saved-balances table", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText("1000 — Cash in hand")).toBeInTheDocument();
@@ -122,7 +122,7 @@ describe("OpeningBalancesPage", () => {
   it("offers the chart of accounts as suggestions in the entry form", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     const { container } = render(ui);
 
     expect(container.querySelectorAll("datalist option").length).toBe(2);
@@ -132,7 +132,7 @@ describe("OpeningBalancesPage", () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
     coaMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText(/chart of accounts could not be loaded/i)).toBeInTheDocument();
@@ -145,7 +145,7 @@ describe("OpeningBalancesPage", () => {
     rolesMock.mockReturnValue(["audit_officer"]);
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText("1000 — Cash in hand")).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("OpeningBalancesPage", () => {
   it("shows the entry form to finance_admin", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByText(/Save Opening Balances/)).toBeInTheDocument();
@@ -166,7 +166,7 @@ describe("OpeningBalancesPage", () => {
   it("labels a closed fiscal year, warns and hides the entry form", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE, FY_CLOSED], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2024-25" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2024-25" }) });
     render(ui);
 
     expect(screen.getByRole("option", { name: "FY 2024-25 (2024-25) — closed" })).toBeInTheDocument();
@@ -177,7 +177,7 @@ describe("OpeningBalancesPage", () => {
   it("leaves an active fiscal year unchanged (form shown, no warning)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE, FY_CLOSED], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
-    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const ui = await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) });
     render(ui);
 
     expect(screen.getByRole("option", { name: "FY 2026-27 (2026-27) — active" })).toBeInTheDocument();
@@ -197,7 +197,7 @@ describe("OpeningBalancesPage", () => {
       }],
       source: "api",
     });
-    render(await OpeningBalancesPage({ searchParams: { fy: "2026-27" } }));
+    render(await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText(/Opening balances for: 2026-27/)).toBeInTheDocument();
     expect(screen.getByText(/2 entries, total debit/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Approve" })).toBeInTheDocument();
@@ -206,7 +206,7 @@ describe("OpeningBalancesPage", () => {
   it("a failed pending-approvals read shows a retry state, not 'nothing waiting'", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
     requestsMock.mockResolvedValue({ data: [], source: "error", status: 500 });
-    render(await OpeningBalancesPage({ searchParams: { fy: "2026-27" } }));
+    render(await OpeningBalancesPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.queryByText("No changes are waiting for approval.")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: /try again|retry|refresh/i }).length).toBeGreaterThan(0);
   });

@@ -13,7 +13,7 @@ const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_
 // A failed or invalid callback must never leave the browser holding cookies
 // that would poison the next attempt: this attempt's PKCE verifier/state,
 // and any stale ACCESS/REFRESH left over from an earlier session.
-function clearAuthCookies(jar: ReturnType<typeof cookies>) {
+function clearAuthCookies(jar: Awaited<ReturnType<typeof cookies>>) {
   jar.delete(COOKIE.PKCE_VERIFIER);
   jar.delete(COOKIE.OAUTH_STATE);
   jar.delete(COOKIE.ACCESS);
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
-  const jar = cookies();
+  const jar = await cookies();
   const savedState = jar.get(COOKIE.OAUTH_STATE)?.value;
   const verifier = jar.get(COOKIE.PKCE_VERIFIER)?.value;
 

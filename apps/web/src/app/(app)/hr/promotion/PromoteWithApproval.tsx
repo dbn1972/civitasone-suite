@@ -180,9 +180,10 @@ export function PromoteWithApproval() {
     if (!effectiveDate) {
       errs.effectiveDate = t("errEffectiveDateRequired");
     } else {
-      const max = new Date();
-      max.setFullYear(max.getFullYear() + MAX_FUTURE_YEARS);
-      if (effectiveDate > max.toISOString().slice(0, 10)) errs.effectiveDate = t("errEffectiveDateTooFar");
+      // CLOS2-S2-07: cutoff is today (IST) + N years, compared as ISO strings.
+      const today = todayIsoIST();
+      const maxIso = `${Number(today.slice(0, 4)) + MAX_FUTURE_YEARS}${today.slice(4)}`;
+      if (effectiveDate > maxIso) errs.effectiveDate = t("errEffectiveDateTooFar");
     }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;

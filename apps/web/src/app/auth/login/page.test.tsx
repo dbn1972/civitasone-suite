@@ -13,18 +13,18 @@ describe("LoginPage (GAP-AUTH-LOGIN-02/04)", () => {
     vi.clearAllMocks();
   });
 
-  it("LOGIN-02: redirects to Keycloak carrying a validated next", () => {
-    LoginPage({ searchParams: { next: "/dashboard/x" } });
+  it("LOGIN-02: redirects to Keycloak carrying a validated next", async () => {
+    await LoginPage({ searchParams: Promise.resolve({ next: "/dashboard/x" }) });
     expect(redirect).toHaveBeenCalledWith("/api/auth/login?next=%2Fdashboard%2Fx");
   });
 
-  it("LOGIN-02: ignores an open-redirect next", () => {
-    LoginPage({ searchParams: { next: "//evil.com" } });
+  it("LOGIN-02: ignores an open-redirect next", async () => {
+    await LoginPage({ searchParams: Promise.resolve({ next: "//evil.com" }) });
     expect(redirect).toHaveBeenCalledWith("/api/auth/login");
   });
 
-  it("renders the error client (not a redirect) when error is present", () => {
-    const ui = LoginPage({ searchParams: { error: "invalid_state" } });
+  it("renders the error client (not a redirect) when error is present", async () => {
+    const ui = await LoginPage({ searchParams: Promise.resolve({ error: "invalid_state" }) });
     render(ui as React.ReactElement);
     expect(redirect).not.toHaveBeenCalled();
     expect(screen.getByText(/sign-in unsuccessful/i)).toBeInTheDocument();

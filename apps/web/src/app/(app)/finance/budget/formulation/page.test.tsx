@@ -38,7 +38,7 @@ describe("BudgetFormulationPage", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("Proposed Outlay (BE, FY 2026-27)")).toBeInTheDocument();
     // the card (and the row's BE cell) show this FY's BE total
     expect(screen.getAllByText("₹12,34,567.89").length).toBeGreaterThan(0);
@@ -48,14 +48,14 @@ describe("BudgetFormulationPage", () => {
 
   it("ignores a malformed ?fy= and falls back to a valid FY label", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-99" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-99" }) }));
     expect(screen.queryByText(/FY 2026-99/)).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-BUDGET-FORMULATION-03
   it("on a failed fetch shows — cards and a Retry state, not ₹0.00 / No records", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "error", status: 500 });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("We couldn't load budget estimates.")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBe(4);
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
@@ -63,7 +63,7 @@ describe("BudgetFormulationPage", () => {
 
   it("a genuinely empty FY still shows zeros, no error", async () => {
     getBudgets.mockResolvedValue({ data: [], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("₹0.00")).toBeInTheDocument();
     expect(screen.queryByText(/We couldn't load/)).not.toBeInTheDocument();
   });
@@ -79,7 +79,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
 
   it("each money column shows the field it is named for (BE=beMinor, Sanctioned, Released)", async () => {
     getBudgets.mockResolvedValue({ data: [full({})], source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const row = screen.getByText("2202").closest("tr")!;
     const cells = Array.from(row.querySelectorAll("td")).map((c) => c.textContent);
     const header = Array.from(row.closest("table")!.querySelectorAll("th")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
@@ -98,7 +98,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
     const idx = header.findIndex((h) => h === "Last Year (BE)");
     const lastYear = (head: string) => screen.getByText(head).closest("tr")!.querySelectorAll("td")[idx].textContent;
@@ -115,7 +115,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       ],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
     const idx = header.findIndex((h) => h === "Last Year (BE)");
     const cells = screen.getAllByRole("row").slice(1).map((r) => r.querySelectorAll("td")[idx]?.textContent);
@@ -127,7 +127,7 @@ describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
       data: [full({ id: "a" }), full({ id: "b", majorHead: "2203" }), full({ id: "c", majorHead: "2204", status: "submitted" }), full({ id: "d", majorHead: "2205", status: "pending" })],
       source: "api",
     });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27" }) }));
     expect(screen.getByText("approved 2")).toBeInTheDocument();
     expect(screen.queryByText("Pending Review")).not.toBeInTheDocument();
     // one word everywhere: the stat card, the tab, and the pending row's pill all read "Pending"
@@ -150,7 +150,7 @@ describe("BudgetFormulationPage -- ?highlight= / ?tab=", () => {
 
   it("opens the tab of the highlighted row and announces it", async () => {
     getBudgets.mockResolvedValue({ data: DATA, source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27", highlight: NEW_ID } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27", highlight: NEW_ID }) }));
     expect(selectedTab()).toBe("Active");
     expect(screen.getByText("Estimate added: 2202 · Head 2202 (FY 2026-27). It is listed under the Active tab.")).toBeInTheDocument();
     expect(screen.getByText("2202")).toBeInTheDocument();
@@ -159,17 +159,17 @@ describe("BudgetFormulationPage -- ?highlight= / ?tab=", () => {
 
   it("an explicit ?tab= wins over the highlighted row's tab", async () => {
     getBudgets.mockResolvedValue({ data: DATA, source: "api" });
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27", highlight: NEW_ID, tab: "exhausted" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27", highlight: NEW_ID, tab: "exhausted" }) }));
     expect(selectedTab()).toBe("Exhausted");
   });
 
   it("a highlight that is not in the list yet says it is still being processed; junk params are ignored", async () => {
     getBudgets.mockResolvedValue({ data: DATA, source: "api" });
-    const { unmount } = render(await BudgetFormulationPage({ searchParams: { fy: "2026-27", highlight: "22222222-2222-4222-8222-222222222222" } }));
+    const { unmount } = render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27", highlight: "22222222-2222-4222-8222-222222222222" }) }));
     expect(screen.getByText(/still being processed/)).toBeInTheDocument();
     expect(selectedTab()).toBe("All");
     unmount();
-    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27", highlight: "<script>", tab: "nope" } }));
+    render(await BudgetFormulationPage({ searchParams: Promise.resolve({ fy: "2026-27", highlight: "<script>", tab: "nope" }) }));
     expect(selectedTab()).toBe("All");
     expect(screen.queryByText(/Estimate added|still being processed/)).not.toBeInTheDocument();
   });

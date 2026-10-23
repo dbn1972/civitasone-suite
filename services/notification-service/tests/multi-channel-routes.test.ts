@@ -215,7 +215,7 @@ describe("POST /v1/webhooks", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/webhooks",
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { name: "My Endpoint", url: "https://hooks.example.com/notify", secret: "a-very-long-secret-key" },
+      payload: { name: "My Endpoint", url: "https://hooks.example.com/notify", secret: globalThis.crypto.randomUUID() },
     });
     await app.close();
     expect(res.statusCode).toBe(202);
@@ -227,7 +227,7 @@ describe("POST /v1/webhooks", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/webhooks",
       headers: { authorization: `Bearer ${adminToken}` },
-      payload: { name: "Bad", url: "http://insecure.example.com", secret: "a-very-long-secret-key" },
+      payload: { name: "Bad", url: "http://insecure.example.com", secret: globalThis.crypto.randomUUID() },
     });
     await app.close();
     expect(res.statusCode).toBe(400);
@@ -245,7 +245,7 @@ describe("POST /v1/webhooks", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/webhooks",
       headers: { authorization: `Bearer ${citizenToken}` },
-      payload: { name: "X", url: "https://x.com", secret: "a-very-long-secret-key" },
+      payload: { name: "X", url: "https://x.com", secret: globalThis.crypto.randomUUID() },
     });
     await app.close();
     expect(res.statusCode).toBe(403);

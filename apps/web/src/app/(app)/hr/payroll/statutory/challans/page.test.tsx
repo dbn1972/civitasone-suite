@@ -58,7 +58,7 @@ describe("ChallansPage", () => {
       });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("C1")).toBeInTheDocument();
   });
@@ -71,7 +71,7 @@ describe("ChallansPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("No challans ingested for this period")).toBeInTheDocument();
   });
@@ -83,7 +83,7 @@ describe("ChallansPage", () => {
     // of the RefreshErrorState contract (retry/back/help).
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
 
     expect(screen.getByText("We couldn't load TDS challans.")).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("ChallansPage", () => {
 
   it("GAP-PAYROLL-STATUTORY-CHALLANS-01: shows Access restricted to employee/manager without calling the API", async () => {
     getSessionRolesMock.mockReturnValue(["employee", "manager"]);
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -115,7 +115,7 @@ describe("ChallansPage", () => {
         source: "api",
       });
     });
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("No challan")).toBeInTheDocument();
     expect(screen.queryByText("no_challan")).not.toBeInTheDocument();
@@ -137,7 +137,7 @@ describe("ChallansPage", () => {
       return Promise.resolve({ data: [], source: "api" });
     });
 
-    const ui = await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06", formType: "26Q" }) });
     renderPage(ui);
     expect(screen.getByText("Filing of 26Q is blocked until challans match")).toBeInTheDocument();
     expect(screen.getByText("TDS deducted for 2026-06 does not match the 26Q challans deposited. Resolve the difference before filing 26Q.")).toBeInTheDocument();
@@ -162,7 +162,7 @@ describe("ChallansPage", () => {
       }
       return Promise.resolve({ data: [], source: "api" });
     });
-    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    const ui = await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) });
     renderPage(ui);
     expect(screen.getByText("Filing of 24Q is blocked until challans match")).toBeInTheDocument();
     expect(screen.getByText(/TDS for 2026-06 is not finalised yet/)).toBeInTheDocument();
@@ -199,7 +199,7 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-03: a fully matched period shows 'Matched' with the green tick", async () => {
     mockReconcile(reconcilePayload({ matched: true, perPeriod: [{ period: "2026-06", status: "matched", matched: true }] }));
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const tile = reconcileTile();
     expect(tile.value).toBe("Matched");
     expect(tile.tick).toBe(true);
@@ -211,7 +211,7 @@ describe("ChallansPage", () => {
     // The contradictory payload from the gap report: before, the TEXT read perPeriod[0].status ('Matched')
     // while the ICON read the top-level flag (false -> warning).
     mockReconcile(reconcilePayload({ matched: false, perPeriod: [{ period: "2026-06", status: "matched", matched: true }] }));
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const tile = reconcileTile();
     expect(tile.value).not.toBe("Matched");
     expect(tile.value).toBe("Not matched");
@@ -222,7 +222,7 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-03: top-level matched=true with a non-matched period row is not shown as matched either", async () => {
     mockReconcile(reconcilePayload({ matched: true, perPeriod: [{ period: "2026-06", status: "shortfall", matched: false }] }));
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const tile = reconcileTile();
     expect(tile.value).toBe("Shortfall");
     expect(tile.warning).toBe(true);
@@ -238,7 +238,7 @@ describe("ChallansPage", () => {
         { period: "2026-06", status: "matched", matched: true },
       ],
     }));
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const tile = reconcileTile();
     expect(tile.value).toBe("Excess deposited");
     expect(tile.warning).toBe(true);
@@ -247,7 +247,7 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-03: with no reconciliation payload the tile says unknown with the warning icon", async () => {
     mockReconcile(null);
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const tile = reconcileTile();
     expect(tile.value).toBe("unknown");
     expect(tile.warning).toBe(true);
@@ -262,14 +262,14 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-04: the table has a Form column showing each row's own form type", async () => {
     mockReconcile(null, [row("C-A", "26Q"), row("C-B", "26Q")]);
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06", formType: "26Q" }) }));
     expect(screen.getByRole("columnheader", { name: /^Form/ })).toBeInTheDocument();
     expect(screen.getAllByText("26Q").length).toBeGreaterThanOrEqual(2);
   });
 
   it("CHALLANS-04: a row from an older payroll-service (no formType) shows the selected form, not a blank", async () => {
     mockReconcile(null, [row("C-OLD", undefined)]);
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06", formType: "26Q" }) }));
     const cell = screen.getByText("C-OLD").closest("tr");
     expect(cell).not.toBeNull();
     expect(within(cell as HTMLElement).getByText("26Q")).toBeInTheDocument();
@@ -277,7 +277,7 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-04: the 'Challans for Period' tile equals the number of rows listed, for the selected form", async () => {
     mockReconcile(null, [row("C-1", "26Q"), row("C-2", "26Q"), row("C-3", "26Q")]);
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06", formType: "26Q" }) }));
     const lab = Array.from(document.querySelectorAll(".lab")).find((e) => e.textContent === "Challans for Period");
     expect(lab?.nextElementSibling?.textContent).toBe("3");
     for (const cin of ["C-1", "C-2", "C-3"]) expect(screen.getByText(cin)).toBeInTheDocument();
@@ -285,7 +285,7 @@ describe("ChallansPage", () => {
 
   it("CHALLANS-04: with no ?formType the page defaults to 24Q and asks both endpoints for 24Q", async () => {
     mockReconcile(null, [row("C-24", "24Q")]);
-    renderPage(await ChallansPage({ searchParams: { period: "2026-06" } }));
+    renderPage(await ChallansPage({ searchParams: Promise.resolve({ period: "2026-06" }) }));
     const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
     expect(paths.every((p) => p.includes("formType=24Q"))).toBe(true);
   });

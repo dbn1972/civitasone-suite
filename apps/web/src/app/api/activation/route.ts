@@ -18,7 +18,7 @@ function gatewayBase(): string | null {
 }
 
 export async function POST(request: Request) {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) return NextResponse.json({ ok: false }, { status: 401 });
 
   let step: unknown;

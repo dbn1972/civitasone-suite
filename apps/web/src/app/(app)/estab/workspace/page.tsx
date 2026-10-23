@@ -1,11 +1,12 @@
 import { PageHeader } from "../../../_components/ds";
 import { GuidedFileWizard } from "./GuidedFileWizard";
 
-export default function EOfficeWorkspacePage({
-  searchParams,
-}: {
-  searchParams?: { fileId?: string; step?: string };
-}) {
+export default async function EOfficeWorkspacePage(
+  props: {
+    searchParams?: Promise<{ fileId?: string; step?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-ESTAB-WORKSPACE-01: resume an in-progress file from the URL so a refresh
   // or accidental navigation on step 3+ re-hydrates the file (the server GET
   // re-checks the caller's permission) instead of orphaning a draft.

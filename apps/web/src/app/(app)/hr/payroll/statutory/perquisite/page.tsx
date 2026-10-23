@@ -66,7 +66,10 @@ async function getEmployeeLabel(employeeId: string): Promise<string | undefined>
   return result.data.find((o) => o.id === employeeId)?.label.trim() || undefined;
 }
 
-export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string; edit?: string } }) {
+export default async function PerquisitePage(
+  props: { searchParams?: Promise<{ employeeId?: string; fy?: string; edit?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("perquisite");
   const tFallback = await getTranslations("employeeFallback");
 

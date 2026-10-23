@@ -1,6 +1,7 @@
 "use client";
 
 import { toHumanError } from "@/lib/messages";
+import { browserFetch } from "@/lib/api/browserClient";
 
 export interface StatutoryReference {
   act: string;
@@ -168,7 +169,7 @@ export async function updateServiceDefinition(id: string, body: UpdateDefinition
 }
 
 export async function fetchServiceDefinition(id: string): Promise<ServiceDefinitionDto> {
-  const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}`, { cache: "no-store" });
+  const res = await browserFetch(`v1/citizen/catalogue/services/${id}`, { cache: "no-store" });
   if (!res.ok) {
     const human = toHumanError("load", { area: "service definition" });
     throw new Error(`${human.what} ${human.next}`);
@@ -226,7 +227,7 @@ export interface ServiceAnalyticsDto {
 
 /** FN-32 — WCAG/GIGW preview of the generated form. */
 export async function fetchA11yPreview(id: string): Promise<A11yPreviewDto> {
-  const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/a11y-preview`, { cache: "no-store" });
+  const res = await browserFetch(`v1/citizen/catalogue/services/${id}/a11y-preview`, { cache: "no-store" });
   if (!res.ok) {
     const human = toHumanError("load", { area: "accessibility preview" });
     throw new Error(`${human.what} ${human.next}`);
@@ -237,7 +238,7 @@ export async function fetchA11yPreview(id: string): Promise<A11yPreviewDto> {
 
 /** FN-16 + FN-31 — reports and KPI tiles this service will get on publish. */
 export async function fetchServiceAnalytics(id: string): Promise<ServiceAnalyticsDto> {
-  const res = await fetch(`/api/proxy/v1/citizen/catalogue/services/${id}/analytics`, { cache: "no-store" });
+  const res = await browserFetch(`v1/citizen/catalogue/services/${id}/analytics`, { cache: "no-store" });
   if (!res.ok) {
     const human = toHumanError("load", { area: "reporting configuration" });
     throw new Error(`${human.what} ${human.next}`);

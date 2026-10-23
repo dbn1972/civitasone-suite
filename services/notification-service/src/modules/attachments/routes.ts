@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { scopedRead, db } from "../../shared/db.js";
 import { validateMime, ALLOWED_MIME_TYPES } from "./mime.js";
 import { scanFile } from "@civitasone/scanner";
@@ -127,7 +128,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/attachments/:id/download", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, UPLOAD_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
 
     const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, storage_key AS "storageKey", scan_status AS "scanStatus", filename
@@ -164,7 +165,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/notifications/attachments/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, UPLOAD_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
 
     const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT id, filename, mime_type AS "mimeType", size_bytes AS "sizeBytes",

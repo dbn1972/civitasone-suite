@@ -25,7 +25,7 @@ describe("Document detail page (LIST-01)", () => {
 
   it("renders document details with title and metadata", async () => {
     mockDoc.mockResolvedValue({ data: doc(), source: "api" });
-    render(await Page({ params: { id: "11111111-1111-1111-1111-111111111111" } }));
+    render(await Page({ params: Promise.resolve({ id: "11111111-1111-1111-1111-111111111111" }) }));
     expect(screen.getByText("Annual Leave Policy")).toBeInTheDocument();
     expect(screen.getByText("Policy · v2")).toBeInTheDocument();
     expect(screen.getByText("Published")).toBeInTheDocument();
@@ -36,14 +36,14 @@ describe("Document detail page (LIST-01)", () => {
   // GAP-KNOWLEDGE-LIST-06: restricted access shows lock icon
   it("shows lock icon for restricted access level", async () => {
     mockDoc.mockResolvedValue({ data: doc({ accessLevel: "restricted" }), source: "api" });
-    render(await Page({ params: { id: "11111111-1111-1111-1111-111111111111" } }));
+    render(await Page({ params: Promise.resolve({ id: "11111111-1111-1111-1111-111111111111" }) }));
     expect(screen.getByText("🔒")).toBeInTheDocument();
     expect(screen.getByText("Restricted")).toBeInTheDocument();
   });
 
   it("shows service error state when document is null + error", async () => {
     mockDoc.mockResolvedValue({ data: null, source: "error" });
-    render(await Page({ params: { id: "nonexistent" } }));
+    render(await Page({ params: Promise.resolve({ id: "nonexistent" }) }));
     expect(screen.getByText("Could not load document")).toBeInTheDocument();
   });
 });

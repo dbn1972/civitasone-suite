@@ -81,7 +81,10 @@ async function getVacancies(): Promise<{ vacancies: Vacancy[]; errored: boolean 
   }
 }
 
-export default async function CareersPage({ searchParams }: { searchParams: { type?: string; q?: string; page?: string } }) {
+export default async function CareersPage(
+  props: { searchParams: Promise<{ type?: string; q?: string; page?: string }> }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("careersHome");
   const { vacancies: allVacancies, errored } = await getVacancies();
   const org = await getCareersOrg();
@@ -107,7 +110,6 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
     <main style={{ minHeight: "100vh", background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 40%)", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       {/* The office's own identity (GAP-RECRUITMENT-CAREERS-HOME-02): name / department / emblem from its settings. */}
       <CareersHeader {...await careersHeaderProps(org)} />
-
       {/* Hero */}
       <header style={{ textAlign: "center", padding: "40px 24px 32px", maxWidth: 800, margin: "0 auto" }}>
         <h1 style={{ fontSize: 32, fontWeight: 800, color: "#0f172a", margin: "0 0 12px", letterSpacing: "-0.5px" }}>
@@ -117,7 +119,6 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
           {t("heroText")}
         </p>
       </header>
-
       {/* Search */}
       {!errored && allVacancies.length > 0 && (
         <form method="GET" action="/careers" role="search" aria-label={t("searchAria")} style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 16px", display: "flex", gap: 8 }}>
@@ -132,7 +133,6 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
           </button>
         </form>
       )}
-
       {/* Type filter tabs */}
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 20px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }} role="navigation" aria-label={t("filterByType")}>
@@ -161,7 +161,6 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
           })}
         </div>
       </div>
-
       {/* Vacancies */}
       <section style={{ maxWidth: 880, margin: "0 auto", padding: "0 24px 64px" }} aria-label={t("openPositions")}>
         {errored ? (
@@ -175,26 +174,22 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
           </div>
         ) : vacancies.length === 0 ? (
           // Distinguish "this filter/search matches nothing" (offer a way back) from "the tenant has nothing published".
-          allVacancies.length > 0 ? (
-            <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
-              <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🔍</p>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>
-                {query
-                  ? (activeType ? t("noMatchQueryInType", { query, type: activeTypeLabel }) : t("noMatchQuery", { query }))
-                  : t("noTypeOpenings", { type: activeTypeLabel })}
-              </h2>
-              <p style={{ color: "#64748b", fontSize: 15, margin: "0 0 16px" }}>{t("tryDifferent")}</p>
-              <Link href="/careers" style={{ display: "inline-block", padding: "10px 20px", background: CAREERS_PRIMARY, color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-                {t("viewAll")}
-              </Link>
-            </div>
-          ) : (
-            <div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
-              <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">📋</p>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>{t("noneTitle")}</h2>
-              <p style={{ color: "#64748b", fontSize: 15 }}>{t("noneText")}</p>
-            </div>
-          )
+          (allVacancies.length > 0 ? (<div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
+            <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">🔍</p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>
+              {query
+                ? (activeType ? t("noMatchQueryInType", { query, type: activeTypeLabel }) : t("noMatchQuery", { query }))
+                : t("noTypeOpenings", { type: activeTypeLabel })}
+            </h2>
+            <p style={{ color: "#64748b", fontSize: 15, margin: "0 0 16px" }}>{t("tryDifferent")}</p>
+            <Link href="/careers" style={{ display: "inline-block", padding: "10px 20px", background: CAREERS_PRIMARY, color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              {t("viewAll")}
+            </Link>
+          </div>) : (<div style={{ textAlign: "center", padding: "48px 24px", background: "#fff", borderRadius: 16, border: "1px solid #e2e8f0" }}>
+            <p style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">📋</p>
+            <h2 style={{ fontSize: 20, fontWeight: 700, color: "#0f172a", margin: "0 0 8px" }}>{t("noneTitle")}</h2>
+            <p style={{ color: "#64748b", fontSize: 15 }}>{t("noneText")}</p>
+          </div>))
         ) : (
           <div style={{ display: "grid", gap: 16 }}>
             {vacancies.map((v) => {
@@ -251,7 +246,6 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
           </nav>
         )}
       </section>
-
       {/* Footer */}
       <footer style={{ textAlign: "center", padding: "24px", borderTop: "1px solid #e2e8f0", color: CAREERS_MUTED, fontSize: 13 }}>
         {t("footerEqual")}

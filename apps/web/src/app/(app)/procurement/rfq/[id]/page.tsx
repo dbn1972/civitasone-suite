@@ -20,7 +20,8 @@ const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left"
   { key: "unit", label: "Unit" },
 ];
 
-export default async function RFQDetailPage({ params }: { params: { id: string } }) {
+export default async function RFQDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: rfq, source } = await getRFQById(params.id);
 
   if (!rfq) {
@@ -71,7 +72,6 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           </>
         }
       />
-
       <Card title="RFQ details" padding>
         <div className="fields">
           <div className="field">
@@ -108,7 +108,6 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           )}
         </div>
       </Card>
-
       {/* GAP-PROCUREMENT-RFQ-DETAIL-01: lifecycle actions (close / award). */}
       <Card title="Actions" padding>
         <RFQActions
@@ -119,7 +118,6 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           awardCandidate={awardCandidate}
         />
       </Card>
-
       {rfq.lineItems.length > 0 && (
         <Card title="Line items">
           <DataTable<LineItemRow>
@@ -129,13 +127,12 @@ export default async function RFQDetailPage({ params }: { params: { id: string }
           />
         </Card>
       )}
-
       {rfq.responses.length > 0 && (
         // GAP-PROCUREMENT-RFQ-DETAIL-02/-03: comparative statement with L1 marker
         // and sealed-amount discipline, replacing the flat total-only table.
-        <Card title="Vendor responses (comparative statement)">
+        (<Card title="Vendor responses (comparative statement)">
           <ComparativeStatement responses={rfq.responses} lineItems={rfq.lineItems} />
-        </Card>
+        </Card>)
       )}
     </>
   );

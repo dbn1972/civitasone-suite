@@ -1,3 +1,4 @@
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -67,7 +68,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
       vendorName: String(po.vendorName ?? po.vendorId ?? "Vendor"),
       orderDate: String(po.orderDate ?? new Date().toISOString().slice(0, 10)),
       status: String(po.status ?? "draft"),
-      totalAmount: ((Number(po.totalMinor ?? 0)) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+      totalAmount: minorToMajorNumber((po.totalMinor ?? 0) as string | number | bigint).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
       itemRows,
     });
     return reply.header("content-type", "text/html; charset=utf-8").send(html);
@@ -91,7 +92,7 @@ export async function poPrintRoutes(app: FastifyInstance): Promise<void> {
       vendorName: String(po.vendorName ?? po.vendorId ?? "Vendor"),
       orderDate: String(po.orderDate ?? new Date().toISOString().slice(0, 10)),
       status: String(po.status ?? "draft"),
-      totalAmount: ((Number(po.totalMinor ?? 0)) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
+      totalAmount: minorToMajorNumber((po.totalMinor ?? 0) as string | number | bigint).toLocaleString("en-IN", { minimumFractionDigits: 2 }),
       itemRows,
     });
     return reply

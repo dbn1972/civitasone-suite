@@ -17,41 +17,41 @@ describe("DemandGrantDetailPage (GAP-FINANCE-BUDGET-DEMAND-GRANTS-04)", () => {
 
   it("lists the head-wise lines of the demand", async () => {
     getDemandGrantById.mockResolvedValue({ data: demand(), source: "api" });
-    render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("Demand D-01")).toBeInTheDocument();
     expect(screen.getByText("General Education")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
   it("warns when the lines do not total the demand, and shows the empty state when there are none", async () => {
     getDemandGrantById.mockResolvedValue({ data: demand({ linesTotalMinor: "40000", linesReconciled: false }), source: "api" });
-    const { unmount } = render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    const { unmount } = render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByRole("alert")).toHaveTextContent(/differs from the demand amount/);
     unmount();
     getDemandGrantById.mockResolvedValue({ data: demand({ lines: [], linesTotalMinor: "0", linesReconciled: false }), source: "api" });
-    render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("No head-wise lines yet")).toBeInTheDocument();
   });
   it("offers the editor only for a draft demand and a write role", async () => {
     getDemandGrantById.mockResolvedValue({ data: demand(), source: "api" });
-    const { unmount } = render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    const { unmount } = render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.getByText("lines-editor")).toBeInTheDocument();
     unmount();
     roles.current = ["audit_officer"];
-    const second = render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    const second = render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.queryByText("lines-editor")).not.toBeInTheDocument();
     second.unmount();
     roles.current = ["finance_officer"];
     getDemandGrantById.mockResolvedValue({ data: demand({ status: "approved" }), source: "api" });
-    render(await DemandGrantDetailPage({ params: { id: "d1" } }));
+    render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "d1" }) }));
     expect(screen.queryByText("lines-editor")).not.toBeInTheDocument();
   });
   it("a real 404 is 'not found'; any other failure is a retryable error", async () => {
     getDemandGrantById.mockResolvedValue({ data: null, source: "error", status: 404 });
-    const { unmount } = render(await DemandGrantDetailPage({ params: { id: "x" } }));
+    const { unmount } = render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.getByText("Demand not found")).toBeInTheDocument();
     unmount();
     getDemandGrantById.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await DemandGrantDetailPage({ params: { id: "x" } }));
+    render(await DemandGrantDetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByText("Demand not found")).not.toBeInTheDocument();
   });
 });

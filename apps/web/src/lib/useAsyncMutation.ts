@@ -39,6 +39,8 @@
  * about confirming a single mutation's write actually landed).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { humanErrorFromFailure } from "./messages";
+import { isNetworkFailure } from "./userFacingError";
 
 export type AsyncMutationPhase =
   | "idle"
@@ -223,7 +225,12 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
       mutated = await optionsRef.current.mutate();
     } catch (err) {
       if (isCurrent()) {
-        setError(err instanceof Error ? err.message : String(err));
+        if (isNetworkFailure(err)) {
+          const h = humanErrorFromFailure({ kind: "save", forceKind: "network" });
+          setError(`${h.what} ${h.next}`);
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
         setPhase("error");
       }
       runningRef.current = false;

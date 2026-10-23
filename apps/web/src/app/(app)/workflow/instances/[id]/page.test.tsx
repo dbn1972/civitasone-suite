@@ -51,14 +51,14 @@ describe("InstanceDetailPage (GAP-WORKFLOW-INSTANCES-DETAIL-03/06)", () => {
     getInstanceById.mockResolvedValue({ data: null, source: "error", status: 404 });
     getInstanceHistory.mockResolvedValue({ data: [], source: "api" });
     getTasksForInstance.mockResolvedValue({ data: [], source: "api" });
-    await expect(InstanceDetailPage({ params: { id: "i1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(InstanceDetailPage({ params: Promise.resolve({ id: "i1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("shows instance.currentNode as the current step even when history failed", async () => {
     getInstanceById.mockResolvedValue({ data: INST, source: "api" });
     getInstanceHistory.mockResolvedValue({ data: [], source: "error" });
     getTasksForInstance.mockResolvedValue({ data: [], source: "api" });
-    render(await InstanceDetailPage({ params: { id: "i1" } }));
+    render(await InstanceDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     const label = screen.getByText("Current step");
     expect(label.closest(".stat")?.textContent).toContain("Inspection");
   });
@@ -67,7 +67,7 @@ describe("InstanceDetailPage (GAP-WORKFLOW-INSTANCES-DETAIL-03/06)", () => {
     getInstanceById.mockResolvedValue({ data: INST, source: "api" });
     getInstanceHistory.mockResolvedValue({ data: [], source: "api" });
     getTasksForInstance.mockResolvedValue({ data: [], source: "error" });
-    render(await InstanceDetailPage({ params: { id: "i1" } }));
+    render(await InstanceDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     const statLabel = screen.getAllByText("Open tasks").find((el) => el.closest(".stat"));
     const card = statLabel?.closest(".stat");
     expect(card?.textContent).toContain("—");
@@ -84,7 +84,7 @@ describe("InstanceDetailPage (GAP-WORKFLOW-INSTANCES-DETAIL-03/06)", () => {
     });
     getInstanceHistory.mockResolvedValue({ data: [], source: "api" });
     getTasksForInstance.mockResolvedValue({ data: [], source: "api" });
-    render(await InstanceDetailPage({ params: { id: "i1" } }));
+    render(await InstanceDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     const link = screen.getByRole("link", { name: "Purchase Order" });
     expect(link).toHaveAttribute("href", `/procurement/orders/${refId}`);
     // The raw enum code and raw UUID must NOT be printed verbatim.

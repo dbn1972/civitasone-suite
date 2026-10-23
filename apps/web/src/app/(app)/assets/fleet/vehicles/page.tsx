@@ -8,7 +8,8 @@ import { VehiclesTable } from "./VehiclesTable";
 
 export type { VehicleRow };
 
-export default async function FleetVehiclesPage({ searchParams }: { searchParams?: { vehicleId?: string } }) {
+export default async function FleetVehiclesPage(props: { searchParams?: Promise<{ vehicleId?: string }> }) {
+  const searchParams = await props.searchParams;
   const { data: vehicles, source } = await getVehicles();
 
   return (

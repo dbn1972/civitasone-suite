@@ -63,7 +63,7 @@ describe("MyApprovalsPage (GAP-APPROVALS-HOME-01 / -03)", () => {
       data: { items: makeItems(10, 30), total: 40, hasMore: false },
       source: "api",
     });
-    render(await MyApprovalsPage({ searchParams: { page: "3" } }));
+    render(await MyApprovalsPage({ searchParams: Promise.resolve({ page: "3" }) }));
 
     // page 3, pageSize 15 -> offset 30.
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("limit=15&offset=30");
@@ -93,7 +93,7 @@ describe("MyApprovalsPage (GAP-APPROVALS-HOME-01 / -03)", () => {
       data: { items: makeItems(5), total: 5, hasMore: false },
       source: "api",
     });
-    render(await MyApprovalsPage({ searchParams: { page: "-9x" } }));
+    render(await MyApprovalsPage({ searchParams: Promise.resolve({ page: "-9x" }) }));
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("offset=0");
   });
 });

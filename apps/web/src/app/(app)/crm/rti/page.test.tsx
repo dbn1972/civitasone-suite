@@ -55,7 +55,7 @@ describe("RtiPage status-aware SLA tiles (GAP-CRM-RTI-01)", () => {
     ];
     getCrmRtiMock.mockResolvedValue({ data: { rows, total: rows.length }, source: "api" });
 
-    const ui = await RtiPage({ searchParams: {} });
+    const ui = await RtiPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // Open = 3 open rows (ids 1,2,3), NOT the 3 closed ones.
@@ -76,7 +76,7 @@ describe("RtiPage pagination (GAP-CRM-RTI-02)", () => {
     const rows = Array.from({ length: 50 }, (_, i) => row(String(i + 1), "RECEIVED", "2026-12-01T00:00:00.000Z"));
     getCrmRtiMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
 
-    const ui = await RtiPage({ searchParams: {} });
+    const ui = await RtiPage({ searchParams: Promise.resolve({}) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(getCrmRtiMock).toHaveBeenCalledWith(expect.objectContaining({ page: 1, limit: 50 }));
@@ -90,7 +90,7 @@ describe("RtiPage pagination (GAP-CRM-RTI-02)", () => {
     const rows = Array.from({ length: 20 }, (_, i) => row(String(101 + i), "FIRST_APPEAL", "2026-12-01T00:00:00.000Z"));
     getCrmRtiMock.mockResolvedValue({ data: { rows, total: 120 }, source: "api" });
 
-    const ui = await RtiPage({ searchParams: { page: "3", status: "FIRST_APPEAL" } });
+    const ui = await RtiPage({ searchParams: Promise.resolve({ page: "3", status: "FIRST_APPEAL" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(getCrmRtiMock).toHaveBeenCalledWith(

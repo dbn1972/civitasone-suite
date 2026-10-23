@@ -73,7 +73,8 @@ async function getSessions(trainingId: string) {
  * here that no employee-search adapter existed was wrong; they back a dozen
  * forms). Everyone else stays self-enrol only.
  */
-export default async function TrainingDetailPage({ params }: { params: { id: string } }) {
+export default async function TrainingDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("trainingDetail");
   const tTraining = await getTranslations("training");
   const [{ data: programs, source: programsSource }, { data: sessions, source: sessionsSource }, { data: myProfile }] = await Promise.all([

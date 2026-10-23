@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 
 type SP = { entity?: string };
 
-export default async function MetadataFormsPage({ searchParams }: { searchParams?: SP }) {
+export default async function MetadataFormsPage(props: { searchParams?: Promise<SP> }) {
+  const searchParams = await props.searchParams;
   // GAP-METADATA-FORMS-02/-03: was calling getMetadataEntities() and labelling
   // entity rows "Forms". A "form" is a layout_definition (CAP-109), listed only
   // entity-scoped (GET /v1/metadata/entities/:entityId/layouts) — there is no

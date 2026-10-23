@@ -24,7 +24,7 @@ beforeEach(() => {
 });
 
 async function renderPage(search: Record<string, string> = {}) {
-  render(await CalendarPage({ searchParams: search }));
+  render(await CalendarPage({ searchParams: Promise.resolve(search) }));
 }
 
 describe("CalendarPage — GAP-LEARNING-CALENDAR-01/02/03/04/05/06", () => {

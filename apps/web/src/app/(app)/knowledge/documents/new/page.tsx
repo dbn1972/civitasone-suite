@@ -9,7 +9,8 @@ import { CreateDocumentForm } from "./CreateDocumentForm";
  * GAP-KNOWLEDGE-DOCUMENTS-NEW-06: replaced inline hex colours in the info banner
  * with CSS token classes for dark-mode support.
  */
-export default function NewDocumentPage({ searchParams }: { searchParams: { category?: string } }) {
+export default async function NewDocumentPage(props: { searchParams: Promise<{ category?: string }> }) {
+  const searchParams = await props.searchParams;
   const category = typeof searchParams.category === "string" ? searchParams.category : "";
   const isSchedule = category.toLowerCase().includes("retention") || category.toLowerCase().includes("schedule");
 

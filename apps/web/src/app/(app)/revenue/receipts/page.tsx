@@ -125,11 +125,12 @@ async function getReceipts(assesseeId: string): Promise<LoaderResult<ReceiptRow[
   );
 }
 
-export default async function ReceiptsPage({
-  searchParams,
-}: {
-  searchParams?: { assesseeId?: string };
-}) {
+export default async function ReceiptsPage(
+  props: {
+    searchParams?: Promise<{ assesseeId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();

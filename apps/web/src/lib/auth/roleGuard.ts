@@ -1,4 +1,6 @@
-import { cookies } from "next/headers";
+// Next 15: cookies() is async. This synchronous helper has many callers, so it uses the
+// supported transitional UnsafeUnwrappedCookies cast (sync access is removed in Next 16).
+import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE } from "./config";
 import { BILLING_INVOICE_READER_ROLES } from "./adminRoles";
@@ -25,7 +27,7 @@ function decodeJwtPayload(token: string): JwtPayload {
 }
 
 export function getSessionRoles(): string[] {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return [];
   const payload = decodeJwtPayload(token);
   return Array.isArray(payload.roles) ? payload.roles : [];
@@ -33,7 +35,7 @@ export function getSessionRoles(): string[] {
 
 /** The current office (tenant) id from the session, or null when not signed in. */
 export function getSessionTenantId(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.tid === "string" && payload.tid.length > 0 ? payload.tid : null;
@@ -41,7 +43,7 @@ export function getSessionTenantId(): string | null {
 
 /** Display name from the session token, or null when not signed in. */
 export function getSessionName(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.name === "string" && payload.name.length > 0 ? payload.name : null;
@@ -54,7 +56,7 @@ export function getSessionName(): string | null {
  * the server remains the authority. Null when not signed in.
  */
 export function getSessionUserId(): string | null {
-  const token = cookies().get(COOKIE.ACCESS)?.value;
+  const token = (cookies() as unknown as UnsafeUnwrappedCookies).get(COOKIE.ACCESS)?.value;
   if (!token) return null;
   const payload = decodeJwtPayload(token);
   return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
@@ -1053,6 +1055,13 @@ export const DESIGNER_AUTHOR_ROLES = ["citizen_admin", "super_admin"];
  * POST/deploy route.
  */
 export const WORKFLOW_DESIGNER_AUTHOR_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to read the admin legacy-delegations report. Mirrors workflow-service's delegations
+ * ADMIN_ROLES (modules/delegations/routes.ts: workflow_admin, super_admin, tenant_admin) on
+ * GET /v1/workflow/delegations/legacy-report. UI gating only; the service enforces the same.
+ */
+export const WORKFLOW_DELEGATION_ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
 /**
  * GAP2-ANALYTICS-ROLES-01: roles permitted to READ the analytics module

@@ -35,7 +35,7 @@ describe("ContractDetailPage (GAP-HR-CONTRACTUAL-05)", () => {
   });
 
   it("never sends terms/compensation to the client DataTable", async () => {
-    const ui = await ContractDetailPage({ params: { id: "c1" } });
+    const ui = await ContractDetailPage({ params: Promise.resolve({ id: "c1" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     const rows = dataTableProps.mock.calls[0]![0].rows as Array<Record<string, unknown>>;
     expect(rows).toHaveLength(1);

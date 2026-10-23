@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 async function renderPage() {
-  render(await Page({ params: { id: PROFILE_ID } }));
+  render(await Page({ params: Promise.resolve({ id: PROFILE_ID }) }));
 }
 
 describe("Customer 360 detail page", () => {

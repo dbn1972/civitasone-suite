@@ -83,7 +83,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
 
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(mAccount).toHaveBeenCalledWith("acc-99");
     expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
     expect(screen.queryByText("Account not found")).not.toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
     mAncestors.mockResolvedValue({ data: [{ id: "p-1", name: "Parent Org" }] as never, source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
 
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(parentFormProps[0]).toMatchObject({ subtreeSize: 7, currentParentId: "p-1", currentParentName: "Parent Org" });
   });
 
@@ -108,7 +108,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
     mAncestors.mockResolvedValue({ data: [], source: "error", status: 404 });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 404 });
 
-    render(await Page({ params: { id: "missing" } }));
+    render(await Page({ params: Promise.resolve({ id: "missing" }) }));
     expect(screen.getByText("Account not found")).toBeInTheDocument();
   });
 
@@ -117,7 +117,7 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
     mAncestors.mockResolvedValue({ data: [], source: "error", status: 500 });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 500 });
 
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(screen.queryByText("Account not found")).not.toBeInTheDocument();
     // GAP-CRM-ACCOUNTS-DETAIL-08: the error reads naturally with a determiner-
     // free plural noun, "We couldn't load account details." (not "account.").
@@ -134,13 +134,13 @@ describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
 
   it("passes canVerify=false for a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("false");
   });
 
   it("passes canVerify=true for crm_admin", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
   });
 
@@ -148,13 +148,13 @@ describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
   // clear the broader CRM admin gate but are 403'd, so they must not be offered Verify / Reject.
   it.each(["admin", "platform_admin"])("passes canVerify=false for %s (the verify route answers 403)", async (role) => {
     mockRoles.mockReturnValue(["crm_user", role]);
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("false");
   });
 
   it.each(["super_admin", "tenant_admin"])("passes canVerify=true for %s (the verify route admits it)", async (role) => {
     mockRoles.mockReturnValue([role]);
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     expect(screen.getByTestId("docs").dataset.canVerify).toBe("true");
   });
 });
@@ -165,7 +165,7 @@ describe("Account detail partial failure (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 503 });
 
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     // The loaded account is NOT replaced by a full-page error.
     expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
     // The Child Accounts card offers a retry rather than a false "No child accounts".
@@ -181,7 +181,7 @@ describe("Account detail partial failure - reporting line (GAP-CRM-ACCOUNTS-DETA
     mChildren.mockResolvedValue({ data: [], source: "api" });
     mockRoles.mockReturnValue(["crm_admin"]);
 
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     // The loaded account is NOT replaced by a full-page error ...
     expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
     // ... and the Reporting Line card offers a retry rather than a false "top-level account".
@@ -202,7 +202,7 @@ describe("Account detail website hardening (GAP-CRM-ACCOUNTS-DETAIL-05)", () => 
       data: { ...account, website: "javascript:alert(1)" } as never,
       source: "api",
     });
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     // The raw value is shown as text, never as an href.
     const link = screen.queryByRole("link", { name: "javascript:alert(1)" });
     expect(link).not.toBeInTheDocument();
@@ -214,7 +214,7 @@ describe("Account detail website hardening (GAP-CRM-ACCOUNTS-DETAIL-05)", () => 
       data: { ...account, website: "ndma.gov.in" } as never,
       source: "api",
     });
-    render(await Page({ params: { id: "acc-99" } }));
+    render(await Page({ params: Promise.resolve({ id: "acc-99" }) }));
     const link = screen.getByRole("link", { name: "ndma.gov.in" });
     expect(link).toHaveAttribute("href", "https://ndma.gov.in/");
   });

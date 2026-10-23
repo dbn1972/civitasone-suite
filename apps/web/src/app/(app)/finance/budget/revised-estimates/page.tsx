@@ -51,11 +51,12 @@ function byAbsVarianceDesc(a: { row: RevisedEstimateRow; bps: bigint | null }, b
   return a.row.headCode.localeCompare(b.row.headCode);
 }
 
-export default async function RevisedEstimatesPage({
-  searchParams,
-}: {
-  searchParams?: { fy?: string };
-}) {
+export default async function RevisedEstimatesPage(
+  props: {
+    searchParams?: Promise<{ fy?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-FINANCE-BUDGET-REVISED-ESTIMATES-01: one row per head for ONE fiscal
   // year. The FY comes from the FyFilter (?fy=), validated, default current FY;
   // before, every FY's row for a head was listed together with no FY column.

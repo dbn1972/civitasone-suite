@@ -33,7 +33,7 @@ describe("AuditParaDetailPage (GAP-FINANCE-AUDIT-PARAS-DETAIL-03/05)", () => {
   });
 
   it("humanizes the Status card (not the raw 'open') and formats dates as dd Mon yyyy", async () => {
-    render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     const card = screen.getByText("Status", { selector: ".stat *" }).closest(".stat");
     expect(card).toHaveTextContent("Open");
     expect(card).not.toHaveTextContent(/\bopen\b/);
@@ -44,23 +44,23 @@ describe("AuditParaDetailPage (GAP-FINANCE-AUDIT-PARAS-DETAIL-03/05)", () => {
   // GAP-FINANCE-AUDIT-PARAS-DETAIL-04
   it("offers the workflow actions the role and status allow, and none to a read-only role", async () => {
     session.roles = ["audit_officer"];
-    const a = render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    const a = render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.queryByText(/para-actions/)).not.toBeInTheDocument();
     a.unmount();
     session.roles = ["finance_officer"];
-    const b = render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    const b = render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("para-actions:respond,escalate")).toBeInTheDocument();
     b.unmount();
     session.roles = ["finance_admin"];
     getPara.mockResolvedValue(PARA({ status: "responded" }));
-    render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("para-actions:escalate,settle")).toBeInTheDocument();
   });
 
   it("a settled para offers no action", async () => {
     session.roles = ["super_admin"];
     getPara.mockResolvedValue(PARA({ status: "settled" }));
-    render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.queryByText(/para-actions/)).not.toBeInTheDocument();
   });
 
@@ -73,7 +73,7 @@ describe("AuditParaDetailPage (GAP-FINANCE-AUDIT-PARAS-DETAIL-03/05)", () => {
       ],
     });
     getNames.mockResolvedValue({ "11111111-1111-4111-8111-111111111111": "Asha Rao" });
-    const { container } = render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    const { container } = render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     const list = screen.getByRole("list", { name: "Audit para timeline" });
     expect(within(list).getByText("Asha Rao")).toBeInTheDocument();
     expect(list).toHaveTextContent("Reply dated 12/09 attached");
@@ -81,11 +81,11 @@ describe("AuditParaDetailPage (GAP-FINANCE-AUDIT-PARAS-DETAIL-03/05)", () => {
   });
 
   it("an empty history and a failed history lookup are different states", async () => {
-    const a = render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    const a = render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.getByText("No reply or action recorded yet")).toBeInTheDocument();
     a.unmount();
     getEvents.mockResolvedValue({ source: "error", status: 503, data: [] });
-    render(await AuditParaDetailPage({ params: { id: "p1" } }));
+    render(await AuditParaDetailPage({ params: Promise.resolve({ id: "p1" }) }));
     expect(screen.queryByText("No reply or action recorded yet")).not.toBeInTheDocument();
     expect(screen.getByText(/We couldn't load the audit para history because of a problem on our side\./)).toBeInTheDocument();
   });

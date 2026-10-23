@@ -161,7 +161,7 @@ describe("TransferPage", () => {
 
     it("resolves ?empId= server-side and does not blow up when the role can't raise a transfer anyway", async () => {
       mockRoles = ["manager"];
-      const ui = await TransferPage({ searchParams: { empId: "11111111-1111-4111-8111-111111111111" } });
+      const ui = await TransferPage({ searchParams: Promise.resolve({ empId: "11111111-1111-4111-8111-111111111111" }) });
       render(ui);
       // Not looked up at all for a role that can't use it -- no point paying
       // for the request.
@@ -171,7 +171,7 @@ describe("TransferPage", () => {
     it("looks up the employee for a role that can raise a transfer", async () => {
       mockRoles = ["hr_admin"];
       getEmployeeByIdMock.mockResolvedValue({ data: { name: "Asha Rao" }, source: "api" });
-      const ui = await TransferPage({ searchParams: { empId: "11111111-1111-4111-8111-111111111111" } });
+      const ui = await TransferPage({ searchParams: Promise.resolve({ empId: "11111111-1111-4111-8111-111111111111" }) });
       render(ui);
       expect(getEmployeeByIdMock).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
     });

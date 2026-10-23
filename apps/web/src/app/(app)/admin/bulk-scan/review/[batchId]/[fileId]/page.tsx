@@ -8,7 +8,8 @@ import { allowedTargetsFromSettings } from "@/lib/bulkScan/settingsView";
 import { ReviewUnavailable } from "../../../_components/ReviewUnavailable";
 import { ReviewWorkspace } from "../../../_components/ReviewWorkspace";
 
-export default async function BulkScanReviewPage({ params }: { params: { batchId: string; fileId: string } }) {
+export default async function BulkScanReviewPage(props: { params: Promise<{ batchId: string; fileId: string }> }) {
+  const params = await props.params;
   if (!sessionHasAnyRole(BULK_SCAN_ADMIN_ROLES)) {
     const t = await getTranslations("bulkScan");
     return <AdminAccessDenied title={t("review.title")} area={t("list.area")} roles={BULK_SCAN_ADMIN_ROLES} />;

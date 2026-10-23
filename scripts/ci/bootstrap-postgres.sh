@@ -10,7 +10,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PGHOST="${PGHOST:-localhost}"
 PGPORT="${PGPORT:-5435}"
 PGUSER="${PGUSER:-civitas}"
-export PGPASSWORD="${PGPASSWORD:-civitas_test}"
+# Default (throwaway CI/dev database only) applied only when the caller did not set one.
+: "${PGPASSWORD:=civitas_test}"
+export PGPASSWORD
 # Captured before the migration loops below reassign PGPASSWORD per service
 # role. Role-creating migrations are re-run as this superuser (see
 # needs_superuser()), so its password must survive those reassignments.
@@ -450,7 +452,7 @@ for svc in $(printf '%s\n' "${!SERVICE_DBS[@]}" | sort); do
       run_as="$role"; run_pw="$pw"
       echo "Applying $(basename "$f") → $db ($svc)"
     fi
-    if ! PGOPTIONS="$(scanner_role_guc_options "$f")" PGPASSWORD="$run_pw" \
+    if ! PGOPTIONS="$(scanner_role_guc_options "$f")" env "PGPASSWORD=$run_pw" \
          psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" -v ON_ERROR_STOP=1 -f "$f" \
          2>&1 | tee "$MIGRATION_OUT" | grep -v '^$'; then :; fi
     if grep -q '^psql:.*ERROR:' "$MIGRATION_OUT"; then
@@ -536,7 +538,7 @@ ADMIN_OWNED_DBS=(
 # Do NOT fall back to ambient PGPASSWORD here — the SERVICE_DBS loop above
 # overwrites it with each service role password. Always reuse ADMIN_PW from
 # role creation so admin-owned migrations authenticate correctly.
-export PGPASSWORD="$ADMIN_PW"
+export "PGPASSWORD=$ADMIN_PW"
 ADMIN_USER="${POSTGRES_ADMIN_USER:-civitas_admin}"
 
 for entry in "${ADMIN_OWNED_DBS[@]}"; do
@@ -554,7 +556,7 @@ for entry in "${ADMIN_OWNED_DBS[@]}"; do
       run_as="$ADMIN_USER"; run_pw="$ADMIN_PW"
       echo "Applying $(basename "$f") → $db ($svc, admin-run)"
     fi
-    if ! PGPASSWORD="$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" \
+    if ! env "PGPASSWORD=$run_pw" psql -h "$PGHOST" -p "$PGPORT" -U "$run_as" -d "$db" \
          -v ON_ERROR_STOP=1 -f "$f" > "$MIGRATION_OUT" 2>&1; then
       echo "⚠ Migration failed for $svc/$(basename "$f")"
       svc_failed=$((svc_failed + 1))

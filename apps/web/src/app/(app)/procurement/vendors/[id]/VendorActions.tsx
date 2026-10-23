@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ActionButton, ConfirmDialog } from "@/app/_components/ds";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { isNetworkFailure } from "@/lib/userFacingError";
 
 const CATEGORIES = ["goods", "services", "works"] as const;
 
@@ -76,7 +77,7 @@ export function VendorActions({
       setEmpanelOpen(false);
       accepted();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("failed"));
+      setError(!isNetworkFailure(e) && e instanceof Error ? e.message : t("failed"));
     } finally {
       setBusy(false);
     }

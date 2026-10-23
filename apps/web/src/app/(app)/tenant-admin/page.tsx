@@ -42,7 +42,8 @@ const QUICK_NAV: QuickNavItem[] = [
   { href: "/tenant-admin/subscription", label: "Subscription", icon: "💳" },
 ];
 
-export default async function TenantAdminPage({ searchParams }: { searchParams?: { denied?: string } }) {
+export default async function TenantAdminPage(props: { searchParams?: Promise<{ denied?: string }> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const canViewOperations = roles.includes("platform_admin") || roles.includes("super_admin");
   const { data: dashboard, source } = await getTenantAdminDashboard();

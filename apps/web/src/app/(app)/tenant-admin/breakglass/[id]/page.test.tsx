@@ -39,7 +39,7 @@ describe("BreakglassDetailPage — FABRICATED (DETAIL-01/04) + DEADROUTE (DETAIL
 
   it("renders the real event, never the hard-coded Vikram Singh sample", async () => {
     getBreakglassEventMock.mockResolvedValue({ data: realEvent, source: "api" });
-    render(await BreakglassDetailPage({ params: { id: "bg-9" } }));
+    render(await BreakglassDetailPage({ params: Promise.resolve({ id: "bg-9" }) }));
     expect(screen.getByText("R. Admin")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Vikram Singh/i);
     expect(document.body.textContent).not.toMatch(/@civitas\.gov\.in/i);
@@ -50,13 +50,13 @@ describe("BreakglassDetailPage — FABRICATED (DETAIL-01/04) + DEADROUTE (DETAIL
 
   it("calls notFound() on a 404", async () => {
     getBreakglassEventMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(BreakglassDetailPage({ params: { id: "nope" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(BreakglassDetailPage({ params: Promise.resolve({ id: "nope" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalled();
   });
 
   it("shows an error state (not fabricated data) on a non-404 failure", async () => {
     getBreakglassEventMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await BreakglassDetailPage({ params: { id: "bg-9" } }));
+    render(await BreakglassDetailPage({ params: Promise.resolve({ id: "bg-9" }) }));
     expect(document.body.textContent).not.toMatch(/Vikram Singh/i);
     expect(notFoundMock).not.toHaveBeenCalled();
   });

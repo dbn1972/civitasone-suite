@@ -8,11 +8,12 @@ import LeaveBalanceClient from "./LeaveBalanceClient";
  * accordingly (employees see only their own balance; admins/managers
  * get the full employee picker).
  */
-export default async function LeaveBalancePage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string>;
-}) {
+export default async function LeaveBalancePage(
+  props: {
+    searchParams?: Promise<Record<string, string>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const profile = await getMyProfile();
   // GAP-HR-LEAVE-BALANCE-04: getMyProfile() normalizes a genuine 404 ("no

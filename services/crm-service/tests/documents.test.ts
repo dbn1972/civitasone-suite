@@ -8,6 +8,7 @@
  * alert cycle.
  */
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
+import { createServer } from "node:http";
 import { signToken } from "@civitasone/auth";
 import { resetClient } from "@civitasone/storage";
 import { buildApp } from "../src/app.js";
@@ -179,16 +180,43 @@ describe("DM-001 confirm + versioning", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("rejects confirm when the object is absent and verification is on (422)", async () => {
-    const pre = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "missing.pdf", mimeType: "application/pdf" });
+  it("rejects confirm when the store reports the object absent and verification is on (422)", async () => {
+    // A real HTTP stub that answers HEAD with 404 (a genuine "not found").
+    const stub = createServer((_req, res) => { res.statusCode = 404; res.end(); });
+    await new Promise<void>((r) => stub.listen(0, "127.0.0.1", r));
+    const prevEndpoint = process.env.AWS_ENDPOINT_URL;
+    process.env.AWS_ENDPOINT_URL = `http://127.0.0.1:${(stub.address() as { port: number }).port}`;
+    resetClient();
+    try {
+      const pre = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "missing.pdf", mimeType: "application/pdf" });
+      const { storageKey } = pre.json().data;
+      process.env.CRM_CONFIRM_REQUIRE_OBJECT = "1";
+      const res = await inject("POST", "/v1/crm/documents", {
+        headers: headers(),
+        payload: { subjectType: "contact", subjectId: SUBJECT, title: "m", filename: "missing.pdf", storageKey, mimeType: "application/pdf", sizeBytes: 1 },
+      });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe("OBJECT_NOT_FOUND");
+    } finally {
+      process.env.CRM_CONFIRM_REQUIRE_OBJECT = "0";
+      if (prevEndpoint === undefined) delete process.env.AWS_ENDPOINT_URL; else process.env.AWS_ENDPOINT_URL = prevEndpoint;
+      resetClient();
+      await new Promise((r) => stub.close(r));
+    }
+  });
+
+  // CLOS2-S6-06: "could not check" (unreachable store, 403, 5xx) must not read as "missing".
+  it("answers 503 STORAGE_UNAVAILABLE, not 422, when the store cannot be checked", async () => {
+    const pre = await presign({ subjectType: "contact", subjectId: SUBJECT, filename: "unknown.pdf", mimeType: "application/pdf" });
     const { storageKey } = pre.json().data;
-    process.env.CRM_CONFIRM_REQUIRE_OBJECT = "1";
+    process.env.CRM_CONFIRM_REQUIRE_OBJECT = "1"; // AWS_ENDPOINT_URL points at nothing => connection refused
     const res = await inject("POST", "/v1/crm/documents", {
       headers: headers(),
-      payload: { subjectType: "contact", subjectId: SUBJECT, title: "m", filename: "missing.pdf", storageKey, mimeType: "application/pdf", sizeBytes: 1 },
+      payload: { subjectType: "contact", subjectId: SUBJECT, title: "m", filename: "unknown.pdf", storageKey, mimeType: "application/pdf", sizeBytes: 1 },
     });
     process.env.CRM_CONFIRM_REQUIRE_OBJECT = "0";
-    expect(res.statusCode).toBe(422);
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe("STORAGE_UNAVAILABLE");
   });
 });
 

@@ -26,7 +26,8 @@ const STAFFING_PLAN_ROLES = HR_STAFF_ROLES;
 
 const YEAR_RE = /^\d{4}$/;
 
-export default async function StaffingPlanPage({ searchParams }: { searchParams?: { year?: string } }) {
+export default async function StaffingPlanPage(props: { searchParams?: Promise<{ year?: string }> }) {
+  const searchParams = await props.searchParams;
   // GAP-HR-STAFFING-PLAN-04 (web half): checked before even attempting the
   // fetch -- see STAFFING_PLAN_ROLES doc comment above.
   const roles = getSessionRoles();

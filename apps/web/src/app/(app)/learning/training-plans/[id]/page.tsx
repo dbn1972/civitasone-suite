@@ -7,7 +7,8 @@ import { getTrainingPlanDetail, getCourses, getTrainingPrograms, getDepartments 
 
 type ItemRow = { id: string; item: string; type: string; targetDate: string; mandatory: string };
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: plan, source, status } = await getTrainingPlanDetail(params.id);
 
   // SF-02: only a real 404 is "not found"; other failures are load errors.

@@ -24,10 +24,10 @@ describe("GAP-DOCS-HOME-01: new module chapters exist", () => {
     }
   });
 
-  it("every new slug renders a chapter heading (generateStaticParams covers all)", () => {
+  it("every new slug renders a chapter heading (generateStaticParams covers all)", async () => {
     const params = chapters.map((ch) => ({ slug: ch.slug }));
     expect(params).toHaveLength(chapters.length);
-    const { container } = render(<ChapterPage params={{ slug: "court" }} />);
+    const { container } = render(await ChapterPage({ params: Promise.resolve({ slug: "court" }) }));
     expect(container.querySelector("h1")?.textContent).toMatch(/Court Management/);
   });
 });
@@ -88,8 +88,8 @@ describe("GAP-DOCS-HOME-04: no dead PDF download link", () => {
     expect(pdf).toBeUndefined();
   });
 
-  it("chapter page does not render a PDF download link", () => {
-    render(<ChapterPage params={{ slug: "finance" }} />);
+  it("chapter page does not render a PDF download link", async () => {
+    render(await ChapterPage({ params: Promise.resolve({ slug: "finance" }) }));
     const pdf = screen
       .queryAllByRole("link")
       .find((a) => a.getAttribute("href")?.includes("CivitasOne-User-Manual.pdf"));
@@ -98,8 +98,8 @@ describe("GAP-DOCS-HOME-04: no dead PDF download link", () => {
 });
 
 describe("GAP-DOCS-SLUG-01: mobile chapter navigation", () => {
-  it("renders a Chapters dropdown that links to every chapter", () => {
-    const { container } = render(<ChapterPage params={{ slug: "finance" }} />);
+  it("renders a Chapters dropdown that links to every chapter", async () => {
+    const { container } = render(await ChapterPage({ params: Promise.resolve({ slug: "finance" }) }));
     const details = Array.from(container.querySelectorAll("details")).find((d) =>
       d.querySelector("summary")?.textContent?.includes("Chapters")
     );
@@ -149,8 +149,8 @@ describe("GAP-DOCS-SLUG-03: heading anchors and table of contents", () => {
     expect(h2?.getAttribute("id")).toBe("budget");
   });
 
-  it("chapter page renders an On this page navigation", () => {
-    const { container } = render(<ChapterPage params={{ slug: "finance" }} />);
+  it("chapter page renders an On this page navigation", async () => {
+    const { container } = render(await ChapterPage({ params: Promise.resolve({ slug: "finance" }) }));
     const tocLinks = Array.from(container.querySelectorAll('a[href^="#"]'));
     expect(tocLinks.length).toBeGreaterThan(0);
   });
@@ -167,8 +167,8 @@ describe("GAP-DOCS-SLUG-04: docs-specific not-found", () => {
 });
 
 describe("GAP-DOCS-SLUG-05: consistent title suffix", () => {
-  it("uses the '— CivitasOne' suffix, matching other marketing pages", () => {
-    const meta = generateMetadata({ params: { slug: "finance" } });
+  it("uses the '— CivitasOne' suffix, matching other marketing pages", async () => {
+    const meta = await generateMetadata({ params: Promise.resolve({ slug: "finance" }) });
     expect(meta.title).toBe("Finance — CivitasOne");
     expect(meta.title).not.toMatch(/CivitasOne Docs/);
   });

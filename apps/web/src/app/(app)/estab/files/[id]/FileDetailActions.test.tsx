@@ -203,3 +203,22 @@ describe("FileDetailActions — disabled Submit/Sign explain why (GAP-ESTAB-FILE
     expect(screen.getByRole("button", { name: "Submit for approval" })).not.toBeDisabled();
   });
 });
+
+describe("FileDetailActions — CLOS2-S1-13 offline", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("saving a yellow note offline shows the standard offline copy, never the raw 'Failed to fetch'", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/notings")) throw new TypeError("Failed to fetch");
+      return jsonResponse({ data: [] });
+    });
+    render(<FileDetailActions fileId="file-1" status="active" />);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    fireEvent.change(screen.getByLabelText("Yellow note (draft)"), { target: { value: "Proposal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save yellow note" }));
+    await waitFor(() => expect(document.body.textContent).toMatch(/connect|offline|internet|network/i));
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+  });
+});

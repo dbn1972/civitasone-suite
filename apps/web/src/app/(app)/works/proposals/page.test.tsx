@@ -47,39 +47,39 @@ describe("ProposalsPage", () => {
   });
 
   it("resolves the work-type id to a readable name in the Type column (01)", async () => {
-    render(await ProposalsPage({ searchParams: {} }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getAllByText("Road Works").length).toBeGreaterThan(0);
   });
 
   it("computes stat/tab counts from the client data (02/03)", async () => {
-    render(await ProposalsPage({ searchParams: {} }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("link", { name: "Draft (2)" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "DAO Finalized (1)" })).toBeInTheDocument();
     expect(screen.getByText("All Proposals (3)")).toBeInTheDocument();
   });
 
   it("marks the active tab with aria-current='page' (04)", async () => {
-    render(await ProposalsPage({ searchParams: { status: "draft" } }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({ status: "draft" }) }));
     expect(screen.getByRole("link", { name: "Draft (2)" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "DAO Finalized (1)" })).not.toHaveAttribute("aria-current");
   });
 
   it("normalises an unknown status to All with the full list (04)", async () => {
-    render(await ProposalsPage({ searchParams: { status: "foo" } }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({ status: "foo" }) }));
     // Title shows the full list, not "All (0)".
     expect(screen.getByText("All Proposals (3)")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "All (3)" })).toHaveAttribute("aria-current", "page");
   });
 
   it("does not offer dead 'Submitted' / 'TS Eligible' tabs or stat card", async () => {
-    render(await ProposalsPage({ searchParams: {} }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByRole("link", { name: /^Submitted/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^TS Eligible/i })).not.toBeInTheDocument();
     expect(screen.queryByText("TS Eligible")).not.toBeInTheDocument();
   });
 
   it("filters rows to the active tab (03)", async () => {
-    render(await ProposalsPage({ searchParams: { status: "dao_finalized" } }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({ status: "dao_finalized" }) }));
     expect(screen.getByText("WRK/2026/002")).toBeInTheDocument();
     expect(screen.queryByText("WRK/2026/001")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "DAO Finalized (1)" })).toHaveAttribute("aria-current", "page");
@@ -87,7 +87,7 @@ describe("ProposalsPage", () => {
 
   it("shows an honest error state when the load fails with no cache (02)", async () => {
     getProposalsMock.mockResolvedValue({ data: [], source: "error" });
-    render(await ProposalsPage({ searchParams: {} }));
+    render(await ProposalsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/couldn't load work proposals/i)).toBeInTheDocument();
   });
 });

@@ -62,7 +62,7 @@ describe("RtiDetailPage", () => {
   it("renders the RTI request detail and its lifecycle actions for a CRM user", async () => {
     fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
 
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getAllByText(RTI.referenceNo).length).toBeGreaterThan(0);
@@ -76,7 +76,7 @@ describe("RtiDetailPage", () => {
   // the raw rupees number.
   it("renders the fee from paise with ₹ formatting", async () => {
     fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText(/Paid — ₹10\.10/)).toBeInTheDocument();
   });
@@ -84,7 +84,7 @@ describe("RtiDetailPage", () => {
   // GAP-CRM-RTI-NEW-02: mode of receipt is surfaced.
   it("shows the mode of receipt", async () => {
     fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText("By post")).toBeInTheDocument();
   });
@@ -95,7 +95,7 @@ describe("RtiDetailPage", () => {
       data: { ...RTI, feeAmountMinor: "15000000", feeAmount: 150000 },
       source: "api",
     });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(ui);
     expect(screen.getByText(/Paid — ₹1,50,000\.00/)).toBeInTheDocument();
   });
@@ -106,7 +106,7 @@ describe("RtiDetailPage", () => {
       data: { ...RTI, feePaid: true, feeAmount: undefined, feeAmountMinor: null },
       source: "api",
     });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(ui);
     expect(screen.getByText("Paid")).toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
@@ -124,14 +124,14 @@ describe("RtiDetailPage", () => {
     it("requests the detail with ?maskPii=true so no viewer is sent the clear value", async () => {
       getSessionRolesMock.mockReturnValue(["crm_admin"]);
       fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
-      await RtiDetailPage({ params: { id: RTI.id } });
+      await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
       expect(fetchJsonMock.mock.calls[0][0]).toBe(`/api/v1/crm/rti/${RTI.id}?maskPii=true`);
     });
 
     it("a PII-read role sees the masked values plus a Reveal control for each, and never the clear value", async () => {
       getSessionRolesMock.mockReturnValue(["crm_admin"]);
       fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
-      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
       const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
       expect(screen.getByText("Anil S•••")).toBeInTheDocument();
       expect(screen.getByText("******0000")).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe("RtiDetailPage", () => {
       const fetchSpy = vi
         .spyOn(globalThis, "fetch")
         .mockResolvedValue(new Response(JSON.stringify({ data: { value: "9876500000" } }), { status: 200 }));
-      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
       render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
       // The contact is the second Reveal control (name, then contact).
@@ -171,7 +171,7 @@ describe("RtiDetailPage", () => {
     it("a role without PII access sees the masked values, NO Reveal button and the not-permitted notice", async () => {
       getSessionRolesMock.mockReturnValue(["crm_user"]);
       fetchJsonMock.mockResolvedValue({ data: { ...RTI, ...MASKED }, source: "api" });
-      const ui = await RtiDetailPage({ params: { id: RTI.id } });
+      const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
       render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
       expect(screen.getByText("Anil S•••")).toBeInTheDocument();
       expect(screen.getByText("******0000")).toBeInTheDocument();
@@ -188,7 +188,7 @@ describe("RtiDetailPage", () => {
       data: { ...RTI, status: "TRANSFERRED", departmentRef: "Department of Revenue", previousDepartmentRef: "Ministry of Finance", transferredAt: "2026-08-03T05:30:00.000Z" },
       source: "api",
     });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText("Department of Revenue")).toBeInTheDocument();
     expect(screen.getByText(/Transferred from Ministry of Finance on /)).toBeInTheDocument();
@@ -196,14 +196,14 @@ describe("RtiDetailPage", () => {
 
   it("omits the transfer line for a request that was never transferred", async () => {
     fetchJsonMock.mockResolvedValue({ data: { ...RTI, previousDepartmentRef: null, transferredAt: null }, source: "api" });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.queryByText(/Transferred from/)).not.toBeInTheDocument();
   });
 
   it("names the origin even when the transfer time was not recorded", async () => {
     fetchJsonMock.mockResolvedValue({ data: { ...RTI, previousDepartmentRef: "Ministry of Finance", transferredAt: null }, source: "api" });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.getByText("Transferred from Ministry of Finance")).toBeInTheDocument();
   });
@@ -211,12 +211,12 @@ describe("RtiDetailPage", () => {
   // GAP-CRM-RTI-06: the section reads exactly like the register table, the filter and the new form.
   it("renders the canonical full section label for s.6 and s.11", async () => {
     fetchJsonMock.mockResolvedValue({ data: RTI, source: "api" });
-    const six = await RtiDetailPage({ params: { id: RTI.id } });
+    const six = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     const { unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{six}</NextIntlClientProvider>);
     expect(screen.getByText("§6 — Information Request")).toBeInTheDocument();
     unmount();
     fetchJsonMock.mockResolvedValue({ data: { ...RTI, section: "s.11" }, source: "api" });
-    const eleven = await RtiDetailPage({ params: { id: RTI.id } });
+    const eleven = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{eleven}</NextIntlClientProvider>);
     expect(screen.getByText("§11 — Third-party Information")).toBeInTheDocument();
   });
@@ -225,7 +225,7 @@ describe("RtiDetailPage", () => {
     getSessionRolesMock.mockReturnValue(["citizen"]);
     // The server returns the masked value for a non-PII role; the page renders it.
     fetchJsonMock.mockResolvedValue({ data: { ...RTI, applicantName: "Anil S•••", applicantContact: "******0000" }, source: "api" });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     expect(screen.queryByText("9876500000")).not.toBeInTheDocument();
     expect(screen.getByText("******0000")).toBeInTheDocument();
@@ -236,7 +236,7 @@ describe("RtiDetailPage", () => {
   it("shows a not-found message instead of crashing for a bogus id", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "api" });
 
-    const ui = await RtiDetailPage({ params: { id: "does-not-exist" } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getAllByText("RTI request not found").length).toBeGreaterThan(0);
@@ -245,7 +245,7 @@ describe("RtiDetailPage", () => {
   // GAP-CRM-RTI-DETAIL-06: a 404 is "not found", distinct from an outage.
   it("treats a 404 as not-found", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(ui);
     expect(screen.getAllByText("RTI request not found").length).toBeGreaterThan(0);
   });
@@ -253,7 +253,7 @@ describe("RtiDetailPage", () => {
   // GAP-CRM-RTI-DETAIL-06: a 500 is a retryable outage, NOT "not found".
   it("shows a retry error state (not 'not found') on a 500", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(ui);
     expect(screen.queryByText("RTI request not found")).not.toBeInTheDocument();
     // RefreshErrorState offers a Try again action.
@@ -264,7 +264,7 @@ describe("RtiDetailPage", () => {
   // never titled as a missing record and never offering a pointless retry.
   it("shows access-restricted (not 'not found') on a 403", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 403 });
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(ui);
     expect(screen.queryByText("RTI request not found")).not.toBeInTheDocument();
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
@@ -273,7 +273,7 @@ describe("RtiDetailPage", () => {
   it("does not claim a cached view when the fetch actually failed", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
 
-    const ui = await RtiDetailPage({ params: { id: RTI.id } });
+    const ui = await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // Not a fabricated "not found" — an honest, retryable error state.
@@ -286,7 +286,7 @@ describe("RtiDetailPage", () => {
     const appeal = { ...RTI, status: "FIRST_APPEAL", firstAppealDueAt: "2026-10-31T00:00:00.000Z" };
     fetchJsonMock.mockResolvedValue({ data: appeal, source: "api" });
 
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: { id: RTI.id } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) })}</NextIntlClientProvider>);
     expect(screen.queryByRole("button", { name: "Record FAA decision" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Record second appeal" })).toBeInTheDocument();
   });
@@ -294,7 +294,7 @@ describe("RtiDetailPage", () => {
   it("shows the decide action to crm_admin", async () => {
     getSessionRolesMock.mockReturnValue(["crm_admin"]);
     fetchJsonMock.mockResolvedValue({ data: { ...RTI, status: "FIRST_APPEAL" }, source: "api" });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: { id: RTI.id } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) })}</NextIntlClientProvider>);
     expect(screen.getByRole("button", { name: "Record FAA decision" })).toBeInTheDocument();
   });
 
@@ -312,7 +312,7 @@ describe("RtiDetailPage", () => {
       },
       source: "api",
     });
-    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: { id: RTI.id } })}</NextIntlClientProvider>);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) })}</NextIntlClientProvider>);
     expect(screen.getByText("Appeal & Disposal")).toBeInTheDocument();
     expect(screen.getByText(/Appeal allowed —/)).toBeInTheDocument();
     expect(screen.getByText("Appeal allowed; furnish the budget breakup within 15 days.")).toBeInTheDocument();

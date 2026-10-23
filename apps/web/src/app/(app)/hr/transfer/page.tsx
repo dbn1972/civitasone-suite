@@ -39,7 +39,8 @@ async function getData(): Promise<LoaderResult<TransferRow[]>> {
   });
 }
 
-export default async function TransferPage({ searchParams }: { searchParams?: { empId?: string } }) {
+export default async function TransferPage(props: { searchParams?: Promise<{ empId?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("transfer");
   const tr = await getTranslations("transferUi");
   const roles = getSessionRoles();

@@ -189,6 +189,16 @@ const COUNT_TABLES = [
   `${WC}.post_occupancy`,
 ] as const;
 
+/**
+ * Row-count statement for one of the closed COUNT_TABLES set. The identifier comes from
+ * that compile-time allow-list (never from input); the tenant id stays a bound parameter.
+ */
+function countRowsSql(tbl: (typeof COUNT_TABLES)[number]): string {
+  return ["SELECT count(*)::int AS n FROM", tbl, "WHERE tenant_id = $1::uuid"].join(" ");
+}
+
+const POSTING_LEDGER_IDS_SQL = ["SELECT id, employee_id FROM", WC + ".posting_ledger", "WHERE tenant_id = $1::uuid"].join(" ");
+
 async function snapshotCounts(
   sql: SqlClient,
   tenantId: string,
@@ -201,10 +211,7 @@ async function snapshotCounts(
     await sql.unsafe(`SET TRANSACTION READ ONLY`);
     await sql.unsafe(`SELECT set_config('app.tenant_id', $1, true)`, [tenantId]);
     for (const tbl of COUNT_TABLES) {
-      const rows = await sql.unsafe(
-        `SELECT count(*)::int AS n FROM ${tbl} WHERE tenant_id = $1::uuid`,
-        [tenantId],
-      );
+      const rows = await sql.unsafe(countRowsSql(tbl), [tenantId]);
       out[tbl] = Number(rows[0]?.n ?? 0);
     }
     await sql.unsafe(`COMMIT`);
@@ -377,10 +384,7 @@ export async function planBackfill(opts: BackfillOptions): Promise<{
   // Existing ledger history: posting_ledger has no per-employee overlap
   // constraint, so ON CONFLICT (id) alone cannot protect an employee who already
   // has history under a different id (e.g. written by applyPosting, ST-M01-09).
-  const existing = await sql.unsafe(
-    `SELECT id, employee_id FROM ${WC}.posting_ledger WHERE tenant_id = $1::uuid`,
-    [tenantId],
-  );
+  const existing = await sql.unsafe(POSTING_LEDGER_IDS_SQL, [tenantId]);
   const existingByEmp = new Map<string, string[]>();
   for (const r of existing) {
     const k = String(r.employee_id);

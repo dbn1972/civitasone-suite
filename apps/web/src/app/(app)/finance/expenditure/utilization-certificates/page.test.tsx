@@ -41,7 +41,7 @@ describe("UCsPage ?scheme= (scheme code filter)", () => {
   });
 
   it("resolves the code to the scheme, names it in the note, and counts only that scheme's certificates", async () => {
-    render(await UCsPage({ searchParams: { scheme: "pmay" } }));
+    render(await UCsPage({ searchParams: Promise.resolve({ scheme: "pmay" }) }));
     expect(screen.getByTestId("uc-table")).toHaveAttribute("data-scheme", JSON.stringify({ code: "PMAY", name: "Housing Scheme" }));
     expect(screen.getByText(/Showing utilization certificates for the scheme "Housing Scheme"/)).toBeInTheDocument();
     // UC-A (stored code PMAY) and UC-C (older, matched by name) -- not UC-B (recorded against MGN) or UC-D.
@@ -51,7 +51,7 @@ describe("UCsPage ?scheme= (scheme code filter)", () => {
 
   it("still filters (by the value as given) when the schemes could not be loaded", async () => {
     schemesMock.mockResolvedValue({ data: [], source: "error", status: 500 });
-    render(await UCsPage({ searchParams: { scheme: "Unrelated" } }));
+    render(await UCsPage({ searchParams: Promise.resolve({ scheme: "Unrelated" }) }));
     expect(screen.getByTestId("uc-table")).toHaveAttribute("data-scheme", JSON.stringify({ code: "Unrelated", name: "Unrelated" }));
     expect(within(screen.getByText("Total UCs").closest(".stat") as HTMLElement).getByText("1")).toBeInTheDocument();
   });

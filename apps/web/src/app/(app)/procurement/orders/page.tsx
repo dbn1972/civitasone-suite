@@ -5,11 +5,12 @@ import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth
 import { OrdersTable } from "./OrdersTable";
 import { parsePoStatusParam } from "../drillThrough";
 
-export default async function OrdersPage({
-  searchParams,
-}: {
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function OrdersPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-PROCUREMENT-DASHBOARD-02: the dashboard's "Active POs" counter links
   // here with ?status=approved; open the list already narrowed to that status.
   const rawStatus = searchParams?.status;

@@ -42,7 +42,7 @@ describe("WaiverDecidePage (GAP-REVENUE-WAIVERS-03)", () => {
 
   it("renders amount, reason and status; enables decide for a different officer", async () => {
     fetchJsonMock.mockResolvedValue({ data: makeWaiver(), source: "api" });
-    const ui = await WaiverDecidePage({ params: { id: WAIVER_ID } });
+    const ui = await WaiverDecidePage({ params: Promise.resolve({ id: WAIVER_ID }) });
     render(ui);
     expect(screen.getByText("₹250.00")).toBeInTheDocument();
     expect(screen.getByText("Hardship")).toBeInTheDocument();
@@ -52,7 +52,7 @@ describe("WaiverDecidePage (GAP-REVENUE-WAIVERS-03)", () => {
   it("disables decide when the signed-in user raised the waiver (maker != checker)", async () => {
     getSessionUserIdMock.mockReturnValue("maker-1");
     fetchJsonMock.mockResolvedValue({ data: makeWaiver({ requestedBy: "maker-1" }), source: "api" });
-    const ui = await WaiverDecidePage({ params: { id: WAIVER_ID } });
+    const ui = await WaiverDecidePage({ params: Promise.resolve({ id: WAIVER_ID }) });
     render(ui);
     expect(screen.getByRole("button", { name: /Approve waiver/ })).toBeDisabled();
     expect(screen.getByText(/you raised this waiver/i)).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("WaiverDecidePage (GAP-REVENUE-WAIVERS-03)", () => {
 
   it("hides decide for an already-decided waiver", async () => {
     fetchJsonMock.mockResolvedValue({ data: makeWaiver({ status: "approved" }), source: "api" });
-    const ui = await WaiverDecidePage({ params: { id: WAIVER_ID } });
+    const ui = await WaiverDecidePage({ params: Promise.resolve({ id: WAIVER_ID }) });
     render(ui);
     expect(screen.queryByRole("button", { name: /Approve waiver/ })).not.toBeInTheDocument();
     expect(screen.getByText(/Already decided/)).toBeInTheDocument();
@@ -68,12 +68,12 @@ describe("WaiverDecidePage (GAP-REVENUE-WAIVERS-03)", () => {
 
   it("calls notFound() on a 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(WaiverDecidePage({ params: { id: WAIVER_ID } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(WaiverDecidePage({ params: Promise.resolve({ id: WAIVER_ID }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("shows a retry state (buttons disabled) on a server error", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await WaiverDecidePage({ params: { id: WAIVER_ID } });
+    const ui = await WaiverDecidePage({ params: Promise.resolve({ id: WAIVER_ID }) });
     render(ui);
     expect(screen.getByRole("button", { name: /Approve waiver/ })).toBeDisabled();
     expect(screen.queryByText(/₹/)).not.toBeInTheDocument();

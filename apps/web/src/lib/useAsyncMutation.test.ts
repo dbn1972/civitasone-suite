@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAsyncMutation } from "./useAsyncMutation";
+import { UserFacingError } from "./userFacingError";
 
 type Mutated = { id: string };
 type Polled = { data: Array<{ id: string }> };
@@ -215,6 +216,30 @@ describe("useAsyncMutation", () => {
     expect(result.current.phase).toBe("error");
     expect(result.current.error).toBe("could not save");
     expect(poll).not.toHaveBeenCalled();
+  });
+
+  it("maps a network failure to human copy, not the raw browser string (CLOS2-S3-04)", async () => {
+    const mutate = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    const { result } = renderHook(() =>
+      useAsyncMutation<Mutated, Polled>({ mutate, poll: vi.fn(), isDone }),
+    );
+    await act(async () => {
+      await result.current.run();
+    });
+    expect(result.current.phase).toBe("error");
+    expect(result.current.error).toMatch(/couldn.t connect/i);
+    expect(result.current.error).not.toContain("Failed to fetch");
+  });
+
+  it("keeps a UserFacingError's own message (CLOS2-S3-04)", async () => {
+    const mutate = vi.fn().mockRejectedValue(new UserFacingError("Duplicate code."));
+    const { result } = renderHook(() =>
+      useAsyncMutation<Mutated, Polled>({ mutate, poll: vi.fn(), isDone }),
+    );
+    await act(async () => {
+      await result.current.run();
+    });
+    expect(result.current.error).toBe("Duplicate code.");
   });
 
   it("ignores an overlapping run() call while already busy", async () => {

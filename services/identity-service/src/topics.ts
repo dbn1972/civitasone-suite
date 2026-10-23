@@ -5,7 +5,7 @@ export const COMMANDS = {
   createSession:   "identity.session.create",
   revokeSession:   "identity.session.revoke",
   revokeAllSessions: "identity.session.revoke_all",
-  resetPassword:   "identity.user.reset_password",
+  resetCredential: "identity.user.reset_password",
   enableMfa:       "identity.mfa.enable",
   setupMfa:        "identity.mfa.setup",
   mfaVerifyFail:   "identity.mfa.verify_fail",

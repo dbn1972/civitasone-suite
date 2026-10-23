@@ -36,7 +36,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("status=pending")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: {} });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("Choose an assessee")).toBeInTheDocument();
@@ -48,7 +48,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByRole("heading", { name: "Raise Adjustment" })).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe("AdjustmentsPage", () => {
 
   it("shows the data-source badge instead of fabricating data on error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
@@ -68,7 +68,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: [], source: "error" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByText("We couldn't load demands.")).toBeInTheDocument();
@@ -77,7 +77,7 @@ describe("AdjustmentsPage", () => {
 
   it("shows a retry error state when the assessees fetch fails (ADJUSTMENTS-04)", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
-    const ui = await AdjustmentsPage({ searchParams: {} });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("We couldn't load assessees.")).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     // Register shows FY labels (not raw demand UUIDs), amount and reason.
@@ -120,7 +120,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Approve transfer pend-1" })).toBeEnabled();
@@ -140,7 +140,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: "Approve transfer pend-2" })).toBeDisabled();
@@ -155,7 +155,7 @@ describe("AdjustmentsPage", () => {
       if (path.includes("/demands")) return Promise.resolve({ data: DEMANDS, source: "api" });
       return Promise.resolve({ data: [ASSESSEE], source: "api" });
     });
-    const ui = await AdjustmentsPage({ searchParams: { assesseeId: ASSESSEE.id } });
+    const ui = await AdjustmentsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
     render(ui);
     expect(screen.getByText("We couldn't load the adjustment register.")).toBeInTheDocument();
   });

@@ -9,10 +9,11 @@ import { StatusFilter } from "./StatusFilter";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams?: { status?: string };
+  searchParams?: Promise<{ status?: string }>;
 }
 
-export default async function ChatPage({ searchParams }: PageProps) {
+export default async function ChatPage(props: PageProps) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("aiChat");
   const requested = searchParams?.status;
   const status = requested === "active" || requested === "handed_off" || requested === "ended"

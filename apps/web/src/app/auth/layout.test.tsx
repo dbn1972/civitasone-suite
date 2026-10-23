@@ -26,21 +26,21 @@ describe("AuthLayout (GAP-AUTH-DEV-05)", () => {
     vi.clearAllMocks();
   });
 
-  it("redirects a signed-in user (live token) away from /auth/*", () => {
+  it("redirects a signed-in user (live token) away from /auth/*", async () => {
     vi.mocked(cookies).mockReturnValue(jarWith(tokenWithExp(3600)) as unknown as ReturnType<typeof cookies>);
-    AuthLayout({ children: "x" });
+    await AuthLayout({ children: "x" });
     expect(redirect).toHaveBeenCalledWith("/dashboard");
   });
 
-  it("does NOT redirect when there is no session cookie", () => {
+  it("does NOT redirect when there is no session cookie", async () => {
     vi.mocked(cookies).mockReturnValue(jarWith(undefined) as unknown as ReturnType<typeof cookies>);
-    AuthLayout({ children: "x" });
+    await AuthLayout({ children: "x" });
     expect(redirect).not.toHaveBeenCalled();
   });
 
-  it("does NOT redirect on an expired-but-present cookie (no redirect loop)", () => {
+  it("does NOT redirect on an expired-but-present cookie (no redirect loop)", async () => {
     vi.mocked(cookies).mockReturnValue(jarWith(tokenWithExp(-10)) as unknown as ReturnType<typeof cookies>);
-    AuthLayout({ children: "x" });
+    await AuthLayout({ children: "x" });
     expect(redirect).not.toHaveBeenCalled();
   });
 });

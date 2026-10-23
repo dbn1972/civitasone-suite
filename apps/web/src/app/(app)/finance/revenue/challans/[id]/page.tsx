@@ -12,7 +12,8 @@ import { formatReceiptHead } from "@/lib/finance/challanRegister";
  * with no record) means "not found". Any other failed load is an outage the
  * user can retry, and a 403 is a permission decision -- not "may not exist".
  */
-export default async function ChallanDetailPage({ params }: { params: { id: string } }) {
+export default async function ChallanDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceChallanById(params.id);
   const { data: challan, source, status } = result;
 

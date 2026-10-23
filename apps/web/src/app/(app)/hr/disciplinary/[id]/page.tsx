@@ -35,13 +35,14 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
   return "—";
 }
 
-export default async function DisciplinaryCaseDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { from?: string };
-}) {
+export default async function DisciplinaryCaseDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ from?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("disciplinaryDetail");
   // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance
   // so Back returns to it instead of dropping the officer out to the full

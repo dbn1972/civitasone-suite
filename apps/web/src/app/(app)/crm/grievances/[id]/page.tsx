@@ -129,11 +129,12 @@ function TimelineItem({
   );
 }
 
-export default async function GrievanceDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function GrievanceDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   const t = await getTranslations("crmGrievanceDetail");
   const result = await fetchJson<unknown, GrievanceDetail | null>(
     // GAP-CRM-GRIEVANCES-DETAIL-05: ask the server to mask citizen contact for EVERY

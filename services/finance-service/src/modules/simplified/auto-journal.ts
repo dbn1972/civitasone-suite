@@ -9,6 +9,7 @@
  * posted through the same GL infrastructure that government tenants use.
  */
 
+import { minorToMajorNumber } from "@civitasone/schemas/money";
 import type { JournalLine } from "../gl/schema.js";
 import { assertJournalBalances } from "../gl/domain.js";
 import { EXPENSE_CATEGORY_MAP } from "./seed.js";
@@ -21,7 +22,7 @@ export function rupeesToPaise(rupees: number): bigint {
 
 /** Convert paise (bigint) back to rupees for display. */
 export function paiseToRupees(paise: bigint): number {
-  return Number(paise) / 100;
+  return minorToMajorNumber(paise);
 }
 
 export interface AutoJournalResult {

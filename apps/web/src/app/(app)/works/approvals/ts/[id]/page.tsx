@@ -84,11 +84,12 @@ const valueStyle: React.CSSProperties = {
 // Page
 // ---------------------------------------------------------------------------
 
-export default async function TsDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function TsDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
   // GET-by-id (GAP-WORKS-APPROVALS-TS-DETAIL-01): fetch the single record so a
   // record beyond the first list page is reachable. The backend returns
   // { data: <record> }; a genuinely missing id is a 404, every other failure

@@ -7,13 +7,14 @@ import { MeetingActions } from "./MeetingActions";
 import { MeetingTimeline } from "./MeetingTimeline";
 import { getTranslations } from "next-intl/server";
 
-export default async function MeetingDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { tab?: string };
-}) {
+export default async function MeetingDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("estabW2");
   const { data: meeting, source } = await getMeetingById(params.id);
   const onAgendaTab = searchParams?.tab === "agenda";
@@ -48,7 +49,6 @@ export default async function MeetingDetailPage({
         back="/estab/meetings"
         actions={<MeetingActions meetingId={params.id} />}
       />
-
       <div className="tabs" role="tablist" style={{ marginBottom: 14 }}>
         <Link
           href={`/estab/meetings/${params.id}`}
@@ -67,7 +67,6 @@ export default async function MeetingDetailPage({
           Agenda ({meeting.agenda.length})
         </Link>
       </div>
-
       {onAgendaTab ? (
         <div className="card">
           <div className="card-h">

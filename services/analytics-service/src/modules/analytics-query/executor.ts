@@ -274,7 +274,7 @@ export async function executeDrillThrough(
     eventType: r.eventType,
     category: r.category,
     status: r.status,
-    amount: Number(r.amount),
+    amount: r.amount.toString(), // bigint paise -> exact string (rows allow string|number)
     occurredAt: r.occurredAt.toISOString(),
   }));
 

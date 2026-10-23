@@ -98,11 +98,12 @@ async function getClaims(): Promise<LoaderResult<ClaimListRow[]>> {
   });
 }
 
-export default async function InsuranceClaimsPage({
-  searchParams,
-}: {
-  searchParams?: { policyId?: string };
-}) {
+export default async function InsuranceClaimsPage(
+  props: {
+    searchParams?: Promise<{ policyId?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const preselectedPolicyId = searchParams?.policyId?.trim() || "";
 
   const policiesRes = await getPolicies();

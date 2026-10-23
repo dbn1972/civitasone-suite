@@ -4,11 +4,12 @@ import { PageHeader } from "@/app/_components/ds";
 import { TrackClient } from "../../../_components/TrackClient";
 
 interface Props {
-  params: { serviceKey: string; trackingNo: string };
+  params: Promise<{ serviceKey: string; trackingNo: string }>;
 }
 
 /** FN-13 — application tracking with StatusTimeline. */
-export default async function ServiceTrackPage({ params }: Props) {
+export default async function ServiceTrackPage(props: Props) {
+  const params = await props.params;
   const t = await getTranslations("citizenServices");
   return (
     <>

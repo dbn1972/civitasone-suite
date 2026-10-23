@@ -38,7 +38,8 @@ function parseDateEnd(v: string | undefined): string | undefined {
   return isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
-export default async function HrAuditLogPage({ searchParams }: { searchParams?: SearchParams }) {
+export default async function HrAuditLogPage(props: { searchParams?: Promise<SearchParams> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => AUDIT_LOG_READER_ROLES.includes(r));
   if (!canAccess) {

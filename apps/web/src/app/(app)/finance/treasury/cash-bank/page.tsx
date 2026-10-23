@@ -8,11 +8,12 @@ import { cashBookTotals, countToday, openingClosing } from "@/lib/finance/cashBo
 // finance-service cash-book route default page size (cashbook/routes.ts `limit` default).
 const CASH_BOOK_PAGE = 100;
 
-export default async function CashBankPage({
-  searchParams,
-}: {
-  searchParams?: { type?: string; from?: string; to?: string };
-}) {
+export default async function CashBankPage(
+  props: {
+    searchParams?: Promise<{ type?: string; from?: string; to?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-FINANCE-TREASURY-CASH-BANK-01: account (cash / bank) and date-range
   // filters, applied server-side by finance-service's cash-book route.
   const query = parseCashBookQuery(searchParams);

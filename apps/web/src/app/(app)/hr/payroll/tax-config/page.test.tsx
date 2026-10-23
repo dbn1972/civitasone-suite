@@ -62,7 +62,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("renders the FETCHED top-slab threshold (₹30,00,000), not the old hard-coded ₹24,00,000 literal", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     // The seeded open-ended top slab (₹30,00,000) is rendered via formatMoney.
     expect(screen.getByText("Above ₹30,00,000.00")).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("requests the slab-config endpoint for the selected FY", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     expect(fetchJsonMock).toHaveBeenCalled();
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("/api/v1/payroll/tax/slab-config?fy=2025-26");
@@ -81,7 +81,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("renders the fetched surcharge bands and standard deduction", async () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     expect(screen.getByText("Above ₹50,00,000.00")).toBeInTheDocument();
     expect(screen.getByText(/Standard deduction: ₹75,000\.00/)).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("shows an error state when the loader reports an error", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) });
     renderPage(ui);
     // No slab tables render on error.
     expect(screen.queryByText(/Above ₹/)).not.toBeInTheDocument();
@@ -98,7 +98,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
 
   it("shows a 'not configured' message for a regime with no config", async () => {
     fetchJsonMock.mockResolvedValue({ data: { fy: "2099-00", new: null, old: null }, source: "api" });
-    const ui = await TaxConfigPage({ searchParams: { fy: "2099-00" } });
+    const ui = await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2099-00" }) });
     renderPage(ui);
     expect(screen.getAllByText(/No configuration on file/i).length).toBeGreaterThan(0);
   });
@@ -128,7 +128,7 @@ describe("TaxConfigPage surcharge tiers (GAP-PAYROLL-TAX-CONFIG-03)", () => {
 
   it("shows all four configured tiers for both regimes, including the old regime's 37% above ₹5Cr next to the new regime's 25%", async () => {
     fetchJsonMock.mockResolvedValue({ data: withBands(SEED_BANDS_NEW, SEED_BANDS_OLD), source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(screen.getByRole("columnheader", { name: "New regime" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Old regime" })).toBeInTheDocument();
     expect(rowCells("Above ₹50,00,000.00")).toEqual(["Above ₹50,00,000.00", "10%", "10%"]);
@@ -139,20 +139,20 @@ describe("TaxConfigPage surcharge tiers (GAP-PAYROLL-TAX-CONFIG-03)", () => {
 
   it("states the new regime's highest configured rate (the cap) from the fetched bands, not a hard-coded 25%", async () => {
     fetchJsonMock.mockResolvedValue({ data: withBands(SEED_BANDS_NEW, SEED_BANDS_OLD), source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(screen.getByText("New regime: the highest surcharge rate configured is 25%, so surcharge under the new regime never exceeds that rate.")).toBeInTheDocument();
   });
 
   it("the cap note follows a tenant override (30% top band) rather than a literal", async () => {
     fetchJsonMock.mockResolvedValue({ data: withBands([{ above: 5000000, ratePct: 10 }, { above: 10000000, ratePct: 30 }], SEED_BANDS_OLD), source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(screen.getByText(/the highest surcharge rate configured is 30%/)).toBeInTheDocument();
     expect(screen.queryByText(/is 25%/)).not.toBeInTheDocument();
   });
 
   it("notes that marginal relief applies at every surcharge threshold (the engine behaviour)", async () => {
     fetchJsonMock.mockResolvedValue({ data: withBands(SEED_BANDS_NEW, SEED_BANDS_OLD), source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(screen.getByText(/Marginal relief applies at every surcharge threshold: tax plus surcharge never exceeds the tax at the threshold plus the income above it\./)).toBeInTheDocument();
   });
 
@@ -164,20 +164,20 @@ describe("TaxConfigPage surcharge tiers (GAP-PAYROLL-TAX-CONFIG-03)", () => {
       ),
       source: "api",
     });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(rowCells("Above ₹1,00,00,000.00")).toEqual(["Above ₹1,00,00,000.00", "15%", "10%"]);
     expect(rowCells("Above ₹2,00,00,000.00")).toEqual(["Above ₹2,00,00,000.00", "15%", "25%"]);
   });
 
   it("a regime with no configuration shows — in its column; the other regime's tiers still show", async () => {
     fetchJsonMock.mockResolvedValue({ data: { ...withBands(SEED_BANDS_NEW, SEED_BANDS_OLD), old: null }, source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2025-26" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) }));
     expect(rowCells("Above ₹5,00,00,000.00")).toEqual(["Above ₹5,00,00,000.00", "25%", "—"]);
   });
 
   it("with nothing configured there is no tier table and no surcharge notes", async () => {
     fetchJsonMock.mockResolvedValue({ data: { fy: "2099-00", new: null, old: null }, source: "api" });
-    renderPage(await TaxConfigPage({ searchParams: { fy: "2099-00" } }));
+    renderPage(await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2099-00" }) }));
     expect(screen.queryByText(/Marginal relief applies/)).not.toBeInTheDocument();
     expect(screen.queryByText(/highest surcharge rate configured/)).not.toBeInTheDocument();
   });
@@ -190,7 +190,7 @@ describe("TaxConfigPage is an informational reference, not a configuration scree
   it("is titled a reference, says it is read-only, and offers nothing to edit or save", async () => {
     fetchJsonMock.mockResolvedValue({ data: withBands(SEED_BANDS_NEW, SEED_BANDS_OLD), source: "api" });
     const { container } = render(
-      <NextIntlClientProvider locale="en" messages={enMessages}>{await TaxConfigPage({ searchParams: { fy: "2025-26" } })}</NextIntlClientProvider>,
+      <NextIntlClientProvider locale="en" messages={enMessages}>{await TaxConfigPage({ searchParams: Promise.resolve({ fy: "2025-26" }) })}</NextIntlClientProvider>,
     );
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Income Tax Reference");
     expect(screen.getByText(/This page is a read-only reference and does not change any rate or limit\./)).toBeInTheDocument();

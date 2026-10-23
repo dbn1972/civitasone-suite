@@ -10,11 +10,12 @@ import {
 } from "../_data/loaders";
 import { TendersTable } from "./TendersTable";
 
-export default async function TendersPage({
-  searchParams,
-}: {
-  searchParams?: { page?: string | string[] };
-}) {
+export default async function TendersPage(
+  props: {
+    searchParams?: Promise<{ page?: string | string[] }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const page = parsePageParam(searchParams?.page);
   // GAP-WORKS-TENDERS-02/NEW-03: resolve type/authority ids to real master
   // names web-side (no cross-module service join). GAP-WORKS-TENDERS-03: the

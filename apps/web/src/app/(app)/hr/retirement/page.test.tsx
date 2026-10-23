@@ -139,7 +139,7 @@ describe("RetirementPage ?empId= prefill wiring (SEC CRITICAL regression guard)"
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     getEmployeeByIdMock.mockResolvedValueOnce({ data: { id: "emp-exited", name: "Already Gone", status: "retired" } });
 
-    await renderPage({ searchParams: { empId: "emp-exited" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "emp-exited" }) });
 
     expect(screen.getByText("Already Gone has already exited (status: retired) and cannot be separated again.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "+ Initiate Separation" })).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe("RetirementPage ?empId= prefill wiring (SEC CRITICAL regression guard)"
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     getEmployeeByIdMock.mockResolvedValueOnce({ data: { id: "emp-active", name: "Still Serving", status: "confirmed" } });
 
-    await renderPage({ searchParams: { empId: "emp-active" } });
+    await renderPage({ searchParams: Promise.resolve({ empId: "emp-active" }) });
 
     expect(screen.getByRole("button", { name: "+ Initiate Separation" })).toBeInTheDocument();
     expect(screen.queryByText(/has already exited/)).not.toBeInTheDocument();

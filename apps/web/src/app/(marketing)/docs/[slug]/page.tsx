@@ -6,14 +6,15 @@ import { MarkdownContent } from "../_content/markdown";
 import { extractToc } from "../_content/toc";
 
 interface Props {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }
 
 export function generateStaticParams() {
   return chapters.map((ch) => ({ slug: ch.slug }));
 }
 
-export function generateMetadata({ params }: Props): Metadata {
+export async function generateMetadata(props: Props): Promise<Metadata> {
+  const params = await props.params;
   const chapter = chapters.find((ch) => ch.slug === params.slug);
   if (!chapter) return {};
   // Suffix aligned with the rest of the marketing site ("— CivitasOne")
@@ -30,7 +31,8 @@ function titleWithNumber(ch: { title: string; number?: number }): string {
   return n === undefined ? ch.title : `${n}. ${ch.title}`;
 }
 
-export default function ChapterPage({ params }: Props) {
+export default async function ChapterPage(props: Props) {
+  const params = await props.params;
   const index = chapters.findIndex((ch) => ch.slug === params.slug);
   if (index === -1) notFound();
 

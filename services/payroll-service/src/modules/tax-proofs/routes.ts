@@ -205,7 +205,13 @@ export async function taxProofRoutes(app: FastifyInstance): Promise<void> {
     const implied = contentTypeOfOwnKey(b.storageKey, ctx.tenantId, b.fy, employeeId);
     if (!implied) throw new HttpError(422, "INVALID_STORAGE_KEY", "storageKey was not issued to you for this financial year");
 
-    const head = await headObject(b.storageKey);
+    let head: Awaited<ReturnType<typeof headObject>>;
+    try {
+      head = await headObject(b.storageKey);
+    } catch {
+      // CLOS2-S6-06: headObject rejects on anything but not-found; that is "could not check", not "missing".
+      throw new HttpError(503, "STORAGE_UNAVAILABLE", "proof storage could not be checked right now");
+    }
     if (!head) throw new HttpError(422, "PROOF_FILE_MISSING", "the uploaded file was not found; upload it again");
     if (head.contentLength === null || head.contentLength <= 0 || head.contentLength > PROOF_MAX_BYTES) {
       throw new HttpError(422, "PROOF_TOO_LARGE", `a proof must be between 1 byte and ${PROOF_MAX_BYTES / (1024 * 1024)} MB`);

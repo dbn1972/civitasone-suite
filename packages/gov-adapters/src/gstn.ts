@@ -10,7 +10,10 @@
  *   GSTN_CLIENT_ID      — OAuth client ID
  *   GSTN_CLIENT_SECRET  — OAuth client secret
  *   GSTN_GSTIN          — filing entity GSTIN
+ *   GSTN_TIMEOUT_MS     — per-request timeout (default 30000)
  */
+
+import { fetchWithTimeout, timeoutFromEnv } from "./timeout.js";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -72,6 +75,23 @@ export class GstnAdapterError extends Error {
   }
 }
 
+/**
+ * Thrown when the GSP does not answer within GSTN_TIMEOUT_MS. For a filing the
+ * request may still have been executed upstream (`outcomeUnknown`): reconcile with
+ * checkFilingStatus (same period / reference) before any retry.
+ */
+export class GstnTimeoutError extends GstnAdapterError {
+  constructor(operation: string, public readonly timeoutMs: number, public readonly outcomeUnknown: boolean) {
+    super(
+      `GSTN ${operation} timed out after ${timeoutMs}ms` + (outcomeUnknown ? " (outcome unknown; reconcile status before retrying)" : ""),
+      "GSTN_TIMEOUT",
+    );
+    this.name = "GstnTimeoutError";
+  }
+}
+
+const gstnTimeoutMs = (): number => timeoutFromEnv("GSTN_TIMEOUT_MS");
+
 // ── Config ────────────────────────────────────────────────────────
 
 const MODE = (process.env.GSTN_MODE ?? "mock") as "mock" | "sandbox" | "production";
@@ -99,7 +119,7 @@ async function getAuthToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  const res = await fetch(`${GSP_URL}/oauth/token`, {
+  const res = await fetchWithTimeout(`${GSP_URL}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -107,7 +127,7 @@ async function getAuthToken(): Promise<string> {
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
     }),
-  });
+  }, gstnTimeoutMs(), (ms) => new GstnTimeoutError("auth", ms, false));
 
   if (!res.ok) {
     throw new GstnAdapterError(`GSTN auth failed (${res.status})`, "GSTN_AUTH_FAILED", res.status);
@@ -164,7 +184,7 @@ export async function fileGstr1(req: Gstr1Request): Promise<GstnFilingResponse> 
     })),
   };
 
-  const res = await fetch(`${GSP_URL}/returns/gstr1`, {
+  const res = await fetchWithTimeout(`${GSP_URL}/returns/gstr1`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -172,7 +192,7 @@ export async function fileGstr1(req: Gstr1Request): Promise<GstnFilingResponse> 
       "gstin": gstin,
     },
     body: JSON.stringify(payload),
-  });
+  }, gstnTimeoutMs(), (ms) => new GstnTimeoutError("GSTR-1 filing", ms, true));
 
   if (!res.ok) {
     const text = await res.text();
@@ -220,7 +240,7 @@ export async function fileGstr3B(req: Gstr3BRequest): Promise<GstnFilingResponse
     },
   };
 
-  const res = await fetch(`${GSP_URL}/returns/gstr3b`, {
+  const res = await fetchWithTimeout(`${GSP_URL}/returns/gstr3b`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -228,7 +248,7 @@ export async function fileGstr3B(req: Gstr3BRequest): Promise<GstnFilingResponse
       "gstin": gstin,
     },
     body: JSON.stringify(payload),
-  });
+  }, gstnTimeoutMs(), (ms) => new GstnTimeoutError("GSTR-3B filing", ms, true));
 
   if (!res.ok) {
     const text = await res.text();
@@ -254,9 +274,9 @@ export async function checkFilingStatus(referenceId: string): Promise<GstnStatus
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${GSP_URL}/returns/status?ref_id=${encodeURIComponent(referenceId)}`, {
+  const res = await fetchWithTimeout(`${GSP_URL}/returns/status?ref_id=${encodeURIComponent(referenceId)}`, {
     headers: { "Authorization": `Bearer ${token}`, "gstin": GSTIN },
-  });
+  }, gstnTimeoutMs(), (ms) => new GstnTimeoutError("status check", ms, false));
 
   if (!res.ok) {
     throw new GstnAdapterError(`GSTN status check failed (${res.status})`, "GSTN_API_ERROR", res.status);

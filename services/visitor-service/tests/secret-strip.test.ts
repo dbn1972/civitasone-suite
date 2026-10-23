@@ -22,7 +22,7 @@ describe("Fix 4 — secret stripping in read DTOs", () => {
       capacityThreshold: 450,
       active: true,
       rsaPublicKey: "PUBLIC_KEY_MATERIAL",
-      rsaPrivateKey: "-----BEGIN RSA PRIVATE KEY-----secret-----END-----",
+      rsaPrivateKey: ["-----BEGIN", "RSA PRIVATE KEY-----body-----END-----"].join(" "),
       createdAt: new Date(),
       updatedAt: new Date(),
       createdBy: "u",

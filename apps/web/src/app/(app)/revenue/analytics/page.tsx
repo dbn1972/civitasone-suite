@@ -152,11 +152,12 @@ async function getAssesseeMap(): Promise<Map<string, AssesseeLite>> {
   return new Map(data.map((a) => [a.id, a]));
 }
 
-export default async function RevenueAnalyticsPage({
-  searchParams,
-}: {
-  searchParams?: { granularity?: string };
-}) {
+export default async function RevenueAnalyticsPage(
+  props: {
+    searchParams?: Promise<{ granularity?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const granularity = searchParams?.granularity === "fy" ? "fy" : "month";
 
   const [

@@ -37,9 +37,9 @@ const UUID = "123e4567-e89b-42d3-a456-426614174000";
 const PAGES: Array<[string, () => Promise<ReactElement>]> = [
   ["list", () => ListPage()],
   ["new", () => NewPage({})],
-  ["detail", () => DetailPage({ params: { batchId: UUID } })],
+  ["detail", () => DetailPage({ params: Promise.resolve({ batchId: UUID }) })],
   ["queue", () => QueuePage()],
-  ["review", () => ReviewPage({ params: { batchId: UUID, fileId: UUID } })],
+  ["review", () => ReviewPage({ params: Promise.resolve({ batchId: UUID, fileId: UUID }) })],
   ["links", () => LinksPage({})],
   ["settings", () => SettingsPage()],
   ["profiles", () => ProfilesPage()],
@@ -70,26 +70,26 @@ describe("bulk scan page role gates", () => {
 
   it("an unknown link state in the URL falls back to awaiting approval", async () => {
     roles.current = ["document_admin"];
-    intl(await LinksPage({ searchParams: { state: "../../etc" } }));
+    intl(await LinksPage({ searchParams: Promise.resolve({ state: "../../etc" }) }));
     expect(loaders.getBulkScanLinks).toHaveBeenCalledWith("awaiting_approval");
   });
 
   it("resume mode only trusts a real uuid in ?batch=", async () => {
     roles.current = ["document_admin"];
-    await NewPage({ searchParams: { batch: "not-a-uuid" } });
+    await NewPage({ searchParams: Promise.resolve({ batch: "not-a-uuid" }) });
     expect(loaders.getBulkScanBatch).not.toHaveBeenCalled();
     loaders.getBulkScanBatch!.mockResolvedValueOnce({ data: null, source: "error", status: 404 });
-    await NewPage({ searchParams: { batch: UUID } });
+    await NewPage({ searchParams: Promise.resolve({ batch: UUID }) });
     expect(loaders.getBulkScanBatch).toHaveBeenCalledWith(UUID);
   });
 
   it("the review page distinguishes not found from a load error", async () => {
     roles.current = ["document_admin"];
-    const a = intl(await ReviewPage({ params: { batchId: UUID, fileId: UUID } }));
+    const a = intl(await ReviewPage({ params: Promise.resolve({ batchId: UUID, fileId: UUID }) }));
     expect(screen.getByText("File not found")).toBeInTheDocument();
     a.unmount();
     loaders.getBulkScanReview!.mockResolvedValueOnce({ data: null, source: "error", status: 500 });
-    intl(await ReviewPage({ params: { batchId: UUID, fileId: UUID } }));
+    intl(await ReviewPage({ params: Promise.resolve({ batchId: UUID, fileId: UUID }) }));
     expect(screen.queryByText("File not found")).not.toBeInTheDocument();
     expect(screen.getByRole("alert")).toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe("bulk scan page role gates", () => {
     loaders.getBulkScanReviewQueue!.mockResolvedValueOnce({ data: { items: [], page: { hasMore: false, pageSize: 200, total: 0 } }, source: "error", status: 500 });
     loaders.getBulkScanLinks!.mockResolvedValueOnce({ data: { items: [], page: { hasMore: false, pageSize: 200, total: 0 } }, source: "error", status: 500 });
     loaders.getBulkScanSettings!.mockResolvedValueOnce({ data: { settings: settingsObject(), version: 1, degraded: false, pendingRequests: [] }, source: "api" });
-    const el = (await ReviewPage({ params: { batchId: UUID, fileId: "f1" } })) as ReactElement<{ queueFailed: boolean; awaitingFailed: boolean }>;
+    const el = (await ReviewPage({ params: Promise.resolve({ batchId: UUID, fileId: "f1" }) })) as ReactElement<{ queueFailed: boolean; awaitingFailed: boolean }>;
     expect(el.props.queueFailed).toBe(true);
     expect(el.props.awaitingFailed).toBe(true);
   });
@@ -109,7 +109,7 @@ describe("bulk scan page role gates", () => {
     roles.current = ["document_admin"];
     loaders.getBulkScanReview!.mockResolvedValueOnce({ data: reviewDetail(), source: "api" });
     loaders.getBulkScanSettings!.mockResolvedValueOnce({ data: { settings: settingsObject(), version: 1, degraded: false, pendingRequests: [] }, source: "api" });
-    const el = await ReviewPage({ params: { batchId: UUID, fileId: "f1" } });
+    const el = await ReviewPage({ params: Promise.resolve({ batchId: UUID, fileId: "f1" }) });
     expect((el as ReactElement).key).toBe("f1");
   });
 });

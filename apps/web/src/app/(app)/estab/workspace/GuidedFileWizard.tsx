@@ -27,12 +27,12 @@ const ALL_CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] a
 const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_letter"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const CLASSIFICATION_HELP: Record<string, string> = {
-  public: "Open information; no clearance required.",
-  confidential: "Routine official matters; limited circulation.",
-  secret: "Sensitive matters; only officers cleared for secret may hold the file.",
-  top_secret: "Highest sensitivity; only officers cleared for top secret may hold the file.",
-};
+const CLASSIFICATION_HELP: Record<string, string> = Object.fromEntries([
+  ["public", "Open information; no clearance required."],
+  ["confidential", "Routine official matters; limited circulation."],
+  ["secret", "Sensitive matters; only officers cleared for secret may hold the file."],
+  ["top_secret", "Highest sensitivity; only officers cleared for top secret may hold the file."],
+]);
 
 function titleCaseEnum(v: string): string {
   return v.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

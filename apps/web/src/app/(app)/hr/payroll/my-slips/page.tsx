@@ -20,7 +20,8 @@ type Row = SalarySlipSummary & Record<string, unknown>;
  * org-wide totals. Each row opens the existing slip detail, which already
  * admits the owning employee.
  */
-export default async function MySlipsPage({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function MySlipsPage(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("mySlips");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_EMPLOYEE_ROLES.includes(r))) {

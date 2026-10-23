@@ -36,15 +36,15 @@ describe("campaign detail page: Send/Cancel visibility matches the service gate"
     captured.canManage = undefined;
   });
 
-  it.each(["platform_admin", "super_admin", "tenant_admin"])("offers management to %s", (role) => {
+  it.each(["platform_admin", "super_admin", "tenant_admin"])("offers management to %s", async (role) => {
     sessionWithRoles([role]);
-    render(CampaignPage({ params: { id: "c1" } }));
+    render(await CampaignPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(captured.canManage).toBe(true);
   });
 
-  it.each(["notification_admin", "audit_officer", "notification_user"])("does NOT offer management to %s", (role) => {
+  it.each(["notification_admin", "audit_officer", "notification_user"])("does NOT offer management to %s", async (role) => {
     sessionWithRoles([role]);
-    render(CampaignPage({ params: { id: "c1" } }));
+    render(await CampaignPage({ params: Promise.resolve({ id: "c1" }) }));
     expect(captured.canManage).toBe(false);
   });
 });

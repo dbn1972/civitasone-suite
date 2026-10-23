@@ -10,13 +10,18 @@ import { ProjectDetailNav } from "./ProjectDetailNav";
  * The layout is server-rendered; only the nav component itself is a client
  * component (it needs usePathname for active-tab detection).
  */
-export default function ProjectDetailLayout({
-  children,
-  params,
-}: {
-  children: ReactNode;
-  params: { id: string };
-}) {
+export default async function ProjectDetailLayout(
+  props: {
+    children: ReactNode;
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+
+  const {
+    children
+  } = props;
+
   return (
     <>
       <ProjectDetailNav projectId={params.id} />

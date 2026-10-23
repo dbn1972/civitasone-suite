@@ -88,11 +88,12 @@ async function getApars(filters: { status?: string; period?: string; q?: string;
   });
 }
 
-export default async function AparListPage({
-  searchParams,
-}: {
-  searchParams: { status?: string; period?: string; q?: string; page?: string };
-}) {
+export default async function AparListPage(
+  props: {
+    searchParams: Promise<{ status?: string; period?: string; q?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => APAR_ROLES.includes(r));

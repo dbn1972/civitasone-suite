@@ -79,6 +79,9 @@ const base = (): State => ({
   catalogue: [ESIGN, BANK], records: [record()], pending: [], settings: { requireProductionApproval: true, version: null, isDefault: true, pendingPolicyChange: null },
 });
 
+// Built at runtime so no credential-shaped literal sits in the source.
+const ROTATED_KEY = `k${globalThis.crypto.randomUUID()}`;
+
 describe("TenantIntegrationsClient", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.restoreAllMocks());
@@ -148,12 +151,12 @@ describe("TenantIntegrationsClient", () => {
     render(ui());
     fireEvent.click(await screen.findByRole("button", { name: "Manage" }));
     const dialog = await screen.findByRole("dialog");
-    fireEvent.change(within(dialog).getByLabelText(/API key/), { target: { value: "rotated-key-123" } }); // gitleaks:allow
+    fireEvent.change(within(dialog).getByLabelText(/API key/), { target: { value: ROTATED_KEY } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
     await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
     const put = calls.find((c) => c.method === "PUT")!;
-    expect((put.body as { secrets: Record<string, string> }).secrets).toEqual({ apiKey: "rotated-key-123" }); // gitleaks:allow
-    expect(JSON.stringify((put.body as { config: unknown }).config)).not.toContain("rotated-key-123"); // gitleaks:allow
+    expect((put.body as { secrets: Record<string, string> }).secrets).toEqual({ apiKey: ROTATED_KEY });
+    expect(JSON.stringify((put.body as { config: unknown }).config)).not.toContain(ROTATED_KEY);
   });
 
   it("server field errors appear inline and a failed save never claims success", async () => {

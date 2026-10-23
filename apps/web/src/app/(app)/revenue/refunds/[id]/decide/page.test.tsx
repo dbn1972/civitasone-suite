@@ -54,7 +54,7 @@ describe("RefundDecidePage", () => {
 
   it("shows the amount, assessee name and receipt number (not raw UUIDs) and enables decide for a checker", async () => {
     mockEnriched();
-    const ui = await RefundDecidePage({ params: { id: REFUND_ID } });
+    const ui = await RefundDecidePage({ params: Promise.resolve({ id: REFUND_ID }) });
     render(ui);
 
     expect(screen.getByText(/₹2,500\.00/)).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("RefundDecidePage", () => {
   it("disables decide for the maker who raised the refund (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-01)", async () => {
     getSessionUserIdMock.mockReturnValue("maker-1");
     mockEnriched();
-    const ui = await RefundDecidePage({ params: { id: REFUND_ID } });
+    const ui = await RefundDecidePage({ params: Promise.resolve({ id: REFUND_ID }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` })).toBeDisabled();
@@ -75,7 +75,7 @@ describe("RefundDecidePage", () => {
 
   it("disables decide and shows the outcome for an already-decided refund (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-02)", async () => {
     mockEnriched({ ...REFUND, status: "approved" });
-    const ui = await RefundDecidePage({ params: { id: REFUND_ID } });
+    const ui = await RefundDecidePage({ params: Promise.resolve({ id: REFUND_ID }) });
     render(ui);
 
     expect(screen.getByRole("button", { name: `Approve refund ${REFUND_ID.slice(0, 8)}` })).toBeDisabled();
@@ -84,7 +84,7 @@ describe("RefundDecidePage", () => {
 
   it("renders notFound() on a 404 (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-04)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(RefundDecidePage({ params: { id: "99999999-9999-9999-9999-999999999999" } })).rejects.toThrow(
+    await expect(RefundDecidePage({ params: Promise.resolve({ id: "99999999-9999-9999-9999-999999999999" }) })).rejects.toThrow(
       "NEXT_NOT_FOUND",
     );
     expect(notFoundMock).toHaveBeenCalled();
@@ -92,7 +92,7 @@ describe("RefundDecidePage", () => {
 
   it("renders a retry state (not notFound) on a 503/network error (GAP-REVENUE-REFUNDS-DETAIL-DECIDE-04)", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 503 });
-    const ui = await RefundDecidePage({ params: { id: REFUND_ID } });
+    const ui = await RefundDecidePage({ params: Promise.resolve({ id: REFUND_ID }) });
     render(ui);
 
     expect(notFoundMock).not.toHaveBeenCalled();

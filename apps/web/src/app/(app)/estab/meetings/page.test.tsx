@@ -33,7 +33,7 @@ describe("MeetingsPage", () => {
 
   it("GAP-ESTAB-MEETINGS-01: all stats show '—' on error", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
-    const ui = await MeetingsPage({ searchParams: {} });
+    const ui = await MeetingsPage({ searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     const vals = Array.from(container.querySelectorAll(".val"));
@@ -44,7 +44,7 @@ describe("MeetingsPage", () => {
 
   it("GAP-ESTAB-MEETINGS-02: empty state does not say 'Schedule a meeting to get started'", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
-    const ui = await MeetingsPage({ searchParams: {} });
+    const ui = await MeetingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.queryByText("Schedule a meeting to get started.")).not.toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("MeetingsPage", () => {
 
   it("GAP-ESTAB-MEETINGS-02: '+ Schedule' links to /meeting/meetings/new", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
-    const ui = await MeetingsPage({ searchParams: {} });
+    const ui = await MeetingsPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     const scheduleLink = screen.getByRole("link", { name: "+ Schedule" });
@@ -66,7 +66,7 @@ describe("MeetingsPage", () => {
       data: [makeMeeting({ status: "in_progress" }), makeMeeting({ id: "m2", status: "completed" })],
       source: "api",
     });
-    const ui = await MeetingsPage({ searchParams: {} });
+    const ui = await MeetingsPage({ searchParams: Promise.resolve({}) });
     const { container } = render(ui);
 
     const labs = Array.from(container.querySelectorAll(".lab")).map((l) => l.textContent);
@@ -78,11 +78,11 @@ describe("MeetingsPage", () => {
 
   it("GAP-ESTAB-MEETINGS-05: the active view carries aria-current=page, the other does not", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    const { unmount } = render(await MeetingsPage({ searchParams: {} }));
+    const { unmount } = render(await MeetingsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByRole("link", { name: "List" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Calendar" })).not.toHaveAttribute("aria-current");
     unmount();
-    render(await MeetingsPage({ searchParams: { view: "calendar" } }));
+    render(await MeetingsPage({ searchParams: Promise.resolve({ view: "calendar" }) }));
     expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "List" })).not.toHaveAttribute("aria-current");
   });
@@ -99,7 +99,7 @@ describe("MeetingsPage", () => {
         ],
         source: "api",
       });
-      const { container } = render(await MeetingsPage({ searchParams: {} }));
+      const { container } = render(await MeetingsPage({ searchParams: Promise.resolve({}) }));
       const upcoming = Array.from(container.querySelectorAll(".stat")).find((c) => c.textContent?.includes("Upcoming Meetings"));
       expect(upcoming?.textContent).toContain("1");
       expect(upcoming?.textContent).not.toContain("2");

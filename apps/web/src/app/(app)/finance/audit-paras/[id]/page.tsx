@@ -7,7 +7,8 @@ import { AuditParaActions } from "./AuditParaActions";
 import { availableParaActions, hasEvents } from "./auditParaActions";
 import { auditParaTone } from "../auditParaTone";
 
-export default async function AuditParaDetailPage({ params }: { params: { id: string } }) {
+export default async function AuditParaDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const result = await getFinanceAuditParaById(params.id);
   const { data: para, source, status } = result;
 

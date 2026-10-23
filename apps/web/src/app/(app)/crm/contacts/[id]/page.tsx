@@ -20,7 +20,8 @@ import { ContactRolesEditor } from "../../../../_components/crm/ContactRolesEdit
 import { DocumentsPanel } from "../../../../_components/crm/DocumentsPanel";
 import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsView";
 
-export default async function Page({ params }: { params: { id: string } }) {
+export default async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const t = await getTranslations("crmContactDetailPage");
   const { data: contact, source, status, errorMessage } = await getContactById(params.id);
 

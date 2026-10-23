@@ -42,14 +42,14 @@ describe("BillDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-05: AppShell already renders the breadcrumb.
   it("renders no hand-rolled breadcrumb of its own", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
-    const { container } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { container } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(container.querySelector("nav.crumbs")).toBeNull();
   });
 
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-06: each datum appears once.
   it("shows vendor, amount, bill number and status once each", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getAllByText("Acme Traders")).toHaveLength(1);
     expect(screen.getAllByText("₹2,500.00")).toHaveLength(1);
     expect(screen.getAllByText("BILL-77")).toHaveLength(1);
@@ -60,11 +60,11 @@ describe("BillDetailPage", () => {
   // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: Pass bill is APPROVER_ROLES-only on the server.
   it("offers Pass bill to an approver but not to a plain finance_officer", async () => {
     rolesMock.mockReturnValue(["finance_officer"]);
-    const { unmount } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { unmount } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("button", { name: /pass bill/i })).not.toBeInTheDocument();
     unmount();
     rolesMock.mockReturnValue(["accounts_officer"]);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("button", { name: /pass bill/i })).toBeInTheDocument();
   });
 
@@ -72,19 +72,19 @@ describe("BillDetailPage", () => {
   it("shows the PO number as a link to the purchase order", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
     loaderMock.mockResolvedValue({ data: { ...BILL, poNumber: "PO-2026-014" }, source: "api" });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("link", { name: "PO-2026-014" })).toHaveAttribute("href", `/procurement/orders/${PO_UUID}`);
     expect(screen.queryByText("PO 5b1c2d3e")).not.toBeInTheDocument();
   });
   it("shows a PO reference that names no page as plain text, and a bill with no PO as an em dash", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
     loaderMock.mockResolvedValue({ data: { ...BILL, poRef: "procurement_po:abc-123", poNumber: "PO-2026-014" }, source: "api" });
-    const { unmount } = render(await BillDetailPage({ params: { id: "b1" } }));
+    const { unmount } = render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByText("PO-2026-014")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "PO-2026-014" })).not.toBeInTheDocument();
     unmount();
     loaderMock.mockResolvedValue({ data: { ...BILL, poRef: undefined }, source: "api" });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: /^PO/ })).not.toBeInTheDocument();
   });
 
@@ -93,28 +93,28 @@ describe("BillDetailPage", () => {
   it("does not offer Pass bill to the officer who lodged the bill", async () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
     viewerMock.mockReturnValue(LODGER);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("button", { name: /pass bill/i })).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(/another officer must pass it/i);
   });
   it("offers Release payment on a passed bill to finance staff other than its lodger and passer", async () => {
     rolesMock.mockReturnValue(["finance_officer"]);
     loaderMock.mockResolvedValue({ data: { ...BILL, status: "passed", passedBy: PASSER }, source: "api" });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("link", { name: "Release payment" })).toBeInTheDocument();
   });
   it("does not offer Release payment to the officer who passed the bill", async () => {
     rolesMock.mockReturnValue(["finance_officer"]);
     viewerMock.mockReturnValue(PASSER);
     loaderMock.mockResolvedValue({ data: { ...BILL, status: "passed", passedBy: PASSER }, source: "api" });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
     expect(screen.getByRole("note")).toHaveTextContent(/you passed this bill/i);
   });
   it("does not offer Release payment to a read-only role (the payments route is finance staff only)", async () => {
     rolesMock.mockReturnValue(["audit_officer"]);
     loaderMock.mockResolvedValue({ data: { ...BILL, status: "passed", passedBy: PASSER }, source: "api" });
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
   });
 });
@@ -134,21 +134,21 @@ describe("BillDetailPage release-payment segregation of duties", () => {
 
   it("shows Release payment to an officer who neither created nor passed the bill", async () => {
     viewerMock.mockReturnValue(OTHER);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.getByRole("link", { name: "Release payment" })).toBeInTheDocument();
     expect(screen.queryByText(/another officer must release/i)).not.toBeInTheDocument();
   });
 
   it("hides Release payment from the bill's creator and says why", async () => {
     viewerMock.mockReturnValue(MAKER);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
     expect(screen.getByText("You lodged this bill, so another officer must release its payment.")).toBeInTheDocument();
   });
 
   it("hides Release payment from the officer who passed the bill and says why", async () => {
     viewerMock.mockReturnValue(PASSER);
-    render(await BillDetailPage({ params: { id: "b1" } }));
+    render(await BillDetailPage({ params: Promise.resolve({ id: "b1" }) }));
     expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
     expect(screen.getByText("You passed this bill, so another officer must release its payment.")).toBeInTheDocument();
   });

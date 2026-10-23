@@ -16,7 +16,7 @@ describe("CDP events page (GAP-CDP-EVENTS-02)", () => {
       data: { rows: [{ id: "e1", label: "order_placed", sublabel: "behavioural", status: "approved", meta: "01 Aug 2026" }], total: 1, limit: 25 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Event")).toBeInTheDocument();
     expect(screen.getByText("Category")).toBeInTheDocument();
     expect(screen.queryByText("Detail")).not.toBeInTheDocument();
@@ -30,7 +30,7 @@ describe("CDP events page (GAP-CDP-EVENTS-02)", () => {
       data: { rows: [{ id: "e1", label: "order_placed" }], total: 60, limit: 25 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing 1–1 of 60/)).toBeInTheDocument();
   });
 
@@ -39,7 +39,7 @@ describe("CDP events page (GAP-CDP-EVENTS-02)", () => {
       data: { rows: [{ id: "e1", label: "order_placed" }], total: 1, limit: 25 },
       source: "api",
     } as never);
-    render(await Page({ searchParams: {} }));
+    render(await Page({ searchParams: Promise.resolve({}) }));
     expect(screen.getByPlaceholderText("Filter events")).toBeInTheDocument();
   });
 });

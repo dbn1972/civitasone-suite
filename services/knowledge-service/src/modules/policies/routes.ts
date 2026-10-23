@@ -5,6 +5,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { pathUuid } from "../../shared/params.js";
 import { LifecycleError } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -72,7 +73,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/policies/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const policy = await queries.getPolicy(ctx.tenantId, id, viewerOf(ctx));
     if (!policy) throw new HttpError(404, "NOT_FOUND", "policy not found");
     return reply.send(policy);
@@ -81,7 +82,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/knowledge/policies/:id/acknowledgements", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const viewer = viewerOf(ctx);
     // A caller who cannot see the document cannot see who acknowledged it.
     if (!viewer.privileged && !(await queries.getPolicy(ctx.tenantId, id, viewer))) {
@@ -99,7 +100,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     // Who-has / who-hasn't over an arbitrary roster is an oversight report.
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = ackReportBody.parse(req.body);
     const report = await queries.acknowledgementReport(ctx.tenantId, id, body.expectedEmployeeIds);
     return reply.send({ policyId: id, ...report });
@@ -115,7 +116,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/policies/:id/submit", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = submitPolicyBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.submitForReview(ctx, id, body)));
   });
@@ -123,14 +124,14 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/policies/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.approvePolicy(ctx, id)));
   });
 
   app.post("/v1/knowledge/policies/:id/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = rejectPolicyBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.rejectPolicy(ctx, id, body)));
   });
@@ -138,7 +139,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/policies/:id/publish", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = publishPolicyBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.publishPolicy(ctx, id, body)));
   });
@@ -146,21 +147,21 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/knowledge/policies/:id/supersede", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.supersedePolicy(ctx, id)));
   });
 
   app.post("/v1/knowledge/policies/:id/withdraw", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.withdrawPolicy(ctx, id)));
   });
 
   app.post("/v1/knowledge/policies/:id/acknowledge", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const { id } = req.params as { id: string };
+    const id = pathUuid(req.params);
     const body = acknowledgePolicyBody.parse(req.body ?? {});
     // An acknowledgement binds to the caller's own identity; nobody may
     // acknowledge on behalf of another employee.

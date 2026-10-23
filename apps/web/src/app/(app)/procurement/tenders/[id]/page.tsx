@@ -42,7 +42,8 @@ const BID_COLUMNS: { key: keyof BidRow; label: string; align?: "left" | "right";
   { key: "status", label: "Status", cellType: "status" },
 ];
 
-export default async function TenderDetailPage({ params }: { params: { id: string } }) {
+export default async function TenderDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: tender, source } = await getProcurementTenderById(params.id);
 
   if (!tender) {

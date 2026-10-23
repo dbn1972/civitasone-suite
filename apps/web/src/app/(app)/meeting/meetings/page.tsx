@@ -38,11 +38,12 @@ const PAGE_SIZE = 25;
 
 const VALID_STATUSES = new Set(STATUS_FILTERS.map((s) => s.value).filter(Boolean) as string[]);
 
-export default async function MeetingsListPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string; page?: string };
-}) {
+export default async function MeetingsListPage(
+  props: {
+    searchParams?: Promise<{ status?: string; page?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   // GAP-MEETING-MEETINGS-01 / GAP-MEETING-HOME-03: read status + page from the
   // query so the home stat cards can drill through to a filtered, paginated
   // list instead of rendering every meeting the API returns.

@@ -6,7 +6,8 @@ import { getDocumentFolders } from "@/app/(app)/documents/_data/loaders";
 import { isUuid } from "@/lib/bulkScan/batchForm";
 import { NewBatchForm } from "../_components/NewBatchForm";
 
-export default async function NewBulkScanBatchPage({ searchParams }: { searchParams?: { batch?: string } }) {
+export default async function NewBulkScanBatchPage(props: { searchParams?: Promise<{ batch?: string }> }) {
+  const searchParams = await props.searchParams;
   if (!sessionHasAnyRole(BULK_SCAN_ADMIN_ROLES)) {
     const t = await getTranslations("bulkScan");
     return <AdminAccessDenied title={t("new.title")} area={t("list.area")} roles={BULK_SCAN_ADMIN_ROLES} />;

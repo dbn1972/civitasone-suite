@@ -27,11 +27,12 @@ type DisplayRow = {
   allocatedMinor: string | null;
 } & Record<string, unknown>;
 
-export default async function CostingPage({
-  searchParams,
-}: {
-  searchParams: { period?: string };
-}) {
+export default async function CostingPage(
+  props: {
+    searchParams: Promise<{ period?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("payrollCosting");
 
   // GAP-PAYROLL-COSTING-05: hr/layout.tsx admits employee/manager. The

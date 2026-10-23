@@ -62,7 +62,10 @@ test.describe('Tenant Admin', () => {
 
   test('user detail breadcrumb links back to users', async ({ page }) => {
     await page.goto('/tenant-admin/users/u0000000-0000-0000-0000-000000000001');
-    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
+    // The detail PageHeader renders its parent link as a "Back" link
+    // (back="/tenant-admin/users"), not a text breadcrumb named "Users".
+    // Intent kept: the page links back to the users list.
+    await expect(page.getByRole('main').getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/tenant-admin/users');
   });
 
   test('navigating users list → detail shows user detail', async ({ page }) => {

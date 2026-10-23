@@ -23,12 +23,12 @@ import { DAK_MODES, EMPTY_DAK_FORM, dakLookupTerm, validateDakForm, type DakForm
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
 const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
-const CLASS_KEY: Record<(typeof CLASSIFICATIONS)[number], string> = {
-  public: "classPublic",
-  confidential: "classConfidential",
-  secret: "classSecret",
-  top_secret: "classTopSecret",
-};
+const CLASS_KEY = Object.fromEntries([
+  ["public", "classPublic"],
+  ["confidential", "classConfidential"],
+  ["secret", "classSecret"],
+  ["top_secret", "classTopSecret"],
+]) as Record<(typeof CLASSIFICATIONS)[number], string>;
 
 /** Rows fetched per request; the register is paged and searched on the server (GAP-ESTAB-DAK-04). */
 const PAGE_SIZE = 50;

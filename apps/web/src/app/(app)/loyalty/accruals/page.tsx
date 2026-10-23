@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 50;
 
 /** GAP-LOYALTY-MEMBERS-04: accruals page uses the same pager pattern as members. */
-export default async function Page({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function Page(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   const page = Math.max(1, Number(searchParams?.page ?? "1") || 1);
   const { data, source } = await getLoyaltyAccruals({ limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
 

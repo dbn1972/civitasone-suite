@@ -35,13 +35,13 @@ describe("Catalogue rates page (GAP-CATALOGUE-RATES-01)", () => {
   });
 
   it("lists the selected product's rate cards", async () => {
-    render(await Page({ searchParams: { productId: PID } }));
+    render(await Page({ searchParams: Promise.resolve({ productId: PID }) }));
     expect(ratesFor).toHaveBeenCalledWith(PID);
     expect(screen.getByText("₹125.50")).toBeInTheDocument();
   });
 
   it("rejects a malformed product id without calling the API", async () => {
-    render(await Page({ searchParams: { productId: "not-a-uuid" } }));
+    render(await Page({ searchParams: Promise.resolve({ productId: "not-a-uuid" }) }));
     expect(ratesFor).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent(/not valid/i);
   });

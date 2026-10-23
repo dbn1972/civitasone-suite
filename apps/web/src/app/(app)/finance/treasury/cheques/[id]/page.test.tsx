@@ -35,7 +35,7 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
 
   it("a bounced cheque shows the bounced icon + humanised label, offers Re-present, not Cancel", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ status: "bounced", bouncedAt: "2025-03-09" }), source: "api" });
-    const { container } = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const { container } = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(container.querySelectorAll(".stat .ic svg")[2]?.getAttribute("class")).toMatch(/circle-x|x-circle/);
     expect(screen.getAllByText("Bounced").length).toBeGreaterThan(0);
     expect(screen.getByText("Not cleared")).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
 
   it("a cancelled cheque shows the cancelled glyph and its reason, and offers no action", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ status: "cancelled", cancelledAt: "2025-03-09", cancelReason: "Wrong payee" }), source: "api" });
-    render(await ChequeDetailPage({ params: { id: "i1" } }));
+    render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.getByText("⛔")).toBeInTheDocument();
     expect(screen.getByText("Cancel Reason").closest(".field")).toHaveTextContent("Wrong payee");
     expect(screen.queryByText(/^actions/)).not.toBeInTheDocument();
@@ -52,32 +52,32 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
 
   it("a cleared cheque keeps the check icon", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ status: "cleared", clearedAt: "2025-03-05T10:00:00Z" }), source: "api" });
-    const { container } = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const { container } = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(container.querySelectorAll(".stat .ic svg")[2]?.getAttribute("class")).toMatch(/circle-check|check-circle/);
     expect(screen.getAllByText("05 Mar 2025").length).toBeGreaterThan(0);
   });
 
   it("offers Cancel on an issued cheque to a finance role, and Mark stale only once it is past validUntil", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ validUntil: "2999-01-01" }), source: "api" });
-    const a = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const a = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.getByText("actions cancel=true represent=false stale=false")).toBeInTheDocument();
     a.unmount();
     getFinanceChequeById.mockResolvedValue({ data: cheque({ validUntil: "2020-01-01" }), source: "api" });
-    render(await ChequeDetailPage({ params: { id: "i1" } }));
+    render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.getByText("actions cancel=true represent=false stale=true")).toBeInTheDocument();
   });
 
   it("hides every action from audit_officer", async () => {
     roles.current = ["audit_officer"];
     getFinanceChequeById.mockResolvedValue({ data: cheque({ validUntil: "2020-01-01" }), source: "api" });
-    render(await ChequeDetailPage({ params: { id: "i1" } }));
+    render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.queryByText(/^actions/)).not.toBeInTheDocument();
   });
 
   // -01: masked account with a role-gated, audited reveal
   it("shows the account masked from the last four digits, and the full number is nowhere in the page", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ bankAccountId: "b1", accountNoLast4: "6789" }), source: "api" });
-    const { container } = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const { container } = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.getByText("Account No").closest(".field")).toHaveTextContent("XXXXXXXX6789");
     expect(container.textContent).not.toMatch(/\d{9,}/);
   });
@@ -85,15 +85,15 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
   it("only reveal roles get the Reveal control (and only when an account is linked)", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ bankAccountId: "b1", accountNoLast4: "6789" }), source: "api" });
     roles.current = ["audit_officer"];
-    const a = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const a = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
     a.unmount();
     roles.current = ["finance_officer"];
-    const b = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const b = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.getByRole("button", { name: "Reveal" })).toBeInTheDocument();
     b.unmount();
     getFinanceChequeById.mockResolvedValue({ data: cheque({ bankAccountId: null, accountNoLast4: null }), source: "api" });
-    render(await ChequeDetailPage({ params: { id: "i1" } }));
+    render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
     expect(screen.getByText("Account No").closest(".field")).toHaveTextContent("—");
   });
@@ -108,7 +108,7 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
       }),
       source: "api",
     });
-    const { container } = render(await ChequeDetailPage({ params: { id: "i1" } }));
+    const { container } = render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     const rows = within(screen.getByRole("list", { name: "Cheque clearance timeline" })).getAllByRole("listitem");
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent("Instrument issued");
@@ -122,7 +122,7 @@ describe("ChequeDetailPage (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01 / -03 / -04 /
 
   it("hides the actor column when no step has an actor", async () => {
     getFinanceChequeById.mockResolvedValue({ data: cheque({ status: "presented", presentedAt: "2025-03-03T10:00:00Z" }), source: "api" });
-    render(await ChequeDetailPage({ params: { id: "i1" } }));
+    render(await ChequeDetailPage({ params: Promise.resolve({ id: "i1" }) }));
     const rows = within(screen.getByRole("list", { name: "Cheque clearance timeline" })).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     for (const r of rows) expect(r.querySelectorAll("span")).toHaveLength(2);

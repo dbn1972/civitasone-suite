@@ -88,7 +88,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default async function ServiceRequestDetailPage({ params }: { params: { id: string } }) {
+export default async function ServiceRequestDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const { data: r, source } = await fetchJson<{ data?: ServiceRequestDetail } | ServiceRequestDetail, ServiceRequestDetail | null>(
     `/api/v1/crm/service-requests/${params.id}?maskPii=true`,
     null,

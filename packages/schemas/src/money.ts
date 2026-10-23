@@ -110,3 +110,49 @@ export const zMoneyMinorStrict = z
 export const zMoneyMinor = z
   .union([z.string().regex(DIGITS_RE), z.number().int(), z.bigint()])
   .transform(toMinorBigintIssue);
+
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+
+/**
+ * STRICT bigint-to-number bridge for the few places a JSON `number` or float
+ * engine input is mandated (a legacy numeric response contract, an
+ * IEEE-754 pro-rata/percentage calculation). Parses with `parseMinor` (so a
+ * non-integer / malformed value is rejected) and then REFUSES any value outside
+ * the safe-integer range instead of silently rounding it the way
+ * `Number(bigint)` does. The result is therefore always exactly the stored
+ * amount, or a RangeError the caller can surface.
+ */
+export function minorToSafeNumber(value: string | number | bigint): number {
+  const exact = parseMinor(value);
+  if (exact > MAX_SAFE || exact < -MAX_SAFE) {
+    throw new RangeError(
+      `money minor ${exact.toString()} exceeds the safe-integer range; keep it as a bigint/string`,
+    );
+  }
+  return Number(exact);
+}
+
+/**
+ * Exact major-unit decimal string for money minor units, e.g. 123450n -> "1234.50"
+ * (default 2 decimals). Pure bigint arithmetic, no float, any magnitude.
+ */
+export function minorToMajorString(value: string | number | bigint, decimals = 2): string {
+  const exact = parseMinor(value);
+  const negative = exact < 0n;
+  const abs = negative ? -exact : exact;
+  const scale = 10n ** BigInt(decimals);
+  const whole = (abs / scale).toString();
+  if (decimals === 0) return `${negative ? "-" : ""}${whole}`;
+  const frac = (abs % scale).toString().padStart(decimals, "0");
+  return `${negative ? "-" : ""}${whole}.${frac}`;
+}
+
+/**
+ * Major-unit amount as a JS number, for display text and for wire formats that
+ * mandate a decimal number (e.g. NIC e-invoice / e-way-bill rupee fields). It
+ * parses the exact decimal string, so the result is the nearest double to the
+ * true amount; never feed it back into stored or summed money.
+ */
+export function minorToMajorNumber(value: string | number | bigint, decimals = 2): number {
+  return parseFloat(minorToMajorString(value, decimals));
+}

@@ -43,7 +43,7 @@ describe("IndentsPage", () => {
 
   it("INDENTS-02: on a failed load, stats read '—' (not 0) and a retry is offered", async () => {
     route({}, "error");
-    render(await IndentsPage({ searchParams: {} }));
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Pending Approval").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("Tender Required").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("Approved").closest(".stat")).toHaveTextContent("—");
@@ -52,14 +52,14 @@ describe("IndentsPage", () => {
 
   it("INDENTS-02: a genuine empty (non-error) still shows 0 and the empty state", async () => {
     route({ data: [] });
-    render(await IndentsPage({ searchParams: {} }));
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Pending Approval").closest(".stat")).toHaveTextContent("0");
     expect(screen.getByText("No indents yet")).toBeInTheDocument();
   });
 
   it("INDENTS-03: a tender_required indent is counted in a visible 'Tender Required' stat", async () => {
     route({ data: [indent({ id: "a", status: "tender_required" }), indent({ id: "b", status: "tender_required" })] });
-    const { container } = render(await IndentsPage({ searchParams: {} }));
+    const { container } = render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     // Scope to the stat tile (the DataTable status cell also reads "Tender Required").
     const statLabel = Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === "Tender Required");
     expect(statLabel).toBeTruthy();
@@ -69,14 +69,14 @@ describe("IndentsPage", () => {
   it("INDENTS-01: a full page shows a truncation notice and a Next link", async () => {
     const rows = Array.from({ length: 100 }, (_, i) => indent({ id: `i${i}`, indentNo: `IND-${i}` }));
     route({ data: rows });
-    render(await IndentsPage({ searchParams: {} }));
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Showing the first 100 indents/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Next/i })).toHaveAttribute("href", "/procurement/indents?page=2");
   });
 
   it("INDENTS-01: page 2 passes offset=100 to the loader", async () => {
     route({ data: [indent({ id: "p2" })] });
-    render(await IndentsPage({ searchParams: { page: "2" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ page: "2" }) }));
     expect(lastPath).toContain("offset=100");
     expect(lastPath).toContain("limit=100");
   });
@@ -84,7 +84,7 @@ describe("IndentsPage", () => {
   it("INDENTS-04: a UUID-shaped requestedBy renders '—', never the raw UUID", async () => {
     const uuid = "00000000-1111-4000-8000-000000000002";
     route({ data: [indent({ id: "u1", indentNo: "IND-U1", requestedBy: uuid })] });
-    render(await IndentsPage({ searchParams: {} }));
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText(uuid)).not.toBeInTheDocument();
   });
 });
@@ -103,7 +103,7 @@ describe("IndentsPage status drill-through (GAP-PROCUREMENT-DASHBOARD-02)", () =
 
   it("the dashboard's 'Pending Indents' filter (draft + pending) lists exactly those indents", async () => {
     route(mixed());
-    render(await IndentsPage({ searchParams: { status: PENDING_INDENT_STATUSES.join(",") } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: PENDING_INDENT_STATUSES.join(",") }) }));
     expect(screen.getByText("IND-DRAFT")).toBeInTheDocument();
     expect(screen.getByText("IND-PENDING")).toBeInTheDocument();
     expect(screen.queryByText("IND-APPROVED")).not.toBeInTheDocument();
@@ -114,7 +114,7 @@ describe("IndentsPage status drill-through (GAP-PROCUREMENT-DASHBOARD-02)", () =
 
   it("the raw service status 'pending' (older links) means Pending Approval, not an empty list", async () => {
     route(mixed());
-    render(await IndentsPage({ searchParams: { status: "pending" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: "pending" }) }));
     expect(screen.getByText("IND-PENDING")).toBeInTheDocument();
     expect(screen.queryByText("IND-DRAFT")).not.toBeInTheDocument();
     expect(screen.queryByText("No indents in this status")).not.toBeInTheDocument();
@@ -122,13 +122,13 @@ describe("IndentsPage status drill-through (GAP-PROCUREMENT-DASHBOARD-02)", () =
 
   it("a single status still filters as before, and an unknown status says so", async () => {
     route(mixed());
-    const { unmount } = render(await IndentsPage({ searchParams: { status: "tender_required" } }));
+    const { unmount } = render(await IndentsPage({ searchParams: Promise.resolve({ status: "tender_required" }) }));
     expect(screen.getByText("IND-TENDER")).toBeInTheDocument();
     expect(screen.queryByText("IND-DRAFT")).not.toBeInTheDocument();
     unmount();
 
     route(mixed());
-    render(await IndentsPage({ searchParams: { status: "no_such_status" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: "no_such_status" }) }));
     expect(screen.getByText("No indents in this status")).toBeInTheDocument();
   });
 });
@@ -170,7 +170,7 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
 
   it("lists the draft and pending indents even when none is on the first unfiltered page", async () => {
     serverRoute(tenant());
-    render(await IndentsPage({ searchParams: { status: PENDING_INDENT_STATUSES.join(",") } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: PENDING_INDENT_STATUSES.join(",") }) }));
     for (const no of ["IND-Z-DRAFT-1", "IND-Z-DRAFT-2", "IND-Z-DRAFT-3", "IND-Z-PENDING-1", "IND-Z-PENDING-2", "IND-Z-PENDING-3"]) {
       expect(screen.getByText(no)).toBeInTheDocument();
     }
@@ -185,7 +185,7 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
 
   it("keeps the stat tiles on the unfiltered page rather than zeroing them under a filter", async () => {
     serverRoute(tenant());
-    const { container } = render(await IndentsPage({ searchParams: { status: PENDING_INDENT_STATUSES.join(",") } }));
+    const { container } = render(await IndentsPage({ searchParams: Promise.resolve({ status: PENDING_INDENT_STATUSES.join(",") }) }));
     const tile = (label: string) => Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === label)!.closest(".stat");
     expect(tile("Approved")).toHaveTextContent("100");
     expect(tile("On this page")).toHaveTextContent("100");
@@ -194,7 +194,7 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
 
   it("sends the service's own status for a list status (pending_approval is pending)", async () => {
     serverRoute(tenant());
-    render(await IndentsPage({ searchParams: { status: "pending_approval" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: "pending_approval" }) }));
     expect(screen.getByText("IND-Z-PENDING-1")).toBeInTheDocument();
     expect(screen.queryByText("IND-Z-DRAFT-1")).not.toBeInTheDocument();
     const listed = paths.find((p) => p.includes("status="))!;
@@ -203,20 +203,20 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
 
   it("makes one request when there is no filter", async () => {
     serverRoute(tenant());
-    render(await IndentsPage({ searchParams: {} }));
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
     expect(paths).toHaveLength(1);
     expect(paths[0]).not.toContain("status=");
   });
 
   it("a full filtered page offers Next, carrying the filter", async () => {
     serverRoute(Array.from({ length: 130 }, (_, i) => indent({ id: `d${i}`, indentNo: `IND-D${String(i).padStart(3, "0")}`, status: "draft" })));
-    render(await IndentsPage({ searchParams: { status: "draft" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: "draft" }) }));
     expect(screen.getByRole("link", { name: /Next/i })).toHaveAttribute("href", "/procurement/indents?status=draft&page=2");
   });
 
   it("an empty page past the end of a filtered list still offers a way back", async () => {
     serverRoute(tenant());
-    render(await IndentsPage({ searchParams: { status: PENDING_INDENT_STATUSES.join(","), page: "2" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: PENDING_INDENT_STATUSES.join(","), page: "2" }) }));
     expect(screen.getByText("No indents on this page")).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Indent pages" });
     expect(nav).toHaveTextContent("Page 2");
@@ -229,7 +229,7 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
 
   it("an empty first page has no pager, just the clear-filter way out", async () => {
     serverRoute(tenant());
-    render(await IndentsPage({ searchParams: { status: "rejected" } }));
+    render(await IndentsPage({ searchParams: Promise.resolve({ status: "rejected" }) }));
     expect(screen.getByText("No indents in this status")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Indent pages" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clear filter" })).toBeInTheDocument();

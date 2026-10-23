@@ -20,7 +20,8 @@ const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 // absurd offset.
 const MAX_PAGE = 10_000;
 
-export default async function LeaveManagementPage({ searchParams }: { searchParams?: { page?: string } }) {
+export default async function LeaveManagementPage(props: { searchParams?: Promise<{ page?: string }> }) {
+  const searchParams = await props.searchParams;
   const t = await getTranslations("leave");
   const roles = getSessionRoles();
   const isAdminOrManager = roles.some((r: string) => ADMIN_OR_MANAGER_ROLES.includes(r));

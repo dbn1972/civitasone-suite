@@ -47,7 +47,7 @@ describe("AaDetailPage", () => {
 
   it("fetches by id and renders the record (reachable beyond the first list page)", async () => {
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await AaDetailPage({ params: { id: "aa-1" } });
+    const ui = await AaDetailPage({ params: Promise.resolve({ id: "aa-1" }) });
     renderUI(ui);
     expect(fetchJsonMock).toHaveBeenCalledWith(
       "/api/v1/works/approvals/aa/aa-1",
@@ -67,7 +67,7 @@ describe("AaDetailPage", () => {
       if (url.includes("/identity/users/directory")) return { data: [[RECORD.approvingAuthorityId, "Superintending Engineer"]], source: "api" };
       return { data: RECORD, source: "api" };
     });
-    const ui = await AaDetailPage({ params: { id: "x-1" } });
+    const ui = await AaDetailPage({ params: Promise.resolve({ id: "x-1" }) });
     renderUI(ui);
     const workLink = screen.getByRole("link", { name: "WK-2026-0042" });
     expect(workLink).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
@@ -78,12 +78,12 @@ describe("AaDetailPage", () => {
 
   it("calls notFound() only for a definitive 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(AaDetailPage({ params: { id: "missing" } })).rejects.toBeInstanceOf(NotFoundError);
+    await expect(AaDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toBeInstanceOf(NotFoundError);
   });
 
   it("shows a retryable load-error state (NOT a 404) when the fetch fails for a non-404 reason", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const ui = await AaDetailPage({ params: { id: "aa-1" } });
+    const ui = await AaDetailPage({ params: Promise.resolve({ id: "aa-1" }) });
     renderUI(ui);
     expect(screen.getByText(/could not load this record/i)).toBeInTheDocument();
   });
@@ -91,7 +91,7 @@ describe("AaDetailPage", () => {
   it("disables Finalize for a user without an approver role", async () => {
     rolesMock.mockReturnValue(["works_viewer"]);
     fetchJsonMock.mockResolvedValue({ data: RECORD, source: "api" });
-    const ui = await AaDetailPage({ params: { id: "aa-1" } });
+    const ui = await AaDetailPage({ params: Promise.resolve({ id: "aa-1" }) });
     renderUI(ui);
     const btn = screen.getByRole("button", { name: "Finalize AA" }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);

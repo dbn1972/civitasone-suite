@@ -93,7 +93,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("shows an honest permission-denied state for a role the backend would reject", async () => {
     mockRoles = ["employee"];
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -101,28 +101,28 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("shows 'Case not found' for a genuine 404", async () => {
     mockLoaders({ caseResult: { data: null, source: "error", status: 404 } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "does-not-exist" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "does-not-exist" }) });
     render(ui);
     expect(screen.getByText("Case not found")).toBeInTheDocument();
   });
 
   it("shows a retryable error state (GAP-HR-DISCIPLINARY-DETAIL-02), NOT 'Case not found', on a 5xx", async () => {
     mockLoaders({ caseResult: { data: null, source: "error", status: 500 } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.queryByText("Case not found")).not.toBeInTheDocument();
   });
 
   it("also treats a network error (no HTTP status at all) as a retryable error, never 'Case not found'", async () => {
     mockLoaders({ caseResult: { data: null, source: "error" } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.queryByText("Case not found")).not.toBeInTheDocument();
   });
 
   it("shows the employee's real name (GAP-HR-DISCIPLINARY-DETAIL-03), not just the case fields", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByText("A. Kumar (E-100)")).toBeInTheDocument();
     expect(screen.getByText("R. Menon")).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("translates the proceeding type instead of printing the raw enum (GAP-HR-DISCIPLINARY-DETAIL-04)", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.queryByText("major", { exact: true })).not.toBeInTheDocument();
     expect(screen.getAllByText("Major (Vigilance)").length).toBeGreaterThan(0);
@@ -138,7 +138,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("falls back to a translated placeholder, never the raw UUID, when case_no is missing", async () => {
     mockLoaders({ caseResult: { data: { ...BASE_CASE, caseNo: "" }, source: "api" } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.queryByText("case-1")).not.toBeInTheDocument();
     expect(screen.getAllByText(/Case \(number not yet assigned\)/).length).toBeGreaterThan(0);
@@ -157,7 +157,7 @@ describe("DisciplinaryCaseDetailPage", () => {
         source: "api",
       },
     });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByText("Status History")).toBeInTheDocument();
     expect(screen.getByText("Issue Charge Memo")).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("shows the confidentiality notice (GAP-HR-DISCIPLINARY-DETAIL-01)", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByText("Confidential — Disciplinary Case")).toBeInTheDocument();
   });
@@ -173,7 +173,7 @@ describe("DisciplinaryCaseDetailPage", () => {
   // GAP-HR-DISCIPLINARY-DETAIL-06
   it("offers the next state-machine action to the case creator (inquiry_appointed -> record finding)", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByRole("button", { name: "Record finding" })).toBeInTheDocument();
   });
@@ -181,7 +181,7 @@ describe("DisciplinaryCaseDetailPage", () => {
   it("offers the actions to the assigned inquiry officer too", async () => {
     mockUserId = "io-1";
     mockLoaders({ caseResult: { data: { ...BASE_CASE, createdBy: "someone-else" }, source: "api" } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByRole("button", { name: "Record finding" })).toBeInTheDocument();
   });
@@ -189,7 +189,7 @@ describe("DisciplinaryCaseDetailPage", () => {
   it("shows no action buttons to a user who is neither creator nor inquiry officer", async () => {
     mockUserId = "u-other";
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.queryByRole("button", { name: "Record finding" })).not.toBeInTheDocument();
     expect(screen.getByText(/only the case creator or the assigned inquiry officer/i)).toBeInTheDocument();
@@ -198,14 +198,14 @@ describe("DisciplinaryCaseDetailPage", () => {
   // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance.
   it("Back returns to the disciplinary register by default", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }) });
     render(ui);
     expect(screen.getByRole("link", { name: "Back to Disciplinary" })).toHaveAttribute("href", "/hr/disciplinary");
   });
 
   it("Back returns to /hr/vigilance, with a Vigilance breadcrumb, when opened from the vigilance register", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" }, searchParams: { from: "vigilance" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }), searchParams: Promise.resolve({ from: "vigilance" }) });
     render(ui);
     expect(screen.getByRole("link", { name: "Back to Vigilance" })).toHaveAttribute("href", "/hr/vigilance");
     expect(screen.queryByRole("link", { name: "Back to Disciplinary" })).not.toBeInTheDocument();
@@ -214,7 +214,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("only the exact value 'vigilance' changes the Back target -- any other ?from= is ignored (no open redirect)", async () => {
     mockLoaders();
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" }, searchParams: { from: "https://evil.example/x" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "case-1" }), searchParams: Promise.resolve({ from: "https://evil.example/x" }) });
     render(ui);
     expect(screen.getByRole("link", { name: "Back to Disciplinary" })).toHaveAttribute("href", "/hr/disciplinary");
     expect(document.querySelector('a[href*="evil.example"]')).toBeNull();
@@ -222,7 +222,7 @@ describe("DisciplinaryCaseDetailPage", () => {
 
   it("the vigilance back target also applies on a not-found case", async () => {
     mockLoaders({ caseResult: { data: null, source: "error", status: 404 } });
-    const ui = await DisciplinaryCaseDetailPage({ params: { id: "gone" }, searchParams: { from: "vigilance" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: Promise.resolve({ id: "gone" }), searchParams: Promise.resolve({ from: "vigilance" }) });
     render(ui);
     expect(screen.getByRole("link", { name: "Back to Vigilance" })).toHaveAttribute("href", "/hr/vigilance");
   });

@@ -43,7 +43,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [row("m1", "in_progress")], page: 1, pageSize: 25, total: 1 },
       source: "api",
     });
-    render(await MeetingsListPage({ searchParams: { status: "in_progress" } }));
+    render(await MeetingsListPage({ searchParams: Promise.resolve({ status: "in_progress" }) }));
     expect(getMeetingsPageMock).toHaveBeenCalledWith(
       expect.objectContaining({ status: "in_progress", page: 1 }),
     );
@@ -54,7 +54,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [row("m1", "scheduled")], page: 2, pageSize: 25, total: 60 },
       source: "api",
     });
-    render(await MeetingsListPage({ searchParams: { page: "2" } }));
+    render(await MeetingsListPage({ searchParams: Promise.resolve({ page: "2" }) }));
     expect(getMeetingsPageMock).toHaveBeenCalledWith(expect.objectContaining({ page: 2 }));
   });
 
@@ -63,7 +63,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [row("m1", "scheduled")], page: 1, pageSize: 25, total: 150 },
       source: "api",
     });
-    render(await MeetingsListPage({ searchParams: {} }));
+    render(await MeetingsListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("All meetings (150)")).toBeInTheDocument();
   });
 
@@ -72,7 +72,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [], page: 1, pageSize: 25, total: 0 },
       source: "error",
     });
-    render(await MeetingsListPage({ searchParams: {} }));
+    render(await MeetingsListPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("All meetings (—)")).toBeInTheDocument();
     // Exactly one error alert region (no duplicate amber badge + error state).
     expect(screen.getAllByRole("alert")).toHaveLength(1);
@@ -83,7 +83,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [row("c1", "cancelled"), row("a1", "archived")], page: 1, pageSize: 25, total: 2 },
       source: "api",
     });
-    const { container } = render(await MeetingsListPage({ searchParams: {} }));
+    const { container } = render(await MeetingsListPage({ searchParams: Promise.resolve({}) }));
     const pills = Array.from(container.querySelectorAll("span.pill"));
     const cancelled = pills.find((p) => p.textContent === "Cancelled");
     const archived = pills.find((p) => p.textContent === "Archived");
@@ -98,7 +98,7 @@ describe("MeetingsListPage", () => {
       data: { rows: [row("m1", "scheduled")], page: 1, pageSize: 25, total: 1 },
       source: "api",
     });
-    render(await MeetingsListPage({ searchParams: {} }));
+    render(await MeetingsListPage({ searchParams: Promise.resolve({}) }));
     const headers = screen.getAllByRole("columnheader");
     // No column header is empty (every <th> has text content).
     for (const h of headers) {

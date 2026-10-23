@@ -16,7 +16,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 export async function GET() {
-  const at = cookies().get(COOKIE.ACCESS)?.value;
+  const at = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!at) return NextResponse.json({ authenticated: false });
 
   const claims = decodeJwtPayload(at);

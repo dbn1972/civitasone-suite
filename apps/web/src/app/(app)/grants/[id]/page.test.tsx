@@ -52,7 +52,7 @@ describe("GrantDetailPage", () => {
   });
 
   it("renders exactly one breadcrumb back-link to /grants/list, not two", async () => {
-    render(await GrantDetailPage({ params: { id: "grant-1" } }));
+    render(await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) }));
 
     const backLinks = screen.getAllByRole("link", { name: "All grants" });
     expect(backLinks).toHaveLength(1);
@@ -63,7 +63,7 @@ describe("GrantDetailPage", () => {
   });
 
   it("still renders the page heading", async () => {
-    render(await GrantDetailPage({ params: { id: "grant-1" } }));
+    render(await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) }));
     expect(
       screen.getByRole("heading", { level: 1, name: "Community water supply project" })
     ).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe("GrantDetailPage", () => {
   // renders the retry state, NOT notFound().
   it("renders a retry state on a failed fetch instead of calling notFound", async () => {
     getGrantByIdMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    const page = await GrantDetailPage({ params: { id: "grant-1" } });
+    const page = await GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) });
     render(page);
     // RefreshErrorState renders a Retry/Try again control; notFound() would have thrown.
     expect(screen.getAllByText(/try again|couldn't load|couldn’t load|retry/i).length).toBeGreaterThan(0);
@@ -82,11 +82,11 @@ describe("GrantDetailPage", () => {
   // GAP-GRANTS-DETAIL-02: a genuine 404 (or successful null) still calls notFound().
   it("calls notFound for a genuine 404", async () => {
     getGrantByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(GrantDetailPage({ params: { id: "grant-1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
   it("calls notFound for a successful null (api source)", async () => {
     getGrantByIdMock.mockResolvedValue({ data: null, source: "api" });
-    await expect(GrantDetailPage({ params: { id: "grant-1" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(GrantDetailPage({ params: Promise.resolve({ id: "grant-1" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

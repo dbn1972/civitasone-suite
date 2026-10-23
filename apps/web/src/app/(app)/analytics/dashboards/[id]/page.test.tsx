@@ -45,7 +45,7 @@ describe("AnalyticsDashboardDetailPage (GAP-ANALYTICS-DASHBOARDS-01)", () => {
     fetchJsonMock.mockImplementation((_path, _empty, opts: { mapResponse: (p: unknown) => unknown }) => {
       return Promise.resolve({ data: opts.mapResponse(DETAIL), source: "api" });
     });
-    render(await AnalyticsDashboardDetailPage({ params: { id: DETAIL.id } }));
+    render(await AnalyticsDashboardDetailPage({ params: Promise.resolve({ id: DETAIL.id }) }));
     expect(screen.getByText("Budget Overview")).toBeInTheDocument();
     expect(screen.getByText("Spend by dept", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
@@ -59,20 +59,20 @@ describe("AnalyticsDashboardDetailPage (GAP-ANALYTICS-DASHBOARDS-01)", () => {
     fetchJsonMock.mockImplementation((_path, _empty, opts: { mapResponse: (p: unknown) => unknown }) => {
       return Promise.resolve({ data: opts.mapResponse(unresolved), source: "api" });
     });
-    render(await AnalyticsDashboardDetailPage({ params: { id: DETAIL.id } }));
+    render(await AnalyticsDashboardDetailPage({ params: Promise.resolve({ id: DETAIL.id }) }));
     expect(screen.getByText("Unknown employee")).toBeInTheDocument();
     expect(screen.queryByText(/22222222/)).not.toBeInTheDocument();
   });
 
   it("calls notFound() on a 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
-    await expect(AnalyticsDashboardDetailPage({ params: { id: "missing" } })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(AnalyticsDashboardDetailPage({ params: Promise.resolve({ id: "missing" }) })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(notFoundMock).toHaveBeenCalledOnce();
   });
 
   it("shows a retryable error state (not not-found) on a transient failure", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 500 });
-    render(await AnalyticsDashboardDetailPage({ params: { id: DETAIL.id } }));
+    render(await AnalyticsDashboardDetailPage({ params: Promise.resolve({ id: DETAIL.id }) }));
     expect(notFoundMock).not.toHaveBeenCalled();
     expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
   });

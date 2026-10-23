@@ -11,7 +11,8 @@ const PAGE_SIZE = 20;
 type Search = { [k: string]: string | string[] | undefined };
 type Row = { id: string; title: string; planYear: string; scope: string; status: string };
 
-export default async function Page({ searchParams }: { searchParams?: Search }) {
+export default async function Page(props: { searchParams?: Promise<Search> }) {
+  const searchParams = await props.searchParams;
   const roles = getSessionRoles();
   const isHr = roles.some((r) => HR_ROLES.includes(r));
 

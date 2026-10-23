@@ -27,13 +27,14 @@ type DispatchRow = {
   mode: string;
 };
 
-export default async function EstabFileDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { created?: string };
-}) {
+export default async function EstabFileDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ created?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("estabW2");
   // GAP-ESTAB-FILES-NEW-06: arriving from "Create File" / "Open file from DAK" (?created=1) the
   // allocated file number is shown here, because the create call only acknowledges (202) and the
@@ -129,13 +130,11 @@ export default async function EstabFileDetailPage({
           </>
         }
       />
-
       {justCreated ? (
         <div role="status" className="alert good" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
           {t("fileCreatedBanner", { fileNo: file.fileNo })}
         </div>
       ) : null}
-
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">

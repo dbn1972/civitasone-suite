@@ -58,13 +58,14 @@ async function getLocationEmployees(id: string, qs: string): Promise<LoaderResul
 
 const srOnly: React.CSSProperties = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" };
 
-export default async function LocationDetailPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: Record<string, string | string[] | undefined>;
-}) {
+export default async function LocationDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const t = await getTranslations("locationDetail");
   const p = parseDetailParams(searchParams);
   const [hier, emps] = await Promise.all([getHierarchy(params.id), getLocationEmployees(params.id, employeesQuery(p))]);

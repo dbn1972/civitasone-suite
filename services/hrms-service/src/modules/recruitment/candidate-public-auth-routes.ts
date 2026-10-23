@@ -122,11 +122,11 @@ function resolveCandSecret(): string {
   return "civitasone-hrms-candidate-portal-internal-dev-fallback-2026-09-08";
 }
 
-const CAND_SECRET = resolveCandSecret();
+const candSigningKey = resolveCandSecret();
 
 export function signCandToken(payload: { candidateId: string; tenantId: string; email: string; exp: number }): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
+  const sig = createHmac("sha256", candSigningKey).update(data).digest("base64url");
   return `${data}.${sig}`;
 }
 
@@ -135,7 +135,7 @@ export function verifyCandToken(token: string): { candidateId: string; tenantId:
   if (dot < 0) return null;
   const data = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = createHmac("sha256", CAND_SECRET).update(data).digest("base64url");
+  const expected = createHmac("sha256", candSigningKey).update(data).digest("base64url");
   try {
     if (!timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch { return null; }

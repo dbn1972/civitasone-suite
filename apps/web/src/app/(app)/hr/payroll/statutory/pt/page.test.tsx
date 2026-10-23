@@ -58,7 +58,7 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
 
   it("shows the version timeline with effective from / to and status, and the in-force slabs read-only", async () => {
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByText(/Version timeline — Maharashtra \(MH\)/)).toBeInTheDocument();
     expect(screen.getByText("Since the beginning")).toBeInTheDocument();
     expect(screen.getByText("Open-ended")).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
       { ...payload.states[0]!.versions[1]!, slabs: [{ ...slab, taxMinor: 20000 }, { ...slab, taxMinor: 0, appliesToGender: "female" }] },
     ] }] };
     loaded(withGender);
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByRole("columnheader", { name: "Applies to" })).toBeInTheDocument();
     expect(screen.getAllByRole("cell", { name: "Women" })).toHaveLength(1);
     expect(screen.getAllByRole("cell", { name: "All employees" })).toHaveLength(1);
@@ -84,13 +84,13 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
 
   it("?version= shows a past version read-only with its recorded reason", async () => {
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH", version: "1900-01-01" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH", version: "1900-01-01" }) }));
     expect(screen.getByText(/Reason recorded: Migrated from unversioned slabs/)).toBeInTheDocument();
   });
 
   it("the old 'takes effect immediately' copy is gone; the new-version form is offered to payroll_admin", async () => {
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.queryByText(/immediately/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Create a new version — Maharashtra \(MH\)/)).toBeInTheDocument();
     expect(screen.getByText(/Earlier versions are never altered/)).toBeInTheDocument();
@@ -99,21 +99,21 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
   it("a payroll_officer can read the timeline but is not offered the create form (API is admin-only)", async () => {
     getSessionRolesMock.mockReturnValue(["payroll_officer"]);
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByText(/Version timeline/)).toBeInTheDocument();
     expect(screen.queryByText(/Create a new version/)).not.toBeInTheDocument();
   });
 
   it("a state with no versions shows the empty state and the form to create the first one", async () => {
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "KA" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "KA" }) }));
     expect(screen.getAllByText("No slab versions for this state").length).toBeGreaterThan(0);
     expect(screen.getByText(/Create a new version — Karnataka \(KA\)/)).toBeInTheDocument();
   });
 
   it("maker != checker: another administrator's pending version is listed with Approve / Reject; your own is not approvable", async () => {
     loaded({ ...payload, pending: [pendingVersion, { ...pendingVersion, id: "22222222-2222-4222-8222-222222222222", makerId: "viewer-9", effectiveFrom: "2027-07-01" }] });
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByText("Waiting for approval")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Reject" })).toHaveLength(1);
@@ -126,7 +126,7 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
   it("a payroll_officer sees pending requests but no approve / reject / switch controls", async () => {
     getSessionRolesMock.mockReturnValue(["payroll_officer"]);
     loaded({ ...payload, pending: [pendingVersion] });
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByText("Waiting for approval")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
     expect(screen.queryByText("Second approver for professional tax changes")).not.toBeInTheDocument();
@@ -134,14 +134,14 @@ describe("ProfessionalTaxPage (versioned slabs)", () => {
 
   it("shows the second-approver switch to payroll_admin: ON by default, with a request-to-turn-off action", async () => {
     loaded();
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.getByText("Second approver for professional tax changes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Request to turn off" })).toBeInTheDocument();
   });
 
   it("a load failure is an error state, never an empty timeline", async () => {
     fetchJsonMock.mockResolvedValue({ data: { today: "", viewerId: "", makerChecker: true, pending: [], lastFinalisedMonth: null, earliestEffectiveFrom: null, states: [] }, source: "error" });
-    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    renderPage(await ProfessionalTaxPage({ searchParams: Promise.resolve({ state: "MH" }) }));
     expect(screen.queryByText("Select a state")).not.toBeInTheDocument();
     expect(screen.queryByText("No slab versions for this state")).not.toBeInTheDocument();
     expect(screen.queryByText(/Version timeline/)).not.toBeInTheDocument();
