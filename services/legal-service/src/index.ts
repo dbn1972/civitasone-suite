@@ -4,7 +4,7 @@ import { startHearingReminderCron } from "./cron/hearing-reminders.js";
 import { sqlClient } from "./shared/db.js";
 
 const app = await buildApp();
-startHearingReminderCron();
+const stopHearingReminderCron = startHearingReminderCron();
 const port = Number(process.env.PORT ?? 3021);
 await app.listen({ port, host: process.env.BIND_HOST ?? "127.0.0.1" });
 app.log.info({ port }, "legal-service listening");
@@ -15,6 +15,7 @@ signalReady();
 
 registerGracefulShutdown({
   cleanup: async () => {
+    stopHearingReminderCron();
     await app.close();
     await sqlClient.end();
   },

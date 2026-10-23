@@ -12,6 +12,7 @@ import { writeAuditLog } from "../../shared/audit.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { COMMANDS } from "../../topics.js";
 import type { RequestContext } from "@civitasone/types";
+import { clampLimit } from "../../shared/clamp-limit.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -286,7 +287,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/kudos/feed", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const limit = Math.min(Number((req.query as any)?.limit ?? 50), 100);
+    const limit = clampLimit((req.query as any)?.limit, 50, 100);
 
     // GAP2-HR-SOCIAL-FEED-08: giver_id/receiver_id are both
     // employee.hrms_employees.id now (see the POST handler), so "my" stats
@@ -346,7 +347,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // plus the rest of the combined feed. Adds the same role set the
     // feature is meant for (HR, manager, employee).
     requireRole(ctx, ALL_ROLES);
-    const limit = Math.min(Number((req.query as any)?.limit ?? 30), 50);
+    const limit = clampLimit((req.query as any)?.limit, 30, 50);
     const feed: any[] = [];
 
     const { kudos, birthdays, newJoinees, announcements, counts } = await withTenantGuc(ctx.tenantId, async (pool) => {
