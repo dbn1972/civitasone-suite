@@ -75,12 +75,14 @@ export async function updateLifecycle(
   actorId: string,
   version: number,
   patch: Partial<Pick<StageInsert, "status" | "startedAt" | "completedAt" | "errorMessage">>,
-): Promise<void> {
-  await tx
+): Promise<number> {
+  const updated = await tx
     .update(stages)
     .set({ ...patch, updatedAt: new Date(), updatedBy: actorId, version: version + 1 })
     // Optimistic guard on top of the row lock: never overwrite a row whose version moved.
-    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId), eq(stages.version, version)));
+    .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId), eq(stages.version, version)))
+    .returning({ id: stages.id });
+  return updated.length;
 }
 
 export { toView };

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { CommandEnvelope } from "@civitasone/queue";
 
 const findRowTx = vi.fn();
-const updateLifecycle = vi.fn();
+const updateLifecycle = vi.fn().mockResolvedValue(1);
 const enqueue = vi.fn();
 const markProcessed = vi.fn();
 
@@ -30,14 +30,33 @@ function cmd(verb: "run" | "skip" | "retry") {
 describe("stage transition re-validates against the locked row", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateLifecycle.mockResolvedValue(1);
     markProcessed.mockResolvedValue(true);
   });
 
-  it("skip arriving after a run already moved the row to in_progress is a no-op", async () => {
+  it("skip arriving after a run already moved the row to in_progress is rejected and audited, not applied", async () => {
     findRowTx.mockResolvedValue({ id: STAGE, status: "in_progress", version: 2, startedAt: new Date() });
     await applyStageTransition({}, cmd("skip"));
     expect(updateLifecycle).not.toHaveBeenCalled();
-    expect(enqueue).not.toHaveBeenCalled();
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0]![1].payload).toMatchObject({
+      action: "step_skip_rejected", outcome: "rejected", reason: "illegal_transition_from_in_progress",
+    });
+  });
+
+  it("a missing (or other-tenant) stage is rejected and audited", async () => {
+    findRowTx.mockResolvedValue(undefined);
+    await applyStageTransition({}, cmd("run"));
+    expect(updateLifecycle).not.toHaveBeenCalled();
+    expect(enqueue.mock.calls[0]![1].payload).toMatchObject({ outcome: "rejected", reason: "stage_not_found" });
+  });
+
+  it("a lost optimistic-version race (0 rows updated) is audited as rejected, never as success", async () => {
+    findRowTx.mockResolvedValue({ id: STAGE, status: "pending", version: 1, startedAt: null });
+    updateLifecycle.mockResolvedValue(0);
+    await applyStageTransition({}, cmd("run"));
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue.mock.calls[0]![1].payload).toMatchObject({ outcome: "rejected", reason: "version_conflict" });
   });
 
   it("skip on a pending row applies, guarded by the version it read", async () => {

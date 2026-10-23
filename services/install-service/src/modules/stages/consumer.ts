@@ -56,18 +56,20 @@ export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<Sta
   const t = tx as Parameters<typeof repo.findRowTx>[0];
   if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
   const row = await repo.findRowTx(t, id, msg.tenantId);
-  if (!row) return;
+  if (!row) return rejectTransition(tx, msg, "stage_not_found");
   // Re-validate inside the transaction (on the locked row): the route's check can be stale by now.
   const next = nextStageStatus(verb, row.status);
-  if (!next) return;
+  if (!next) return rejectTransition(tx, msg, `illegal_transition_from_${row.status}`);
   const now = new Date();
-  await repo.updateLifecycle(t, id, msg.tenantId, msg.actorId, row.version, {
+  const updated = await repo.updateLifecycle(t, id, msg.tenantId, msg.actorId, row.version, {
     status: next,
     // run/retry (re)start the step and clear any previous failure; skip closes it.
     startedAt: next === "in_progress" ? now : row.startedAt,
     completedAt: next === "skipped" ? now : null,
     errorMessage: null,
   });
+  // Row count 0 means the optimistic version guard lost a race: do not audit a success that did not happen.
+  if (updated === 0) return rejectTransition(tx, msg, "version_conflict");
   await enqueue(tx as Parameters<typeof enqueue>[0], {
     topic: AUDIT_TOPIC,
     eventType: AUDIT_TOPIC,
@@ -75,6 +77,19 @@ export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<Sta
     actorId: msg.actorId,
     correlationId: msg.correlationId,
     payload: { service: "install", action: `step_${verb}`, resourceType: "stage", resourceId: id, outcome: "success" },
+  });
+}
+
+/** The caller already got a 202, so a command that cannot apply must leave a trace: audit it as rejected with a reason. */
+async function rejectTransition(tx: unknown, msg: CommandEnvelope<StageTransitionPayload>, reason: string): Promise<void> {
+  const { id, verb } = msg.payload;
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC,
+    eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId,
+    actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: { service: "install", action: `step_${verb}_rejected`, resourceType: "stage", resourceId: id, outcome: "rejected", reason },
   });
 }
 
