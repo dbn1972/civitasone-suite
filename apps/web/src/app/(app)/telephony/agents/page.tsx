@@ -6,7 +6,7 @@
  * presence (available / busy / wrap-up / offline) and their queue assignment.
  * WCAG 2.2 AA: semantic structure, aria-live status, DS DataTable + StatusPill.
  */
-import { formatInIST } from "@/lib/formatters";
+import { formatInIST, formatDateTimeIST } from "@/lib/formatters";
 import { useState } from "react";
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable, ErrorState, Button } from "../../../_components/ds";
 import type { PillVariant } from "../../../_components/ds/StatusPill";
@@ -103,7 +103,7 @@ export default function TelephonyAgentsPage() {
   }
 
   const cacheNote = showingCache
-    ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+    ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
     : loading && !hasData
       ? "Loading agents…"
       : `Updated ${refreshedAt}`;

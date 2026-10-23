@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { DarkModeToggle } from "./DarkModeToggle";
 
@@ -56,5 +56,30 @@ describe("DarkModeToggle", () => {
     fireEvent.click(screen.getByRole("button")); // dark → system
     fireEvent.click(screen.getByRole("button")); // system → light
     expect(document.documentElement.classList.contains("dark")).toBe(false);
+  });
+
+  describe("storage hardening (CLOS2-S3-02)", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("does not throw and still toggles the dark class when storage is blocked", () => {
+      const blocked = () => {
+        throw new DOMException("The operation is insecure.", "SecurityError");
+      };
+      vi.spyOn(Storage.prototype, "getItem").mockImplementation(blocked);
+      vi.spyOn(Storage.prototype, "setItem").mockImplementation(blocked);
+      render(<DarkModeToggle />);
+      fireEvent.click(screen.getByRole("button")); // light -> dark
+      expect(document.documentElement.classList.contains("dark")).toBe(true);
+      expect(screen.getByRole("button")).toHaveTextContent("🌙");
+    });
+
+    it("ignores a junk stored value and keeps the light default", () => {
+      localStorage.setItem("civitas-theme", "bogus");
+      render(<DarkModeToggle />);
+      expect(screen.getByRole("button")).toHaveTextContent("☀️");
+      expect(document.documentElement.classList.contains("dark")).toBe(false);
+    });
   });
 });

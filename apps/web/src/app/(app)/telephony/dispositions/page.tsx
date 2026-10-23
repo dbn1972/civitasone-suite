@@ -9,6 +9,7 @@
  * displayed on this screen at all (counts only).
  * WCAG 2.2 AA: semantic structure, aria-live status, DS DataTable.
  */
+import { formatDateTimeIST } from "@/lib/formatters";
 import { useMemo, useState } from "react";
 import { PageHeader, StatCard, StatGrid, DataTable, ProgressBar, Segmented, ErrorState, Button } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
@@ -152,7 +153,7 @@ export default function TelephonyDispositionsPage() {
 
   const pending = loading && !hasData;
   const cacheNote = showingCache
-    ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+    ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
     : pending
       ? "Loading dispositions…"
       : "";

@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable, Segmented, ErrorState, Button } from "../../../_components/ds";
 import type { PillVariant } from "../../../_components/ds/StatusPill";
 import { useOfflineResource } from "@/lib/sync/resource";
-import { formatSecondsDuration } from "@/lib/formatters";
+import { formatSecondsDuration, formatDateTimeIST } from "@/lib/formatters";
 import { callMetricsPath, metricsToSummary, toCallMetrics, type CallMetrics } from "@/lib/telephony/callMetrics";
 import { toHumanError } from "@/lib/messages";
 
@@ -174,7 +174,7 @@ export default function TelephonyCallsPage() {
 
   const pending = loading && !hasData;
   const cacheNote = showingCache
-    ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+    ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
     : pending
       ? "Loading calls…"
       : "";

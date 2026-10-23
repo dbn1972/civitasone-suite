@@ -3,7 +3,7 @@
 import type React from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { maskLast4 } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatDateTimeIST } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { DprActions } from "./DprActions";
 
@@ -86,7 +86,7 @@ export function DprTrackingTable({ rows, source = "api", canReview = false }: { 
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   // GAP-PROJECTS-DPR-TRACKING-01: the Actions column (Start review / Approve /

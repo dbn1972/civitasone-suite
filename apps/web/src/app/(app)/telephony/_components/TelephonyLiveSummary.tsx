@@ -13,6 +13,7 @@
  * with no cache renders a RefreshErrorState with a working Retry — never a wall
  * of zeros or a fabricated 100% SLA that would read as "all is well".
  */
+import { formatDateTimeIST } from "@/lib/formatters";
 import { StatCard, StatGrid, ErrorState } from "../../../_components/ds";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { callMetricsPath, metricsToSummary, toCallMetrics, type CallMetrics } from "@/lib/telephony/callMetrics";
@@ -37,7 +38,7 @@ export function TelephonyLiveSummary() {
 
   const showingCache = (offline || source === "cache") && cachedAt !== null;
   const note = showingCache
-    ? `Showing saved data from ${new Date(cachedAt!).toLocaleString("en-IN")}${offline ? " — you're offline" : ""}.`
+    ? `Showing saved data from ${formatDateTimeIST(new Date(cachedAt!))}${offline ? " — you're offline" : ""}.`
     : loading && metrics === null
       ? "Loading live status…"
       : "";

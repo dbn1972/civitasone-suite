@@ -1,6 +1,6 @@
 "use client";
 
-import { UserFacingError } from "@/lib/userFacingError";
+import { UserFacingError, isNetworkFailure } from "@/lib/userFacingError";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -265,7 +265,7 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
           const invitedEmail = await submit();
           onCreated(invitedEmail);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to invite user.");
+          setError(isNetworkFailure(err) ? formError.fromException("save", err).message : err instanceof Error ? err.message : "Failed to invite user.");
         } finally {
           setBusy(false);
         }
