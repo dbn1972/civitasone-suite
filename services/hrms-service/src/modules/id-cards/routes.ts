@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { sqlPool, sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 import { queue } from "../../shared/infra.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { COMMANDS } from "../../topics.js";
 
 /**
@@ -395,19 +396,13 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/id-cards/me", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    // Find employee ID for current user. employee.hrms_employees is RLS
-    // ENABLEd + FORCEd (migration 0026/0034), so this needed the GUC wrap
-    // too. It also referenced a `user_id` column that doesn't exist on this
-    // table (real column: user_ref -- same actorId-linkage column
-    // self-service/routes.ts and employee/actor-link.ts already key employee
-    // lookups on); that was a hard "column does not exist" error independent
-    // of RLS, fixed alongside the GUC wrap.
-    const empRow = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
-      tx,
-      `SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2 LIMIT 1`,
-      [ctx.actorId, ctx.tenantId],
-    ));
-    const employeeId = empRow.rows[0]?.id;
+    // Issue #1780: this used to be `SELECT id ... WHERE user_ref = $1 LIMIT 1`
+    // with no ORDER BY -- with duplicate user_ref rows the pick was arbitrary
+    // (another employee's ID card = PII exposure, or a false 404). Resolve through
+    // the shared actor-link resolver, which is deterministic and FAILS CLOSED
+    // (409 AMBIGUOUS_EMPLOYEE_LINK) if the actor is linked to more than one
+    // employee row, instead of guessing.
+    const employeeId = (await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))?.id;
     if (!employeeId) throw new HttpError(404, "NOT_FOUND", "Employee record not found");
 
     // hrms.id_cards is RLS FORCEd -- without the GUC this always matched 0

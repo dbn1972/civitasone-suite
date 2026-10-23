@@ -112,3 +112,24 @@ export function validateCompletion(
 ): CompletionResult {
   return validateChecklistCompletion(sections, responses, evidenceCount, requiredEvidenceCount);
 }
+
+/**
+ * Maker-checker for the final sign-off: nobody who conducted the inspection
+ * (i.e. is on its assigned-inspector list) may finalize it, nor be the
+ * reviewer it is submitted to. Mirrors capa `assertMakerCheckerForVerification`.
+ *
+ * @throws {DomainError} with code `MAKER_CHECKER_VIOLATION`.
+ */
+export function assertMakerCheckerForFinalization(
+  assignedInspectors: unknown,
+  checkerId: string,
+  role: "finalizer" | "reviewer" = "finalizer",
+): void {
+  const conductors = Array.isArray(assignedInspectors) ? (assignedInspectors as unknown[]) : [];
+  if (conductors.includes(checkerId)) {
+    throw new DomainError(
+      "MAKER_CHECKER_VIOLATION",
+      `The ${role} cannot be an inspector who conducted this inspection (maker-checker enforcement)`,
+    );
+  }
+}

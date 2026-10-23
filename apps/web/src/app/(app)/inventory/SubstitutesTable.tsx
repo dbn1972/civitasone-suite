@@ -19,12 +19,12 @@ type Col = {
 
 const columns: Col[] = [
   // GAP-INVENTORY-SUBSTITUTES-03: names + links; the full id stays in the tooltip for support.
-  { key: "itemId", label: "Item", render: (r) => <Link href={`/inventory/${r.itemId}`} title={r.itemId}>{itemLabel(r)}</Link> },
+  { key: "itemId", label: "Item", render: (r) => <Link href={`/inventory/items/${r.itemId}`} title={r.itemId}>{itemLabel(r)}</Link> },
   {
     key: "substituteId",
     label: "Substitute",
     render: (r) => (
-      <Link href={`/inventory/${r.substituteId}`} title={r.substituteId}>
+      <Link href={`/inventory/items/${r.substituteId}`} title={r.substituteId}>
         {itemLabel({ itemId: r.substituteId, itemName: r.substituteName, itemSku: r.substituteSku })}
       </Link>
     ),

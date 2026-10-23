@@ -65,6 +65,70 @@ export function payrollRunStatusVariant(status: string): PillVariant | undefined
     : undefined;
 }
 
+/**
+ * GAP-PAYROLL-PERIOD-02/05: one place for "has money moved for this run".
+ * payroll-service folds the internal disbursed state into "paid" before the
+ * API responds (queries.ts mapRunStatus), so the wire only ever says "paid";
+ * "disbursed" is tolerated defensively and counts the same.
+ */
+export function isPaidPayrollRunStatus(status: string): boolean {
+  return status === "paid" || status === "disbursed";
+}
+
+export type PayrollRunBuckets = {
+  total: number;
+  /** Money has moved (paid / disbursed). */
+  paid: number;
+  /** The run failed. */
+  failed: number;
+  /** Everything else: draft, processing, completed-awaiting-disbursement, or an unrecognised status. */
+  inProgress: number;
+};
+
+/**
+ * Splits runs into three disjoint buckets that ALWAYS sum to `total`, so an
+ * unexpected status can never make a stat tile row disagree with the run count
+ * (GAP-PAYROLL-PERIOD-02). Shared by the Payroll home and Period screens so
+ * both bucket a given set of runs identically.
+ */
+export function bucketPayrollRuns(runs: ReadonlyArray<{ status: string }>): PayrollRunBuckets {
+  let paid = 0;
+  let failed = 0;
+  for (const r of runs) {
+    if (isPaidPayrollRunStatus(r.status)) paid += 1;
+    else if (r.status === "failed") failed += 1;
+  }
+  return { total: runs.length, paid, failed, inProgress: runs.length - paid - failed };
+}
+
+/** Plain code-unit comparison: locale-independent, so YYYY-MM / ISO dates order identically everywhere. */
+function cmp(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The most recent run: highest pay period (YYYY-MM sorts lexicographically),
+ * then latest run date, then id as a final deterministic tie-break. Null for an
+ * empty list. GAP-PAYROLL-PERIOD-02: a headcount tile must show ONE run count --
+ * summing employeeCount across every run counts each person once per month.
+ */
+export function latestPayrollRun<T extends { id: string; payPeriod: string; runDate?: string }>(
+  runs: ReadonlyArray<T>,
+): T | null {
+  let best: T | null = null;
+  for (const r of runs) {
+    if (best === null) {
+      best = r;
+      continue;
+    }
+    const byPeriod = cmp(r.payPeriod, best.payPeriod);
+    const byDate = cmp(r.runDate ?? "", best.runDate ?? "");
+    const byId = cmp(r.id, best.id);
+    if (byPeriod > 0 || (byPeriod === 0 && (byDate > 0 || (byDate === 0 && byId > 0)))) best = r;
+  }
+  return best;
+}
+
 // draft/finalized come from the list endpoint's narrowed status; computed,
 // approved, paid, held and exception are the raw payroll_slips.status values
 // (payroll_slips_status_check) that GET /v1/payroll/slips/:id returns.
@@ -101,13 +165,43 @@ export function isPrintableSlipStatus(status: string): boolean {
  * actual backend source, not assumed. "draft"/"finalized"/"completed" are
  * tolerated here defensively (the DB column's own schema default is "draft",
  * and a future review/approval stage may one day add "finalized"/
- * "completed") but are not currently reachable from any code path.
+ * "completed") but are not currently reachable from any code path. "verified"
+ * and "approved" are the other two states the DB CHECK allows
+ * (payroll_tax_declarations_status_check); no writer sets them yet, but they
+ * get real labels so the day one does, the pill is not raw English.
  */
-const INCOME_TAX_STATUSES = ["submitted", "pending", "draft", "finalized", "completed"] as const;
+const INCOME_TAX_STATUSES = ["submitted", "pending", "draft", "verified", "approved", "finalized", "completed"] as const;
 
 /** Income-tax declaration row status (payroll-service tax/routes.ts). */
 export function incomeTaxStatusLabel(status: string, t: TFn): string {
   return (INCOME_TAX_STATUSES as readonly string[]).includes(status)
     ? t(`status.${status}` as Parameters<TFn>[0])
     : status;
+}
+
+export type IncomeTaxBuckets = {
+  total: number;
+  /** submitted / finalized / completed: the declaration is on file. */
+  finalized: number;
+  /** pending / draft: nothing on file yet. */
+  pending: number;
+  /** Anything else (verified, approved, or a status this build does not know). */
+  other: number;
+};
+
+/**
+ * GAP-PAYROLL-INCOME-TAX-04: three disjoint buckets that ALWAYS sum to `total`.
+ * The Finalized/Pending sets are unchanged; `other` is the remainder, so a
+ * DB-valid status the writer does not produce today (verified / approved,
+ * payroll_tax_declarations_status_check, migration 0027) or a future one is still counted somewhere
+ * instead of silently falling out of every tile but Total.
+ */
+export function bucketIncomeTaxStatuses(rows: ReadonlyArray<{ status: string }>): IncomeTaxBuckets {
+  let finalized = 0;
+  let pending = 0;
+  for (const r of rows) {
+    if (r.status === "submitted" || r.status === "finalized" || r.status === "completed") finalized += 1;
+    else if (r.status === "pending" || r.status === "draft") pending += 1;
+  }
+  return { total: rows.length, finalized, pending, other: rows.length - finalized - pending };
 }

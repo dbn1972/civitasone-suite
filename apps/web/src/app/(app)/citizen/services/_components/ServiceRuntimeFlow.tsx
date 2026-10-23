@@ -12,6 +12,9 @@ import {
   isChannelAllowed,
   type RuntimeJourneyStep,
   buildDemandLines,
+  computeFeeBreakup,
+  discardDraft,
+  type FeeBreakup,
   confirmPayment,
   createPaymentIntent,
   formatExpectedByDate,
@@ -116,7 +119,48 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
 
   const channel = counterMode ? "counter" : "portal";
   const channelOk = isChannelAllowed(service.channels, channel);
-  const demandLines = useMemo(() => buildDemandLines(service), [service]);
+  // The service's own fee breakup (base / exemption / payable), fetched when the
+  // fee step opens; null (no schedule or a failed call) keeps the single-line fallback.
+  const [breakup, setBreakup] = useState(null as FeeBreakup | null);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const demandLines = useMemo(
+    () => buildDemandLines(service, breakup, {
+      base: t("feeBaseLine"),
+      exemption: (label: string) => t("feeExemptionLine", { label }),
+      payable: t("feePayableLine"),
+    }),
+    [service, breakup, t],
+  );
+
+  useEffect(() => {
+    if (step !== "fee" || !hasFee) return;
+    let live = true;
+    void computeFeeBreakup(service.id, values).then((b) => { if (live) setBreakup(b); });
+    return () => { live = false; };
+    // values is deliberately read at fee-step entry only; the form is frozen on this step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, hasFee, service.id]);
+
+  const onDiscardDraft = async () => {
+    if (!draftId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await discardDraft(draftId);
+      setDraftId(null);
+      setValues({});
+      setErrors({});
+      setSectionIndex(0);
+      setConsented(false);
+      setSaveState("idle");
+      setConfirmingDiscard(false);
+      setStep("form");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t("discardFailed"));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -377,6 +421,26 @@ export function ServiceRuntimeFlow({ service, counterMode = false, assistedBy = 
               });
             }}
           />
+          {draftId ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end" }}>
+              {confirmingDiscard ? (
+                <>
+                  <span role="alert" style={{ fontSize: 13 }}>{t("discardDraftConfirm")}</span>
+                  <Button type="button" variant="ghost" style={{ minHeight: 44 }} disabled={busy} onClick={() => setConfirmingDiscard(false)}>
+                    {t("discardDraftKeep")}
+                  </Button>
+                  <Button type="button" variant="danger" style={{ minHeight: 44 }} disabled={busy} onClick={() => void onDiscardDraft()}>
+                    {t("discardDraftYes")}
+                  </Button>
+                </>
+              ) : (
+                <Button type="button" variant="ghost" style={{ minHeight: 44 }} disabled={busy} onClick={() => setConfirmingDiscard(true)}>
+                  {t("discardDraft")}
+                </Button>
+              )}
+            </div>
+          ) : null}
+          {error && step === "form" ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 12, color: "var(--mut)" }} aria-live="polite">
               {saveState === "saving" ? t("saving") : saveState === "saved" ? t("savedJustNow") : saveState === "error" ? t("offlineRetrying") : ""}

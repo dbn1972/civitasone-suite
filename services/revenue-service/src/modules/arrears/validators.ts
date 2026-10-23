@@ -43,6 +43,12 @@ export const listWriteOffsQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+export const listWaiversQuery = z.object({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const createRecoveryReferralBody = z.object({
   assesseeId: z.string().uuid(),
   reason: z.string().min(1).max(500),

@@ -172,8 +172,41 @@ describe("ExceptionsPanel", () => {
     );
     expect(screen.getByText("Matched to UTR on bank statement")).toBeInTheDocument();
     expect(screen.getByText(/02\/07\/2026|02 Jul 2026/)).toBeInTheDocument();
-    // a raw actor UUID is never shown as a name
+    // a raw actor UUID is never shown as a name; with no resolved name it reads as a short "User ..." label
     expect(screen.queryByText(/11111111-aaaa/)).not.toBeInTheDocument();
+    expect(screen.getByText(/User 11111111/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-01: a written-off row displays reason, WHO and when.
+  it("names who wrote a row off (resolved name), with the reason and the date", () => {
+    render(
+      <ExceptionsPanel
+        exceptions={[
+          {
+            ...RESOLVED_EXCEPTION,
+            status: "written_off",
+            resolutionNote: "Bank charge, not recoverable",
+            resolvedBy: "11111111-aaaa-4000-8000-000000000001",
+            resolvedAt: "2026-07-02T00:00:00.000Z",
+          },
+        ]}
+        actorNames={{ "11111111-aaaa-4000-8000-000000000001": "Asha Rao" }}
+      />,
+    );
+    expect(screen.getByText("Bank charge, not recoverable")).toBeInTheDocument();
+    expect(screen.getByText(/Asha Rao · /)).toBeInTheDocument();
+    expect(screen.queryByText(/User 11111111/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/11111111-aaaa/)).not.toBeInTheDocument();
+  });
+
+  it("shows no actor for a closed row that has no resolver recorded", () => {
+    render(
+      <ExceptionsPanel
+        exceptions={[{ ...RESOLVED_EXCEPTION, resolutionNote: "Matched manually", resolvedBy: null, resolvedAt: "2026-07-02T00:00:00.000Z" }]}
+      />,
+    );
+    expect(screen.queryByText(/User /)).not.toBeInTheDocument();
+    expect(screen.getByText(/02\/07\/2026|02 Jul 2026/)).toBeInTheDocument();
   });
 
   // GAP-FINANCE-RECONCILIATION-03 / DETAIL-05

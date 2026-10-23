@@ -3,6 +3,7 @@
 import type React from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatDateTimeIST } from "@/lib/formatters";
 import { EscalationActions } from "./EscalationActions";
 
 export type EscalationRow = {
@@ -77,7 +78,7 @@ export function EscalationsTable({ rows, source = "api", canAct = false }: { row
 
   const cacheNote =
     offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — you're offline" : ""}.`
+      ? `Showing saved data${cachedAt ? ` from ${formatDateTimeIST(cachedAt)}` : ""}${offline ? " — you're offline" : ""}.`
       : null;
 
   // GAP-PROJECTS-ESCALATIONS-02: the Actions column (Acknowledge / Reassign /

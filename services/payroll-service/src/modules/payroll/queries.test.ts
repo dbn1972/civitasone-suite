@@ -230,3 +230,76 @@ describe("getRunDetail attaches readiness issue codes to each slip", () => {
     expect(JSON.stringify(detail)).not.toMatch(/\b[A-Z]{5}\d{4}[A-Z]\b/);
   });
 });
+
+// GAP-PAYROLL-RUNS-01: the runs payload carries exact integer-paise twins of every rupee float
+// -- run-level (list + detail) AND per slip -- and a contract guard fails if any is not an integer.
+describe("GAP-PAYROLL-RUNS-01 — exact integer-paise money on the runs payloads", () => {
+  const INTEGER_STRING = /^-?\d+$/;
+
+  beforeEach(() => {
+    listRunsByTenant.mockReset();
+    aggregateSlipsByRunIds.mockReset();
+    findRunById.mockReset();
+    listSlipsByRun.mockReset();
+    fetchPayrollReadiness.mockReset();
+    fetchPayrollReadiness.mockResolvedValue(new Map());
+  });
+
+  it("listRuns: grossMinor / netMinor / deductionsMinor are the exact aggregate paise as strings", async () => {
+    listRunsByTenant.mockResolvedValue([{ ...baseRun, status: "approved", lastError: null }]);
+    aggregateSlipsByRunIds.mockResolvedValue(new Map([
+      ["run-1", { employeeCount: 3, grossMinor: 15_000_001n, netMinor: 12_345_678n }],
+    ]));
+
+    const [row] = await listRuns("tenant-1", 50);
+
+    expect(row).toMatchObject({ grossMinor: "15000001", netMinor: "12345678", deductionsMinor: "2654323" });
+    // the rupee floats stay (additive contract), derived from the same paise
+    expect(row?.grossAmount).toBe(150000.01);
+    expect(row?.netAmount).toBe(123456.78);
+  });
+
+  it("getRunDetail: run-level and per-slip paise strings are exact and sum consistently", async () => {
+    findRunById.mockResolvedValue({ ...baseRun, status: "processing", lastError: null });
+    listSlipsByRun.mockResolvedValue([
+      { id: "s1", employeeId: "e1", employeeNo: "E1", grossMinor: 10_000_050n, totalDeductionsMinor: 1_000_025n, netPayMinor: 9_000_025n, status: "computed" },
+      { id: "s2", employeeId: "e2", employeeNo: "E2", grossMinor: 5_000_001n, totalDeductionsMinor: 654_298n, netPayMinor: 4_345_703n, status: "computed" },
+    ]);
+
+    const detail = await getRunDetail("run-1", "tenant-1");
+
+    expect(detail).toMatchObject({ grossMinor: "15000051", netMinor: "13345728", deductionsMinor: "1654323" });
+    expect(detail?.salarySlips.map((s) => [s.grossMinor, s.deductionsMinor, s.netMinor])).toEqual([
+      ["10000050", "1000025", "9000025"],
+      ["5000001", "654298", "4345703"],
+    ]);
+    // run total == sum of slip strings, exactly (BigInt)
+    const sum = (k: "grossMinor" | "deductionsMinor" | "netMinor") =>
+      detail!.salarySlips.reduce((a, s) => a + BigInt(s[k]), 0n);
+    expect(sum("grossMinor")).toBe(BigInt(detail!.grossMinor));
+    expect(sum("netMinor")).toBe(BigInt(detail!.netMinor));
+  });
+
+  it("CONTRACT: no money *Minor field on the list or detail payload is ever non-integer", async () => {
+    listRunsByTenant.mockResolvedValue([{ ...baseRun, status: "approved", lastError: null }]);
+    aggregateSlipsByRunIds.mockResolvedValue(new Map([["run-1", { employeeCount: 1, grossMinor: 9_007_199_254_740_993n, netMinor: 1n }]]));
+    findRunById.mockResolvedValue({ ...baseRun, status: "approved", lastError: null });
+    listSlipsByRun.mockResolvedValue([
+      { id: "s1", employeeId: "e1", employeeNo: "E1", grossMinor: 9_007_199_254_740_993n, totalDeductionsMinor: 0n, netPayMinor: 9_007_199_254_740_993n, status: "computed" },
+    ]);
+
+    const [row] = await listRuns("tenant-1", 50);
+    const detail = await getRunDetail("run-1", "tenant-1");
+
+    for (const v of [row?.grossMinor, row?.netMinor, row?.deductionsMinor, detail?.grossMinor, detail?.netMinor, detail?.deductionsMinor]) {
+      expect(v).toMatch(INTEGER_STRING);
+    }
+    for (const slip of detail?.salarySlips ?? []) {
+      for (const v of [slip.grossMinor, slip.deductionsMinor, slip.netMinor]) expect(v).toMatch(INTEGER_STRING);
+    }
+    // bigint-safe: the digits beyond 2^53 survive (a float would have rounded to ...992)
+    expect(row?.grossMinor).toBe("9007199254740993");
+    expect(detail?.salarySlips[0]?.grossMinor).toBe("9007199254740993");
+  });
+});
+

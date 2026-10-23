@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import { auditRead } from "../../shared/read-audit.js";
 import * as vendorQueries from "../vendor/queries.js";
 import * as tenderQueries from "../tender/queries.js";
 import * as auctionQueries from "../auction/queries.js";
@@ -32,6 +33,22 @@ export async function procurementGapRoutes(app: FastifyInstance): Promise<void> 
       tenderQueries.listBidEvaluations(ctx.tenantId, q.limit, q.offset),
       tenderQueries.countBidEvaluations(ctx.tenantId),
     ]);
+    // GAP-PROCUREMENT-BID-EVALUATION-06: bid scores are sealed-bid material, so
+    // every read of the register is audited (who, when, how many rows, how many
+    // carried an opened financial envelope -- never the bids themselves). Fails
+    // closed: if the audit event cannot be recorded, nothing is returned.
+    await auditRead(ctx, {
+      action: "bid_evaluations_view",
+      resourceType: "bid_evaluation_register",
+      route: "/v1/procurement/bid-evaluations",
+      resultCount: data.length,
+      details: {
+        total,
+        limit: q.limit,
+        offset: q.offset,
+        financialRevealedCount: data.filter((r) => r.financialScore !== null).length,
+      },
+    });
     return reply.send({ data, meta: pageMeta(q.limit, q.offset, total) });
   });
 

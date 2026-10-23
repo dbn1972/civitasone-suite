@@ -7,6 +7,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import type { GrantUtilization } from "@civitasone/types";
+import { ucStatusLabel } from "@/lib/grants/ucStatus";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Col = {
@@ -70,7 +71,7 @@ export function UtilizationTable({
       label: "Submitted Date",
       render: (row) => (row.submittedDate ? formatIndianDate(row.submittedDate) : "—"),
     },
-    { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
+    { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} label={ucStatusLabel(row.status)} /> },
     {
       key: "id",
       label: "Action",

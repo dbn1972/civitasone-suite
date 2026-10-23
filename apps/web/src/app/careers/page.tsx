@@ -51,14 +51,31 @@ async function getVacancies(): Promise<{ vacancies: Vacancy[]; errored: boolean 
   const base = (process.env.CIVITASONE_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
   const tenantId = process.env.DEMO_TENANT_ID || "00000000-0000-0000-0000-000000000001";
   try {
-    const res = await fetch(`${base}/api/v1/careers/vacancies`, {
-      headers: { "x-tenant-id": tenantId },
-      cache: "no-store",
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return { vacancies: [], errored: true };
-    const json = await res.json();
-    return { vacancies: (json.data || json) as Vacancy[], errored: false };
+    // The API pages its result (max 100 per request) and reports `total`; page to
+    // the end so a tenant with >100 open vacancies is never silently truncated.
+    // MAX_PAGES is a runaway guard, not a cap anyone should hit (50 x 100 = 5,000).
+    const PAGE = 100;
+    const MAX_PAGES = 50;
+    const all: Vacancy[] = [];
+    for (let i = 0; i < MAX_PAGES; i++) {
+      // The first request carries no query (server default = first 100); only a
+      // tenant with more than one page ever asks for further offsets.
+      const qs = i === 0 ? "" : `?limit=${PAGE}&offset=${i * PAGE}`;
+      const res = await fetch(`${base}/api/v1/careers/vacancies${qs}`, {
+        headers: { "x-tenant-id": tenantId },
+        cache: "no-store",
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return { vacancies: [], errored: true };
+      const json = await res.json();
+      const batch = (json.data || json) as Vacancy[];
+      all.push(...batch);
+      const total = typeof json.total === "number" ? json.total : null;
+      // Legacy/unpaged response (no total): a single page is everything.
+      // A failed page already returned { errored: true } above; this is only the loop terminator.
+      if (total === null || batch.length === 0 || all.length >= total) break; // ux-001-ok: pagination terminator, not an empty render
+    }
+    return { vacancies: all, errored: false };
   } catch {
     return { vacancies: [], errored: true };
   }

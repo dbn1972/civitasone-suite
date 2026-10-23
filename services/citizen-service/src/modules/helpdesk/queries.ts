@@ -2,7 +2,7 @@ import type { HelpdeskTicketStatus, HelpdeskTicketSummary, TicketDetail } from "
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { TicketRow } from "./schema.js";
-import { computeSlaStatus, mapPriority, mapStatus } from "./sla.js";
+import { computeSlaStatus, mapPriority, mapStatus, periodStart, type ReportPeriod } from "./sla.js";
 
 function mapTicketStatus(status: string): HelpdeskTicketStatus {
   const s = status.toLowerCase();
@@ -51,7 +51,8 @@ function toDetail(row: TicketRow, notes: Awaited<ReturnType<typeof repo.listNote
     ticketNo: row.ticketNo ?? row.id.slice(0, 8).toUpperCase(),
     subject: row.subject,
     description: row.description,
-    requesterName: row.citizenId.slice(0, 8),
+    // Real requester name when the intake recorded one; else a short id.
+    requesterName: row.requesterName ?? row.citizenId.slice(0, 8),
     ...(row.assigneeId ? { assignedTo: row.assigneeId } : {}),
     priority: mapPriority(row.priority),
     slaStatus,
@@ -158,13 +159,16 @@ export async function getSlaRules(tenantId: string): Promise<Array<{ queue: stri
   ];
 }
 
-export async function getTicketAnalytics(tenantId: string) {
-  const counts = await repo.countTicketsByStatus(tenantId);
+export async function getTicketAnalytics(tenantId: string, period?: ReportPeriod) {
+  // No period => all-time (legacy behaviour); otherwise only tickets created
+  // on/after the start of the requested reporting period.
+  const since = period ? periodStart(period) : undefined;
+  const counts = await repo.countTicketsByStatus(tenantId, since);
   const total = counts.reduce((s, c) => s + c.count, 0);
   const open = counts.filter((c) => c.status === "open" || c.status === "in_progress").reduce((s, c) => s + c.count, 0);
   const resolved = counts.find((c) => c.status === "resolved")?.count ?? 0;
   const closed = counts.find((c) => c.status === "closed")?.count ?? 0;
-  const slaBreachedCount = await repo.countBreachedTickets(tenantId);
+  const slaBreachedCount = await repo.countBreachedTickets(tenantId, since);
   return {
     totalTickets: total,
     openTickets: open,

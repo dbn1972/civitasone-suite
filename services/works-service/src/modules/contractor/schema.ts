@@ -46,6 +46,8 @@ export const contractorRatings = works.table("contractor_ratings", {
   ratedBy:      uuid("rated_by").notNull(),
   ratedAt:      timestamp("rated_at", { withTimezone: true }).notNull().defaultNow(),
   note:         text("note"),
+  /** GAP-WORKS-CONTRACTORS-DETAIL-04: the work this rating is about (optional; validated against work_proposals). */
+  workId:       uuid("work_id"),
 }, (t) => ({
   ratingRange: check("rating_range", sql`${t.rating} >= 1 AND ${t.rating} <= 5`),
 }));

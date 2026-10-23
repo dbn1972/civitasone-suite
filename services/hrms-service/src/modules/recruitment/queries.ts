@@ -64,9 +64,9 @@ export async function listJobOpenings(tenantId: string, limit: number, departmen
 }
 
 /** Public: list open + published vacancies for a tenant (no auth needed). */
-export async function listPublishedVacancies(tenantId: string) {
-  const rows = await repo.listPublishedOpenings(tenantId);
-  return rows.map((r) => ({
+export async function listPublishedVacancies(tenantId: string, limit?: number, offset?: number) {
+  const { rows, total } = await repo.listPublishedOpenings(tenantId, limit, offset);
+  const vacancies = rows.map((r) => ({
     id: r.id,
     title: r.title,
     refNo: r.refNo,
@@ -79,6 +79,7 @@ export async function listPublishedVacancies(tenantId: string) {
     postedAt: r.postedAt ?? undefined,
     closesAt: r.closesAt ?? undefined,
   }));
+  return { vacancies, total };
 }
 
 /** Public: single vacancy detail (must be published + open). */

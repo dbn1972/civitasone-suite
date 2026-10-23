@@ -13,12 +13,14 @@ import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db.js";
 import { form16BulkJobs } from "../src/modules/form16-pdf/schema.js";
 import { payrollStructures, payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import type { MemoryQueue } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
 import { registerForm16BulkConsumers } from "../src/modules/form16-pdf/bulk-consumer.js";
 import { registerTaxConfig } from "../src/modules/tax/engine.js";
+import { renderPdf } from "@civitasone/render";
+import { putObject } from "@civitasone/storage";
 
 // tests/setup-tax-config.ts (global vitest setupFiles) only registers FY
 // 2024-26. This file's fixtures span older FYs too (2018-19..2023-24) —
@@ -87,6 +89,9 @@ const hrmsGate = vi.hoisted(() => {
   };
 });
 
+/** When `message` is set the mocked HRMS call throws it (a per-employee DATA_UNAVAILABLE failure). */
+const hrmsFault = vi.hoisted(() => ({ message: null as string | null }));
+
 async function drainQueue(): Promise<void> {
   await (queue as unknown as MemoryQueue).drain();
 }
@@ -114,6 +119,7 @@ async function waitForJobStatus(app: Awaited<ReturnType<typeof buildApp>>, fy: s
 vi.mock("../src/shared/hrms-client.js", () => ({
   fetchPayrollInput: vi.fn(async () => {
     await hrmsGate.wait();
+    if (hrmsFault.message) throw new Error(hrmsFault.message);
     return { month: "2024-03", employees: [], lopDays: {} };
   }),
   HrmsUnavailableError: class HrmsUnavailableError extends Error {
@@ -298,6 +304,57 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — duplicate", () => {
     expect(res2.statusCode).toBe(409);
     const body = res2.json();
     expect(body.code).toBe("BULK_JOB_IN_PROGRESS");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// A re-run of the same FY (GAP-PAYROLL-FORM16-04): earlier rows stay in place
+// ═══════════════════════════════════════════════════════════════════
+
+describe("form16 bulk jobs — a re-run for an FY that already has an older completed job", () => {
+  const fy = "2017-18";
+  const oldJobId = randomUUID();
+  const newJobId = randomUUID();
+
+  it("bulk-status and bulk-download talk about the NEWEST job, and the in-flight guard sees it", async () => {
+    // Inserted old-first so a bare unordered LIMIT 1 would return the OLD,
+    // completed row (exactly the stale answer the wizard used to be handed).
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(form16BulkJobs).values({
+        id: oldJobId, tenantId: TENANT, fy, status: "completed", storagePrefix: `form16/${TENANT}/${fy}`,
+        createdAt: new Date("2026-01-01T00:00:00Z"), completedAt: new Date("2026-01-01T00:05:00Z"), createdBy: UUID,
+      });
+      await tx.insert(form16BulkJobs).values({
+        id: newJobId, tenantId: TENANT, fy, status: "processing",
+        createdAt: new Date("2026-02-01T00:00:00Z"), createdBy: UUID,
+      });
+    }));
+
+    const app = await buildApp();
+    const status = await app.inject({
+      method: "GET", url: `/v1/payroll/tax/form16/bulk-status?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().data.jobId).toBe(newJobId);
+    expect(status.json().data.status).toBe("processing");
+
+    // The newest job is not finished, so there is nothing to download yet (not the old ZIP).
+    const download = await app.inject({
+      method: "GET", url: `/v1/payroll/tax/form16/bulk-download?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(download.statusCode).toBe(422);
+    expect(download.json().code).toBe("JOB_NOT_COMPLETED");
+
+    // A third generation is refused while the newest is in flight, even though an older row is completed.
+    const again = await app.inject({
+      method: "POST", url: "/v1/payroll/tax/form16/bulk-generate",
+      headers: { authorization: `Bearer ${adminToken()}` }, payload: { fy },
+    });
+    await app.close();
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("BULK_JOB_IN_PROGRESS");
   });
 });
 
@@ -507,5 +564,141 @@ describe("GET /v1/payroll/tax/form16/bulk-download", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(401);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GAP-PAYROLL-FORM16-05: bulk-status never returns raw exception text
+// ═══════════════════════════════════════════════════════════════════
+
+describe("GET /v1/payroll/tax/form16/bulk-status — failure details are user-safe", () => {
+  async function getStatus(fy: string): Promise<{ status: number; body: { data: Record<string, unknown> } }> {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/tax/form16/bulk-status?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    return { status: res.statusCode, body: res.json() };
+  }
+
+  async function generateAndSettle(fy: string): Promise<void> {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/payroll/tax/form16/bulk-generate",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { fy },
+    });
+    expect(res.statusCode).toBe(202);
+    await waitForJobStatus(app, fy, "completed");
+    await app.close();
+  }
+
+  // FYs of their own (no other test in this file creates a job for them), with a tax
+  // configuration registered so buildForm16 can succeed up to the stage under test.
+  const FY_RENDER = "2015-16";
+  const FY_STORAGE = "2014-15";
+  const FY_DATA = "2013-14";
+  const FY_STORED = "2012-13";
+  const FY_CAP = "2011-12";
+  beforeAll(() => {
+    for (const startYear of [2011, 2012, 2013, 2014, 2015]) {
+      registerTaxConfig("new", startYear, MINIMAL_TAX_CONFIG);
+      registerTaxConfig("old", startYear, MINIMAL_TAX_CONFIG);
+    }
+  });
+  afterEach(() => {
+    hrmsFault.message = null;
+  });
+
+  it("a stored entry with raw exception text is projected to { employeeNo, reasonCode } only", async () => {
+    const employeeId = randomUUID();
+    const raw = "connect ECONNREFUSED 10.0.3.7:5432 while reading /srv/keys/signing.p12";
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(form16BulkJobs).values({
+        id: randomUUID(), tenantId: TENANT, fy: FY_STORED, status: "completed", totalEmployees: 3, generated: 0, failed: 3,
+        createdBy: UUID,
+        errorDetails: [
+          { employeeId, employeeNo: "EMP-0109", error: raw, reasonCode: "STORAGE_ERROR" },
+          { employeeId: randomUUID(), employeeNo: "EMP-0110", error: "No PAN on file" },
+          { employeeId: "system", employeeNo: "N/A", error: "database is down", reasonCode: "UNKNOWN" },
+        ],
+      });
+    }));
+
+    const { status, body } = await getStatus(FY_STORED);
+    expect(status).toBe(200);
+    expect(body.data.errorDetails).toEqual([
+      { employeeNo: "EMP-0109", reasonCode: "STORAGE_ERROR" },
+      { employeeNo: "EMP-0110", reasonCode: "UNKNOWN" },
+      { employeeNo: "N/A", reasonCode: "UNKNOWN" },
+    ]);
+    expect(body.data.errorDetailsTotal).toBe(3);
+    const wire = JSON.stringify(body);
+    for (const leaked of [raw, "ECONNREFUSED", "signing.p12", "No PAN on file", "database is down", employeeId, "employeeId"]) {
+      expect(wire).not.toContain(leaked);
+    }
+  });
+
+  it("caps the returned list and reports how many failures were recorded in all", async () => {
+    const stored = Array.from({ length: 130 }, (_, i) => ({
+      employeeId: randomUUID(), employeeNo: `EMP-${String(i).padStart(4, "0")}`, error: "boom", reasonCode: "DATA_UNAVAILABLE",
+    }));
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(form16BulkJobs).values({
+        id: randomUUID(), tenantId: TENANT, fy: FY_CAP, status: "completed", totalEmployees: 130, generated: 0, failed: 130,
+        createdBy: UUID, errorDetails: stored,
+      });
+    }));
+    const { body } = await getStatus(FY_CAP);
+    expect(body.data.errorDetails).toHaveLength(100);
+    expect((body.data.errorDetails as Array<{ employeeNo: string }>)[0]!.employeeNo).toBe("EMP-0000");
+    expect(body.data.errorDetailsTotal).toBe(130);
+  });
+
+  it("a job with no failures reports no details", async () => {
+    const { body } = await getStatus("2021-22");
+    expect(body.data.errorDetails).toBeNull();
+    expect(body.data.errorDetailsTotal).toBe(0);
+  });
+
+  it("the consumer records RENDERER_UNAVAILABLE when the PDF renderer is unavailable, and the raw message stays server-side", async () => {
+    vi.mocked(renderPdf).mockResolvedValueOnce({ buffer: Buffer.alloc(0), pages: 0, mode: "html-only", signed: false } as never);
+    await generateAndSettle(FY_RENDER);
+
+    const { body } = await getStatus(FY_RENDER);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.errorDetails).toEqual([{ employeeNo: "F16BULKTEST01", reasonCode: "RENDERER_UNAVAILABLE" }]);
+    expect(JSON.stringify(body)).not.toContain("Chromium");
+
+    // The operator-only detail is still in the job row.
+    const [row] = await runWithTenant(TENANT, () => db.transaction((tx) =>
+      tx.select().from(form16BulkJobs).where(and(eq(form16BulkJobs.tenantId, TENANT), eq(form16BulkJobs.fy, FY_RENDER)))));
+    expect(row).toBeDefined();
+    expect(JSON.stringify(row!.errorDetails)).toContain("Chromium");
+  });
+
+  it("the consumer records STORAGE_ERROR when the upload fails, without echoing the storage error", async () => {
+    vi.mocked(putObject).mockRejectedValueOnce(new Error("AccessDenied: arn:aws:s3:::civitas-form16-prod/form16/tenant-prefix"));
+    await generateAndSettle(FY_STORAGE);
+
+    const { body } = await getStatus(FY_STORAGE);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.errorDetails).toEqual([{ employeeNo: "F16BULKTEST01", reasonCode: "STORAGE_ERROR" }]);
+    const wire = JSON.stringify(body);
+    expect(wire).not.toContain("AccessDenied");
+    expect(wire).not.toContain("arn:aws");
+  });
+
+  it("the consumer records DATA_UNAVAILABLE when the employee's salary data cannot be built", async () => {
+    hrmsFault.message = "HRMS 10.0.4.9:8080 ECONNREFUSED";
+    await generateAndSettle(FY_DATA);
+
+    const { body } = await getStatus(FY_DATA);
+    expect(body.data.failed).toBe(1);
+    expect(body.data.errorDetails).toEqual([{ employeeNo: "F16BULKTEST01", reasonCode: "DATA_UNAVAILABLE" }]);
+    expect(JSON.stringify(body)).not.toContain("ECONNREFUSED");
   });
 });

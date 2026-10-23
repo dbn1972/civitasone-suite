@@ -8,6 +8,7 @@ import * as pfmsRepo from "../pfms/repo.js";
 import { checkBatchSendable } from "../pfms/consumer.js";
 import { isProductionDeployment } from "../pfms/dsc-client.js";
 import * as paymentsRepo from "../payments/repo.js";
+import { normalisePoNumber } from "../payments/domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { pino } from "pino";
 import type { BankFileRow } from "./bank-file-generator.js";
@@ -153,7 +154,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
   /** procurement.grn.accepted → draft vendor bill with PO/GRN refs for 3-way match */
   queue.subscribe(CONSUMED_EVENTS.grnAccepted, async (msg) => {
     const p = msg.payload as {
-      grnId: string; poRef: string; vendorId: string; grossMinor?: string | number;
+      grnId: string; poRef: string; poNo?: string; vendorId: string; grossMinor?: string | number;
       poAmountMinor?: string; grnAmountMinor?: string;
     };
     const billId = randomUUID();
@@ -179,6 +180,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const hasRealPoRef = Boolean(p.poRef) && p.poRef !== "undefined" && p.poRef !== "null";
     const poRef = hasRealPoRef ? (p.poRef.startsWith("procurement_") ? p.poRef : `procurement_po:${p.poRef}`) : undefined;
     const grnRef = `procurement_grn:${p.grnId}`;
+    // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number rides with a real poRef only (never a number without its
+    // link); billCreate normalises it again before it is stored.
+    const poNumber = poRef ? normalisePoNumber(p.poNo) : null;
     // R5: authoritative ordered (PO) and accepted (GRN) values derived in
     // procurement. The vendor bill is drafted for the GRN-accepted value (pay
     // for what was received), falling back to legacy grossMinor when the
@@ -217,6 +221,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
           deductions: [],
           netMinor: minorString(grossBig),
           poRef,
+          ...(poNumber ? { poNumber } : {}),
           grnRef,
           ...(poAmountMinor != null ? { poAmountMinor: poAmountMinor.toString() } : {}),
           ...(grnAmountMinor != null ? { grnAmountMinor: grnAmountMinor.toString() } : {}),

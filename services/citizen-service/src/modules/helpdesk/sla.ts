@@ -42,3 +42,31 @@ export function mapStatus(status: string): "open" | "in_progress" | "pending" | 
   if (s === "pending") return "pending";
   return "open";
 }
+
+export type ReportPeriod = "mtd" | "qtd" | "fy";
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * Start (inclusive, as a UTC instant) of the reporting period containing `now`,
+ * on the Indian calendar: month-to-date from the 1st of the month, quarter-to-date
+ * from the start of the Indian fiscal quarter (Apr/Jul/Oct/Jan), fiscal-year-to-date
+ * from 1 April. Boundaries are midnight IST.
+ */
+export function periodStart(period: ReportPeriod, now = new Date()): Date {
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  const y = ist.getUTCFullYear();
+  const m = ist.getUTCMonth(); // 0-based
+  let sy = y;
+  let sm: number;
+  if (period === "mtd") {
+    sm = m;
+  } else if (period === "fy") {
+    sm = 3;
+    if (m < 3) sy = y - 1;
+  } else {
+    // fiscal quarters start in Apr(3), Jul(6), Oct(9), Jan(0)
+    sm = m >= 9 ? 9 : m >= 6 ? 6 : m >= 3 ? 3 : 0;
+  }
+  return new Date(Date.UTC(sy, sm, 1) - IST_OFFSET_MS);
+}

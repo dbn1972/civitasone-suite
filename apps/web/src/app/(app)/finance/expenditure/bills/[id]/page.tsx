@@ -1,9 +1,11 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
 import { getFinanceBillById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney, formatEntityRef } from "@/lib/formatters";
-import { canWrite, BILL_APPROVE_ROLES } from "@/lib/finance/writeRoles";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { billPoHref, billPoLabel } from "@/lib/finance/billRefs";
+import { canWrite, BILL_APPROVE_ROLES, PAYMENT_RELEASE_ROLES } from "@/lib/finance/writeRoles";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
 import { ScannedDocumentsSection } from "../../../_components/scanned/ScannedDocumentsSection";
 import { BillLineItemsTable } from "./BillLineItemsTable";
@@ -34,6 +36,9 @@ export default async function BillDetailPage(props: { params: Promise<{ id: stri
     );
   }
 
+  const roles = getSessionRoles();
+  const poHref = billPoHref(bill);
+
   return (
     <>
       <PageHeader
@@ -47,7 +52,12 @@ export default async function BillDetailPage(props: { params: Promise<{ id: stri
               id={params.id}
               status={bill.status}
               threeWayMatch={bill.threeWayMatch}
-              canPass={canWrite(getSessionRoles(), BILL_APPROVE_ROLES)}
+              canPass={canWrite(roles, BILL_APPROVE_ROLES)}
+              canRelease={canWrite(roles, PAYMENT_RELEASE_ROLES)}
+              // Maker-checker (GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03): withhold what the server would 409.
+              viewerId={getSessionUserId()}
+              createdBy={bill.createdBy ?? null}
+              passedBy={bill.passedBy ?? null}
             />
           </>
         }
@@ -61,7 +71,7 @@ export default async function BillDetailPage(props: { params: Promise<{ id: stri
 
       <Card title={t("cardTitleDetails")} padding>
         <div className="fields">
-          <div className="field"><span className="label">{t("fieldPoRef")}</span><span>{formatEntityRef(bill.poRef)}</span></div>
+          <div className="field"><span className="label">{t("fieldPoRef")}</span><span>{poHref ? <Link href={poHref}>{billPoLabel(bill)}</Link> : billPoLabel(bill)}</span></div>
           <div className="field"><span className="label">{t("fieldGrnRef")}</span><span>{formatEntityRef(bill.grnRef)}</span></div>
           <div className="field"><span className="label">{t("fieldInvoiceNo")}</span><span>{bill.invoiceNo ?? "—"}</span></div>
           <div className="field"><span className="label">{t("fieldThreeWayMatch")}</span><StatusPill status={bill.threeWayMatch} /></div>

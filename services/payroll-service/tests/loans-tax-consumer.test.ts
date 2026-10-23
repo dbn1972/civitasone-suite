@@ -5,8 +5,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
-const { mockTx, dbTransactionFn, enqueuedMessages, insertLoanMock, updateLoanMock, findLoanByIdTxMock, findLoansByEmployeeTxMock, findLatestGrossMinorForEmployeeTxMock } = vi.hoisted(() => {
-  const _insertMock = vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoUpdate: vi.fn().mockResolvedValue(undefined) }) });
+const { mockTx, dbTransactionFn, enqueuedMessages, insertLoanMock, updateLoanMock, findLoanByIdTxMock, findLoansByEmployeeTxMock, findLatestGrossMinorForEmployeeTxMock, upsertReturningMock } = vi.hoisted(() => {
+  // GAP-PAYROLL-TAX-DECLARATION-05: the declaration upsert is now
+  // `.onConflictDoUpdate({ ..., setWhere }).returning({ id })` -- one row when the
+  // write landed, none when it was blocked because the stored declaration is locked.
+  const _upsertReturningMock = vi.fn().mockResolvedValue([{ id: "decl-1" }]);
+  const _insertMock = vi.fn().mockReturnValue({ values: vi.fn().mockReturnValue({ onConflictDoUpdate: vi.fn().mockReturnValue({ returning: _upsertReturningMock }) }) });
   // BUG-1 (payroll loans EMI cap): consumer.ts now runs
   // `tx.execute(sql\`SELECT pg_advisory_xact_lock(...)\`)` before insertLoan,
   // to serialize the combined-EMI re-check against concurrent createLoan
@@ -17,6 +21,7 @@ const { mockTx, dbTransactionFn, enqueuedMessages, insertLoanMock, updateLoanMoc
   const _enqueuedMessages: Array<{ topic: string; payload: unknown }> = [];
   return {
     mockTx: _mockTx, dbTransactionFn: _dbTransactionFn as any, enqueuedMessages: _enqueuedMessages,
+    upsertReturningMock: _upsertReturningMock,
     insertLoanMock: vi.fn(async () => undefined),
     updateLoanMock: vi.fn(async () => undefined),
     // GAP-PAYROLL-LOANS-02: the disburse consumer now reads via the
@@ -50,7 +55,7 @@ vi.mock("../src/modules/loans/repo.js", () => ({
   findLatestGrossMinorForEmployeeTx: (...a: any[]) => findLatestGrossMinorForEmployeeTxMock(...a),
 }));
 vi.mock("../src/modules/tax/schema.js", () => ({
-  taxDeclarations: { tenantId: "tid", employeeId: "eid", fy: "fy" },
+  taxDeclarations: { tenantId: "tid", employeeId: "eid", fy: "fy", status: "status", id: "id" },
 }));
 
 import { registerLoansConsumers, isUniqueViolation } from "../src/modules/loans/consumer.js";
@@ -210,6 +215,27 @@ describe("taxDeclarationSubmit command", () => {
     // Audit emitted
     const audit = enqueuedMessages.find(m => m.topic === "audit.event.record");
     expect(audit).toBeDefined();
+    expect(audit!.payload).toMatchObject({ action: "submit", resourceType: "tax_declaration", outcome: "success" });
+    await q.stop();
+  });
+
+  // GAP-PAYROLL-TAX-DECLARATION-05: the upsert writes nothing when the stored
+  // declaration is verified / approved (the real-DB suite proves the SQL guard);
+  // the consumer must then NOT report a successful submit.
+  it("a blocked write (locked declaration) is audited as denied, never as a successful submit", async () => {
+    upsertReturningMock.mockResolvedValueOnce([]);
+    const q = new MemoryQueue(); registerTaxConsumers(q); await q.start();
+    const employeeId = randomUUID();
+    await q.publish(COMMANDS.taxDeclarationSubmit, makeMsg(COMMANDS.taxDeclarationSubmit, {
+      id: randomUUID(), tenantId: TENANT, employeeId,
+      fy: "2025-26", regime: "new", section80c: 150000, section80d: 25000,
+      otherDeductions: 0, rentPaidMinor: 240000,
+    }));
+    await settle();
+    const audits = enqueuedMessages.filter(m => m.topic === "audit.event.record");
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.payload).toMatchObject({ action: "submit", outcome: "denied", reason: "DECLARATION_LOCKED", employeeId, fy: "2025-26" });
+    expect(audits.some((a) => (a.payload as { outcome: string }).outcome === "success")).toBe(false);
     await q.stop();
   });
 });

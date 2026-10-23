@@ -56,14 +56,15 @@ describe("AaDetailPage", () => {
     );
     expect(screen.getAllByText("AA/2026-27/001").length).toBeGreaterThan(0);
     // Work renders as a link with the full id in a tooltip, not bare text.
-    const workLink = screen.getByRole("link", { name: /123e4567…/ });
+    const workLink = screen.getByRole("link", { name: "ID 123e4567…" });
     expect(workLink).toHaveAttribute("title", RECORD.workId);
+    expect(screen.getByText(/^Unknown officer \(/)).toHaveAttribute("title", RECORD.approvingAuthorityId);
   });
 
   it("resolves the work number (linked to the proposal) and the officer NAME web-side (GAP-WORKS-APPROVALS-DETAIL-03)", async () => {
     fetchJsonMock.mockImplementation(async (url: string) => {
       if (url.includes("/works/proposals/")) return { data: { workNumber: "WK-2026-0042", description: "Canal" }, source: "api" };
-      if (url.includes("/identity/users")) return { data: { [RECORD.approvingAuthorityId]: "Superintending Engineer" }, source: "api" };
+      if (url.includes("/identity/users/directory")) return { data: [[RECORD.approvingAuthorityId, "Superintending Engineer"]], source: "api" };
       return { data: RECORD, source: "api" };
     });
     const ui = await AaDetailPage({ params: Promise.resolve({ id: "x-1" }) });

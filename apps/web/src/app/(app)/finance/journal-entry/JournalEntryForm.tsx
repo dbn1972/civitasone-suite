@@ -1,7 +1,7 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
@@ -131,6 +131,17 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-FINANCE-JOURNAL-ENTRY-06 / VOUCHERS-NEW-05/06: the id of the input to focus once a server refusal tied to that field
+  // closes the confirm dialog. Focus cannot move in the same tick as the close: the page behind an open Modal is `inert`
+  // (a browser ignores focus() on it) and Modal restores focus to the button that opened it when it unmounts. This effect
+  // runs after both of those are undone.
+  const focusAfterClose = useRef<string | null>(null);
+  useEffect(() => {
+    if (confirmOpen || !focusAfterClose.current) return;
+    const id = focusAfterClose.current;
+    focusAfterClose.current = null;
+    document.getElementById(id)?.focus();
+  }, [confirmOpen]);
   // GAP-FINANCE-VOUCHERS-NEW-02: after a successful post with a redirectTo the
   // clerk stays on a success panel (no instant hard navigation) and chooses
   // between viewing the GL and posting another voucher.
@@ -289,7 +300,19 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     const resolved = await formError.fromResponse(res, "save");
     setStatus("error");
     setMessage(resolved.message);
-    // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06 and GAP-FINANCE-JOURNAL-ENTRY-06: a refusal tied to a field of THIS
+    // form (the voucher number is already used, the posting date is in a closed period) is fixed in that field. Close
+    // the confirm dialog so the message under the field is visible, keep everything the officer typed, and move focus
+    // there once the dialog is gone (see focusAfterClose). Nothing was queued or posted (the server refuses before
+    // enqueueing), so there is no redirect and no success panel, and the same idempotency key is safe to reuse for the
+    // corrected submit.
+    const fieldToFix = resolved.fieldErrors.voucherNo ? "jv-voucher" : resolved.fieldErrors.postingDate ? "jv-date" : null;
+    if (fieldToFix) {
+      focusAfterClose.current = fieldToFix;
+      setConfirmOpen(false);
+      return;
+    }
+    // Any other failure is shown inside the dialog by throwing for ConfirmDialog's busy/error flow.
     throw UserFacingError.from(resolved);
   }
 
@@ -361,14 +384,14 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             maxLength={VOUCHER_NO_MAX}
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
-            aria-invalid={errors.voucherNo ? true : undefined}
-            aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
+            aria-invalid={errors.voucherNo || formError.fieldError("voucherNo") ? true : undefined}
+            aria-describedby={errors.voucherNo ? "jv-voucher-err" : formError.fieldError("voucherNo") ? "jv-voucher-srv-err" : undefined}
           />
           <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block", marginTop: 2 }}>
             Optional. If left blank, a gapless voucher number is allocated when the entry is approved.
           </span>
           {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
-          {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
+          {formError.fieldError("voucherNo") && <span id="jv-voucher-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
         </div>
         <div className="field">
           <label className="label" htmlFor="jv-date">Posting Date</label>
@@ -378,8 +401,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             type="date"
             value={postingDate}
             onChange={(e) => setPostingDate(e.target.value)}
-            aria-invalid={errors.postingDate ? true : undefined}
-            aria-describedby={errors.postingDate ? "jv-date-err" : undefined}
+            aria-invalid={errors.postingDate || formError.fieldError("postingDate") ? true : undefined}
+            aria-describedby={errors.postingDate ? "jv-date-err" : formError.fieldError("postingDate") ? "jv-date-srv-err" : undefined}
           />
           {dateCheck && !errors.postingDate && (
             <span
@@ -397,7 +420,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             </span>
           )}
           {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
-          {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
+          {formError.fieldError("postingDate") && <span id="jv-date-srv-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
         </div>
       </div>
 

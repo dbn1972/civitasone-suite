@@ -6,16 +6,8 @@ import { currentFinancialYear } from "@/lib/fiscalYear";
 import { useFormError } from "@/lib/useFormError";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
+import { AMOUNT_FIELD_MAP, parseTaxDeclarationResponse, type AmountField } from "@/lib/payroll/taxDeclaration";
 import { Button, ConfirmDialog, StatusPill, Field, Input } from "../../../../_components/ds";
-
-type AmountField =
-  | "section80c"
-  | "section80d"
-  | "otherDeductions"
-  | "rentPaid"
-  | "prevEmployerSalary"
-  | "otherSourcesIncome"
-  | "perquisites";
 
 /**
  * Parse a clerk-entered rupees string into a non-negative paise integer.
@@ -46,6 +38,15 @@ type Limits = { sec80cCapMinor: number | null; sec80dCapMinor: number | null; la
 
 /** GAP-PAYROLL-TAX-DECLARATION-05: GET /v1/payroll/tax-declarations/window. */
 type WindowInfo = { open: boolean; state: "open" | "not_open" | "closed"; opensOn: string | null; closesOn: string | null };
+
+/**
+ * GAP-PAYROLL-TAX-DECLARATION-05: statuses payroll sets once it has relied on a
+ * declaration. A declaration in one of them renders read-only. Mirrors
+ * payroll-service tax/declaration-lock.ts (which refuses the write with 409
+ * DECLARATION_LOCKED); the service never sets either status yet, so this is inert
+ * until a verification step exists.
+ */
+const LOCKED_STATUSES: readonly string[] = ["verified", "approved"];
 
 function toCapMinor(v: unknown): number | null {
   return typeof v === "string" && /^\d+$/.test(v) && Number.isSafeInteger(Number(v)) ? Number(v) : null;
@@ -96,6 +97,12 @@ export function TaxDeclarationForm() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<Record<AmountField, number> | null>(null);
 
+  // GAP-PAYROLL-TAX-DECLARATION-05: the whole form (inputs, regime radios, submit)
+  // is read-only for a verified/approved declaration or a closed window.
+  const locked = hasExisting && !loadFailed && existingStatus !== null && LOCKED_STATUSES.includes(existingStatus);
+  const windowClosed = windowInfo !== null && !windowInfo.open;
+  const readOnly = locked || windowClosed;
+
   const regimeNewId = useId();
   const regimeOldId = useId();
   const s80cId = useId();
@@ -115,26 +122,35 @@ export function TaxDeclarationForm() {
       try {
         const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}`, { signal });
         if (res.ok) {
-          const data = await res.json();
-          if (data) {
-            setRegime(data.regime === "old" ? "old" : "new");
-            setSection80c(formatPaiseForInput(data.section80c));
-            setSection80d(formatPaiseForInput(data.section80d));
-            setOtherDeductions(formatPaiseForInput(data.otherDeductions));
-            setRentPaid(formatPaiseForInput(data.rentPaidMinor));
-            setPrevEmployerSalary(formatPaiseForInput(data.prevEmployerSalaryMinor));
-            setOtherSourcesIncome(formatPaiseForInput(data.otherSourcesIncomeMinor));
-            setPerquisites(formatPaiseForInput(data.perquisitesMinor));
+          // GAP-PAYROLL-TAX-DECLARATION-03: the body is unwrapped (root or { data })
+          // and validated. Anything that is not a declaration (or "none") is a FAILED
+          // load -- banner + disabled submit -- never a form of silent blanks that the
+          // next save would write over the stored declaration.
+          const parsed = parseTaxDeclarationResponse(await res.json());
+          if (parsed.kind === "ok") {
+            const d = parsed.declaration;
+            const byApiName = d as unknown as Record<string, unknown>;
+            const prefill = (f: AmountField) => formatPaiseForInput(byApiName[AMOUNT_FIELD_MAP[f]]);
+            setRegime(d.regime);
+            setSection80c(prefill("section80c"));
+            setSection80d(prefill("section80d"));
+            setOtherDeductions(prefill("otherDeductions"));
+            setRentPaid(prefill("rentPaid"));
+            setPrevEmployerSalary(prefill("prevEmployerSalary"));
+            setOtherSourcesIncome(prefill("otherSourcesIncome"));
+            setPerquisites(prefill("perquisites"));
             setHasExisting(true);
-            setExistingStatus(typeof data.status === "string" ? data.status : null);
-            setFiledAt(typeof data.createdAt === "string" ? data.createdAt : null);
-            setUpdatedAt(typeof data.updatedAt === "string" ? data.updatedAt : null);
-            setLandlordName(typeof data.landlordName === "string" ? data.landlordName : "");
-            setLandlordPanMasked(typeof data.landlordPanMasked === "string" ? data.landlordPanMasked : null);
-          } else {
+            setExistingStatus(d.status ?? null);
+            setFiledAt(d.createdAt ?? null);
+            setUpdatedAt(d.updatedAt ?? null);
+            setLandlordName(d.landlordName ?? "");
+            setLandlordPanMasked(d.landlordPanMasked ?? null);
+          } else if (parsed.kind === "none") {
             setHasExisting(false);
             setExistingStatus(null);
             setFiledAt(null);
+          } else {
+            setLoadFailed(true);
           }
         } else {
           setLoadFailed(true);
@@ -217,6 +233,7 @@ export function TaxDeclarationForm() {
   }
 
   async function performSubmit(parsed: Record<AmountField, number>) {
+    if (readOnly) return;
     setMessage(null);
     setBusy(true);
 
@@ -227,13 +244,15 @@ export function TaxDeclarationForm() {
         body: JSON.stringify({
           fy,
           regime,
-          section80c: parsed.section80c,
-          section80d: parsed.section80d,
-          otherDeductions: parsed.otherDeductions,
-          rentPaidMinor: parsed.rentPaid,
-          prevEmployerSalaryMinor: parsed.prevEmployerSalary || undefined,
-          otherSourcesIncomeMinor: parsed.otherSourcesIncome || undefined,
-          perquisitesMinor: parsed.perquisites || undefined,
+          // Amount names come from the one FIELD_MAP (all paise); the three optional
+          // ones are omitted when nothing is declared (0 -> undefined), as before.
+          [AMOUNT_FIELD_MAP.section80c]: parsed.section80c,
+          [AMOUNT_FIELD_MAP.section80d]: parsed.section80d,
+          [AMOUNT_FIELD_MAP.otherDeductions]: parsed.otherDeductions,
+          [AMOUNT_FIELD_MAP.rentPaid]: parsed.rentPaid,
+          [AMOUNT_FIELD_MAP.prevEmployerSalary]: parsed.prevEmployerSalary || undefined,
+          [AMOUNT_FIELD_MAP.otherSourcesIncome]: parsed.otherSourcesIncome || undefined,
+          [AMOUNT_FIELD_MAP.perquisites]: parsed.perquisites || undefined,
           // GAP-PAYROLL-TAX-DECLARATION-02: blank PAN/name = keep what is on file.
           landlordName: landlordName.trim() || undefined,
           landlordPan: landlordPan.trim() ? landlordPan.trim().toUpperCase() : undefined,
@@ -263,6 +282,8 @@ export function TaxDeclarationForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    // The controls are disabled; this is the defence-in-depth for a programmatic submit.
+    if (readOnly) return;
 
     const parsed = validateAmounts();
     if (!parsed) {
@@ -341,7 +362,6 @@ export function TaxDeclarationForm() {
   }
 
   const regimeDisablesDeductions = regime === "new";
-  const windowClosed = windowInfo !== null && !windowInfo.open;
   const showLandlord = regime === "old" && (parseRupeesToPaise(rentPaid) ?? 0) > (limits?.landlordPanRentThresholdMinor ?? DEFAULT_LANDLORD_PAN_RENT_THRESHOLD_MINOR);
 
   return (
@@ -378,6 +398,11 @@ export function TaxDeclarationForm() {
       </div>
     )}
 
+    {/* GAP-PAYROLL-TAX-DECLARATION-05: verified / approved => read-only. */}
+    {locked && (
+      <p role="status" className="pill info" style={{ marginBottom: 16, width: "fit-content" }}>{t("lockedNotice")}</p>
+    )}
+
     {/*
       noValidate: min/step below are still useful hints (native spinner
       increments) but must not silently block submission via the browser's
@@ -389,7 +414,8 @@ export function TaxDeclarationForm() {
       <div className="card-h">
         <h3>{t("formHeading", { fy })}</h3>
       </div>
-      <div className="pad" style={{ display: "grid", gap: 16 }}>
+      {/* A disabled fieldset disables every control inside it (radios, amounts, landlord, submit). */}
+      <fieldset disabled={readOnly} className="pad" style={{ display: "grid", gap: 16, border: "none", margin: 0, minWidth: 0 }}>
         {/* Regime Selection */}
         <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
           <legend style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("regimeLegend")}</legend>
@@ -528,7 +554,7 @@ export function TaxDeclarationForm() {
         )}
 
         <div>
-          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || loadFailed || windowClosed}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || loadFailed || readOnly}>
             {busy ? t("submittingBtn") : t("submitBtn")}
           </Button>
         </div>
@@ -545,7 +571,7 @@ export function TaxDeclarationForm() {
         <p style={{ fontSize: 12, color: "var(--ink2)" }}>
           {t("proofsNote")}
         </p>
-      </div>
+      </fieldset>
     </form>
 
     <ConfirmDialog

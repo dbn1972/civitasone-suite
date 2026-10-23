@@ -126,11 +126,12 @@ describe("CreatePOForm — NEW-03 server-side search + load failure handling", (
     fireEvent.focus(screen.getByLabelText("Vendor *"));
     expect(await screen.findByText("Couldn’t load vendors.")).toBeInTheDocument();
     expect(screen.queryByText("No vendors match your search.")).not.toBeInTheDocument();
-    // A failed picker blocks submit.
-    expect(screen.getByRole("button", { name: "Create PO" })).toBeDisabled();
+    // A failed picker blocks submit. The search state reaches the form from an effect AFTER the
+    // error text renders, so wait for the button to reflect it rather than asserting synchronously.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create PO" })).toBeDisabled());
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("option", { name: /Acme Supplies/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create PO" })).not.toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create PO" })).not.toBeDisabled());
   });
 
   it("shows the empty copy when no approved indent matches", async () => {

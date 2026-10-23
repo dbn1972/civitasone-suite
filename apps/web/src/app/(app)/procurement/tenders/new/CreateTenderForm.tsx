@@ -229,20 +229,20 @@ export function CreateTenderForm() {
             EMD exempt (MSE / Startup)
           </label>
           {emdExempt ? (
-            <input className="inp" placeholder="Exemption reason" value={emdExemptReason} onChange={(e) => setEmdExemptReason(e.target.value)} maxLength={200} style={{ minHeight: 40, marginTop: 6 }} />
+            <input className="inp" aria-label="EMD exemption reason" placeholder="Exemption reason" value={emdExemptReason} onChange={(e) => setEmdExemptReason(e.target.value)} maxLength={200} style={{ minHeight: 40, marginTop: 6 }} />
           ) : null}
         </div>
 
         {/* GAP-PROCUREMENT-TENDERS-NEW-02: single-source justification. */}
         {type === "single_source" ? (
           <div className="field" style={{ gridColumn: "1 / -1", ...fieldStyle, borderInlineStart: "3px solid var(--warn)" }}>
-            <span className="label">Single-source justification (GFR Rule 166) *</span>
-            <select value={justificationCategory} onChange={(e) => setJustificationCategory(e.target.value)} style={{ minHeight: 44, marginBottom: 8 }}>
+            <label className="label" htmlFor="t-sj-cat">Single-source justification (GFR Rule 166) *</label>
+            <select id="t-sj-cat" value={justificationCategory} onChange={(e) => setJustificationCategory(e.target.value)} style={{ minHeight: 44, marginBottom: 8 }}>
               <option value="">Select a category…</option>
               {JUSTIFICATION_CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
-            <textarea className="inp" rows={2} placeholder="Reason this must be single-source (min 10 characters)" value={justification} maxLength={2000} onChange={(e) => setJustification(e.target.value)} />
-            <input className="inp" placeholder="Approving authority" value={approvingAuthority} maxLength={200} onChange={(e) => setApprovingAuthority(e.target.value)} style={{ minHeight: 44, marginTop: 8 }} />
+            <textarea className="inp" id="t-sj-reason" aria-label="Single-source justification reason" rows={2} placeholder="Reason this must be single-source (min 10 characters)" value={justification} maxLength={2000} onChange={(e) => setJustification(e.target.value)} />
+            <input className="inp" aria-label="Approving authority" placeholder="Approving authority" value={approvingAuthority} maxLength={200} onChange={(e) => setApprovingAuthority(e.target.value)} style={{ minHeight: 44, marginTop: 8 }} />
           </div>
         ) : null}
 

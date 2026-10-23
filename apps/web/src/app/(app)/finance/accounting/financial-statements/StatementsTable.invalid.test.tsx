@@ -12,17 +12,24 @@ function seed(data: unknown) {
   } as never);
 }
 const ROW = (o: Record<string, unknown>) => ({
-  id: "r", head: "Cash", type: "asset", openingBalance: 0, receipts: 0, payments: 0, closingBalance: -1000, ...o,
+  id: "r", head: "Cash", type: "asset", openingBalance: "0", receipts: "0", payments: "0", closingBalance: "-100000", ...o,
 });
 
 describe("StatementsTable invalid figures (GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03)", () => {
   beforeEach(() => vi.mocked(useSeededResource).mockReset());
 
   it("shows a dash and a data-error notice, never a fabricated 0", () => {
-    seed([ROW({ receipts: "1e5", payments: null }), ROW({ id: "r2", head: "Bank", closingBalance: 5 })]);
+    seed([ROW({ receipts: "1e5", payments: null }), ROW({ id: "r2", head: "Bank", closingBalance: "500" })]);
     render(<StatementsTable statements={[]} source="api" />);
     expect(screen.getByRole("alert")).toHaveTextContent(/Data error: 2 figures/);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("a JSON number (a possible rupee float) is unreadable, not read as paise", () => {
+    seed([ROW({ closingBalance: -1000 })]);
+    render(<StatementsTable statements={[]} source="api" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Data error: 1 figure /);
+    expect(screen.queryByText("₹10.00")).not.toBeInTheDocument();
   });
 
   it("a clean ledger shows no data-error notice", () => {

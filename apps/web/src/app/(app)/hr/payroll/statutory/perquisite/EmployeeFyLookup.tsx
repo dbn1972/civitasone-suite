@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, Card, EntityPicker } from "../../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { recentFinancialYears } from "@/lib/fiscalYear";
+import { isValidFy } from "@/lib/validators/fy";
 
 /**
  * GAP-PAYROLL-STATUTORY-PERQUISITE-05: employeeId used to be a pasted raw
@@ -31,6 +32,13 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
     e.preventDefault();
     if (!empId) {
       setError(t("requiredError"));
+      return;
+    }
+    // GAP-PAYROLL-STATUTORY-PERQUISITE-05: defence in depth -- the select only offers
+    // well-formed years, but a value that is not a real financial year (YYYY-YY with
+    // the suffix = start year + 1) must never reach the URL.
+    if (!isValidFy(fyValue)) {
+      setError(t("fyInvalidError"));
       return;
     }
     setError(null);

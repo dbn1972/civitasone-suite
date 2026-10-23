@@ -73,8 +73,9 @@ export function RaiseRequestForm({
       }
       // GAP-HELPDESK-CATALOGUE-DETAIL-03: confirm the submission with a toast,
       // including a short reference when the response carries one.
-      const payload = (await res.json().catch(() => null)) as { data?: { id?: unknown } } | null;
-      const newId = payload && payload.data && typeof payload.data.id === "string" ? payload.data.id : null;
+      const payload = (await res.json().catch(() => null)) as { data?: { requestId?: unknown } } | null;
+      // helpdesk-service answers 202 { data: { requestId, ticketId, ... } }.
+      const newId = payload && payload.data && typeof payload.data.requestId === "string" ? payload.data.requestId : null;
       toast.success(
         newId
           ? `Request submitted (ref ${newId.slice(0, 8).toUpperCase()}). Track it under My Requests.`

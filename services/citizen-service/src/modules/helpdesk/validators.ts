@@ -11,6 +11,8 @@ export const createTicketBody = z.object({
   priority:    z.enum(["low", "medium", "high", "critical"]).optional(),
   category:    safeText({ max: 64 }).optional(),
   channel:     z.enum(["web", "email", "phone", "walk_in"]).optional(),
+  // Reporter's name, kept as its own field (not folded into the description).
+  requesterName: safeText({ max: 200 }).optional(),
 });
 export type CreateTicketBody = z.infer<typeof createTicketBody>;
 

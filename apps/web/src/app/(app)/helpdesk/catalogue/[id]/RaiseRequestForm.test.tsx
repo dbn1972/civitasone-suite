@@ -38,7 +38,14 @@ describe("RaiseRequestForm (GAP-HELPDESK-CATALOGUE-DETAIL-02/03/05)", () => {
 
   it("shows a success toast with reference on successful POST (DETAIL-03)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ data: { id: "aaaabbbb-cccc-1111-2222-333344445555" } }), { status: 201 }),
+      // REAL helpdesk-service 202 shape (catalogue/routes.ts): data.requestId, never data.id.
+      new Response(JSON.stringify({ data: {
+        requestId: "aaaabbbb-cccc-1111-2222-333344445555",
+        ticketId: "99990000-cccc-1111-2222-333344445555",
+        status: "pending_approval",
+        currentStage: null,
+        correlationId: "corr-1",
+      } }), { status: 202 }),
     );
     render(<RaiseRequestForm offeringId="o1" schema={schema} defaultPriority="Medium" />);
     fireEvent.change(screen.getByLabelText(/summary/i), { target: { value: "Need access" } });

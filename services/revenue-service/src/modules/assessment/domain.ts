@@ -10,9 +10,51 @@ export { DomainError, assertMakerChecker };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+export type DcbEntryType = "demand" | "collection" | "refund" | "adjustment" | "write_off" | "waiver";
+
 export interface DcbEntry {
-  entryType: "demand" | "collection" | "refund" | "adjustment" | "write_off";
+  entryType: DcbEntryType;
   amountMinor: bigint;
+  /**
+   * Needed only to tell the two legs of an `adjustment` apart (the credit leg
+   * is written with a narration starting "Adjustment credit"). Optional so
+   * every other entry type classifies from `entryType` alone.
+   */
+  narration?: string | null;
+}
+
+/**
+ * Signed effect of ONE ledger entry on the outstanding balance (positive
+ * RAISES what is owed, negative reduces it), classified by entry type:
+ *   - demand        raises the balance
+ *   - refund        raises the balance (money returned to the payer re-opens
+ *                   the liability the collection had cleared)
+ *   - collection    reduces it
+ *   - write_off     reduces it
+ *   - waiver        reduces it
+ *   - adjustment    TWO legs of equal amount: the credit leg (target demand)
+ *                   raises, the debit leg (source demand) reduces. The leg is
+ *                   identified by the narration the writer stamps on it;
+ *                   anything not marked as a credit is the debit leg.
+ * Unknown types fall back to the historical behaviour (reduce).
+ */
+export function dcbBalanceEffect(entry: {
+  entryType: string;
+  amountMinor: bigint;
+  narration?: string | null;
+}): bigint {
+  switch (entry.entryType) {
+    case "demand":
+      return entry.amountMinor;
+    case "refund":
+      // Always raises the balance. The consumer writes a positive amount; a
+      // negative-signed refund (older fixtures/imports) means the same thing.
+      return entry.amountMinor < 0n ? -entry.amountMinor : entry.amountMinor;
+    case "adjustment":
+      return (entry.narration ?? "").startsWith("Adjustment credit") ? entry.amountMinor : -entry.amountMinor;
+    default:
+      return -entry.amountMinor;
+  }
 }
 
 export interface DcbSummary {
@@ -35,8 +77,11 @@ export function computeDcbSummary(entries: DcbEntry[]): DcbSummary {
     if (entry.entryType === "demand") {
       totalDemand += entry.amountMinor;
     } else {
-      // collection, refund (negative refund adds back), adjustment, write_off
-      totalCollection += entry.amountMinor;
+      // Every other entry is a balance movement; collected is the NET of the
+      // balance-reducing flows (collection/write_off/waiver/adjustment debit)
+      // less the balance-raising ones (refund, adjustment credit), so a refund
+      // lifts the balance and an adjustment's two equal legs net to zero.
+      totalCollection -= dcbBalanceEffect(entry);
     }
   }
 
@@ -59,12 +104,13 @@ export function assertPaymentNotExceedBalance(paymentMinor: bigint, balanceMinor
 /**
  * Compute running balance after a new entry.
  */
-export function computeNewBalance(currentBalance: bigint, entryType: string, amount: bigint): bigint {
-  if (entryType === "demand") {
-    return currentBalance + amount;
-  }
-  // collection, write_off, adjustment reduce balance
-  return currentBalance - amount;
+export function computeNewBalance(
+  currentBalance: bigint,
+  entryType: string,
+  amount: bigint,
+  narration: string | null = null,
+): bigint {
+  return currentBalance + dcbBalanceEffect({ entryType, amountMinor: amount, narration });
 }
 
 /**

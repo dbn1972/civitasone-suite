@@ -61,7 +61,7 @@ export default async function EstabDashboardPage() {
       />
       <StatGrid>
         {/* GAP-ESTAB-DASHBOARD-02: the service counts status='active' here, exactly what the File Register's "Active Files" tile counts, so the two tiles carry the same name and the same number. */}
-        <StatCard icon="📁" tone="info" href="/estab/list" hint={t("dashActiveFilesHint")} label={t("dashActiveFiles")} value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
+        <StatCard icon="📁" tone="info" href="/estab/list" hint={t("dashActiveFilesHint")} label={t("dashActiveFiles")} value={errored ? "—" : data.filesActive.toLocaleString("en-IN")} />
         <StatCard icon="⏱" tone="bad" href="/estab/inbox" hint={t("dashSlaHint")} label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
         <StatCard icon="📬" tone="info" href="/estab/dak" label="DAK Pending" value={errored ? "—" : data.dakPending.toLocaleString("en-IN")} />
         <StatCard icon="📊" tone="warn" hint={t("dashAvgPendencyHint")} label="Avg Pendency (days)" value={errored ? "—" : formatDays(data.avgPendencyDays)} />
@@ -112,15 +112,14 @@ export default async function EstabDashboardPage() {
               <h3>Pendency snapshot</h3>
             </div>
             <div className="fields pad">
-              <div className="fld"><div className="l">{t("dashActiveFilesSnapshot")}</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
-              <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{errored ? "—" : data.dakPending}</div></div>
-              <div className="fld"><div className="l">SLA breached</div><div className="v">{errored ? "—" : data.slaBreached}</div></div>
-              {/* GAP-ESTAB-DASHBOARD-05: this row previously repeated the
-                  "Avg pendency" stat tile verbatim. Replaced with the
-                  vehiclesInUse figure, which the dashboard already loads but
-                  was never displayed anywhere, so the snapshot no longer
-                  duplicates a tile and no loaded field is silently dropped. */}
-              <div className="fld"><div className="l">Vehicles in use</div><div className="v">{errored ? "—" : data.vehiclesInUse}</div></div>
+              {/* GAP-ESTAB-DASHBOARD-05: every row here is a figure the stat tiles above do NOT
+                  show. The panel used to echo Active files, Unlinked DAK, SLA breached and Avg
+                  pendency verbatim; those live in the tiles only. What it adds: how many files
+                  are open at any stage (the tile counts status Active alone), how long the
+                  oldest one has been open, and the vehicles in use (loaded but never shown). */}
+              <div className="fld"><div className="l">{t("dashSnapshotOpenFiles")}</div><div className="v">{errored ? "—" : data.openFiles.toLocaleString("en-IN")}</div></div>
+              <div className="fld"><div className="l">{t("dashSnapshotOldestOpen")}</div><div className="v">{errored ? "—" : formatDays(data.oldestPendencyDays)}</div></div>
+              <div className="fld"><div className="l">{t("dashSnapshotVehicles")}</div><div className="v">{errored ? "—" : data.vehiclesInUse.toLocaleString("en-IN")}</div></div>
             </div>
           </div>
         </div>

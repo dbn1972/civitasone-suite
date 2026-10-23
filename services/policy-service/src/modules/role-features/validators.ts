@@ -1,14 +1,21 @@
 /** zod validators for role-features commands. */
 import { z } from "zod";
 
+const reason = z.string().trim().min(1).max(500).optional();
+
 export const grantFeatureBody = z.object({
   roleName: z.string().min(1).max(100),
   featureKey: z.string().min(1).max(200),
   granted: z.boolean().default(true),
+  reason,
 });
 export type GrantFeatureBody = z.infer<typeof grantFeatureBody>;
 
 export const roleParam = z.object({ role: z.string().min(1).max(100) });
+/** DELETE body: the audited reason for the revocation (optional for back-compat; persisted when sent). */
+export const revokeFeatureBody = z.object({ reason }).default({});
+export type RevokeFeatureBody = z.infer<typeof revokeFeatureBody>;
+
 export const grantIdParam = z.object({ id: z.string().uuid() });
 
 export const evaluateQuery = z.object({

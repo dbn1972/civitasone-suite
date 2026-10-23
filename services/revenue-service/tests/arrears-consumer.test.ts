@@ -67,6 +67,7 @@ vi.mock("../src/modules/arrears/schema.js", () => ({
 }));
 
 vi.mock("../src/modules/assessment/schema.js", () => ({
+  demands: { tenantId: "tenantId", id: "id", assesseeId: "assesseeId" },
   dcbEntries: { tenantId: "tenantId", assesseeId: "assesseeId", balanceMinor: "balanceMinor", entryType: "entryType", demandId: "demandId", amountMinor: "amountMinor", createdAt: "createdAt" },
 }));
 
@@ -84,6 +85,11 @@ vi.mock("../src/modules/arrears/domain.js", () => ({
     return entries;
   }),
   validateWriteOff: vi.fn(),
+  DomainError: class DomainError extends Error {
+    constructor(public readonly code: string, message: string) {
+      super(message);
+    }
+  },
   validateRecoveryReferral: (outstanding: bigint) => {
     if (outstanding <= 0n) {
       const err = new Error("Recovery referral requires outstanding arrears; this assessee has none");
@@ -103,6 +109,7 @@ vi.mock("../src/modules/arrears/domain.js", () => ({
 vi.mock("drizzle-orm", () => ({
   eq: vi.fn((...args: any[]) => args),
   and: vi.fn((...args: any[]) => args),
+  desc: vi.fn((...args: any[]) => args),
   sql: vi.fn().mockReturnValue("sql"),
 }));
 
@@ -148,7 +155,7 @@ describe("Arrears Consumer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Default: select returns DCB balance row
-    mockSelectWhere.mockReturnValue({ limit: mockSelectLimit });
+    mockSelectWhere.mockReturnValue({ limit: mockSelectLimit, orderBy: vi.fn().mockReturnValue({ limit: mockSelectLimit }) });
     mockSelectLimit.mockResolvedValue([{ total: 400000n }]);
     mockReturning.mockResolvedValue([{ id: "plan-1" }]);
 
@@ -290,7 +297,12 @@ describe("Arrears Consumer", () => {
     });
 
     it("updates the waiver when a DIFFERENT officer decides a pending waiver", async () => {
-      mockSelectLimit.mockResolvedValueOnce([{ requestedBy: "maker-x", status: "pending" }]);
+      mockSelectLimit
+        .mockResolvedValueOnce([
+          { requestedBy: "maker-x", status: "pending", demandId: "d-1", amountMinor: 25000n, waiverType: "penalty" },
+        ])
+        .mockResolvedValueOnce([{ assesseeId: "assessee-1" }]) // demand -> assessee
+        .mockResolvedValueOnce([{ balanceMinor: 100000n }]); // latest demand balance
       const msg = buildMsg({
         payload: { waiverId: "w-1", approve: true },
         actorId: "checker-y",
@@ -299,6 +311,46 @@ describe("Arrears Consumer", () => {
       expect(mockUpdate).toHaveBeenCalledTimes(1);
       const audit = mockEnqueue.mock.calls.find((c) => c[1].topic === "audit.event.record");
       expect(audit![1].payload.outcome).toBe("approved");
+      // Approval writes a balance-reducing `waiver` ledger entry on the demand.
+      expect(mockInsert).toHaveBeenCalledTimes(1);
+      expect(mockValues).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tenantId: "tenant-1",
+          assesseeId: "assessee-1",
+          demandId: "d-1",
+          entryType: "waiver",
+          amountMinor: 25000n,
+          balanceMinor: 75000n,
+          referenceId: "w-1",
+          referenceType: "waiver",
+          createdBy: "checker-y",
+        }),
+      );
+    });
+
+    it("writes NO ledger entry when a different officer REJECTS a pending waiver", async () => {
+      mockSelectLimit.mockResolvedValueOnce([
+        { requestedBy: "maker-x", status: "pending", demandId: "d-1", amountMinor: 25000n, waiverType: "both" },
+      ]);
+      await handlers["revenue.waiver.decide"]!(
+        buildMsg({ payload: { waiverId: "w-1", approve: false }, actorId: "checker-y" }),
+      );
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+      expect(mockInsert).not.toHaveBeenCalled();
+    });
+
+    it("fails (rolls back the approval) when the waiver's demand no longer exists", async () => {
+      mockSelectLimit
+        .mockResolvedValueOnce([
+          { requestedBy: "maker-x", status: "pending", demandId: "d-gone", amountMinor: 25000n, waiverType: "both" },
+        ])
+        .mockResolvedValueOnce([]);
+      await expect(
+        handlers["revenue.waiver.decide"]!(
+          buildMsg({ payload: { waiverId: "w-1", approve: true }, actorId: "checker-y" }),
+        ),
+      ).rejects.toThrow(/not found/i);
+      expect(mockInsert).not.toHaveBeenCalled();
     });
 
     it("does NOT update an already-decided waiver", async () => {

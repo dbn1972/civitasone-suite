@@ -24,9 +24,8 @@ type Channel = "web" | "email" | "phone" | "walk_in";
  * citizen-service's createTicketBody (verified in
  * services/citizen-service/src/modules/helpdesk/validators.ts) already
  * accepts `channel` ("web"|"email"|"phone"|"walk_in"); it does NOT accept a
- * free-text requester name field, so the requester name is recorded in the
- * description preamble rather than invented as a body field the API rejects.
- * DECISION recorded in the batch report.
+ * free-text requester name field at the time; it now does (`requesterName`,
+ * migration 0039), so the name is sent as its own field.
  */
 function toApiPriority(p: Priority): string {
   return p.toLowerCase();
@@ -84,18 +83,16 @@ export function NewTicketForm() {
     setStatus("submitting");
     setMessage("");
 
-    // Record the requester name in the description preamble when supplied —
-    // citizen-service accepts no dedicated requester field (NEW-01 decision).
+    // The reporter's name travels as its own `requesterName` field (stored on the
+    // ticket) rather than being folded into the free-text description.
     const trimmedRequester = requesterName.trim();
-    const finalDescription = trimmedRequester
-      ? `Reported by: ${trimmedRequester}\n\n${description.trim()}`
-      : description.trim();
 
     const body: Record<string, string> = {
       subject: subject.trim(),
-      description: finalDescription,
+      description: description.trim(),
       priority: toApiPriority(priority),
       channel,
+      ...(trimmedRequester ? { requesterName: trimmedRequester } : {}),
     };
 
     try {
@@ -120,10 +117,9 @@ export function NewTicketForm() {
       const ticketNo = payload?.ticketNo;
       const id = payload?.id;
       toast.success(ticketNo ? `Ticket ${ticketNo} submitted.` : "Ticket submitted successfully.");
-      // Deep-link to the new ticket only when the backend returned a real
-      // ticket number (a fully-created ticket); a bare id with no ticketNo
-      // (e.g. a 202 Accepted with the command id only) falls back to the list.
-      router.push(id && ticketNo ? `/helpdesk/tickets/${id}` : "/helpdesk/tickets");
+      // citizen-service answers 202 { id, status, correlationId, data: { id, ticketNo } };
+      // deep-link whenever an id came back, else fall back to the list.
+      router.push(id ? `/helpdesk/tickets/${encodeURIComponent(id)}` : "/helpdesk/tickets");
       router.refresh();
     } catch (caught) {
       setStatus("error");

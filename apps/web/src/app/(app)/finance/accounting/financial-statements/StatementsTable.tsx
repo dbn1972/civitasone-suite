@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState, RefreshErrorState, StatGrid, StatCard } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { balanceSheetTotals, incomeExpenditureTotals, parseRupeesExact } from "./statementTotals";
+import { balanceSheetTotals, incomeExpenditureTotals, parseMinorExact } from "./statementTotals";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
@@ -29,9 +29,9 @@ interface StatementsTableProps {
   source?: "api" | "error";
 }
 
-/** "—" for anything that is not a clean money value (never a fabricated 0). */
+/** "—" for anything that is not a clean paise string (never a fabricated 0). */
 function cellMoney(v: unknown): string {
-  const p = parseRupeesExact(v);
+  const p = parseMinorExact(v);
   return p === null ? "—" : formatMoney(p);
 }
 
@@ -42,7 +42,10 @@ type StatRow = FinancialStatementSummary & Record<string, unknown>;
 export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
-    "finance.financialStatements",
+    // ".v2": the cached shape changed from rupee numbers to paise strings
+    // (GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03); an old-key cache entry
+    // must never be read back as paise.
+    "finance.financialStatements.v2",
     statements,
     source,
     (d) => d.length === 0,
@@ -59,7 +62,7 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
   // Any unreadable figure anywhere: flag it, show "—" in the cell, and withhold
   // totals and the balance verdict that would silently exclude it.
   const badCells = rows.reduce(
-    (n, r) => n + MONEY_FIELDS.filter((f) => parseRupeesExact((r as unknown as Record<string, unknown>)[f]) === null).length,
+    (n, r) => n + MONEY_FIELDS.filter((f) => parseMinorExact((r as unknown as Record<string, unknown>)[f]) === null).length,
     0,
   );
 

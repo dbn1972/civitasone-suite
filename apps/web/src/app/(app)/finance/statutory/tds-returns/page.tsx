@@ -11,6 +11,8 @@ import { canWrite } from "@/lib/finance/writeRoles";
 
 /** finance-service TDS return filing is recorded by these roles (tds/filings-routes.ts FINANCE_ROLES). */
 const TDS_FILING_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+/** finance-service tds/routes.ts: POST /v1/finance/vendor-tds/:id/pan/reveal (audited) is open to these roles only. */
+const TDS_PAN_REVEAL_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 
 /**
  * GAP-FINANCE-STATUTORY-TDS-RETURNS-01: this reads the per-deduction vendor TDS
@@ -60,7 +62,7 @@ export default async function TDSReturnsPage(props: { searchParams?: Promise<{ f
         )}
       </Card>
       <Card title="TDS Deductions">
-        <TDSReturnsTable returns={deductions} source={source === "error" ? "error" : "api"} />
+        <TDSReturnsTable returns={deductions} source={source === "error" ? "error" : "api"} canReveal={canWrite(getSessionRoles(), TDS_PAN_REVEAL_ROLES)} />
       </Card>
     </div>
   );

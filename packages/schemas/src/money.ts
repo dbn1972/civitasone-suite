@@ -93,6 +93,19 @@ export const zMoneyMinorStringNonNeg = z
   .union([z.string().regex(/^\d+$/, "must be a non-negative base-10 integer"), z.number().int().nonnegative()])
   .transform(toMinorStringIssue);
 
+/**
+ * STRICT read-model codec: money minor units (paise) as a base-10 integer
+ * STRING only (signed; a net balance can be negative). Unlike
+ * `zMoneyMinorString` it rejects a JSON number outright. Use it where a number
+ * on the wire could be a different unit, e.g. a stale client or server still
+ * sending rupee floats, which a tolerant codec would silently read as paise and
+ * mis-scale by 100x. A `1e3`, `12.5`, `""`, `abc` or `1,000` is a schema error,
+ * never a coerced amount (GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03).
+ */
+export const zMoneyMinorStrict = z
+  .string()
+  .regex(DIGITS_RE, "must be a base-10 integer string of minor units (paise)");
+
 /** Zod field that decodes money minor units straight to a bigint. */
 export const zMoneyMinor = z
   .union([z.string().regex(DIGITS_RE), z.number().int(), z.bigint()])

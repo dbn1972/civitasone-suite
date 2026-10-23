@@ -8,6 +8,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { rateEngineRoutes } from "./modules/rate-engine/routes.js";
 import { assesseeRoutes } from "./modules/assessee/routes.js";
@@ -27,6 +28,17 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
+
+  // Per-user rate limiting (300 req/min keyed by actorId, ops paths excluded),
+  // same shape as audit-service/hrms-service. Registered so routes can carry
+  // route-level `config.rateLimit` overrides.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) =>
+      (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // RLS enforcement — set app.tenant_id GUC per request
   app.addHook("onRequest", createTenantTxHook(db));

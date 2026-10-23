@@ -68,8 +68,14 @@ type Deductee26Q = {
   pan: string;
   panFlag: string;
   section: string;
-  amountPaidMinor: string;
-  tdsDeductedMinor: string;
+  /**
+   * GAP-PAYROLL-RETURNS-06: integer paise as a JSON number, like every other
+   * amount in the 24Q / force-file / 26Q family. `string` is still tolerated
+   * (a payroll-service from before the unification sent bigint strings);
+   * sumMinor / formatMoney take either.
+   */
+  amountPaidMinor: number | string;
+  tdsDeductedMinor: number | string;
   periods: string[];
 };
 
@@ -79,7 +85,7 @@ type Form26Q = {
   quarter: Quarter;
   deducteeCount: number;
   deductees: Deductee26Q[];
-  totalTdsDeductedMinor: string;
+  totalTdsDeductedMinor: number | string;
   populated: boolean;
   reconciliation: { matched: boolean };
   note: string;

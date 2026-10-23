@@ -6,7 +6,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { GrantFeatureBody } from "./validators.js";
+import type { GrantFeatureBody, RevokeFeatureBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -24,7 +24,7 @@ export async function grantFeature(ctx: RequestContext, body: GrantFeatureBody):
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revokeFeature(ctx: RequestContext, grantId: string): Promise<Accepted> {
+export async function revokeFeature(ctx: RequestContext, grantId: string, body: RevokeFeatureBody = {}): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.roleFeatureRevoke, {
     messageId: id,
@@ -33,7 +33,7 @@ export async function revokeFeature(ctx: RequestContext, grantId: string): Promi
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { grantId, tenantId: ctx.tenantId },
+    payload: { grantId, tenantId: ctx.tenantId, ...(body.reason ? { reason: body.reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -18,6 +18,7 @@ export default async function SalarySlipPage(props: { params: Promise<{ id: stri
   const params = await props.params;
   const t = await getTranslations("salarySlipDetail");
   const tFallback = await getTranslations("employeeFallback");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
   // employee got "Access restricted" on their OWN payslip -- see the
@@ -42,7 +43,7 @@ export default async function SalarySlipPage(props: { params: Promise<{ id: stri
   if (errored) {
     return (
       <div className="page-main wrap" style={{ maxWidth: 800 }}>
-        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
+        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel={tCommon("backToSalarySlips")} />
         <div className="pad">
           <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref="/hr/payroll/salary-slips" />
         </div>
@@ -56,7 +57,7 @@ export default async function SalarySlipPage(props: { params: Promise<{ id: stri
     // shows a proper not-found card with a back link.
     return (
       <div className="page-main wrap" style={{ maxWidth: 800 }}>
-        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
+        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel={tCommon("backToSalarySlips")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>{t("notFoundMessage")}</p>
         </Card>
@@ -76,7 +77,7 @@ export default async function SalarySlipPage(props: { params: Promise<{ id: stri
       <PageHeader
         title={t("title")}
         back="/hr/payroll/salary-slips"
-        backLabel="Back to Salary Slips"
+        backLabel={tCommon("backToSalarySlips")}
         actions={
           <>
             <Link href={`/hr/payroll/slips/${params.id}`} className="btn secondary" style={{ minHeight: 44 }}>{t("dashboardView")}</Link>

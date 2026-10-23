@@ -3,8 +3,18 @@ import { PageHeader } from "../../../_components/ds";
 import { getProcurementPOs } from "../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { OrdersTable } from "./OrdersTable";
+import { parsePoStatusParam } from "../drillThrough";
 
-export default async function OrdersPage() {
+export default async function OrdersPage(
+  props: {
+    searchParams?: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  // GAP-PROCUREMENT-DASHBOARD-02: the dashboard's "Active POs" counter links
+  // here with ?status=approved; open the list already narrowed to that status.
+  const rawStatus = searchParams?.status;
+  const initialStatus = parsePoStatusParam(Array.isArray(rawStatus) ? rawStatus[0] : rawStatus);
   const { data: orders, source } = await getProcurementPOs({ limit: 500 });
 
   // GAP-PROCUREMENT-ORDERS-03: creating a PO is a controlled maker action; the
@@ -25,7 +35,7 @@ export default async function OrdersPage() {
           the same seeded resource the table renders, so on a fetch error they
           read "—" (not a fabricated 0 / ₹0.00) and can never contradict the
           rows shown. */}
-      <OrdersTable orders={orders} source={source} />
+      <OrdersTable orders={orders} source={source} {...(initialStatus ? { initialStatus } : {})} />
     </>
   );
 }

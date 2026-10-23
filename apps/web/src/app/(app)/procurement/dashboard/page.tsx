@@ -10,6 +10,7 @@ import { getTranslations } from "next-intl/server";
 // drift — previously the dashboard hard-coded its own 8-entry QUICK_LINKS,
 // orphaning eight modules (incl. GeM, EMD & BG, Empanelment) from here.
 import { procurementTiles } from "../tiles";
+import { PENDING_INDENTS_HREF, ACTIVE_POS_HREF, CONTRACTS_REGISTER_HREF } from "../drillThrough";
 
 // GAP-PROCUREMENT-DASHBOARD-04: the Dashboard tile links back to this very
 // page, so drop it from the on-dashboard quick-link grid; everything else in
@@ -54,11 +55,13 @@ export default async function ProcurementDashboardPage() {
 
       {/* GAP-PROCUREMENT-DASHBOARD-02: the counters are a "snapshot of pending
           actions", so each must drill into the filtered list it counts (same
-          deep-link convention as other module dashboards). Links are dropped
+          deep-link convention as other module dashboards). The filter each link
+          carries selects exactly the rows the counter counted (see
+          ../drillThrough.ts, which the target pages parse). Links are dropped
           when the load errored — a "—" tile has nothing to act on. */}
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : "/procurement/indents?status=pending"} />
-        <StatCard icon="📦" tone="info" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
+        <StatCard icon="📋" tone="info" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : PENDING_INDENTS_HREF} />
+        <StatCard icon="📦" tone="info" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : ACTIVE_POS_HREF} />
         {/* GAP-PROCUREMENT-DASHBOARD-05: label the window so the KPI is not
             ambiguous - accepted GRNs received in the current IST calendar month. */}
         <StatCard icon="✅" tone="good" label="GRNs (MTD)" hint={t("grnsMtdHint")} value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />
@@ -71,7 +74,7 @@ export default async function ProcurementDashboardPage() {
           label="Contract Renewals Due"
           hint={!errored && dashboard.contractRenewalsDue == null ? t("renewalsUnavailableHint") : undefined}
           value={errored || dashboard.contractRenewalsDue == null ? "—" : dashboard.contractRenewalsDue}
-          href={errored ? undefined : "/procurement/contracts?status=renewal_due"}
+          href={errored ? undefined : CONTRACTS_REGISTER_HREF}
         />
       </StatGrid>
       {!errored && dashboard.contractRenewalsDue == null ? (

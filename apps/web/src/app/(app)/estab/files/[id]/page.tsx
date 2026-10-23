@@ -1,7 +1,9 @@
+import { getTranslations } from "next-intl/server";
 import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { NOTE_SIGNED_LABEL } from "../../_shared/signatureCopy";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
@@ -25,9 +27,20 @@ type DispatchRow = {
   mode: string;
 };
 
-export default async function EstabFileDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function EstabFileDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ created?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const params = await props.params;
-  const { data: file, source } = await getEstabFileById(params.id);
+  const t = await getTranslations("estabW2");
+  // GAP-ESTAB-FILES-NEW-06: arriving from "Create File" / "Open file from DAK" (?created=1) the
+  // allocated file number is shown here, because the create call only acknowledges (202) and the
+  // gapless number is assigned when the command is processed.
+  const justCreated = searchParams?.created === "1";
+  const { data: file, source, status } = await getEstabFileById(params.id);
 
   // The loader collapses 404, 5xx and network errors all into source:"error",
   // so we cannot claim "not found" — that would tell an officer an existing
@@ -35,6 +48,20 @@ export default async function EstabFileDetailPage(props: { params: Promise<{ id:
   // as two flat sibling early-returns, rather than nesting the not-found
   // check inside a single `if (!file)`, so the `source === "error"` guard
   // is a direct, statically-visible gate on everything below it — UX-013.)
+  if (source === "error" && !file && justCreated && status === 404) {
+    // Straight after a create, a 404 means the command has not been processed yet (the file does not
+    // exist until it is): that is not an outage and not a lost file. Any other failure still shows the
+    // ordinary retryable error below.
+    return (
+      <>
+        <PageHeader title={t("fileCreatingTitle")} back="/estab/list" />
+        <div role="status" className="alert" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+          {t("fileCreatingMessage")}
+        </div>
+        <a className="btn" href={`/estab/files/${encodeURIComponent(params.id)}?created=1`}>{t("fileCreatingRefresh")}</a>
+      </>
+    );
+  }
   if (source === "error" && !file) {
     return (
       <>
@@ -68,8 +95,9 @@ export default async function EstabFileDetailPage(props: { params: Promise<{ id:
         idx: idx + 1,
         content: ns.content,
         author: ns.author,
-        when: ns.timestamp ? formatIndianDate(ns.timestamp) : "—",
-        type: `${typeLabel}${ns.eSigned ? " · e-Signed" : ""}`,
+        // GAP-ESTAB-FILES-DETAIL-05: a legal record shows the time of day, not just the date.
+        when: ns.timestamp ? formatIndianDateTime(ns.timestamp) : "—",
+        type: `${typeLabel}${ns.eSigned ? ` · ${NOTE_SIGNED_LABEL}` : ""}`,
         status: (ns.noteStatus ?? "—").replace(/_/g, " "),
         signedAt: ns.signedAt ?? null,
       };
@@ -102,6 +130,11 @@ export default async function EstabFileDetailPage(props: { params: Promise<{ id:
           </>
         }
       />
+      {justCreated ? (
+        <div role="status" className="alert good" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
+          {t("fileCreatedBanner", { fileNo: file.fileNo })}
+        </div>
+      ) : null}
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">

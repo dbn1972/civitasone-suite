@@ -1,4 +1,4 @@
-import { and, eq, sql, desc } from "drizzle-orm";
+import { and, eq, or, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { fetchUserRoleKeys } from "../../shared/identity-client.js";
 import { delegations, type DelegationRow, type DelegationView } from "./schema.js";
@@ -50,14 +50,32 @@ export async function create(input: {
   return toView(rows[0]!);
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<{ rows: DelegationView[]; total: number }> {
+export type DelegationListFilter = {
+  /** delegator = this user */
+  delegatorId?: string;
+  /** delegate = this user */
+  delegateId?: string;
+  /** when set, restrict to rows where this user is delegator OR delegate (plain-user scope) */
+  involving?: string;
+};
+
+export async function listByTenant(
+  tenantId: string, limit: number, offset: number, filter: DelegationListFilter = {},
+): Promise<{ rows: DelegationView[]; total: number }> {
+  const conds = [eq(delegations.tenantId, tenantId)];
+  if (filter.delegatorId) conds.push(eq(delegations.delegatorId, filter.delegatorId));
+  if (filter.delegateId) conds.push(eq(delegations.delegateId, filter.delegateId));
+  if (filter.involving) {
+    conds.push(or(eq(delegations.delegatorId, filter.involving), eq(delegations.delegateId, filter.involving))!);
+  }
+  const where = and(...conds);
   const rows = await scopedRead((tx) => tx.select().from(delegations)
-    .where(eq(delegations.tenantId, tenantId))
-    .orderBy(desc(delegations.createdAt))
+    .where(where)
+    .orderBy(desc(delegations.createdAt), desc(delegations.id))
     .limit(limit)
     .offset(offset));
   const totalRes = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(delegations)
-    .where(eq(delegations.tenantId, tenantId)));
+    .where(where));
   return { rows: rows.map(toView), total: totalRes[0]?.n ?? 0 };
 }
 

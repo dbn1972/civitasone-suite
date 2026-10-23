@@ -114,6 +114,7 @@ export default async function FinanceDashboardPage(props: { searchParams?: Promi
               utilisationPct={data.budgetUtilisationPct}
               expenditure={data.totalExpenditure}
               sanctionedMinor={data.sanctionedMinor}
+              {...(data.categoryBreakdown ? { categoryBreakdown: data.categoryBreakdown } : {})}
             />
           )}
         </div>

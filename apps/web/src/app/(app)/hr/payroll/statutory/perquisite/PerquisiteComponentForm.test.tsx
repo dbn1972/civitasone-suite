@@ -13,7 +13,7 @@ import { PerquisiteComponentForm } from "./PerquisiteComponentForm";
 // UX-017: PerquisiteComponentForm now reads its copy through next-intl
 // (useTranslations("perquisiteComponentForm")), so every render needs a real
 // provider in the tree -- same pattern as pt/PtSlabForm.test.tsx (tranche 12).
-function renderForm(props: { defaultEmployeeId: string; defaultFy: string }) {
+function renderForm(props: { defaultEmployeeId: string; defaultFy: string; defaultEmployeeName?: string }) {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
       <PerquisiteComponentForm {...props} />
@@ -37,11 +37,33 @@ describe("PerquisiteComponentForm", () => {
     expect(screen.queryByRole("button", { name: "Save Component" })).not.toBeInTheDocument();
   });
 
-  it("shows the looked-up employee/FY read-only once both are selected", () => {
-    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27" });
-    expect(screen.getByText("e1")).toBeInTheDocument();
+  it("shows the looked-up employee (by name, not UUID) and FY read-only once both are selected", () => {
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PerquisiteComponentForm defaultEmployeeId="7c1d2e3f-0000-4000-8000-000000000001" defaultFy="2026-27" defaultEmployeeName="Ravi Kumar" />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
     expect(screen.getByText("2026-27")).toBeInTheDocument();
     expect(screen.queryByText("Look up an employee first")).not.toBeInTheDocument();
+    // GAP-PAYROLL-STATUTORY-PERQUISITE-05: the raw id is the API key, never shown
+    expect(container.textContent).not.toContain("7c1d2e3f");
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PERQUISITE-05: a looked-up employee with no name shows a neutral label, still no UUID", () => {
+    const { container } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PerquisiteComponentForm defaultEmployeeId="7c1d2e3f-0000-4000-8000-000000000001" defaultFy="2026-27" />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("Selected employee")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("7c1d2e3f");
+  });
+
+  it.each(["2026", "2026-28", "26-27"])("GAP-PAYROLL-STATUTORY-PERQUISITE-05: an invalid FY (%s) never gets a save form", (badFy) => {
+    renderForm({ defaultEmployeeId: "e1", defaultFy: badFy });
+    expect(screen.getByText("Look up an employee first")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save Component" })).not.toBeInTheDocument();
   });
 
   it("saves a perquisite component on confirm (happy path)", async () => {
@@ -49,18 +71,20 @@ describe("PerquisiteComponentForm", () => {
       new Response(JSON.stringify({ message: "perquisite component saved" }), { status: 201 }),
     );
 
-    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27" });
+    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27", defaultEmployeeName: "Ravi Kumar" });
     fireEvent.change(screen.getByLabelText(/Value by Employer/), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Component" }));
 
     await waitFor(() => expect(screen.getByText("Save this perquisite component?")).toBeInTheDocument());
+    // GAP-PAYROLL-STATUTORY-PERQUISITE-05: the confirm dialog names the employee, not the id.
+    expect(screen.getByRole("alertdialog")).toHaveTextContent("for employee Ravi Kumar (FY 2026-27)");
     fireEvent.click(screen.getByText("Confirm & Save"));
 
     // GAP-PAYROLL-STATUTORY-PERQUISITE-07: the saved message now shows the
     // sentence-cased, translated nature label ("Accommodation"), not the
     // raw backend key ("accommodation").
     await waitFor(() => {
-      expect(screen.getByText(/Perquisite component "Accommodation" saved for e1\./)).toBeInTheDocument();
+      expect(screen.getByText(/Perquisite component "Accommodation" saved for Ravi Kumar\./)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
   });

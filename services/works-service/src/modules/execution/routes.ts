@@ -107,7 +107,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/execution/:workId/scopes", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const { workId } = v.workIdParamSchema.parse({ workId: (req.params as { workId: string }).workId });
     const data = await listScopes(ctx.tenantId, workId);
     return reply.send({ data });
   });
@@ -116,7 +116,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/works/execution/:workId/issues", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
-    const { workId } = req.params as { workId: string };
+    const { workId } = v.workIdParamSchema.parse({ workId: (req.params as { workId: string }).workId });
     const data = await listIssues(ctx.tenantId, workId);
     return reply.send({ data });
   });

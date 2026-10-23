@@ -82,8 +82,9 @@ describe("PromoteWithApproval lookups (GAP-HR-PROMOTION-05)", () => {
     expect(await screen.findByText("Could not load designations. Check your connection and try again.")).toBeInTheDocument();
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/ID/)).not.toBeInTheDocument();
-    // Next is held back while the required lookup is failed and nothing is selected
-    expect(next()).toBeDisabled();
+    // Next is held back while the required lookup is failed and nothing is selected. The picker
+    // reports its failed state to the form from an effect AFTER the error text renders, so wait for it.
+    await waitFor(() => expect(next()).toBeDisabled());
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     fireEvent.mouseDown(await screen.findByText("Under Secretary"));
@@ -98,7 +99,8 @@ describe("PromoteWithApproval lookups (GAP-HR-PROMOTION-05)", () => {
     fireEvent.change(field("Employee"), { target: { value: "Asha" } });
     expect(await screen.findByText(/Could not load employees/)).toBeInTheDocument();
     expect(screen.queryByText("No matching employees")).not.toBeInTheDocument();
-    expect(next()).toBeDisabled();
+    // The failed state reaches the form from an effect AFTER the error text renders, so wait for it.
+    await waitFor(() => expect(next()).toBeDisabled());
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     fireEvent.mouseDown(await screen.findByText("Asha Verma (E001)"));

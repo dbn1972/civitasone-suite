@@ -206,6 +206,16 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
     });
   });
 
+  queue.subscribe(COMMANDS.draftDelete, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const removed = await intakeRepo.deleteDraft(tx, p.id, msg.tenantId);
+      if (!removed) return;
+      await audit(tx, msg, "draft_delete", "application_intake", p.id);
+    });
+  });
+
   queue.subscribe(COMMANDS.draftSubmit, async (msg) => {
     const p = msg.payload as {
       id: string; draftId: string; tenantId: string; trackingNo: string; channel: string;

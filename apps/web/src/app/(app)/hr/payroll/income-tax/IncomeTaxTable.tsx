@@ -3,10 +3,13 @@
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { incomeTaxStatusLabel } from "@/lib/payroll/statusLabels";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type Row = {
   id: string;
+  /** hrms employee id: the drill-in target (GAP-PAYROLL-INCOME-TAX-03). `id` is a declaration id OR an employee id, so it cannot be used. */
+  employeeId?: string;
   employee: string;
   department: string;
   grossIncome: string;
@@ -25,7 +28,9 @@ type Row = {
  * means "not applicable", not "nothing declared".
  */
 function deductionCell(r: Row, value: string): string {
-  return r.regime === "new" ? "—" : formatRupees(value);
+  // The income-tax API sends whole-rupee strings; convert exactly to paise
+  // (no float) and render with formatMoney. Non-numeric -> "—" (unknown).
+  return r.regime === "new" ? "—" : formatMoney(rupeesToMinorString(value, { allowZero: true }));
 }
 
 /**
@@ -69,6 +74,10 @@ export function IncomeTaxTable({ items }: { items: Row[] }) {
     <DataTable<Row>
       columns={columns}
       rows={items}
+      // GAP-PAYROLL-INCOME-TAX-03: row -> employee profile (same target every
+      // other payroll list uses). No link when the API gave no employeeId.
+      rowHref={(r) => (r.employeeId ? `/hr/employees/${encodeURIComponent(r.employeeId)}` : undefined)}
+      identifyingColumnKey="employee"
       sortable
       filterable
       filterPlaceholder={t("filterPlaceholder")}

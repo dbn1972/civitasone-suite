@@ -151,15 +151,17 @@ export const FINANCE_ROLES = [
  * grants on its own routes — derived (not assumed) from the service's route
  * guards: collection/routes.ts REVENUE_ROLES ("revenue_admin", "revenue_officer",
  * "finance_admin", "super_admin", "tenant_admin") and analytics/routes.ts
- * READ_ROLES (adds "revenue_analyst"). This is the client-side counterpart to
+ * READ_ROLES (adds "revenue_analyst"), plus assessment/routes.ts and
+ * trade-license/routes.ts which also allow "revenue_collector". This is the client-side counterpart to
  * that server enforcement: a signed-in user with NONE of these roles gets
  * "access restricted" on direct navigation to any /revenue/* URL, instead of
- * reading assessee financial/PII data the backend would otherwise 403. Fails
- * OPEN when roles are unknown (empty array), matching Sidebar/moduleVisibility.
+ * reading assessee financial/PII data the backend would otherwise 403. The
+ * /revenue layout FAILS CLOSED when roles are unknown (empty array).
  */
 export const REVENUE_ROLES = [
   "revenue_admin",
   "revenue_officer",
+  "revenue_collector",
   "revenue_analyst",
   "finance_admin",
   "super_admin",
@@ -184,6 +186,25 @@ export const OPENING_BALANCE_WRITE_ROLES = ["finance_admin", "super_admin"] as c
  * typing a reason, so the buttons are hidden for them. Mirrors that constant.
  */
 export const PAYMENT_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-05: roles finance-service lets create a head of account (POST /v1/finance/accounts)
+ * and map its PFMS HoA code (PATCH /v1/finance/accounts/:id/hoa): budget/routes.ts FINANCE_ROLES. The rest of
+ * FINANCE_ROLES (audit_officer, budget_officer, procurement_officer, accounts_officer, payroll_admin, tenant_admin,
+ * admin) can READ the chart but would get a 403 only after filling the form, so "+ Add Head" and the form are hidden
+ * for them. (A control account additionally needs finance_admin/super_admin; the server enforces that.) Mirrors that
+ * constant exactly -- keep in sync.
+ */
+export const ACCOUNT_HEAD_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
+ * GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03: roles payroll-service lets search the employee lookup
+ * (GET /v1/payroll/employee-lookup: employee-lookup/routes.ts LOOKUP_ROLES), which the new-advance form uses to PICK
+ * the officer an advance is issued to. finance_admin can create an advance but is not among them, so for that role the
+ * form falls back to a typed officer name (no employee id) instead of an officer picker that could only 403. Mirrors
+ * that constant exactly -- keep in sync.
+ */
+export const EMPLOYEE_LOOKUP_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"] as const;
 
 /**
  * UX gate for every page under /hr, /hr/payroll and /hr/recruitment (all

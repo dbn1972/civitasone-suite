@@ -41,15 +41,16 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       status: z.string().optional(),
       // D1 (FE↔BE high ROI) — scope the task list to one instance.
       instanceId: z.string().uuid().optional(),
-      // GAP-HR-LEAVE-APPROVALS-02 — scope the list to one record type (e.g.
-      // leave_app) in SQL, so a module inbox is not paged out by other modules'
-      // tasks. Same bound as the refType column (varchar(64)).
-      refType: z.string().min(1).max(64).optional(),
+      // GAP-PROCUREMENT-APPROVALS-01: server-side module scoping. Repeatable
+      // (`?refType=a&refType=b`) so a module queue (procurement's four refTypes)
+      // is filtered BEFORE limit/offset instead of being cut out of a tenant-wide
+      // first page client-side. Narrowing only: it can never widen the role scope.
+      refType: z.union([z.string().min(1).max(64), z.array(z.string().min(1).max(64)).max(20)]).optional(),
     }).parse(req.query);
-    const listOpts: { status?: string; roles?: string[]; instanceId?: string; refType?: string } = {};
+    const listOpts: { status?: string; roles?: string[]; instanceId?: string; refTypes?: string[] } = {};
     if (q.status !== undefined) listOpts.status = q.status;
     if (q.instanceId !== undefined) listOpts.instanceId = q.instanceId;
-    if (q.refType !== undefined) listOpts.refType = q.refType;
+    if (q.refType !== undefined) listOpts.refTypes = Array.isArray(q.refType) ? q.refType : [q.refType];
     if (ctx.roles.length) listOpts.roles = ctx.roles;
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });

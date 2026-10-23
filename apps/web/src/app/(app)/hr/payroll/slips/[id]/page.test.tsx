@@ -100,13 +100,14 @@ describe("PayslipDetailPage (dashboard view)", () => {
 
   // GAP-PAYROLL-SLIPS-DETAIL-06: back-nav used to point an employee at the
   // admin-only salary-slips list (a guaranteed 403 for them).
-  it("points an employee's back-link at /hr/payroll, not the admin-only salary-slips list", async () => {
+  it("points an employee's back-link at My payslips -- not the admin-only salary-slips list, and not /hr/payroll, which also says 'Access restricted' to an employee", async () => {
     getSessionRolesMock.mockReturnValue(["employee"]);
     fetchJsonMock.mockResolvedValueOnce({ data: baseSlip(), source: "api" });
     const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
     renderPage(ui);
-    const back = screen.getByText("Back to Payroll").closest("a");
-    expect(back).toHaveAttribute("href", "/hr/payroll");
+    const back = screen.getByText("Back to My Payslips").closest("a");
+    expect(back).toHaveAttribute("href", "/hr/payroll/my-slips");
+    expect(screen.queryByText("Back to Payroll")).not.toBeInTheDocument();
   });
 
   it("points an admin's back-link at the salary-slips list", async () => {
@@ -116,6 +117,29 @@ describe("PayslipDetailPage (dashboard view)", () => {
     renderPage(ui);
     const back = screen.getByText("Back to Salary Slips").closest("a");
     expect(back).toHaveAttribute("href", "/hr/payroll/salary-slips");
+  });
+
+  // GAP-PAYROLL-SLIPS-DETAIL-06: a missing or blank department/employee name renders a dash, never an empty cell.
+  it.each([
+    ["null", null],
+    ["undefined", undefined],
+    ["an empty string", ""],
+    ["whitespace", "   "],
+  ])("renders a dash for a department that is %s", async (_label, department) => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+    fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ department }), source: "api" });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
+    renderPage(ui);
+    const label = screen.getByText("Department");
+    expect(label.nextElementSibling?.textContent).toBe("—");
+  });
+
+  it("renders the department when there is one", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+    fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ department: "Finance" }), source: "api" });
+    const ui = await PayslipDetailPage({ params: Promise.resolve({ id: "slip-1" }) });
+    renderPage(ui);
+    expect(screen.getByText("Department").nextElementSibling?.textContent).toBe("Finance");
   });
 
   // GAP-PAYROLL-SLIPS-DETAIL-05: a draft/computed slip must not be

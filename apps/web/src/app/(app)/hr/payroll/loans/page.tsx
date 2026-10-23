@@ -73,11 +73,12 @@ export default async function LoansPage(
 ) {
   const searchParams = await props.searchParams;
   const t = await getTranslations("payrollLoans");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_HR_READER_ROLES.includes(r))) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Back to Payroll" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={tCommon("backToPayroll")} />
         <PermissionDenied module="employee loans" requiredRoles={PAYROLL_HR_READER_ROLES} />
       </div>
     );
@@ -104,7 +105,7 @@ export default async function LoansPage(
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
       {empId && <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />}
 

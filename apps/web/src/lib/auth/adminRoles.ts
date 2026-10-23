@@ -98,3 +98,11 @@ export const ADMIN_CONSOLE_ROLES: readonly string[] = Array.from(
     ...INTEGRATION_ADMIN_ROLES,
   ]),
 );
+
+/**
+ * Roles shown the CSV export on the stock-movements summary (inventory/reconcile).
+ * Lives here (no next/headers import) so "use client" components can import it.
+ * Strictest safe default: the same inventory manager tier that approves counts;
+ * inventory-service still authorises every ledger read.
+ */
+export const INVENTORY_LEDGER_EXPORT_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];

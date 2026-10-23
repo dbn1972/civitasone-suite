@@ -15,6 +15,10 @@ vi.mock("next/navigation", () => ({
 const rolesMock = vi.fn<() => string[]>(() => []);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 
+// The actor-name lookup is a display enrichment with its own loader tests (loaders.fpFinance02.test.ts).
+const actorNamesMock = vi.fn(async (_ids: readonly (string | null | undefined)[]): Promise<Record<string, string>> => ({}));
+vi.mock("@/app/_data/loaders", () => ({ getFinanceActorNames: (ids: readonly (string | null | undefined)[]) => actorNamesMock(ids) }));
+
 import ReconciliationRunDetailPage from "./page";
 
 const RUN = {
@@ -53,6 +57,7 @@ const EXCEPTION = {
 
 describe("ReconciliationRunDetailPage", () => {
   beforeEach(() => {
+    actorNamesMock.mockClear();
     fetchJsonMock.mockReset();
     rolesMock.mockReset().mockReturnValue([]);
   });
@@ -65,6 +70,20 @@ describe("ReconciliationRunDetailPage", () => {
 
     expect(screen.getByText(/Recon Run — book-vs-bank/)).toBeInTheDocument();
     expect(screen.getByText("UTR12345")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-01: the run's closed breaks name who closed them.
+  it("shows who wrote a break off, by name", async () => {
+    const resolver = "11111111-aaaa-4000-8000-000000000001";
+    const closed = { ...EXCEPTION, status: "written_off", resolutionNote: "Bank charge, not recoverable", resolvedBy: resolver, resolvedAt: "2026-07-02T00:00:00.000Z" };
+    fetchJsonMock.mockResolvedValue({ data: { data: RUN, breaks: [closed] }, source: "api" });
+    actorNamesMock.mockResolvedValue({ [resolver]: "Asha Rao" });
+
+    render(await ReconciliationRunDetailPage({ params: Promise.resolve({ id: RUN.id }) }));
+
+    expect(actorNamesMock).toHaveBeenCalledWith([resolver]);
+    expect(screen.getByText(/Asha Rao · /)).toBeInTheDocument();
+    expect(screen.queryByText(/11111111-aaaa/)).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-RECONCILIATION-DETAIL-03: failure vs not-found are told apart by status.

@@ -41,12 +41,18 @@ describe("low stock (GAP-INVENTORY-LOW-STOCK-02 / -03)", () => {
     expect(screen.getByText("Out of stock")).toBeInTheDocument();
     expect(screen.getByText("Low")).toBeInTheDocument();
     expect(screen.queryByText("LOW")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Gel pen" })).toHaveAttribute("href", `/inventory/${ID_A}`);
+    expect(screen.getByRole("link", { name: "Gel pen" })).toHaveAttribute("href", `/inventory/items/${ID_A}`);
     const raise = screen.getAllByRole("link", { name: "Raise indent" })[0];
     const url = new URL(raise.getAttribute("href") ?? "", "http://x");
     expect(url.pathname).toBe("/procurement/indents/new");
     expect(url.searchParams.get("itemCode")).toBe("PEN-01");
     expect(url.searchParams.get("quantity")).toBe("40");
+  });
+
+  it("says so when the page is full (the most urgent items are listed first)", () => {
+    state.rows = Array.from({ length: 500 }, (_, i) => row({ itemId: `${ID_A.slice(0, 24)}${String(i).padStart(12, "0")}`, name: `Item ${i}` }));
+    render(<LowStockTable rows={[]} source="api" />);
+    expect(screen.getByRole("note")).toHaveTextContent(/first 500 low-stock items/i);
   });
 
   it("a healthy empty list says nothing is below reorder level", () => {
@@ -74,7 +80,7 @@ describe("reservations (GAP-INVENTORY-RESERVATIONS-02 / -03)", () => {
   it("shows the item name linked to its page and the store name", () => {
     state.rows = [res({})];
     render(<ReservationsTable reservations={[]} source="api" />);
-    expect(screen.getByRole("link", { name: "PEN-01 \u00b7 Gel pen" })).toHaveAttribute("href", `/inventory/${ID_A}`);
+    expect(screen.getByRole("link", { name: "PEN-01 \u00b7 Gel pen" })).toHaveAttribute("href", `/inventory/items/${ID_A}`);
     expect(screen.getByText("Main Store")).toBeInTheDocument();
   });
 
@@ -95,8 +101,8 @@ describe("substitutes (GAP-INVENTORY-SUBSTITUTES-03)", () => {
   it("names and links both ends and formats the conversion factor", () => {
     state.rows = [sub({})];
     render(<SubstitutesTable substitutes={[]} source="api" />);
-    expect(screen.getByRole("link", { name: "PEN-01 \u00b7 Gel pen" })).toHaveAttribute("href", `/inventory/${ID_A}`);
-    expect(screen.getByRole("link", { name: "Ball pen" })).toHaveAttribute("href", `/inventory/${ID_B}`);
+    expect(screen.getByRole("link", { name: "PEN-01 \u00b7 Gel pen" })).toHaveAttribute("href", `/inventory/items/${ID_A}`);
+    expect(screen.getByRole("link", { name: "Ball pen" })).toHaveAttribute("href", `/inventory/items/${ID_B}`);
     expect(screen.getByText("1 : 1.5")).toBeInTheDocument();
     expect(screen.queryByText("1.500000")).not.toBeInTheDocument();
   });

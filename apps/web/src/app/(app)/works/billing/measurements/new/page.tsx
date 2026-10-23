@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
@@ -99,6 +100,7 @@ function RecordMeasurementForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.measurementNew");
 
   const workId = safeWorkId(searchParams.get("workId")) ?? "";
 
@@ -121,6 +123,8 @@ function RecordMeasurementForm() {
   // work's MBs as a select (and show the selected MB number) instead of a
   // pasted UUID.
   const [mbs, setMbs] = useState<Option[] | null>(null);
+  // Measurement books of this work that are listed by the API but no longer accept measurements.
+  const [closedMbCount, setClosedMbCount] = useState(0);
   const [boqItems, setBoqItems] = useState<Option[] | null>(null);
   // GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: the work may arrive via ?workId= or
   // be picked; MBs and BoQ items are then offered as selects for that work.
@@ -166,8 +170,15 @@ function RecordMeasurementForm() {
         if (cancelled || !res.ok) return;
         const body = (await res.json()) as { data?: unknown };
         const rows = Array.isArray(body.data) ? body.data : [];
+        // Only a DRAFT measurement book accepts measurements (works-service rejects the rest with MB_NOT_OPEN once the
+        // finalization chain has started), so only those are offered. A row without a status is kept: the server decides.
+        const open = rows.filter((r) => {
+          const status = String((r as Record<string, unknown>).status ?? "");
+          return status === "" || status === "draft";
+        });
+        setClosedMbCount(rows.length - open.length);
         setMbs(
-          rows.map((r) => {
+          open.map((r) => {
             const row = r as Record<string, unknown>;
             return { id: String(row.id ?? ""), label: String(row.mbNumber ?? row.id ?? "") };
           }),
@@ -341,6 +352,11 @@ function RecordMeasurementForm() {
                   required
                 />
               )}
+              {closedMbCount > 0 ? (
+                <p role="note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                  {t("closedBooks", { count: closedMbCount })}
+                </p>
+              ) : null}
             </div>
             <div>
               <label style={labelStyle} htmlFor="boqItemId">BoQ Item *</label>

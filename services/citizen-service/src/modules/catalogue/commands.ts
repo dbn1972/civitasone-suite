@@ -119,6 +119,8 @@ export async function publishDefinition(ctx: RequestContext, id: string): Promis
     throw new HttpError(403, "MAKER_CHECKER", "publisher must differ from the submitter");
   }
   ensurePublishable(def);
+  // The design may have been edited after submit; the checker must publish what was tested.
+  await assertLatestTestPassed(ctx, id);
   const accepted = await publish(ctx, COMMANDS.catalogueDefinitionPublish, randomUUID(), { id });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "catalogue", id));
   return { ...accepted, id };

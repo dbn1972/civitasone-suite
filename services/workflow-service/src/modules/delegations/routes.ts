@@ -9,6 +9,10 @@ import * as commands from "./commands.js";
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["workflow_admin", "super_admin", "tenant_admin"];
 
+function hasAdminRole(ctx: { roles: string[] }): boolean {
+  return ctx.roles.some((r) => ADMIN_ROLES.includes(r));
+}
+
 /** Longest a delegation may run (inclusive, in days from fromDate to toDate). */
 export const MAX_DELEGATION_DAYS = 90;
 
@@ -61,11 +65,33 @@ export async function delegationRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/workflow/delegations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
+    const isAdmin = hasAdminRole(ctx);
     const q = z.object({
       limit: z.coerce.number().int().min(1).max(200).default(50),
       offset: z.coerce.number().int().min(0).default(0),
+      mine: z.enum(["true", "false"]).optional(),
+      toMe: z.enum(["true", "false"]).optional(),
+      delegatorId: z.string().uuid().optional(),
+      delegateId: z.string().uuid().optional(),
     }).parse(req.query);
-    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
+    // The id filters let a caller look at someone else's delegations: admin only.
+    if ((q.delegatorId || q.delegateId) && !isAdmin) {
+      throw new HttpError(403, "FORBIDDEN", "delegatorId / delegateId filters are admin-only");
+    }
+    const filter: repo.DelegationListFilter = {};
+    if (q.mine === "true") filter.delegatorId = ctx.actorId;
+    if (q.toMe === "true") filter.delegateId = ctx.actorId;
+    if (q.delegatorId) {
+      if (filter.delegatorId && filter.delegatorId !== q.delegatorId) return reply.send({ data: [], total: 0 });
+      filter.delegatorId = q.delegatorId;
+    }
+    if (q.delegateId) {
+      if (filter.delegateId && filter.delegateId !== q.delegateId) return reply.send({ data: [], total: 0 });
+      filter.delegateId = q.delegateId;
+    }
+    // Plain users only ever see delegations they are party to; admins see the tenant.
+    if (!isAdmin) filter.involving = ctx.actorId;
+    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, filter);
     return reply.send({ data: rows, total });
   });
 
@@ -96,6 +122,11 @@ export async function delegationRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "delegation not found");
+    // Ownership: only the delegator or a workflow admin may revoke. Refusals are audited.
+    if (existing.delegatorId !== ctx.actorId && !hasAdminRole(ctx)) {
+      await commands.refuseDelegationRevoke(ctx, id);
+      throw new HttpError(403, "NOT_DELEGATOR", "only the delegator or a workflow admin may revoke this delegation");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.revokeDelegation(ctx, id));
   });
 

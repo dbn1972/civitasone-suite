@@ -96,6 +96,18 @@ export async function insertOla(tx: Writer, row: OlaInsert): Promise<OlaRow> {
   return res[0]!;
 }
 
+/** OLAs for many offerings in one query (catalogue list turnaround column). */
+export async function listOlasForOfferings(tenantId: string, offeringIds: string[]): Promise<OlaRow[]> {
+  if (offeringIds.length === 0) return [];
+  return db.transaction((tx) =>
+    tx
+      .select()
+      .from(catalogueOlas)
+      .where(and(eq(catalogueOlas.tenantId, tenantId), inArray(catalogueOlas.offeringId, offeringIds)))
+      .orderBy(catalogueOlas.targetMinutes),
+  );
+}
+
 export async function listOlas(tenantId: string, offeringId: string): Promise<OlaRow[]> {
   return db.transaction((tx) =>
     tx

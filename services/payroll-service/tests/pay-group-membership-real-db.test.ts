@@ -274,8 +274,11 @@ describe("membership: assign, overlap, move, end, mid-month", () => {
   it("two concurrent assignments of one employee to different groups: exactly one wins (no double membership)", async () => {
     const results = await Promise.all([assign(GB, E5, "2026-10-01"), assign(GC, E5, "2026-10-01")]);
     expect(results.map((r) => r.statusCode)).toEqual([202, 202]); // both pass the read-only pre-check
-    await until(() => assignments(E5.id), (r) => r.length > 0);
-    await settleMs(600);
+    // Wait for BOTH commands to be processed (each writes exactly one audit event, whatever its outcome),
+    // not a fixed 600ms: the loser can still be in flight after that, and would then land after the
+    // cleanup below and leave a stray E5 membership that breaks the bulk-assign tests that follow.
+    const e5Audits = async () => [...(await auditsFor(GB)), ...(await auditsFor(GC))].filter((r) => (r.payload as Row).employeeId === E5.id);
+    await until(e5Audits, (a) => a.length >= 2);
     const rows = await assignments(E5.id);
     expect(rows.filter((r) => r.effective_to === null)).toHaveLength(1);
     // the loser's command was a move or a rejection - never two open memberships

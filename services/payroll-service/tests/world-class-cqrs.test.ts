@@ -406,6 +406,46 @@ describe("Salary revision CQRS (F3 leftover)", () => {
     expect(mockEnqueued.some((e) => e.topic === "audit.event.record")).toBe(true);
   });
 
+  // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's reason (and the sanctioning order) are audited with the revision.
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: the maker's reason and the order number land on the audit record", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    executeResponder = (_q, n) => (n === 1 ? [] : [{ id: "salrev-1" }]);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({
+      ...baseMsg, messageId: "m-salrev-reason",
+      payload: { ...REVISION_MSG, reason: "Sanctioned per order ORD-95 dated 1 April" },
+    });
+
+    const audit = mockEnqueued.find((e) => e.topic === "audit.event.record");
+    expect(audit).toBeDefined();
+    expect(audit!.payload).toMatchObject({
+      service: "payroll", action: "create", resourceType: "payroll_salary_revision", resourceId: "salrev-1",
+      reason: "Sanctioned per order ORD-95 dated 1 April",
+      newValue: { status: "pending", orderNo: "ORD-95" },
+    });
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: an older client with no reason still audits (reason simply absent)", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS } = await import("../src/topics.js");
+
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    executeResponder = (_q, n) => (n === 1 ? [] : [{ id: "salrev-1" }]);
+
+    await handlers[COMMANDS.salaryRevisionCreate]({ ...baseMsg, messageId: "m-salrev-noreason", payload: REVISION_MSG });
+
+    const audit = mockEnqueued.find((e) => e.topic === "audit.event.record");
+    expect(audit).toBeDefined();
+    expect(audit!.payload).not.toHaveProperty("reason");
+  });
+
   it("fin-payroll-03: a redelivered revision whose row already exists emits nothing (ON CONFLICT DO NOTHING returns no row)", async () => {
     const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
     const { COMMANDS } = await import("../src/topics.js");

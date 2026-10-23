@@ -31,6 +31,7 @@ async function getSettlements(): Promise<LoaderResult<SettlementRow[]>> {
 
 export default async function FnfPage() {
   const t = await getTranslations("payrollFnf");
+  const tCommon = await getTranslations("payrollCommon");
   const roles = getSessionRoles();
   if (!roles.some((r) => FNF_READ_ROLES.includes(r))) {
     return <PermissionDenied module="fnf" requiredRoles={FNF_READ_ROLES} />;
@@ -82,7 +83,7 @@ export default async function FnfPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tCommon("backToPayroll")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 

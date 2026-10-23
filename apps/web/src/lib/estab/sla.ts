@@ -63,7 +63,23 @@ export function pendencyDays(
 ): number | null {
   if (!file.createdDate || file.createdDate === "—") return null;
   if (isClosedStatus(file.status)) return null;
-  // daysLeft is "days until due", so for "days since created" we negate.
+  // daysLeft is "days until due", so for "days since created" we negate. "0 - d" (not "-d") so a file
+  // created today reads 0, never -0.
   const d = daysLeft(file.createdDate);
-  return d !== null ? -d : null;
+  return d !== null ? 0 - d : null;
+}
+
+/**
+ * Mean pendency in days over the open files in `files`, to one decimal, or null when none has a
+ * usable created date. The dashboard computes this figure in SQL over every open file in the
+ * office (services/estab-service/src/modules/dashboard/queries.ts); this is the same definition
+ * over whichever rows the caller holds, for a viewer who cannot read the dashboard
+ * (GAP-ESTAB-DASHBOARD-02).
+ */
+export function averagePendencyDays(
+  files: ReadonlyArray<{ createdDate?: string; status?: string }>,
+): number | null {
+  const days = files.map((f) => pendencyDays(f)).filter((d): d is number => d !== null);
+  if (days.length === 0) return null;
+  return Math.round((days.reduce((sum, d) => sum + d, 0) / days.length) * 10) / 10;
 }

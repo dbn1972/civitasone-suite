@@ -38,7 +38,7 @@ describe("InstalmentsPage", () => {
           source: "api",
         });
       }
-      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve(assesseesPage);
     });
 
@@ -53,10 +53,25 @@ describe("InstalmentsPage", () => {
     expect(links.some((l) => l.getAttribute("href") === "/revenue/instalments/p1")).toBe(true);
   });
 
+  it("passes the service DCB outstanding (not a sum of demand nets) to the plan form", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/instalments")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: "750000", source: "api" });
+      return Promise.resolve(assesseesPage);
+    });
+
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({ assesseeId: "a1" }) });
+    render(ui);
+
+    expect(fetchJsonMock.mock.calls.some((c) => String(c[0]).endsWith("/api/v1/revenue/assessees/a1/dcb"))).toBe(true);
+    expect(fetchJsonMock.mock.calls.some((c) => String(c[0]).includes("/demands"))).toBe(false);
+    expect(screen.getByText(/Outstanding arrears: ₹7,500\.00/)).toBeInTheDocument();
+  });
+
   it("renders an empty state when there are no instalment plans", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/instalments")) return Promise.resolve({ data: [], source: "api" });
-      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve(assesseesPage);
     });
 
@@ -69,7 +84,7 @@ describe("InstalmentsPage", () => {
   it("shows the data-source badge when a loader falls back on error", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/instalments")) return Promise.resolve({ data: [], source: "error" });
-      if (path.includes("/demands")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/dcb")) return Promise.resolve({ data: [], source: "api" });
       return Promise.resolve(assesseesPage);
     });
 

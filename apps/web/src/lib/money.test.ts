@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rupeesToMinorString, percentToBps, parseMinorOrZero } from "./money";
+import { rupeesToMinorString, parseRupeesToMinor, percentToBps, parseMinorOrZero } from "./money";
 
 describe("rupeesToMinorString", () => {
   it("converts whole rupees", () => {
@@ -144,5 +144,31 @@ describe("parseMinorOrZero (GAP-FINANCE-JOURNAL-ENTRY-02)", () => {
   });
   it("sums 0.1 + 0.2 exactly", () => {
     expect((parseMinorOrZero("0.1") ?? 0n) + (parseMinorOrZero("0.2") ?? 0n)).toBe(30n);
+  });
+});
+
+// GAP-PAYROLL-SALARY-REVISIONS-02 acceptance: the bigint twin of rupeesToMinorString.
+describe("parseRupeesToMinor", () => {
+  it("parses a decimal-string rupee amount to exact bigint paise", () => {
+    expect(parseRupeesToMinor("1234.5")).toBe(123450n);
+    expect(parseRupeesToMinor("100")).toBe(10000n);
+    expect(parseRupeesToMinor("0.07")).toBe(7n);
+    expect(parseRupeesToMinor("90071992547409.93")).toBe(9007199254740993n);
+  });
+
+  it("rejects exponent, negative and non-numeric input", () => {
+    expect(parseRupeesToMinor("1e3")).toBeNull();
+    expect(parseRupeesToMinor("-1")).toBeNull();
+    expect(parseRupeesToMinor("abc")).toBeNull();
+    expect(parseRupeesToMinor("")).toBeNull();
+  });
+
+  it("rejects more than 2 decimals instead of silently rounding money", () => {
+    expect(parseRupeesToMinor("1.005")).toBeNull();
+  });
+
+  it("rejects zero unless allowZero is set", () => {
+    expect(parseRupeesToMinor("0")).toBeNull();
+    expect(parseRupeesToMinor("0", { allowZero: true })).toBe(0n);
   });
 });

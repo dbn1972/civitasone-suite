@@ -10,6 +10,7 @@ import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as riskQueries from "../risk/queries.js";
 import * as exportsRepo from "../exports/repo.js";
+import { downloadGrant } from "../exports/download.js";
 
 const READER_ROLES = ["audit_officer", "audit_admin", "finance_admin", "super_admin", "platform_admin"];
 
@@ -46,7 +47,8 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         row.status === "failed" ? "failed" :
         "processing"
       ) as "queued" | "processing" | "completed" | "failed",
-      downloadUrl: row.signedUrl ?? undefined,
+      // Short-lived requester-bound download token (not the stored path); absent when withheld.
+      downloadUrl: downloadGrant(ctx, row)?.token,
       // GAP-AUDIT-EXPORTS-04: distinguishing metadata for same-day exports.
       periodFrom: new Date(row.periodFrom as unknown as string).toISOString(),
       periodTo: new Date(row.periodTo as unknown as string).toISOString(),

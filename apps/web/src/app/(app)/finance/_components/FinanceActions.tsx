@@ -17,6 +17,7 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ActionButton, useToast } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 
@@ -116,21 +117,60 @@ export function billPassBlockedReason(status: string, threeWayMatch?: string): s
   return null;
 }
 
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: the segregation-of-duties rules finance-service enforces on the money path,
+ * so the page does not invite the officer to an action the server will refuse (a self-approval is a 409
+ * MAKER_CHECKER_VIOLATION, a payment by the passer is a 409 PAYER_IS_PASSER):
+ *   - "Pass bill":        the officer who lodged the bill cannot pass it            (assertDistinctMakerChecker)
+ *   - "Release payment":  the lodger cannot pay it (assertDistinctMakerChecker), nor can the officer who passed it
+ *                         (assertPayerNotPasser)
+ * Returns the rule that applies to this viewer, or null. An unknown viewer (no session id) is never blocked here: the
+ * server decides. The server stays the authority; this only hides the control.
+ */
+export function billSodConflict(
+  action: "pass" | "release",
+  viewerId: string | null | undefined,
+  createdBy: string | null | undefined,
+  passedBy: string | null | undefined,
+): "lodger" | "passer" | null {
+  if (!viewerId) return null;
+  if (createdBy && createdBy === viewerId) return "lodger";
+  if (action === "release" && passedBy && passedBy === viewerId) return "passer";
+  return null;
+}
+
+const SOD_NOTE_STYLE = { fontSize: 12, color: "var(--mut)" } as const;
+
 export function BillPassPayActions({
-  id, status, threeWayMatch, canPass = true,
+  id, status, threeWayMatch, canPass = true, canRelease = true, viewerId = null, createdBy = null, passedBy = null,
 }: {
   id: string; status: string; threeWayMatch?: string;
   /** GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: false hides "Pass bill" for roles the server 403s (approve is APPROVER_ROLES). */
   canPass?: boolean;
+  /**
+   * false hides "Release payment" for roles the server 403s (POST payments/eft is FINANCE_ROLES). The creator / passer
+   * rule (GAP-FINANCE-PAYMENTS-01: MAKER_CHECKER_VIOLATION / PAYER_IS_PASSER) is applied below from viewerId / createdBy /
+   * passedBy, with a reason shown. UI hints only; the server stays the authority.
+   */
+  canRelease?: boolean;
+  /** The signed-in officer's id and the bill's lodger / passer, to withhold the actions the maker-checker rules refuse. */
+  viewerId?: string | null;
+  createdBy?: string | null;
+  passedBy?: string | null;
 }) {
+  const t = useTranslations("expenditureBillDetail");
   const router = useRouter();
   const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
   const canPay = s === "passed"; // finance-service emits "passed" (a pass maps approved -> passed)
   const passBlocked = billPassBlockedReason(status, threeWayMatch);
+  const passConflict = billSodConflict("pass", viewerId, createdBy, passedBy);
+  const releaseConflict = billSodConflict("release", viewerId, createdBy, passedBy);
   return (
     <>
-      {canPass ? (<>
+      {canPass && passBlocked === null && passConflict ? (
+        <span role="note" style={SOD_NOTE_STYLE}>{t("cannotPassOwn")}</span>
+      ) : canPass ? (<>
       <span title={passBlocked ?? undefined}>
         <ActionButton
           label="Pass bill"
@@ -150,12 +190,16 @@ export function BillPassPayActions({
       </span>
       {passBlocked ? <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{passBlocked}</span> : null}
       </>) : null}
-      {canPay ? (
-        // Releasing a payment needs the DDO, mode and the bill's net amount --
-        // collected (and confirmed) on the payment form, not a one-line reason.
-        <Link href={`/finance/payments/new?billId=${encodeURIComponent(id)}`} className="btn primary">
-          Release payment
-        </Link>
+      {canPay && canRelease ? (
+        releaseConflict ? (
+          <span role="note" style={SOD_NOTE_STYLE}>{releaseConflict === "lodger" ? t("cannotReleaseLodged") : t("cannotReleasePassed")}</span>
+        ) : (
+          // Releasing a payment needs the DDO, mode and the bill's net amount --
+          // collected (and confirmed) on the payment form, not a one-line reason.
+          <Link href={`/finance/payments/new?billId=${encodeURIComponent(id)}`} className="btn primary">
+            Release payment
+          </Link>
+        )
       ) : null}
     </>
   );

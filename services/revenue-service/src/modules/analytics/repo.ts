@@ -27,7 +27,7 @@ import {
   type PeriodTrend,
   type RankedDefaulter,
 } from "./domain.js";
-import { ageIntoBuckets } from "../assessment/domain.js";
+import { ageIntoBuckets, dcbBalanceEffect } from "../assessment/domain.js";
 
 export type Granularity = "month" | "fy";
 
@@ -50,6 +50,7 @@ interface RawDcbRow {
   createdAt: string | Date;
   entryType: string;
   amountMinor: bigint;
+  narration?: string | null;
 }
 
 /** Map raw DCB ledger rows into period-keyed entries for aggregation. */
@@ -58,17 +59,20 @@ export function toPeriodEntries(rows: RawDcbRow[], granularity: Granularity): Pe
     period: periodKey(r.createdAt, granularity),
     entryType: r.entryType as PeriodDcbEntry["entryType"],
     amountMinor: r.amountMinor,
+    // Only carried when present: it exists to tell an adjustment's credit leg
+    // from its debit leg and is irrelevant to every other entry type.
+    ...(r.narration != null ? { narration: r.narration } : {}),
   }));
 }
 
 /** Current outstanding balance per demand from its DCB ledger movements. */
 export function computeDemandBalances(
-  rows: Array<{ demandId: string; entryType: string; amountMinor: bigint }>,
+  rows: Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>,
 ): Map<string, bigint> {
   const balances = new Map<string, bigint>();
   for (const r of rows) {
     const cur = balances.get(r.demandId) ?? 0n;
-    balances.set(r.demandId, r.entryType === "demand" ? cur + r.amountMinor : cur - r.amountMinor);
+    balances.set(r.demandId, cur + dcbBalanceEffect(r));
   }
   return balances;
 }
@@ -96,6 +100,7 @@ async function loadDcbRows(tenantId: string): Promise<RawDcbRow[]> {
         createdAt: dcbEntries.createdAt,
         entryType: dcbEntries.entryType,
         amountMinor: dcbEntries.amountMinor,
+        narration: dcbEntries.narration,
       })
       .from(dcbEntries)
       .where(eq(dcbEntries.tenantId, tenantId));
@@ -162,13 +167,13 @@ export async function getArrearsAging(tenantId: string, asOfDate: string) {
         .from(demands)
         .where(eq(demands.tenantId, tenantId));
       const dcbRows = await t
-        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, narration: dcbEntries.narration })
         .from(dcbEntries)
         .where(eq(dcbEntries.tenantId, tenantId));
       return { demandRows, dcbRows };
     });
 
-    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint }>);
+    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>);
     const aged = ageIntoBuckets(
       (demandRows as Array<{ id: string; dueDate: string }>).map((d) => ({
         dueDate: d.dueDate,
@@ -196,13 +201,13 @@ export async function getDefaulters(tenantId: string, limit: number): Promise<Ra
         .from(demands)
         .where(eq(demands.tenantId, tenantId));
       const dcbRows = await t
-        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor })
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, narration: dcbEntries.narration })
         .from(dcbEntries)
         .where(eq(dcbEntries.tenantId, tenantId));
       return { demandRows, dcbRows };
     });
 
-    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint }>);
+    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>);
     const outstanding = outstandingByAssessee(
       demandRows as Array<{ id: string; assesseeId: string }>,
       balances,

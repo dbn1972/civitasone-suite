@@ -17,6 +17,12 @@ export const BILL_CREATE_ROLES = ["finance_officer", "finance_admin", "super_adm
 export const ADVANCE_CREATE_ROLES = BILL_CREATE_ROLES;
 /** PATCH /v1/finance/bills/:id/approve -> APPROVER_ROLES in payments/routes.ts. */
 export const BILL_APPROVE_ROLES = ["accounts_officer", "finance_admin", "super_admin"] as const;
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: POST /v1/finance/payments/eft (releasing a passed bill's payment) is guarded
+ * by FINANCE_ROLES in payments/routes.ts. The bill detail is readable by more roles (audit_officer, procurement_officer),
+ * so "Release payment" is only offered to these.
+ */
+export const PAYMENT_RELEASE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 export const RECURRING_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
 
 /**
