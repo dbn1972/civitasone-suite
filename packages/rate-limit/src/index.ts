@@ -11,16 +11,24 @@ export interface RateLimitConfig {
   skip?: (req: FastifyRequest) => boolean;
 }
 
+/**
+ * Default bucket key: the VERIFIED tenant from req.ctx (set by authPlugin from the
+ * validated token) plus the IP. Never reads an x-tenant-id header (client-forgeable).
+ * A missing ctx, or the empty tenantId that public paths carry, is treated as absent
+ * and falls back to a per-IP bucket. The auth plugin must be registered BEFORE
+ * registerRateLimit so ctx is populated when the limiter's onRequest hook runs.
+ */
+export function defaultKey(req: FastifyRequest): string {
+  const tenantId = (req as { ctx?: { tenantId?: string } | null }).ctx?.tenantId;
+  return tenantId ? `tenant:${tenantId}:${req.ip}` : `ip:${req.ip}`;
+}
+
 export async function registerRateLimit(app: FastifyInstance, config: RateLimitConfig = {}): Promise<void> {
   await app.register(rateLimit, {
     max: config.max ?? 100,
     timeWindow: config.timeWindow ?? "1 minute",
     allowList: config.allowList ?? ["127.0.0.1", "::1"],
-    keyGenerator: config.keyGenerator ?? ((req) => {
-      // Use tenant ID + IP for per-tenant limiting
-      const tenantId = (req as any).tenantId ?? req.ip;
-      return `${tenantId}:${req.ip}`;
-    }),
+    keyGenerator: config.keyGenerator ?? defaultKey,
     ...(config.skip ? { skip: config.skip } : {}),
     errorResponseBuilder: (_req, context) => ({
       statusCode: 429,

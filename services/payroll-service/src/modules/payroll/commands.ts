@@ -49,7 +49,13 @@ async function assertReceipts(ctx: RequestContext, category: string, keys: strin
   if (!keys || keys.length === 0) return;
   // HEAD every object: it must exist, be within the size cap and be a PDF / JPEG /
   // PNG as stored (the presign signs both, but the stored object is what counts).
-  const heads = await Promise.all(keys.map((k) => headObject(k)));
+  let heads: Awaited<ReturnType<typeof headObject>>[];
+  try {
+    heads = await Promise.all(keys.map((k) => headObject(k)));
+  } catch {
+    // CLOS2-S6-06: headObject rejects on anything but not-found; that is "could not check", not "not uploaded".
+    throw new HttpError(503, "STORAGE_UNAVAILABLE", "receipt storage could not be checked right now");
+  }
   if (heads.some((h) => h === null)) {
     throw new HttpError(400, "ATTACHMENT_NOT_UPLOADED", "a receipt was not uploaded; upload it again before submitting");
   }

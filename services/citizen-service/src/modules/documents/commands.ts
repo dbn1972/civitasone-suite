@@ -22,6 +22,15 @@ import type {
 /** OAuth state TTL (10 min): the consent redirect must complete promptly. */
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
+/** CLOS2-S6-06: objectExists rejects on anything but not-found; surface that as a retryable 503. */
+async function objectExistsOr503(key: string): Promise<boolean> {
+  try {
+    return await objectExists(key);
+  } catch {
+    throw new HttpError(503, "STORAGE_UNAVAILABLE", "document storage could not be checked right now");
+  }
+}
+
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export interface PresignResult {
@@ -84,7 +93,7 @@ export async function upload(ctx: RequestContext, body: UploadBody): Promise<Acc
     throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey was not presigned by this caller");
   }
   // The key must also reference an object that was actually PUT to the store.
-  if (!(await objectExists(body.storageKey))) {
+  if (!(await objectExistsOr503(body.storageKey))) {
     throw new HttpError(400, "OBJECT_NOT_UPLOADED", "no uploaded object exists for storageKey");
   }
   const id = randomUUID();
@@ -256,7 +265,7 @@ export async function resubmit(
     if (!keyBelongsToCaller(body.storageKey, ctx.tenantId, ctx.actorId)) {
       throw new HttpError(400, "INVALID_STORAGE_KEY", "storageKey was not presigned by this caller");
     }
-    if (!(await objectExists(body.storageKey))) {
+    if (!(await objectExistsOr503(body.storageKey))) {
       throw new HttpError(400, "OBJECT_NOT_UPLOADED", "no uploaded object exists for storageKey");
     }
   }
