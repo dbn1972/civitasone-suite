@@ -62,8 +62,8 @@ export function QuarterCreateForm() {
     const next: FieldErrors = {};
     if (!quarterNo.trim()) next.quarterNo = "Enter the quarter number.";
     if (carpetAreaSqft.trim()) {
-      const n = parseInt(carpetAreaSqft, 10);
-      if (!Number.isFinite(n) || n <= 0) next.carpetAreaSqft = "Carpet area must be a positive whole number of sq. ft.";
+      const t = carpetAreaSqft.trim();
+      if (!/^\d+$/.test(t) || parseInt(t, 10) <= 0) next.carpetAreaSqft = "Carpet area must be a positive whole number of sq. ft.";
     }
     setErrors(next);
     if (next.quarterNo) { quarterNoRef.current?.focus(); return false; }

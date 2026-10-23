@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { browserFetch } from "@/lib/api/browserClient";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AcceptedNotice, ActionButton, EntityPicker } from "../../../_components/ds";
@@ -72,9 +73,8 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       if (!dueDate) throw new Error("Due date is required");
       if (!ownerId.trim()) throw new Error("Owner is required");
 
-      const res = await fetch("/api/proxy/v1/contract/obligations", {
+      const res = await browserFetch("v1/contract/obligations", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contractId,
           title: title.trim(),
@@ -110,9 +110,8 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
     setMessage("");
     accepted.reset();
     try {
-      const res = await fetch(`/api/proxy/v1/contract/obligations/${obligationId}`, {
+      const res = await browserFetch(`v1/contract/obligations/${obligationId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: nextStatus, version }),
       });
       if (res.status !== 202 && !res.ok) {

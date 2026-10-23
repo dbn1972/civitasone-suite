@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import { RTIDetailClient } from "./RTIDetailClient";
 import enMessages from "@/messages/en.json";
@@ -164,5 +164,27 @@ describe("RTIDetailClient -- error copy & statutory clock (GAP-CITIZEN-RTI-DETAI
     const { container } = renderClient({ initialRti: ok, initialSource: "api" });
     const link = container.querySelector('a[href="https://storage.example/doc.pdf"]');
     expect(link).not.toBeNull();
+  });
+});
+
+describe("RTIDetailClient -- CLOS2-S1-15 offline errors", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new TypeError("Failed to fetch"))));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the translated load fallback, not raw 'Failed to fetch', when the detail load fails offline", async () => {
+    renderClient({ initialSource: "error" });
+    expect(await screen.findByText(enMessages.citizenRti.loadErrorFallback)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+  });
+
+  it("shows the translated appeal fallback, not raw 'Failed to fetch', when filing an appeal offline", async () => {
+    renderClient({ initialRti: mockRti, initialSource: "api" });
+    fireEvent.click(screen.getByRole("button", { name: enMessages.citizenRti.fileAppeal }));
+    fireEvent.change(screen.getByLabelText(enMessages.citizenRti.appealGroundsLabel), { target: { value: "No reply in 30 days" } });
+    fireEvent.click(screen.getByRole("button", { name: enMessages.citizenRti.submitAppeal }));
+    expect(await screen.findByText(enMessages.citizenRti.appealErrorFallback)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("Failed to fetch");
   });
 });

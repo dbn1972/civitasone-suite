@@ -104,3 +104,21 @@ describe("designerApi — 409 maps to a key-collision message", () => {
     expect((err as Error).message).not.toMatch(/\b409\b/);
   });
 });
+
+describe("designerApi — CLOS2-S1-10 offline reads never show the raw browser message", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it.each([
+    ["fetchServiceDefinition", () => fetchServiceDefinition("d1")],
+    ["fetchA11yPreview", () => fetchA11yPreview("d1")],
+    ["fetchServiceAnalytics", () => fetchServiceAnalytics("d1")],
+  ])("%s rejects with the standard offline copy, not 'Failed to fetch'", async (_n, call) => {
+    const err = await call().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).not.toContain("Failed to fetch");
+    expect((err as Error).message).toMatch(/connect|offline|internet|network/i);
+  });
+});

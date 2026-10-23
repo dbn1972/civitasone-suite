@@ -122,4 +122,38 @@ describe("ObligationsPanel", () => {
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toMatchObject({ status: "completed", version: 2 });
   });
+
+  it("CLOS2-S1-11: Start offline shows the standard offline copy, never the raw 'Failed to fetch'", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    render(
+      <ObligationsPanel
+        contractId="c1"
+        obligations={[{ id: "ob-1", title: "Submit BG", status: "pending", version: 1, ownerId: "u1" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+    expect(screen.getByRole("alert").textContent).toMatch(/connect|offline|internet|network/i);
+  });
+
+  it("CLOS2-S1-11: Add obligation offline shows the standard offline copy, never the raw 'Failed to fetch'", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      if (String(input).includes("/identity/users")) {
+        return new Response(
+          JSON.stringify({ data: [{ id: "11111111-1111-1111-1111-111111111111", name: "Asha Officer" }] }),
+          { status: 200 },
+        );
+      }
+      throw new TypeError("Failed to fetch");
+    });
+    render(<ObligationsPanel contractId="c1" obligations={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("Submit progress report"), { target: { value: "Submit BG" } });
+    fireEvent.change(document.querySelector('input[type="date"]') as HTMLInputElement, { target: { value: "2026-09-01" } });
+    fireEvent.change(screen.getByLabelText("Owner"), { target: { value: "Asha" } });
+    fireEvent.mouseDown(await screen.findByText(/Asha Officer/));
+    fireEvent.click(screen.getByRole("button", { name: "Add obligation" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+  });
 });
