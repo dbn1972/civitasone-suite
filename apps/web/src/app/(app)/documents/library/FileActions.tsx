@@ -27,7 +27,7 @@ export function FileActions({ fileId, name, status }: { fileId: string; name: st
 
   async function remove(): Promise<void> {
     setError(null);
-    const res = await fetch(`/api/v1/documents/files/${encodeURIComponent(fileId)}`, { method: "DELETE" });
+    const res = await fetch(`/api/proxy/v1/documents/files/${encodeURIComponent(fileId)}`, { method: "DELETE" });
     if (!res.ok) {
       const human = await formError.fromResponse(res, "save");
       setError(human.message);

@@ -16978,6 +16978,18 @@
     "reviewerSearching": "Searching…",
     "reviewerSearchError": "Could not search people. Please try again."
   },
+  "documentsDak": {
+    "acknowledge": "Acknowledge",
+    "acknowledged": "Acknowledged",
+    "ackTitle": "Acknowledge this dak?",
+    "ackDescription": "This records that you have received and seen this dak. It cannot be undone.",
+    "forward": "Forward",
+    "forwardTitle": "Forward this dak",
+    "forwardDescription": "This assigns the dak to the user whose ID you entered. They will see it in their inbox.",
+    "assigneeLabel": "Assign to (user ID)",
+    "assigneeHint": "Paste the user ID of the person to assign this dak to.",
+    "assigneeInvalid": "Enter a valid user ID (UUID)."
+  },
   "workflowDelegations": {
     "title": "My delegations",
     "tabsAria": "Delegation lists",

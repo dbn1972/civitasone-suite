@@ -19,12 +19,12 @@ export function createDak(ctx: RequestContext, body: CreateDakBody): Accepted {
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export function forwardDak(ctx: RequestContext, dakId: string, assignedTo: string): Accepted {
-  return pub(COMMANDS.dakForward, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId, assignedTo });
+export function forwardDak(ctx: RequestContext, dakId: string, assignedTo: string, asAdmin = false): Accepted {
+  return pub(COMMANDS.dakForward, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId, assignedTo, asAdmin });
 }
 
-export function acknowledgeDak(ctx: RequestContext, dakId: string): Accepted {
-  return pub(COMMANDS.dakAcknowledge, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId });
+export function acknowledgeDak(ctx: RequestContext, dakId: string, asAdmin = false): Accepted {
+  return pub(COMMANDS.dakAcknowledge, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId, asAdmin });
 }
 
 export function createNoting(ctx: RequestContext, dakId: string, body: string): Accepted {
@@ -35,9 +35,12 @@ export function createNoting(ctx: RequestContext, dakId: string, body: string): 
 }
 
 export function submitApproval(ctx: RequestContext, dakId: string): Accepted {
-  return pub(COMMANDS.approvalSubmit, ctx.tenantId, ctx.actorId, ctx.correlationId, { dakId });
+  // The returned id IS the approval row id (the consumer inserts it), so the client can decide it by that id.
+  const id = randomUUID();
+  void queue.publish(COMMANDS.approvalSubmit, { messageId: id, type: COMMANDS.approvalSubmit, tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { dakId, approvalId: id } });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export function decideApproval(ctx: RequestContext, approvalId: string, decision: string, remarks?: string | null): Accepted {
-  return pub(COMMANDS.approvalDecide, ctx.tenantId, ctx.actorId, ctx.correlationId, { approvalId, decision, remarks });
+export function decideApproval(ctx: RequestContext, approvalId: string, decision: string, remarks?: string | null, asAdmin = false): Accepted {
+  return pub(COMMANDS.approvalDecide, ctx.tenantId, ctx.actorId, ctx.correlationId, { approvalId, decision, remarks, asAdmin });
 }

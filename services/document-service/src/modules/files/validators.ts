@@ -22,6 +22,9 @@ export const uploadFileBody = z.object({
   tags:       z.array(z.string().max(64)).max(20).default([]),
   // Base64-encoded content (small files / metadata-only uploads)
   content:    z.string().optional(),
+  // Object key returned by the presign flow (admin-service `uploads/<tenant>/document/<actor>/<uuid>.<ext>`);
+  // ownership is verified against the caller in commands.uploadFile.
+  storageKey: z.string().min(1).max(1000).optional(),
 });
 export type UploadFileBody = z.infer<typeof uploadFileBody>;
 

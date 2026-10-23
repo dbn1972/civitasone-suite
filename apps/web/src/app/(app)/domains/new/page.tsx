@@ -63,7 +63,7 @@ export default function NewDomainPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/domains", {
+      const res = await fetch("/api/proxy/v1/domains", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsed.data),

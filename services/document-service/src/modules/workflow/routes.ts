@@ -5,8 +5,34 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createDakBody, forwardDakBody, createNotingBody, approvalDecisionBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
+import type { DakView } from "./schema.js";
 
 const ROLES = ["document_user", "document_admin", "super_admin"];
+/** Tenant-wide dak visibility/handling (same admin roles as the bulk-scan reviewer surface). */
+const ADMIN_ROLES = ["document_admin", "super_admin"];
+
+const isAdmin = (ctx: RequestContext): boolean => hasAnyRole(ctx, ADMIN_ROLES);
+
+/** Read access: admin, creator or current assignee. 404 (not 403) so dak existence is not disclosed. */
+async function loadReadable(ctx: RequestContext, id: string): Promise<DakView> {
+  const dak = await repo.getById(ctx.tenantId, id);
+  if (!dak || !(isAdmin(ctx) || dak.createdBy === ctx.actorId || dak.assignedTo === ctx.actorId)) {
+    throw new HttpError(404, "NOT_FOUND", "dak not found");
+  }
+  return dak;
+}
+
+/** Handle access (forward/acknowledge): admin, the current assignee, or the creator while the dak is unassigned. */
+async function loadHandleable(ctx: RequestContext, id: string): Promise<DakView> {
+  const dak = await loadReadable(ctx, id);
+  const holder = dak.assignedTo ?? dak.createdBy;
+  if (!(isAdmin(ctx) || holder === ctx.actorId)) {
+    throw new HttpError(403, "FORBIDDEN", "only the current holder of this dak may act on it");
+  }
+  return dak;
+}
 
 export async function workflowRoutes(app: FastifyInstance): Promise<void> {
   // Dak/file
@@ -21,7 +47,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const q = listQuerySchema.parse(req.query);
-    const data = await repo.listByTenant(ctx.tenantId, q.limit, q.offset);
+    const data = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, isAdmin(ctx) ? undefined : ctx.actorId);
     return reply.send({ data });
   });
 
@@ -38,9 +64,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
-    const dak = await repo.getById(ctx.tenantId, id);
-    if (!dak) throw new HttpError(404, "NOT_FOUND", "dak not found");
-    return reply.send(dak);
+    return reply.send(await loadReadable(ctx, id));
   });
 
   app.post("/v1/documents/daks/:id/forward", async (req, reply) => {
@@ -48,14 +72,16 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const body = forwardDakBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, commands.forwardDak(ctx, id, body.assignedTo));
+    await loadHandleable(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
   });
 
   app.post("/v1/documents/daks/:id/acknowledge", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
-    return sendAccepted(reply, acceptedResponseSchema, commands.acknowledgeDak(ctx, id));
+    await loadHandleable(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, commands.acknowledgeDak(ctx, id, isAdmin(ctx)));
   });
 
   // Notings
@@ -63,6 +89,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
+    await loadReadable(ctx, id);
     const data = await repo.listNotings(ctx.tenantId, id);
     return reply.send({ data });
   });
@@ -72,6 +99,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const body = createNotingBody.parse(req.body);
+    await loadReadable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, commands.createNoting(ctx, id, body.body));
   });
 
@@ -80,6 +108,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
+    await loadReadable(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, commands.submitApproval(ctx, id));
   });
 
@@ -88,7 +117,20 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const body = approvalDecisionBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, commands.decideApproval(ctx, id, body.decision, body.remarks ?? null));
+    // Approver scoping: only an admin or the current holder of the underlying dak may decide, and never the
+    // submitter (segregation of duties). 404 for unknown/out-of-scope approvals so existence is not disclosed.
+    const approval = await repo.getApprovalById(ctx.tenantId, id);
+    const dak = approval ? await repo.getById(ctx.tenantId, approval.dakId) : null;
+    if (!approval || !dak || !(isAdmin(ctx) || (dak.assignedTo ?? dak.createdBy) === ctx.actorId)) {
+      throw new HttpError(404, "NOT_FOUND", "approval not found");
+    }
+    if (approval.createdBy === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "the submitter of an approval may not decide it");
+    }
+    if (approval.status !== "pending") {
+      throw new HttpError(409, "CONFLICT", "approval already decided");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, commands.decideApproval(ctx, id, body.decision, body.remarks ?? null, isAdmin(ctx)));
   });
 
   // Dashboard stats
@@ -96,7 +138,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const inbox = await repo.listInbox(ctx.tenantId, ctx.actorId, 500, 0);
-    const all = await repo.listByTenant(ctx.tenantId, 500, 0);
+    const all = await repo.listByTenant(ctx.tenantId, 500, 0, isAdmin(ctx) ? undefined : ctx.actorId);
     return reply.send({
       inboxCount: inbox.length,
       // Tenant-wide counts (used by the Library page's "all" tiles).
