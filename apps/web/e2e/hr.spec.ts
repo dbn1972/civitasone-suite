@@ -78,7 +78,11 @@ test.describe('HR', () => {
   test('leave application form shows all required fields', async ({ page }) => {
     await page.goto('/hr/leave/apply');
     await expect(page.getByRole('heading', { name: /leave/i })).toBeVisible();
-    await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
+    // b56fccd90 (#2128, GAP-HR-LEAVE-APPLY-03): the Employee field is now a required
+    // type-ahead picker, so its <label> text reads "Employee *" and exact label-text
+    // matching no longer finds it. The control's accessible name (the aria-hidden "*"
+    // is excluded) is still exactly "Employee"; assert it by role.
+    await expect(page.getByRole('combobox', { name: 'Employee', exact: true })).toBeVisible();
     await expect(page.getByLabel(/leave type/i)).toBeVisible();
     await expect(page.getByLabel(/from date/i)).toBeVisible();
     await expect(page.getByLabel(/to date/i)).toBeVisible();
