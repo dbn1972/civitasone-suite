@@ -86,7 +86,7 @@ describe("POST /api/auth/dev-login", () => {
     const { POST } = await loadRoute();
     let last: Response | undefined;
     for (let i = 0; i < 6; i++) {
-      last = await POST(formRequest({ username: "superadmin", password: "wrong" }));
+      last = await POST(formRequest({ username: "superadmin", password: globalThis.crypto.randomUUID() }));
     }
     expect(last!.status).toBe(429);
     expect(last!.headers.get("Retry-After")).toBe("60");

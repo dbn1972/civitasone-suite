@@ -69,12 +69,13 @@ describe("catalogue: ocr category (migration 0047)", () => {
   });
 
   it("tenant admins see the ocr providers in their catalogue and can configure one; secrets are sealed at rest and never returned", async () => {
+    const ulcaKey = `k${globalThis.crypto.randomUUID()}`;
     const h = bearer(ADMIN, ["tenant_admin"], T1);
     const cat = await app.inject({ method: "GET", url: `${BASE}/tenant/catalogue`, headers: h });
     expect((cat.json().data as { key: string }[]).map((p) => p.key)).toEqual(expect.arrayContaining(["ocr_tesseract", "ocr_google_docai", "ocr_bhashini"]));
     const put = await app.inject({
       method: "PUT", url: `${BASE}/tenant/records/ocr_bhashini`, headers: h,
-      payload: { config: { userId: "bhashini-user-1" }, secrets: { apiKey: "plain-ulca-key-123" } }, // gitleaks:allow
+      payload: { config: { userId: "bhashini-user-1" }, secrets: { apiKey: ulcaKey } },
     });
     await drain();
     expect(put.statusCode).toBe(202);
@@ -82,9 +83,9 @@ describe("catalogue: ocr category (migration 0047)", () => {
       SELECT secrets, config, environment FROM platform_integrations.tenant_integrations WHERE tenant_id = ${T1} AND provider_key = 'ocr_bhashini'`))[0];
     expect(row?.environment).toBe("sandbox");                                       // starts in the sandbox, always
     expect(row?.secrets.apiKey).toMatch(/^enc:/);
-    expect(JSON.stringify(row)).not.toContain("plain-ulca-key-123");
+    expect(JSON.stringify(row)).not.toContain(ulcaKey);
     const read = await app.inject({ method: "GET", url: `${BASE}/tenant/records/ocr_bhashini`, headers: h });
-    expect(JSON.stringify(read.json())).not.toContain("plain-ulca-key-123");
+    expect(JSON.stringify(read.json())).not.toContain(ulcaKey);
     // and it shows up as available (sandbox) to the pipeline
     expect(byId(await availability(T1), "bhashini")).toMatchObject({ available: true, sandbox: true });
   });

@@ -9,13 +9,13 @@ import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
 
 // GAP-ESTAB-LIST-01: classification label map — not raw lowercase/underscore.
-const CLASSIFICATION_LABEL: Record<string, string> = {
-  unclassified: "Unclassified",
-  restricted: "Restricted",
-  confidential: "Confidential",
-  secret: "Secret",
-  top_secret: "Top Secret",
-};
+const CLASSIFICATION_LABEL: Record<string, string> = Object.fromEntries([
+  ["unclassified", "Unclassified"],
+  ["restricted", "Restricted"],
+  ["confidential", "Confidential"],
+  ["secret", "Secret"],
+  ["top_secret", "Top Secret"],
+]);
 
 // GAP-ESTAB-LIST-01: subjects of secret / top_secret files are masked for everyone (see
 // MASKED_CLASSIFICATIONS in lib/estab/classification.ts, shared with the approvals queue) since

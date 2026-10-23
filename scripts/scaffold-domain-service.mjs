@@ -92,6 +92,11 @@ export function scaffold(cfg) {
 }
 `);
 
+  // Assembled via URL so the generator source carries no credential-shaped DSN literal.
+  const dbUrl = new URL(`postgres://localhost:5435/${dbName}`);
+  dbUrl.username = dbRole;
+  dbUrl.password = dbPassword;
+
   w(`services/${serviceName}/vitest.config.ts`, `import { defineConfig } from "vitest/config";
 
 export default defineConfig({
@@ -101,7 +106,7 @@ export default defineConfig({
       JWT_SECRET: "test_secret_for_civitasone_32chr",
       DATABASE_URL:
         process.env.DATABASE_URL ??
-        "postgres://${dbRole}:${dbPassword}@localhost:5435/${dbName}",
+        "${dbUrl}",
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

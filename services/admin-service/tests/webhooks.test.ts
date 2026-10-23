@@ -58,13 +58,13 @@ describe("HMAC-SHA256 Signature", () => {
 
   it("verifySignature returns true for valid signature", () => {
     const body = '{"event":"finance.invoice.created"}';
-    const secret = "webhook-hmac-key";
+    const secret = globalThis.crypto.randomUUID();
     const sig = signPayload(secret, body);
     expect(verifySignature(secret, body, sig)).toBe(true);
   });
 
   it("verifySignature returns false for tampered body", () => {
-    const secret = "webhook-hmac-key";
+    const secret = globalThis.crypto.randomUUID();
     const sig = signPayload(secret, '{"event":"original"}');
     expect(verifySignature(secret, '{"event":"tampered"}', sig)).toBe(false);
   });

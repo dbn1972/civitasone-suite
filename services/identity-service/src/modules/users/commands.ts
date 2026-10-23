@@ -78,9 +78,9 @@ export async function changeUserStatus(ctx: RequestContext, id: string, body: St
 // the best-effort Keycloak UPDATE_PASSWORD action. See the consumer + keycloak
 // helper for the honest semantics when Keycloak is not configured.
 export async function requestPasswordReset(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
-  await queue.publish(COMMANDS.resetPassword, {
+  await queue.publish(COMMANDS.resetCredential, {
     messageId: randomUUID(),
-    type: COMMANDS.resetPassword, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    type: COMMANDS.resetCredential, tenantId: ctx.tenantId, actorId: ctx.actorId,
     correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, reason: reason ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

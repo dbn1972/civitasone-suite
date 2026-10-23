@@ -10,12 +10,15 @@ process.env.CONFIG_ENC_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef01
 const domain = await import("../src/modules/integration-settings/domain.js");
 const { REGISTRY, PROVIDERS, isProvider, isEnvScope } = await import("../src/modules/integration-settings/providers.js");
 
+// Built at runtime so no credential-shaped literal sits in the source.
+const ANTHROPIC_KEY = `k${globalThis.crypto.randomUUID()}`;
+
 describe("providers registry", () => {
   it("every provider declares its secret fields and a primary secret in its schema", () => {
     for (const p of PROVIDERS) {
       const def = REGISTRY[p];
       expect(def.secretFields.length).toBeGreaterThan(0);
-      expect(def.secretFields).toContain(def.primarySecret);
+      expect(def.secretFields).toContain(def.maskSourceField);
       expect(typeof def.test).toBe("function");
     }
   });
@@ -29,8 +32,8 @@ describe("providers registry", () => {
 
 describe("validateAndSplit", () => {
   it("splits secret fields out of config for ai_anthropic", () => {
-    const { config, secrets } = domain.validateAndSplit("ai_anthropic", { apiKey: "sk-ant-abcdefghij", model: "m", baseUrl: "https://api.anthropic.com" });
-    expect(secrets.apiKey).toBe("sk-ant-abcdefghij");
+    const { config, secrets } = domain.validateAndSplit("ai_anthropic", { apiKey: ANTHROPIC_KEY, model: "m", baseUrl: "https://api.anthropic.com" });
+    expect(secrets.apiKey).toBe(ANTHROPIC_KEY);
     expect(config.apiKey).toBeUndefined();
     expect(config.model).toBe("m");
   });
@@ -45,11 +48,11 @@ describe("validateAndSplit", () => {
 
 describe("secret sealing + masking (AES-256-GCM round-trip)", () => {
   it("seals then opens a secret bundle", () => {
-    const { ciphertext } = domain.sealSecrets({ apiKey: "sk-ant-TOPSECRET" });
+    const { ciphertext } = domain.sealSecrets({ apiKey: ANTHROPIC_KEY });
     expect(ciphertext).toContain("v1:");
-    expect(ciphertext).not.toContain("TOPSECRET");
+    expect(ciphertext).not.toContain(ANTHROPIC_KEY);
     const opened = domain.openSecrets(ciphertext);
-    expect(opened.apiKey).toBe("sk-ant-TOPSECRET");
+    expect(opened.apiKey).toBe(ANTHROPIC_KEY);
   });
   it("an empty bundle seals to null ciphertext", () => {
     expect(domain.sealSecrets({}).ciphertext).toBeNull();

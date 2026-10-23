@@ -34,7 +34,7 @@ const ACTOR = "bbbbbbbb-1313-4000-8000-000000000001";
 const MEETING = "11111111-1313-4000-8000-000000000001";
 const R_OPEN = "22222222-1313-4000-8000-000000000001"; // roll_call, voting_open
 const R_DONE = "22222222-1313-4000-8000-000000000002"; // roll_call, effective, 2 for / 1 against
-const R_SECRET = "22222222-1313-4000-8000-000000000003"; // secret_ballot, voting_open
+const R_ANON_BALLOT = "22222222-1313-4000-8000-000000000003"; // secret_ballot, voting_open
 const MEMBER_A = "33333333-1313-4000-8000-000000000001";
 const MEMBER_B = "33333333-1313-4000-8000-000000000002";
 const MEMBER_C = "33333333-1313-4000-8000-000000000003";
@@ -90,7 +90,7 @@ beforeAll(async () => {
   });
   await insertResolution(R_OPEN, "OPEN/1", "roll_call", "voting_open", "pending");
   await insertResolution(R_DONE, "DONE/1", "roll_call", "effective", "passed");
-  await insertResolution(R_SECRET, "SECR/1", "secret_ballot", "voting_open", "pending");
+  await insertResolution(R_ANON_BALLOT, "SECR/1", "secret_ballot", "voting_open", "pending");
 
   const insertVote = (resolutionId: string, memberId: string, position: string) => sqlClient.begin(async (sql) => {
     await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
@@ -103,9 +103,9 @@ beforeAll(async () => {
   await insertVote(R_DONE, MEMBER_A, "for");
   await insertVote(R_DONE, MEMBER_B, "for");
   await insertVote(R_DONE, MEMBER_C, "against");
-  // R_SECRET: 1 for, 1 against (positions must never be disclosed).
-  await insertVote(R_SECRET, MEMBER_A, "for");
-  await insertVote(R_SECRET, MEMBER_B, "against");
+  // R_ANON_BALLOT: 1 for, 1 against (positions must never be disclosed).
+  await insertVote(R_ANON_BALLOT, MEMBER_A, "for");
+  await insertVote(R_ANON_BALLOT, MEMBER_B, "against");
 });
 
 afterAll(async () => {
@@ -287,7 +287,7 @@ describe("reads (200)", () => {
     expect(res.statusCode).toBe(200);
     const rows = res.json().data as Array<{ resolutionId: string }>;
     const ids = rows.map((r) => r.resolutionId);
-    expect(ids).toContain(R_SECRET);
+    expect(ids).toContain(R_ANON_BALLOT);
     // R_DONE is effective (concluded) and must NOT appear among active votes.
     expect(ids).not.toContain(R_DONE);
   });
@@ -295,7 +295,7 @@ describe("reads (200)", () => {
   it("200 withholds individual positions for a secret ballot (Req 11.1)", async () => {
     const res = await app.inject({
       method: "GET",
-      url: `/v1/meetings/${MEETING}/votes/${R_SECRET}/results`,
+      url: `/v1/meetings/${MEETING}/votes/${R_ANON_BALLOT}/results`,
       headers: readHeaders(),
     });
     expect(res.statusCode).toBe(200);

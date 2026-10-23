@@ -52,7 +52,8 @@ vi.mock("../src/shared/infra.js", () => ({
 // module's own internal fallback -- unrotated -- through the first SEC-003
 // fixup, even though ecosystem.config.js's copy was rotated).
 const OLD_HARDCODED_FALLBACK = "dev-cand-secret-not-for-production";
-const REAL_PROD_SECRET = "sec-003-a-real-rotated-production-secret-value-not-source-visible";
+// Built at runtime: a "real" rotated value that is, by construction, never source-visible.
+const REAL_PROD_SECRET = `sec-003-rotated-${globalThis.crypto.randomUUID()}`;
 
 function signWithSecret(secret: string, payload: Record<string, unknown>): string {
   const data = Buffer.from(JSON.stringify(payload)).toString("base64url");

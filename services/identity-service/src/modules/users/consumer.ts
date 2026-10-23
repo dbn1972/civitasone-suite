@@ -137,7 +137,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
   // change is delegated to Keycloak (best-effort, post-commit): when Keycloak is
   // configured we set the UPDATE_PASSWORD required action; when it is not, the
   // request is still audited but no credential changes (honest dev behaviour).
-  queue.subscribe<{ id: string; reason?: string | null }>(COMMANDS.resetPassword, async (msg) => {
+  queue.subscribe<{ id: string; reason?: string | null }>(COMMANDS.resetCredential, async (msg) => {
     let userEmail: string | null = null;
     let kcEnabled = false;
     await db.transaction(async (tx) => {

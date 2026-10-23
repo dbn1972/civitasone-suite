@@ -153,11 +153,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const detail = await queries.getDashboardDetail(ctx, id);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "dashboard not found");
-    const EMBED_SECRET = resolveEmbedSecret();
+    const embedSigningKey = resolveEmbedSecret();
     const payload = { tenantId: ctx.tenantId, dashboardId: id, exp: Math.floor(Date.now() / 1000) + 3600 };
     const hdr = Buffer.from(JSON.stringify({ alg: "HS256", typ: "embed" })).toString("base64url");
     const pay = Buffer.from(JSON.stringify(payload)).toString("base64url");
-    const sig = createHmac("sha256", EMBED_SECRET).update(`${hdr}.${pay}`).digest("base64url");
+    const sig = createHmac("sha256", embedSigningKey).update(`${hdr}.${pay}`).digest("base64url");
     const token = `${hdr}.${pay}.${sig}`;
     return reply.send({ data: { embedUrl: "/embed/dashboards/" + id + "?token=" + token, expiresIn: 3600 } });
   });

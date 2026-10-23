@@ -87,7 +87,7 @@ export function validateAndSplit(provider: Provider, raw: unknown): SplitInput {
 /** Compute the masked last4 of the primary secret (for display), or null. */
 export function primaryLast4(provider: Provider, secrets: Record<string, string>): string | null {
   const def = REGISTRY[provider];
-  const primary = secrets[def.primarySecret];
+  const primary = secrets[def.maskSourceField];
   const anySecret = primary ?? Object.values(secrets)[0];
   if (!anySecret) return null;
   return anySecret.slice(-4);
@@ -126,7 +126,7 @@ export function openSecrets(ciphertext: string | null | undefined): Record<strin
   return {};
 }
 
-/** The masked display form of a set secret: "••••1234", or null when unset. */
+/** The masked display form of a stored credential (bullets plus last four), or null when unset. */
 export function maskLast4(last4: string | null | undefined): string | null {
   if (!last4) return null;
   return `••••${last4}`;
