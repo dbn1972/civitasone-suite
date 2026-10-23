@@ -5,7 +5,7 @@ export default function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Service Catalogue</h1>
+          <div data-skeleton-heading="">Service Catalogue</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>

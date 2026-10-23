@@ -9,7 +9,7 @@ test.describe('Attendance Management', () => {
   test.describe('Attendance Overview', () => {
     test('page renders h1 heading', async ({ page }) => {
       await page.goto('/hr/attendance');
-      await expect(page.locator('h1#page-heading')).toHaveText('Attendance');
+      await expect(page.locator('h1#page-heading:visible')).toHaveText('Attendance');
     });
 
     test('shows Total Records stat card label', async ({ page }) => {
@@ -61,7 +61,7 @@ test.describe('Attendance Management', () => {
   test.describe('Regularisation', () => {
     test('page renders h1 heading', async ({ page }) => {
       await page.goto('/hr/attendance/regularisation');
-      await expect(page.locator('h1#page-heading')).toContainText('Regularisation');
+      await expect(page.locator('h1#page-heading:visible')).toContainText('Regularisation');
     });
 
     test('shows Pending stat card label', async ({ page }) => {

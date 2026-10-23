@@ -104,7 +104,7 @@ test.describe('Keyboard Navigation — WCAG 2.1.1 / 2.1.2 / 2.4.3', () => {
   test('Payroll Runs — Tab moves through without infinite trap', async ({ page }) => {
     await page.goto('/hr/payroll');
     await page.waitForLoadState('load');
-    await page.locator('#page-heading').waitFor({ state: 'visible', timeout: 15000 }).catch(() => null);
+    await page.locator('#page-heading:visible').waitFor({ state: 'visible', timeout: 15000 }).catch(() => null);
     const before = await page.evaluate(() => document.activeElement?.tagName);
     for (let i = 0; i < 25; i++) {
       await page.keyboard.press('Tab');

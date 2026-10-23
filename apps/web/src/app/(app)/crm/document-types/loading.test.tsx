@@ -13,6 +13,6 @@ describe("Document Types loading skeleton (GAP-CRM-DOCUMENT-TYPES-05)", () => {
     expect(rowBlocks.length).toBeGreaterThanOrEqual(3);
     // aria-busy for assistive tech and the heading matches the loaded page.
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-    expect(container.querySelector("#page-heading")?.textContent).toBe("Document Types");
+    expect(container.querySelector("[data-skeleton-heading]")?.textContent).toBe("Document Types");
   });
 });

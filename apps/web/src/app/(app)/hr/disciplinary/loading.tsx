@@ -5,7 +5,7 @@ export default function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">Disciplinary Cases</h1>
+          <div data-skeleton-heading="">Disciplinary Cases</div>
           <div className="sub">Loading disciplinary cases…</div>
         </div>
       </div>

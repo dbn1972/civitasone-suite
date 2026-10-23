@@ -8,7 +8,7 @@ export default function Loading() {
         <div>
           {/* GAP-CRM-LINKED-ACCOUNTS-06: the segment's one name is "Connected
               Accounts" (matching the page title), not "Linked Accounts". */}
-          <h1 id="page-heading">{t("linkedAccountsTitle")}</h1>
+          <div data-skeleton-heading="">{t("linkedAccountsTitle")}</div>
         </div>
       </div>
       {/* The page is a single card (connect form + connected-accounts table),

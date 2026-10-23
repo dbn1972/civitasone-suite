@@ -13,7 +13,7 @@ export default function Loading() {
     <div className="page-main" aria-busy="true">
       <div className="ph">
         <div style={{ display: "grid", gap: 8 }}>
-          <h1 id="page-heading">Document Types</h1>
+          <div data-skeleton-heading="">Document Types</div>
           <SkeletonBar w={320} h={14} style={{ borderRadius: 6 }} />
         </div>
       </div>
