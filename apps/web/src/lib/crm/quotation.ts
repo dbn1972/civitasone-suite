@@ -149,7 +149,9 @@ export function normaliseProducts(raw: unknown): Product[] {
 /** True when the product is enabled and today falls in its active window. */
 export function isProductSelectable(p: Product, now: Date = new Date()): boolean {
   if (!p.enabled) return false;
-  const today = now.toISOString().slice(0, 10);
+  // IST calendar day (same convention as lib/retirement.ts todayDateOnly): the
+  // UTC date is still "yesterday" between 00:00 and 05:30 IST.
+  const today = new Date(now.getTime() + 19_800_000).toISOString().slice(0, 10);
   if (p.activeFrom && today < p.activeFrom.slice(0, 10)) return false;
   if (p.activeTo && today > p.activeTo.slice(0, 10)) return false;
   return true;

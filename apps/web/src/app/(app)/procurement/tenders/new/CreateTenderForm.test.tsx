@@ -105,4 +105,16 @@ describe("CreateTenderForm (GAP-PROCUREMENT-TENDERS-NEW-01/02/03/04/05)", () => 
     expect(screen.getByLabelText("Scope of work")).toHaveAttribute("maxLength", "4000");
     expect(screen.getByLabelText("Eligibility criteria")).toHaveAttribute("maxLength", "4000");
   });
+  it("CLOS-S3-03: single-source and EMD-exemption controls have accessible names", async () => {
+    wireFetch();
+    render(<CreateTenderForm />);
+    await waitFor(() => expect(screen.getByLabelText("Tender title *")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "single_source" } });
+    fireEvent.click(screen.getByLabelText(/EMD exempt/));
+    expect(screen.getByLabelText("EMD exemption reason")).toBeInTheDocument();
+    expect(screen.getByLabelText("Single-source justification (GFR Rule 166) *")).toBeInstanceOf(HTMLSelectElement);
+    expect(screen.getByLabelText("Single-source justification reason")).toBeInstanceOf(HTMLTextAreaElement);
+    expect(screen.getByLabelText("Approving authority")).toBeInstanceOf(HTMLInputElement);
+  });
+
 });
