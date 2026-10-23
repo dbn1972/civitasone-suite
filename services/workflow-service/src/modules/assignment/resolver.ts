@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 import { tasks } from "../tasks/schema.js";
 import { resolveFromMatrix, findActiveSubstitute } from "./matrix-repo.js";
+import { todayIST } from "../../shared/dates.js";
 
 const domainSchema = pgSchema("workflow");
 
@@ -97,7 +98,7 @@ export async function resolveAssignee(
   if (!assignee) return null;
 
   // Substitution check: if the resolved user has an active substitute, use them instead.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const substitute = await findActiveSubstitute(tx, tenantId, assignee, today);
   return substitute ?? assignee;
 }
