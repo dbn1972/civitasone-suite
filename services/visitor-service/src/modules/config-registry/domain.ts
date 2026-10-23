@@ -116,3 +116,64 @@ export function effectiveAllowed(configuredKeys: string[], fallback: readonly st
   if (configuredKeys.includes(CONFIGURED_EMPTY_SENTINEL)) return new Set();
   return new Set(configuredKeys);
 }
+
+// ─── visitor_policy value bounds ─────────────────────────────────────────────────
+
+/**
+ * Inclusive integer bounds for every NUMERIC visitor_policy knob (keys mirror
+ * POLICY_DEFAULTS in policy.ts; units are encoded in the key suffix). A value
+ * outside its bounds (e.g. retention.pii_days = 999999) is refused at write
+ * time rather than silently driving the purge/overstay/lead-time workers.
+ * Where the admin UI exposes the field its range matches the web form
+ * (apps/web visitor/_data/policy.ts).
+ */
+export const POLICY_NUMBER_BOUNDS: Readonly<Record<string, { min: number; max: number }>> = {
+  "retention.pii_days":                      { min: 1, max: 3650 },
+  "retention.erasure_sla_hours":             { min: 1, max: 720 },
+  "visit_request.reminder_hours":            { min: 1, max: 720 },
+  "visit_request.auto_reject_hours":         { min: 1, max: 720 },
+  "visit_request.no_show_warning_minutes":   { min: 1, max: 1440 },
+  "visit_request.no_show_hours":             { min: 1, max: 72 },
+  "visit_request.min_lead_hours":            { min: 0, max: 720 },
+  "visit_request.max_lead_days":             { min: 1, max: 365 },
+  "check_in.overstay_escalation_hours":      { min: 1, max: 168 },
+  "check_in.overstay_grace_minutes":         { min: 0, max: 240 },
+  "check_in.waiting_reminder_minutes":       { min: 1, max: 1440 },
+  "check_in.waiting_reminder_upper_minutes": { min: 1, max: 1440 },
+  "digital_pass.multi_day_max_days":         { min: 1, max: 90 },
+  "digital_pass.recurring_max_days":         { min: 1, max: 730 },
+  "turnstile.tailgating_tolerance":          { min: 0, max: 10 },
+};
+
+/** Boolean-valued visitor_policy knobs (mirrors POLICY_BOOL_DEFAULTS in policy.ts). */
+export const POLICY_BOOLEAN_KEYS: ReadonlySet<string> = new Set([
+  "turnstile.anti_passback_enabled",
+  "check_in.auto_print_badge",
+]);
+
+function unwrapValue(v: unknown): unknown {
+  // The readers (policy.ts toNumber/toBoolean) also accept a `{ value: X }` wrapper.
+  return v && typeof v === "object" && !Array.isArray(v) && "value" in (v as Record<string, unknown>)
+    ? (v as Record<string, unknown>).value
+    : v;
+}
+
+/**
+ * Validate a visitor_policy value against its key's type + bounds. Returns an error
+ * message, or null when valid / when the key is not a known scalar knob.
+ */
+export function policyValueError(configKey: string, value: unknown): string | null {
+  const bounds = POLICY_NUMBER_BOUNDS[configKey];
+  if (bounds) {
+    const raw = unwrapValue(value);
+    const n = typeof raw === "number" ? raw : (typeof raw === "string" && raw.trim() !== "" ? Number(raw) : Number.NaN);
+    if (!Number.isInteger(n)) return `${configKey} must be a whole number`;
+    if (n < bounds.min || n > bounds.max) return `${configKey} must be between ${bounds.min} and ${bounds.max}`;
+    return null;
+  }
+  if (POLICY_BOOLEAN_KEYS.has(configKey)) {
+    const raw = unwrapValue(value);
+    if (typeof raw !== "boolean" && raw !== "true" && raw !== "false") return `${configKey} must be true or false`;
+  }
+  return null;
+}

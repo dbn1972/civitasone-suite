@@ -16348,6 +16348,9 @@
     "confirmLabel": "Submit review",
     "commentLabel": "Comment (optional)"
   },
+  "pluginInstalled": {
+    "disableReasonLabel": "Reason for disabling (recorded in the audit log)"
+  },
   "pluginMarketplace": {
     "install": "Install",
     "installed": "Installed",
