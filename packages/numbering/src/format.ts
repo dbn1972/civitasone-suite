@@ -5,14 +5,26 @@
  */
 import type { NumberFormatSpec } from "./spec.js";
 
+/** IST (Asia/Kolkata) is UTC+05:30 year-round; India observes no DST. */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * Calendar year and month (1-12) of Fri Oct 23 11:20:08 UTC 2026 in IST. Statutory numbering periods
+ * follow the Indian calendar, so 00:00-05:30 IST on the 1st of a month/FY
+ * already belongs to the new period even though the UTC date is still the 31st.
+ */
+function istYearMonth(date: Date): { year: number; month: number } {
+  const ist = new Date(date.getTime() + IST_OFFSET_MS);
+  return { year: ist.getUTCFullYear(), month: ist.getUTCMonth() + 1 };
+}
+
 /**
  * Financial-year label for `date` given a first-month, e.g. April-start (4):
  * 2026-03-31 -> "2025-26", 2026-04-01 -> "2026-27". A January start (1)
  * degenerates to the calendar year, "2026-27" style still (start-endShort).
  */
 export function financialYear(date: Date, fyStartMonth: number): string {
-  const y = date.getUTCFullYear();
-  const m = date.getUTCMonth() + 1; // 1-12
+  const { year: y, month: m } = istYearMonth(date);
   const startYear = m >= fyStartMonth ? y : y - 1;
   const endYear = startYear + 1;
   return `${startYear}-${String(endYear).slice(-2).padStart(2, "0")}`;
@@ -31,21 +43,22 @@ export function formatSequence(seq: bigint | number, width: number): string {
  *   - never   -> "ALL"
  *   - yearly  -> financial year ("2026-27") if embedFinancialYear else calendar year
  *   - monthly -> "YYYY-MM" (calendar month)
+ * All periods are computed on the IST calendar (CLOS2-S6-02).
  */
 export function resetBucket(spec: NumberFormatSpec, date: Date): string {
   switch (spec.resetPolicy) {
     case "never":
       return "ALL";
     case "monthly": {
-      const y = date.getUTCFullYear();
-      const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const { year: y, month } = istYearMonth(date);
+      const m = String(month).padStart(2, "0");
       return `${y}-${m}`;
     }
     case "yearly":
     default:
       return spec.embedFinancialYear
         ? financialYear(date, spec.fyStartMonth)
-        : String(date.getUTCFullYear());
+        : String(istYearMonth(date).year);
   }
 }
 
