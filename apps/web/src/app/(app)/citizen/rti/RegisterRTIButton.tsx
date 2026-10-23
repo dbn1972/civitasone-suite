@@ -1,5 +1,6 @@
 "use client";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -73,7 +74,7 @@ export function RegisterRTIButton() {
       setCpioQuery("");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("registerErrorFallback"));
+      setError(e instanceof UserFacingError ? e.message : t("registerErrorFallback"));
     } finally {
       setBusy(false);
     }

@@ -1,5 +1,6 @@
 "use client";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -46,7 +47,7 @@ export function LogRequestButton() {
       setConsent(false);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not log the request.");
+      setError(e instanceof UserFacingError ? e.message : t("errLogRequest"));
     } finally {
       setBusy(false);
     }

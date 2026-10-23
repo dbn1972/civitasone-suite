@@ -1374,6 +1374,9 @@
     "statAvgResolutionDays": "औसत समाधान दिन"
   },
   "citizenRequests": {
+    "errLogRequest": "अनुरोध दर्ज नहीं किया जा सका।",
+    "errLoadRequest": "अनुरोध लोड नहीं हो सका।",
+    "errRecordAction": "कार्रवाई दर्ज नहीं की जा सकी।",
     "pageTitle": "नागरिक सेवा अनुरोध",
     "pageSubtitle": "शिकायतें और सेवा अनुरोध रजिस्टर।",
     "statOpen": "खुले",
