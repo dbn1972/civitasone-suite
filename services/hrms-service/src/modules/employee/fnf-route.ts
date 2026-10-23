@@ -8,6 +8,7 @@
  * - gratuity = (basic * 15/26) * years_of_service (if >= 5 years)
  * Returns the F&F breakdown with optional tax breakdown from payroll-service.
  */
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -60,7 +61,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     const emp = empRows[0];
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
-    const basicMinor = Number(emp.basicMinor); // in minor units (paise)
+    const basicMinor = minorToSafeNumber(emp.basicMinor); // minor units (paise); the F&F pro-rata maths below is float, so reject (not round) > 2^53
     const dailyBasicMinor = Math.round(basicMinor / 30);
 
     // Calculate years of service

@@ -29,11 +29,13 @@ export async function holidayRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ year: z.string().regex(/^\d{4}$/).default(String(new Date().getFullYear())) }).parse(req.query);
+    const yearStart = `${q.year}-01-01`;
+    const yearEnd = `${q.year}-12-31`;
     const rows = await scopedRead((tx) => tx.select().from(hrmsHolidays)
       .where(and(
         eq(hrmsHolidays.tenantId, ctx.tenantId),
-        sql`${hrmsHolidays.date} >= ${q.year + '-01-01'}`,
-        sql`${hrmsHolidays.date} <= ${q.year + '-12-31'}`
+        sql`${hrmsHolidays.date} >= ${yearStart}`,
+        sql`${hrmsHolidays.date} <= ${yearEnd}`
       )));
     return reply.send({ data: rows.map(r => ({ id: r.id, name: r.name, date: r.date, type: r.type, applicableTo: r.applicableTo })) });
   });

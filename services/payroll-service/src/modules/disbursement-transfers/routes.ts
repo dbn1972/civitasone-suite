@@ -24,6 +24,7 @@
  * BEFORE the number is returned -- if the audit cannot be queued the request
  * fails and nothing is revealed.
  */
+import { minorToRupees } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
@@ -115,7 +116,7 @@ export function serializeTransfer(r: DisbursementTransferRow): TransferResponse 
     accountNumberMasked: r.accountLast4 ? `XXXX${r.accountLast4}` : null,
     ifsc: r.ifsc,
     amountPaise: r.amountMinor.toString(),
-    amountRupees: Number(r.amountMinor) / 100,
+    amountRupees: minorToRupees(r.amountMinor),
     status: r.status,
     fileFormat: r.fileFormat,
     fileReference: r.fileReference,

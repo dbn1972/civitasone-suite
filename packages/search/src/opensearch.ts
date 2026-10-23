@@ -127,8 +127,12 @@ export class OpenSearchEngine implements SearchEngine {
 
     const result = await this.client.bulk({ body, refresh: "wait_for" });
     if (result.body.errors) {
-      const failed = result.body.items.filter((item: { index?: { error?: unknown } }) => item.index?.error);
-      log.warn({ failedCount: failed.length }, "Some documents failed to index in OpenSearch");
+      const failed = result.body.items.filter((item: { index?: { _id?: string; error?: unknown } }) => item.index?.error);
+      const failedIds = failed.map((i: { index?: { _id?: string } }) => i.index?._id);
+      log.warn({ failedCount: failed.length, failedIds }, "Some documents failed to index in OpenSearch");
+      throw new Error(
+        `OpenSearch bulk index failed for ${failed.length} document(s): ${failedIds.slice(0, 20).join(", ")}`,
+      );
     }
   }
 

@@ -29,7 +29,8 @@ export interface DemoUser {
 
 // Password intentionally matches the seeded demo accounts documented for this
 // environment. These are non-production, tenant-sandbox credentials only.
-export const DEMO_PASSWORD = "CivitasOne#2026!";
+// Supplied via the environment (UAT_DEMO_PASSWORD); never stored in source.
+export const DEMO_PASSWORD = process.env.UAT_DEMO_PASSWORD ?? "";
 
 export const PRIYA: DemoUser = {
   username: "priya",
@@ -61,6 +62,9 @@ export async function liveLogin(
   // authorize endpoint, which serves the hosted login form directly (the
   // browser URL stays on /protocol/openid-connect/auth?...; the form's own
   // `action` attribute points at login-actions/authenticate, not the URL bar).
+  if (!user.password) {
+    throw new Error("UAT_DEMO_PASSWORD must be set in the environment to log in to the live UAT environment");
+  }
   await page.goto("/auth/login");
   await page.waitForURL(/\/auth\/realms\/civitasone\/protocol\/openid-connect\/auth/, {
     timeout: 30_000,

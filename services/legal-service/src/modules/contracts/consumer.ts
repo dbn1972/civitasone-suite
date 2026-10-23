@@ -45,7 +45,7 @@ export function registerContractConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.contractReviewCleared, eventType: EVENTS.contractReviewCleared,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { reviewId: p.reviewId, contractRef: review.contractRef, valueMinor: Number(review.valueMinor ?? 0n) },
+        payload: { reviewId: p.reviewId, contractRef: review.contractRef, valueMinor: (review.valueMinor ?? 0n).toString() },
       });
       await audit(tx, msg, "clear", "contract_review", p.reviewId);
     });

@@ -48,8 +48,8 @@ export function CurrentLoansCard({ bookId }: { bookId: string }) {
       setRows(out.map((i) => ({
         id: i.id,
         borrower: nameMap.get(i.borrowerRef) ?? "—",
-        issuedAt: formatIndianDate(i.issuedAt.slice(0, 10)),
-        dueAt: formatIndianDate(i.dueAt.slice(0, 10)),
+        issuedAt: formatIndianDate(i.issuedAt),
+        dueAt: formatIndianDate(i.dueAt),
         _borrowerRef: i.borrowerRef,
       })));
       setState("ready");

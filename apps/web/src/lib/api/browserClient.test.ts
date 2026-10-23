@@ -211,3 +211,27 @@ describe("errorMessageForStatus", () => {
     expect(await errorMessageFromResponse(mockRes(400, {}))).toBe(await errorMessageForStatus(mockRes(400, {})));
   });
 });
+
+// CLOS2-S3-03: blocked storage must not stop requests from being sent.
+describe("browserFetch with blocked storage", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("still calls fetch once when localStorage and sessionStorage throw SecurityError", async () => {
+    const denied = {
+      getItem() { throw new DOMException("denied", "SecurityError"); },
+      setItem() { throw new DOMException("denied", "SecurityError"); },
+      removeItem() { throw new DOMException("denied", "SecurityError"); },
+    };
+    vi.stubGlobal("localStorage", denied);
+    vi.stubGlobal("sessionStorage", denied);
+    const fetchSpy = vi.fn(async () => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    const res = await browserFetch("v1/x");
+    expect(res.status).toBe(200);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const init = (fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1];
+    const headers = init.headers as Record<string, string>;
+    expect(headers["x-device-id"]).toBeTruthy();
+    expect(headers["x-device-trust-token"]).toBeUndefined();
+  });
+});

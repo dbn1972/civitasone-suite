@@ -48,6 +48,9 @@
  *       passes at the location, rather than returning a 500.
  */
 import { Redis } from "ioredis";
+import { pino } from "pino";
+
+const log = pino({ name: "evacuation-roster" });
 
 const ROSTER_KEY = (tenantId: string, locationId: string): string =>
   `visitor:${tenantId}:evacuation:roster:${locationId}`;
@@ -218,7 +221,16 @@ export async function removeFromRoster(tenantId: string, locationId: string, pas
 export async function getFullRoster(tenantId: string, locationId: string): Promise<RosterEntry[]> {
   const store = getStore();
   const all = await store.hgetall(ROSTER_KEY(tenantId, locationId));
-  return Object.values(all).map((v) => JSON.parse(v) as RosterEntry);
+  const entries: RosterEntry[] = [];
+  for (const [field, value] of Object.entries(all)) {
+    try {
+      entries.push(JSON.parse(value) as RosterEntry);
+    } catch {
+      // One corrupt entry must not take down the whole emergency roster. Never log the raw value (may hold PII).
+      log.warn({ tenantId, locationId, field }, "evacuation roster: skipped corrupt entry");
+    }
+  }
+  return entries;
 }
 
 /**

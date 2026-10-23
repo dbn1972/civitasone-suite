@@ -14,8 +14,8 @@ SVC_PW="${SVC_PW:-court_dev_pw}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 MIG="$HERE/../migrations"
 
-super() { docker exec -e PGPASSWORD="$PG_SUPER_PW" "$PG_CONTAINER" psql -U "$PG_SUPER" "$@"; }
-svc()   { docker exec -e PGPASSWORD="$SVC_PW"      "$PG_CONTAINER" psql -U court_svc   "$@"; }
+super() { docker exec -e "PGPASSWORD=$PG_SUPER_PW" "$PG_CONTAINER" psql -U "$PG_SUPER" "$@"; }
+svc()   { docker exec -e "PGPASSWORD=$SVC_PW" "$PG_CONTAINER" psql -U court_svc   "$@"; }
 
 echo ">> (re)create role + database"
 super -d postgres -v ON_ERROR_STOP=1 \

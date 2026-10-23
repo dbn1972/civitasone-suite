@@ -8,7 +8,7 @@ import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { ConfirmDialog, DataTable, EmptyState, ErrorState, Button } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatDateTimeIST } from "@/lib/formatters";
 
 type WorkflowTask = {
   id: string;
@@ -297,7 +297,7 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
 
   const cacheNote =
     offline || source === "cache"
-      ? `Saved queue${cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}${offline ? " — offline" : ""}.`
+      ? `Saved queue${cachedAt ? ` from ${formatDateTimeIST(new Date(cachedAt))}` : ""}${offline ? " — offline" : ""}.`
       : null;
 
   const dialogTask = pending?.task;

@@ -1,3 +1,4 @@
+import { parseMinor } from "@civitasone/schemas/money";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
@@ -68,7 +69,7 @@ export function registerF3_pension_Consumers(queue: Queue): void {
               daRatePct: rawQuery.daRatePct !== undefined ? Number(rawQuery.daRatePct) : 50,
               commutePct: rawQuery.commutePct !== undefined ? Number(rawQuery.commutePct) : 40,
               ageNextBirthday: rawQuery.ageNextBirthday !== undefined ? Number(rawQuery.ageNextBirthday) : undefined,
-              avgEmolumentsMinor: rawQuery.avgEmolumentsMinor !== undefined ? Number(rawQuery.avgEmolumentsMinor) : undefined,
+              avgEmolumentsMinor: rawQuery.avgEmolumentsMinor !== undefined ? parseMinor(rawQuery.avgEmolumentsMinor as string | number) : undefined,
             };
 
             // Read through the caller's already-open tx directly -- this used
@@ -103,7 +104,7 @@ export function registerF3_pension_Consumers(queue: Queue): void {
             };
             if (emp.dateOfBirth) input.dateOfBirth = emp.dateOfBirth;
             if (q.ageNextBirthday !== undefined) input.ageNextBirthday = q.ageNextBirthday;
-            if (q.avgEmolumentsMinor !== undefined) input.avgEmolumentsMinor = BigInt(q.avgEmolumentsMinor);
+            if (q.avgEmolumentsMinor !== undefined) input.avgEmolumentsMinor = q.avgEmolumentsMinor;
 
             const result: PensionResult = computePension(input);
             // The route only publishes when `persist && result.definedBenefit`;

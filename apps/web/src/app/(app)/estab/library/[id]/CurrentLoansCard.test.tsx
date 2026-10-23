@@ -58,4 +58,24 @@ describe("CurrentLoansCard", () => {
       expect(screen.getByText("All copies on the shelf")).toBeInTheDocument();
     });
   });
+
+  it("CLOS2-S1-04: due date 00:30 IST is shown as the IST day, not the UTC day", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/estab/library/issues") && url.includes("status=issued")) {
+        return new Response(
+          JSON.stringify([{
+            id: "i1", bookId: BOOK_ID, bookTitle: "Manual", borrowerRef: EMP_ID,
+            issuedAt: "2026-10-22T20:30:00.000Z", dueAt: "2026-11-04T19:00:00.000Z", status: "issued",
+          }]),
+          { status: 200 },
+        );
+      }
+      if (url.includes("/estab/library/issues")) return new Response(JSON.stringify([]), { status: 200 });
+      return new Response(null, { status: 404 });
+    });
+    render(<CurrentLoansCard bookId={BOOK_ID} />);
+    expect((await screen.findAllByText("05 Nov 2026"))[0]).toBeInTheDocument();
+    expect(screen.getAllByText("23 Oct 2026")[0]).toBeInTheDocument();
+  });
 });

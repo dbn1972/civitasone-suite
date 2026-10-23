@@ -42,9 +42,12 @@ export interface DashboardUpdateEvent {
   timestamp: string;
 }
 
+/** In-process event-bus channel name for a tenant (an EventEmitter key, not SQL). */
+const tenantChannel = (tenantId: string): string => ["update", tenantId].join(":");
+
 /** Call this from fact ingestion consumers to push updates to connected clients. */
 export function emitDashboardUpdate(event: DashboardUpdateEvent): void {
-  dashboardBus.emit(`update:${event.tenantId}`, event);
+  dashboardBus.emit(tenantChannel(event.tenantId), event);
 }
 
 export async function streamRoutes(app: FastifyInstance): Promise<void> {
@@ -70,7 +73,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
       reply.raw.write(`event: dashboard_update\ndata: ${JSON.stringify(event)}\n\n`);
     };
 
-    dashboardBus.on(`update:${tenantId}`, onUpdate);
+    dashboardBus.on(tenantChannel(tenantId), onUpdate);
 
     // Heartbeat every 30s to keep connection alive
     const heartbeat = setInterval(() => {
@@ -80,7 +83,7 @@ export async function streamRoutes(app: FastifyInstance): Promise<void> {
     // Cleanup on client disconnect
     req.raw.on("close", () => {
       clearInterval(heartbeat);
-      dashboardBus.off(`update:${tenantId}`, onUpdate);
+      dashboardBus.off(tenantChannel(tenantId), onUpdate);
     });
 
     // Prevent Fastify from closing the response — we manage it manually

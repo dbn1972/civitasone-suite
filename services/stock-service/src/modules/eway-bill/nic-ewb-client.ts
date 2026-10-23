@@ -49,6 +49,23 @@ export interface GetEwbResponse {
   ewbDate: string;
 }
 
+/**
+ * Thrown when NIC does not answer within EWB_TIMEOUT_MS (default 30000). For
+ * write calls the request may still have been executed upstream (`outcomeUnknown`):
+ * reconcile via getEwb before regenerating / retrying.
+ */
+export class NicTimeoutError extends Error {
+  constructor(path: string, public readonly timeoutMs: number, public readonly outcomeUnknown: boolean) {
+    super(`NIC EWB API ${path} timed out after ${timeoutMs}ms` + (outcomeUnknown ? " (outcome unknown; reconcile with getEwb before retrying)" : ""));
+    this.name = "NicTimeoutError";
+  }
+}
+
+function ewbTimeoutMs(): number {
+  const n = Number(process.env.EWB_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 30_000;
+}
+
 const EWB_API_URL  = process.env.EWB_API_URL ?? "mock";
 const EWB_USERNAME = process.env.EWB_USERNAME ?? "";
 const EWB_PASSWORD = process.env.EWB_PASSWORD ?? "";
@@ -87,7 +104,15 @@ async function nicRequest<T>(path: string, method: string, body?: unknown): Prom
   if (body) {
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(url, opts);
+  const timeoutMs = ewbTimeoutMs();
+  let res: Response;
+  try {
+    res = await fetch(url, { ...opts, signal: AbortSignal.timeout(timeoutMs) });
+  } catch (err) {
+    const name = (err as { name?: string } | null)?.name;
+    if (name === "TimeoutError" || name === "AbortError") throw new NicTimeoutError(path, timeoutMs, method !== "GET");
+    throw err;
+  }
 
   if (!res.ok) {
     const text = await res.text();

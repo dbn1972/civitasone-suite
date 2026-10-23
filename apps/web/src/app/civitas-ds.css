@@ -4,6 +4,9 @@
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --primary:#00439C; --primary-d:#003280; --primary-soft:#dbeafe;
+  /* --accent was referenced by 11 components but never defined (fallbacks removed in 53f343019),
+     so accent borders and badges rendered transparent. Alias it to the brand primary. */
+  --accent:var(--primary);
   --indigo:#6366f1; --violet:#8b5cf6; --amber:#f59e0b; --rose:#f43f5e; --sky:#0ea5e9; --cyan:#06b6d4;
   /* --mut was #98a2b3, which is 2.58:1 on --panel/#ffffff and fails WCAG 2.2 AA
      (SC 1.4.3 requires 4.5:1 for body text). It is used by the sidebar brand

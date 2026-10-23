@@ -332,7 +332,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     // Narrow cross-tenant read: the policy `public_share_read` (migration 0251)
     // makes visible only the row(s) matching this transaction-local token.
     const found = await rawSqlClient.begin(async (tx) => {
-      await tx`SELECT set_config('app.visiting_card_token', ${token}, true)`;
+      await tx.unsafe("SELECT set_config('app.visiting_card_token', $1, true)", [token]);
       return tx.unsafe(
         `SELECT e.full_name, e.email, e.mobile, dsg.name AS designation, dep.name AS department,
                 vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.website, vc.tagline,

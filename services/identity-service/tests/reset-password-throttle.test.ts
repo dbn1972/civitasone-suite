@@ -55,7 +55,7 @@ describe("reset-password throttle", () => {
     const blocked = await reset(U1);
     expect(blocked.statusCode).toBe(429);
     expect((blocked.json() as { code: string }).code).toBe("RESET_RECENTLY_REQUESTED");
-    const published = spy.mock.calls.filter((c) => c[0] === COMMANDS.resetPassword);
+    const published = spy.mock.calls.filter((c) => c[0] === COMMANDS.resetCredential);
     expect(published).toHaveLength(PASSWORD_RESET_MAX_PER_WINDOW);
     spy.mockRestore();
   });

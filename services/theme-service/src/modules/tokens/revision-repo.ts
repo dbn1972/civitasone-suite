@@ -75,7 +75,8 @@ export async function publish(args: {
     // publishes would otherwise both read N and insert N+1, and the expectedVersion check
     // would not be atomic. The transaction-scoped advisory lock makes read-check-insert one
     // critical section; the partial unique index (migration 0014) is the backstop.
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${"theme.publish:" + args.tenantId}, 0))`);
+    const publishLockKey = `theme.publish:${args.tenantId}`;
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${publishLockKey}, 0))`);
     const latestRows = await tx
       .select({ version: revisions.version })
       .from(revisions)

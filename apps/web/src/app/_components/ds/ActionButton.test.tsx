@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ActionButton } from "./ActionButton";
+import { UserFacingError } from "@/lib/userFacingError";
 
 describe("ActionButton", () => {
   it("renders the button with label", () => {
@@ -73,6 +74,27 @@ describe("ActionButton", () => {
     fireEvent.click(screen.getByText("Confirm"));
     await waitFor(() => {
       expect(screen.getByText("Server error")).toBeInTheDocument();
+    });
+  });
+
+  it("shows human network copy, not the raw browser string, on a network failure (CLOS2-S3-04)", async () => {
+    const onConfirm = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<ActionButton label="Approve" confirmTitle="Approve?" onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByText("Confirm"));
+    await waitFor(() => {
+      expect(screen.getByRole("alertdialog").textContent).toMatch(/couldn.t connect/i);
+    });
+    expect(screen.getByRole("alertdialog").textContent).not.toContain("Failed to fetch");
+  });
+
+  it("still shows a UserFacingError's own message (CLOS2-S3-04)", async () => {
+    const onConfirm = vi.fn().mockRejectedValue(new UserFacingError("RFQ already closed."));
+    render(<ActionButton label="Approve" confirmTitle="Approve?" onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByText("Confirm"));
+    await waitFor(() => {
+      expect(screen.getByText("RFQ already closed.")).toBeInTheDocument();
     });
   });
 

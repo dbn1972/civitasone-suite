@@ -48,10 +48,12 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
+  // CLOS2-S6-01: auth must register BEFORE the limiter so req.ctx.tenantId is set when the
+  // default per-tenant key is computed (onRequest hooks run in registration order).
+  await app.register(authPlugin);
+
   // GAP-NOTIFICATIONS-COMPOSE-01: per-route rate-limit config is read by the plugin.
   await registerRateLimit(app, { max: 200, timeWindow: "1 minute" });
-
-  await app.register(authPlugin);
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

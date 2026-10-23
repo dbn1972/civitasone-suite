@@ -97,27 +97,27 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body);
 
     // HR admins may update any goal; employees only their own
-    const ownerClause = isHr(ctx) ? "" : "AND employee_id = $3";
-    const checkParams = isHr(ctx) ? [id, ctx.tenantId] : [id, ctx.tenantId, ctx.actorId];
+    // Static statement: a NULL owner param (HR) disables the owner filter.
+    const ownerId = isHr(ctx) ? null : ctx.actorId;
     const { rows: existing } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 ${ownerClause}`,
-      checkParams,
+      "SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND ($3::uuid IS NULL OR employee_id = $3::uuid)",
+      [id, ctx.tenantId, ownerId],
     ));
     if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
-    const sets: string[] = ["updated_at = NOW()"];
-    const vals: unknown[] = [];
-    let i = 1;
-    if (body.title       != null)      { sets.push(`title = $${i++}`);       vals.push(body.title); }
-    if (body.description != null)      { sets.push(`description = $${i++}`); vals.push(body.description); }
-    if (body.status      != null)      { sets.push(`status = $${i++}`);      vals.push(body.status); }
-    if (body.progress    != null)      { sets.push(`progress = $${i++}`);    vals.push(body.progress); }
-    if (body.dueDate     !== undefined){ sets.push(`due_date = $${i++}`);    vals.push(body.dueDate); }
-    if (vals.length === 0) return reply.send({ updated: false });
-    vals.push(id, ctx.tenantId);
+    const dueDateGiven = body.dueDate !== undefined;
+    if (body.title == null && body.description == null && body.status == null && body.progress == null && !dueDateGiven) {
+      return reply.send({ updated: false });
+    }
+    // Static statement: COALESCE keeps a column unchanged when its param is NULL.
     await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `UPDATE hrms.goals SET ${sets.join(", ")} WHERE id = $${i} AND tenant_id = $${i + 1}`,
-      vals,
+      `UPDATE hrms.goals SET updated_at = NOW(),
+         title = COALESCE($1, title), description = COALESCE($2, description),
+         status = COALESCE($3, status), progress = COALESCE($4, progress),
+         due_date = CASE WHEN $5::boolean THEN $6 ELSE due_date END
+       WHERE id = $7 AND tenant_id = $8`,
+      [body.title ?? null, body.description ?? null, body.status ?? null, body.progress ?? null,
+       dueDateGiven, body.dueDate ?? null, id, ctx.tenantId],
     ));
     return reply.send({ updated: true });
   });
@@ -195,16 +195,15 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
       notes:       z.string().max(2000).optional(),
     }).parse(req.body);
 
-    const sets: string[] = ["updated_at = NOW()"];
-    const vals: unknown[] = [];
-    let i = 1;
-    if (body.status      != null)      { sets.push(`status = $${i++}`);       vals.push(body.status); }
-    if (body.completedAt !== undefined) { sets.push(`completed_at = $${i++}`); vals.push(body.completedAt); }
-    if (body.notes       != null)      { sets.push(`notes = $${i++}`);        vals.push(body.notes); }
-    vals.push(id, ctx.tenantId);
+    const completedAtGiven = body.completedAt !== undefined;
+    // Static statement: COALESCE keeps a column unchanged when its param is NULL.
     const { rowCount } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `UPDATE hrms.development_plans SET ${sets.join(", ")} WHERE id = $${i} AND tenant_id = $${i + 1}`,
-      vals,
+      `UPDATE hrms.development_plans SET updated_at = NOW(),
+         status = COALESCE($1, status),
+         completed_at = CASE WHEN $2::boolean THEN $3 ELSE completed_at END,
+         notes = COALESCE($4, notes)
+       WHERE id = $5 AND tenant_id = $6`,
+      [body.status ?? null, completedAtGiven, body.completedAt ?? null, body.notes ?? null, id, ctx.tenantId],
     ));
     if (!rowCount) throw new HttpError(404, "NOT_FOUND", "Development plan not found");
     return reply.send({ updated: true });

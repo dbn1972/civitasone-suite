@@ -231,8 +231,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
       if (poAmountMinor != null && grnAmountMinor != null) {
         const THREE_WAY_TOLERANCE_PCT = 5;
         const deviationMinor = grossBig > poAmountMinor ? grossBig - poAmountMinor : poAmountMinor - grossBig;
+        // Deviation as a PERCENTAGE ratio (not money): exact bigint basis points, then a
+        // small integer to a float percent for the tolerance comparison.
+        const deviationBps = poAmountMinor > 0n ? deviationMinor * 10000n / poAmountMinor : 0n;
         const variance = poAmountMinor > 0n
-          ? Number(deviationMinor * 10000n / poAmountMinor) / 100
+          ? Number(deviationBps) / 100
           : (grossBig > 0n ? Number.POSITIVE_INFINITY : 0);
         const matched = variance <= THREE_WAY_TOLERANCE_PCT;
         await enqueue(tx, {

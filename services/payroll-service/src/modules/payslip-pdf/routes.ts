@@ -1,3 +1,4 @@
+import { formatRupeesIN, minorFromDb } from "../../shared/money.js";
 import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
 import { loadLetterhead } from "../letterhead/routes.js";
 import type { FastifyInstance } from "fastify";
@@ -75,7 +76,7 @@ const DEFAULT_TEMPLATE = `<!DOCTYPE html>
 </html>`;
 
 function formatAmount(minor: number | bigint): string {
-  return (Number(minor) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return formatRupeesIN(minorFromDb(minor));
 }
 
 // Intentionally flat: this only ever does {{var}} substitution, no

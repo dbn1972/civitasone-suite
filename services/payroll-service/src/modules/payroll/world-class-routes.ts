@@ -1,3 +1,4 @@
+import { minorFromDb, minorToWireNumber } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
@@ -248,28 +249,28 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       net_pay_minor: string; tds_minor: string; month: string;
     }>;
 
-    let ytdGross = 0, ytdNet = 0, ytdTds = 0, ytdDeductions = 0;
+    let ytdGross = 0n, ytdNet = 0n, ytdTds = 0n, ytdDeductions = 0n;
     for (const s of slipRows) {
-      ytdGross       += Number(s.gross_minor);
-      ytdDeductions  += Number(s.total_deductions_minor);
-      ytdNet         += Number(s.net_pay_minor);
-      ytdTds         += Number(s.tds_minor);
+      ytdGross       += minorFromDb(s.gross_minor);
+      ytdDeductions  += minorFromDb(s.total_deductions_minor);
+      ytdNet         += minorFromDb(s.net_pay_minor);
+      ytdTds         += minorFromDb(s.tds_minor);
     }
 
     return reply.send({
       employeeId: q.employeeId,
       fy: fyStr,
       monthsProcessed: slipRows.length,
-      ytdGrossMinor:      ytdGross,
-      ytdDeductionsMinor: ytdDeductions,
-      ytdNetMinor:        ytdNet,
-      ytdTdsMinor:        ytdTds,
+      ytdGrossMinor:      minorToWireNumber(ytdGross),
+      ytdDeductionsMinor: minorToWireNumber(ytdDeductions),
+      ytdNetMinor:        minorToWireNumber(ytdNet),
+      ytdTdsMinor:        minorToWireNumber(ytdTds),
       breakdown: slipRows.map((s) => ({
         period: s.month,
-        grossMinor:      Number(s.gross_minor),
-        deductionsMinor: Number(s.total_deductions_minor),
-        netMinor:        Number(s.net_pay_minor),
-        tdsMinor:        Number(s.tds_minor),
+        grossMinor:      minorToWireNumber(minorFromDb(s.gross_minor)),
+        deductionsMinor: minorToWireNumber(minorFromDb(s.total_deductions_minor)),
+        netMinor:        minorToWireNumber(minorFromDb(s.net_pay_minor)),
+        tdsMinor:        minorToWireNumber(minorFromDb(s.tds_minor)),
       })),
     });
   });
@@ -306,7 +307,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     }>;
     const s = rows[0];
     return reply.send({
-      protectedNetFloorMinor: s ? Number(s.protected_net_floor_minor) : 0,
+      protectedNetFloorMinor: s ? minorToWireNumber(minorFromDb(s.protected_net_floor_minor)) : 0,
       updatedAt: s?.updated_at ?? null,
       // GAP-PAYROLL-SALARY-REVISIONS-04: maker != checker for salary revisions (default ON).
       salaryRevisionSecondApprover: s ? s.salary_revision_second_approver !== false : true,

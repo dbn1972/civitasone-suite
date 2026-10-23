@@ -43,6 +43,8 @@ export class CircuitBreaker {
   private _state: CircuitBreakerState = "closed";
   private _failures = 0;
   private _openedAt: number | null = null;
+  /** True while the single half-open probe is in flight. */
+  private _probing = false;
 
   constructor(private readonly opts: CircuitBreakerOptions) {
     if (opts.failureThreshold < 1) throw new RangeError("failureThreshold must be >= 1");
@@ -78,13 +80,25 @@ export class CircuitBreaker {
       throw new CircuitBreakerOpenError(this.opts.name);
     }
 
+    // Half-open admits exactly ONE probe. Set synchronously, before the first await, so concurrent callers
+    // arriving in the same tick are rejected instead of all running fn.
+    const isProbe = currentState === "half-open";
+    if (isProbe) {
+      if (this._probing) throw new CircuitBreakerOpenError(this.opts.name);
+      this._probing = true;
+    }
+
     try {
-      const result = await fn();
-      this._onSuccess();
-      return result;
-    } catch (err) {
-      if (this.opts.countsAsFailure?.(err) !== false) this._onFailure();
-      throw err;
+      try {
+        const result = await fn();
+        this._onSuccess();
+        return result;
+      } catch (err) {
+        if (this.opts.countsAsFailure?.(err) !== false) this._onFailure();
+        throw err;
+      }
+    } finally {
+      if (isProbe) this._probing = false;
     }
   }
 

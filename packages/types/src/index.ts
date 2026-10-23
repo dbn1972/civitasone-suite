@@ -1550,14 +1550,14 @@ export type TicketDetail = {
   slaStatus: "within_sla" | "due_soon" | "breached";
   status: "open" | "in_progress" | "pending" | "resolved" | "closed";
   channel?: "web" | "email" | "phone" | "walk_in";
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string | null;
+  updatedAt: string | null;
   resolvedAt?: string;
   comments: Array<{
     id: string;
     author: string;
     content: string;
-    createdAt: string;
+    createdAt: string | null;
     isInternal: boolean;
   }>;
 };
@@ -2493,7 +2493,7 @@ export type UserSummary = {
   mfaEnabled: boolean;
   lastLoginAt?: string;
   status: string;
-  createdAt: string;
+  createdAt: string | null;
 };
 
 export type UserDetail = {

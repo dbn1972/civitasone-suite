@@ -46,9 +46,9 @@ export function IssuesTable({ rows }: { rows: LibraryIssueSummary[] }) {
     ...i,
     bookTitleDisplay: i.bookTitle ?? "—",
     borrowerDisplay: nameMap.get(i.borrowerRef) ?? "—",
-    issuedAtDisplay: formatIndianDate(i.issuedAt.slice(0, 10)),
-    dueAtDisplay: formatIndianDate(i.dueAt.slice(0, 10)),
-    returnedAtDisplay: i.returnedAt ? formatIndianDate(i.returnedAt.slice(0, 10)) : "—",
+    issuedAtDisplay: formatIndianDate(i.issuedAt),
+    dueAtDisplay: formatIndianDate(i.dueAt),
+    returnedAtDisplay: i.returnedAt ? formatIndianDate(i.returnedAt) : "—",
   }));
 
   async function confirmReturn() {

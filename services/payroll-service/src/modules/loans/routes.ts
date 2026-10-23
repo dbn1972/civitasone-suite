@@ -1,3 +1,4 @@
+import { minorFromDb, minorToWireNumber, divRoundHalfUp } from "../../shared/money.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
@@ -67,11 +68,13 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     // repayment schedule by iterating loan ids (IDOR).
     await scopeEmployeeId(ctx, loan.employeeId, READER_STAFF_ROLES);
 
-    const principal = Number(loan.principalMinor);
-    const emiMinor  = Number(loan.emiMinor);
-    const annualRate = Number(loan.interestRatePct);
+    // Money stays bigint paise end to end; only the JSON edge converts, via the
+    // range-checked minorToWireNumber (the wire contract is JSON-number paise).
+    const principal = minorFromDb(loan.principalMinor);
+    const emiMinor = minorFromDb(loan.emiMinor);
+    const annualRate = Number(loan.interestRatePct); // a percentage (numeric(5,2)), not money
+    const { scaled: ratePctScaled, scale: ratePctScale } = parseDecimalPct(String(loan.interestRatePct));
     const tenure = loan.tenureMonths;
-    const monthlyRate = annualRate / 100 / 12;
 
     const schedule: Array<{
       installmentNo: number;
@@ -84,7 +87,9 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
 
     let balance = principal;
     for (let i = 1; i <= tenure; i++) {
-      const interest = monthlyRate > 0 ? Math.round(balance * monthlyRate) : 0;
+      // round-half-up(balance * pct / 100 / 12) in exact integer math (same
+      // rounding policy as the former Math.round(balance * monthlyRate)).
+      const interest = ratePctScaled > 0n ? divRoundHalfUp(balance * ratePctScaled, ratePctScale * 1200n) : 0n;
       // LOW (payroll-calc audit): clamp to >= 0, matching the real deduction
       // engine's own guard (consumer.ts processPayrollRun's loan loop: `if
       // (principal < 0n) principal = 0n;`). Without this, an EMI smaller than
@@ -94,32 +99,43 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       // for what is only a preview endpoint (the real deduction engine
       // already collects the full interest and simply recovers zero
       // principal that period, leaving the balance flat, not growing).
-      const principalPart = Math.max(0, Math.min(emiMinor - interest, balance));
-      const closing = Math.max(0, balance - principalPart);
+      const principalPart = maxBig(0n, minBig(emiMinor - interest, balance));
+      const closing = maxBig(0n, balance - principalPart);
       schedule.push({
         installmentNo: i,
-        openingMinor: balance,
-        emiMinor,
-        principalMinor: principalPart,
-        interestMinor: interest,
-        closingMinor: closing,
+        openingMinor: minorToWireNumber(balance),
+        emiMinor: minorToWireNumber(emiMinor),
+        principalMinor: minorToWireNumber(principalPart),
+        interestMinor: minorToWireNumber(interest),
+        closingMinor: minorToWireNumber(closing),
       });
       balance = closing;
-      if (balance === 0) break;
+      if (balance === 0n) break;
     }
 
     return reply.send({
       loanId: id,
       loanNo: loan.loanNo,
       tenureMonths: tenure,
-      principalMinor: principal,
-      emiMinor,
+      principalMinor: minorToWireNumber(principal),
+      emiMinor: minorToWireNumber(emiMinor),
       interestRatePct: annualRate,
       schedule,
     });
   });
 
   app.setErrorHandler(errorHandler);
+}
+
+const maxBig = (a: bigint, b: bigint): bigint => (a > b ? a : b);
+const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
+
+/** Parse a non-negative decimal percentage string ("8.50") into an exact scaled integer: 850n over scale 100n. */
+function parseDecimalPct(pct: string): { scaled: bigint; scale: bigint } {
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(pct.trim());
+  if (!m) throw new HttpError(500, "INVALID_RATE", "stored interest rate is not a non-negative decimal");
+  const frac = m[2] ?? "";
+  return { scaled: BigInt(`${m[1]}${frac}`), scale: 10n ** BigInt(frac.length) };
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

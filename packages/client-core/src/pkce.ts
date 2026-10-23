@@ -81,10 +81,10 @@ export async function exchangeAuthorizationCode(
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`TOKEN_EXCHANGE_FAILED: ${res.status} ${detail}`);
+    throw new Error(`TOKEN_EXCHANGE_FAILED: ${res.status}`);
   }
   return res.json() as Promise<TokenResponse>;
 }
@@ -103,6 +103,7 @@ export async function refreshAccessToken(
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(10_000),
   });
   if (!res.ok) throw new Error(`TOKEN_REFRESH_FAILED: ${res.status}`);
   return res.json() as Promise<TokenResponse>;

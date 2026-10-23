@@ -116,7 +116,9 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
       if (!sched) return;
-      const fee = computeFee(Number(sched.baseAmount), sched.exemptions, p.subject ?? {});
+      // sched.baseAmount is a bigint({mode:"number"}) column (validator-capped at 100_000_000_00
+      // paise, far below 2^53): already a safe-integer number, so passed with no coercion.
+      const fee = computeFee(sched.baseAmount, sched.exemptions, p.subject ?? {});
       const gatewayRef = configured ? `pi_${p.id}` : null;
       await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
@@ -165,7 +167,9 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
       if (!sched) return;
-      const fee = computeFee(Number(sched.baseAmount), sched.exemptions, p.subject ?? {});
+      // sched.baseAmount is a bigint({mode:"number"}) column (validator-capped at 100_000_000_00
+      // paise, far below 2^53): already a safe-integer number, so passed with no coercion.
+      const fee = computeFee(sched.baseAmount, sched.exemptions, p.subject ?? {});
       const now = new Date();
       const year = now.getUTCFullYear();
       const seq = await repo.nextReceiptSeq(tx, p.tenantId, year);
@@ -286,7 +290,7 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pay = await repo.findPaymentByIdTx(tx, p.paymentId, p.tenantId);
       if (!pay || !isRefundable(pay.status)) return;
-      if (p.amount > Number(pay.amount)) return;
+      if (p.amount > pay.amount) return; // both safe-integer paise numbers (see schema.ts mode:"number")
       const existing = await repo.listRefundsByPaymentTx(tx, p.tenantId, p.paymentId);
       if (existing.some((r) => r.status === "requested")) return;
       await repo.insertRefund(tx, {

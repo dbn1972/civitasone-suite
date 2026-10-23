@@ -69,4 +69,19 @@ describe("IssuesTable", () => {
       expect(cells.length).toBeGreaterThanOrEqual(2);
     });
   });
+
+  it("CLOS2-S1-03: issued/due/returned dates roll over to the IST calendar day", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+    const rolled: LibraryIssueSummary[] = [
+      {
+        id: "i9", bookId: "b9", bookTitle: "Rollover Book", borrowerRef: EMP_ID,
+        issuedAt: "2026-10-22T20:30:00.000Z", dueAt: "2026-11-04T19:00:00.000Z",
+        returnedAt: "2026-11-05T20:00:00.000Z", status: "returned",
+      } as LibraryIssueSummary,
+    ];
+    render(<IssuesTable rows={rolled} />);
+    expect((await screen.findAllByText("23 Oct 2026"))[0]).toBeInTheDocument();
+    expect(screen.getAllByText("05 Nov 2026")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("06 Nov 2026")[0]).toBeInTheDocument();
+  });
 });

@@ -9,6 +9,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { scrollBehavior } from "@/lib/motion";
+import { renderMarkdown } from "./renderMarkdown";
+
+// Re-exported for existing callers/tests that import it from the panel (CLOS2-S3-08).
+export { renderMarkdown };
 
 const SESSION_KEY = "civitasone.assistant.messages";
 
@@ -21,23 +25,6 @@ export interface ChatMessage {
 
 interface AskCivitasOnePanelProps {
   onClose: () => void;
-}
-
-/** Simple markdown-to-HTML renderer (bold, italic, code, links, line breaks). */
-function renderMarkdown(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/```([\s\S]*?)```/g, "<pre><code>$1</code></pre>")
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, rawHref) => {
-      const href = /^https?:\/\//i.test(rawHref) ? rawHref : '#';
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
-    })
-    .replace(/\n/g, "<br>");
 }
 
 function loadMessages(): ChatMessage[] {

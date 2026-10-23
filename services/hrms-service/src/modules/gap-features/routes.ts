@@ -2,6 +2,7 @@
  * World-class gap features — compensation planning, LMS, skills matrix,
  * succession planning, engagement surveys, onboarding, 360° feedback, benefits.
  */
+import { minorToSafeNumber } from "@civitasone/schemas/money";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
@@ -621,7 +622,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(422, "FY_MISMATCH", "election fy does not match the plan's financial year");
       }
       const components = Array.isArray(plan.components) ? plan.components : [];
-      const capByName = new Map(components.map((c) => [c.name, Number(c.maxMinor)]));
+      const capByName = new Map(components.map((c) => [c.name, minorToSafeNumber(c.maxMinor)]));
       const seenComponents = new Set<string>();
       for (const e of body.elections) {
         // A repeated component would let each entry pass the per-component cap
@@ -638,7 +639,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
           throw new HttpError(422, "CAP_EXCEEDED", `elected amount for "${e.component}" exceeds its configured cap`);
         }
       }
-      const flexBudget = Number(plan.flex_budget_minor);
+      const flexBudget = minorToSafeNumber(plan.flex_budget_minor);
       if (flexBudget > 0 && total > flexBudget) {
         throw new HttpError(422, "BUDGET_EXCEEDED", "total elected amount exceeds the plan's flex budget");
       }

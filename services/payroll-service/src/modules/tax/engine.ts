@@ -23,8 +23,8 @@
  * DOM-014: slab / rebate / surcharge / marginal-relief / cess were previously
  * computed as `Math.round(rupees * floatRate)` — floating-point rupee
  * arithmetic, the same class of bug the finance gl-service comment at
- * `gl/queries.ts:71` warns against ("Number(minor)/100 ... float-precision
- * loss"). computeTax() keeps its existing Number-rupees public signature
+ * `gl/queries.ts:71` warns against (dividing a float-converted paise value
+ * by 100 ... float-precision loss"). computeTax() keeps its existing Number-rupees public signature
  * (every caller — routes.ts, form16.ts, fnf/domain.ts — and the pinned tests
  * in engine-money.test.ts depend on it, and no real (regime, FY) slab table
  * comes close to Number.MAX_SAFE_INTEGER rupees), but every internal step now
@@ -35,6 +35,7 @@
  * convert bigint paise down to the engine's rupee inputs, or bigint TDS
  * spreads) are converted the same way.
  */
+import { toSafeInt } from "../../shared/money.js";
 export const PLATFORM_DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 export interface TaxSlab { from: number; to: number; rate: number }
 export type Regime = "old" | "new";
@@ -163,8 +164,8 @@ function slabTax(taxableIncomeMinor: bigint, slabs: TaxSlab[]): { taxMinor: bigi
     totalMinor += slabTaxMinor;
     breakdown.push({
       slab: s.to === Infinity ? `>${(s.from / 100000).toFixed(0)}L` : `${(s.from / 100000).toFixed(1)}L-${(s.to / 100000).toFixed(1)}L`,
-      taxableAmount: Number(inSlabMinor / 100n),
-      tax: Number(roundRupeeMinor(slabTaxMinor) / 100n),
+      taxableAmount: toSafeInt(inSlabMinor / 100n),
+      tax: toSafeInt(roundRupeeMinor(slabTaxMinor) / 100n),
     });
     remaining -= inSlabMinor;
   }
@@ -213,11 +214,11 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
   const totalMinor = roundTenRupeesMinor(afterRebateMinor + surchargeMinor + cessMinor);
 
   return {
-    baseTax: Number(baseTaxMinor / 100n),
-    rebate: Number(rebateMinor / 100n),
-    surcharge: Number(surchargeMinor / 100n),
-    cess: Number(cessMinor / 100n),
-    totalTax: Number(totalMinor / 100n),
+    baseTax: toSafeInt(baseTaxMinor / 100n),
+    rebate: toSafeInt(rebateMinor / 100n),
+    surcharge: toSafeInt(surchargeMinor / 100n),
+    cess: toSafeInt(cessMinor / 100n),
+    totalTax: toSafeInt(totalMinor / 100n),
     slabBreakdown: breakdown,
   };
 }
@@ -232,7 +233,7 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
 export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
   const stdDeductionMinor = BigInt(stdDeduction(regime, startYear, tenantId)) * 100n;
   const taxableMinor = roundTenRupeesMinor(maxBig(0n, annualGrossMinor - stdDeductionMinor));
-  const taxable = Number(taxableMinor / 100n);
+  const taxable = toSafeInt(taxableMinor / 100n);
   const annualTaxMinor = BigInt(computeTax(taxable, regime, startYear, tenantId).totalTax) * 100n;
   const monthlyMinor = roundRupeeMinor(divRoundBig(annualTaxMinor, 12n));
   return monthlyMinor;
@@ -250,7 +251,7 @@ export function hraExemptionMinor(salaryAnnualMinor: bigint, hraReceivedAnnualMi
 /** Full annual income tax (paise) from a precomputed ANNUAL TAXABLE income. */
 export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
   const taxableMinor = roundTenRupeesMinor(maxBig(0n, annualTaxableMinor)); // Sec 288A
-  const taxableRupees = Number(taxableMinor / 100n);
+  const taxableRupees = toSafeInt(taxableMinor / 100n);
   return BigInt(computeTax(taxableRupees, regime, startYear, tenantId).totalTax) * 100n;
 }
 

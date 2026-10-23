@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { browserFetch } from "@/lib/api/browserClient";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AcceptedNotice, ActionButton } from "../../../_components/ds";
@@ -153,9 +154,8 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       if (validTo < validFrom) {
         throw new Error("'Valid to' must be on or after 'Valid from'");
       }
-      const res = await fetch(`/api/proxy/v1/contract/contracts/${contractId}/bonds`, {
+      const res = await browserFetch(`v1/contract/contracts/${contractId}/bonds`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bondType,
           amountMinor: Number(amountMinor),
@@ -186,11 +186,10 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
     setError(undefined);
     setBusyBondId(bondId);
     try {
-      const res = await fetch(
-        `/api/proxy/v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
+      const res = await browserFetch(
+        `v1/contract/contracts/${contractId}/bonds/${bondId}/transition`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             toStatus,
             notes: reason?.trim() || `${toStatus[0]!.toUpperCase()}${toStatus.slice(1)} from contract detail`,

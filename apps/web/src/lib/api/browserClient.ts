@@ -16,9 +16,14 @@ function deviceHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     "x-device-id": getOrCreateDeviceId(),
   };
-  if (typeof sessionStorage !== "undefined") {
-    const trust = sessionStorage.getItem(TRUST_KEY);
-    if (trust) headers["x-device-trust-token"] = trust;
+  // CLOS2-S3-03: blocked storage throws SecurityError; omit the trust token then.
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const trust = sessionStorage.getItem(TRUST_KEY);
+      if (trust) headers["x-device-trust-token"] = trust;
+    }
+  } catch {
+    // storage unavailable: send the request without a trust token
   }
   return headers;
 }

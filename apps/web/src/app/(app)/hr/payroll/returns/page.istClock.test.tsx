@@ -35,14 +35,14 @@ describe("ReturnsPage default FY/quarter (IST)", () => {
 
   it("01:00 IST on 1 Apr is FY 2026-27 Q1 (host clock still on 31 Mar)", async () => {
     vi.setSystemTime(new Date("2026-03-31T19:00:00Z"));
-    await ReturnsPage({ searchParams: {} });
+    await ReturnsPage({ searchParams: Promise.resolve({}) });
     expect(firstUrl()).toContain("2026-27");
     expect(firstUrl()).toContain("Q1");
   });
 
   it("23:30 IST on 31 Mar is still FY 2025-26 Q4", async () => {
     vi.setSystemTime(new Date("2026-03-31T18:00:00Z"));
-    await ReturnsPage({ searchParams: {} });
+    await ReturnsPage({ searchParams: Promise.resolve({}) });
     expect(firstUrl()).toContain("2025-26");
     expect(firstUrl()).toContain("Q4");
   });

@@ -22,14 +22,19 @@ test.describe('Locations', () => {
 
   test('locations list shows seeded location HQ Delhi', async ({ page }) => {
     await page.goto('/locations/list');
-    await expect(page.getByText('HQ Delhi')).toBeVisible();
+    // Scoped to the table cell: the same name also appears as an <option> in
+    // the "Parent location" select of the add-location form (7554d78c8,
+    // GAP-LOCATIONS-LIST-01/02), so a bare getByText is a strict-mode violation.
+    await expect(page.getByRole('cell', { name: 'HQ Delhi', exact: true })).toBeVisible();
   });
 
   test('locations list shows location type office', async ({ page }) => {
     await page.goto('/locations/list');
     // cell role + exact: true -- a loose "office" text search also matches the
     // page heading ("Offices & branches") and subtitle ("Your head office...").
-    await expect(page.getByRole('cell', { name: 'office', exact: true })).toBeVisible();
+    // The raw mock type `office` is rendered through the locationsList.types
+    // catalogue (LocationsListTable.tsx, 7554d78c8), so the cell reads "Office".
+    await expect(page.getByRole('cell', { name: 'Office', exact: true })).toBeVisible();
   });
 
   test('locations list shows active status', async ({ page }) => {

@@ -1365,7 +1365,21 @@ function handler(req: http.IncomingMessage, res: http.ServerResponse) {
     return;
   }
 
-  const body = path in FIXTURES ? FIXTURES[path] : { data: [] };
+  let body: unknown = path in FIXTURES ? FIXTURES[path] : { data: [] };
+  // GAP-HR-LEAVE-03: the real GET /v1/hrms/leave-requests answers the opt-in
+  // ?withMeta=1 with a { data, meta } envelope (LeaveRequestPageSchema, built by
+  // services/hrms-service/src/modules/leave/routes.ts); only the bare-array
+  // form is returned without it. /hr/leave asks for the envelope, so serve it
+  // in the real shape or the page falls into its "couldn't load" error state.
+  if (path === '/api/v1/hrms/leave-requests' && Array.isArray(body) && /[?&]withMeta=1\b/.test(req.url ?? '')) {
+    const rows = body as Array<{ status: string }>;
+    const statusCounts: Record<string, number> = {};
+    for (const r of rows) statusCounts[r.status] = (statusCounts[r.status] ?? 0) + 1;
+    body = {
+      data: rows,
+      meta: { page: 1, pageSize: 100, offset: 0, total: rows.length, hasMore: false, statusCounts },
+    };
+  }
   res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
   res.end(JSON.stringify(body));
 }

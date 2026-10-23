@@ -64,7 +64,11 @@ export default async function Page(props: { searchParams: Promise<{ bucket?: str
     const pa = PRIORITY_WEIGHT[a.priority.toLowerCase()] ?? 2;
     const pb = PRIORITY_WEIGHT[b.priority.toLowerCase()] ?? 2;
     if (pa !== pb) return pa - pb;
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    // CLOS2-S3-11: a ticket with no createdAt sorts last (not as "newest").
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : NaN;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : NaN;
+    if (Number.isNaN(ta) || Number.isNaN(tb)) return Number.isNaN(ta) ? (Number.isNaN(tb) ? 0 : 1) : -1;
+    return ta - tb;
   });
 
   const rows: TicketRow[] = sorted.map((t) => ({

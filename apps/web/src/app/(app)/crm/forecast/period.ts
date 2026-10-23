@@ -38,7 +38,9 @@ export function localizedPeriodLabel(
 /** The FY an ISO date belongs to (the starting calendar year, e.g. FY starting Apr 2026 → 2026). */
 export function financialYearStartYear(d: Date): number {
   // Months are 0-based; Jan/Feb/Mar (0,1,2) belong to the FY that started the previous April.
-  return d.getUTCMonth() <= 2 ? d.getUTCFullYear() - 1 : d.getUTCFullYear();
+  // The FY boundary is an IST calendar boundary (UTC+05:30, no DST): shift the instant before reading UTC fields.
+  const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+  return ist.getUTCMonth() <= 2 ? ist.getUTCFullYear() - 1 : ist.getUTCFullYear();
 }
 
 function iso(year: number, month1: number, day: number): string {

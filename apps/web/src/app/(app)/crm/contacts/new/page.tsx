@@ -37,19 +37,16 @@ type LeadFieldRule = { fieldName?: string; required?: boolean; enabled?: boolean
  * link rather than a fragile name match. Mirrors OpportunityForm's adapters.
  */
 async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  try {
-    const res = await browserFetch("v1/crm/accounts", { signal });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
-    const q = query.trim().toLowerCase();
-    return (body.data ?? [])
-      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
-      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
-      .slice(0, 20)
-      .map((a) => ({ id: a.id, label: a.name }));
-  } catch {
-    return [];
-  }
+  // Throws on failure (EntityPicker contract): a failed search must show the search-error text, not "No matches".
+  const res = await browserFetch("v1/crm/accounts", { signal });
+  if (!res.ok) throw new Error("accounts search failed");
+  const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
+  const q = query.trim().toLowerCase();
+  return (body.data ?? [])
+    .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
+    .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
+    .slice(0, 20)
+    .map((a) => ({ id: a.id, label: a.name }));
 }
 
 async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {

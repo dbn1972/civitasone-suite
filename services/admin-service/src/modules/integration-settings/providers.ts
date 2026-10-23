@@ -7,7 +7,7 @@
  *   - label      → human name
  *   - configSchema → zod schema for the NON-secret settings kept in `config`
  *   - secretFields → the fields that must be encrypted (never returned in GETs)
- *   - primarySecret → which secret field the masked ••••1234 is derived from
+ *   - maskSourceField → which secret field the masked ••••1234 is derived from
  *   - test()     → a REAL connection probe; fail-closed, never a fake success.
  *
  * Adding a provider = one entry here + (optionally) an adapter reading it.
@@ -50,7 +50,7 @@ export interface ProviderDef {
   /** field names that are secret → encrypted, never returned. */
   secretFields: string[];
   /** the secret whose last4 is shown masked. */
-  primarySecret: string;
+  maskSourceField: string;
   /** run a real connection probe against the resolved config + secrets. */
   test: (input: { config: Record<string, unknown>; secrets: Record<string, string>; endpointUrl: string }) => Promise<TestResult>;
 }
@@ -150,7 +150,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       baseUrl: z.string().url().default("https://api.anthropic.com"),
     }),
     secretFields: ["apiKey"],
-    primarySecret: "apiKey",
+    maskSourceField: "apiKey",
     test: async ({ config, secrets }) => {
       const base = String(config.baseUrl ?? "https://api.anthropic.com").replace(/\/$/, "");
       const key = secrets.apiKey;
@@ -170,7 +170,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       fromNumber: z.string().min(3),
     }),
     secretFields: ["authToken"],
-    primarySecret: "authToken",
+    maskSourceField: "authToken",
     test: async ({ config, secrets }) => {
       const sid = String(config.accountSid ?? "");
       const token = secrets.authToken;
@@ -191,7 +191,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       graphVersion: z.string().default("v18.0"),
     }),
     secretFields: ["accessToken"],
-    primarySecret: "accessToken",
+    maskSourceField: "accessToken",
     test: async ({ config, secrets }) => {
       const id = String(config.phoneNumberId ?? "");
       const token = secrets.accessToken;
@@ -215,7 +215,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       secure: z.boolean().default(false),
     }),
     secretFields: ["password"],
-    primarySecret: "password",
+    maskSourceField: "password",
     test: async ({ config }) => {
       const host = String(config.host ?? "");
       const p = Number(config.port ?? 587);
@@ -235,7 +235,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       serviceAccount: z.string().optional(),
     }).refine((v) => v.serverKey || v.serviceAccount, { message: "serverKey or serviceAccount is required" }),
     secretFields: ["serverKey", "serviceAccount"],
-    primarySecret: "serverKey",
+    maskSourceField: "serverKey",
     test: async ({ config, secrets }) => {
       // FCM v1 needs an OAuth token minted from the service account — a full
       // token exchange is out of scope for a health probe, so we verify the
@@ -265,7 +265,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       cert: z.string().min(1),
     }),
     secretFields: ["cert"],
-    primarySecret: "cert",
+    maskSourceField: "cert",
     test: async ({ config }) => {
       const endpoint = String(config.endpoint ?? "");
       if (!endpoint) return { status: "failed", ok: false, error: "endpoint is not configured" };
@@ -283,7 +283,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       endpoint: z.string().url().optional(),
     }),
     secretFields: ["key"],
-    primarySecret: "key",
+    maskSourceField: "key",
     test: async ({ config, secrets }) => {
       if (!config.vpa || !secrets.key) return { status: "failed", ok: false, error: "vpa/key not configured" };
       const endpoint = config.endpoint ? String(config.endpoint) : "";
@@ -315,7 +315,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       columnMapping: z.record(z.enum(["name", "email", "mobile", "company", "city"])).default({}),
     }),
     secretFields: ["privateKey"],
-    primarySecret: "privateKey",
+    maskSourceField: "privateKey",
     test: async ({ config }) => {
       const host = String(config.host ?? "");
       const p = Number(config.port ?? 22);
@@ -338,7 +338,7 @@ export const REGISTRY: Record<Provider, ProviderDef> = {
       endpoint: z.string().url(),
     }),
     secretFields: ["apiKey"],
-    primarySecret: "apiKey",
+    maskSourceField: "apiKey",
     test: async ({ config, secrets }) => {
       const endpoint = String(config.endpoint ?? "");
       if (!endpoint || !secrets.apiKey) return { status: "failed", ok: false, error: "endpoint/apiKey not configured" };

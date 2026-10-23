@@ -10,9 +10,12 @@
  *   PFMS_AGENCY_CODE   — registered agency code
  *   PFMS_AUTH_TOKEN    — bearer token or API key
  *   PFMS_SCHEME_CODE   — default scheme code for disbursements
+ *   PFMS_TIMEOUT_MS    — per-request timeout (default 30000)
  *
  * Fail-closed: if env vars are missing in non-mock mode, all calls throw.
  */
+
+import { fetchWithTimeout, timeoutFromEnv } from "./timeout.js";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -85,6 +88,22 @@ export class PfmsAdapterError extends Error {
   }
 }
 
+/**
+ * Thrown when the PFMS gateway does not answer within PFMS_TIMEOUT_MS. For a
+ * disbursement the request may still have been executed upstream
+ * (`outcomeUnknown`): reconcile with checkDisbursementStatus / the same txnRef
+ * before any retry.
+ */
+export class PfmsTimeoutError extends PfmsAdapterError {
+  constructor(operation: string, public readonly timeoutMs: number, public readonly outcomeUnknown: boolean) {
+    super(
+      `PFMS ${operation} timed out after ${timeoutMs}ms` + (outcomeUnknown ? " (outcome unknown; reconcile status before retrying)" : ""),
+      "PFMS_TIMEOUT",
+    );
+    this.name = "PfmsTimeoutError";
+  }
+}
+
 // ── Mock Implementation ───────────────────────────────────────────
 
 function mockDisburse(req: PfmsDisbursementRequest): PfmsDisbursementResponse {
@@ -119,7 +138,7 @@ async function realDisburse(req: PfmsDisbursementRequest): Promise<PfmsDisbursem
     narration: req.narration,
   };
 
-  const res = await fetch(`${API_URL}/v1/disbursement/initiate`, {
+  const res = await fetchWithTimeout(`${API_URL}/v1/disbursement/initiate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -127,7 +146,7 @@ async function realDisburse(req: PfmsDisbursementRequest): Promise<PfmsDisbursem
       "X-Agency-Code": AGENCY_CODE,
     },
     body: JSON.stringify(body),
-  });
+  }, timeoutFromEnv("PFMS_TIMEOUT_MS"), (ms) => new PfmsTimeoutError("disbursement", ms, true));
 
   if (!res.ok) {
     const text = await res.text();
@@ -148,13 +167,13 @@ async function realDisburse(req: PfmsDisbursementRequest): Promise<PfmsDisbursem
 }
 
 async function realStatus(req: PfmsStatusRequest): Promise<PfmsStatusResponse> {
-  const res = await fetch(`${API_URL}/v1/disbursement/status?txnId=${encodeURIComponent(req.pfmsTxnId)}`, {
+  const res = await fetchWithTimeout(`${API_URL}/v1/disbursement/status?txnId=${encodeURIComponent(req.pfmsTxnId)}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${AUTH_TOKEN}`,
       "X-Agency-Code": AGENCY_CODE,
     },
-  });
+  }, timeoutFromEnv("PFMS_TIMEOUT_MS"), (ms) => new PfmsTimeoutError("status check", ms, false));
 
   if (!res.ok) {
     const text = await res.text();

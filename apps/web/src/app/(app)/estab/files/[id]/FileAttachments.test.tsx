@@ -161,4 +161,11 @@ describe("FileAttachments — download link (DETAIL-02)", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("This attachment is unavailable."),
     );
   });
+
+  it("CLOS2-S1-02: attachment date uses Indian format with IST rollover (not raw UTC yyyy-mm-dd)", () => {
+    const atts = [{ id: "a1", fileName: "Roll.pdf", fileType: "application/pdf", size: 1000, uploadedAt: "2026-10-22T20:00:00.000Z" }];
+    render(<FileAttachments fileId="file-1" attachments={atts} />);
+    expect(screen.getByText(/23 Oct 2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-10-22/)).not.toBeInTheDocument();
+  });
 });

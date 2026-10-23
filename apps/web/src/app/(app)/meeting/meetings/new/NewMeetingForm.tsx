@@ -21,13 +21,13 @@ import { humanize, istLocalToIso } from "../../_data/format";
  * confidentiality level restricts, shown under the select so a clerk isn't
  * choosing from bare enum tokens.
  */
-const CONFIDENTIALITY_HELP: Record<ConfidentialityLevel, string> = {
-  public: "Public — anyone in the organisation may view the meeting and its record.",
-  internal: "Internal (default) — visible to meeting participants and the secretariat.",
-  confidential: "Confidential — restricted to participants and authorised officers.",
-  secret: "Secret — restricted to named participants; minutes access is tightly controlled.",
-  top_secret: "Top secret — the most restricted level; access is limited to cleared members only.",
-};
+const CONFIDENTIALITY_HELP = Object.fromEntries([
+  ["public", "Public — anyone in the organisation may view the meeting and its record."],
+  ["internal", "Internal (default) — visible to meeting participants and the secretariat."],
+  ["confidential", "Confidential — restricted to participants and authorised officers."],
+  ["secret", "Secret — restricted to named participants; minutes access is tightly controlled."],
+  ["top_secret", "Top secret — the most restricted level; access is limited to cleared members only."],
+]) as Record<ConfidentialityLevel, string>;
 
 const labelStyle: React.CSSProperties = {
   display: "block",

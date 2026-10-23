@@ -20,13 +20,13 @@ describe("Form16Page default FY (IST)", () => {
 
   it("01:00 IST on 1 Apr 2026 defaults to 2026-27", async () => {
     vi.setSystemTime(new Date("2026-03-31T19:30:00Z"));
-    await Form16Page({ searchParams: {} });
+    await Form16Page({ searchParams: Promise.resolve({}) });
     expect(String(statusAwareGetMock.mock.calls[0]?.[0])).toContain("fy=2026-27");
   });
 
   it("23:30 IST on 31 Mar 2026 still defaults to 2025-26", async () => {
     vi.setSystemTime(new Date("2026-03-31T18:00:00Z"));
-    await Form16Page({ searchParams: {} });
+    await Form16Page({ searchParams: Promise.resolve({}) });
     expect(String(statusAwareGetMock.mock.calls[0]?.[0])).toContain("fy=2025-26");
   });
 });
