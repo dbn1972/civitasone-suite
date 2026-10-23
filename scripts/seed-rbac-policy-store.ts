@@ -98,7 +98,7 @@ function mintSuperAdminJwt(): string {
   const sig = createHmac("sha256", SECRET).update(`${header}.${payload}`).digest("base64url");
   return `${header}.${payload}.${sig}`;
 }
-const TOKEN = mintSuperAdminJwt();
+const SUPERADMIN_BEARER = mintSuperAdminJwt();
 
 const ts = () => new Date().toLocaleTimeString();
 const log = (...a: unknown[]) => console.log(`[${ts()}]`, ...a);
@@ -108,7 +108,7 @@ async function api<T>(tenantId: string, method: string, path: string, body?: unk
     method,
     headers: {
       "content-type": "application/json",
-      "authorization": `Bearer ${TOKEN}`,
+      "authorization": `Bearer ${SUPERADMIN_BEARER}`,
       "x-tenant-id": tenantId,
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -170,7 +170,7 @@ async function ensureRole(tenantId: string, name: string, existingRoles: RoleRow
 
 async function roleVisible(tenantId: string, roleId: string): Promise<boolean> {
   const res = await fetch(`${POLICY}/policy/roles/${roleId}`, {
-    headers: { authorization: `Bearer ${TOKEN}`, "x-tenant-id": tenantId },
+    headers: { authorization: `Bearer ${SUPERADMIN_BEARER}`, "x-tenant-id": tenantId },
   });
   return res.ok;
 }

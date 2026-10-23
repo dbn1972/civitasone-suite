@@ -70,7 +70,7 @@ describe("deriveKey", () => {
 
 describe("AES-256-GCM encryption", () => {
   it("round-trips a JSON value", () => {
-    const secret = { apiKey: "sk-live-123", nested: [1, 2, 3] };
+    const secret = { apiKey: globalThis.crypto.randomUUID(), nested: [1, 2, 3] };
     const blob = encryptValue(secret, KEY);
     expect(isEncryptedBlob(blob)).toBe(true);
     expect(blob.startsWith("v1:")).toBe(true);

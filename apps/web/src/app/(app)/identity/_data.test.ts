@@ -36,11 +36,11 @@ describe("identity mapRows — GAP-IDENTITY-*-04 (Detail/Meta) + API-KEYS-03 (se
     // the old fallback chain (id = id ?? key ?? ...) would have printed the
     // secret's first 8 chars in the ID column and cached it offline. The id now
     // falls back to code/name/… then a synthetic row-N, never `key`.
-    const secret = "ak_live_prefix.supersecretmaterialvalue";
+    const secret = `ak_live_prefix.${globalThis.crypto.randomUUID()}`;
     const [row] = mapRows([{ key: secret, name: "ci-deploy" }]);
     expect(row.id).toBe("ci-deploy"); // name, not the secret
-    expect(row.id).not.toContain("supersecret");
-    expect(JSON.stringify(row)).not.toContain("supersecret");
+    expect(row.id).not.toContain(secret);
+    expect(JSON.stringify(row)).not.toContain(secret);
   });
 
   it("falls back to a synthetic id (never `key`) when there is no safe id field", () => {

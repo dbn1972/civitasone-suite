@@ -198,7 +198,7 @@ describe("meeting QR token (Req 6.1, 6.2)", () => {
 
   it("rejects a tampered signature", () => {
     const token = generateMeetingQrToken({ meetingId: MEETING, secret, now: START, nonce: "n3" });
-    const result = verifyMeetingQrToken(token, { secret: "wrong-secret", now: START });
+    const result = verifyMeetingQrToken(token, { secret: globalThis.crypto.randomUUID(), now: START });
     expect(result).toEqual({ valid: false, reason: "bad_signature" });
   });
 

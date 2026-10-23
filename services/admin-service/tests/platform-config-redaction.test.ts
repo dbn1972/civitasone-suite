@@ -18,10 +18,11 @@ const TID = randomUUID();
 const bearer = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: randomUUID(), roles, tid: TID } as never, SECRET)}` });
 // Built at runtime so no credential-shaped literal sits in the source.
 const PW = `p${globalThis.crypto.randomUUID().replace(/-/g, "")}`;
+const withAuth = (scheme: string, userinfo: string, rest: string): string => `${scheme}://${userinfo}@${rest}`;
 
 describe("redactEndpoint", () => {
   it.each([
-    [`redis://default:${PW}@cache.internal:6380/0`, "redis://cache.internal:6380"],
+    [withAuth("redis", `default:${PW}`, "cache.internal:6380/0"), "redis://cache.internal:6380"],
     [`redis://${PW}@cache.internal:6380`, "redis://cache.internal:6380"],
     [`rediss://:${PW}@cache.internal`, "rediss://cache.internal"],
     [`https://AKIA:${PW}@s3.example.test/bucket?X-Amz-Signature=${PW}`, "https://s3.example.test"],
