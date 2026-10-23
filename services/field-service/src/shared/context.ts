@@ -37,3 +37,9 @@ export async function requirePermissionKey(ctx: RequestContext, permissionKey: s
     throw err;
   }
 }
+
+/** Tenant-wide field visibility (supervisor/admin). Plain field_agents are limited to their own records. */
+export const FIELD_SUPERVISOR_ROLES = ["field_admin", "super_admin"];
+export function isFieldSupervisor(ctx: RequestContext): boolean {
+  return hasAnyRole(ctx, FIELD_SUPERVISOR_ROLES);
+}

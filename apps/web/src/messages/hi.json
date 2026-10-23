@@ -16626,5 +16626,15 @@
     "bannerSoon": "{days, plural, one {# दिन} other {# दिन}} में समाप्त — नवीनीकरण आवश्यक",
     "bannerExpired": "प्रमाणपत्र समाप्त हो गया है — कृपया तुरंत नवीनीकरण करें",
     "renew": "अभी नवीनीकरण करें"
+  },
+  "inspectionReview": {
+    "submitLabel": "समीक्षा के लिए भेजें",
+    "confirmTitle": "इस निरीक्षण को समीक्षा के लिए भेजें?",
+    "confirmDescription": "समीक्षा अधिकारी चुनें। समीक्षक वह निरीक्षक नहीं हो सकता जिसने यह निरीक्षण किया है।",
+    "reviewerLabel": "समीक्षा अधिकारी",
+    "reviewerPlaceholder": "नाम से खोजें",
+    "reviewerNoResults": "कोई मेल खाता व्यक्ति नहीं मिला",
+    "reviewerSearching": "खोज रहे हैं…",
+    "reviewerSearchError": "लोगों को खोजा नहीं जा सका। कृपया पुनः प्रयास करें।"
   }
 }

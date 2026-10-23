@@ -808,6 +808,13 @@ export const THEME_MODULE_ROLES = ["theme_user", ...THEME_ADMIN_ROLES];
 export const FIELD_VISIT_LOCATION_ROLES = ["field_admin", "super_admin"];
 
 /**
+ * Roles permitted to open the tenant-wide field agent roster. Mirrors field-service's
+ * GET /v1/field/agents gate (supervisors only); the server stays the authority, this
+ * only decides whether the hub offers the tile.
+ */
+export const FIELD_AGENT_ROSTER_ROLES = ["field_admin", "super_admin"];
+
+/**
  * GAP-VISITOR-ADMIN-02 / GAP-VISITOR-HOME-02: roles permitted to administer
  * visitor policy (/visitor/admin). Mirrors visitor-service config-registry
  * CONFIG_WRITE_ROLES exactly (modules/config-registry/routes.ts) — only
@@ -1124,3 +1131,21 @@ export const ESTAB_DFA_DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_a
  * can READ acknowledgements but is NOT an approver there.
  */
 export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"];
+
+/**
+ * Roles admitted somewhere in inspection-service. Derived from the union of the
+ * `*_ROLES` constants in services/inspection-service/src/modules/**\/routes.ts
+ * (re-derive with `grep -rn "_ROLES = \[" ...` if the service changes). The
+ * service stays the authority; this gate only stops a role with no inspection
+ * permission from landing on a hub whose every call 403s.
+ */
+export const INSPECTION_ROLES = [
+  "inspector",
+  "reviewing_officer",
+  "supervising_officer",
+  "planning_officer",
+  "audit_officer",
+  "inspection_admin",
+  "tenant_admin",
+  "super_admin",
+];
