@@ -104,11 +104,18 @@ const quotaCheckPluginImpl: FastifyPluginAsync<QuotaCheckOptions> = async (fasti
 
     // 1. Resolve quota (cache-first)
     const cacheKey = `quota:${tenantId}`;
-    let quota: TenantQuota;
+    let quota: TenantQuota | undefined;
     const cached = await store.get(cacheKey);
     if (cached) {
-      quota = JSON.parse(cached) as TenantQuota;
-    } else {
+      // A corrupt or wrong-shape cache entry is a miss (refetch + overwrite), never a 500.
+      try {
+        const parsed = JSON.parse(cached) as Partial<TenantQuota> | null;
+        if (typeof parsed?.maxApiCallsPerMin === "number") quota = parsed as TenantQuota;
+      } catch {
+        /* fall through to refetch */
+      }
+    }
+    if (!quota) {
       quota = await fetchQuotaFromService(tenantServiceUrl, tenantId);
       await store.set(cacheKey, JSON.stringify(quota), quotaCacheTtlSeconds);
     }

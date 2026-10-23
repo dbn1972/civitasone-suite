@@ -12,6 +12,9 @@
  * Requirements validated: 7.1, 7.9, 7.10
  */
 import { Redis } from "ioredis";
+import { pino } from "pino";
+
+const log = pino({ name: "turnstile-command-queue" });
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,7 +117,14 @@ export async function dequeueCommand(
 
     if (!raw) return null;
 
-    const entry: CommandEntry = JSON.parse(raw);
+    let entry: CommandEntry;
+    try {
+      entry = JSON.parse(raw) as CommandEntry;
+    } catch {
+      // Poison entry (already popped): discard it and keep looking. Never log the raw payload.
+      log.warn({ tenantId, deviceId }, "turnstile command queue: discarded corrupt entry");
+      continue;
+    }
 
     // Check expiration — skip expired commands
     if (entry.expiresAt) {

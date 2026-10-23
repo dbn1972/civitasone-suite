@@ -119,3 +119,59 @@ describe("CircuitBreaker — constructor validation", () => {
       .toThrow(RangeError);
   });
 });
+
+describe("CircuitBreaker — half-open single probe (CLOS2-S6-03)", () => {
+  const trip = async (cb: CircuitBreaker) => {
+    await expect(cb.call(FAIL)).rejects.toThrow("upstream failure");
+  };
+
+  it("admits ONE probe; concurrent callers are rejected while it is in flight", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 0 });
+    await trip(cb);
+    expect(cb.state).toBe("half-open");
+
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const fn = vi.fn(async () => { await gate; return "ok"; });
+
+    const results = Promise.allSettled([cb.call(fn), cb.call(fn), cb.call(fn)]);
+    release();
+    const settled = await results;
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(settled.filter((s) => s.status === "fulfilled")).toHaveLength(1);
+    const rejected = settled.filter((s): s is PromiseRejectedResult => s.status === "rejected");
+    expect(rejected).toHaveLength(2);
+    for (const r of rejected) expect(r.reason).toBeInstanceOf(CircuitBreakerOpenError);
+  });
+
+  it("a successful probe closes the breaker and calls flow again", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 0 });
+    await trip(cb);
+    await expect(cb.call(OK)).resolves.toBe("ok");
+    expect(cb.state).toBe("closed");
+    await expect(Promise.all([cb.call(OK), cb.call(OK)])).resolves.toEqual(["ok", "ok"]);
+  });
+
+  it("a failed probe re-opens the breaker and releases the probe flag", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 0 });
+    await trip(cb);
+    await trip(cb); // probe fails -> open (recoveryMs 0 -> half-open again immediately)
+    await expect(cb.call(OK)).resolves.toBe("ok");
+  });
+
+  it("a probe aborted with countsAsFailure=false clears the flag so a later call can probe", async () => {
+    const cb = new CircuitBreaker({
+      name: "svc",
+      failureThreshold: 1,
+      recoveryMs: 0,
+      countsAsFailure: (e) => !(e instanceof Error && e.name === "AbortError"),
+    });
+    await trip(cb);
+    const abort = async (): Promise<never> => { const e = new Error("aborted"); e.name = "AbortError"; throw e; };
+    await expect(cb.call(abort)).rejects.toThrow("aborted");
+    expect(cb.state).toBe("half-open");
+    await expect(cb.call(OK)).resolves.toBe("ok");
+    expect(cb.state).toBe("closed");
+  });
+});

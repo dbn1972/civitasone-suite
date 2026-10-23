@@ -279,3 +279,69 @@ describe("OpenSearchEngine", () => {
     expect(result).toBe(false);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOS2-S6-04 — Meilisearch write paths must surface non-2xx responses
+// ─────────────────────────────────────────────────────────────────────────────
+describe("MeilisearchEngine — write failures are not swallowed (CLOS2-S6-04)", () => {
+  const doc: SearchDocument = { id: "i", tenantId: "t1", documentId: "d", title: "T", content: "C", tags: [] };
+  let engine: MeilisearchEngine;
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    engine = new MeilisearchEngine({ host: "http://meili-test:7700", apiKey: "test-key" });
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+  afterEach(() => fetchSpy.mockRestore());
+
+  const ops: Array<[string, () => Promise<void>]> = [
+    ["index", () => engine.index(doc)],
+    ["bulkIndex", () => engine.bulkIndex([doc])],
+    ["remove", () => engine.remove("t1", "d")],
+    ["removeAll", () => engine.removeAll("t1")],
+  ];
+
+  for (const [name, run] of ops) {
+    it(`${name} rejects on 401`, async () => {
+      fetchSpy.mockResolvedValue(new Response("", { status: 401 }));
+      await expect(run()).rejects.toThrow(/failed: 401/);
+    });
+    it(`${name} rejects on 500`, async () => {
+      fetchSpy.mockResolvedValue(new Response("", { status: 500 }));
+      await expect(run()).rejects.toThrow(/failed: 500/);
+    });
+    it(`${name} still resolves on 202`, async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ taskUid: 1 }), { status: 202 }));
+      await expect(run()).resolves.toBeUndefined();
+    });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLOS2-S6-05 — OpenSearch partial bulk failure must not count as success
+// ─────────────────────────────────────────────────────────────────────────────
+describe("OpenSearchEngine — bulkIndex partial failure (CLOS2-S6-05)", () => {
+  const docs: SearchDocument[] = ["a", "b"].map((id) => ({
+    id, tenantId: "t1", documentId: id, title: "T", content: "C", tags: [],
+  }));
+
+  const engineWith = (bulk: ReturnType<typeof vi.fn>) => {
+    const engine = new OpenSearchEngine({ node: "http://localhost:9200" });
+    (engine as unknown as { client: { bulk: typeof bulk } }).client = { bulk };
+    return engine;
+  };
+
+  it("rejects naming only the failed document ids", async () => {
+    const bulk = vi.fn().mockResolvedValue({
+      body: { errors: true, items: [{ index: { _id: "a" } }, { index: { _id: "b", error: { type: "x" } } }] },
+    });
+    const err = await engineWith(bulk).bulkIndex(docs).then(() => null, (e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err!.message).toMatch(/1 document\(s\): b$/);
+  });
+
+  it("resolves when errors is false", async () => {
+    const bulk = vi.fn().mockResolvedValue({ body: { errors: false, items: [] } });
+    await expect(engineWith(bulk).bulkIndex(docs)).resolves.toBeUndefined();
+  });
+});
