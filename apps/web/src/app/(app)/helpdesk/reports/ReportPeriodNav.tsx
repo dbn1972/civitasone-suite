@@ -17,10 +17,8 @@ const VALUES = Object.keys(PERIOD_LABELS) as ReportPeriod[];
 /**
  * GAP-HELPDESK-REPORTS-01: searchParams-driven period control. Selecting a
  * period navigates to ?period=<value>, triggering a server refetch with the
- * new period. DECISION: the backend analytics endpoint does not yet support
- * period-based filtering — totals currently reflect all-time data regardless
- * of selection. This records the user's INTENT so the labels are correct,
- * and sets up the web side for when the backend implements date filtering.
+ * new period. citizen-service's analytics endpoint filters on it (MTD / QTD /
+ * FY, Indian fiscal calendar, by ticket creation date).
  */
 export function ReportPeriodNav({ current }: { current: ReportPeriod }) {
   const router = useRouter();

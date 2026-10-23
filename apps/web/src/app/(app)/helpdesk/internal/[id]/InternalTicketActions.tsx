@@ -11,11 +11,11 @@ import { useFormError } from "@/lib/useFormError";
  * Uses the helpdesk-service transition contract
  * (POST /v1/helpdesk/tickets/:id/transition, body { status }, see
  * services/helpdesk-service/src/modules/tickets/routes.ts). The service state
- * machine is stepwise (open -> investigating -> resolved -> closed) and the
- * list/detail view collapses open/investigating into "Open", so both
- * "Start investigation" and "Resolve" are offered; an illegal step comes back
- * as a 422 and is shown as an error toast. The transition endpoint takes no
- * free-text reason, so none is collected here.
+ * machine is stepwise (open -> investigating -> resolved -> closed); the view
+ * maps open -> "Open", investigating -> "In Progress", so exactly the one legal
+ * next step is offered (Open: Start investigation, In Progress: Resolve,
+ * Resolved: Close). The transition endpoint takes no free-text reason, so none
+ * is collected here.
  */
 export function InternalTicketActions({ ticketId, currentStatus }: { ticketId: string; currentStatus: string }) {
   const router = useRouter();
@@ -46,8 +46,8 @@ export function InternalTicketActions({ ticketId, currentStatus }: { ticketId: s
     }
   }
 
-  const isOpen = currentStatus === "Open" || currentStatus === "In Progress";
-  const isResolvable = isOpen;
+  const isOpen = currentStatus === "Open";
+  const isResolvable = currentStatus === "In Progress";
   const isClosable = currentStatus === "Resolved";
 
   return (

@@ -33,13 +33,13 @@ describe("TicketActions (GAP-HELPDESK-TICKETS-DETAIL-01/03/04)", () => {
     expect(screen.queryByRole("button", { name: /close/i })).not.toBeInTheDocument();
   });
 
-  it("DETAIL-04: status='resolved' hides Resolve but shows Close", () => {
+  it("DETAIL-04: status='resolved' offers Close only (no Reply / Assign / Resolve)", () => {
     render(<TicketActions ticketId="t1" status="resolved" canAct={true} />);
 
     expect(screen.queryByRole("button", { name: /resolve/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /close/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /reply/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /assign/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /reply/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /assign/i })).not.toBeInTheDocument();
   });
 
   it("DETAIL-04: canAct=false hides all buttons (viewer/citizen role)", () => {
