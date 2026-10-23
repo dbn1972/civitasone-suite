@@ -86,6 +86,7 @@ export default async function WorkflowHubPage() {
             { title: "My tasks", href: "/workflow/my-tasks", description: "Your task inbox — claim, approve, return or reject" },
             { title: "Instances", href: "/workflow/list", description: "Running & completed process instances" },
             { title: "Approval workflows", href: "/workflow/definitions", description: "Process definitions, versions and graphs" },
+            { title: "My delegations", href: "/workflow/delegations", description: "Hand a role to a colleague for up to 90 days, and revoke it" },
             { title: "BPMN Designer", href: "/workflow/designer", description: "Visual drag-and-drop process modeling with BPMN 2.0" },
           ]}
         />
