@@ -1,3 +1,4 @@
+import { formatRupees } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -93,12 +94,12 @@ function csvRenderer(run: { runNo: string; month: string }): Renderer {
         escapeCsv(l.name),
         escapeCsv(l.accountNo),
         escapeCsv(l.ifsc),
-        (Number(l.amountMinor) / 100).toFixed(2),
+        formatRupees(l.amountMinor),
         escapeCsv(`Salary ${run.month} ${l.employeeNo}`),
       ].join(",");
     });
     const header = "Employee No,Name,Bank Account,IFSC,Net Pay Amount,Narration";
-    const trailer = `TRAILER,${lines.length},,,${(Number(totalNetMinor) / 100).toFixed(2)},Control total`;
+    const trailer = `TRAILER,${lines.length},,,${formatRupees(totalNetMinor)},Control total`;
     // Later files of the same run get a -<seq> suffix so every file name (the
     // ledger's file_reference) is distinct.
     const filename = `bank_transfer_${run.runNo}_${run.month}${seq > 1 ? `-${seq}` : ""}.csv`;

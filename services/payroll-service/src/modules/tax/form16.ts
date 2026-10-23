@@ -1,3 +1,4 @@
+import { toSafeInt, minorToRupees } from "../../shared/money.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
@@ -111,12 +112,12 @@ export interface Form16DeductionInputs {
  * out of `buildForm16` (which is DB-bound) so DOM-014's bigint arithmetic can be
  * unit-tested directly. Everything here is bigint paise end-to-end: the caps
  * (80C/80D), the Chapter VI-A total, and the final Sec 288A round-to-nearest-10
- * are all exact integer operations — no `Number(minor)/100` division happens
- * until the very last line, once, on an amount that is already whole-rupee.
+ * are all exact integer operations — no float division of a converted paise
+ * value happens until the very last line, once, on an amount that is already whole-rupee.
  *
  * Declared amounts (`section80cMinor` etc.) are arbitrary non-negative integer
  * paise (see `amountMinor` in validators.ts) — NOT guaranteed whole-rupee — so
- * summing them as `Number(minor)/100` floats before rounding to the nearest 10
+ * summing them as float rupees before rounding to the nearest 10
  * rupees (as the pre-DOM-014 code did) could round to the wrong bracket; see
  * `dom-014-tax-precision.test.ts` for a concrete reproduction.
  */
@@ -151,7 +152,7 @@ export function computeForm16Deductions(
 
   return {
     section80cMinor, section80dMinor, hraExemptMinor, otherDeductionsMinor, totalChapterViAMinor,
-    extraIncomeMinor, taxableIncomeMinor, taxableIncome: Number(taxableIncomeMinor / 100n),
+    extraIncomeMinor, taxableIncomeMinor, taxableIncome: toSafeInt(taxableIncomeMinor / 100n),
   };
 }
 
@@ -161,7 +162,7 @@ export function computeForm16Deductions(
  *
  * DOM-014: every amount below is accumulated as bigint paise (`*Minor`) and
  * converted to the Number-rupee report fields with a single division at the
- * very end — never `Number(minor)/100` summed or subtracted repeatedly across
+ * very end — never float rupees summed or subtracted repeatedly across
  * many slip/TDS rows and declaration fields (declared amounts are arbitrary
  * paise, not necessarily whole-rupee, per `amountMinor` in validators.ts), so
  * no float-precision error can accumulate into the taxable-income / tax-due
@@ -196,7 +197,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId))));
   const fySlips = slipRows.filter((s) => finalisedRunIds.has(s.runId));
   const grossMinor = roundRupeeMinor(fySlips.reduce((a, s) => a + BigInt(s.grossMinor), 0n));
-  const grossSalary = Number(grossMinor / 100n);
+  const grossSalary = toSafeInt(grossMinor / 100n);
 
   // Quarterly TDS breakup.
   const quartersMinor = { Q1: 0n, Q2: 0n, Q3: 0n, Q4: 0n };
@@ -220,8 +221,8 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
     }
   }
   const quarters = {
-    Q1: Number(quartersMinor.Q1) / 100, Q2: Number(quartersMinor.Q2) / 100,
-    Q3: Number(quartersMinor.Q3) / 100, Q4: Number(quartersMinor.Q4) / 100,
+    Q1: minorToRupees(quartersMinor.Q1), Q2: minorToRupees(quartersMinor.Q2),
+    Q3: minorToRupees(quartersMinor.Q3), Q4: minorToRupees(quartersMinor.Q4),
   };
   const totalTdsDeductedMinor = roundRupeeMinor(totalTdsMinor);
 
@@ -279,7 +280,7 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
   const totalTdsCreditedMinor = totalTdsDeductedMinor + prevEmployerTdsRoundedMinor;
   const totalTaxLiabilityMinor = BigInt(totalTaxLiability) * 100n;
   const balanceMinor = totalTaxLiabilityMinor - totalTdsCreditedMinor;
-  const balance = Number(balanceMinor / 100n);
+  const balance = toSafeInt(balanceMinor / 100n);
 
   // M4: HRMS fetch failure must FAIL the export (HrmsUnavailableError propagates
   // → 502) instead of silently emitting a blank PAN. A blank PAN is only
@@ -301,24 +302,24 @@ export async function buildForm16WithMinor(tenantId: string, employeeId: string,
       },
       deductee: { name: deducteeName, pan: deducteePan, panFlag: deducteePan ? "" : "PANNOTAVBL" },
       quarterlyTds: quarters,
-      totalTdsDeposited: Number(totalTdsDeductedMinor / 100n),
+      totalTdsDeposited: toSafeInt(totalTdsDeductedMinor / 100n),
       note: "Verify challan/TRACES references before issuing Part A.",
     },
     form16PartB: {
       grossSalary,
-      perquisites: Number(perquisitesMinor) / 100,
-      prevEmployerSalary: Number(prevEmployerSalaryMinor) / 100,
-      otherSourcesIncome: Number(otherSourcesIncomeMinor) / 100,
+      perquisites: minorToRupees(perquisitesMinor),
+      prevEmployerSalary: minorToRupees(prevEmployerSalaryMinor),
+      otherSourcesIncome: minorToRupees(otherSourcesIncomeMinor),
       standardDeduction,
-      hraExempt: Number(hraExemptMinor) / 100,
-      section80c: Number(section80cMinor) / 100,
-      section80d: Number(section80dMinor) / 100,
-      otherDeductions: Number(otherDeductionsMinor) / 100,
-      totalChapterViA: Number(totalChapterViAMinor) / 100,
+      hraExempt: minorToRupees(hraExemptMinor),
+      section80c: minorToRupees(section80cMinor),
+      section80d: minorToRupees(section80dMinor),
+      otherDeductions: minorToRupees(otherDeductionsMinor),
+      totalChapterViA: minorToRupees(totalChapterViAMinor),
       taxableIncome, taxOnIncome: tax.baseTax, rebate87A: tax.rebate, surcharge: tax.surcharge, cess: tax.cess,
       totalTaxLiability,
-      totalTdsDeducted: Number(totalTdsDeductedMinor / 100n),
-      prevEmployerTds: Number(prevEmployerTdsRoundedMinor / 100n),
+      totalTdsDeducted: toSafeInt(totalTdsDeductedMinor / 100n),
+      prevEmployerTds: toSafeInt(prevEmployerTdsRoundedMinor / 100n),
       balanceTaxPayable: balance > 0 ? balance : 0, refundDue: balance < 0 ? -balance : 0, regime,
     },
   };

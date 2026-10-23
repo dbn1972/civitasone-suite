@@ -1,3 +1,4 @@
+import { minorFromDb, minorToWireNumber } from "../../shared/money.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -220,8 +221,8 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
       // GAP-PAYROLL-PENSIONERS-04: the register lists the PPO number MASKED;
       // the full value is only served by the audited reveal endpoint (fin03-routes.ts).
       id: r.id, ppoNo: maskPpoNo(String(r.ppo_no ?? "")), ppoNoMasked: true, fullName: r.full_name, dateOfBirth: r.date_of_birth,
-      basicPensionMinor: Number(r.basic_pension_minor), commutedPensionMinor: Number(r.commuted_pension_minor),
-      commutationDate: r.commutation_date, medicalAllowanceMinor: Number(r.medical_allowance_minor),
+      basicPensionMinor: minorToWireNumber(minorFromDb(r.basic_pension_minor)), commutedPensionMinor: minorToWireNumber(minorFromDb(r.commuted_pension_minor)),
+      commutationDate: r.commutation_date, medicalAllowanceMinor: minorToWireNumber(minorFromDb(r.medical_allowance_minor)),
       ddoCode: r.ddo_code, taxRegime: r.tax_regime, status: r.status,
     })));
   });

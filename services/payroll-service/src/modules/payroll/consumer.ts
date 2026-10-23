@@ -1,3 +1,4 @@
+import { minorToWireNumber } from "../../shared/money.js";
 import { exceedsCap, lockCostingGroup, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
 import type { Queue } from "@civitasone/queue";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED } from "../tax/verified-inputs.js";
@@ -2301,7 +2302,7 @@ async function processPensionRun(
         employeeId: pen.id, employeeNo: pen.ppo_no,
         basicMinor: result.basicPensionMinor, grossMinor: result.grossMinor,
         totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
-        components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: Number(c.amountMinor) })),
+        components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor) })),
         tdsMinor: result.tdsMinor,
         status: result.netPayMinor < 0n ? "exception" : "computed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -2399,7 +2400,7 @@ export async function computeAndInsertSlip(
     employeeId: params.employeeId, employeeNo: params.employeeNo,
     basicMinor: params.basicMinor, grossMinor: result.grossMinor,
     totalDeductionsMinor: result.totalDeductionsMinor, netPayMinor: result.netPayMinor,
-    components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: Number(c.amountMinor) })),
+    components: allComps.map((c) => ({ code: c.code, name: c.name, type: c.type, amountMinor: minorToWireNumber(c.amountMinor) })),
     pfEmployeeMinor: result.pfEmployeeMinor, pfEmployerMinor: result.pfEmployerMinor,
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
     esiMinor: result.esiMinor, tdsMinor: result.tdsMinor,
