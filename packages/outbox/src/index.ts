@@ -556,8 +556,9 @@ export function startOutboxPurge(db: DrizzleTx, opts: OutboxPurgeOptions = {}): 
             );
           }
         }
-      } catch {
-        /* swallow — non-critical maintenance */
+      } catch (err) {
+        // Non-critical maintenance: never throw, but make a persistent failure visible.
+        logger?.warn({ err }, "outbox purge cycle failed");
       }
     })();
   }, intervalMs);
