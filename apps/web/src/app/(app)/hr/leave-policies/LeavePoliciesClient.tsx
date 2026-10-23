@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { PageHeader, Card, DataTable, EmptyState, ErrorState, ConfirmDialog, Drawer, StatGrid, StatCard, StatusPill, SkeletonTable, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
@@ -114,6 +114,24 @@ export default function LeavePoliciesClient() {
     }
   }
 
+  // Deferred toast-dismiss / reconcile timers are tracked so unmount cancels them;
+  // otherwise they fire into a torn-down tree (setState on an unmounted component).
+  const timersRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  function later(fn: () => void, ms: number) {
+    const id = setTimeout(() => {
+      timersRef.current.delete(id);
+      fn();
+    }, ms);
+    timersRef.current.add(id);
+  }
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
+
   useEffect(() => {
     const controller = new AbortController()
     void fetchPolicies(controller.signal)
@@ -186,13 +204,13 @@ export default function LeavePoliciesClient() {
       setEditId(null);
       setDiscardPromptOpen(false);
       setToast({ tone: "good", text: t("toastUpdated") });
-      setTimeout(() => setToast(null), 4000);
+      later(() => setToast(null), 4000);
       // Background reconcile: confirm the optimistic view against the real,
       // by-then-likely-consistent server state without re-entering the
       // full-page loading state (fetchPolicies() itself doesn't toggle
       // `state` back to "loading" mid-session since `state` is already
       // "ready" here, so this is already a quiet background refresh).
-      setTimeout(() => { void fetchPolicies(); }, 1500);
+      later(() => { void fetchPolicies(); }, 1500);
     } catch (caught) {
       setSaveError(formError.fromException("save", caught).message);
     } finally {
@@ -233,8 +251,8 @@ export default function LeavePoliciesClient() {
       // toastDeactivated/toastReactivated keys — same queued-write shape as
       // an ordinary field edit, so the same message applies.
       setToast({ tone: "good", text: t("toastUpdated") });
-      setTimeout(() => setToast(null), 4000);
-      setTimeout(() => { void fetchPolicies(); }, 1500);
+      later(() => setToast(null), 4000);
+      later(() => { void fetchPolicies(); }, 1500);
     } catch (caught) {
       setDeactivateError(formError.fromException("save", caught).message);
     } finally {
@@ -246,8 +264,8 @@ export default function LeavePoliciesClient() {
     // GAP-HR-LEAVE-POLICIES-03: same queued-write timing issue as saveEdit
     // — "submitted", not "created", and a short delay before reconciling.
     setToast({ tone: "good", text: t("toastCreated") });
-    setTimeout(() => setToast(null), 4000);
-    setTimeout(() => { void fetchPolicies(); }, 1500);
+    later(() => setToast(null), 4000);
+    later(() => { void fetchPolicies(); }, 1500);
   }
 
   const editingPolicy = policies.find((p) => p.id === editId) ?? null;
