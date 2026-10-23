@@ -942,6 +942,15 @@ const FIXTURES: Record<string, unknown> = {
     { id: 'step-002', stepNo: 2, title: 'Seed Master Data', description: 'Load initial lookup tables', isRequired: true, status: 'completed', completedAt: '2024-01-01T10:05:00Z' },
     { id: 'step-003', stepNo: 3, title: 'Configure SMTP', description: 'Email delivery settings', isRequired: false, status: 'pending' },
   ],
+  // GET /v1/plugins registry (plugin-service pluginsListSchema = paginatedSchema(pluginViewSchema));
+  // /plugins/installed reads this for plugin_admin/super_admin. Name lives in manifestJson.
+  '/api/v1/plugins': {
+    data: [
+      { id: 'b0000000-0000-4000-8000-000000000001', tenantId: '11111111-0000-0000-0000-000000000001', manifestJson: { name: 'PFMS Connector', version: '1.0.0' }, state: 'enabled', installedAt: '2024-01-01T00:00:00Z', enabledAt: '2024-01-02T00:00:00Z', disabledAt: null, config: null, version: 1 },
+      { id: 'b0000000-0000-4000-8000-000000000002', tenantId: '11111111-0000-0000-0000-000000000001', manifestJson: { name: 'Aadhaar eSign', version: '1.0.0' }, state: 'disabled', installedAt: '2024-01-01T00:00:00Z', enabledAt: null, disabledAt: '2024-01-03T00:00:00Z', config: null, version: 1 },
+    ],
+    pagination: PAGINATION,
+  },
   '/api/v1/plugins/items': [
     { name: 'PFMS Connector', status: 'enabled' },
     { name: 'Aadhaar eSign', status: 'disabled' },
