@@ -47,6 +47,7 @@ import {
 import { generateMeetingQrToken, verifyMeetingQrToken } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { resolveUserNames } from "../../shared/identity-client.js";
 
 // ─── RBAC (design § Access Control Matrix) ──────────────────────────────────
 // meeting_admin: full access · committee_secretary: secretariat (manual mark, sheet, QR) ·
@@ -148,7 +149,16 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const { meetingId } = meetingIdParam.parse(req.params);
     await requireMeeting(ctx.tenantId, meetingId);
     const dashboard = await repo.getLiveAttendance(ctx.tenantId, meetingId);
-    return reply.send({ data: dashboard });
+    // Rows carry only employeeId; resolve display names from identity-service so
+    // a secretary does not run attendance against raw UUIDs. Best-effort: an
+    // unresolved id keeps displayName null and the web falls back to the id.
+    const names = await resolveUserNames(ctx.tenantId, dashboard.participants.map((p) => p.employeeId));
+    return reply.send({
+      data: {
+        ...dashboard,
+        participants: dashboard.participants.map((p) => ({ ...p, displayName: names.get(p.employeeId) ?? null })),
+      },
+    });
   });
 
   // ── Secretary manual marking (Req 6.1) ───────────────────────────────────

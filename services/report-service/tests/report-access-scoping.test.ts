@@ -38,6 +38,7 @@ vi.mock("../src/shared/infra.js", () => ({
 
 vi.mock("../src/modules/jobs/repo.js", () => ({
   findById: async (id: string) => S.jobRows.find((r) => r.id === id) ?? null,
+  findDetailById: async (id: string) => S.jobRows.find((r) => r.id === id) ?? null,
   listByTenant: async (_t: string, _l: number, _o: number, owner?: string) => {
     S.listJobsOwner.push(owner);
     return S.jobRows.filter((r) => !owner || r.requestedBy === owner);
