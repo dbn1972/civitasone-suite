@@ -74,13 +74,40 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-*-UUID: entityLabel/parentId mapping", () =>
   });
 });
 
-describe("hub overview mapping", () => {
-  it("maps per-domain avgConfidence into nullable accuracy", () => {
-    const mapped = captured.overviewMap!({ domains: [{ domain: "leads", totalPredictions: 10, avgConfidence: 0.9 }] }) as Array<{
-      accuracy: number | null;
-      fallbackRate: number | null;
-    }>;
-    expect(mapped[0]!.accuracy).toBeCloseTo(0.9);
+describe("hub overview mapping (real ml-service shape: { data: { domains: [...] } })", () => {
+  const real = {
+    data: {
+      window: "30d", totalPredictions: 10, avgConfidence: 0.9, fallbackRate: 0, fallbackCount: 0,
+      domains: [
+        { domain: "leads", totalPredictions: 10, avgConfidence: 0.9, fallbackRate: 0 },
+        { domain: "inventory", totalPredictions: 4, avgConfidence: 0.5, fallbackRate: 0.25 },
+      ],
+    },
+  };
+
+  it("reads data.domains and maps avgConfidence / fallbackRate", () => {
+    const mapped = captured.overviewMap!(real) as Array<{ domain: string; totalPredictions: number; avgConfidence: number | null; fallbackRate: number | null }>;
+    expect(mapped).toHaveLength(2);
+    expect(mapped[0]).toEqual({ domain: "leads", totalPredictions: 10, avgConfidence: 0.9, fallbackRate: 0 });
+    expect(mapped[1]!.fallbackRate).toBeCloseTo(0.25);
+  });
+
+  it("does not invent fields the service never emits", () => {
+    const mapped = captured.overviewMap!(real) as Array<Record<string, unknown>>;
+    for (const row of mapped) {
+      expect(Object.keys(row).sort()).toEqual(["avgConfidence", "domain", "fallbackRate", "totalPredictions"]);
+    }
+  });
+
+  it("returns [] for an empty or malformed payload (hub shows the empty state)", () => {
+    expect(captured.overviewMap!({ data: { domains: [] } })).toEqual([]);
+    expect(captured.overviewMap!({ data: {} })).toEqual([]);
+    expect(captured.overviewMap!(null)).toEqual([]);
+  });
+
+  it("maps a missing avgConfidence/fallbackRate to null, not 0", () => {
+    const mapped = captured.overviewMap!({ data: { domains: [{ domain: "leads", totalPredictions: 1 }] } }) as Array<{ avgConfidence: number | null; fallbackRate: number | null }>;
+    expect(mapped[0]!.avgConfidence).toBeNull();
     expect(mapped[0]!.fallbackRate).toBeNull();
   });
 });

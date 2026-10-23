@@ -9,7 +9,8 @@ import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { createExportBody, PII_EXPORT_ROLES } from "./validators.js";
-import { verifyArtifact } from "./signing.js";
+import { verifyArtifact, verifyDownloadToken } from "./signing.js";
+import { canDownload, downloadGrant } from "./download.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -17,18 +18,9 @@ const EXPORT_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_a
 const READER_ROLES = EXPORT_ROLES;
 const EXPORT_DIR = process.env.EXPORT_DIR ?? "/tmp/audit-exports";
 
-// H1: the tokenized download URL must only be handed to a caller who is actually
-// allowed to fetch the artifact: the requester, and for PII exports also a PII role.
-// Everyone else authorized to read status gets ready:true with no token.
-function canDownload(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>): boolean {
-  const isRequester = r.createdBy === ctx.actorId;
-  const piiOk = !r.includesPii || hasAnyRole(ctx, PII_EXPORT_ROLES);
-  return isRequester && piiOk;
-}
-
 function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof repo.findByIdTx>>>) {
   const ready = r.status === "completed" && !!r.signedUrl;
-  const allowToken = ready && canDownload(ctx, r);
+  const grant = downloadGrant(ctx, r);
   return {
     id: r.id,
     status: r.status,
@@ -38,7 +30,9 @@ function statusDto(ctx: RequestContext, r: NonNullable<Awaited<ReturnType<typeof
     rowCount: r.rowCount ?? null,
     includesPii: r.includesPii,
     ready,
-    download: allowToken ? r.signedUrl : null,
+    // Short-lived, requester-bound download token (NOT the stored path); null when withheld.
+    download: grant ? grant.token : null,
+    downloadExpiresAt: grant ? grant.expiresAt : null,
     retentionUntil: r.retentionUntil ? r.retentionUntil.toISOString() : null,
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : null,
     error: r.error ?? null,
@@ -95,19 +89,28 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
     // before this read — a bare db.select() runs with no RLS GUC set.
     const row = await db.transaction((tx) => repo.findByIdTx(tx, id, ctx.tenantId));
-    if (!row || row.status !== "completed" || !row.downloadToken) {
+    if (!row || row.status !== "completed" || !row.signedUrl) {
       throw new HttpError(404, "NOT_FOUND", "export not available");
     }
-    if (row.downloadToken !== token) throw new HttpError(403, "FORBIDDEN", "invalid download token");
-    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
-      throw new HttpError(410, "EXPIRED", "download link expired");
+    // Token is short-lived and HMAC-bound to (export, tenant, requester): a token
+    // lifted from a URL/log cannot be replayed by any other reader.
+    const check = verifyDownloadToken(token, { exportId: id, tenantId: ctx.tenantId, actorId: ctx.actorId });
+    if (check === "invalid") throw new HttpError(403, "FORBIDDEN", "invalid download token");
+    if (check === "expired") throw new HttpError(410, "EXPIRED", "download link expired");
+    if (!canDownload(ctx, row)) {
+      if (row.includesPii && !hasAnyRole(ctx, PII_EXPORT_ROLES)) {
+        throw new HttpError(403, "PII_EXPORT_FORBIDDEN", "PII export download requires audit_admin+");
+      }
+      throw new HttpError(403, "FORBIDDEN", "only the requester may download this export");
     }
-    if (row.includesPii && !hasAnyRole(ctx, PII_EXPORT_ROLES)) {
-      throw new HttpError(403, "PII_EXPORT_FORBIDDEN", "PII export download requires audit_admin+");
+    if (row.expiresAt && row.expiresAt.getTime() < Date.now()) {
+      throw new HttpError(410, "EXPIRED", "export retention window elapsed");
     }
     const file = path.join(EXPORT_DIR, ctx.tenantId, `${id}.${row.format}`);
     const buf = await readFile(file).catch(() => null);
     if (!buf) throw new HttpError(404, "NOT_FOUND", "artifact missing");
+    void reply.header("cache-control", "no-store");
+    void reply.header("referrer-policy", "no-referrer");
     void reply.header("content-type", row.format === "csv" ? "text/csv" : "application/json");
     void reply.header("content-disposition", `attachment; filename="audit-export-${id}.${row.format}"`);
     // AUD-2: surface the integrity proof alongside the bytes so a client can

@@ -23,7 +23,6 @@ export default async function ProjectsInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Tasks Scored",
-        accuracy: "Prediction Accuracy",
         fallbackRate: "Fallback Rate",
         topFactor: "Top Factor",
       }}

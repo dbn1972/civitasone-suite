@@ -125,7 +125,9 @@ export function DomainInsightPage({
         <StatCard
           icon="🎯"
           tone="good"
-          label={statLabels?.accuracy ?? resolvedMetric.label}
+          // ml-service reports mean prediction CONFIDENCE, not AUC-ROC / precision /
+          // MAPE, so the stat is named for what it is.
+          label={statLabels?.accuracy ?? "Avg. confidence"}
           value={formatPct(evaluation.accuracy)}
         />
         <StatCard
@@ -134,14 +136,18 @@ export function DomainInsightPage({
           label={statLabels?.fallbackRate ?? "Fallback Rate"}
           value={formatPct(evaluation.fallbackRate)}
         />
-        <StatCard
-          icon="🔑"
-          tone="info"
-          label={statLabels?.topFactor ?? "Top Factor"}
-          value={evaluation.topFactor}
-        />
+        {/* Top factor is not emitted by ml-service: only show it when a value exists. */}
+        {evaluation.topFactor !== "—" && (
+          <StatCard
+            icon="🔑"
+            tone="info"
+            label={statLabels?.topFactor ?? "Top Factor"}
+            value={evaluation.topFactor}
+          />
+        )}
       </StatGrid>
 
+      {evaluation.accuracyTrend.length > 0 && (
       <Card title={`${resolvedMetric.label} Trend (30 days)${resolvedMetric.higherIsBetter ? "" : " — lower is better"}`}>
         <AccuracyTrendChart
           data={evaluation.accuracyTrend}
@@ -150,10 +156,13 @@ export function DomainInsightPage({
           thresholds={resolvedMetric.thresholds}
         />
       </Card>
+      )}
 
+      {evaluation.factorBreakdown.length > 0 && (
       <Card title="Factor Breakdown">
         <FactorBreakdown factors={evaluation.factorBreakdown} />
       </Card>
+      )}
 
       <Card title="Recent Predictions">
         <RecentPredictionsTable
