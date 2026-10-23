@@ -7,6 +7,8 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { sql } from "drizzle-orm";
@@ -18,6 +20,7 @@ import { registerHotspotConsumers } from "../src/modules/hotspots/consumer.js";
 import * as complaintsRepo from "../src/modules/complaints/repo.js";
 import * as hotspotsRepo from "../src/modules/hotspots/repo.js";
 import { runWithTenant } from "@civitasone/db";
+import { COMMANDS } from "../src/topics.js";
 import { hdr, waitFor, ADMIN_ROLES, USER_ROLES, TENANT_A } from "./support.js";
 
 // repo.findById() runs through `db`, which is wrapped with tenant-GUC
@@ -123,5 +126,83 @@ describe("terminal failure of a create command is audited, never silent", () => 
       db.transaction((tx) => tx.execute(sql`SELECT 1 FROM _outbox.messages WHERE correlation_id = ${messageId}`)),
     );
     expect(rows.length).toBe(0);
+  });
+});
+
+describe("terminal failure is audited through the REGISTERED consumer (tenantScoped forwards options)", () => {
+  it("a hotspot.identify command that fails on every retry leaves an audit.event.record outcome=failure in the outbox", async () => {
+    const messageId = randomUUID();
+    // id is not a uuid -> the INSERT inside the real consumer throws on every
+    // attempt; the queue exhausts maxAttempts and fires onOutcome(failed).
+    // Only reaches the hook if tenantScoped() passed the subscribe options through.
+    await queue.publish(COMMANDS.hotspotIdentify, {
+      messageId,
+      type: COMMANDS.hotspotIdentify,
+      tenantId: TENANT_A,
+      actorId: "c3333333-0000-4000-8000-00000000000a",
+      correlationId: messageId,
+      schemaVersion: "1.0",
+      payload: { id: "not-a-uuid", location: { ward: "9" }, category: "x", complaintCount: 1, riskScore: 1, tenantId: TENANT_A },
+    });
+    const read = () =>
+      runWithTenant(TENANT_A, () =>
+        db.transaction((tx) =>
+          tx.execute(sql`SELECT payload FROM _outbox.messages WHERE topic = 'audit.event.record' AND correlation_id = ${messageId}`),
+        ),
+      );
+    await waitFor(async () => (await read()).length > 0, 15000);
+    const rows = await read();
+    expect(rows.length).toBe(1);
+    const payload = (rows[0] as { payload: Record<string, any> }).payload;
+    expect(payload.outcome).toBe("failure");
+    expect(payload.action).toBe("hotspot.identify");
+    expect(payload.details.status).toBe("failed");
+  });
+});
+
+describe("migration 0003 seeding survives FORCE RLS (runs as the owner with no tenant GUC)", () => {
+  const SEEDED = "DRNH-2026-000900";
+  const migrationSql = readFileSync(
+    fileURLToPath(new URL("../migrations/0003_number_sequences.sql", import.meta.url)),
+    "utf8",
+  );
+  const hotspotId = randomUUID();
+
+  afterAll(async () => {
+    await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) => tx.execute(sql`DELETE FROM civitas_drainage.drainage_hotspots WHERE id = ${hotspotId}`)),
+    );
+  });
+
+  it("re-running the migration after rows exist seeds the sequence past the highest existing number and keeps FORCE RLS on", async () => {
+    await runWithTenant(TENANT_A, () =>
+      db.transaction((tx) =>
+        hotspotsRepo.insert(tx, {
+          id: hotspotId, tenantId: TENANT_A, hotspotCode: SEEDED,
+          location: { ward: "9" }, category: "seed", complaintCount: 1, riskScore: 1,
+          status: "identified", createdBy: "c3333333-0000-4000-8000-00000000000a", updatedBy: "c3333333-0000-4000-8000-00000000000a",
+        } as never),
+      ),
+    );
+    // Rewind the sequence to 1 (as a fresh/unseeded one would be), then re-run the migration
+    // through the raw client: owner role, NO tenant GUC -- exactly how the migration runner connects.
+    await sqlClient.unsafe(`SELECT setval('civitas_drainage.hotspot_code_seq', 1, false)`);
+    await sqlClient.unsafe(migrationSql);
+
+    const next = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.hotspot_code_seq')::bigint AS n`);
+    expect(Number((next[0] as { n: string }).n)).toBeGreaterThan(900);
+
+    const force = await sqlClient.unsafe(
+      `SELECT relname, relforcerowsecurity FROM pg_class WHERE oid IN ('civitas_drainage.drainage_complaints'::regclass, 'civitas_drainage.drainage_hotspots'::regclass)`,
+    );
+    expect(force.length).toBe(2);
+    for (const r of force) expect((r as { relforcerowsecurity: boolean }).relforcerowsecurity).toBe(true);
+  });
+
+  it("a second run never rewinds the sequence", async () => {
+    const before = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.complaint_number_seq')::bigint AS n`);
+    await sqlClient.unsafe(migrationSql);
+    const after = await sqlClient.unsafe(`SELECT nextval('civitas_drainage.complaint_number_seq')::bigint AS n`);
+    expect(Number((after[0] as { n: string }).n)).toBeGreaterThan(Number((before[0] as { n: string }).n));
   });
 });
