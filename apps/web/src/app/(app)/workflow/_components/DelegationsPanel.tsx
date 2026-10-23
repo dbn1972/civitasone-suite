@@ -6,7 +6,8 @@
  * API (workflow-service, via /api/proxy): POST/GET/DELETE /v1/workflow/delegations. Writes are CQRS: a 202 means
  * "received", so after each write this panel polls the list (bounded) until the change is visible, never faking success.
  * The service scopes the list to the caller: ?mine=true returns delegations the caller created (delegator) and
- * ?toMe=true those handed to the caller (delegate), so there is no client-side filtering or row window.
+ * ?toMe=true those handed to the caller (delegate). The panel also drops any row that is not the caller's, so it stays
+ * correct against a service that does not yet apply those filters.
  * The role picker offers only roles the user holds (from the session); the service re-checks them against the token.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,7 +23,7 @@ import { humaniseCode } from "@/lib/labels";
 import { formatIndianDate, formatShortId, todayIST } from "@/lib/formatters";
 import { searchDirectoryUsers, resolveDirectoryUsers } from "@/lib/directory/searchUsers";
 import {
-  MAX_DELEGATION_DAYS, MAX_REASON_LENGTH, addDays, delegationState, heldRoleList, isDelegationErrorCode, parseDelegationList,
+  MAX_DELEGATION_DAYS, MAX_DELEGATION_ROLES, MAX_REASON_LENGTH, addDays, delegationState, heldRoleList, isDelegationErrorCode, parseDelegationList,
   validateDelegationForm, type Delegation, type DelegationFormErrors, type DelegationState,
 } from "../_data/delegations";
 
@@ -35,12 +36,17 @@ type View = "mine" | "toMe";
 type Loaded = { rows: Delegation[]; total: number };
 type ListState = { status: "loading" } | { status: "error" } | ({ status: "ready" } & Loaded);
 
-async function fetchDelegations(view: View = "mine"): Promise<Loaded> {
+async function fetchDelegations(view: View = "mine", userId: string | null = null): Promise<Loaded> {
   const res = await fetch(`${LIST_URL}?limit=${LIST_LIMIT}&${view === "mine" ? "mine=true" : "toMe=true"}`, { cache: "no-store" });
   if (!res.ok) throw new Error("LIST_UNAVAILABLE");
   const parsed = parseDelegationList(await res.json());
   if (!parsed) throw new Error("LIST_UNEXPECTED_BODY");
-  return parsed;
+  // Defence in depth: a service that predates the mine/toMe filters ignores them and returns the whole tenant.
+  // Never show (or offer Revoke on) rows that are not this user's, whatever the server returned.
+  if (!userId) return parsed;
+  const me = userId.toLowerCase();
+  const rows = parsed.rows.filter((r) => (view === "mine" ? r.delegatorId : r.delegateId).toLowerCase() === me);
+  return { rows, total: rows.length < parsed.rows.length ? rows.length : parsed.total };
 }
 
 export interface DelegationsPanelProps {
@@ -72,12 +78,12 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
     const target = v ?? viewRef.current;
     setList({ status: "loading" });
     try {
-      const loaded = await fetchDelegations(target);
+      const loaded = await fetchDelegations(target, userId);
       if (viewRef.current === target) apply(loaded);
     } catch {
       if (viewRef.current === target) setList({ status: "error" });
     }
-  }, [apply]);
+  }, [apply, userId]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -112,13 +118,13 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   const pollOpts = pollDelayMs !== undefined ? { initialDelayMs: pollDelayMs } : {};
   const created = useAcceptedWrite<string, Loaded>({
     ...pollOpts,
-    poll: () => fetchDelegations("mine"),
+    poll: () => fetchDelegations("mine", userId),
     isDone: (l, id) => l.rows.some((r) => r.id === id),
     onConfirmed: (l) => { if (viewRef.current === "mine") apply(l); },
   });
   const revoked = useAcceptedWrite<string, Loaded>({
     ...pollOpts,
-    poll: () => fetchDelegations("mine"),
+    poll: () => fetchDelegations("mine", userId),
     isDone: (l, id) => !l.rows.some((r) => r.id === id && r.isActive),
     onConfirmed: (l) => { if (viewRef.current === "mine") apply(l); },
   });
@@ -159,7 +165,7 @@ export function DelegationsPanel({ userId, roles, canViewLegacy = false, pollDel
   const msg = (k: keyof DelegationFormErrors): string | undefined => {
     const key = shown[k];
     if (!key) return undefined;
-    return t(key, { max: key === "rolesTooMany" ? 20 : key === "reasonTooLong" ? MAX_REASON_LENGTH : MAX_DELEGATION_DAYS, latest: formatIndianDate(addDays(fromDate, MAX_DELEGATION_DAYS)) });
+    return t(key, { max: key === "rolesTooMany" ? MAX_DELEGATION_ROLES : key === "reasonTooLong" ? MAX_REASON_LENGTH : MAX_DELEGATION_DAYS, latest: formatIndianDate(addDays(fromDate, MAX_DELEGATION_DAYS)) });
   };
   const latestTo = /^\d{4}-\d{2}-\d{2}$/.test(fromDate) ? addDays(fromDate, MAX_DELEGATION_DAYS) : undefined;
 

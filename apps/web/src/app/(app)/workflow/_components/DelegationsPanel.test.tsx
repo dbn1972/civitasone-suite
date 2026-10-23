@@ -137,10 +137,31 @@ describe("DelegationsPanel: my active and expired delegations", () => {
 });
 
 describe("DelegationsPanel: Delegated to me tab", () => {
+  it("drops rows that are not mine when the service ignores ?mine (whole-tenant response)", async () => {
+    const other = row({ id: "ffffffff-ffff-4fff-8fff-ffffffffffff", delegatorId: RAVI, delegateId: ASHA, reason: "Ravi only" });
+    stub({ lists: [() => list([row(), other]), () => list([row(), other])] });
+    panel();
+    await screen.findByRole("button", { name: /Revoke delegation to/ });
+    expect(screen.queryByText("Ravi only")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Revoke delegation to/ })).toHaveLength(1);
+  });
+
+  it("drops rows not addressed to me on the Delegated to me tab when the service ignores ?toMe", async () => {
+    const toMe = row({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", delegatorId: RAVI, delegateId: ME, reason: "Covering for Ravi" });
+    const notMine = row({ id: "ffffffff-ffff-4fff-8fff-ffffffffffff", delegatorId: RAVI, delegateId: ASHA, reason: "Ravi to Asha" });
+    stub({ lists: [() => list([row()]), () => list([toMe, notMine])] });
+    panel();
+    await screen.findByRole("button", { name: /Revoke delegation to/ });
+    fireEvent.click(screen.getByRole("tab", { name: "Delegated to me" }));
+    expect(await screen.findByText("Covering for Ravi")).toBeInTheDocument();
+    expect(screen.queryByText("Ravi to Asha")).not.toBeInTheDocument();
+  });
+
   it("loads ?toMe=true, shows who delegated, and offers no revoke or create form", async () => {
     const lists = [
       () => list([row()]),
       () => list([row({ id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", delegatorId: RAVI, delegateId: ME, reason: "Covering for Ravi" })]),
+      () => list([row()]), // back on "My delegations": scoped to my own rows again
     ];
     stub({ lists });
     panel();
