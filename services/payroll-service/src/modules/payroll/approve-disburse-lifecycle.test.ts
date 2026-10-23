@@ -32,6 +32,9 @@ describe("payroll run approve/disburse lifecycle (REGRESSION: silent no-op)", ()
   const tenantId = randomUUID();
   const creatorId = randomUUID();
   const approverId = randomUUID(); // distinct from creator - avoids SELF_APPROVAL_FORBIDDEN
+  // GAP-PAYROLL-DETAIL-02: the person who approved a run may not also disburse it
+  // (MAKER_CHECKER_VIOLATION), so disbursement is done by a third user here.
+  const disburserId = randomUUID();
   const runId = randomUUID();
   const structureId = randomUUID();
   const employeeId = randomUUID();
@@ -100,10 +103,10 @@ describe("payroll run approve/disburse lifecycle (REGRESSION: silent no-op)", ()
     await memQueue.drain();
   }
 
-  function superAdminCtx(): RequestContext {
+  function superAdminCtx(actorId: string = approverId): RequestContext {
     return {
       tenantId,
-      actorId: approverId,
+      actorId,
       actorType: "user",
       roles: ["super_admin"],
       correlationId: randomUUID(),
@@ -124,7 +127,7 @@ describe("payroll run approve/disburse lifecycle (REGRESSION: silent no-op)", ()
   });
 
   it("disburse genuinely updates status to 'disbursed' and sets disbursed_at in the database", async () => {
-    await disburseRun(superAdminCtx(), runId);
+    await disburseRun(superAdminCtx(disburserId), runId);
     await drain();
 
     const row = await runWithTenant(tenantId, () => db.transaction((tx) => repo.findRunByIdTx(tx, runId)));

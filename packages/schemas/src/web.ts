@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "./common.js";
-import { zMoneyMinorString } from "./money.js";
+import { zMoneyMinorString, zMoneyMinorStrict } from "./money.js";
 
 export const auditRowSchema = z.object({
   actor: z.string(),
@@ -624,6 +624,14 @@ export const FinanceDashboardSchema = z.object({
   // Total budget estimate (BE only, no RE) in minor units, as a bigint-safe decimal
   // string (GAP-FINANCE-DASHBOARD-04). Optional so an older API still parses.
   sanctionedMinor: z.string().regex(/^\d+$/).optional(),
+  // GAP-FINANCE-DASHBOARD-01: expenditure split by category, AS REPORTED by finance-service (never derived or
+  // estimated on the client). Each amount is minor units (paise) as a base-10 string. Optional: finance-service does
+  // not send it yet (what a "category" is, and which spend counts as expenditure, is an owner decision), and the
+  // dashboard says "Category breakdown not available" until it does.
+  categoryBreakdown: z.array(z.object({
+    label: z.string().trim().min(1).max(120),
+    amountMinor: z.string().regex(/^\d+$/),
+  })).max(50).optional(),
 });
 
 // Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
@@ -696,8 +704,16 @@ export const BillSummarySchema = z.object({
   // as a legacy value only so older fixtures/clients still parse.
   status: z.enum(["pending", "passed", "approved", "paid", "rejected", "on_hold", "under_review"]),
   poRef: z.string().optional(),
+  // GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number (e.g. "PO-2026-014") snapshotted from the GRN the bill was
+  // drafted from. Absent on hand-lodged and older bills, which fall back to the id form of poRef.
+  poNumber: z.string().optional(),
   // The list emits "na"; the detail query emits matched | pending | na.
   threeWayMatch: z.enum(["matched", "pending", "partial", "unmatched", "na"]).default("na"),
+  // GAP-FINANCE-PAYMENTS-01: actor ids (not names) of the bill's creator and, while it is
+  // passed, its passer. The payment UI hides "Release payment" from either of them; the
+  // server's segregation-of-duties check is the authority. Optional for older servers.
+  createdBy: z.string().optional(),
+  passedBy: z.string().optional(),
 });
 export const BillSummaryListSchema = z.array(BillSummarySchema);
 
@@ -714,6 +730,10 @@ export const BillDetailSchema = BillSummarySchema.extend({
   grnRef: z.string().optional(),
   invoiceNo: z.string().optional(),
   paymentRef: z.string().optional(),
+  // GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: who lodged the bill and (while it is passed) who passed it, so the page can
+  // withhold the maker-checker actions the server would refuse. User ids, never names; the server stays the authority.
+  createdBy: z.string().optional(),
+  passedBy: z.string().optional(),
 });
 
 export const AdvanceSummarySchema = z.object({
@@ -742,6 +762,8 @@ export const UCSummarySchema = z.object({
   id: z.string(),
   ucNo: z.string(),
   grantRef: z.string().optional(),
+  // The Scheme Tracking code (finance_schemes.code) the certificate was raised against; absent on older certificates.
+  schemeCode: z.string().optional(),
   grantee: z.string(),
   // Bigint-safe string, not z.number(): payments/queries.ts's listUCs
   // returns row.amountMinor.toString() (H3: paise can exceed 2^53), so a
@@ -807,10 +829,16 @@ export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 export const FinancialStatementSummarySchema = z.object({
   id: z.string(),
   head: z.string(),
-  openingBalance: z.number(),
-  receipts: z.number(),
-  payments: z.number(),
-  closingBalance: z.number(),
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03: every balance is MINOR
+  // units (paise) as a bigint-safe decimal string, e.g. "150050" for
+  // Rs 1,500.50 -- NOT rupees and NOT a JSON number (a double loses precision
+  // above 2^53 and a rupee float read as paise is 100x off). Strict on
+  // purpose: a number or a non-numeric string fails the schema.
+  openingBalance: zMoneyMinorStrict,
+  receipts: zMoneyMinorStrict,
+  payments: zMoneyMinorStrict,
+  // credits - debits; negative for a debit-normal head.
+  closingBalance: zMoneyMinorStrict,
   type: z.enum(["asset", "liability", "income", "expenditure"]),
 });
 export const FinancialStatementSummaryListSchema = z.array(FinancialStatementSummarySchema);
@@ -961,6 +989,12 @@ export const PayrollRunDetailSchema = z.object({
   grossMinor: z.string().regex(/^-?\d+$/).optional(),
   netMinor: z.string().regex(/^-?\d+$/).optional(),
   deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+  // GAP-PAYROLL-HOME-03: payroll_runs.run_type (regular | supplementary |
+  // arrears | pensioner). Optional so a payload from an older payroll-service
+  // still validates (the web then treats the run as regular). Deliberately a
+  // plain string, not an enum: sendValidated() throws on an unrecognised enum
+  // member, which would 400 the whole run list because of one row.
+  runType: z.string().min(1).max(16).optional(),
   // payroll-critical fix: 'failed' added as a real, distinct status -- it
   // used to be silently remapped to 'draft' server-side (payroll-service's
   // queries.ts mapRunStatus), making a run whose async processing genuinely
@@ -973,6 +1007,11 @@ export const PayrollRunDetailSchema = z.object({
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);
 
 export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
+  // GAP-PAYROLL-DETAIL-02: the run's maker and checker (user ids only). Optional
+  // so a payload from an older payroll-service still validates; approvedBy is
+  // null until the run is approved.
+  createdBy: z.string().nullable().optional(),
+  approvedBy: z.string().nullable().optional(),
   salarySlips: z.array(z.object({
     id: z.string(),
     employeeId: z.string(),
@@ -980,6 +1019,10 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
     gross: z.number(),
     deductions: z.number(),
     net: z.number(),
+    // GAP-PAYROLL-HOME-01: integer-paise strings (see PayrollRunDetailSchema).
+    grossMinor: z.string().regex(/^-?\d+$/).optional(),
+    deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+    netMinor: z.string().regex(/^-?\d+$/).optional(),
     status: z.string(),
     // GAP-PAYROLL-DETAIL-05: issue codes (MISSING_PAN, INVALID_PAN,
     // MISSING_BANK_ACCOUNT, INVALID_IFSC) -- never the PAN / account number.

@@ -23,15 +23,18 @@
  * aria-invalid/aria-describedby for every non-English user.
  *
  * GAP-PAYROLL-SALARY-REVISIONS-02: whether a manual, free-text-employee
- * salary write belongs on this screen at all (vs. a read-only notice
- * pointing at HRMS pay-fixation, per en.json's own now-removed
- * readOnlyNotice copy) is a product decision this fixer is explicitly not
- * making -- see the PR description. What's fixed here are bugs independent
- * of that decision: the float-based money parsing, the free-text employee
- * UUID, and missing cross-field validation. Mandatory order number/reason
- * and a maker-checker approval step (this form's other two fix steps) stay
- * open for the same reason -- they only make sense once "should manual
- * entry exist" is answered.
+ * salary write belongs on this screen at all (vs. a read-only screen that
+ * defers to HRMS pay-fixation) is a product decision still OPEN -- see the
+ * ledger entry; the form is kept, restricted to PAYROLL_ADMIN_ROLES by
+ * page.tsx. Independent of that decision, this form: parses rupees with the
+ * paise-safe decimal-string parser (parseRupeesToMinor, no float), requires
+ * the sanctioning order number, and captures the maker's REASON in the
+ * ConfirmDialog (min 10 chars) which travels with the command to the audit
+ * trail. The revision is then 'pending' until a different payroll user
+ * approves it (maker-checker, GAP-PAYROLL-SALARY-REVISIONS-04). Cross-checking
+ * the typed old/new basic against HRMS and any pay-matrix rule are owner
+ * decisions that are NOT implemented here (no pay-matrix table or policy
+ * threshold exists in the repo to check against).
  */
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -39,9 +42,15 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
+import { parseRupeesToMinor } from "@/lib/money";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { REVISION_TYPES, REVISION_TYPE_FORM_LABEL_KEYS, type RevisionType } from "@/lib/payroll/revisionTypes";
+
+/**
+ * The API takes JSON numbers, which are IEEE doubles: a paise figure above 2^53-1 would be
+ * rounded silently on the wire. Larger figures are refused here (the API refuses them too).
+ */
+const MAX_WIRE_MINOR = BigInt(Number.MAX_SAFE_INTEGER);
 
 type InvalidField = "employeeId" | "orderNo" | "effectiveDate" | "oldBasic" | "newBasic" | "oldGross" | "newGross" | null;
 
@@ -134,24 +143,41 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
     // explicit 0 (allowZero) -- matching the backend's nonnegative() for
     // oldBasicMinor/oldGrossMinor and the error copy's "0 if there truly was
     // none" -- while the NEW figures stay strictly positive (backend positive()).
-    const oldBasicMinor = rupeesToMinorString(oldBasic, { allowZero: true });
+    const oldBasicMinor = parseRupeesToMinor(oldBasic, { allowZero: true });
     if (oldBasicMinor === null) {
       fail("oldBasic", t("oldBasicRequiredError"), oldBasicRef);
       return;
     }
-    const newBasicMinor = rupeesToMinorString(newBasic);
+    const newBasicMinor = parseRupeesToMinor(newBasic);
     if (newBasicMinor === null) {
       fail("newBasic", t("newBasicRequiredError"), newBasicRef);
       return;
     }
-    const oldGrossMinor = rupeesToMinorString(oldGross, { allowZero: true });
+    const oldGrossMinor = parseRupeesToMinor(oldGross, { allowZero: true });
     if (oldGrossMinor === null) {
       fail("oldGross", t("oldGrossRequiredError"), oldGrossRef);
       return;
     }
-    const newGrossMinor = rupeesToMinorString(newGross);
+    const newGrossMinor = parseRupeesToMinor(newGross);
     if (newGrossMinor === null) {
       fail("newGross", t("newGrossRequiredError"), newGrossRef);
+      return;
+    }
+    // Refuse a figure that Number() could not carry exactly (> 2^53-1 paise) instead of rounding it.
+    if (oldBasicMinor > MAX_WIRE_MINOR) {
+      fail("oldBasic", t("amountTooLargeError"), oldBasicRef);
+      return;
+    }
+    if (newBasicMinor > MAX_WIRE_MINOR) {
+      fail("newBasic", t("amountTooLargeError"), newBasicRef);
+      return;
+    }
+    if (oldGrossMinor > MAX_WIRE_MINOR) {
+      fail("oldGross", t("amountTooLargeError"), oldGrossRef);
+      return;
+    }
+    if (newGrossMinor > MAX_WIRE_MINOR) {
+      fail("newGross", t("amountTooLargeError"), newGrossRef);
       return;
     }
 
@@ -159,11 +185,11 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
     // amount below the "old" one (other than an explicit correction, which
     // exists precisely to fix a wrongly-recorded figure) almost certainly
     // means the clerk swapped old/new or mistyped a digit.
-    if (revisionType !== "correction" && BigInt(newBasicMinor) < BigInt(oldBasicMinor)) {
+    if (revisionType !== "correction" && newBasicMinor < oldBasicMinor) {
       fail("newBasic", t("newBasicBelowOldError"), newBasicRef);
       return;
     }
-    if (BigInt(newGrossMinor) < BigInt(newBasicMinor)) {
+    if (newGrossMinor < newBasicMinor) {
       fail("newGross", t("newGrossBelowBasicError"), newGrossRef);
       return;
     }
@@ -176,6 +202,8 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
       return;
     }
 
+    // The API takes JSON integers; Number() is exact because every figure was bounded
+    // to <= Number.MAX_SAFE_INTEGER paise above, and it only happens here, at the wire edge.
     setPending({
       oldBasicMinor: Number(oldBasicMinor),
       newBasicMinor: Number(newBasicMinor),
@@ -186,7 +214,7 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
     setConfirmOpen(true);
   }
 
-  async function createSalaryRevision() {
+  async function createSalaryRevision(reason: string | undefined) {
     if (!pending || !employeeId) return;
     setBusy(true);
     setDialogError(undefined);
@@ -202,6 +230,9 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
           oldGrossMinor: pending.oldGrossMinor,
           newGrossMinor: pending.newGrossMinor,
           orderNo: orderNo.trim(),
+          // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's stated reason is written
+          // to the audit trail with the revision (the ConfirmDialog requires it).
+          ...(reason ? { reason } : {}),
         }),
       });
       setConfirmOpen(false);
@@ -351,6 +382,10 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
         open={confirmOpen}
         title={t("confirmTitle")}
         confirmLabel={t("confirmLabel")}
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={512}
+        reasonLabel={t("reasonLabel")}
         busy={busy}
         errorMessage={dialogError}
         description={t.rich("confirmDescription", {
@@ -360,7 +395,7 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
           effectiveDate,
           strong: (chunks) => <strong>{chunks}</strong>,
         })}
-        onConfirm={() => void createSalaryRevision()}
+        onConfirm={(reason) => void createSalaryRevision(reason)}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
     </form>

@@ -133,7 +133,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Money is a JS number (openingBalance/receipts/... reduced with + at page.tsx:13-16), not paise bigint/decimal string as GL and sanctions use (general-ledger/page.tsx:14); large tenants can lose precision.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx:13-16 and StatementsTable.tsx:94-97 add values with `+` and cast `as number`; formatMoney(number) treats them as paise and rounds (lib/formatters.ts:100). Contrast general-ledger/page.tsx:14 (BigInt on string paise). Overstated: integer paise sums are exact up to 2^53 (about ₹9e13), so precision loss for a normal tenant is unlikely; the real risks are contract inconsistency with rule 11 (bigint/decimal-string) and that if the API ever sends strings, `+` would concatenate. The declared type lives in @civitasone/types (absent), so the wire type is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx`, `apps/web/src/app/(app)/finance/accounting/financial-statements/StatementsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `packages/types (FinancialStatementSummary + zod schema)`
@@ -237,7 +237,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Balanced check runs on the full list in page.tsx:17 but totals in GLTable footer run on the filtered list (GLTable.tsx:59-60) - two different totals on one screen.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx:14-17 totals and the Balanced delta use the full list; GLTable.tsx:107-108 and footer :199 total the filtered list (tab + search), so a Payment-only tab correctly shows debit != credit next to a 'Balanced' card. Logic is coherent but unlabelled, which reads as two conflicting totals.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/general-ledger/GLTable.tsx`, `apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx`
@@ -327,7 +327,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** — PR #1795 (merged)
+- [~] **Status** — PR #1795 (merged); W2 finance rescan: partly closed. DONE: a duplicate typed voucher number is now a synchronous 409 DUPLICATE_VOUCHER answered as a voucherNo field error before anything is queued (a retry of the same idempotency key is not a duplicate of itself), shown under the input with the confirm dialog closed and focus on the field, tested (service + component); blank = server-allocated gapless number stays the design. OPEN, OWNER DECISION: the voucher numbering series is not decided, so a single character such as 'x' is still accepted by the deliberately permissive pattern (acceptance 1) and no series decision is recorded (acceptance 3). QUESTION for Finance: what is the voucher numbering series (prefix, financial-year part, minimum sequence digits) per voucher type, and may an officer type a number at all or must it always be server-allocated?
 - **First-pass claim:** Voucher number is free text with no series/duplicate hint (JournalEntryForm.tsx:100,205-215); the GL later relies on it as the voucher key.
 - **Verified evidence:** JournalEntryForm.tsx:100 validates voucherNo only as non-empty; input at 208-216 is free text with placeholder 'e.g. JV-2026-001' and no series suggestion, format check, max length or duplicate check. True for the UI. Whether the GL keys on voucherNo and rejects duplicates is cannot-verify (finance-service/gl validators absent from snapshot); the client already sends x-idempotency-key (line 159) which protects retries but not a user reusing a number. Also zod is not used at the form boundary (hand-rolled validate()), contrary to CLAUDE.md rule 9 spirit for client forms; backend zod is the real boundary.
 - **Files to change:** `apps/web/src/app/(app)/finance/journal-entry/JournalEntryForm.tsx`, `apps/web/src/app/(app)/finance/journal-entry/page.tsx`
@@ -832,7 +832,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-BUDGET-FORMULATION-05  ·  LOW  ·  partly  ·  theme STATUS (was NAVUX)
 
-- [x] **Status** — PR #1797 (merged)
+- [~] **Status** — PR #1797 (merged); W2 finance rescan: partly closed. DONE: the status enum now covers what GET /v1/finance/budgets computes today (active, exhausted) plus draft/pending/submitted/approved/rejected, each with an explicit pill tone and exactly one tab (unknown values under Other); tabs are offered only for statuses that have rows (no dead tabs); the create form links to ?highlight=<id>, which opens that row's tab and announces it (or says it is still being processed); tested. OPEN, OWNER DECISION: budget.finance_budgets has no status column, so the approval statuses never occur on a live row and draft keeps the muted pill tone. QUESTION: does a budget estimate get a real lifecycle (draft, pending, submitted, approved/rejected) with a submit and approve workflow and which role decides, or is the computed active/exhausted status final?
 - **First-pass claim:** Tab "Submitted" and stat "Pending Review" are different statuses; a newly proposed estimate (new page) has no visible status path here.
 - **Verified evidence:** FormulationTable.tsx:60-67 tabs Submitted/Approved/Pending map to statuses submitted/approved/pending, while the stat card (page.tsx:37) is "Pending Review" = status "pending", so the labels invite confusion. Cannot verify which status POST /v1/finance/budgets assigns to a new estimate (finance-service absent), so 'no visible status path' is unproven; the new page (new/page.tsx:86-89) does redirect to the list. Back navigation exists (PageHeader back=...).
 - **Files to change:** `apps/web/src/app/(app)/finance/budget/formulation/FormulationTable.tsx`, `apps/web/src/app/(app)/finance/budget/formulation/page.tsx`
@@ -1527,7 +1527,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1790 (merged)
+- [x] **Status** — PR #1790 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Level (Major / Minor / Sub-minor) is chosen but no parent head can be selected (page.tsx:101-110), so a minor or sub-minor head is created unattached to any major head; the resulting tree cannot be inferred from the form.
 - **Verified evidence:** Create form (new/page.tsx:165-223) has code, name, level select (LEVEL_OPTIONS 25-29), classification, hoaCode; submit body (87-93) has no parent. The header comment (6-9) says the endpoint accepts code, name, level, hoaCode, classification only, so the tree cannot be expressed. Backend schema unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/finance/chart-of-accounts/new/page.tsx`, `services/finance-service (accounts create schema, if parentId not supported)`
@@ -1705,7 +1705,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme DATA-INTEGRITY (was PII)
 
-- [x] **Status** — PR #1790 (merged)
+- [~] **Status** — PR #1790 (merged); W2 finance rescan: web side complete, backend OPEN. DONE: FinanceDashboardSchema / FinanceDashboard carry an optional categoryBreakdown [{label, amountMinor (paise string)}], mapFinanceDashboard is all-or-nothing, and BudgetChart draws a bar chart whose labels are exactly the supplied amounts (acceptance 2; an amount beyond 2^53 paise is listed exactly), tested with a mocked breakdown; without one the page still says Category breakdown not available (acceptance 1). OPEN, OWNER DECISION: finance-service getDashboard sends no category split. QUESTION: what are the expenditure categories (major head of account, economic classification, scheme) and which postings count as expenditure? Today totalExpenditure sums ALL ledger debits (dashboard/queries.ts), so a category split would not reconcile with that tile until the definition is fixed.
 - **First-pass claim:** "Expenditure by Category" is fabricated: BudgetChart.tsx:26-32 multiplies total expenditure by hard-coded shares (Salaries 35%, Infra 25%, Programs 20%, Grants 12%, Other 8%). No API field supplies a category split, so a finance officer sees a plausible chart that is not their data and would be exported by "Export MIS".
 - **Verified evidence:** BudgetChart.tsx:43-49 builds barData from Math.round(utilized*0.35/0.25/0.20/0.12/0.08); chart titled 'Expenditure by Category' (line 57). loaders.ts:1833-1845 mapFinanceDashboard exposes only budgetUtilisationPct, pendingSanctions, paymentsThisMonth, totalExpenditure - no category field. Export MIS (PrintExportButton -> window.print) prints the chart. Backend finance-service not in snapshot, so whether a category endpoint exists is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/dashboard/BudgetChart.tsx`, `apps/web/src/app/(app)/finance/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1938,7 +1938,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-ADVANCES-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** — PR #1805 (merged)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: partly closed. DONE: the Officers/Parties filter and the FINANCE_ROLES route gate were already in place; the free-text reason on employee advances is now masked together with the name and purpose for roles outside ADVANCE_OFFICER_NAME_ROLES (tested over HTTP). OPEN, OWNER DECISION: amount, adjusted amount and balance on employee advances are still shown to every reader role, and there is no recoveryMode column because the API has no such field. QUESTIONS: should balances on personal advances be hidden from roles outside ADVANCE_OFFICER_NAME_ROLES, and which roles keep them (payroll-recovery scope)? What are the recovery modes (salary deduction, cash, adjustment against a bill) and where is the mode recorded?
 - **First-pass claim:** Personal advances (officer names) and party advances share one list with a free-text Purpose (type, capitalised) - no recovery-mode column and no DPDP role gating of individual officers' balances beyond FINANCE_ROLES.
 - **Verified evidence:** Single table mixes personal and party advances with beneficiary + type columns (AdvancesTable.tsx:61-70); no recovery-mode column in code. The page has no role gating in the file (FINANCE_ROLES gating, if any, would be in layout/middleware not read here) - cannot-verify. DPDP concern is a judgement, not a code defect.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/advances/AdvancesTable.tsx`
@@ -2030,7 +2030,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** — PR #1805 (merged)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: partly closed. DONE: payee is required (blocked client-side); an officer advance picks the employee through the payroll employee-lookup and stores payeeId; a vendor advance picks an active vendor of this tenant; migration 0150 adds payee_id; tested (component + real DB). OPEN, OWNER DECISION: finance_admin can create advances but is not in the payroll-service employee-lookup roles (apps/web/src/lib/auth/workRoles.ts EMPLOYEE_LOOKUP_ROLES; NewAdvanceForm.tsx picksPayee), so for finance_admin an officer advance is still a typed name with no id and the free-text DPDP gap persists for that role. QUESTION: may finance_admin be added to the employee-lookup roles (payroll-service employee-lookup LOOKUP_ROLES and EMPLOYEE_LOOKUP_ROLES)? The role list is deliberately not widened here.
 - **First-pass claim:** Payee is optional (page.tsx:84-86) yet the register column "Officer / Party" is the primary identifier; an advance can be created for nobody. No employee/vendor picker, and DPDP-sensitive individual advances are entered as free text.
 - **Verified evidence:** new/page.tsx:91-92 payee input has no required attribute and payload sends payee: form.payee || undefined (line 47); free text, no employee/vendor picker. Register column beneficiary (AdvancesTable.tsx:63) is primary. DPDP claim is judgement; no PII controls visible. Backend may reject empty payee (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/advances/new/page.tsx`
@@ -2178,7 +2178,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-06  ·  LOW  ·  partly  ·  theme UUID
 
-- [x] **Status** — PR #1805 (merged)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** PO Ref uses formatInternalRef and shows raw ids in the mono cell for Bill (BillsTable.tsx:46); dates via formatIndianDate.
 - **Verified evidence:** BillsTable.tsx:43 renders formatInternalRef(b.poRef) which returns the raw ref string as-is (formatters.ts:26-29), e.g. 'procurement_po:abc-123' with the type prefix and id - only null/'undefined' become '—'. But the observation's 'raw ids in the mono cell for Bill' is wrong: the mono cell (l.41) is b.billNo, a human bill number, not an id. Dates use formatIndianDate (l.45-46) correctly.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/BillsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2200,7 +2200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** — PR #1786 (merged)
+- [x] **Status** — PR #1786 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** A failed fetch is indistinguishable from a missing bill: getFinanceBillById falls back to null, so the page renders "Bill not found - may have been removed or the ID is invalid" (page.tsx:17-24) and the DataSourceBadge on the found branch (page.tsx:45) can never show for a load failure.
 - **Verified evidence:** getFinanceBillById (loaders.ts:1900-1907) returns null data with source 'error' on any failure; page.tsx:13-23 renders not-found whenever !bill regardless of source, so 500/403/network errors read 'not found' - true. The found-branch badge (line 41) only shows when bill exists and source==='error' which cannot occur with fetchJson, so it is dead. However apiClient.ts already returns status/errorCode (lines 8-26, 144), so the fix is available.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/bills/[id]/page.tsx`
@@ -2312,7 +2312,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-GUARANTEES-04  ·  LOW  ·  partly  ·  theme MISSING-ACTION (was DEADROUTE)
 
-- [x] **Status** — PR #1805 (merged)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: PARTIAL. The register copy no longer claims it mirrors Procurement (finance_guarantees rows come only from finance-service's own create command, POST /v1/finance/guarantees, which still has no web caller) and the header link is worded as the separate Procurement EMD/PBG register, which is itself read-only. OWNER DECISION still open: which module owns recording, releasing and invoking guarantees, and whether Procurement EMD/PBG instruments should be copied into the Finance register. Release/invoke are money-affecting and need maker-checker + an audit event once the owner picks a home.
 - **First-pass claim:** Read-only: no create/release/invoke action exists in the route, so guarantees can only be entered elsewhere (not determinable from the route; finance-service absent).
 - **Verified evidence:** True that the guarantees route is read-only: page.tsx and GuaranteesTable.tsx contain no create/release/invoke action and no rowHref. Nothing in the web app writes guarantees (grep of finance for guarantee only finds this route, finance/page.tsx card and procurement/emd-bg, which is a separate EMD/BG surface). Whether the backend supports create/release/invoke is cannot-verify. 'DEADROUTE' is the wrong theme - no dead link exists; it is a missing capability/decision.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/guarantees/page.tsx`, `apps/web/src/app/(app)/finance/expenditure/guarantees/GuaranteesTable.tsx`
@@ -2500,7 +2500,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05  ·  LOW  ·  partly  ·  theme MISSING-LINK (was DEADROUTE)
 
-- [x] **Status** — PR #1843 (merged)
+- [x] **Status** — PR #1843 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Scheme detail has no link to related UCs or fund releases, though the list subtitle promises UC status and progress.
 - **Verified evidence:** Confirmed: detail Card (l.133-145) has only the scheme's own fields and no links to UCs or fund releases. The list subtitle (en.json expenditureSchemeTracking.subtitle) does promise 'milestones, UC status, and progress'. UCs carry only a free-text `scheme` field on create (new/page.tsx:173) so a reliable scheme->UC link may need backend (schemeId); cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/scheme-tracking/[id]/page.tsx`
@@ -2586,7 +2586,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-05  ·  LOW  ·  partly  ·  theme CONTENT (was VALIDATION)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: OPEN, OWNER DECISION. No GFR 12-A / department UC format file exists in the repo and its content must come from the finance department, so nothing was invented. Question: which official UC format (PDF or DOCX) should be offered, and where is it hosted (apps/web/public/templates or object storage)? Once supplied, restore the secondary 'Download Format' <a download> header button.
 - **First-pass claim:** The code comment records that a "Download Format" duplicate button was removed because no UC template exists (page.tsx:21-24) - the register still has no template for grantees.
 - **Verified evidence:** page.tsx:25-27 comment says the duplicate 'Download Format' button was removed because no UC template exists; header now only has '+ New UC' (l.28). This is a code comment describing a removal, not a defect; a missing template is a content/product gap. Theme is not VALIDATION.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/page.tsx`, `apps/web/public (template file, new)`
@@ -2640,7 +2640,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was OTHER)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: PARTIAL. Done: the picker sends the scheme's CODE (unique per office) as `schemeCode`, stored in its own nullable column finance_uc.scheme_code (migration 0154) and validated against the tenant's schemes (400 UNKNOWN_SCHEME), independent of a typed grant reference; the UC register and the scheme detail link match by that code (older certificates still match by name). OWNER DECISIONS still open: (a) is the scheme CODE (not a schemeId FK) the canonical link? (b) must a UC be blocked when the office has no schemes? Today the field is required whenever schemes exist and optional only when there are none.
 - **First-pass claim:** "Scheme / grant" is an optional free-text input (page.tsx:79-81), not a picker over Scheme Tracking records, so UCs cannot be reliably linked to a scheme for the Pending UC count.
 - **Verified evidence:** Confirmed: new/page.tsx:213-214 is an optional plain <input id='uc-scheme'> (no `required`, sent as scheme||undefined at l.173). Partly wrong: the Pending UC stat on scheme-tracking is computed from scheme status (scheme-tracking/page.tsx:23), not from UCs, so free text does not affect that count. A picker over getFinanceSchemes (loaders.ts:2037) is feasible; whether backend expects scheme id vs name/code is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2655,7 +2655,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-04  ·  LOW  ·  partly  ·  theme MISSING-FEATURE (was OTHER)
 
-- [x] **Status** — PR #1807 (merged)
+- [~] **Status** — PR #1807 (merged); W2 finance rescan: OPEN, OWNER DECISION. Not built: finance-service has no UC attachment endpoint, column or listing, and the scanned-documents link flow covers only payments, bills and vouchers. Question: should signed-UC / supporting-statement attachments use the existing scanned-documents link flow (add a 'uc' target kind and a UC detail page to show them) or a new upload endpoint, and what file type, size cap and malware-scan rules apply to government documents?
 - **First-pass claim:** No attachment upload for the signed UC or supporting statements, though the register status flow is pending > submitted > verified.
 - **Verified evidence:** Confirmed: form (new/page.tsx:203-237) has no file input. However the status flow pending>submitted>verified is only inferred from UCsTable TAB_STATUS_MAP; no submit/verify UI exists at all in the web app for this route. Object-storage/attachment endpoint for finance is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/utilization-certificates/new/page.tsx`
@@ -2888,7 +2888,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-GST-05  ·  MEDIUM  ·  partly  ·  theme OTHER (was PII)
 
-- [x] **Status** — PR #1843 (merged)
+- [~] **Status** — PR #1843 (merged); W2 finance rescan: PARTIAL. Done: input (AP) invoice numbers link to the source bill, low-priority columns sit behind a toggle, and the CSV export is role-gated, confirmed and audited fail-closed. OWNER DECISION still open: the link target for OUTPUT (sales) rows. The GST ledger has no producer in this repo (nothing publishes finance.gst.entry_record) and finance-service cannot verify an AR invoice id across services, so linking to /billing/invoices/{id} would be a guess. Question: what does gst_ledger.invoice_id reference for direction=output, and may it link to /billing/invoices/{id}? Also note the ledger is fetched 500 rows at a time with a truncation warning, so the CSV of a very busy month can be incomplete.
 - **First-pass claim:** Ledger table has 11 columns, including Party GSTIN and HSN, with no column chooser, no export and no link to the source invoice (invoice_id is fetched but not linked).
 - **Verified evidence:** Table columns GstConsole.tsx:57-67 are exactly 11 (Invoice No., Date, GSTIN, Party, Direction, GST Type, HSN, Rate, Taxable, Tax, Status). Confirmed: no column chooser, no export, and invoice_id (types.ts:96) is fetched but unused. The PII framing is weak: GSTIN/HSN are business identifiers, largely public, so masking is not the right fix; there is also no finance invoice-detail route in this snapshot to link to (finance folder has bills under expenditure/bills only), and the console page has no export control (TDS returns has CSV export per hub copy).
 - **Files to change:** `apps/web/src/app/(app)/finance/gst/GstConsole.tsx`, `apps/web/src/app/(app)/finance/gst/types.ts`, `apps/web/src/app/_components/ds (DataTable column props)`
@@ -2920,7 +2920,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-GST-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** — PR #1807 (merged)
+- [x] **Status** — PR #1807 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** loading.tsx is one empty .skeleton block for a three-fetch, table-heavy page (gst/loading.tsx).
 - **Verified evidence:** gst/loading.tsx is one `<div className="skeleton" role="status">` (identical to fiscal-years/loading.tsx). The page awaits three fetches then renders header, period card, four stat cards and a tabbed table (page.tsx:57-83).
 - **Files to change:** `apps/web/src/app/(app)/finance/gst/loading.tsx`
@@ -3085,7 +3085,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-MEDICAL-02  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** — PR #1810 (merged)
+- [x] **Status** — PR #1810 (merged) — next.config.mjs now redirects /finance/medical -> /hr/medical before finance/layout.tsx's role gate (employee/manager/HR users no longer hit PermissionDenied); the page-level redirect is kept only as a fallback — whether to delete finance/medical/page.tsx is an optional owner call (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Finance sidebar and home do not need this route: it exists only for bookmarks, so it can be deleted once analytics show no hits (page.tsx:3-8).
 - **Verified evidence:** Confirmed as a fact, but it is a housekeeping suggestion, not a defect. apps/web/src/app/(app)/finance/medical/page.tsx:3-8 is a comment plus `redirect("/hr/medical")` (line 10). No sidebar, hub tile or navRouteManifest entry references /finance/medical (grep of apps/web/src finds only the file itself). But nothing records hits on the redirect (bare server redirect, no telemetry), so 'delete once analytics show no hits' cannot be acted on today. The folder also still holds orphaned components (MedicalClaimForm.tsx) that nothing imports.
 - **Files to change:** `apps/web/src/app/(app)/finance/medical/page.tsx`, `apps/web/src/app/(app)/finance/medical/MedicalClaimForm.tsx`
@@ -3237,7 +3237,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PAYMENTS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** — PR #1786 (merged)
+- [~] **Status** — PR #1786 (merged); W2 finance rescan: PARTIAL. Done: New Payment / Release payment are hidden from the bill's creator and passer; payment initiate now requires a reason (10-500 chars) and its audit event carries actor, exact paise amount, mode, bill, DDO and reason. REMAINING (OWNER DECISION): (1) a separate payment-level Pending Approval -> approve/release step (payment maker vs checker): today SoD is bill-creator != payer and bill-passer != payer, enforced in the route and the initiate consumer; a payment approval state is a workflow/policy change. (2) the acceptance says same-actor release is 403, but every SoD refusal in finance-service is 409 (MAKER_CHECKER_VIOLATION / PAYER_IS_PASSER): confirm 409 is acceptable
 - **First-pass claim:** "+ New Payment" POSTs only { action: "release", reason } (FinanceActions.tsx:88) and is styled danger: an irreversible outward disbursement is triggered from a one-line free-text reason with no beneficiary, amount, mode or bill.
 - **Verified evidence:** FinanceActions.tsx:78-91 '+ New Payment' is danger-styled ActionButton with requireReason ('Authorising officer & reason'), POSTing /api/proxy/v1/finance/payments/eft {action:'release', reason}. No beneficiary, amount, mode or bill fields; the dialog copy claims 'maker prepares, a distinct checker must authorise' but nothing on the client enforces or shows a checker. The endpoint's server behaviour cannot be seen (finance-service absent). Note the reason is free text naming the 'authorising officer', not a structured id.
 - **Files to change:** `apps/web/src/app/(app)/finance/_components/FinanceActions.tsx`, `apps/web/src/app/(app)/finance/payments/NewPaymentForm.tsx (new)`, `services/finance-service payments routes (backend)`
@@ -3357,7 +3357,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PAYMENTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** — PR #1840 (merged)
+- [~] **Status** — PR #1840 (merged); W2 finance rescan: PARTIAL. Done: EntityPicker offers a Try again button on a failed search (EmployeePicker wires it); RaiseEOfficeNote searches the directory the signed-in role can reach: the tenant-wide payroll employee lookup for finance_officer EVEN IF the user also holds employee or manager (the HR directory scopes those two roles to direct reports, which would leave the picker empty), the HR directory for HR staff and payroll admin/officer (tenant-wide there) and, failing those, for employee/manager alone (direct reports only). REMAINING (OWNER DECISION): seven eFile initiator roles (estab-service linkage INITIATOR_ROLES) are on neither directory's role list (hrms DIRECTORY_ROLES, payroll LOOKUP_ROLES): finance_admin, estab_officer, estab_admin, procurement_officer, procurement_admin, grant_officer and grant_admin. employeeDirectoryForRoles() returns 'none' for each, so the picker shows a plain 'cannot search the employee directory' note and they cannot complete the raise from the UI (unless the same user also holds employee or manager, which reaches only that user's direct reports). The other initiators are covered: hr_officer, hr_admin and super_admin use the HR directory, finance_officer the payroll lookup, and service_account is a trusted internal caller with no picker. Either (a) add all seven to payroll-service LOOKUP_ROLES (widens a name directory to seven more roles), or (b) add an estab-service forward-to lookup open to INITIATOR_ROLES (one endpoint that fixes every one of them and can return only the id and name needed to forward a file): which?
 - **First-pass claim:** Raising an eOffice file asks the officer to paste two employee UUIDs (RaiseEOfficeNote.tsx: placeholders "employee UUID" and "approver UUID", validated only against a UUID regex), a raw-id entry no clerk can complete without a lookup.
 - **Verified evidence:** RaiseEOfficeNote.tsx:~168-176 renders two plain inputs with placeholders 'employee UUID' / 'approver UUID'; submit() at :102-103 validates only UUID_RE. The component is shared by ~10 detail pages (grants, hr/disciplinary, assets, bills, sanctions, legal, procurement, payments). No EntityPicker exists in the repo. An identity users loader exists (getTenantUsers, /api/identity/users); the current user id could default initiatedBy from the session (not verified where the id is exposed).
 - **Files to change:** `apps/web/src/app/_components/RaiseEOfficeNote.tsx`, `apps/web/src/app/_components/EmployeePicker.tsx (new)`
@@ -3681,7 +3681,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PFMS-07  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** — PR #1811 (merged)
+- [x] **Status** — PR #1811 (merged) — selecting a bill now also fills the payee name from the bill's vendor (editable, never overwrites typed text, nothing for an Unknown vendor); BillSummary carries no bank data, so account no. and IFSC stay typed (owner call: prefilling them needs an audited vendor-master reveal) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Payee Account No. and Payee IFSC are entered in plain text and echoed with no masking in the advice flow (PaymentAdviceForm.tsx), and Bill ID is a raw UUID the clerk must copy from elsewhere.
 - **Verified evidence:** True in part: PaymentAdviceForm.tsx:205-217 payee account is a plain text input (maxLength 32), IFSC :232-245, and billId is a raw UUID field validated by uuidRe at :95-101 that the clerk must copy from elsewhere. Overstated: the value is not echoed anywhere; the confirm text shows only payeeName and amount (en.json pfmsPaymentAdviceForm.confirmDescription ~3588) and submit clears the fields (:141). Masking a typed field would hinder verification and no shared <Masked> component exists (grep found none in apps/web or packages/ui-kit). A bills list loader exists: getFinanceBills in app/_data/loaders.ts:1891 (GET /api/v1/finance/bills).
 - **Files to change:** `apps/web/src/app/(app)/finance/pfms/PaymentAdviceForm.tsx`, `apps/web/src/app/(app)/finance/pfms/page.tsx`, `apps/web/src/app/(app)/finance/pfms/PaymentsPanel.tsx`
@@ -3739,7 +3739,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-RECONCILIATION-01  ·  HIGH  ·  partly  ·  theme AUDIT (was MONEY)
 
-- [x] **Status** — PR #1811 (merged)
+- [~] **Status** — PR #1811 (merged); W2 finance rescan: PARTIAL. Done: a resolved / written-off row shows the reason, the date and WHO (resolved_by resolved to a name through the new GET /v1/finance/actors). REMAINING (OWNER DECISION): fix step 3, a write-off threshold above which a second approver must approve, with an approval state in the backend; needs the threshold (paise) and the approver role from Finance and is not invented here
 - **First-pass claim:** Resolve and Write off send only { action } (ExceptionsPanel.tsx:74-76) although the row type carries resolutionNote, resolvedBy and resolvedAt (:24-26): no reason or note is captured, and a write-off of any size (₹30 or ₹45,000) is one confirm with no second approver, breaching the audited maker-checker rule in CLAUDE.md.
 - **Verified evidence:** ExceptionsPanel.tsx:72-75 POSTs { action } only; resolutionNote/resolvedBy/resolvedAt exist on ExceptionRow (:26-28) but no UI captures or displays them. Write off of any amount is one ConfirmDialog (:178-196). Mis-cited rule: CLAUDE.md contains no maker-checker rule (grep of CLAUDE.md, docs, .claude); it requires audit events on every mutation (rule 8), enforced server-side (cannot verify: finance recon route absent). Theme MONEY is off; this is a control/audit gap.
 - **Files to change:** `apps/web/src/app/(app)/finance/reconciliation/ExceptionsPanel.tsx`, `(backend) reconciliation exception action route`
@@ -4325,7 +4325,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-STATUTORY-TDS-RETURNS-05  ·  LOW  ·  partly  ·  theme OTHER (was PII)
 
-- [x] **Status** — PR #1814 (merged)
+- [x] **Status** — PR #1814 (merged) — TDS table now offers an audited PAN reveal (reason 10-500 chars -> POST /v1/finance/vendor-tds/:id/pan/reveal) to finance_officer/finance_admin/super_admin; masked by default, CSV and offline cache never carry the full PAN (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Vendor is shown by name only; the PAN needed to reconcile with Form 26AS is not shown (TDSReturnsTable.tsx:19). PAN is a DPDP-adjacent field, so any addition should be masked.
 - **Verified evidence:** TDSReturnsTable.tsx:20 shows vendor_name only, no PAN. True. But this is a missing-field enhancement, not a PII leak; no <Masked> component exists in apps/web (grep found none), and whether VendorTdsEntry contains a PAN cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/finance/statutory/tds-returns/TDSReturnsTable.tsx`, `apps/web/src/app/_components/Masked.tsx`
@@ -4780,7 +4780,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-TREASURY-E-PAYMENTS-01  ·  HIGH  ·  partly  ·  theme DUPLICATE (was I18N)
 
-- [x] **Status** — PR #1817 (merged)
+- [x] **Status** — PR #1817 (merged) — both tiles are kept; the acceptance alternative 'both render identical rows with links' is met by one shared PaymentsTable (EPaymentsTable is now a thin wrapper); merging into one tile + redirect remains an optional owner call (W2 finance rescan: completed by #2136)
 - **First-pass claim:** This route is a second copy of the Payments register: it calls the same endpoint with the same loader contract (loaders.ts:1993-2005) and shows the same four columns minus the tabs, actions and row link (EPaymentsTable.tsx:36-41 vs payments/PaymentsTable.tsx:81-95). Two sidebar tiles lead to one dataset.
 - **Verified evidence:** getFinanceEPayments (loaders.ts:1997-2005) and getPayments (loaders.ts:769-772) both hit /api/v1/finance/payments with paymentsListSchema and mapPayments. EPaymentsTable.tsx has the same four columns (referenceId, beneficiary, amountDisplay, status) as payments/PaymentsTable.tsx:81-95 minus Segmented tabs, reference formatting and rowHref. Tiles: finance/page.tsx:30 (e-Payment Orders) and :46 (Payments). The 'actions' claim is overstated: PaymentsTable has tabs and a row link but no action buttons.
 - **Files to change:** `apps/web/src/app/(app)/finance/treasury/e-payments/page.tsx`, `apps/web/src/app/(app)/finance/treasury/e-payments/EPaymentsTable.tsx`, `apps/web/src/app/(app)/finance/page.tsx`
@@ -5055,7 +5055,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-VENDORS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was CONFIRM)
 
-- [x] **Status** — PR #1840 (merged)
+- [~] **Status** — PR #1840 (merged); W2 finance rescan: PARTIAL. Done: PATCH mutations (field edit, deactivate, reactivate) now write audit events (field names only); vendor and bank-change approvals now require a reason (400 without); decisions are POST not PATCH; maker-checker is unchanged. REMAINING (OWNER DECISION; the same question GAP-FINANCE-PAYMENTS-01 carries, so one answer settles both): the acceptance says a self-approved bank change gets 403, but every SoD refusal in finance-service is 409 MAKER_CHECKER_VIOLATION (repo-wide convention): confirm 409 is acceptable. No code change is pending; on a yes, tick this [x]
 - **First-pass claim:** No actions: a vendor cannot be edited, approved from Pending, blocked, or have bank details changed here (page.tsx:77-121); bank-detail change is the fraud-sensitive workflow that most needs maker-checker.
 - **Verified evidence:** True that apps/web/src/app/(app)/finance/vendors/[id]/page.tsx:75-122 has no edit/approve/block/bank-change action; it is a read-only page. But vendors/page.tsx:8-10 comments that status is derived from isActive only and no approval workflow exists, and finance-service is absent, so whether endpoints for vendor update/approve/bank change exist cannot be verified. The maker-checker point is a valid design need, not a defect in existing code.
 - **Files to change:** `apps/web/src/app/(app)/finance/vendors/[id]/page.tsx`, `apps/web/src/lib/finance/vendor.ts (new)`, `apps/web/src/app/(app)/finance/vendors/[id]/VendorActions.tsx (new)`
@@ -5134,7 +5134,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** No period-close check on posting date in the client: the client never checks the period status, so a date in a closed period is only caught, if at all, by the backend (undeterminable; finance/period-close/page.tsx exists as a separate screen).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals reject a postingDate in a closed period with a clear error code?
@@ -5189,7 +5189,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1804 (merged)
+- [x] **Status** — PR #1804 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Hub tile promises a "hierarchical account tree" (finance/page.tsx:9) but the screen is a flat list; "+ Add Head" is shown to every FINANCE_ROLES member (page.tsx:24) with the create authority enforced only server-side (undeterminable).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/accounts', 'GET /v1/finance/accounts']`
 - **Question:** Which roles may create account heads, and does GET return parentId for building a tree?
@@ -5200,7 +5200,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1805 (merged)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Both actions render for every FINANCE_ROLES member; the maker-checker rule (distinct officer) is stated in dialog copy but enforced only server-side, absent from the snapshot (FinanceActions.tsx:130,145).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/bills/:id/pass', 'POST /v1/finance/bills/:id/pay']`
 - **Question:** Do pass and pay require distinct users (maker != checker) and respective roles?
@@ -5211,7 +5211,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-JOURNAL-ENTRY-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1807 (merged)
+- [x] **Status** — PR #1807 (merged) — POST /v1/finance/journals now answers 409 DUPLICATE_VOUCHER (voucherNo field error) for a typed duplicate and the consumer records a race loser as a failure audit; web shows the message under Voucher Number (W2 finance rescan: completed by #2136)
 - **First-pass claim:** Voucher number is typed by hand (placeholder JV-2026-001) rather than allocated by the server, risking duplicates; the backend duplicate handling is undeterminable (finance-service absent).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals enforce a unique voucher number per tenant (409 on duplicate) or allocate it server-side when omitted?

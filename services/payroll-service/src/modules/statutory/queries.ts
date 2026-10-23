@@ -116,6 +116,9 @@ export async function listNpsReport(tenantId: string, limit: number) {
     pranLast4: pranMap.get(r.employeeId) ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
+    // GAP-PAYROLL-STATUTORY-NPS-05: the base the percentages were applied to
+    // (Basic + DA). null for rows written before migration 0159 -- not guessed.
+    pensionBaseMinor: r.pensionBaseMinor == null ? null : Number(r.pensionBaseMinor),
     empContribPct: r.empContribPct,
     erContribPct: r.erContribPct,
     empContribMinor: Number(r.empContribMinor),

@@ -1,59 +1,28 @@
 "use client";
 
-import { DataTable, StatusPill } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { useSeededResource } from "@/lib/sync/resource";
 import type { PaymentSummary } from "@civitasone/types";
-import { epaymentStatusVariant } from "./epaymentUi";
+import { PaymentsTable } from "../../payments/PaymentsTable";
 
-// DataTable's generic requires an index signature; PaymentSummary is a plain
-// named interface. The intersection satisfies the constraint without
-// widening away real field names/types (unlike `as unknown as Record<...>`).
-type Row = PaymentSummary & Record<string, unknown>;
-
+/**
+ * GAP-FINANCE-TREASURY-E-PAYMENTS-01: e-Payment Orders and Payments are two entries to ONE dataset
+ * (GET /api/v1/finance/payments), so this renders the shared Payments register table: the same formatted
+ * reference, the same exact-paise amount (sorted numerically), the same Pending / Released tabs and the same
+ * row link to the payment. Only the offline-cache key, headings and the audited CSV export are this screen's own.
+ */
 export function EPaymentsTable({ orders, source = "api" }: { orders: PaymentSummary[]; source?: "api" | "error" }) {
-  // Single narrow cast: Row has identical field names/types to PaymentSummary,
-  // plus a compile-time-only index signature DataTable's generic requires.
-  // Not `as unknown as` — no type information is erased, every named field
-  // stays exactly as typed.
-  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
-    "finance.epayment.orders",
-    orders as Row[],
-    source,
-    (d) => d.length === 0,
-  );
-
   return (
-    <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
-      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      {/* Columns match PaymentSummary's real shape (referenceId/beneficiary/amountDisplay/status) —
-          no bank/bankRef/date fields exist on this endpoint's response. */}
-      <DataTable<Row>
-        columns={[
-          { key: "referenceId", label: "Reference" },
-          { key: "beneficiary", label: "Beneficiary" },
-          { key: "amountDisplay", label: "Amount", align: "right" },
-          { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} variant={epaymentStatusVariant(row.status)} /> },
-        ]}
-        rows={rows}
-        // Same register as /finance/payments: open the payment (UTR, submit for approval).
-        // Only rows that carry a real id link; id-less rows stay plain (no dead link).
-        rowHref={(row) => (row.id ? `/finance/payments/${row.id}` : "")}
-        sortable
-        filterable
-        filterPlaceholder="Search payment orders…"
-        pageSize={15}
-        exportable exportAudit="finance/treasury/e-payments"
-        exportFilename="e-payment-orders"
-        emptyIcon="💳"
-        emptyTitle="No payment orders"
-        emptyMessage="No electronic payment orders found."
-      />
-    </>
+    <PaymentsTable
+      payments={orders}
+      source={source}
+      cacheKey="finance.epayment.orders"
+      labels={{
+        title: "Payment Orders",
+        searchPlaceholder: "Search payment orders…",
+        emptyIcon: "💳",
+        emptyTitle: "No payment orders",
+        emptyMessage: "No electronic payment orders found.",
+      }}
+      exportConfig={{ audit: "finance/treasury/e-payments", filename: "e-payment-orders" }}
+    />
   );
 }

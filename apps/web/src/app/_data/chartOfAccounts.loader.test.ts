@@ -31,4 +31,19 @@ describe("getChartOfAccounts", () => {
     expect(mapped[0]!.parentId).toBeUndefined();
     expect(mapped[1]).toMatchObject({ id: "c", parentId: "g" });
   });
+
+  it("carries the head's level (0 major, 1 minor, 2 sub-minor) and drops anything else", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    await getChartOfAccounts();
+    const opts = fetchJsonMock.mock.calls[0]![2] as { mapResponse: (p: unknown) => unknown };
+    const mapped = opts.mapResponse({
+      data: [
+        { id: "a", code: "1", name: "A", type: "asset", status: "active", level: 0 },
+        { id: "b", code: "2", name: "B", type: "asset", status: "active", level: 2 },
+        { id: "c", code: "3", name: "C", type: "asset", status: "active", level: 7 },
+        { id: "d", code: "4", name: "D", type: "asset", status: "active" },
+      ],
+    }) as Array<{ level?: number }>;
+    expect(mapped.map((m) => m.level)).toEqual([0, 2, undefined, undefined]);
+  });
 });

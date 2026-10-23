@@ -22,6 +22,8 @@ export type ContractDisplayFields = {
   valueDisplay: string;
   dept: string;
   amountMinor: number | string | undefined;
+  /** Linked purchase-order reference as stored, "—" when none (GAP-PROCUREMENT-CONTRACTS-05). */
+  poRef: string;
 };
 
 // Pure derivation of everything the page renders from the raw contract
@@ -50,6 +52,7 @@ export function deriveContractDisplayFields(contract: Record<string, unknown>): 
   const endDate = field(contract, "endDate", "end_date", "validTo", "expiryDate", "expiry");
   const status = field(contract, "status");
   const description = field(contract, "description", "remarks", "notes");
+  const poRef = field(contract, "poRef", "po_ref");
 
   // contract-service's column is `valueMinor` (already in minor units/paise --
   // formatMoney expects exactly that, no conversion needed). The previous
@@ -84,6 +87,6 @@ export function deriveContractDisplayFields(contract: Record<string, unknown>): 
 
   return {
     title, contractNo, parties, contractType, startDate, endDate,
-    status, statusLower, statusCls, description, valueDisplay, dept, amountMinor,
+    status, statusLower, statusCls, description, valueDisplay, dept, amountMinor, poRef,
   };
 }

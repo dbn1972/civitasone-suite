@@ -72,7 +72,7 @@ export interface EntityPickerProps {
    */
   searchRetryLabel?: string;
   /**
-   * GAP-HR-PROMOTION-05: when set, a failed search also shows a button with this
+   * GAP-HR-PROMOTION-05 / GAP-FINANCE-PAYMENTS-DETAIL-02: when set, a failed search also shows a button with this
    * text that re-runs the last query, so a transient failure (a 500, a dropped
    * connection) is recoverable without retyping. Omit to keep the alert-only
    * behaviour every existing caller has.
@@ -479,17 +479,18 @@ export function EntityPicker({
           </>
         ) : null}
       </span>
-
       {/* Skipped when `searchRetryLabel` already renders the inline retry above, so a caller that sets both never gets two buttons. */}
-      {open && failed && !loading && retryText && !searchRetryLabel && (
+      {showStatus && failed && !loading && retryText && !searchRetryLabel ? (
         <button
           type="button"
+          className="btn ghost"
+          style={{ justifySelf: "start", minHeight: 44 }}
+          disabled={disabled}
           onClick={() => runSearch(query)}
-          style={{ justifySelf: "start", fontSize: 12, padding: "2px 10px", borderRadius: 6, border: "1px solid var(--line)", background: "var(--panel)", cursor: "pointer" }}
         >
           {retryText}
         </button>
-      )}
+      ) : null}
 
       {open && results.length > 0 && (
         <ul

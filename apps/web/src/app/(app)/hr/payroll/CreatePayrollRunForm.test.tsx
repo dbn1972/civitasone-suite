@@ -16,6 +16,16 @@ vi.mock("@/app/_components/ds/Toast", () => ({
 
 vi.mock("@/lib/activation", () => ({ trackActivation: vi.fn() }));
 
+// GAP-PAYROLL-HOME-06: the Server Action that drops the cached run-list pages. A
+// Server Action cannot run under vitest (no request scope), so it is mocked here;
+// its own behaviour is covered by _actions.test.ts.
+const mockRevalidate = vi.fn();
+vi.mock("./_actions", () => ({ revalidatePayrollRunLists: () => mockRevalidate() }));
+beforeEach(() => {
+  mockRevalidate.mockReset();
+  mockRevalidate.mockResolvedValue(undefined);
+});
+
 vi.mock("../../../_components/ds", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../_components/ds")>();
   return {
@@ -238,5 +248,107 @@ describe("CreatePayrollRunForm — Run for picker", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain(fragment);
     expect(alert.textContent).not.toContain(code);
+  });
+});
+
+// GAP-PAYROLL-HOME-06: "after creating a run and going back, the new run appears
+// immediately". On a tenant-wide create the form router.push()es to the new run,
+// and on Back Next restores the /hr/payroll tree it had cached (no staleness
+// check), so the list was missing the run just created. The form now awaits a
+// Server Action that revalidates the run-list paths BEFORE it navigates, which
+// makes the client reset its router cache.
+describe("CreatePayrollRunForm — run list freshness on Back (HOME-06)", () => {
+  const GROUPS = [
+    { id: "g1", name: "Monthly Staff" },
+    { id: "g2", name: "Contract Staff" },
+  ];
+
+  beforeEach(() => {
+    mockPush.mockReset();
+    mockRefresh.mockReset();
+    toastSuccess.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  function ok(body: unknown) {
+    return new Response(JSON.stringify(body), { status: 202, headers: { "content-type": "application/json" } });
+  }
+  function renderForm() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <CreatePayrollRunForm structures={STRUCTURES} payGroups={GROUPS} />
+      </NextIntlClientProvider>,
+    );
+  }
+  async function create() {
+    fireEvent.click(screen.getByRole("button", { name: "Create Run" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm create run" }));
+  }
+
+  it("revalidates the run lists BEFORE pushing to the new run (tenant-wide run)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(ok({ id: "run-1" }));
+    let release!: () => void;
+    mockRevalidate.mockReturnValue(new Promise<void>((resolve) => { release = resolve; }));
+
+    renderForm();
+    await create();
+
+    await waitFor(() => expect(mockRevalidate).toHaveBeenCalledTimes(1));
+    // The purge has not finished, so the form must not have navigated away yet.
+    expect(mockPush).not.toHaveBeenCalled();
+
+    release();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/hr/payroll/run-1"));
+    expect(mockRevalidate.mock.invocationCallOrder[0]).toBeLessThan(mockPush.mock.invocationCallOrder[0]!);
+  });
+
+  it("revalidates before it opens the single run of a one-group run too", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(ok({ id: "c1", data: { runIds: ["run-7"] } }));
+    renderForm();
+    fireEvent.change(screen.getByRole("combobox", { name: "Run for" }), { target: { value: "groups" } });
+    fireEvent.click(screen.getByLabelText("Monthly Staff"));
+    await create();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/hr/payroll/run-7"));
+    expect(mockRevalidate).toHaveBeenCalledTimes(1);
+    expect(mockRevalidate.mock.invocationCallOrder[0]).toBeLessThan(mockPush.mock.invocationCallOrder[0]!);
+  });
+
+  it("revalidates before refreshing the list when several group runs are created", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(ok({ id: "c1", data: { runIds: ["run-1", "run-2"] } }));
+    renderForm();
+    fireEvent.change(screen.getByRole("combobox", { name: "Run for" }), { target: { value: "groups" } });
+    fireEvent.click(screen.getByLabelText("Monthly Staff"));
+    fireEvent.click(screen.getByLabelText("Contract Staff"));
+    await create();
+
+    await screen.findByText("2 payroll runs created.");
+    expect(mockRevalidate).toHaveBeenCalledTimes(1);
+    expect(mockRefresh).toHaveBeenCalledTimes(1);
+    expect(mockRevalidate.mock.invocationCallOrder[0]).toBeLessThan(mockRefresh.mock.invocationCallOrder[0]!);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("a failed purge never blocks the navigation or shows an error: the run exists already", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(ok({ id: "run-1" }));
+    mockRevalidate.mockRejectedValue(new Error("Invalid Server Actions request."));
+
+    renderForm();
+    await create();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/hr/payroll/run-1"));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("does not revalidate when the create itself failed (nothing changed)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "DUPLICATE_RUN_FOR_PERIOD", message: "raw" }), { status: 409, headers: { "content-type": "application/json" } }),
+    );
+    renderForm();
+    await create();
+
+    await screen.findByRole("alert");
+    expect(mockRevalidate).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

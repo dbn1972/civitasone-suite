@@ -215,6 +215,14 @@ describe("income-tax listing and computation read the same selection", () => {
     expect(deductions(data)).toEqual([100_000, 150_000, 150_000]); // E_OVER 1L declared, E_NOPROOF 1.5L, E_VERIFIED 2L -> cap 1.5L
   });
 
+  // GAP-PAYROLL-INCOME-TAX-03: `id` is the DECLARATION id when one exists, so the
+  // web drill-in needs the employee id as its own field.
+  it("each row names its employee in employeeId, separately from the declaration id in id", async () => {
+    const { data } = await listing();
+    expect(data.map((r) => String(r.employeeId)).sort()).toEqual([E_VERIFIED, E_NOPROOF, E_OVER].sort());
+    for (const r of data) expect(r.id, "id is a declaration id here, not the employee id").not.toBe(r.employeeId);
+  });
+
   it("after the cutoff: verified only, capped at declared and at the limit; unverified = 0", async () => {
     await setCutoff(null);
     vi.useFakeTimers({ toFake: ["Date"] });

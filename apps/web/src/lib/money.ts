@@ -47,6 +47,22 @@ export function rupeesToMinorString(input: string, opts?: { allowZero?: boolean 
 }
 
 /**
+ * Same parse as {@link rupeesToMinorString} (decimal string, never float
+ * arithmetic) returning exact BigInt paise, or null when rejected
+ * (GAP-PAYROLL-SALARY-REVISIONS-02: a pay-revision amount is compared and
+ * ordered as an integer, never as a float).
+ *
+ *   parseRupeesToMinor("1234.5") -> 123450n
+ *   parseRupeesToMinor("1e3")    -> null
+ *   parseRupeesToMinor("-1")     -> null
+ *   parseRupeesToMinor("abc")    -> null
+ */
+export function parseRupeesToMinor(input: string, opts?: { allowZero?: boolean }): bigint | null {
+  const minor = rupeesToMinorString(input, opts);
+  return minor === null ? null : BigInt(minor);
+}
+
+/**
  * GAP-FINANCE-PFMS-02: parse a clerk-typed RUPEES amount that may carry
  * thousands separators (Indian "1,20,000.50" or western "120,000.50") into a
  * paise digit-string, with no float math. At most 2 decimals; anything

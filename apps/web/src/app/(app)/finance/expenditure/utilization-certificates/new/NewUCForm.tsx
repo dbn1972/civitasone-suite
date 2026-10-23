@@ -74,7 +74,9 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
         body: JSON.stringify({
           ucNo: form.ucNo,
           purpose: form.purpose,
-          scheme: form.scheme || undefined,
+          // The chosen scheme's Scheme Tracking CODE (unique per office), stored with the certificate in its own
+          // column -- not the free-text scheme name, which is not unique and was lost when a grant reference was typed.
+          schemeCode: form.scheme || undefined,
           // GAP-...-UTILIZATION-CERTIFICATES-NEW-02: the body that utilised the grant.
           grantee: form.grantee.trim(),
           grantRef: form.grantRef.trim() || undefined,
@@ -140,15 +142,15 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
               >
                 <option value="">{t("schemePlaceholder")}</option>
                 {(schemes ?? []).map((s) => (
-                  <option key={s.code} value={s.name}>{s.name} ({s.code})</option>
+                  <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
                 ))}
               </select>
               {schemes !== null && schemes.length === 0 && (
                 <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("noSchemes")}</span>
               )}
               {errors.scheme && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.scheme}</span>}
-              {formError.fieldError("scheme") && (
-                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("scheme")}</span>
+              {formError.fieldError("schemeCode") && (
+                <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("schemeCode")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>

@@ -21,7 +21,8 @@ const idParam = z.object({ id: z.string().uuid() });
 const changeParam = z.object({ id: z.string().uuid(), changeId: z.string().uuid() });
 
 // approve / reject are bound to the vendor version the checker reviewed (stale -> 409 VERSION_CONFLICT)
-const decideOpt = z.object({ version: z.number().int().min(1), reason: z.string().trim().min(5).max(500).optional() });
+// GAP-FINANCE-VENDORS-DETAIL-04: approving a vendor (it can then be paid) or a bank-detail change (the payment-diversion
+// control point) is an authorising act, so the approver states why; it is written to the audit event. Reject already did.
 const decideReq = z.object({ version: z.number().int().min(1), reason: z.string().trim().min(5).max(500) });
 const reasonOpt = z.object({ reason: z.string().trim().min(5).max(500).optional() });
 const reasonReq = z.object({ reason: z.string().trim().min(5).max(500) });
@@ -47,7 +48,7 @@ export async function vendorWorkflowRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = decideOpt.parse(req.body ?? {});
+    const body = decideReq.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.requestVendorDecision(ctx, id, "approve", body.reason, body.version));
   });
 
@@ -90,7 +91,7 @@ export async function vendorWorkflowRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
     const { id, changeId } = changeParam.parse(req.params);
-    const body = reasonOpt.parse(req.body ?? {});
+    const body = reasonReq.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.requestBankChangeDecision(ctx, id, changeId, "approve", body.reason));
   });
 

@@ -645,6 +645,8 @@ export interface AccountSummary {
   id?: string;
   /** Parent head id, or null/absent for a top-level head. A head that is some other head's parent is a non-postable group head. */
   parentId?: string | null;
+  /** Position in the chart: 0 = major head, 1 = minor head, 2 = sub-minor head (absent on older feeds). */
+  level?: 0 | 1 | 2;
   /** Sub-ledger-controlled account: not postable from a manual journal (GAP-FINANCE-JOURNAL-ENTRY-04). */
   isControl?: boolean;
   code: string;
@@ -767,6 +769,11 @@ export type FinanceDashboard = {
   totalExpenditure: number;
   /** Total budget estimate (BE only), minor units (paise) as a decimal string; absent from an older API. */
   sanctionedMinor?: string;
+  /**
+   * Expenditure by category exactly as finance-service reports it (GAP-FINANCE-DASHBOARD-01); absent until the
+   * service sends one. `amountMinor` is paise as a base-10 string.
+   */
+  categoryBreakdown?: Array<{ label: string; amountMinor: string }>;
 };
 
 export type BudgetSummary = {
@@ -821,7 +828,13 @@ export type BillSummary = {
   dueDate?: string;
   status: "pending" | "passed" | "approved" | "paid" | "rejected" | "on_hold" | "under_review";
   poRef?: string;
+  /** Human PO number (e.g. "PO-2026-014") snapshotted from the GRN the bill was drafted from; absent on hand-lodged / older bills. */
+  poNumber?: string;
   threeWayMatch: "matched" | "pending" | "partial" | "unmatched" | "na";
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the bill's creator (maker). */
+  createdBy?: string;
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the officer who passed the bill, while status is "passed". */
+  passedBy?: string;
 };
 
 export type BillDetail = BillSummary & {
@@ -829,6 +842,10 @@ export type BillDetail = BillSummary & {
   grnRef?: string;
   invoiceNo?: string;
   paymentRef?: string;
+  /** User id of the officer who lodged the bill (maker-checker: they cannot pass it or release its payment). */
+  createdBy?: string;
+  /** User id of the officer who passed it, while it is passed (the passer cannot release its payment). */
+  passedBy?: string;
 };
 
 export type AdvanceSummary = {
@@ -852,6 +869,8 @@ export type UCSummary = {
   id: string;
   ucNo: string;
   grantRef?: string;
+  /** Scheme Tracking code (finance_schemes.code) the certificate was raised against; absent on older certificates. */
+  schemeCode?: string;
   grantee: string;
   amount: string;        // minor units (paise), bigint-safe decimal string
   periodFrom: string;
@@ -890,10 +909,15 @@ export type GLEntrySummary = {
 export type FinancialStatementSummary = {
   id: string;
   head: string;
-  openingBalance: number;
-  receipts: number;
-  payments: number;
-  closingBalance: number;
+  /**
+   * The four balances are MINOR units (paise) as base-10 integer strings
+   * (bigint-safe; see FinancialStatementSummarySchema), never rupee numbers.
+   * `closingBalance` = credits - debits and may be negative.
+   */
+  openingBalance: string;
+  receipts: string;
+  payments: string;
+  closingBalance: string;
   type: "asset" | "liability" | "income" | "expenditure";
 };
 
@@ -982,13 +1006,28 @@ export type PayrollRunDetail = {
   runDate: string;
   payPeriod: string;
   employeeCount: number;
+  /** Legacy rupee float. Money screens use the *Minor fields below (GAP-PAYROLL-HOME-01). */
   grossAmount: number;
   netAmount: number;
   deductions: number;
+  /** GAP-PAYROLL-HOME-01: authoritative integer-paise totals (bigint strings); render with formatMoney. */
+  grossMinor?: string;
+  netMinor?: string;
+  deductionsMinor?: string;
+  /**
+   * GAP-PAYROLL-HOME-03: payroll_runs.run_type. Absent on a payload from an older
+   * payroll-service, which is treated as "regular". Supplementary, arrears and
+   * pensioner runs coexist with the regular run of a month, so a headcount over a
+   * list of runs must only count the regular ones.
+   */
+  runType?: "regular" | "supplementary" | "arrears" | "pensioner";
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {
+  /** GAP-PAYROLL-DETAIL-02: user ids of the run's maker and checker (approvedBy is null until approved). */
+  createdBy?: string | null;
+  approvedBy?: string | null;
   salarySlips: Array<{
     id: string;
     employeeId: string;
@@ -996,6 +1035,10 @@ export type PayrollRunFullDetail = PayrollRunDetail & {
     gross: number;
     deductions: number;
     net: number;
+    /** GAP-PAYROLL-HOME-01: integer-paise strings; render with formatMoney. */
+    grossMinor?: string;
+    deductionsMinor?: string;
+    netMinor?: string;
     status: string;
   }>;
 };

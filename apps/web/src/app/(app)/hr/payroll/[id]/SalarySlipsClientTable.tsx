@@ -2,22 +2,33 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { formatRupees } from "@/lib/formatters";
+import { formatMinorOrLegacy, minorOrLegacy } from "@/lib/payroll/runMoney";
 import { Button, Modal, StatusPill } from "@/app/_components/ds";
 
+/**
+ * GAP-PAYROLL-HOME-01: amounts are integer-paise strings (the API's
+ * grossMinor / deductionsMinor / netMinor), rendered with formatMoney. The
+ * legacy rupee floats on the same payload are not read here; a missing value
+ * shows "—" (unknown), never a made-up zero.
+ */
 type SlipRow = {
   id: string;
   employeeId: string;
   employeeName: string;
-  gross: number;
-  deductions: number;
-  net: number;
+  /** Rupee floats (legacy wire format); the *Minor strings below are the exact paise twins. */
+  gross?: number;
+  deductions?: number;
+  net?: number;
+  /** GAP-PAYROLL-RUNS-01: exact integer paise (digit strings); preferred over the rupee floats. */
+  grossMinor?: string;
+  deductionsMinor?: string;
+  netMinor?: string;
   status: string;
 };
 
 // ─── Salary Slip Preview Modal ─────────────────────────────────────────────
 
-function SlipLine({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+function SlipLine({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <tr>
       <td
@@ -38,7 +49,7 @@ function SlipLine({ label, value, bold }: { label: string; value: number; bold?:
           borderBottom: "1px solid var(--line)",
         }}
       >
-        {formatRupees(value)}
+        {value}
       </td>
     </tr>
   );
@@ -89,7 +100,17 @@ function SalarySlipModal({
   // ignored). Only the real, API-backed figures are shown now: gross,
   // deductions and net, with an explicit check that they foot -- instead of
   // silently hiding a mismatch behind a 10px disclaimer.
-  const reconciles = slip.gross - slip.deductions === slip.net;
+  //
+  // GAP-PAYROLL-RUNS-01: the footing check is exact BigInt paise arithmetic on
+  // the API's *Minor strings (rupee floats only as a legacy fallback), so a
+  // slip like 1234.56 - 100.10 = 1134.46 can no longer raise a false float
+  // mismatch warning. A figure that is missing entirely cannot be confirmed to
+  // foot, so it warns too.
+  const grossMinor = minorOrLegacy(slip.grossMinor, slip.gross);
+  const deductionsMinor = minorOrLegacy(slip.deductionsMinor, slip.deductions);
+  const netMinor = minorOrLegacy(slip.netMinor, slip.net);
+  const reconciles = grossMinor !== null && deductionsMinor !== null && netMinor !== null
+    && grossMinor - deductionsMinor === netMinor;
 
   // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore).
   return (
@@ -144,11 +165,11 @@ function SalarySlipModal({
         {/* Slip body -- only API-backed figures (see GAP-PAYROLL-DETAIL-01). */}
         <div style={{ padding: "14px 20px" }}>
           <SlipSection title={t("earningsSectionTitle")}>
-            <SlipLine label={t("grossEarningsLabel")} value={slip.gross} bold />
+            <SlipLine label={t("grossEarningsLabel")} value={formatMinorOrLegacy(slip.grossMinor, slip.gross)} bold />
           </SlipSection>
 
           <SlipSection title={t("deductionsSectionTitle")}>
-            <SlipLine label={t("totalDeductionsLabel")} value={slip.deductions} bold />
+            <SlipLine label={t("totalDeductionsLabel")} value={formatMinorOrLegacy(slip.deductionsMinor, slip.deductions)} bold />
           </SlipSection>
 
           {!reconciles && (
@@ -170,7 +191,7 @@ function SalarySlipModal({
           >
             <span style={{ fontWeight: 700, fontSize: 15 }}>{t("netPayLabel")}</span>
             <span style={{ fontWeight: 700, fontSize: 17, color: "var(--primary)" }}>
-              {formatRupees(slip.net)}
+              {formatMinorOrLegacy(slip.netMinor, slip.net)}
             </span>
           </div>
         </div>
@@ -285,13 +306,13 @@ export function SalarySlipsClientTable({
                 <tr key={slip.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
-                    {formatRupees(slip.gross)}
+                    {formatMinorOrLegacy(slip.grossMinor, slip.gross)}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
-                    {formatRupees(slip.deductions)}
+                    {formatMinorOrLegacy(slip.deductionsMinor, slip.deductions)}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                    {formatRupees(slip.net)}
+                    {formatMinorOrLegacy(slip.netMinor, slip.net)}
                   </td>
                   <td style={{ padding: "10px 12px" }}>
                     <StatusPill status={slip.status} />

@@ -50,7 +50,7 @@ export default async function GeneralLedgerPage({
       {result.source === "error" ? (
         <LoadErrorState result={result} area="general ledger" backHref="/finance" />
       ) : (
-        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} view={view} />
+        <GLTable entries={result.data.entries} pagination={result.data.pagination} totals={result.data.totals} ledgerTotals={result.data.ledgerTotals} view={view} />
       )}
     </>
   );

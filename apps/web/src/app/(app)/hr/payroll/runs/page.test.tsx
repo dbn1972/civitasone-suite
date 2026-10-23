@@ -50,7 +50,7 @@ describe("PayrollRunsPage", () => {
   it("renders real runs with correctly-formatted rupee amounts and a working detail link", async () => {
     fetchJsonMock.mockResolvedValue({
       data: [
-        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 500000, netAmount: 430000, deductions: 70000, status: "paid" },
+        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 500000, netAmount: 430000, deductions: 70000, grossMinor: "50000000", netMinor: "43000000", deductionsMinor: "7000000", status: "paid" },
       ],
       source: "api",
     });
@@ -65,6 +65,22 @@ describe("PayrollRunsPage", () => {
     expect(screen.getByRole("link", { name: "Open August 2026" })).toHaveAttribute("href", "/hr/payroll/run-1");
     expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
     expect(screen.getByText("₹4,30,000.00")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-RUNS-01: renders the exact paise strings (grossMinor/netMinor), same figure as the legacy float payload", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        // rupee floats deliberately disagree with the paise strings: the strings win.
+        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 42, grossAmount: 1, netAmount: 1, deductions: 0, grossMinor: "15000000", netMinor: "12345678", deductionsMinor: "2654322", status: "paid" },
+      ],
+      source: "api",
+    });
+
+    const ui = await PayrollRunsPage();
+    renderWithProvider(ui);
+
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
   });
 
   it("points the empty-state CTA at the working /hr/payroll page, not the broken /hr/payroll/period page", async () => {

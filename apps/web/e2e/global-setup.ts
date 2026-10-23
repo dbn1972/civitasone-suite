@@ -421,8 +421,8 @@ const FIXTURES: Record<string, unknown> = {
   // fail that array schema outright and silently fall back to source:"error"
   // + empty, which is exactly what a `{ data: [] }` shape had been doing.
   '/api/v1/payroll/runs': [
-    { id: 'run-001', runDate: '2024-07-31', payPeriod: '2024-07', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'paid' },
-    { id: 'run-003', runDate: '2024-09-30', payPeriod: '2024-09', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, status: 'draft' },
+    { id: 'run-001', runDate: '2024-07-31', payPeriod: '2024-07', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, grossMinor: '15000000', netMinor: '13500000', deductionsMinor: '1500000', status: 'paid' },
+    { id: 'run-003', runDate: '2024-09-30', payPeriod: '2024-09', employeeCount: 2, grossAmount: 150000, netAmount: 135000, deductions: 15000, grossMinor: '15000000', netMinor: '13500000', deductionsMinor: '1500000', status: 'draft' },
   ],
   // REL-023: missing entirely -- /hr/payroll (create-run-form gating, via
   // getPayrollStructures()) and /hr/payroll/structures's own "Salary

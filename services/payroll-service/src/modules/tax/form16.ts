@@ -54,6 +54,40 @@ export interface Form16 {
   };
 }
 
+/**
+ * GAP-PAYROLL-RETURNS-06: Form 16 Part B in EXACT integer paise. buildForm16()
+ * accumulates every figure as bigint paise anyway and then divides once into the
+ * display-rupee `form16PartB` above; this is the same set of figures before that
+ * division, so a consumer that needs paise (the 24Q Annexure II wire) never has
+ * to multiply a rupee Number back up by 100. Field-for-field twin of
+ * `Form16["form16PartB"]`: every `xMinor` is that field's value in paise.
+ */
+export interface Form16PartBMinor {
+  grossSalaryMinor: bigint; perquisitesMinor: bigint; prevEmployerSalaryMinor: bigint; otherSourcesIncomeMinor: bigint;
+  standardDeductionMinor: bigint; hraExemptMinor: bigint;
+  section80cMinor: bigint; section80dMinor: bigint; otherDeductionsMinor: bigint; totalChapterViAMinor: bigint;
+  taxableIncomeMinor: bigint; taxOnIncomeMinor: bigint; rebate87AMinor: bigint; surchargeMinor: bigint; cessMinor: bigint;
+  totalTaxLiabilityMinor: bigint; totalTdsDeductedMinor: bigint; prevEmployerTdsMinor: bigint;
+  balanceTaxPayableMinor: bigint; refundDueMinor: bigint;
+  regime: "old" | "new";
+}
+
+export interface Form16WithMinor {
+  form16: Form16;
+  partBMinor: Form16PartBMinor;
+}
+
+/**
+ * A whole-rupee amount (the tax engine reports slab tax, rebate, surcharge, cess
+ * and total tax as whole rupees -- Sec 288B -- derived from bigint paise) as
+ * exact paise. Integer-only arithmetic; a fractional rupee is a bug upstream and
+ * fails loudly instead of being rounded here.
+ */
+function wholeRupeesToMinor(rupees: number): bigint {
+  if (!Number.isInteger(rupees)) throw new Error(`Form 16 expected a whole-rupee amount, got ${rupees}`);
+  return BigInt(rupees) * 100n;
+}
+
 const CAP_80C_MINOR = 15_000_000n; // Rs 150,000
 const CAP_80D_MINOR = 5_000_000n;  // Rs 50,000
 const minBig = (a: bigint, b: bigint): bigint => (a < b ? a : b);
@@ -137,6 +171,15 @@ export function computeForm16Deductions(
  * are unchanged for all pre-existing (whole-rupee) data.
  */
 export async function buildForm16(tenantId: string, employeeId: string, fy: string): Promise<Form16> {
+  return (await buildForm16WithMinor(tenantId, employeeId, fy)).form16;
+}
+
+/**
+ * Same computation as {@link buildForm16}, returning the exact-paise Part B
+ * alongside the display-rupee Form 16. Both are views of ONE computation, so
+ * they cannot drift: `partBMinor.xMinor / 100` is `form16.form16PartB.x`.
+ */
+export async function buildForm16WithMinor(tenantId: string, employeeId: string, fy: string): Promise<Form16WithMinor> {
   const { startYear, endYear } = parseFy(fy);
   const months = fyMonths(startYear);
 
@@ -217,7 +260,7 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
 
   const {
     section80cMinor, section80dMinor, hraExemptMinor, otherDeductionsMinor, totalChapterViAMinor,
-    taxableIncome,
+    taxableIncome, taxableIncomeMinor,
   } = computeForm16Deductions({
     grossMinor, standardDeduction, regime,
     hraClaimedMinor: dec ? BigInt(dec.hraClaimed) : 0n,
@@ -246,7 +289,7 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const deducteePan = emp?.pan ?? "";   // reachable + no PAN → genuine PANNOTAVBL
   const deducteeName = emp?.fullName ?? "";
 
-  return {
+  const form16: Form16 = {
     employeeId,
     fy,
     assessmentYear: `${endYear}-${String((endYear + 1) % 100).padStart(2, "0")}`,
@@ -279,4 +322,30 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
       balanceTaxPayable: balance > 0 ? balance : 0, refundDue: balance < 0 ? -balance : 0, regime,
     },
   };
+
+  const partBMinor: Form16PartBMinor = {
+    grossSalaryMinor: grossMinor,
+    perquisitesMinor,
+    prevEmployerSalaryMinor,
+    otherSourcesIncomeMinor,
+    standardDeductionMinor: wholeRupeesToMinor(standardDeduction),
+    hraExemptMinor,
+    section80cMinor,
+    section80dMinor,
+    otherDeductionsMinor,
+    totalChapterViAMinor,
+    taxableIncomeMinor,
+    taxOnIncomeMinor: wholeRupeesToMinor(tax.baseTax),
+    rebate87AMinor: wholeRupeesToMinor(tax.rebate),
+    surchargeMinor: wholeRupeesToMinor(tax.surcharge),
+    cessMinor: wholeRupeesToMinor(tax.cess),
+    totalTaxLiabilityMinor,
+    totalTdsDeductedMinor,
+    prevEmployerTdsMinor: prevEmployerTdsRoundedMinor,
+    balanceTaxPayableMinor: balanceMinor > 0n ? balanceMinor : 0n,
+    refundDueMinor: balanceMinor < 0n ? -balanceMinor : 0n,
+    regime,
+  };
+
+  return { form16, partBMinor };
 }

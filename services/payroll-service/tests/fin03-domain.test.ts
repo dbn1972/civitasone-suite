@@ -95,6 +95,22 @@ describe("salary revision sanity (GAP-PAYROLL-SALARY-REVISIONS-03)", () => {
     expect(r.success).toBe(false);
     if (!r.success) expect(r.error.issues[0]!.path).toEqual(["newGrossMinor"]);
   });
+
+  // GAP-PAYROLL-SALARY-REVISIONS-02 (review hardening): the four paise figures arrive as JSON numbers
+  // (doubles). 2^53 and above is already rounded by JSON.parse, so it is refused, never stored as a different amount.
+  it("refuses a paise figure above 2^53-1 on every amount field, and accepts exactly 2^53-1", () => {
+    const MAX_SAFE = 9007199254740991; // 90,071,992,547,409.91 rupees
+    const body = { employeeId: "11111111-1111-4111-8111-111111111111", effectiveDate: "2026-04-01", orderNo: "ORD-1", ...base };
+    // every field at exactly 2^53-1 is consistent with the sanity rules (gross >= basic, new >= old) and is accepted verbatim
+    const atLimit = createSalaryRevisionBody.parse({ ...body, oldBasicMinor: MAX_SAFE, newBasicMinor: MAX_SAFE, oldGrossMinor: MAX_SAFE, newGrossMinor: MAX_SAFE });
+    expect(atLimit.newBasicMinor).toBe(MAX_SAFE);
+    expect(atLimit.newGrossMinor).toBe(MAX_SAFE);
+    for (const field of ["oldBasicMinor", "newBasicMinor", "oldGrossMinor", "newGrossMinor"] as const) {
+      const over = createSalaryRevisionBody.safeParse({ ...body, newBasicMinor: 1, [field]: MAX_SAFE + 1 });
+      expect(over.success, field).toBe(false);
+      if (!over.success) expect(over.error.issues.some((i) => i.path[0] === field), field).toBe(true);
+    }
+  });
 });
 
 describe("other boundaries", () => {

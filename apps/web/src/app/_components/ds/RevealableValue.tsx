@@ -33,6 +33,19 @@ export interface RevealableValueProps {
   fallback?: React.ReactNode;
   autoHideMs?: number;
   className?: string;
+  /**
+   * Reason length bounds, for an endpoint that enforces its own (defaults 5 and 300, the vendor / cheque
+   * reveals). Set both to match the route, e.g. the TDS PAN reveal needs 10 to 500, so the dialog never
+   * lets through a reason the server would 400.
+   */
+  minReasonLength?: number;
+  maxReasonLength?: number;
+  /**
+   * What record the value belongs to (e.g. the vendor name), for a control repeated once per table row.
+   * When set it is appended to the Reveal / Hide button's accessible name ("Reveal PAN for Vendor A"), so a
+   * screen-reader button list can tell the rows apart. The visible text stays "Reveal" / "Hide".
+   */
+  context?: string;
 }
 
 const MIN_REASON = 5;
@@ -40,6 +53,7 @@ const MAX_REASON = 300;
 
 export function RevealableValue({
   maskedText, revealPath, revealBody, pick, canReveal, label, fallback = "—", autoHideMs = 30_000, className,
+  minReasonLength = MIN_REASON, maxReasonLength = MAX_REASON, context,
 }: RevealableValueProps) {
   const t = useTranslations("revealableValue");
   const te = useTranslations("financeWorkflowErrors");
@@ -57,7 +71,7 @@ export function RevealableValue({
 
   async function reveal(reason?: string) {
     const r = (reason ?? "").trim();
-    if (r.length < MIN_REASON) return;
+    if (r.length < minReasonLength) return;
     setBusy(true);
     setError("");
     try {
@@ -90,11 +104,15 @@ export function RevealableValue({
       </span>
       {canReveal ? (
         clear === null ? (
-          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={false} onClick={() => { setError(""); setOpen(true); }}>
+          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={false}
+            {...(context ? { "aria-label": t("revealAria", { label, context }) } : {})}
+            onClick={() => { setError(""); setOpen(true); }}>
             {t("reveal")}
           </button>
         ) : (
-          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={true} onClick={hide}>
+          <button type="button" className="btn ghost" style={{ padding: "0 8px", fontSize: 12 }} aria-pressed={true}
+            {...(context ? { "aria-label": t("hideAria", { label, context }) } : {})}
+            onClick={hide}>
             {t("hide")}
           </button>
         )
@@ -106,8 +124,8 @@ export function RevealableValue({
         confirmLabel={t("confirm")}
         requireReason
         reasonLabel={t("reasonLabel")}
-        minReasonLength={MIN_REASON}
-        maxReasonLength={MAX_REASON}
+        minReasonLength={minReasonLength}
+        maxReasonLength={maxReasonLength}
         busy={busy}
         errorMessage={error}
         onConfirm={(reason) => { void reveal(reason); }}

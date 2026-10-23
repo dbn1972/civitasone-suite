@@ -4,6 +4,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { getProcurementIndents } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { indentServiceStatusQuery, parseIndentStatusFilter } from "../drillThrough";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -46,23 +47,38 @@ export default async function IndentsPage({
   const pageParam = Number(readParam(searchParams, "page") ?? "1");
   const pageNo = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
   const q = readParam(searchParams, "q")?.trim() || undefined;
-  const statusFilter = readParam(searchParams, "status")?.trim() || undefined;
+  // GAP-PROCUREMENT-DASHBOARD-02: `?status=` may carry one status or a comma-
+  // separated set (the dashboard's "Pending Indents" counter counts draft AND
+  // pending); the raw service status `pending` is the list's `pending_approval`.
+  const statusFilters = parseIndentStatusFilter(readParam(searchParams, "status"));
+  const statusFilter = statusFilters.length > 0 ? statusFilters.join(",") : undefined;
   const offset = (pageNo - 1) * PAGE_SIZE;
 
-  const { data: indents, source } = await getProcurementIndents({ limit: PAGE_SIZE, offset, q });
+  // GAP-PROCUREMENT-DASHBOARD-02: the status filter is sent to the server so it
+  // is applied BEFORE paging. Filtering one fetched page in the browser would
+  // hide matching indents that sit on later pages (a counter reading N could
+  // land on "No indents in this status"). The stat tiles keep describing the
+  // unfiltered page of results, so when a filter is active that page is a second
+  // fetch; without a filter the one fetch serves both.
+  const serviceStatus = indentServiceStatusQuery(statusFilters);
+  const listFetch = getProcurementIndents({ limit: PAGE_SIZE, offset, q, status: serviceStatus });
+  const statsFetch = serviceStatus ? getProcurementIndents({ limit: PAGE_SIZE, offset, q }) : listFetch;
+  const [{ data: listed, source }, { data: indents, source: statsSource }] = await Promise.all([listFetch, statsFetch]);
 
-  const errored = source === "error";
+  const errored = source === "error" || statsSource === "error";
   // GAP-PROCUREMENT-INDENTS-01: this page is truncated when a full page came
   // back (there may be more rows the server didn't send).
-  const truncated = !errored && indents.length === PAGE_SIZE;
+  const truncated = !errored && listed.length === PAGE_SIZE;
 
   // GAP-PROCUREMENT-INDENTS-03: count every status that has a label, so the
   // actionable states (Tender Required especially) are visible, not just the
   // three the page used to show.
   const countOf = (status: string) => indents.filter((i) => i.status === status).length;
 
-  // GAP-PROCUREMENT-INDENTS-03: optional client-chosen status narrowing.
-  const filtered = statusFilter ? indents.filter((i) => i.status === statusFilter) : indents;
+  // GAP-PROCUREMENT-INDENTS-03: optional client-chosen status narrowing. The
+  // server already filtered; this only guards against a service that ignored
+  // the filter, so the rows can never disagree with the chosen status.
+  const filtered = statusFilters.length > 0 ? listed.filter((i) => statusFilters.includes(i.status)) : listed;
 
   // GAP-PROCUREMENT-INDENTS-02: on a failed load the stats must read "we don't
   // know" ("—"), not a fabricated 0. StatCard renders null as "—".
@@ -89,6 +105,27 @@ export default async function IndentsPage({
     return qs ? `/procurement/indents?${qs}` : "/procurement/indents";
   };
 
+  // Pager links keep the search query and the status filter.
+  const pageHref = (n: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (statusFilter) params.set("status", statusFilter);
+    if (n > 1) params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `/procurement/indents?${qs}` : "/procurement/indents";
+  };
+
+  // GAP-PROCUREMENT-DASHBOARD-02: shown under the rows AND under the empty state,
+  // so a page past the end (or a filter with nothing on this page) can always
+  // step back or forward instead of stranding the reader.
+  const pager = (truncated || pageNo > 1) ? (
+    <nav className="dt-pager" aria-label="Indent pages" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+      {pageNo > 1 ? <Link className="btn ghost" href={pageHref(pageNo - 1)}>← Previous</Link> : null}
+      <span aria-live="polite" style={{ fontSize: 13, color: "var(--mut)" }}>Page {pageNo}</span>
+      {truncated ? <Link className="btn ghost" href={pageHref(pageNo + 1)}>Next →</Link> : null}
+    </nav>
+  ) : null;
+
   return (
     <>
       <PageHeader
@@ -98,7 +135,7 @@ export default async function IndentsPage({
         actions={
           <>
             <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>
-            {errored ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
+            {errored ? <DataSourceBadge source={source === "error" ? source : statsSource} message="Couldn't load — showing nothing" /> : null}
           </>
         }
       />
@@ -114,23 +151,28 @@ export default async function IndentsPage({
         <StatCard icon="🚫" tone="bad" label="Rejected" value={stat(countOf("rejected"))} href={statusHref("rejected")} />
       </StatGrid>
 
-      <Card title={statusFilter ? `Indents — ${STATUS_LABELS[statusFilter] ?? statusFilter}` : "All indents"}>
+      <Card title={statusFilter ? `Indents — ${statusFilters.map((s) => STATUS_LABELS[s] ?? s).join(", ")}` : "All indents"}>
         {errored ? (
           // GAP-PROCUREMENT-INDENTS-02: a real retry (RefreshErrorState re-runs
           // the server fetch) instead of a dead ErrorState, and no 0-valued
           // stats masquerading as data above.
           <RefreshErrorState error={toHumanError("load", { area: "indents" })} backHref="/procurement/indents" />
         ) : rows.length === 0 ? (
-          <EmptyState
-            icon="📋"
-            title={statusFilter ? "No indents in this status" : "No indents yet"}
-            message={statusFilter
-              ? "No indents match this status filter. Clear the filter to see all indents."
-              : "An indent is a request to buy goods or services. Create your first one to start a purchase."}
-            action={statusFilter
-              ? <Link href={statusHref()} className="btn ghost">Clear filter</Link>
-              : <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>}
-          />
+          <>
+            <EmptyState
+              icon="📋"
+              title={pageNo > 1 ? "No indents on this page" : statusFilter ? "No indents in this status" : "No indents yet"}
+              message={pageNo > 1
+                ? "There are no more indents after the previous page. Go back to the previous page."
+                : statusFilter
+                  ? "No indents match this status filter. Clear the filter to see all indents."
+                  : "An indent is a request to buy goods or services. Create your first one to start a purchase."}
+              action={statusFilter
+                ? <Link href={statusHref()} className="btn ghost">Clear filter</Link>
+                : <Link href="/procurement/indents/new" className="btn primary">+ New Indent</Link>}
+            />
+            {pager}
+          </>
         ) : (
           <>
             {/* GAP-PROCUREMENT-INDENTS-01: honest truncation cue + server paging controls. */}
@@ -159,23 +201,7 @@ export default async function IndentsPage({
                 { key: "status", label: "Status", cellType: "status", statusLabels: STATUS_LABELS },
               ]}
             />
-            {(truncated || pageNo > 1) ? (
-              <nav className="dt-pager" aria-label="Indent pages" style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
-                {pageNo > 1 ? (
-                  <Link
-                    className="btn ghost"
-                    href={(() => { const p = new URLSearchParams(); if (q) p.set("q", q); if (statusFilter) p.set("status", statusFilter); if (pageNo - 1 > 1) p.set("page", String(pageNo - 1)); const s = p.toString(); return s ? `/procurement/indents?${s}` : "/procurement/indents"; })()}
-                  >← Previous</Link>
-                ) : null}
-                <span aria-live="polite" style={{ fontSize: 13, color: "var(--mut)" }}>Page {pageNo}</span>
-                {truncated ? (
-                  <Link
-                    className="btn ghost"
-                    href={(() => { const p = new URLSearchParams(); if (q) p.set("q", q); if (statusFilter) p.set("status", statusFilter); p.set("page", String(pageNo + 1)); return `/procurement/indents?${p.toString()}`; })()}
-                  >Next →</Link>
-                ) : null}
-              </nav>
-            ) : null}
+            {pager}
           </>
         )}
       </Card>

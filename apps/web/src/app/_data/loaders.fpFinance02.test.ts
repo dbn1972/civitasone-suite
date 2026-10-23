@@ -45,12 +45,16 @@ describe("fp-finance-02 loaders", () => {
 
   it("getFinanceGLPage builds a bounded, filtered query and validates the payload", async () => {
     const entry = { id: "j:1", voucherNo: "V", date: "2026-06-01", accountCode: "1000", accountName: "Cash", referenceNo: "V", type: "journal", debit: "1", credit: "0" };
-    next.result = { data: { data: [entry], pagination: { limit: 25, offset: 50, total: 60, hasMore: false }, totals: { entryLines: 60, vouchers: 3, accountsActive: 4, debitMinor: "1", creditMinor: "1" } }, source: "api" };
+    next.result = { data: { data: [entry], pagination: { limit: 25, offset: 50, total: 60, hasMore: false }, totals: { entryLines: 60, vouchers: 3, accountsActive: 4, debitMinor: "1", creditMinor: "1" }, ledgerTotals: { entryLines: 90, vouchers: 5, accountsActive: 6, debitMinor: "7", creditMinor: "7" } }, source: "api" };
     const r = await getFinanceGLPage({ fy: "2026-27", type: "payment", q: "PV 1", page: 3, pageSize: 25 });
     expect(last().path).toBe("/api/v1/finance/journals/lines?limit=25&offset=50&fy=2026-27&type=payment&q=PV+1");
     expect(last().options.revalidateSeconds).toBeUndefined();
     expect(r.data.entries).toHaveLength(1);
     expect(r.data.totals?.entryLines).toBe(60);
+    // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04: the ledger-wide totals ride along; an older server omits them (null, never zero)
+    expect(r.data.ledgerTotals?.entryLines).toBe(90);
+    const older = last().options.mapResponse({ data: [entry], pagination: { limit: 25, offset: 0, total: 1, hasMore: false }, totals: { entryLines: 1, vouchers: 1, accountsActive: 1, debitMinor: "1", creditMinor: "1" } });
+    expect((older as { ledgerTotals: unknown }).ledgerTotals).toBeNull();
     // a payload that is not the expected shape is an error state, not an empty ledger
     expect(last().options.mapResponse({ data: "x" })).toBeNull();
     expect(last().options.mapResponse({ data: [{ nope: 1 }], pagination: {} })).toBeNull();
