@@ -9,7 +9,7 @@ import type { NumberFormatSpec } from "./spec.js";
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**
- * Calendar year and month (1-12) of Fri Oct 23 11:20:08 UTC 2026 in IST. Statutory numbering periods
+ * Calendar year and month (1-12) of `date` in IST. Statutory numbering periods
  * follow the Indian calendar, so 00:00-05:30 IST on the 1st of a month/FY
  * already belongs to the new period even though the UTC date is still the 31st.
  */
