@@ -23,6 +23,7 @@ import { Button, Field, Input, Select, Textarea } from "../../../_components/ds"
 import { EmployeePicker } from "../../../_components/EmployeePicker";
 import { translateFormErrors } from "./translateFormErrors";
 import { validateShiftChange, type ShiftChangeErrors } from "./shiftChangeSchema";
+import { todayIST } from "@/lib/formatters";
 
 type CreatedRequest = { id: string };
 type ShiftRequestsList = { data: Array<{ id: string }> };
@@ -233,7 +234,7 @@ export function ShiftChangeRequestForm({
           type="date"
           value={effectiveDate}
           onChange={(e) => { setEffectiveDate(e.target.value); clearClientError("effectiveDate"); }}
-          min={new Date().toISOString().split("T")[0]}
+          min={todayIST()}
         />
       </Field>
 

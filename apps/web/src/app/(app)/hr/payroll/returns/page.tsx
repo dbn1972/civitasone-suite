@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { maskPan } from "../../../../_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, istDateKey } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
@@ -97,10 +97,10 @@ type Form24QLookup =
   | { state: "error" };
 
 function currentFyQuarter(): { fy: string; quarter: Quarter } {
-  const now = new Date();
-  const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  // CLOS2-S2-01: IST calendar, not the (UTC) host clock.
+  const [yy, m] = istDateKey(new Date()).split("-").map(Number);
+  const y = m >= 4 ? yy : yy - 1;
   const fy = `${y}-${String((y + 1) % 100).padStart(2, "0")}`;
-  const m = now.getMonth() + 1;
   const quarter: Quarter = m >= 4 && m <= 6 ? "Q1" : m >= 7 && m <= 9 ? "Q2" : m >= 10 && m <= 12 ? "Q3" : "Q4";
   return { fy, quarter };
 }
