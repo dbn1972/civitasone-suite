@@ -31,3 +31,9 @@ If any of the above later needs an estab-local screen, add it under
 `files`, `committee`/`meetings`, `assets`/`vehicles`, `facilities`/`guesthouse`,
 `dashboard`, `approval-rules`/`approval-matrix`, `dfa`, `handover`, `migration`,
 `operators`, `notifications`, `quarters`, `fleet`, `library`, `dak`/`dispatch`.
+
+## Configuration
+
+| Variable | Effect |
+|---|---|
+| `ESTAB_APPROVER_ROLES` | Comma-separated lowercase role codes (e.g. `section_officer,under_secretary,deputy_secretary`) that an approval-matrix rule may name as approvers (GAP-ESTAB-APPROVAL-MATRIX-03). When set, `POST` / `PATCH /v1/estab/approval-rules` refuse a chain naming any other role (`422 UNKNOWN_APPROVER_ROLE`) and `GET /v1/estab/approval-rules` returns the list as `approverRoles` so the matrix form offers only those roles. When unset, any well-formed role is accepted, as before. Which roles belong in the list is an owner decision, so no default is shipped. |

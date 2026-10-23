@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -152,5 +152,73 @@ describe("ContractorDetailPage", () => {
     const banner = screen.getByLabelText(/Rating: 4\.0 out of 5/i);
     const filled = (banner.textContent?.match(/★/g) ?? []).length;
     expect(filled).toBe(4);
+  });
+});
+
+describe("ContractorDetailPage: rater names and the cooling-off period (DETAIL-03 / DETAIL-04)", () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+  beforeEach(() => {
+    session.roles = ["works_admin"];
+    session.userId = "me-0000";
+    nextResults.contractor = contractor();
+    nextResults.rating = { payload: [], source: "api" };
+  });
+
+  it("DETAIL-03: a row the server could not name shows a dash in Rated By, never any part of the user id", async () => {
+    nextResults.rating = {
+      payload: {
+        data: [{ id: "r1", rating: 4, ratedAt: "2024-02-01T00:00:00Z", ratedBy: "deadbeef-6789-4000-8000-000000000000", ratedByName: null, note: "Fine" }],
+        meta: { cooldownDays: 0 },
+      },
+      source: "api",
+    };
+    render(await ContractorDetailPage({ params: { id: ID } }));
+    const row = screen.getByText("Fine").closest("tr") as HTMLElement;
+    expect(row.textContent).toContain("—");
+    expect(document.body.textContent).not.toContain("deadbeef");
+  });
+
+  it("DETAIL-04: the Work column shows the linked work number, and a dash for an unlinked rating", async () => {
+    nextResults.rating = {
+      payload: {
+        data: [
+          { id: "r1", rating: 5, ratedAt: "2024-02-01T00:00:00Z", ratedBy: "u1", ratedByName: "A", note: "linked one", workNumber: "WRK/2026/7" },
+          { id: "r2", rating: 3, ratedAt: "2024-01-01T00:00:00Z", ratedBy: "u2", ratedByName: "B", note: "unlinked one" },
+        ],
+        meta: { cooldownDays: 0 },
+      },
+      source: "api",
+    };
+    render(await ContractorDetailPage({ params: { id: ID } }));
+    expect((screen.getByText("linked one").closest("tr") as HTMLElement).textContent).toContain("WRK/2026/7");
+    expect((screen.getByText("unlinked one").closest("tr") as HTMLElement).textContent).not.toContain("WRK/");
+    expect(screen.getByRole("columnheader", { name: /Work/ })).toBeInTheDocument();
+  });
+
+  it("DETAIL-04: the {data, meta.cooldownDays} envelope reaches the form -- the viewer's own recent rating warns and holds Submit", async () => {
+    nextResults.rating = {
+      payload: {
+        data: [
+          // newest first: someone else rated today, but the viewer's own last rating is 3 days old
+          { id: "r1", rating: 5, ratedAt: daysAgo(0), ratedBy: "someone-else", ratedByName: "R. Das" },
+          { id: "r2", rating: 4, ratedAt: daysAgo(3), ratedBy: "me-0000", ratedByName: "Me" },
+        ],
+        meta: { cooldownDays: 30 },
+      },
+      source: "api",
+    };
+    render(await ContractorDetailPage({ params: { id: ID } }));
+    expect(screen.getByText(/rated this contractor within the last 30 days/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Rate 3 stars/i }));
+    expect(screen.getByRole("button", { name: "Submit Rating" })).toBeDisabled();
+  });
+
+  it("DETAIL-04: with no cooling-off period configured (no meta) there is no warning, even after a very recent own rating", async () => {
+    nextResults.rating = {
+      payload: [{ id: "r2", rating: 4, ratedAt: daysAgo(0), ratedBy: "me-0000", ratedByName: "Me" }],
+      source: "api",
+    };
+    render(await ContractorDetailPage({ params: { id: ID } }));
+    expect(screen.queryByText(/rated this contractor within the last/i)).not.toBeInTheDocument();
   });
 });

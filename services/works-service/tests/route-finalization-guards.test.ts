@@ -178,12 +178,24 @@ describe("Billing finalization step guards", () => {
     expect(res.statusCode).toBe(422);
   });
 
-  it("Bill finalize → 422 when re-finalizing at do_finalized (terminal)", async () => {
+  // GAP-WORKS-BILLING-WORKID-07: finalize is idempotent. Repeating the step a bill is ALREADY at (here the terminal
+  // one) is a harmless replay answered 200; it used to be a 422 INVALID_STEP. What a terminal bill must never do is
+  // move: any other step is still refused.
+  it("Bill finalize at do_finalized (terminal): repeating that step is an idempotent 200, any other step is still 422", async () => {
     billStore[BILL_ID] = { id: BILL_ID, status: "do_finalized" };
-    const res = await app.inject({
+    const replay = await app.inject({
       method: "POST", url: `/v1/works/billing/bills/${BILL_ID}/finalize`, headers: auth,
       payload: { nextStatus: "do_finalized" },
     });
-    expect(res.statusCode).toBe(422);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.json().data).toMatchObject({ id: BILL_ID, status: "do_finalized", alreadyApplied: true });
+    for (const nextStatus of ["so_finalized", "sdo_finalized", "auditor_finalized", "dao_finalized"]) {
+      const back = await app.inject({
+        method: "POST", url: `/v1/works/billing/bills/${BILL_ID}/finalize`, headers: auth,
+        payload: { nextStatus },
+      });
+      expect(back.statusCode, nextStatus).toBe(422);
+      expect(back.json().error.code).toBe("INVALID_STEP");
+    }
   });
 });

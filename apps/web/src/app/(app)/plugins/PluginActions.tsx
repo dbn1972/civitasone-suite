@@ -20,6 +20,7 @@ async function postVerb(
   verb: "install" | "enable" | "disable",
   pluginId: string,
   router: ReturnType<typeof useRouter>,
+  reason?: string,
 ): Promise<void> {
   let url: string;
   let body: string | undefined;
@@ -28,7 +29,8 @@ async function postVerb(
     body = JSON.stringify({ pluginId });
   } else {
     url = `/api/proxy/v1/plugins/${pluginId}/${verb}`;
-    body = undefined;
+    // Disable is audited: the service requires the operator's reason in the body.
+    body = verb === "disable" ? JSON.stringify({ reason: (reason ?? "").trim() }) : undefined;
   }
   const res = await fetch(url, {
     method: "POST",
@@ -52,7 +54,19 @@ async function postVerb(
  * GAP-PLUGINS-INSTALLED-04 (theme STATUS): a row with no id cannot be managed,
  * so instead of three dead disabled buttons it renders an explanatory note.
  */
-export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; canManage?: boolean }) {
+export type PluginActionLabels = { disableReasonLabel: string };
+const DEFAULT_LABELS: PluginActionLabels = { disableReasonLabel: "Reason for disabling (recorded in the audit log)" };
+
+export function PluginActions({
+  plugin,
+  canManage = true,
+  labels = DEFAULT_LABELS,
+}: {
+  plugin: Plugin;
+  canManage?: boolean;
+  /** Translated copy, supplied by the server page (this component renders without an intl provider in tests). */
+  labels?: PluginActionLabels;
+}) {
   const router = useRouter();
 
   if (!canManage) return null;
@@ -66,7 +80,7 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
   }
   const id = plugin.id;
 
-  const run = (verb: "install" | "enable" | "disable") => postVerb(verb, id, router);
+  const run = (verb: "install" | "enable" | "disable", reason?: string) => postVerb(verb, id, router, reason);
   const lifecycle = lifecycleOf(plugin.status);
 
   const wrap = { display: "inline-flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" as const };
@@ -96,7 +110,11 @@ export function PluginActions({ plugin, canManage = true }: { plugin: Plugin; ca
           confirmTitle={`Disable “${plugin.name}”?`}
           confirmDescription="Disabling immediately removes this feature for all tenant users. This may interrupt active workflows."
           confirmLabel="Disable plugin"
-          onConfirm={() => run("disable")}
+          requireReason
+          minReasonLength={3}
+          maxReasonLength={500}
+          reasonLabel={labels.disableReasonLabel}
+          onConfirm={(reason) => run("disable", reason)}
         />
       </div>
     );

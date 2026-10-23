@@ -28,7 +28,7 @@ import type {
   CRMAccountSummary,
   CRMDealSummary,
 } from "@civitasone/types";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, istDatePart } from "@/lib/formatters";
 import { parseRupeesToPaise } from "@/lib/money";
 import { normalizeDealStage, toWireStage } from "@/lib/crm/dealStages";
 
@@ -813,6 +813,8 @@ export function mapLegalCaseSummaries(payload: unknown): LegalCaseSummary[] | nu
   return mapped;
 }
 
+const ESTAB_FILE_STATUSES = ["draft", "active", "pending", "closed", "transferred", "archived", "disposed"] as const;
+
 export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -831,12 +833,17 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
             : rawClass === "secret" ? "secret"
               : rawClass === "top_secret" ? "top_secret"
                 : "unclassified";
+    // GAP-ESTAB-DASHBOARD-01: keep the service status as it is. Folding closed and draft into
+    // "active" hid finished files from the shared overdue / pendency rule (lib/estab/sla.ts),
+    // so My Desk counted closed past-due files that the dashboard excludes.
     const rawStatus = (toText(row.status) ?? "active").toLowerCase();
     const status: EstabFileSummary["status"] =
-      rawStatus === "archived" ? "archived"
-        : rawStatus === "disposed" ? "disposed"
-          : rawStatus === "pending" ? "pending"
-            : "active";
+      // GAP-ESTAB-DASHBOARD-01 keeps every service status; a draft is still in work, so it is
+      // presented as "active" (GAP-ESTAB list/detail status display).
+      rawStatus === "draft" ? "active"
+        : (ESTAB_FILE_STATUSES as readonly string[]).includes(rawStatus)
+          ? (rawStatus as EstabFileSummary["status"])
+          : "active";
     mapped.push({
       id,
       fileNo,
@@ -846,14 +853,35 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
       // SF-17b: the service sends the creator's resolved name as createdByName; the raw
       // createdBy id is never shown. "" = unresolved (the list renders "Unknown employee").
       createdBy: toText(row.createdByName) ?? "",
-      createdDate: toText(row.createdDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
+      // GAP-ESTAB-DASHBOARD-01: the IST calendar day of the instant, not its UTC date. The dashboard counts
+      // "overdue" and "pendency" in IST days, so a timestamp between 18:30 and 24:00 UTC (already the
+      // next day in IST) must not be cut to the previous day here.
+      createdDate: toText(row.createdDate) ?? istDatePart(toText(row.createdAt)) ?? "—",
       currentHolder: toText(row.currentWith) ?? toText(row.currentHolder) ?? undefined,
       status,
-      dueDate: toText(row.dueBy)?.slice(0, 10) ?? toText(row.dueDate) ?? undefined,
+      dueDate: istDatePart(toText(row.dueBy)) ?? toText(row.dueDate) ?? undefined,
       tags: [],
     });
   }
   return mapped;
+}
+
+/**
+ * GAP-ESTAB-INBOX-01: "My Desk" - the files on the signed-in officer's desk plus whether the officer can
+ * be handed files at all. `notEnrolled` is true only when the tenant has adopted the operator model AND
+ * the caller is not an active operator (estab-service /files/mine `operator` flags); a tenant that has
+ * not adopted operators, or a response without the flags, never claims it.
+ */
+export type EstabDesk = {
+  files: EstabFileSummary[];
+  notEnrolled: boolean;
+};
+
+export function mapEstabDesk(payload: unknown): EstabDesk | null {
+  const files = mapEstabFileSummaries(payload);
+  if (!files) return null;
+  const operator = isRecord(payload) && isRecord(payload.operator) ? payload.operator : null;
+  return { files, notEnrolled: operator?.adopted === true && operator?.enrolled === false };
 }
 
 export function mapEstabFileDetail(payload: unknown): import("@civitasone/types").EstabFileDetail | null {

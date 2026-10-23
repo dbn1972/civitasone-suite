@@ -33,8 +33,16 @@ describe("visitor guard console roles vs visitor-service check-in routes", () =>
     expect(VISITOR_GUARD_ROLES).not.toContain("employee");
   });
 
-  it("web guard roles == backend roster-read roles minus employee (== gate roles + protocol_officer)", () => {
-    expect([...VISITOR_GUARD_ROLES].sort()).toEqual(active.filter((r) => r !== "employee").sort());
-    expect([...VISITOR_GUARD_ROLES].sort()).toEqual([...new Set([...gate, ...write, "protocol_officer"])].sort());
+  it("protocol_officer may read the roster on the backend but is not a gate role, so it is not offered the console", () => {
+    expect(active).toContain("protocol_officer");
+    expect(gate).not.toContain("protocol_officer");
+    expect(write).not.toContain("protocol_officer");
+    expect(VISITOR_GUARD_ROLES).not.toContain("protocol_officer");
+  });
+
+  it("web guard roles == backend gate/write roles (the console performs verify/check-in/check-out)", () => {
+    expect([...VISITOR_GUARD_ROLES].sort()).toEqual([...new Set([...gate, ...write])].sort());
+    // every console role can also read the roster
+    for (const r of VISITOR_GUARD_ROLES) expect(active).toContain(r);
   });
 });

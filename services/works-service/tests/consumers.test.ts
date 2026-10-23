@@ -3,15 +3,26 @@
  * Tests that replaying the same messageId is a no-op.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { measurements } from "../src/modules/billing/schema.js";
+import { boqItems } from "../src/modules/boq/schema.js";
+
+// Table-aware rows for the two reads that build a bill's measured value; everything else resolves to [].
+function rowsFor(table: unknown): unknown[] {
+  if (table === measurements) return [{ boqItemId: "boq-1", quantity: "10" }]; // 10 x 100 paise = 1000 paise measured
+  if (table === boqItems) return [{ id: "boq-1", rate: 100n }];
+  return [];
+}
 
 // Mock DB and outbox
 const mockInsert = vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) });
 const mockUpdate = vi.fn().mockReturnValue({ set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }) });
 const mockTx = {
+  // billCreate takes a per-work advisory lock (tx.execute) before its duplicate-number check.
+  execute: vi.fn().mockResolvedValue([]),
   insert: mockInsert,
   update: mockUpdate,
   select: vi.fn().mockReturnValue({
-    from: vi.fn().mockReturnValue({
+    from: vi.fn().mockImplementation((table: unknown) => ({
       where: vi.fn().mockImplementation(() => {
         // Shared fixture used for both the award lookup and the MB lookup
         // (this generic mock isn't table-aware) — carries the fields both
@@ -24,12 +35,12 @@ const mockTx = {
             id: "award-1", workId: "w-1", awardId: "award-1",
             acceptedAmountMinor: 999999999999n, status: "do_finalized",
           }]),
-          then: (resolve: Function) => Promise.resolve([]).then(resolve),
+          then: (resolve: Function) => Promise.resolve(rowsFor(table)).then(resolve),
         };
         chain.for = vi.fn().mockReturnValue(chain);
         return chain;
       }),
-    }),
+    })),
   }),
 };
 const mockTransaction = vi.fn((fn: Function) => fn(mockTx));
@@ -192,11 +203,10 @@ describe("Billing consumer — idempotency", () => {
         mbId: "mb-1",
         billMode: "e_mb",
         billNumber: "BILL/001",
-        // 0 so the measured-value gate (no measurements in this generic
-        // mock — this test only exercises the idempotency wrapper, not the
-        // measured-value business rule, which is covered in
-        // orphan-consumers.test.ts / works-ai-pack-gaps.test.ts) passes.
-        grossAmountMinor: "0",
+        // Strictly positive (a zero gross is now rejected) and within the 1000 paise of measured work the
+        // table-aware mock above supplies; this test only exercises the idempotency wrapper, the measured-value
+        // and award-ceiling rules are covered in orphan-consumers.test.ts / works-ai-pack-gaps.test.ts.
+        grossAmountMinor: "1000",
         deductionsMinor: "0",
       },
     });

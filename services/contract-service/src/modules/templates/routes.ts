@@ -159,9 +159,27 @@ export async function templateRoutes(app: FastifyInstance): Promise<void> {
 
     // Parse metadata from query string (JSON-encoded)
     const metadataRaw = (req.query as Record<string, unknown>).metadata;
-    const metadata: Record<string, unknown> = metadataRaw
-      ? JSON.parse(String(metadataRaw))
-      : {};
+    // CLOS-S4-02: malformed JSON or a non-object value is a client error (400),
+    // not an unhandled SyntaxError (500). Sent directly because this plugin has
+    // no error handler of its own (HttpError would still surface as a 500 here).
+    let metadata: Record<string, unknown> = {};
+    if (metadataRaw) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(String(metadataRaw));
+      } catch {
+        parsed = undefined;
+      }
+      if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return reply.code(400).send({
+          code: "INVALID_METADATA",
+          message: "metadata must be a JSON object",
+          correlationId: (req.headers["x-correlation-id"] as string) ?? req.id,
+          retryable: false,
+        });
+      }
+      metadata = parsed as Record<string, unknown>;
+    }
 
     const allClauses = await queries.getTemplateClauses(id, ctx.tenantId);
 

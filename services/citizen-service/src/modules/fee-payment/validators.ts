@@ -25,7 +25,9 @@ export const createScheduleBody = z.object({
 export type CreateScheduleBody = z.infer<typeof createScheduleBody>;
 
 export const computeFeeBody = z.object({
-  applicationId: z.string().uuid(),
+  // Optional: compute is a pure read (no mutation) and the apply screen needs the
+  // breakup BEFORE an application id exists. Nothing downstream reads it.
+  applicationId: z.string().uuid().optional(),
   serviceId:     z.string().uuid().optional(),
   scheduleId:    z.string().uuid().optional(),
   subject:       z.record(z.unknown()).default({}),

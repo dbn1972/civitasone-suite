@@ -15,6 +15,7 @@ function tasksPage(data: unknown[], hasMore: boolean): Response {
   return jsonResponse({ data, pagination: { hasMore } });
 }
 
+// GET /v1/estab/files/:id returns the file as a bare DTO (no { data } envelope), with note sheets.
 function estabTask(id: string, refId: string, name = "DS approval") {
   return { id, name, status: "pending", refType: "estab_file", refId, roleRef: "estab_deputy_secretary" };
 }
@@ -51,7 +52,7 @@ describe("EstabApprovalsPanel — pagination (GAP-ESTAB-APPROVALS-01)", () => {
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(tasksPage(page1, true))              // page 1: all other modules, hasMore
       .mockResolvedValueOnce(tasksPage([estab], false))          // page 2: the estab task
-      .mockResolvedValueOnce(jsonResponse({ data: { fileNo: "EST/2026/9", subject: "Posting order" } })); // file meta
+      .mockResolvedValueOnce(jsonResponse({ fileNo: "EST/2026/9", subject: "Posting order", classification: "public", noteSheets: [] })); // file meta
 
     render(<EstabApprovalsPanel />);
     // The estab file number appears (not an empty state).
@@ -67,7 +68,7 @@ describe("EstabApprovalsPanel — file context in rows & dialog (GAP-ESTAB-APPRO
     const estab = estabTask("t-9", "22222222-2222-4222-8222-222222222222");
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(tasksPage([estab], false))
-      .mockResolvedValueOnce(jsonResponse({ data: { fileNo: "EST/2026/42", subject: "Transfer of Shri X" } }));
+      .mockResolvedValueOnce(jsonResponse({ fileNo: "EST/2026/42", subject: "Transfer of Shri X", classification: "public", noteSheets: [] }));
 
     render(<EstabApprovalsPanel />);
     await waitFor(() => expect(screen.getByText("EST/2026/42")).toBeInTheDocument());
@@ -87,7 +88,7 @@ describe("EstabApprovalsPanel — honest signature copy (GAP-ESTAB-APPROVALS-02)
     const estab = estabTask("t-3", "33333333-3333-4333-8333-333333333333");
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(tasksPage([estab], false))
-      .mockResolvedValueOnce(jsonResponse({ data: { fileNo: "EST/1", subject: "S" } }));
+      .mockResolvedValueOnce(jsonResponse({ fileNo: "EST/1", subject: "S", classification: "public", noteSheets: [] }));
 
     render(<EstabApprovalsPanel />);
     await waitFor(() => expect(screen.getByText("EST/1")).toBeInTheDocument());
@@ -106,7 +107,7 @@ describe("EstabApprovalsPanel — decision message & errors (GAP-ESTAB-APPROVALS
     const estab = estabTask("t-5", "44444444-4444-4444-8444-444444444444", "Deputy Secretary approval");
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(tasksPage([estab], false))
-      .mockResolvedValueOnce(jsonResponse({ data: { fileNo: "EST/2026/55", subject: "Sub" } }))
+      .mockResolvedValueOnce(jsonResponse({ fileNo: "EST/2026/55", subject: "Sub", classification: "public", noteSheets: [] }))
       .mockResolvedValueOnce(jsonResponse({ id: "t-5", status: "accepted" }, 202)) // complete
       .mockResolvedValueOnce(tasksPage([], false)); // reload
 
@@ -131,7 +132,7 @@ describe("EstabApprovalsPanel — decision message & errors (GAP-ESTAB-APPROVALS
     const estab = estabTask("t-7", "55555555-5555-4555-8555-555555555555");
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(tasksPage([estab], false))
-      .mockResolvedValueOnce(jsonResponse({ data: { fileNo: "EST/7", subject: "S" } }))
+      .mockResolvedValueOnce(jsonResponse({ fileNo: "EST/7", subject: "S", classification: "public", noteSheets: [] }))
       .mockResolvedValueOnce(new Response("workflow internal explosion", { status: 500 }));
 
     render(<EstabApprovalsPanel />);

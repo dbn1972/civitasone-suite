@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog, Button, AcceptedNotice } from "@/app/_components/ds";
+import { ConfirmDialog, Button, AcceptedNotice, EntityPicker, Field } from "@/app/_components/ds";
+import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 
@@ -11,17 +13,21 @@ interface ContractorRatingFormProps {
   currentRating: number;
   ratingCount: number;
   canRate: boolean;
-  /** ISO timestamp of the most recent rating, for the self-cooldown hint. */
+  /** ISO timestamp of the viewer's own most recent rating of this contractor, for the cooling-off check. */
   lastRatedAt?: string | null;
-  /** actorId (JWT sub) of the most recent rating's author. */
+  /** actorId (JWT sub) of the author of that rating. */
   lastRatedBy?: string | null;
   /** The current viewer's actorId, to detect "I rated this recently". */
   viewerId?: string | null;
+  /**
+   * The cooling-off period (days) works-service enforces between two ratings by the same officer, as the API reports
+   * it (rating-history meta.cooldownDays). 0 / absent = no cooldown configured: nothing is warned about or held back.
+   * The server stays the authority (409 RATING_COOLDOWN); this only keeps the officer from submitting in vain.
+   */
+  cooldownDays?: number;
 }
 
 const MIN_REASON = 10;
-/** Days within which the SAME user re-rating is warned about (UI hint only; backend is authoritative). */
-const COOLDOWN_DAYS = 30;
 
 export function ContractorRatingForm({
   contractorId,
@@ -31,10 +37,14 @@ export function ContractorRatingForm({
   lastRatedAt,
   lastRatedBy,
   viewerId,
+  cooldownDays = 0,
 }: ContractorRatingFormProps) {
+  const t = useTranslations("works.contractorRating");
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const [selectedRating, setSelectedRating] = useState<number>(0);
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: the work this rating is about (optional).
+  const [workId, setWorkId] = useState<string | null>(null);
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,14 +61,16 @@ export function ContractorRatingForm({
 
   const displayRating = hoverRating || selectedRating;
 
-  // GAP-WORKS-CONTRACTORS-DETAIL-04: warn (don't hard-block — the backend is
-  // the authority) when THIS user already rated within the cooldown window.
+  // GAP-WORKS-CONTRACTORS-DETAIL-04: when THIS user already rated within the configured cooling-off period the
+  // backend refuses a new rating (409 RATING_COOLDOWN), so say so up front and hold the Submit button back instead
+  // of letting the officer type a reason that will be rejected.
   const recentlyRatedBySelf = (() => {
+    if (cooldownDays <= 0) return false;
     if (!lastRatedAt || !lastRatedBy || !viewerId || lastRatedBy !== viewerId) return false;
     const last = new Date(lastRatedAt).getTime();
     if (Number.isNaN(last)) return false;
     const days = (Date.now() - last) / (1000 * 60 * 60 * 24);
-    return days < COOLDOWN_DAYS;
+    return days < cooldownDays;
   })();
 
   async function handleConfirm(reason?: string) {
@@ -72,7 +84,7 @@ export function ContractorRatingForm({
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rating: selectedRating, comment }),
+          body: JSON.stringify({ rating: selectedRating, comment, ...(workId ? { workId } : {}) }),
         }
       );
       if (!res.ok) {
@@ -84,6 +96,7 @@ export function ContractorRatingForm({
       setDialogOpen(false);
       toast.success("Rating submitted.");
       setSelectedRating(0);
+      setWorkId(null);
       void accepted.accept();
     } catch (caught) {
       setErrorMessage(formError.fromException("save", caught).message);
@@ -116,8 +129,7 @@ export function ContractorRatingForm({
           role="status"
           style={{ margin: 0, fontSize: 13, color: "var(--warn)", background: "var(--warnbg)", padding: "8px 12px", borderRadius: 8 }}
         >
-          You rated this contractor within the last {COOLDOWN_DAYS} days. A new rating
-          will be recorded in addition to the previous one.
+          {t("cooldownBlocked", { days: cooldownDays })}
         </p>
       )}
 
@@ -141,10 +153,21 @@ export function ContractorRatingForm({
         ))}
       </div>
 
+      <Field label={t("workLabel")}>
+        <EntityPicker
+          value={workId}
+          onChange={(v) => setWorkId(Array.isArray(v) ? v[0] ?? null : v)}
+          search={searchWorkProposals}
+          resolve={resolveWorkProposals}
+          placeholder={t("workPlaceholder")}
+          aria-label={t("workLabel")}
+        />
+      </Field>
+
       <div>
         <Button
           variant="primary"
-          disabled={selectedRating === 0}
+          disabled={selectedRating === 0 || recentlyRatedBySelf}
           onClick={() => setDialogOpen(true)}
         >
           Submit Rating

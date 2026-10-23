@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getTerminology, ORG_TYPES, ORG_TYPE_LABELS } from "./orgConfig";
+import { getTerminology, ORG_TYPES, ORG_TYPE_LABELS, tenantDpoEmail, getDpoEmail, DEFAULT_DPO_EMAIL } from "./orgConfig";
 
 describe("getTerminology", () => {
   it("returns govt_dept terminology by default (null input)", () => {
@@ -92,5 +92,23 @@ describe("ORG_TYPE_LABELS", () => {
 
   it("displays friendly name for govt_dept", () => {
     expect(ORG_TYPE_LABELS.govt_dept).toBe("Government Department");
+  });
+});
+
+
+describe("tenantDpoEmail / getDpoEmail (per-tenant DPO address)", () => {
+  it("reads a well-formed tenant settings.dpoEmail", () => {
+    expect(tenantDpoEmail({ dpoEmail: " dpo@office.gov.in " })).toBe("dpo@office.gov.in");
+  });
+  it.each([
+    [{}], [null], [undefined], ["x"], [{ dpoEmail: 5 }], [{ dpoEmail: "" }],
+    [{ dpoEmail: "not an email" }], [{ dpoEmail: "a@b" }], [{ dpoEmail: "a@b.in?cc=evil@x.in" }],
+    [{ dpoEmail: "a@b.in,c@d.in" }], [{ dpoEmail: "a b@c.in" }],
+  ])("ignores an unusable value %j (never reaches a mailto link)", (settings) => {
+    expect(tenantDpoEmail(settings)).toBeNull();
+  });
+  it("tenant value wins; otherwise the global fallback applies", () => {
+    expect(getDpoEmail(tenantDpoEmail({ dpoEmail: "dpo@office.gov.in" }))).toBe("dpo@office.gov.in");
+    expect(getDpoEmail(tenantDpoEmail({}))).toBe(process.env.NEXT_PUBLIC_DPO_EMAIL?.trim() || DEFAULT_DPO_EMAIL);
   });
 });

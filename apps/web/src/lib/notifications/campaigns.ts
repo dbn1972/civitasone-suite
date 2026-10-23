@@ -337,3 +337,45 @@ export async function cancelCampaign(id: string): Promise<void> {
   const res = await browserFetch(`notification/campaigns/${encodeURIComponent(id)}/cancel`, { method: "PATCH" });
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
 }
+
+/* ======================================================= contact lookup == */
+
+export interface CampaignContactHit {
+  id: string;
+  name: string;
+  company: string | null;
+  /** Masked by crm-service -- never raw PII. */
+  email: string | null;
+  phone: string | null;
+}
+
+/**
+ * Look up CRM contacts to use as campaign recipients (crm-service
+ * GET /v1/crm/contacts/lookup: id + display name + MASKED email/phone only).
+ * Campaign recipients are CRM contact ids -- that is what the marketing-consent
+ * check resolves -- so the form picks contacts rather than taking raw
+ * emails/phones. Returns null on any failure (including a user without CRM
+ * access) so the picker can say so instead of showing "no matches".
+ */
+export async function searchCampaignContacts(q: string): Promise<CampaignContactHit[] | null> {
+  try {
+    const res = await browserFetch(`v1/crm/contacts/lookup?q=${encodeURIComponent(q.trim())}&limit=10`);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: unknown };
+    if (!Array.isArray(body.data)) return null;
+    return body.data.flatMap((r): CampaignContactHit[] => {
+      if (!r || typeof r !== "object") return [];
+      const o = r as Record<string, unknown>;
+      if (typeof o.id !== "string" || typeof o.name !== "string") return [];
+      return [{
+        id: o.id,
+        name: o.name,
+        company: typeof o.company === "string" ? o.company : null,
+        email: typeof o.email === "string" ? o.email : null,
+        phone: typeof o.phone === "string" ? o.phone : null,
+      }];
+    });
+  } catch {
+    return null;
+  }
+}

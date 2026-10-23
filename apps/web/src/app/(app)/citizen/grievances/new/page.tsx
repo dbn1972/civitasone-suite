@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { PageHeader, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { getDpoEmail } from "@/lib/orgConfig";
+import { useTenantDpoEmail } from "./DpoEmailContext";
 import { formatShortId } from "@/lib/formatters";
 
 const DPDP_NOTICE_VERSION = "2023.1";
@@ -31,7 +32,7 @@ export default function RegisterGrievancePage() {
   const [copied, setCopied] = useState(false);
   const formError = useFormError("grievance");
 
-  const dpoEmail = getDpoEmail();
+  const dpoEmail = getDpoEmail(useTenantDpoEmail());
 
   // GAP-CITIZEN-GRIEVANCES-NEW-05: category labels come from i18n, not hard-coded English.
   const CATEGORIES = [

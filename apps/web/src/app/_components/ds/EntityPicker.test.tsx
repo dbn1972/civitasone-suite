@@ -239,6 +239,126 @@ describe("EntityPicker", () => {
     expect(screen.getByText("Asha Verma")).toBeInTheDocument();
   });
 
+  describe("combobox semantics and keyboard navigation (GAP-WORKS-APPROVALS-TS-NEW-01)", () => {
+    const THREE: EntityOption[] = [
+      { id: "w1", label: "WK/001" },
+      { id: "w2", label: "WK/002" },
+      { id: "w3", label: "WK/003" },
+    ];
+    const activeId = (input: HTMLElement) => input.getAttribute("aria-activedescendant");
+    const optionId = (label: string) => screen.getByRole("option", { name: new RegExp(label) }).id;
+
+    it("exposes combobox + listbox + option roles with aria-expanded / aria-controls / aria-autocomplete wired up", async () => {
+      render(<Harness search={vi.fn(async () => THREE)} />);
+      const input = screen.getByLabelText("Manager");
+      expect(input).toHaveAttribute("role", "combobox");
+      expect(input).toHaveAttribute("aria-autocomplete", "list");
+      expect(input).toHaveAttribute("aria-expanded", "false");
+      fireEvent.change(input, { target: { value: "WK" } });
+      const listbox = await screen.findByRole("listbox");
+      expect(input).toHaveAttribute("aria-expanded", "true");
+      expect(input.getAttribute("aria-controls")).toBe(listbox.id);
+      expect(screen.getAllByRole("option")).toHaveLength(3);
+    });
+
+    it("ArrowDown / ArrowUp move aria-activedescendant through the options, clamp at both ends, and Enter picks the active one", async () => {
+      render(<Harness search={vi.fn(async () => THREE)} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      await screen.findByRole("listbox");
+      expect(activeId(input)).toBe(optionId("WK/001"));
+
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      expect(activeId(input)).toBe(optionId("WK/002"));
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "ArrowDown" }); // already on the last one: stays
+      expect(activeId(input)).toBe(optionId("WK/003"));
+      fireEvent.keyDown(input, { key: "ArrowUp" });
+      expect(activeId(input)).toBe(optionId("WK/002"));
+      fireEvent.keyDown(input, { key: "ArrowUp" });
+      fireEvent.keyDown(input, { key: "ArrowUp" }); // already on the first one: stays
+      expect(activeId(input)).toBe(optionId("WK/001"));
+
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(input).toHaveValue("WK/002"));
+    });
+
+    it("Escape closes the list", async () => {
+      render(<Harness search={vi.fn(async () => THREE)} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      await screen.findByRole("listbox");
+      fireEvent.keyDown(input, { key: "Escape" });
+      expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+      expect(input).toHaveAttribute("aria-expanded", "false");
+    });
+
+    const WITH_DISABLED: EntityOption[] = [
+      { id: "w1", label: "WK/001" },
+      { id: "w2", label: "WK/002", disabledReason: "Not DAO-finalized" },
+      { id: "w3", label: "WK/003" },
+    ];
+
+    it("lists a disabled option with its reason and aria-disabled, instead of hiding it", async () => {
+      render(<Harness search={vi.fn(async () => WITH_DISABLED)} />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "WK" } });
+      const disabled = await screen.findByRole("option", { name: /WK\/002/ });
+      expect(disabled).toHaveAttribute("aria-disabled", "true");
+      expect(disabled).toHaveTextContent("Not DAO-finalized");
+      expect(screen.getByRole("option", { name: /WK\/001/ })).not.toHaveAttribute("aria-disabled");
+    });
+
+    it("arrow keys skip a disabled option and Enter never picks it", async () => {
+      render(<Harness search={vi.fn(async () => WITH_DISABLED)} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      await screen.findByRole("listbox");
+      expect(activeId(input)).toBe(optionId("WK/001"));
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      expect(activeId(input)).toBe(optionId("WK/003")); // WK/002 skipped
+      fireEvent.keyDown(input, { key: "ArrowUp" });
+      expect(activeId(input)).toBe(optionId("WK/001"));
+      expect(activeId(input)).not.toBe(optionId("WK/002"));
+    });
+
+    it("the first active option is the first ENABLED one when the list starts with a disabled option", async () => {
+      const disabledFirst: EntityOption[] = [{ id: "d", label: "WK/000", disabledReason: "Not DAO-finalized" }, ...THREE];
+      render(<Harness search={vi.fn(async () => disabledFirst)} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      await screen.findByRole("listbox");
+      expect(activeId(input)).toBe(optionId("WK/001"));
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(input).toHaveValue("WK/001"));
+    });
+
+    it("clicking a disabled option selects nothing and leaves the list open; clicking an enabled one selects it", async () => {
+      const onChange = vi.fn();
+      render(<Harness search={vi.fn(async () => WITH_DISABLED)} onChange={onChange} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      fireEvent.mouseDown(await screen.findByRole("option", { name: /WK\/002/ }));
+      expect(onChange).not.toHaveBeenCalled();
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+      fireEvent.mouseDown(screen.getByRole("option", { name: /WK\/003/ }));
+      expect(onChange).toHaveBeenCalledWith("w3");
+    });
+
+    it("when every option is disabled nothing is active and Enter selects nothing", async () => {
+      const onChange = vi.fn();
+      const allDisabled = THREE.map((o) => ({ ...o, disabledReason: "Not DAO-finalized" }));
+      render(<Harness search={vi.fn(async () => allDisabled)} onChange={onChange} />);
+      const input = screen.getByLabelText("Manager");
+      fireEvent.change(input, { target: { value: "WK" } });
+      await screen.findByRole("listbox");
+      expect(activeId(input)).toBeNull();
+      fireEvent.keyDown(input, { key: "ArrowDown" });
+      fireEvent.keyDown(input, { key: "Enter" });
+      expect(onChange).not.toHaveBeenCalled();
+    });
+  });
+
   it("renders one hidden input per selected id, sharing the given name, for a plain form post", async () => {
     const { container } = render(
       <Harness multiple name="managerIds" initialValue={["e1", "e2"]} initialOptions={OPTIONS} search={vi.fn(async () => [])} />,

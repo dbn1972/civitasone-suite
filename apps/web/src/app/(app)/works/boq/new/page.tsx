@@ -1,12 +1,14 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, Suspense } from "react";
+import { useState, useRef, Suspense } from "react";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { humanZodMessage } from "@/lib/humanZodMessage";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, Field, EntityPicker, SkeletonCard } from "@/app/_components/ds";
 import type { EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { errorCodeFromResponse } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
@@ -33,6 +35,23 @@ const boqFormSchema = z.object({
   quantity: z.string().regex(QTY_RE, "Enter a valid quantity (up to 3 decimals)."),
 });
 
+/**
+ * GAP-WORKS-BOQ-NEW-04 / BR-016: the key works-service compares to decide a BoQ line is a duplicate -- the item code
+ * when there is one, otherwise the description, trimmed and case-insensitive. Kept in step with boqLineKey in
+ * services/works-service/src/modules/boq/domain.ts so the early check on blur agrees with the server's answer.
+ */
+type BoqLineRef = { itemCode?: string | null; itemDescription?: string | null };
+function boqLineKey(code: string | null | undefined, description: string | null | undefined): string {
+  const c = (code ?? "").trim();
+  return (c || (description ?? "").trim()).toLowerCase();
+}
+function isDuplicateLine(existing: BoqLineRef[], code: string, description: string): boolean {
+  const key = boqLineKey(code, description);
+  return key !== "" && existing.some((r) => boqLineKey(r.itemCode, r.itemDescription) === key);
+}
+
+type DuplicateError = { field: "itemCode" | "itemDescription"; message: string };
+
 /** Estimate = rate(paise) × quantity, in BigInt, rounded half-up to a paise.
  * quantity carries up to 3 dp, so scale by 1000 and divide back. Mirrors the
  * backend calculateBoqAmount contract closely enough for a preview. */
@@ -49,6 +68,7 @@ function NewBoqItemForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.boqNew");
   const presetWorkId = searchParams.get("workId") ?? "";
   const [form, setForm] = useState({
     workId: presetWorkId,
@@ -65,6 +85,39 @@ function NewBoqItemForm() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("BoQ item");
+  // The inline "this line already exists" error, bound to the field that identifies the line (item code when given,
+  // else the description). The page-level banner stays for every other failure.
+  const [dupError, setDupError] = useState<DuplicateError | null>(null);
+  // The work's current BoQ lines, loaded lazily (first blur of the code/description) for the early duplicate check.
+  const existingLines = useRef<{ workId: string; lines: BoqLineRef[] } | null>(null);
+
+  function duplicateError(code: string): DuplicateError {
+    return code.trim()
+      ? { field: "itemCode", message: t("duplicateByCode") }
+      : { field: "itemDescription", message: t("duplicateByDescription") };
+  }
+
+  /** Early (optional) check against the work's BoQ list. Silent on any failure: the server is the authority. */
+  async function checkDuplicateEarly() {
+    const workId = form.workId.trim();
+    if (!z.string().uuid().safeParse(workId).success) return;
+    if (!boqLineKey(form.itemCode, form.itemDescription)) return;
+    try {
+      let known = existingLines.current;
+      if (!known || known.workId !== workId) {
+        const res = await fetch(`/api/proxy/v1/works/boq/${workId}`);
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: unknown };
+        known = { workId, lines: Array.isArray(body.data) ? (body.data as BoqLineRef[]) : [] };
+        existingLines.current = known;
+      }
+      if (isDuplicateLine(known.lines, form.itemCode, form.itemDescription)) {
+        setDupError(duplicateError(form.itemCode));
+      }
+    } catch {
+      /* no early hint; the POST will still be refused with a 409 */
+    }
+  }
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -108,6 +161,7 @@ function NewBoqItemForm() {
     e.preventDefault();
     setMessage("");
     setError("");
+    setDupError(null);
     formError.clear();
 
     const parsed = boqFormSchema.safeParse({
@@ -147,10 +201,11 @@ function NewBoqItemForm() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        // GAP-WORKS-BOQ-NEW-04: a duplicate line is a 409 from the API — map it
-        // to a clear, clerk-safe field message rather than the generic error.
-        if (res.status === 409) {
-          setError("This item already exists for this work.");
+        // GAP-WORKS-BOQ-NEW-04: a duplicate line is a synchronous 409 DUPLICATE_BOQ_LINE from works-service (flat
+        // envelope, code at the top level) -- shown on the field that identifies the line, with the form kept. Any
+        // other failure (a frozen BoQ is also a 409) takes the catalogued page-level message.
+        if (res.status === 409 && (await errorCodeFromResponse(res)) === "DUPLICATE_BOQ_LINE") {
+          setDupError(duplicateError(form.itemCode));
           return;
         }
         setError((await formError.fromResponse(res, "save")).message);
@@ -225,10 +280,18 @@ function NewBoqItemForm() {
               style={{ ...inputStyle, minHeight: 72 }}
               rows={2}
               value={form.itemDescription}
-              onChange={set("itemDescription")}
+              onChange={(e) => { setDupError(null); set("itemDescription")(e); }}
+              onBlur={() => { void checkDuplicateEarly(); }}
               maxLength={1024}
               required
+              aria-invalid={dupError?.field === "itemDescription" ? true : undefined}
+              aria-describedby={dupError?.field === "itemDescription" ? "itemDescription-error" : undefined}
             />
+            {dupError?.field === "itemDescription" ? (
+              <p id="itemDescription-error" role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
+                {dupError.message}
+              </p>
+            ) : null}
           </div>
 
           <div
@@ -245,10 +308,18 @@ function NewBoqItemForm() {
                 style={inputStyle}
                 type="text"
                 value={form.itemCode}
-                onChange={(e) => { setSrItemId(null); set("itemCode")(e); }}
+                onChange={(e) => { setSrItemId(null); setDupError(null); set("itemCode")(e); }}
+                onBlur={() => { void checkDuplicateEarly(); }}
                 placeholder="e.g. SR-2024-C001"
                 maxLength={64}
+                aria-invalid={dupError?.field === "itemCode" ? true : undefined}
+                aria-describedby={dupError?.field === "itemCode" ? "itemCode-error" : undefined}
               />
+              {dupError?.field === "itemCode" ? (
+                <p id="itemCode-error" role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
+                  {dupError.message}
+                </p>
+              ) : null}
             </div>
 
             <div>

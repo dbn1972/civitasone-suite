@@ -12,6 +12,15 @@ const applicantTypeField = z.union([
   z.enum(["individual", "person", "org", "organisation", "organization", "institutional", "anon"]),
 ]).optional();
 
+/** GET /drafts filters (server-side; `summary` omits formData so a banner probe never downloads form answers). */
+export const listDraftsQuery = z.object({
+  citizenId: z.string().uuid().optional(),
+  serviceId: z.string().uuid().optional(),
+  status: z.enum(["draft", "submitted"]).optional(),
+  summary: z.enum(["true", "false"]).optional(),
+  limit: z.string().regex(/^\d{1,3}$/).optional(),
+});
+
 export const saveDraftBody = z.object({
   citizenId:     z.string().uuid().optional(),
   serviceId:     z.string().uuid(),

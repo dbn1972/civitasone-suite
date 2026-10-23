@@ -8,7 +8,11 @@ vi.mock("next/navigation", () => ({
 
 // The departments a file can be opened in (enrolled operator divisions). One by default, so the
 // form selects it; individual tests override it.
-const depts = vi.hoisted(() => ({ value: { loaded: true, failed: false, divisions: ["ADMIN"] as string[] } }));
+const depts = vi.hoisted(() => ({
+  value: { loaded: true, failed: false, forbidden: false, divisions: ["ADMIN"] } as {
+    loaded: boolean; failed: boolean; forbidden?: boolean; divisions: string[];
+  },
+}));
 vi.mock("@/lib/estab/useEstabDivisions", () => ({ useEstabDivisions: () => depts.value }));
 
 import NewFilePage from "./page";
@@ -98,30 +102,47 @@ describe("NewFilePage (estab) — no double submit (GAP-ESTAB-FILES-NEW-05)", ()
     fireEvent.click(btn);
     fireEvent.click(btn);
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/estab/files/f1"));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/estab/files/f1?created=1"));
     expect(postCalls.filter((c) => String(c[0]).includes("/estab/files")).length).toBe(1);
     // Submit control is latched disabled after a successful create.
     expect(screen.getByRole("button", { name: /Creating…|Created/ })).toBeDisabled();
   });
 });
 
-describe("NewFilePage (estab) — shows allocated file number (GAP-ESTAB-FILES-NEW-06)", () => {
+describe("NewFilePage (estab) — the allocated file number is shown on the file page (GAP-ESTAB-FILES-NEW-06)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     pushMock.mockReset();
     depts.value = { loaded: true, failed: false, divisions: ["ADMIN"] };
   });
 
-  it("surfaces the server-allocated fileNo in the success banner", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.resolve(new Response(JSON.stringify({ id: "f1", fileNo: "ADMIN/2026/0042" }), { status: 201 }));
-      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    });
+  // The real service acknowledges a create with 202 { id, status, correlationId }: the gapless file number is
+  // allocated later, when the command is processed, so the response has no fileNo.
+  const ACK = { id: "f1", status: "accepted", correlationId: "c-1" };
+
+  it("Given the real 202 acknowledgement, Then the officer is sent to the file with ?created=1 and no invented number is shown", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((_i: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify(init?.method === "POST" ? ACK : { data: [] }), { status: init?.method === "POST" ? 202 : 200 })));
     render(<NewFilePage />);
     fill();
     fireEvent.click(screen.getByRole("button", { name: /Create File/ }));
 
-    await waitFor(() => expect(screen.getByText(/File ADMIN\/2026\/0042 created/)).toBeInTheDocument());
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/estab/files/f1?created=1"));
+    const banner = screen.getByRole("status");
+    expect(banner.textContent).toMatch(/File created with an opening yellow note/);
+    // No file number is available yet, so none may be shown.
+    expect(banner.textContent).not.toMatch(/\b[A-Z]+\/\d/);
+  });
+
+  it("Given an acknowledgement with no id, Then it falls back to the register instead of doing nothing", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((_i: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify(init?.method === "POST" ? {} : { data: [] }), { status: init?.method === "POST" ? 202 : 200 })));
+    render(<NewFilePage />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /Create File/ }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/estab/list"));
+    expect(screen.getByRole("status").textContent).toMatch(/Find it in the file register/);
   });
 });
 
@@ -212,7 +233,7 @@ describe("NewFilePage (estab) — department is a pick-list, never free text or 
 
   it.each([
     ["no operators are enrolled (empty list)", { loaded: true, failed: false, divisions: [] as string[] }, /No department list is available/i],
-    ["the operators list is not readable for the role (403)", { loaded: true, failed: true, divisions: [] as string[] }, /could not be loaded/i],
+    ["the operators list is not readable for the role (403)", { loaded: true, failed: true, forbidden: true, divisions: [] as string[] }, /No department list is available/i],
   ])("Given %s, Then Department is a typed field with an explanation, and the typed value is posted", async (_n, value, note) => {
     depts.value = value;
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((_i: RequestInfo | URL, init?: RequestInit) =>
@@ -226,6 +247,36 @@ describe("NewFilePage (estab) — department is a pick-list, never free text or 
     fireEvent.change(dept, { target: { value: "Legal" } });
     fireEvent.click(screen.getByRole("button", { name: "Create File" }));
     await waitFor(() => expect(postBody(fetchSpy)?.dept).toBe("Legal"));
+  });
+});
+
+describe("NewFilePage (estab) — a failed department load never falls back to typing (GAP-ESTAB-FILES-NEW-03)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+
+  it("Given the department list failed to load (a network or server error), Then Department is a disabled select with an alert, and nothing can be posted", async () => {
+    depts.value = { loaded: true, failed: true, forbidden: false, divisions: [] };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    render(<NewFilePage />);
+    const dept = screen.getByLabelText("Department") as HTMLSelectElement;
+    expect(dept.tagName).toBe("SELECT");
+    expect(dept.disabled).toBe(true);
+    expect(screen.getByRole("alert").textContent).toMatch(/Departments could not be loaded/i);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: "Create File" }));
+    expect(await screen.findByText("Select a department.")).toBeInTheDocument();
+    expect(fetchSpy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("Given the list is still loading, Then Department is a disabled select, not an input", () => {
+    depts.value = { loaded: false, failed: false, forbidden: false, divisions: [] };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    render(<NewFilePage />);
+    const dept = screen.getByLabelText("Department") as HTMLSelectElement;
+    expect(dept.tagName).toBe("SELECT");
+    expect(dept.disabled).toBe(true);
   });
 });
 
