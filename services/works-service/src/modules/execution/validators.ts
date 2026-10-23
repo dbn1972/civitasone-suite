@@ -71,3 +71,6 @@ export const physicalCompleteSchema = z.object({
   completionDate: z.string().optional(),
   certificateFileKey: z.string().max(512).optional(),
 });
+
+/** :workId path param feeds a uuid column; reject non-uuid with 400 instead of a DB 22P02 -> 500. */
+export const workIdParamSchema = z.object({ workId: z.string().uuid() });
