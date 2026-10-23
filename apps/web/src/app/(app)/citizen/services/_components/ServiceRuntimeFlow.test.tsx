@@ -10,6 +10,8 @@ const listDraftsForServiceMock = vi.fn();
 const submitDraftMock = vi.fn();
 const createPaymentIntentMock = vi.fn();
 const confirmPaymentMock = vi.fn();
+const computeFeeBreakupMock = vi.fn();
+const discardDraftMock = vi.fn();
 
 vi.mock("../_data/runtimeApi", async () => {
   const actual = await vi.importActual<typeof import("../_data/runtimeApi")>("../_data/runtimeApi");
@@ -21,6 +23,8 @@ vi.mock("../_data/runtimeApi", async () => {
     submitDraft: (...a: unknown[]) => submitDraftMock(...a),
     createPaymentIntent: (...a: unknown[]) => createPaymentIntentMock(...a),
     confirmPayment: (...a: unknown[]) => confirmPaymentMock(...a),
+    computeFeeBreakup: (...a: unknown[]) => computeFeeBreakupMock(...a),
+    discardDraft: (...a: unknown[]) => discardDraftMock(...a),
   };
 });
 
@@ -72,6 +76,8 @@ beforeEach(() => {
   submitDraftMock.mockResolvedValue({ applicationId: "app-1", trackingNo: "TRK-1" });
   createPaymentIntentMock.mockResolvedValue("pay-1");
   confirmPaymentMock.mockResolvedValue(undefined);
+  computeFeeBreakupMock.mockResolvedValue(null);
+  discardDraftMock.mockResolvedValue(undefined);
 });
 afterEach(() => {
   vi.runOnlyPendingTimers();
@@ -145,5 +151,82 @@ describe("ServiceRuntimeFlow payment mode (sandbox must be opt-in)", () => {
 
     expect(createPaymentIntentMock).toHaveBeenCalledTimes(1);
     expect(confirmPaymentMock).toHaveBeenCalledWith("pay-1", "sandbox");
+  });
+});
+
+describe("ServiceRuntimeFlow fee breakup", () => {
+  const cs = enMessages.citizenServices;
+  async function reachFeeStep() {
+    fireEvent.click(screen.getByLabelText(cs.consentCheckbox));
+    fireEvent.click(screen.getByTestId("type-name"));
+    fireEvent.click(screen.getByRole("button", { name: cs.reviewAnswers }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: cs.continueToFee }));
+    });
+  }
+
+  it("shows the API fee breakup (base, exemption, payable) when the service returns one", async () => {
+    computeFeeBreakupMock.mockResolvedValue({ baseMinor: 150000, payableMinor: 50000, exemptionLabel: "BPL family", currency: "INR" });
+    renderFlow();
+    await reachFeeStep();
+    expect(computeFeeBreakupMock).toHaveBeenCalledWith("svc-1", expect.objectContaining({ full_name: "Asha" }));
+    expect(screen.getByText(cs.feeBaseLine)).toBeInTheDocument();
+    expect(screen.getByText("₹1,500")).toBeInTheDocument();
+    expect(screen.getByText(cs.feeExemptionLine.replace("{label}", "BPL family"))).toBeInTheDocument();
+    expect(screen.getByText("−₹1,000")).toBeInTheDocument();
+    expect(screen.getByText(cs.feePayableLine)).toBeInTheDocument();
+    expect(screen.getByText("₹500")).toBeInTheDocument();
+  });
+
+  it("falls back to the single published-fee line when there is no breakup", async () => {
+    renderFlow();
+    await reachFeeStep();
+    expect(screen.getByText("Trade License — application fee")).toBeInTheDocument();
+    expect(screen.queryByText(cs.feeBaseLine)).not.toBeInTheDocument();
+  });
+});
+
+describe("ServiceRuntimeFlow discard draft", () => {
+  const cs = enMessages.citizenServices;
+
+  it("offers no discard when there is no saved draft", async () => {
+    renderFlow();
+    expect(screen.queryByRole("button", { name: cs.discardDraft })).not.toBeInTheDocument();
+  });
+
+  it("confirms, deletes the saved draft and returns to a clean, un-consented form", async () => {
+    listDraftsForServiceMock.mockResolvedValue([{ id: "draft-9", formData: { full_name: "Asha" } }]);
+    renderFlow();
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: cs.discardDraft }));
+    expect(discardDraftMock).not.toHaveBeenCalled(); // needs an explicit second step
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: cs.discardDraftYes }));
+    });
+    expect(discardDraftMock).toHaveBeenCalledWith("draft-9");
+    expect(screen.getByText(cs.consentTitle)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: cs.discardDraft })).not.toBeInTheDocument();
+  });
+
+  it("keep draft cancels the confirmation without deleting", async () => {
+    listDraftsForServiceMock.mockResolvedValue([{ id: "draft-9", formData: {} }]);
+    renderFlow();
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: cs.discardDraft }));
+    fireEvent.click(screen.getByRole("button", { name: cs.discardDraftKeep }));
+    expect(discardDraftMock).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: cs.discardDraft })).toBeInTheDocument();
+  });
+
+  it("a failed delete keeps the draft and shows an error", async () => {
+    listDraftsForServiceMock.mockResolvedValue([{ id: "draft-9", formData: {} }]);
+    discardDraftMock.mockRejectedValue(new Error("Could not delete."));
+    renderFlow();
+    await act(async () => { await Promise.resolve(); });
+    fireEvent.click(screen.getByRole("button", { name: cs.discardDraft }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: cs.discardDraftYes }));
+    });
+    expect(screen.getByText("Could not delete.")).toBeInTheDocument();
   });
 });

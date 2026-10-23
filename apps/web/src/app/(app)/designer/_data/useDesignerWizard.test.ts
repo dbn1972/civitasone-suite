@@ -100,3 +100,38 @@ describe("useDesignerWizard — onSubmit never falls back to a raw '<Verb> faile
     expect(result.current.error).toMatch(/couldn't load/i);
   });
 });
+
+/**
+ * A pass only authorises submit for the design it tested. The server flags a run
+ * whose design hash no longer matches the draft (`stale`) and rejects submit with
+ * TEST_STALE; the Submit button must not light up on such a pass.
+ */
+describe("useDesignerWizard — canSubmit is bound to the tested design", () => {
+  const DEF = {
+    id: "def-1", serviceKey: "k", name: "S", servicePattern: "certificate",
+    channels: ["portal"], status: "draft", version: 1,
+    formId: "f", eligibilityRuleSetId: "e", workflowDefinitionId: "w", feeScheduleId: "fs", hoaCode: "h",
+    requiredDocuments: [{ docType: "id" }], issuanceType: "certificate",
+  };
+  async function submittable(latest: Record<string, unknown>) {
+    fetchServiceDefinition.mockReset().mockResolvedValue(DEF);
+    fetchLatestSandboxTest.mockReset().mockResolvedValue(latest);
+    const { result } = renderHook(() => useDesignerWizard("def-1", "b1"));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    return result.current;
+  }
+
+  it("a current pass allows submit", async () => {
+    expect((await submittable({ id: "t1", status: "pass", stale: false })).canSubmit).toBe(true);
+  });
+  it("a pass the server marks stale does NOT allow submit", async () => {
+    const w = await submittable({ id: "t1", status: "pass", stale: true });
+    expect(w.testPassed).toBe(false);
+    expect(w.canSubmit).toBe(false);
+  });
+  it("a failed or missing run does not allow submit", async () => {
+    expect((await submittable({ id: "t1", status: "fail" })).canSubmit).toBe(false);
+    expect((await submittable({ id: "", status: "none" })).canSubmit).toBe(false);
+  });
+});

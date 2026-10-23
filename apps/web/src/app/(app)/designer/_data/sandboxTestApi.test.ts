@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { runSandboxTest } from "./sandboxTestApi";
+import { runSandboxTest, fetchLatestSandboxTest } from "./sandboxTestApi";
 
 /**
  * UX-016: sandboxTestApi.ts's runSandboxTest used to throw the raw response
@@ -28,5 +28,22 @@ describe("sandboxTestApi — runSandboxTest never leaks raw status or server tex
     expect(message).not.toMatch(/\b502\b/);
     expect(message).not.toContain("sandbox-runner circuit open");
     expect(message).toMatch(/couldn't save/i);
+  });
+});
+
+describe("fetchLatestSandboxTest carries the server's stale flag", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const latest = (extra: Record<string, unknown>) =>
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ id: "r1", status: "pass", steps: [], createdAt: "2026-10-01T00:00:00Z", ...extra }), { status: 200 })) as unknown as typeof fetch);
+
+  it("maps stale=true / stale=false", async () => {
+    latest({ stale: true });
+    expect((await fetchLatestSandboxTest("d1")).stale).toBe(true);
+    latest({ stale: false });
+    expect((await fetchLatestSandboxTest("d1")).stale).toBe(false);
+  });
+  it("leaves stale undefined when an older server does not send it", async () => {
+    latest({});
+    expect((await fetchLatestSandboxTest("d1")).stale).toBeUndefined();
   });
 });

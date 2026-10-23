@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, resolveCitizenId, isOfficer } from "../../shared/context.js";
-import { idParam, trackingParam, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
+import { idParam, trackingParam, listDraftsQuery, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
 import {
   buildTrackingNumber, resolveAssistedBy, isAssistedChannel, resolveAndGateApplicantType,
   hasFormAnswers, ApplicantTypeRejectedError, type IntakeChannel,
@@ -86,9 +86,17 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/citizen/intake/drafts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
-    const citizenId = typeof (req.query as { citizenId?: string })?.citizenId === "string"
-      ? (req.query as { citizenId?: string }).citizenId : undefined;
-    return reply.send({ data: await intake.listDrafts(ctx, citizenId) });
+    const q = listDraftsQuery.parse(req.query ?? {});
+    const rows = await intake.listDrafts(ctx, q.citizenId, {
+      serviceId: q.serviceId,
+      status: q.status,
+      limit: q.limit ? Number(q.limit) : undefined,
+    });
+    // `summary=true`: id + routing fields only -- never the form answers.
+    const data = q.summary === "true"
+      ? rows.map(({ formData: _formData, ...rest }) => rest)
+      : rows;
+    return reply.send({ data });
   });
 
   app.get("/v1/citizen/intake/drafts/:id", async (req, reply) => {
@@ -118,6 +126,18 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
       documentTypes: body.documentTypes,
       ...(applicantType !== undefined ? { applicantType } : {}),
     }));
+  });
+
+  // Discard a draft. Owner-scoped (citizen who owns it, or the officer who filed
+  // it on their behalf); a missing/foreign/non-draft row is a 404, not a 403, so
+  // existence is not leaked. Async like every other draft command (202).
+  app.delete("/v1/citizen/intake/drafts/:id", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CITIZEN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const draft = await intake.getDraftForDiscard(ctx, id);
+    if (!draft || draft.status !== "draft") throw new HttpError(404, "NOT_FOUND", "draft not found");
+    return sendAccepted(reply, acceptedResponseSchema, await commands.deleteDraft(ctx, id));
   });
 
   app.post("/v1/citizen/intake/drafts/:id/submit", async (req, reply) => {

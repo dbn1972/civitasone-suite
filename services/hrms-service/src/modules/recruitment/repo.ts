@@ -354,15 +354,35 @@ export async function updateInterviewScorecard(
 
 // --- Public careers (published vacancies) ---
 
-export async function listPublishedOpenings(tenantId: string): Promise<JobOpeningRow[]> {
-  return scopedRead((tx) => tx.select().from(hrmsJobOpenings)
-    .where(and(
-      eq(hrmsJobOpenings.tenantId, tenantId),
-      eq(hrmsJobOpenings.isPublished, true),
-      eq(hrmsJobOpenings.status, "open"),
-    ))
-    .orderBy(desc(hrmsJobOpenings.createdAt))
-    .limit(100));
+export const PUBLISHED_OPENINGS_MAX_PAGE = 100;
+
+/**
+ * Published + open vacancies, paginated. The previous hard `.limit(100)` silently
+ * dropped every opening past the 100th from the public careers board; callers now
+ * get `total` (same predicate) and page with limit/offset. A stable `id`
+ * tiebreaker keeps pages disjoint when createdAt ties.
+ */
+export async function listPublishedOpenings(
+  tenantId: string,
+  limit: number = PUBLISHED_OPENINGS_MAX_PAGE,
+  offset = 0,
+): Promise<{ rows: JobOpeningRow[]; total: number }> {
+  const pageLimit = Math.max(1, Math.min(PUBLISHED_OPENINGS_MAX_PAGE, Math.floor(limit)));
+  const pageOffset = Math.max(0, Math.floor(offset));
+  const where = and(
+    eq(hrmsJobOpenings.tenantId, tenantId),
+    eq(hrmsJobOpenings.isPublished, true),
+    eq(hrmsJobOpenings.status, "open"),
+  );
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(hrmsJobOpenings)
+      .where(where)
+      .orderBy(desc(hrmsJobOpenings.createdAt), desc(hrmsJobOpenings.id))
+      .limit(pageLimit)
+      .offset(pageOffset);
+    const counted = await tx.select({ n: sql<number>`count(*)::int` }).from(hrmsJobOpenings).where(where);
+    return { rows, total: counted[0]?.n ?? 0 };
+  });
 }
 
 export async function findPublishedOpening(id: string, tenantId: string): Promise<JobOpeningRow | null> {

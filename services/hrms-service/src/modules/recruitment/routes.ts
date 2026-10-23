@@ -299,8 +299,16 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
       || (req.headers["x-tenant-id"] as string | undefined)
       || "";
     if (!tenantId) throw new HttpError(400, "MISSING_TENANT", "tenantId is required");
-    const vacancies = await queries.listPublishedVacancies(tenantId);
-    return reply.send({ data: vacancies });
+    // Real pagination (was a silent hard cap of 100): `limit` (1..100, default 100)
+    // and `offset`; the response carries `total` so a client can page to the end.
+    const q = z.object({
+      limit: z.string().regex(/^\d{1,3}$/).optional(),
+      offset: z.string().regex(/^\d{1,6}$/).optional(),
+    }).parse(req.query ?? {});
+    const limit = Math.min(repo.PUBLISHED_OPENINGS_MAX_PAGE, Math.max(1, Number(q.limit) || repo.PUBLISHED_OPENINGS_MAX_PAGE));
+    const offset = Number(q.offset) || 0;
+    const { vacancies, total } = await queries.listPublishedVacancies(tenantId, limit, offset);
+    return reply.send({ data: vacancies, total, limit, offset });
   });
 
   // Get a single vacancy's detail (public).
