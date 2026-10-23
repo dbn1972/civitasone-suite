@@ -1375,6 +1375,9 @@
     "statAvgResolutionDays": "Avg. Resolution Days"
   },
   "citizenRequests": {
+    "errLogRequest": "Could not log the request.",
+    "errLoadRequest": "Failed to load request.",
+    "errRecordAction": "Could not record the action.",
     "pageTitle": "Citizen Service Requests",
     "pageSubtitle": "Grievances and service requests register.",
     "statOpen": "Open",
