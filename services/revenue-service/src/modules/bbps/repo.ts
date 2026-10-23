@@ -87,7 +87,8 @@ export async function getDcbOutstandingTx(tx: Writer, tenantId: string, assessee
   const result = await tx
     .select({
       totalOutstanding: sql<bigint>`COALESCE(SUM(
-        CASE WHEN ${dcbEntries.entryType} = 'demand' THEN ${dcbEntries.amountMinor}
+        CASE WHEN ${dcbEntries.entryType} IN ('demand', 'refund') THEN ${dcbEntries.amountMinor}
+             WHEN ${dcbEntries.entryType} = 'adjustment' AND ${dcbEntries.narration} LIKE 'Adjustment credit%' THEN ${dcbEntries.amountMinor}
              ELSE -${dcbEntries.amountMinor}
         END
       ), 0)`.mapWith({ mapFromDriverValue: (v: string) => BigInt(v) }),

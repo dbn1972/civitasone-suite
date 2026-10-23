@@ -75,6 +75,32 @@ export async function listWriteOffs(
 }
 
 /**
+ * Tenant-scoped, paginated waiver list (newest first), optionally filtered by
+ * status, so the checker's waivers page can DISCOVER pending waivers instead of
+ * pasting a UUID from the maker (mirrors listWriteOffs).
+ */
+export async function listWaivers(
+  tenantId: string,
+  opts: { status?: string; limit: number; offset: number },
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = opts.status
+      ? and(eq(waivers.tenantId, tenantId), eq(waivers.status, opts.status))
+      : eq(waivers.tenantId, tenantId);
+    const page = await t
+      .select()
+      .from(waivers)
+      .where(where)
+      .orderBy(desc(waivers.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(waivers).where(where);
+    return { rows: page ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
+}
+
+/**
  * GAP-REVENUE-WAIVERS-03: fetch a single waiver by id, tenant-scoped, so the
  * maker-checker decide screen can show the checker the amount/demand/reason and
  * who raised it before approving or rejecting — never decide blind on a bare

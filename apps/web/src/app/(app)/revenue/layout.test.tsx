@@ -37,9 +37,16 @@ describe("RevenueLayout role gate", () => {
 		expect(screen.getByText("secret ledger")).toBeInTheDocument();
 	});
 
-	it("fails open when roles are unknown (empty)", () => {
-		getSessionRolesMock.mockReturnValue([]);
+	it("allows a revenue collector (the service grants it on assessment + trade-license routes)", () => {
+		getSessionRolesMock.mockReturnValue(["revenue_collector"]);
 		render(<RevenueLayout>{<div>secret ledger</div>}</RevenueLayout>);
 		expect(screen.getByText("secret ledger")).toBeInTheDocument();
+	});
+
+	it("fails closed when roles are unknown (empty)", () => {
+		getSessionRolesMock.mockReturnValue([]);
+		render(<RevenueLayout>{<div>secret ledger</div>}</RevenueLayout>);
+		expect(screen.queryByText("secret ledger")).not.toBeInTheDocument();
+		expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
 	});
 });

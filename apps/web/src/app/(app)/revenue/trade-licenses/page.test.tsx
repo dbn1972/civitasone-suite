@@ -52,6 +52,19 @@ describe("TradeLicensesTable money display (GAP-REVENUE-TRADE-LICENSES-04)", () 
     expect(screen.queryByText("2500")).not.toBeInTheDocument();
   });
 
+  it("renders the table filter box and filters rows by business name (filterKeys needs filterable)", async () => {
+    mockFetchRows([
+      makeRow({ id: "1", licenseNo: "TL-1", businessName: "Acme Traders" }),
+      makeRow({ id: "2", licenseNo: "TL-2", businessName: "Zenith Stores" }),
+    ]);
+    render(<TradeLicensesPage />);
+    expect(await screen.findByText("Acme Traders")).toBeInTheDocument();
+    const box = screen.getByRole("searchbox");
+    fireEvent.change(box, { target: { value: "zenith" } });
+    await waitFor(() => expect(screen.queryByText("Acme Traders")).not.toBeInTheDocument());
+    expect(screen.getByText("Zenith Stores")).toBeInTheDocument();
+  });
+
   it("renders a missing fee as an em-dash without crashing the row (regression from UX-018)", async () => {
     mockFetchRows([
       makeRow({

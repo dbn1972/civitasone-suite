@@ -25,6 +25,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = generateBillBody.parse(req.body);
+    // The consumer silently drops a second bill for the same assessment, which
+    // left the caller believing one was queued. Reject synchronously instead.
+    const existing = await repo.findBillByAssessment(ctx.tenantId, body.assessmentId);
+    if (existing) {
+      throw new HttpError(409, "BILL_ALREADY_EXISTS", `a bill (${existing.billNo}) has already been issued for this assessment`);
+    }
     const result = await commands.generateBill(ctx, body);
     return reply.code(202).send({ data: result });
   });
