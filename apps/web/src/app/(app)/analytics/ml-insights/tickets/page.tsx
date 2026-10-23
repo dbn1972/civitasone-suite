@@ -22,7 +22,6 @@ export default async function TicketsInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Tickets Scored",
-        accuracy: "Precision",
         fallbackRate: "Fallback Rate",
         topFactor: "Top Factor",
       }}

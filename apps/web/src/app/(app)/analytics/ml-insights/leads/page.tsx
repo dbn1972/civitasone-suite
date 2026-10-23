@@ -28,7 +28,6 @@ export default async function LeadsInsightsPage() {
       canExport={canExport}
       statLabels={{
         predictions: "Leads Scored",
-        accuracy: "AUC-ROC",
         fallbackRate: "Fallback Rate",
         topFactor: "Top Factor",
       }}

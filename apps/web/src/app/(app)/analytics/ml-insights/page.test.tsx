@@ -19,11 +19,8 @@ async function show() {
 const domain = (over: Partial<MLDomainSummary>): MLDomainSummary => ({
   domain: "leads",
   totalPredictions: 100,
-  accuracy: 0.9,
+  avgConfidence: 0.9,
   fallbackRate: 0.1,
-  topFactor: "tenure",
-  modelVersion: 3,
-  lastTrainedAt: "2026-09-01T00:00:00Z",
   ...over,
 });
 
@@ -43,45 +40,41 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-02: no misleading cross-metric average", () 
     await show();
     expect(screen.queryByText("Avg. Accuracy")).not.toBeInTheDocument();
   });
-
-  it("labels the leads card with its own metric (AUC-ROC), not 'Accuracy'", async () => {
-    state.result = { data: [domain({})], source: "api" };
-    await show();
-    expect(screen.getByText(/AUC-ROC/)).toBeInTheDocument();
-  });
 });
 
-describe("GAP-ANALYTICS-ML-INSIGHTS-04: last-trained + stale", () => {
-  it("marks a model trained 200+ days ago as Stale and excludes it from Active", async () => {
-    const old = new Date(Date.now() - 200 * 24 * 60 * 60 * 1000).toISOString();
-    state.result = { data: [domain({ lastTrainedAt: old })], source: "api" };
+describe("honest labels: ml-service only emits average confidence", () => {
+  it("labels every card 'Avg. confidence' and never AUC-ROC / Precision / MAPE / Accuracy", async () => {
+    state.result = { data: [domain({}), domain({ domain: "inventory", avgConfidence: 0.12 })], source: "api" };
+    const { container } = await show();
+    expect(screen.getAllByText("Avg. confidence").length).toBe(2);
+    expect(container.textContent).not.toMatch(/AUC-ROC|Precision|MAPE|Accuracy|Last trained|Stale/);
+  });
+
+  it("does not render fields ml-service never emits (last trained, stale pill)", async () => {
+    state.result = { data: [domain({})], source: "api" };
     await show();
-    expect(screen.getByText("Stale")).toBeInTheDocument();
-    // Active (not stale) = 0 of 6
-    expect(screen.getByText("0/6")).toBeInTheDocument();
+    expect(screen.queryByText("Last trained")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stale")).not.toBeInTheDocument();
+  });
+
+  it("counts domains that have predictions", async () => {
+    state.result = { data: [domain({}), domain({ domain: "tickets", totalPredictions: 0 })], source: "api" };
+    await show();
+    expect(screen.getByText("1/6")).toBeInTheDocument();
   });
 });
 
 describe("GAP-ANALYTICS-ML-INSIGHTS-03: honest aria-label per card", () => {
-  it("the leads card aria-label names its metric, not 'accuracy'", async () => {
+  it("the leads card aria-label names average confidence, not 'accuracy'", async () => {
     state.result = { data: [domain({})], source: "api" };
     await show();
-    const link = screen.getByLabelText(/Lead Scoring — AUC-ROC/i);
-    expect(link).toBeInTheDocument();
-  });
-});
-
-describe("GAP-ANALYTICS-ML-INSIGHTS-03 (W2 re-check): inventory card + axe", () => {
-  it("the inventory card aria-label says MAPE and 'lower is better', never 'accuracy'", async () => {
-    state.result = { data: [domain({ domain: "inventory", accuracy: 0.12 })], source: "api" };
-    await show();
-    const link = screen.getByLabelText(/Demand Forecasting — MAPE 12% \(lower is better\)/i);
+    const link = screen.getByLabelText(/Lead Scoring — average confidence 90%/i);
     expect(link.getAttribute("aria-label")).not.toMatch(/accuracy/i);
   });
 
   it("the hub has no axe violations (contrast needs a real browser and is excluded)", async () => {
     const axe = (await import("axe-core")).default;
-    state.result = { data: [domain({}), domain({ domain: "inventory", accuracy: 0.12 })], source: "api" };
+    state.result = { data: [domain({}), domain({ domain: "inventory", avgConfidence: 0.12 })], source: "api" };
     const { container } = await show();
     const out = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
     expect(out.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);

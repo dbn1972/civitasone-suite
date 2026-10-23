@@ -167,6 +167,7 @@ export const PROJECT_WRITE_ROLES = ["project_manager", "project_officer", "super
  * others); this gate stops a user who would be 403'd from loading PII.
  */
 export const PROJECT_READER_ROLES = [
+  "project_manager",
   "project_officer",
   "project_admin",
   "finance_officer",

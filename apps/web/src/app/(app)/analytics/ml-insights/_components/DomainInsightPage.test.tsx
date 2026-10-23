@@ -60,9 +60,20 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-*-05/06: 0% vs missing on real data", () => 
     expect(screen.getAllByText("0%").length).toBeGreaterThanOrEqual(2);
   });
 
-  it("uses the domain's metric label for the accuracy card by default", () => {
-    show({ title: "Lead Scoring Insights", subtitle: "s", domain: "leads", evaluation: dataEval, source: "api" });
-    // leads -> AUC-ROC
-    expect(screen.getByText("AUC-ROC")).toBeInTheDocument();
+  it("labels the stat 'Avg. confidence' (ml-service emits confidence, not AUC-ROC/MAPE)", () => {
+    show({ title: "Demand Forecasting Insights", subtitle: "s", domain: "inventory", evaluation: { ...dataEval, accuracyTrend: [] }, source: "api" });
+    expect(screen.getByText("Avg. confidence")).toBeInTheDocument();
+    expect(screen.queryByText(/MAPE/)).not.toBeInTheDocument();
+  });
+
+  it("hides the Top Factor card when the service emitted none", () => {
+    show({ title: "Lead Scoring Insights", subtitle: "s", domain: "leads", evaluation: { ...dataEval, topFactor: "—" }, source: "api" });
+    expect(screen.queryByText("Top Factor")).not.toBeInTheDocument();
+  });
+
+  it("hides the trend and factor cards when there is no such data", () => {
+    show({ title: "Lead Scoring Insights", subtitle: "s", domain: "leads", evaluation: { ...dataEval, accuracyTrend: [], factorBreakdown: [] }, source: "api" });
+    expect(screen.queryByText("Factor Breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Trend \(30 days\)/)).not.toBeInTheDocument();
   });
 });

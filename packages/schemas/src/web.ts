@@ -2257,6 +2257,9 @@ export const AuditObservationSummarySchema = z.object({
   dueDate: z.string().optional(),
   status: z.enum(["open", "replied", "partially_closed", "closed", "compliance_pending"]),
   para: z.string().optional(),
+  // Money value in minor units (paise) — the formatMoney() contract. Without this
+  // key zod strips it from the list response.
+  amount: z.number().optional(),
 });
 export const AuditObservationSummaryListSchema = z.array(AuditObservationSummarySchema);
 

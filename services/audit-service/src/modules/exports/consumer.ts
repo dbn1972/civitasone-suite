@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { chmod, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Queue } from "@civitasone/queue";
@@ -125,7 +124,6 @@ export function registerExportConsumers(queue: Queue): void {
         ...manifestCore, signingKeyId: signingKeyId(), alg: SIGNATURE_ALG,
       };
 
-      const token = randomUUID().replace(/-/g, "");
       const now = Date.now();
       const expiresAt = new Date(now + RETENTION_DAYS * 86_400_000);
       const tenantDir = path.join(EXPORT_DIR, p.tenantId);
@@ -145,14 +143,15 @@ export function registerExportConsumers(queue: Queue): void {
       await writeFile(sigPath, JSON.stringify({ ...manifest, signature, signedAt: signedAt.toISOString() }, null, 2), { encoding: "utf8", mode: 0o600 });
       await chmod(sigPath, 0o600);
 
-      // tenant-scoped, time-limited download location.
-      const downloadPath = `/v1/audit/exports/${p.id}/download?token=${token}`;
+      // Tenant-scoped download location. NO token is persisted: a short-lived,
+      // requester-bound token is minted on demand by the status/list endpoints.
+      const downloadPath = `/v1/audit/exports/${p.id}/download`;
 
       await db.transaction(async (tx) => {
         const row = await repo.findByIdTx(tx, p.id, p.tenantId);
         if (!row || row.status !== "pending") return; // already finalized / re-delivery
         const done = await repo.completeExportVersioned(tx, p.id, p.tenantId, row.version ?? 1, {
-          signedUrl: downloadPath, downloadToken: token, rowCount: projected.length,
+          signedUrl: downloadPath, rowCount: projected.length,
           retentionUntil: expiresAt, expiresAt, updatedBy: msg.actorId,
           contentSha256, signature, signedAt, signingKeyId: signingKeyId(), signatureAlg: SIGNATURE_ALG,
         });
