@@ -722,7 +722,7 @@ function mapSingleHelpdeskTicket(row: unknown): TicketDetail | null {
       id: noteId,
       author: toText(n.author) ?? toText(n.authorId)?.slice(0, 8) ?? "Agent",
       content,
-      createdAt: toText(n.createdAt) ?? new Date().toISOString(),
+      createdAt: toText(n.createdAt) ?? null,
       isInternal: Boolean(n.isInternal),
     }];
   });
@@ -737,8 +737,8 @@ function mapSingleHelpdeskTicket(row: unknown): TicketDetail | null {
     slaStatus,
     status,
     channel: (["web", "email", "phone", "walk_in"] as const).find((c) => c === row.channel),
-    createdAt: toText(row.createdAt) ?? new Date().toISOString(),
-    updatedAt: toText(row.updatedAt) ?? new Date().toISOString(),
+    createdAt: toText(row.createdAt) ?? null,
+    updatedAt: toText(row.updatedAt) ?? null,
     resolvedAt: toText(row.resolvedAt) ?? undefined,
     comments,
   };
@@ -1256,7 +1256,7 @@ export function mapAdminUserSummaries(payload: unknown): UserSummary[] | null {
       mfaEnabled: row.mfaEnabled === true,
       lastLoginAt: toText(row.lastLoginAt) ?? undefined,
       status: toText(row.status) ?? "active",
-      createdAt: toText(row.createdAt) ?? new Date().toISOString(),
+      createdAt: toText(row.createdAt) ?? null,
     });
   }
   return mapped;

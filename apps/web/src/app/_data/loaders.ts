@@ -4512,7 +4512,7 @@ export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[
 
 // Helpdesk detail loaders
 
-function mapTicketDetails(payload: unknown): TicketDetail[] | null {
+export function mapTicketDetails(payload: unknown): TicketDetail[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
   const mapped: TicketDetail[] = [];
@@ -4544,8 +4544,8 @@ function mapTicketDetails(payload: unknown): TicketDetail[] | null {
       slaStatus: slaStatus as TicketDetail["slaStatus"],
       status: status as TicketDetail["status"],
       channel: (["web", "email", "phone", "walk_in"] as const).find((c) => c === row.channel),
-      createdAt: toText(row.createdAt) ?? new Date().toISOString(),
-      updatedAt: toText(row.updatedAt) ?? new Date().toISOString(),
+      createdAt: toText(row.createdAt) ?? null,
+      updatedAt: toText(row.updatedAt) ?? null,
       resolvedAt: toText(row.resolvedAt) ?? undefined,
       comments: [],
     });

@@ -36,6 +36,22 @@ describe("SLA Queue page (GAP-HELPDESK-SLAS-01/03/04)", () => {
     sessionRoles = ["helpdesk_admin"];
   });
 
+  it("CLOS2-S3-11: a ticket with no createdAt sorts last and shows a dash, not a made-up date", async () => {
+    getSlaTicketsMock.mockResolvedValue({
+      source: "api",
+      data: [
+        ticket({ id: "none", ticketNo: "NO-DATE", priority: "medium", slaStatus: "breached", createdAt: null }),
+        ticket({ id: "dated", ticketNo: "HAS-DATE", priority: "medium", slaStatus: "breached", createdAt: "2026-06-01T00:00:00Z" }),
+      ],
+    });
+    const ui = await Page({ searchParams: Promise.resolve({}) });
+    render(ui);
+    const dated = screen.getByText("HAS-DATE");
+    const none = screen.getByText("NO-DATE");
+    expect(dated.compareDocumentPosition(none) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
   it("SLAS-03: Critical overdue ranks above an older Low ticket", async () => {
     getSlaTicketsMock.mockResolvedValue({
       source: "api",
