@@ -87,4 +87,20 @@ export const checklistQuery = z.object({
 }).refine((q) => Boolean(q.serviceId || q.applicationId), {
   message: "serviceId or applicationId required",
 });
+/** Max lane lookups in one batched verification-lane request (one per visible task row). */
+export const VERIFICATION_LANE_BATCH_MAX = 50;
+/**
+ * Batched officer lane checklist: one request for many (lane, application) rows so a
+ * task inbox does not fire one /verification-lane GET per row. Each entry is exactly
+ * the checklistQuery contract (laneKey required, serviceId or applicationId required).
+ */
+export const verificationLaneBatchBody = z.object({
+  lanes: z.array(z.object({
+    laneKey:       safeText({ max: 64 }),
+    serviceId:     z.string().uuid().optional(),
+    applicationId: z.string().uuid().optional(),
+  }).refine((q) => Boolean(q.serviceId || q.applicationId), {
+    message: "serviceId or applicationId required",
+  })).min(1).max(VERIFICATION_LANE_BATCH_MAX),
+});
 export const applicationQuery = z.object({ applicationId: z.string().uuid() });

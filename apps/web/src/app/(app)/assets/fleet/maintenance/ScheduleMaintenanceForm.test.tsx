@@ -93,7 +93,7 @@ describe("ScheduleMaintenanceForm", () => {
   it("explains the optional odometer threshold and links the help text to the field", () => {
     render(<ScheduleMaintenanceForm options={[]} />);
     const field = screen.getByLabelText(/^Odometer Threshold \(km\) \(optional\)/);
-    const help = screen.getByText(/does not trigger it/);
+    const help = screen.getByText(/recorded odometer reaches this reading/);
     expect(field.getAttribute("aria-describedby")).toContain(help.id);
   });
 });

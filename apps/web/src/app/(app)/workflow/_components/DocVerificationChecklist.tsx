@@ -2,8 +2,10 @@
 
 /**
  * FN-26 — officer workbasket document verification checklist for the current
- * workflow lane. Loads `/v1/citizen/documents/verification-lane?laneKey=…` so
- * only documents bound to this lane (e.g. Inspection) appear.
+ * workflow lane. Loads the lane checklist from
+ * `POST /v1/citizen/documents/verification-lane/batch` so only documents bound to
+ * this lane (e.g. Inspection) appear. Every checklist mounted in the same tick
+ * (one per visible inbox row) shares ONE request rather than one GET each.
  */
 import { useEffect, useState } from "react";
 
@@ -26,6 +28,59 @@ interface ChecklistItem {
 const checklistCache = new Map<string, ChecklistItem[]>();
 function cacheKey(lane: string, serviceId: string | null | undefined, applicationId: string | null | undefined): string {
   return `${lane}|${serviceId ?? ""}|${applicationId ?? ""}`;
+}
+
+type LaneRequest = { laneKey: string; serviceId?: string; applicationId?: string };
+type LaneWaiter = { req: LaneRequest; resolve: (items: ChecklistItem[]) => void; reject: (e: unknown) => void };
+/** Mirrors citizen-service's VERIFICATION_LANE_BATCH_MAX. */
+const BATCH_MAX = 50;
+let laneQueue: LaneWaiter[] = [];
+let laneTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Queue one (lane, application) lookup; everything queued in the same tick is sent as
+ * a single batched POST (chunked at BATCH_MAX). Resolves with that lane'"'"'s items, or
+ * rejects when the request failed or the service could not answer that lane.
+ */
+function loadLaneChecklist(req: LaneRequest): Promise<ChecklistItem[]> {
+  return new Promise((resolve, reject) => {
+    laneQueue.push({ req, resolve, reject });
+    if (laneTimer === null) laneTimer = setTimeout(flushLaneQueue, 0);
+  });
+}
+
+async function flushLaneQueue(): Promise<void> {
+  const waiters = laneQueue;
+  laneQueue = [];
+  laneTimer = null;
+  for (let i = 0; i < waiters.length; i += BATCH_MAX) {
+    const chunk = waiters.slice(i, i + BATCH_MAX);
+    try {
+      const res = await fetch("/api/proxy/v1/citizen/documents/verification-lane/batch", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ lanes: chunk.map((w) => w.req) }),
+      });
+      if (!res.ok) throw new Error(`verification-lane batch ${res.status}`);
+      const body = (await res.json()) as {
+        data?: Array<{ laneKey?: string; serviceId?: string | null; applicationId?: string | null; ok?: boolean; items?: ChecklistItem[] }>;
+      };
+      const byKey = new Map<string, ChecklistItem[]>();
+      for (const r of Array.isArray(body.data) ? body.data : []) {
+        if (r.ok === true && typeof r.laneKey === "string") {
+          byKey.set(cacheKey(r.laneKey, r.serviceId, r.applicationId), Array.isArray(r.items) ? r.items : []);
+        }
+      }
+      for (const w of chunk) {
+        const items = byKey.get(cacheKey(w.req.laneKey, w.req.serviceId, w.req.applicationId));
+        if (items) w.resolve(items);
+        else w.reject(new Error("lane not resolved"));
+      }
+    } catch (e) {
+      for (const w of chunk) w.reject(e);
+    }
+  }
 }
 
 /** Checklist state a parent can observe (see Props.onState). */
@@ -80,22 +135,16 @@ export function DocVerificationChecklist({
       setError(null);
       return;
     }
-    const qs = new URLSearchParams({ laneKey: normalizeLane(laneKey) });
-    if (serviceId) qs.set("serviceId", serviceId);
-    if (applicationId) qs.set("applicationId", applicationId);
+    const lane = normalizeLane(laneKey);
 
     (async () => {
       try {
-        const res = await fetch(`/api/proxy/v1/citizen/documents/verification-lane?${qs.toString()}`, {
-          cache: "no-store",
+        const next = await loadLaneChecklist({
+          laneKey: lane,
+          ...(serviceId ? { serviceId } : {}),
+          ...(applicationId ? { applicationId } : {}),
         });
-        if (!res.ok) {
-          if (!cancelled) setError("Could not load document checklist.");
-          return;
-        }
-        const body = (await res.json()) as { items?: ChecklistItem[] };
         if (!cancelled) {
-          const next = Array.isArray(body.items) ? body.items : [];
           checklistCache.set(key, next);
           setItems(next);
           setError(null);

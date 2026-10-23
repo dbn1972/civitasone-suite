@@ -51,6 +51,13 @@ export async function listPrerequisiteIds(tenantId: string, courseId: string): P
   return rows.map((r) => r.p);
 }
 
+/** id + title for a set of courses (tenant-scoped), so an error can name a course instead of citing its UUID. */
+export async function getCourseTitles(tenantId: string, ids: string[]): Promise<Array<{ id: string; title: string }>> {
+  if (ids.length === 0) return [];
+  return scopedRead((t) => t.select({ id: courses.id, title: courses.title }).from(courses)
+    .where(and(eq(courses.tenantId, tenantId), inArray(courses.id, ids))));
+}
+
 // ── modules & lessons ─────────────────────────────────────────────
 export async function insertModule(tx: Writer, row: typeof modules.$inferInsert): Promise<ModuleRow> {
   const rows = await tx.insert(modules).values(row).returning();

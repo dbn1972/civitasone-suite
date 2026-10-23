@@ -5,7 +5,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, resolveCitizenId, isOfficer, assertOwnership, HttpError } from "../../shared/context.js";
 import {
   idParam, uploadBody, presignBody, digilockerFetchBody, verifyBody, resubmitBody,
-  checklistQuery, applicationQuery, authorizeBody, callbackBody,
+  checklistQuery, verificationLaneBatchBody, applicationQuery, authorizeBody, callbackBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -84,6 +84,39 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const { serviceId, applicationId, laneKey } = checklistQuery.parse(req.query);
     if (!laneKey) throw new HttpError(400, "VALIDATION_FAILED", "laneKey is required");
     return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId, laneKey));
+  });
+
+  /**
+   * Batched form of verification-lane for the officer task inbox: one POST for every
+   * visible row. Read-only (POST only to carry the list of lanes in the body). Each entry
+   * is answered independently, so one unknown application never fails the whole batch.
+   */
+  app.post("/v1/citizen/documents/verification-lane/batch", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, OFFICER_ROLES);
+    const { lanes } = verificationLaneBatchBody.parse(req.body);
+    // De-duplicate identical lookups, then resolve them with bounded concurrency.
+    const unique = new Map<string, (typeof lanes)[number]>();
+    for (const l of lanes) unique.set(`${l.laneKey}|${l.serviceId ?? ""}|${l.applicationId ?? ""}`, l);
+    const entries = [...unique.entries()];
+    const results: Array<{ laneKey: string; serviceId: string | null; applicationId: string | null; ok: boolean; items: unknown[]; complete: boolean }> = [];
+    const CONCURRENCY = 5;
+    for (let i = 0; i < entries.length; i += CONCURRENCY) {
+      const chunk = entries.slice(i, i + CONCURRENCY);
+      const settled = await Promise.all(chunk.map(async ([, l]) => {
+        try {
+          const r = await queries.checklist(ctx.tenantId, l.serviceId, l.applicationId, l.laneKey);
+          return { laneKey: l.laneKey, serviceId: l.serviceId ?? null, applicationId: l.applicationId ?? null, ok: true, items: r.items, complete: r.complete };
+        } catch (err) {
+          if (err instanceof HttpError && err.status < 500) {
+            return { laneKey: l.laneKey, serviceId: l.serviceId ?? null, applicationId: l.applicationId ?? null, ok: false, items: [] as unknown[], complete: false };
+          }
+          throw err;
+        }
+      }));
+      results.push(...settled);
+    }
+    return reply.send({ data: results });
   });
 
   app.get("/v1/citizen/documents/pending", async (req, reply) => {

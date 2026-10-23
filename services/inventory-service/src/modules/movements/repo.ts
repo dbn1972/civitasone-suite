@@ -269,10 +269,25 @@ export async function listLowStock(tenantId: string, limit: number, offset: numb
       gte(items.reorderLevel, 1),
       lte(stockBalances.onHandQty, items.reorderLevel),
     ))
+    // Most urgent first: the biggest shortfall below the reorder level leads the
+    // list, so a capped page never hides the items closest to stock-out.
     // limit/offset needs a total order or pages overlap and skip rows.
-    .orderBy(items.name, stockBalances.id)
+    .orderBy(desc(sql`${items.reorderLevel} - ${stockBalances.onHandQty}`), items.name, stockBalances.id)
     .limit(limit).offset(offset));
   return rows;
+}
+
+/** Total rows the low-stock report matches (independent of limit/offset). */
+export async function countLowStock(tenantId: string): Promise<number> {
+  const [c] = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` })
+    .from(stockBalances)
+    .innerJoin(items, and(eq(stockBalances.itemId, items.id), eq(stockBalances.tenantId, items.tenantId)))
+    .where(and(
+      eq(stockBalances.tenantId, tenantId),
+      gte(items.reorderLevel, 1),
+      lte(stockBalances.onHandQty, items.reorderLevel),
+    )));
+  return c?.n ?? 0;
 }
 
 /** Read reorder policy for an item (used by the consumer's low-stock check). */

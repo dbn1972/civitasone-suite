@@ -10,8 +10,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { SUBSTITUTES_PAGE_LIMIT } from "./substitutesCoverage";
 import { getItemNames, getStoreNames, getSupplierNames, getWarehouseNames } from "./_lookups";
 
-import { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT } from "./_limits";
-export { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT };
+import { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT, LOW_STOCK_LIMIT } from "./_limits";
+export { INVENTORY_LEDGER_LIMIT, INVENTORY_LIST_LIMIT, LOW_STOCK_LIMIT };
 
 export type InventoryItemRow = {
   id: string;
@@ -363,7 +363,7 @@ export function getInventoryNamedList(
 }
 
 export async function getInventoryLowStock(): Promise<LoaderResult<InventoryLowStockRow[]>> {
-  const res = await fetchJson<Envelope<InventoryLowStockRow>, InventoryLowStockRow[]>("/api/v1/inventory/low-stock", [], {
+  const res = await fetchJson<Envelope<InventoryLowStockRow>, InventoryLowStockRow[]>(`/api/v1/inventory/low-stock?limit=${LOW_STOCK_LIMIT}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "inventory.lowStock",
     mapResponse: listOf,
