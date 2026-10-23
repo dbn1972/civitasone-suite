@@ -4,7 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
-import { errorMessageFromResponse } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatMoney, todayIST, addDaysIST } from "@/lib/formatters";
 import { canWriteAssets } from "@/lib/auth/workRoles";
 import { assetActionScope } from "@/lib/assetLifecycle";
@@ -168,7 +168,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
     setBusy(true);
     setMessage("");
     try {
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/barcode`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/barcode`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ barcode: tagCode.trim() }),
@@ -185,7 +185,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
 
   const amcAction = useConfirmAction({
     onConfirm: async () => {
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/maintenance`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/maintenance`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -212,7 +212,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   // Maker-checker: transfer changes custody/location of a government asset.
   const transferAction = useConfirmAction({
     onConfirm: async (reason) => {
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/transfer`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/transfer`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -233,7 +233,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
     onConfirm: async (reason) => {
       const proceedsMinor = safeProceedsNumber(proceedsToMinorString(proceeds) ?? "0");
       if (proceedsMinor === null) throw new Error("The proceeds amount is too large to submit.");
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/request-disposal`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/request-disposal`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -261,7 +261,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
       const why = (reason ?? "").trim();
       const extra = directNotes.trim();
       const notes = extra ? `${why}\n\n${extra}` : why;
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/dispose`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/dispose`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -280,7 +280,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
 
   const interOrgTransferAction = useConfirmAction({
     onConfirm: async () => {
-      const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/inter-org-transfer`, {
+      const res = await browserFetch(`v1/asset/assets/${assetId}/inter-org-transfer`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

@@ -8,6 +8,12 @@ describe("forecast period helpers (GAP-CRM-FORECAST-03)", () => {
     expect(financialYearStartYear(new Date(Date.UTC(2026, 0, 15)))).toBe(2025); // Jan 2026 -> FY2025
   });
 
+  it("CLOS2-S1-16: reads the FY in IST, so 00:00-05:29 IST on 1 April is already the new FY", () => {
+    expect(financialYearStartYear(new Date("2026-03-31T18:29:59Z"))).toBe(2025); // 23:59:59 IST 31 Mar
+    expect(financialYearStartYear(new Date("2026-03-31T18:30:00Z"))).toBe(2026); // 00:00 IST 1 Apr
+    expect(financialYearStartYear(new Date("2026-03-31T19:00:00Z"))).toBe(2026); // 00:30 IST 1 Apr
+  });
+
   it("resolves FY quarters to inclusive close-date windows", () => {
     const [q1, q2, q3, q4] = fyQuarters(2026);
     expect(q1).toMatchObject({ closeDateFrom: "2026-04-01", closeDateTo: "2026-06-30" });

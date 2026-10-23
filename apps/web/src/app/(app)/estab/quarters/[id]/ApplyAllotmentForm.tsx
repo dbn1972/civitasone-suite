@@ -40,8 +40,7 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
     const next: FieldErrors = {};
     if (!employeeRef) next.employeeRef = "Select the applying employee.";
     if (seniorityMonths.trim()) {
-      const n = parseInt(seniorityMonths, 10);
-      if (!Number.isFinite(n) || n < 0) next.seniorityMonths = "Seniority (months) must be zero or a positive whole number.";
+      if (!/^\d+$/.test(seniorityMonths.trim())) next.seniorityMonths = "Seniority (months) must be zero or a positive whole number.";
     }
     setErrors(next);
     if (next.seniorityMonths) { seniorityRef.current?.focus(); return false; }

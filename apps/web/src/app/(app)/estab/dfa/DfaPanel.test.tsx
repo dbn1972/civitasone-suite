@@ -310,3 +310,37 @@ describe("DfaPanel — GAP-ESTAB-DFA-02 (role + actor gating)", () => {
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
   });
 });
+
+describe("DfaPanel — CLOS2-S1-08 linked-file search failure", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function openPicker() {
+    fireEvent.click(screen.getByRole("button", { name: "+ New draft" }));
+    const input = screen.getByPlaceholderText("Search by file number or subject…");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "FILE-12" } });
+  }
+
+  it("shows the search-error text, not 'No matches', when the file search returns 500", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/estab/files/search")) return new Response("{}", { status: 500 });
+      return jsonResponse({ data: [] });
+    });
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
+    await screen.findByRole("button", { name: "+ New draft" });
+    openPicker();
+    await waitFor(() => expect(screen.getAllByText(/load results/i).length).toBeGreaterThan(0));
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
+  it("still shows 'No matches' when the search succeeds with an empty list", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ data: [] }));
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
+    await screen.findByRole("button", { name: "+ New draft" });
+    openPicker();
+    await waitFor(() => expect(screen.getAllByText("No matches").length).toBeGreaterThan(0));
+  });
+});

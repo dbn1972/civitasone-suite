@@ -167,4 +167,18 @@ describe("BondActions", () => {
     expect(screen.queryByRole("button", { name: "Claim" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Forfeit" })).not.toBeInTheDocument();
   });
+
+  it("CLOS2-S1-11: register offline shows the standard offline copy, never the raw 'Failed to fetch'", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<BondActions contractId="c1" canRegister bonds={[]} />);
+    fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-3" } });
+    fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "500" } });
+    const dates = Array.from(document.querySelectorAll('input[type="date"]')) as HTMLInputElement[];
+    fireEvent.change(dates[0]!, { target: { value: "2026-04-01" } });
+    fireEvent.change(dates[1]!, { target: { value: "2027-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(document.body.textContent).not.toContain("Failed to fetch");
+    expect(screen.getByRole("alert").textContent).toMatch(/connect|offline|internet|network/i);
+  });
 });

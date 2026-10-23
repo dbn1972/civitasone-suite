@@ -27,9 +27,14 @@ export default function DesignerTestPage() {
   const [running, setRunning] = useState(false);
 
   const loadHistory = useCallback(async (isLive: () => boolean = () => true) => {
-    const data = await fetchSandboxTestHistory(params.id);
-    if (!isLive()) return;
-    setHistory(data);
+    try {
+      const data = await fetchSandboxTestHistory(params.id);
+      if (!isLive()) return;
+      setHistory(data);
+    } catch {
+      // History is secondary: keep what is shown. Must not reject, or the mount effect leaks an
+      // unhandled rejection and runTest would overwrite a successful run with a transport failure.
+    }
   }, [params.id]);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { browserFetch } from "@/lib/api/browserClient";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -112,7 +113,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     setMessage("");
     setError("");
     try {
-      const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings`, {
+      const res = await browserFetch(`v1/estab/files/${fileId}/notings`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         // SECURITY: no officerId — the server derives the noting's officer
@@ -141,7 +142,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     }
     setMessage("");
     setError("");
-    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/submit-for-approval`, {
+    const res = await browserFetch(`v1/estab/files/${fileId}/submit-for-approval`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ notingId: draftNotingId, remarks }),
@@ -161,7 +162,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     if (!draftNotingId) throw new Error("No draft note to sign.");
     setMessage("");
     setError("");
-    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/notings/${draftNotingId}/sign`, {
+    const res = await browserFetch(`v1/estab/files/${fileId}/notings/${draftNotingId}/sign`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
@@ -182,7 +183,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     const target = toOfficer.trim();
     setMessage("");
     setError("");
-    const res = await fetch(`/api/proxy/v1/estab/files/${fileId}/move`, {
+    const res = await browserFetch(`v1/estab/files/${fileId}/move`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({

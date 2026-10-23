@@ -66,7 +66,8 @@ function confirmsTransition(fresh: Dfa[], id: string, expected: string, view: Fi
 // GAP-ESTAB-DFA-04: the existing estab file search, as an EntityPicker adapter (file no + subject).
 async function searchFiles(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   const res = await fetch(`/api/proxy/v1/estab/files/search?q=${encodeURIComponent(query)}&limit=10`, { signal });
-  if (!res.ok) return [];
+  // Throw so EntityPicker shows its search-error text; [] would read as "No matches".
+  if (!res.ok) throw new Error("file search failed");
   const body = (await res.json()) as { data?: Array<{ id: string; fileNo: string; subject: string }> };
   return (body.data ?? []).map((f) => ({ id: f.id, label: f.fileNo, sublabel: f.subject }));
 }
