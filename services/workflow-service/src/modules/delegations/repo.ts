@@ -1,6 +1,7 @@
 import { and, eq, or, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { fetchUserRoleKeys } from "../../shared/identity-client.js";
+import { todayIST } from "../../shared/dates.js";
 import { delegations, type DelegationRow, type DelegationView } from "./schema.js";
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -155,8 +156,16 @@ export async function activeByDelegator(tenantId: string, delegatorId: string): 
 }
 
 /** Active legacy delegations (created before role scoping: empty roles) for the re-issue report. */
-export async function listLegacy(tenantId: string, limit: number, offset: number): Promise<{ rows: DelegationView[]; total: number }> {
-  const where = and(eq(delegations.tenantId, tenantId), eq(delegations.isActive, true), sql`cardinality(${delegations.roles}) = 0`);
+export async function listLegacy(
+  tenantId: string, limit: number, offset: number, onDate: string = todayIST(),
+): Promise<{ rows: DelegationView[]; total: number }> {
+  // Still-running only: an expired legacy delegation (to_date before the IST
+  // calendar date `onDate`) is not actionable, matching activeForDelegate.
+  const where = and(
+    eq(delegations.tenantId, tenantId), eq(delegations.isActive, true),
+    sql`cardinality(${delegations.roles}) = 0`,
+    sql`(${delegations.toDate} IS NULL OR ${delegations.toDate} >= ${onDate})`,
+  );
   const rows = await scopedRead((tx) => tx.select().from(delegations).where(where)
     .orderBy(desc(delegations.createdAt)).limit(limit).offset(offset));
   const totalRes = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(delegations).where(where));

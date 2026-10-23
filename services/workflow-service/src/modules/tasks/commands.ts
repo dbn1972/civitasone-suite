@@ -12,10 +12,11 @@ import * as delegationRepo from "../delegations/repo.js";
 import * as historyRepo from "../history/repo.js";
 import type { TaskView } from "./schema.js";
 import { checkMandatoryDocs } from "./doc-gate.js";
+import { todayIST } from "../../shared/dates.js";
 
-/** YYYY-MM-DD in UTC, used to bound active-delegation validity. */
+/** YYYY-MM-DD in IST (Asia/Kolkata), used to bound active-delegation validity. */
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayIST();
 }
 
 export type Accepted = { id: string; status: string; correlationId: string };
