@@ -47,7 +47,6 @@ import { securityOverviewRoutes } from "./modules/gap/security-overview-routes.j
 import { registerRateLimit } from "@civitasone/rate-limit";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
 import { platformCatalogueRoutes } from "./modules/platform-catalogue/routes.js";
-import { registerRateLimit } from "@civitasone/rate-limit";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
