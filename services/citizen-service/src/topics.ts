@@ -87,6 +87,17 @@ export const COMMANDS = {
   // COMP-002 -- generic citizen service-request portal
   serviceRequestSubmit:    "citizen.service_request.submit",
   serviceRequestUpdate:    "citizen.service_request.update",
+  // Citizen engagement -- alerts / notices / surveys (migration 0041)
+  alertCreate:             "citizen.alert.create",
+  alertPublish:            "citizen.alert.publish",
+  alertWithdraw:           "citizen.alert.withdraw",
+  noticeCreate:            "citizen.notice.create",
+  noticePublish:           "citizen.notice.publish",
+  noticeWithdraw:          "citizen.notice.withdraw",
+  surveyCreate:            "citizen.survey.create",
+  surveyPublish:           "citizen.survey.publish",
+  surveyClose:             "citizen.survey.close",
+  surveyRespond:           "citizen.survey.respond",
 } as const;
 
 export const EVENTS = {

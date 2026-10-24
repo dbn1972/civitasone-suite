@@ -292,6 +292,9 @@ import {
   CitizenRequestSummaryListSchema,
   RTISummaryListSchema,
   ProjectsDashboardSchema,
+  CitizenAlertListSchema,
+  CitizenNoticeListSchema,
+  CitizenSurveyListSchema,
   ProjectSummaryListSchema,
   ProjectDetailSchema,
   MilestoneSummaryListSchema,
@@ -353,6 +356,10 @@ import {
   KnowledgeRecordListSchema,
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
+  crmActivityFeedListSchema,
+  AdminIdpProviderListSchema,
+  AdminSsoProviderListSchema,
+  AdminSecurityOverviewSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { mapBillingSettings, mapOfflinePayments, mapReminderStatus, type BillingSettingsView, type OfflinePaymentView, type ReminderView } from "@/lib/admin/invoiceOps";
@@ -4488,26 +4495,24 @@ export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | nu
   return mapped;
 }
 
-// Wire-level guard for GET /v1/crm/activities. The previous schema here
-// (CRMActivityEntryListSchema) described the MAPPED CRMActivityEntry shape
-// (owner, non-null subject) as a bare array, but crm-service returns the
-// `{ data, pagination }` envelope of activityViewSchema rows (actorName / text,
-// nullable subject, no owner). Every real response therefore failed validation and
-// /crm/activities always rendered "We couldn't load interactions". Validate only
-// the envelope here; mapCRMActivityEntries() does the per-row field validation and
-// the enum fallbacks.
-const crmActivitiesWireSchema = z.union([
-  z.array(z.record(z.string(), z.unknown())),
-  z.object({ data: z.array(z.record(z.string(), z.unknown())) }).passthrough(),
-]);
+// Wire contract for GET /v1/crm/activities with NO subject: the caller-scoped feed (crm_user: own /
+// assigned / own-record activities; crm_admin: the tenant). The envelope + row shape is the shared
+// crmActivityFeedListSchema that crm-service validates its response against; mapCRMActivityEntries()
+// then applies the enum fallbacks. (The subject-scoped timeline is a different mode of the same
+// route and is not used by this screen.)
+export const CRM_ACTIVITIES_FEED_LIMIT = 200;
 
 export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[]>> {
-  return fetchJson<unknown, CRMActivityEntry[]>("/api/v1/crm/activities", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "crm.activities.full",
-    responseSchema: crmActivitiesWireSchema,
-    mapResponse: mapCRMActivityEntries,
-  });
+  return fetchJson<z.infer<typeof crmActivityFeedListSchema>, CRMActivityEntry[]>(
+    `/api/v1/crm/activities?limit=${CRM_ACTIVITIES_FEED_LIMIT}&offset=0`,
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "crm.activities.full",
+      responseSchema: crmActivityFeedListSchema,
+      mapResponse: mapCRMActivityEntries,
+    },
+  );
 }
 
 // Helpdesk detail loaders
@@ -4742,6 +4747,7 @@ export async function getCitizenAlerts(): Promise<LoaderResult<CitizenAlert[]>> 
   return fetchJson<unknown, CitizenAlert[]>("/api/v1/citizen/alerts", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.alerts",
+    responseSchema: CitizenAlertListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenAlert[] | null,
   });
 }
@@ -4760,6 +4766,7 @@ export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>
   return fetchJson<unknown, CitizenNotice[]>("/api/v1/citizen/notices", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.notices",
+    responseSchema: CitizenNoticeListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenNotice[] | null,
   });
 }
@@ -4772,6 +4779,7 @@ export async function getCitizenSurveys(): Promise<LoaderResult<CitizenSurvey[]>
   return fetchJson<unknown, CitizenSurvey[]>("/api/v1/citizen/surveys", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.surveys",
+    responseSchema: CitizenSurveyListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenSurvey[] | null,
   });
 }
@@ -6425,13 +6433,17 @@ export type SsoProvider = {
   protocol: string;
   entityId: string;
   status: string;
-  lastSync: string;
+  /** null until the provider has synced at least once. */
+  lastSync: string | null;
+  /** True when a client secret is stored. The secret itself is write-only and never returned. */
+  hasClientSecret?: boolean;
 };
 
 export async function getSsoProviders(): Promise<LoaderResult<SsoProvider[]>> {
   return fetchJson<unknown, SsoProvider[]>("/api/v1/admin/sso/providers", [], {
     revalidateSeconds: 60,
     telemetryKey: "admin.sso.providers",
+    responseSchema: AdminSsoProviderListSchema,
     mapResponse: (p) => getArrayPayload(p) as SsoProvider[] | null,
   });
 }
@@ -6589,6 +6601,7 @@ export async function getSecurityOverview(): Promise<LoaderResult<SecurityOvervi
     {
       revalidateSeconds: 30,
       telemetryKey: "admin.security.overview",
+      responseSchema: AdminSecurityOverviewSchema,
       mapResponse: mapSecurityOverview,
     },
   );
@@ -6662,14 +6675,18 @@ export type IdpProviderSummary = {
   protocol: string;
   status: string;
   usersSynced: number;
-  lastSync: string;
+  /** null until the provider has synced at least once. */
+  lastSync: string | null;
   endpoint: string;
+  /** True when a client secret is stored. The secret itself is write-only and never returned. */
+  hasClientSecret?: boolean;
 };
 
 export async function getIdpProviders(): Promise<LoaderResult<IdpProviderSummary[]>> {
   return fetchJson<unknown, IdpProviderSummary[]>("/api/v1/admin/idp/providers", [], {
     revalidateSeconds: 60,
     telemetryKey: "admin.idp.providers",
+    responseSchema: AdminIdpProviderListSchema,
     mapResponse: (p) => getArrayPayload(p) as IdpProviderSummary[] | null,
   });
 }

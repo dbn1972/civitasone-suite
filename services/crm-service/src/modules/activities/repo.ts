@@ -1,4 +1,5 @@
 import { eq, desc, and, sql, type SQL } from "drizzle-orm";
+import type { ActivityFeedQuery } from "./validators.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { activities, type ActivityRow, type ActivityInsert, type ActivityView } from "./schema.js";
 
@@ -133,5 +134,82 @@ export async function listOverdueTasks(
     `)) as unknown as Array<Record<string, unknown>>;
     const [ct] = (await tx.execute(sql`SELECT count(*)::int AS total FROM crm.activities a WHERE ${where}`)) as unknown as Array<{ total: number }>;
     return { rows, total: ct?.total ?? 0 };
+  });
+}
+
+export interface FeedRow {
+  id: string; tenantId: string; actorName: string; text: string;
+  contactId: string | null; dealId: string | null; accountId: string | null;
+  type: string; subject: string | null; status: string;
+  dueDate: string | null; remindAt: string | null; location: string | null;
+  completedAt: string | null; createdAt: string;
+  ownerId: string | null; relatedName: string | null;
+}
+
+const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => "\\" + c);
+
+/**
+ * Scoped activity feed. Tenant is ALWAYS filtered (and RLS applies). When `actorId` is given
+ * (non-admin) the rows are limited to activities the actor owns (COALESCE(owner_id, created_by),
+ * i.e. owner or assignee) or that belong to a contact/deal/account whose owner_id is the actor -
+ * the only record-ownership scoping this module has. Admins pass actorId=null for the tenant.
+ */
+export async function listFeed(
+  tenantId: string,
+  actorId: string | null,
+  q: ActivityFeedQuery,
+  callerId: string,
+): Promise<{ rows: FeedRow[]; total: number }> {
+  const conds: SQL[] = [sql`a.tenant_id = ${tenantId}`];
+  if (actorId) {
+    conds.push(sql`(COALESCE(a.owner_id, a.created_by) = ${actorId} OR c.owner_id = ${actorId} OR d.owner_id = ${actorId} OR ac.owner_id = ${actorId})`);
+  }
+  if (q.type) conds.push(sql`a.type = ${q.type}`);
+  if (q.status === "overdue") conds.push(sql`(a.status = 'open' AND a.due_date < (now() AT TIME ZONE 'Asia/Kolkata')::date)`);
+  else if (q.status === "open") conds.push(sql`(a.status = 'open' AND (a.due_date IS NULL OR a.due_date >= (now() AT TIME ZONE 'Asia/Kolkata')::date))`);
+  else if (q.status) conds.push(sql`a.status = ${q.status}`);
+  if (q.ownerId) conds.push(sql`COALESCE(a.owner_id, a.created_by) = ${q.ownerId}`);
+  if (q.mine) conds.push(sql`COALESCE(a.owner_id, a.created_by) = ${callerId}`);
+  if (q.relatedType === "contact") conds.push(sql`a.contact_id IS NOT NULL`);
+  else if (q.relatedType === "deal") conds.push(sql`a.deal_id IS NOT NULL`);
+  else if (q.relatedType === "account") conds.push(sql`a.account_id IS NOT NULL`);
+  if (q.dueFrom) conds.push(sql`a.due_date >= ${q.dueFrom}::date`);
+  if (q.dueTo) conds.push(sql`a.due_date <= ${q.dueTo}::date`);
+  if (q.q) {
+    const like = "%" + escapeLike(q.q) + "%";
+    conds.push(sql`(a.subject ILIKE ${like} OR a.text ILIKE ${like})`);
+  }
+  const where = sql.join(conds, sql` AND `);
+  const from = sql`FROM crm.activities a
+      LEFT JOIN crm.contacts c ON c.id = a.contact_id AND c.tenant_id = a.tenant_id
+      LEFT JOIN crm.deals d ON d.id = a.deal_id AND d.tenant_id = a.tenant_id
+      LEFT JOIN crm.accounts ac ON ac.id = a.account_id AND ac.tenant_id = a.tenant_id`;
+  return scopedRead(async (tx) => {
+    const rows = (await tx.execute(sql`
+      SELECT a.id, a.tenant_id AS "tenantId", a.actor_name AS "actorName", a.text,
+             a.contact_id AS "contactId", a.deal_id AS "dealId", a.account_id AS "accountId",
+             a.type, a.subject,
+             CASE WHEN a.status = 'open' AND a.due_date < (now() AT TIME ZONE 'Asia/Kolkata')::date
+                  THEN 'overdue' ELSE a.status END AS status,
+             a.due_date::text AS "dueDate", a.remind_at AS "remindAt", a.location,
+             a.completed_at AS "completedAt", a.created_at AS "createdAt",
+             COALESCE(a.owner_id, a.created_by) AS "ownerId",
+             COALESCE(c.name, d.name, ac.name) AS "relatedName"
+      ${from}
+      WHERE ${where}
+      ORDER BY a.created_at DESC, a.id DESC
+      LIMIT ${q.limit} OFFSET ${q.offset}
+    `)) as unknown as Array<Record<string, unknown>>;
+    const [ct] = (await tx.execute(sql`SELECT count(*)::int AS total ${from} WHERE ${where}`)) as unknown as Array<{ total: number }>;
+    const iso = (v: unknown): string | null => (v == null ? null : v instanceof Date ? v.toISOString() : String(v));
+    return {
+      rows: rows.map((r) => ({
+        ...(r as unknown as FeedRow),
+        remindAt: iso(r["remindAt"]),
+        completedAt: iso(r["completedAt"]),
+        createdAt: iso(r["createdAt"]) as string,
+      })),
+      total: ct?.total ?? 0,
+    };
   });
 }

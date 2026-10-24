@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createActivityBody, updateActivityBody, idParam, activitiesListSchema, listActivitiesQuery, overdueTasksQuery, overdueTasksListSchema } from "./validators.js";
+import { createActivityBody, updateActivityBody, idParam, activitiesListSchema, listActivitiesQuery, activityFeedQuery, activityFeedListSchema, overdueTasksQuery, overdueTasksListSchema } from "./validators.js";
 import * as repo from "./repo.js";
 import { assertAccountLinkable } from "../contacts/account-guard.js";
 import * as commands from "./commands.js";
@@ -13,6 +13,8 @@ import { isActiveTenantUser } from "../../shared/identity-client.js";
 import { resolveUserNames } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// Tenant-wide feed visibility (CRM admin tier; crm_user is record-scoped).
+const FEED_ADMIN_ROLES = ["crm_admin", "super_admin"];
 // GAP-CRM-TASK-ESCALATION-03: the overdue-task monitor is also open to tenant_admin. The web
 // CRM layout already admits tenant_admin to /crm/overdue-tasks, and the sibling escalation-rule
 // and service-request reads list it, so without this the page loaded and then failed on 403.
@@ -47,13 +49,19 @@ export async function activityRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createActivity(ctx, body));
   });
 
-  // Per-record timeline. subjectType+subjectId are REQUIRED: without them this used
-  // to return the whole tenant's activities, which the FE embeds on every contact/
-  // account page — a same-tenant leak. Now it is always scoped to one subject.
-  app.get("/v1/crm/activities", async (req, reply) => {
+  // Per-record timeline (subjectType+subjectId given) OR the scoped feed (neither given).
+  // The timeline is always scoped to one subject; the feed is scoped to the caller: crm_user sees
+  // activities they own/are assigned or that belong to records they own, crm_admin/super_admin
+  // see the tenant. Supplying only one of subjectType/subjectId is still a 400 (never a leak).
+  app.get("/v1/crm/activities", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    const q = listActivitiesQuery.parse(req.query);
+    const raw = (req.query ?? {}) as Record<string, unknown>;
+    if (raw["subjectType"] === undefined && raw["subjectId"] === undefined) {
+      const fq = activityFeedQuery.parse(raw);
+      return sendValidated(reply, activityFeedListSchema, await queries.listFeed(ctx.tenantId, ctx.actorId, hasAnyRole(ctx, FEED_ADMIN_ROLES), fq));
+    }
+    const q = listActivitiesQuery.parse(raw);
     sendValidated(reply, activitiesListSchema, await queries.listActivities(ctx.tenantId, q.subjectType, q.subjectId, q.limit, q.offset));
   });
 

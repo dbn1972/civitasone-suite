@@ -33,6 +33,7 @@ import { documentsRoutes } from "./modules/documents/routes.js";
 import { appealRoutes } from "./modules/appeal/routes.js";
 import { applicantIdentityRoutes } from "./modules/applicant-identity/routes.js";
 import { serviceRequestRoutes } from "./modules/requests/routes.js";
+import { engagementRoutes } from "./modules/engagement/routes.js";
 import { cpioRoutes } from "./modules/cpio/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -97,8 +98,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(documentsRoutes);
   await app.register(appealRoutes);
   await app.register(serviceRequestRoutes);
-  const { citizenGapRoutes } = await import("./modules/gap/routes.js");
-  await app.register(citizenGapRoutes);
+  await app.register(engagementRoutes);
 
   registerSchemaErrorHandler(app, HttpError);
 

@@ -21,6 +21,7 @@ import { schema as packsModule }       from "../modules/packs/schema.js";
 import { schema as documentsModule }   from "../modules/documents/schema.js";
 import { schema as appealModule }      from "../modules/appeal/schema.js";
 import { schema as requestsModule }    from "../modules/requests/schema.js";
+import { schema as engagementModule }  from "../modules/engagement/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -40,6 +41,7 @@ const SCHEMA = {
   ...documentsModule,
   ...appealModule,
   ...requestsModule,
+  ...engagementModule,
   ...outboxSchema,
 };
 

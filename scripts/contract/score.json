@@ -1,9 +1,9 @@
 {
-  "overall": 10,
+  "overall": 9.8,
   "modules": {
     "analytics": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "3/3",
       "blockers": []
     },
     "assets": {
@@ -13,7 +13,7 @@
     },
     "audit": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "11/11",
       "blockers": []
     },
     "billing": {
@@ -23,52 +23,52 @@
     },
     "citizen": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "6/6",
       "blockers": []
     },
     "contracts": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "9/9",
       "blockers": []
     },
     "crm": {
       "score": 10,
-      "wired": "6/6",
+      "wired": "24/24",
       "blockers": []
     },
     "estab": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "15/15",
       "blockers": []
     },
     "finance": {
       "score": 10,
-      "wired": "13/13",
+      "wired": "53/53",
       "blockers": []
     },
     "grants": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "11/11",
       "blockers": []
     },
     "helpdesk": {
       "score": 10,
-      "wired": "5/5",
+      "wired": "16/16",
       "blockers": []
     },
     "hr": {
       "score": 10,
-      "wired": "16/16",
+      "wired": "54/54",
       "blockers": []
     },
     "install": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "3/3",
       "blockers": []
     },
     "inventory": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "6/6",
       "blockers": []
     },
     "knowledge": {
@@ -78,17 +78,12 @@
     },
     "legal": {
       "score": 10,
-      "wired": "6/6",
-      "blockers": []
-    },
-    "locations": {
-      "score": 10,
-      "wired": "1/1",
+      "wired": "9/9",
       "blockers": []
     },
     "notifications": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "3/3",
       "blockers": []
     },
     "plugins": {
@@ -98,17 +93,17 @@
     },
     "procurement": {
       "score": 10,
-      "wired": "14/14",
+      "wired": "28/28",
       "blockers": []
     },
     "projects": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "18/18",
       "blockers": []
     },
     "reports": {
       "score": 10,
-      "wired": "5/5",
+      "wired": "6/6",
       "blockers": []
     },
     "stock": {
@@ -116,14 +111,9 @@
       "wired": "4/4",
       "blockers": []
     },
-    "telephony": {
-      "score": 10,
-      "wired": "1/1",
-      "blockers": []
-    },
     "tenant-admin": {
       "score": 10,
-      "wired": "12/12",
+      "wired": "32/32",
       "blockers": []
     },
     "themes": {
@@ -131,11 +121,49 @@
       "wired": "1/1",
       "blockers": []
     },
-    "workflow": {
-      "score": 10,
+    "admin": {
+      "score": 8.5,
+      "wired": "33/33",
+      "blockers": []
+    },
+    "ai": {
+      "score": 8.5,
+      "wired": "6/6",
+      "blockers": []
+    },
+    "approvals": {
+      "score": 8.5,
       "wired": "1/1",
+      "blockers": []
+    },
+    "developer-portal": {
+      "score": 8.5,
+      "wired": "1/1",
+      "blockers": []
+    },
+    "learning": {
+      "score": 8.5,
+      "wired": "3/3",
+      "blockers": []
+    },
+    "platform-admin": {
+      "score": 8.5,
+      "wired": "11/11",
+      "blockers": []
+    },
+    "policy": {
+      "score": 8.5,
+      "wired": "3/3",
       "blockers": []
     }
   },
-  "failing": []
+  "failing": [
+    "admin",
+    "ai",
+    "approvals",
+    "developer-portal",
+    "learning",
+    "platform-admin",
+    "policy"
+  ]
 }

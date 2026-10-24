@@ -88,3 +88,10 @@ export const msmeOnboardBody = z.object({
   state:        z.string().min(2).max(64).optional(),
 });
 export type MsmeOnboardBody = z.infer<typeof msmeOnboardBody>;
+
+// GET /v1/tenants (platform-admin directory). limit is hard-capped to match the SQL function.
+export const listTenantsQuery = z.object({
+  q: z.string().trim().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(500),
+  offset: z.coerce.number().int().min(0).default(0),
+});

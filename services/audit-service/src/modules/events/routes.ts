@@ -56,11 +56,15 @@ const eventFilterQuery = {
   service: z.string().max(256).optional(),
   resourceType: z.string().min(1).max(128).optional(),
   actor: z.string().trim().min(1).max(128).optional(),
+  /** Comma-separated payload outcomes ("failure,denied"). */
+  outcome: z.string().max(128).optional(),
 };
-function toFilters(q: { service?: string | undefined; resourceType?: string | undefined; actor?: string | undefined }): queries.EventFilters {
+function toFilters(q: { service?: string | undefined; resourceType?: string | undefined; actor?: string | undefined; outcome?: string | undefined }): queries.EventFilters {
   const services = q.service?.split(",").map((v) => v.trim()).filter((v) => v.length > 0).slice(0, 10);
+  const outcomes = q.outcome?.split(",").map((v) => v.trim()).filter((v) => v.length > 0).slice(0, 5);
   return {
     ...(services && services.length > 0 ? { services } : {}),
+    ...(outcomes && outcomes.length > 0 ? { outcomes } : {}),
     ...(q.resourceType ? { resourceType: q.resourceType } : {}),
     ...(q.actor ? { actor: q.actor } : {}),
   };
