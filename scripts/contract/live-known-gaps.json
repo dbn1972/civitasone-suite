@@ -20,24 +20,6 @@
       "since": "2026-10-07"
     },
     {
-      "apiPath": "/api/v1/admin/idp/providers",
-      "status": 501,
-      "reason": "admin-service/src/modules/gap/routes.ts answers 501: no distinct IdP-provider store exists",
-      "since": "2026-10-07"
-    },
-    {
-      "apiPath": "/api/v1/admin/sso/providers",
-      "status": 501,
-      "reason": "admin-service/src/modules/gap/routes.ts answers 501: identity-service SAML config route is itself an unfinished stub",
-      "since": "2026-10-07"
-    },
-    {
-      "apiPath": "/api/v1/admin/security/overview",
-      "status": 501,
-      "reason": "admin-service/src/modules/gap/routes.ts answers 501 NOT_IMPLEMENTED by design (no backing aggregate)",
-      "since": "2026-10-07"
-    },
-    {
       "apiPath": "/api/v1/crm/activities",
       "status": 400,
       "reason": "GET /v1/crm/activities requires subjectType+subjectId (deliberate same-tenant-leak fix in crm-service activities/routes.ts) but the /crm/activities page's getCRMActivities() sends neither; needs a scoped tenant-wide feed endpoint or a per-subject page, a product/security decision",

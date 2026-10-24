@@ -3438,3 +3438,54 @@ export const catalogueProductListSchema = z.object({
 });
 
 export type CatalogueProductRow = z.infer<typeof catalogueProductRowSchema>;
+
+// ── Tenant admin: IdP / SSO provider registry + security overview ─────────────
+// One contract shared by admin-service (sendValidated) and the web loaders
+// (apps/web/src/app/_data/loaders.ts: getIdpProviders / getSsoProviders /
+// getSecurityOverview). Client secrets are write-only and never appear here.
+
+export const AdminIdpProviderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  protocol: z.string(),
+  status: z.string(),
+  usersSynced: z.number().int().nonnegative(),
+  lastSync: z.string().nullable(),
+  endpoint: z.string(),
+  hasClientSecret: z.boolean(),
+});
+export const AdminIdpProviderListSchema = z.object({
+  data: z.array(AdminIdpProviderSchema),
+  meta: z.object({ page: z.number(), pageSize: z.number(), total: z.number() }),
+});
+
+export const AdminSsoProviderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  protocol: z.string(),
+  entityId: z.string(),
+  status: z.string(),
+  lastSync: z.string().nullable(),
+  hasClientSecret: z.boolean(),
+});
+export const AdminSsoProviderListSchema = z.object({
+  data: z.array(AdminSsoProviderSchema),
+  meta: z.object({ page: z.number(), pageSize: z.number(), total: z.number() }),
+});
+
+export const AdminSecurityEventSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  type: z.string(),
+  actor: z.string(),
+  ipAddress: z.string(),
+  outcome: z.string(),
+});
+export const AdminSecurityOverviewSchema = z.object({
+  activeSessions: z.number().int().nonnegative(),
+  failedLogins24h: z.number().int().nonnegative(),
+  /** Whole-number percentage 0-100 of active users with MFA enabled. */
+  mfaAdoptionRate: z.number().min(0).max(100),
+  trustedDevices: z.number().int().nonnegative(),
+  events: z.array(AdminSecurityEventSchema),
+});

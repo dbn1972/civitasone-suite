@@ -6,7 +6,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDateTime } from "@/lib/formatters";
 
 /** Latest valid lastSync across providers as an ISO string, or null. */
-function latestSyncIso(providers: { lastSync?: string }[]): string | null {
+function latestSyncIso(providers: { lastSync?: string | null }[]): string | null {
   let best: number | null = null;
   for (const p of providers) {
     if (!p.lastSync) continue;
@@ -33,14 +33,10 @@ export default async function SSOPage() {
 
   return (
     <div className="page-main wrap">
-      {/* GAP-TENANT-ADMIN-SSO-01 (DECISION, recorded): there is no SSO/IdP
-          provider store yet — admin-service GET /v1/admin/sso/providers returns
-          501 and identity-service's SAML config route is an unfinished stub
-          that persists nothing. The old "Configure IDP" button bounced to
-          /tenant-admin/idp whose own "Add Provider" bounced back here, so no
-          screen ever added a provider. Rather than ship a form that POSTs to a
-          501, this page is honestly read-only until the backend provider store
-          + test-connection flow exists (HUMAN REVIEW). No circular link. */}
+      {/* GAP-TENANT-ADMIN-SSO-01 (DECISION, recorded): this page stays read-only. The provider
+          registry is now real (admin-service GET /v1/admin/sso/providers, backed by
+          identity_providers.providers); the create/edit/test-connection UI is a separate product
+          decision (HUMAN REVIEW), so there is still no circular link back to /tenant-admin/idp. */}
       <PageHeader
         title="SSO & Identity Providers"
         subtitle="SAML/OIDC identity providers configured for single sign-on. Read-only — providers are provisioned by platform operations."

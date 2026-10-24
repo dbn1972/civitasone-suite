@@ -150,6 +150,25 @@ export function registerMfaConsumers(q: Queue): void {
           updatedAt: now,
         })
         .where(and(eq(mfaConfigs.userId, p.userId), eq(mfaConfigs.tenantId, p.tenantId)));
+      // The Security Center's "failed logins (24h)" counts these: a failed second-factor
+      // check is the sign-in failure this service can observe (the primary credential check
+      // happens in Keycloak). No code or secret is recorded, only that a verification failed.
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "identity",
+          action: "mfa_verify_failed",
+          resourceType: "user",
+          resourceId: p.userId,
+          outcome: "failure",
+          severity: "warning",
+          locked: p.lock,
+        },
+      });
     });
   });
 

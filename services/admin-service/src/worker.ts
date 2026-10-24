@@ -25,6 +25,7 @@ import { registerMfaExportConsumers } from "./modules/mfa-export/consumer.js";
 import { registerIdpExportConsumers } from "./modules/idp-export/consumer.js";
 import { registerTableExportConsumers } from "./modules/table-export/consumer.js";
 import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
+import { registerIdentityProviderConsumers } from "./modules/identity-providers/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
 // the approve route. Without this the command would have no consumer.
 import { registerSandboxConsumers } from "./modules/sandbox/consumer.js";
@@ -53,6 +54,7 @@ registerIdpExportConsumers(queue);
 registerTableExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
 registerTenantSettingsConsumers(tenantScoped(queue));
+registerIdentityProviderConsumers(tenantScoped(queue));
 registerApiMonitoringConsumers(queue);
 // handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
 // not need the tenantScoped(queue) proxy.
