@@ -118,6 +118,12 @@ describe("GET /v1/tenants -- cross-tenant directory", () => {
     expect(p1.limit).toBe(1);
   });
 
+  it("restores FORCE row level security on tenant.tenants after the list call", async () => {
+    expect((await list(`?q=${RUN}`, bearer(["super_admin"], ADMIN_TENANT))).statusCode).toBe(200);
+    const rows = await sqlClient`SELECT relforcerowsecurity AS f FROM pg_class WHERE oid = 'tenant.tenants'::regclass`;
+    expect(rows[0]?.f).toBe(true);
+  });
+
   it("rejects an out-of-range limit", async () => {
     expect((await list("?limit=501", bearer(["super_admin"], ADMIN_TENANT))).statusCode).toBe(400);
   });
