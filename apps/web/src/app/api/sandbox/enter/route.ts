@@ -163,7 +163,7 @@ function originAllowed(req: Request): boolean {
 const MAX_BODY_BYTES = 16 * 1024;
 
 /** Read the request body, returning null as soon as it exceeds `max` bytes. */
-async function readBounded(req: Request, max: number): Promise<Uint8Array | null> {
+async function readBounded(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
   if (!req.body) return new Uint8Array(0);
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
