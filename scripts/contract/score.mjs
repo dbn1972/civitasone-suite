@@ -89,7 +89,10 @@ const MODULE_SERVICE = {
 };
 
 const MODULE_E2E = {
+  admin: 'admin',
+  ai: 'ai',
   analytics: 'analytics',
+  approvals: 'approvals',
   assets: 'assets',
   audit: 'audit',
   billing: 'billing',
@@ -97,6 +100,7 @@ const MODULE_E2E = {
   contracts: 'contracts',
   crm: 'crm',
   dashboard: 'dashboard',
+  'developer-portal': 'developer-portal',
   estab: 'estab',
   finance: 'finance',
   grants: 'grants',
@@ -105,10 +109,13 @@ const MODULE_E2E = {
   install: 'install',
   inventory: 'inventory',
   knowledge: 'knowledge',
+  learning: 'learning',
   legal: 'legal',
   locations: 'locations',
   notifications: 'notifications',
+  'platform-admin': 'platform-admin',
   plugins: 'plugins',
+  policy: 'policy',
   procurement: 'procurement',
   projects: 'projects',
   reports: 'reports',

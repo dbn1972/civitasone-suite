@@ -1,5 +1,5 @@
 {
-  "overall": 9.7,
+  "overall": 9.8,
   "modules": {
     "analytics": {
       "score": 10,
@@ -28,22 +28,22 @@
     },
     "contracts": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "9/9",
       "blockers": []
     },
     "crm": {
       "score": 10,
-      "wired": "26/26",
+      "wired": "24/24",
       "blockers": []
     },
     "estab": {
       "score": 10,
-      "wired": "14/14",
+      "wired": "15/15",
       "blockers": []
     },
     "finance": {
       "score": 10,
-      "wired": "49/49",
+      "wired": "53/53",
       "blockers": []
     },
     "grants": {
@@ -58,7 +58,7 @@
     },
     "hr": {
       "score": 10,
-      "wired": "53/53",
+      "wired": "54/54",
       "blockers": []
     },
     "install": {
@@ -73,17 +73,12 @@
     },
     "knowledge": {
       "score": 10,
-      "wired": "4/4",
+      "wired": "5/5",
       "blockers": []
     },
     "legal": {
       "score": 10,
       "wired": "9/9",
-      "blockers": []
-    },
-    "locations": {
-      "score": 10,
-      "wired": "1/1",
       "blockers": []
     },
     "notifications": {
@@ -118,7 +113,7 @@
     },
     "tenant-admin": {
       "score": 10,
-      "wired": "30/30",
+      "wired": "32/32",
       "blockers": []
     },
     "themes": {
@@ -126,76 +121,49 @@
       "wired": "1/1",
       "blockers": []
     },
+    "admin": {
+      "score": 8.5,
+      "wired": "33/33",
+      "blockers": []
+    },
     "ai": {
-      "score": 8,
+      "score": 8.5,
       "wired": "6/6",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/ai.spec.ts"
-      ]
+      "blockers": []
     },
     "approvals": {
-      "score": 8,
+      "score": 8.5,
       "wired": "1/1",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/approvals.spec.ts"
-      ]
+      "blockers": []
     },
     "developer-portal": {
-      "score": 8,
+      "score": 8.5,
       "wired": "1/1",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
-      ]
+      "blockers": []
     },
     "learning": {
-      "score": 8,
-      "wired": "2/2",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/learning.spec.ts"
-      ]
-    },
-    "meeting": {
-      "score": 8,
-      "wired": "1/1",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/meeting.spec.ts"
-      ]
+      "score": 8.5,
+      "wired": "3/3",
+      "blockers": []
     },
     "platform-admin": {
-      "score": 8,
+      "score": 8.5,
       "wired": "11/11",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
-      ]
+      "blockers": []
     },
     "policy": {
-      "score": 8,
+      "score": 8.5,
       "wired": "3/3",
-      "blockers": [
-        "D_playwright: no apps/web/e2e/policy.spec.ts"
-      ]
-    },
-    "admin": {
-      "score": 7.6,
-      "wired": "28/33",
-      "blockers": [
-        "/admin/editions: MISSING route — route-not-found: /v1/admin/editions",
-        "/admin/entitlements: MISSING route — route-not-found: /v1/admin/entitlements",
-        "/admin/gateways: MISSING route — route-not-found: /v1/admin/gateways",
-        "/admin/operators: MISSING route — service-missing: /identity/operators/",
-        "/admin/tenants: MISMATCH — method-mismatch: /v1/tenants/",
-        "D_playwright: no apps/web/e2e/admin.spec.ts"
-      ]
+      "blockers": []
     }
   },
   "failing": [
+    "admin",
     "ai",
     "approvals",
     "developer-portal",
     "learning",
-    "meeting",
     "platform-admin",
-    "policy",
-    "admin"
+    "policy"
   ]
 }

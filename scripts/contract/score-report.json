@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-10-24T01:41:48.091Z",
-  "overallScore": "9.7/10",
-  "overallScoreNum": 9.7,
+  "generatedAt": "2026-10-24T06:19:21.351Z",
+  "overallScore": "9.8/10",
+  "overallScoreNum": 9.8,
   "staticCounts": {
-    "totalPages": 882,
-    "wired": 371,
-    "missing": 4,
-    "mismatch": 1,
-    "noLoader": 580,
+    "totalPages": 886,
+    "wired": 383,
+    "missing": 0,
+    "mismatch": 0,
+    "noLoader": 585,
     "fabricatedData": 0
   },
   "modules": [
@@ -318,11 +318,11 @@
     },
     {
       "module": "contracts",
-      "total": 8,
-      "wired": 8,
+      "total": 9,
+      "wired": 9,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "8/8",
+      "wiredStr": "9/9",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -379,11 +379,11 @@
     },
     {
       "module": "crm",
-      "total": 26,
-      "wired": 26,
+      "total": 24,
+      "wired": 24,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "26/26",
+      "wiredStr": "24/24",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -440,11 +440,11 @@
     },
     {
       "module": "estab",
-      "total": 14,
-      "wired": 14,
+      "total": 15,
+      "wired": 15,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "14/14",
+      "wiredStr": "15/15",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -501,11 +501,11 @@
     },
     {
       "module": "finance",
-      "total": 49,
-      "wired": 49,
+      "total": 53,
+      "wired": 53,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "49/49",
+      "wiredStr": "53/53",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -684,11 +684,11 @@
     },
     {
       "module": "hr",
-      "total": 53,
-      "wired": 53,
+      "total": 54,
+      "wired": 54,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "53/53",
+      "wiredStr": "54/54",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -867,11 +867,11 @@
     },
     {
       "module": "knowledge",
-      "total": 4,
-      "wired": 4,
+      "total": 5,
+      "wired": 5,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "4/4",
+      "wiredStr": "5/5",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -957,67 +957,6 @@
           "max": 1.5,
           "liveTestedPaths": 6,
           "livePassedPaths": 6,
-          "note": ""
-        },
-        "B_hardening": {
-          "earned": "1.00",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "loading.tsx present"
-        },
-        "D_tests": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "service tests present"
-        },
-        "D_typecheck": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "typecheck script present"
-        },
-        "D_playwright": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "e2e spec present"
-        }
-      },
-      "topBlocker": "—"
-    },
-    {
-      "module": "locations",
-      "total": 1,
-      "wired": 1,
-      "missing": 0,
-      "mismatch": 0,
-      "wiredStr": "1/1",
-      "score": "10/10",
-      "scoreNum": 10,
-      "blockers": [],
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "1.50",
-          "max": 1.5,
-          "liveTestedPaths": 1,
-          "livePassedPaths": 1,
           "note": ""
         },
         "B_hardening": {
@@ -1416,11 +1355,11 @@
     },
     {
       "module": "tenant-admin",
-      "total": 30,
-      "wired": 30,
+      "total": 32,
+      "wired": 32,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "30/30",
+      "wiredStr": "32/32",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1537,17 +1476,15 @@
       "topBlocker": "—"
     },
     {
-      "module": "ai",
-      "total": 6,
-      "wired": 6,
+      "module": "admin",
+      "total": 33,
+      "wired": 33,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "6/6",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/ai.spec.ts"
-      ],
+      "wiredStr": "33/33",
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1592,12 +1529,73 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/ai.spec.ts"
+      "topBlocker": "—"
+    },
+    {
+      "module": "ai",
+      "total": 6,
+      "wired": 6,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "6/6",
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "e2e spec present"
+        }
+      },
+      "topBlocker": "—"
     },
     {
       "module": "approvals",
@@ -1606,11 +1604,9 @@
       "missing": 0,
       "mismatch": 0,
       "wiredStr": "1/1",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/approvals.spec.ts"
-      ],
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1655,12 +1651,12 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/approvals.spec.ts"
+      "topBlocker": "—"
     },
     {
       "module": "developer-portal",
@@ -1669,11 +1665,9 @@
       "missing": 0,
       "mismatch": 0,
       "wiredStr": "1/1",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
-      ],
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1718,25 +1712,23 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
+      "topBlocker": "—"
     },
     {
       "module": "learning",
-      "total": 2,
-      "wired": 2,
+      "total": 3,
+      "wired": 3,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "2/2",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/learning.spec.ts"
-      ],
+      "wiredStr": "3/3",
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1781,75 +1773,12 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/learning.spec.ts"
-    },
-    {
-      "module": "meeting",
-      "total": 1,
-      "wired": 1,
-      "missing": 0,
-      "mismatch": 0,
-      "wiredStr": "1/1",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/meeting.spec.ts"
-      ],
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": ""
-        },
-        "B_hardening": {
-          "earned": "1.00",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "loading.tsx present"
-        },
-        "D_tests": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "service tests present"
-        },
-        "D_typecheck": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "typecheck script present"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "no playwright spec"
-        }
-      },
-      "topBlocker": "D_playwright: no apps/web/e2e/meeting.spec.ts"
+      "topBlocker": "—"
     },
     {
       "module": "platform-admin",
@@ -1858,11 +1787,9 @@
       "missing": 0,
       "mismatch": 0,
       "wiredStr": "11/11",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
-      ],
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1907,12 +1834,12 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
+      "topBlocker": "—"
     },
     {
       "module": "policy",
@@ -1921,11 +1848,9 @@
       "missing": 0,
       "mismatch": 0,
       "wiredStr": "3/3",
-      "score": "8/10",
-      "scoreNum": 8,
-      "blockers": [
-        "D_playwright: no apps/web/e2e/policy.spec.ts"
-      ],
+      "score": "8.5/10",
+      "scoreNum": 8.5,
+      "blockers": [],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1970,80 +1895,12 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.00",
+          "earned": "0.50",
           "max": 0.5,
-          "note": "no playwright spec"
+          "note": "e2e spec present"
         }
       },
-      "topBlocker": "D_playwright: no apps/web/e2e/policy.spec.ts"
-    },
-    {
-      "module": "admin",
-      "total": 33,
-      "wired": 28,
-      "missing": 4,
-      "mismatch": 1,
-      "wiredStr": "28/33",
-      "score": "7.6/10",
-      "scoreNum": 7.6,
-      "blockers": [
-        "/admin/editions: MISSING route — route-not-found: /v1/admin/editions",
-        "/admin/entitlements: MISSING route — route-not-found: /v1/admin/entitlements",
-        "/admin/gateways: MISSING route — route-not-found: /v1/admin/gateways",
-        "/admin/operators: MISSING route — service-missing: /identity/operators/",
-        "/admin/tenants: MISMATCH — method-mismatch: /v1/tenants/",
-        "D_playwright: no apps/web/e2e/admin.spec.ts"
-      ],
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "1.76",
-          "max": 2,
-          "pct": "88%"
-        },
-        "A3_table_exists": {
-          "earned": "1.45",
-          "max": 1.5,
-          "pct": "97%"
-        },
-        "A4_live_200": {
-          "earned": "0.00",
-          "max": 1.5,
-          "liveTestedPaths": 0,
-          "livePassedPaths": 0,
-          "note": ""
-        },
-        "B_hardening": {
-          "earned": "0.85",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "loading.tsx present"
-        },
-        "D_tests": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "service tests present"
-        },
-        "D_typecheck": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "typecheck script present"
-        },
-        "D_playwright": {
-          "earned": "0.00",
-          "max": 0.5,
-          "note": "no playwright spec"
-        }
-      },
-      "topBlocker": "/admin/editions: MISSING route — route-not-found: /v1/admin/editions"
+      "topBlocker": "—"
     },
     {
       "module": "catalogue",
@@ -2226,7 +2083,31 @@
       "detail": "No loader screens (navigation hub only)"
     },
     {
+      "module": "locations",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
       "module": "loyalty",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "meeting",
       "total": 0,
       "score": "N/A",
       "scoreNum": null,
