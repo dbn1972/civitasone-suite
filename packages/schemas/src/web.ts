@@ -3438,3 +3438,27 @@ export const catalogueProductListSchema = z.object({
 });
 
 export type CatalogueProductRow = z.infer<typeof catalogueProductRowSchema>;
+
+/**
+ * GET /v1/tenants (tenant-service, super_admin/platform_admin only): the
+ * platform-admin tenant directory behind the /admin/tenants screen. `users` is
+ * null because user counts live in identity-service, not tenant.*.
+ */
+export const adminTenantDirectoryRowSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  domain: z.string(),
+  edition: z.string(),
+  status: z.string(),
+  region: z.string(),
+  residency: z.string(),
+  isolationTier: z.string(),
+  createdDate: z.string().datetime(),
+  users: z.number().int().nonnegative().nullable(),
+});
+export const adminTenantDirectoryResponseSchema = z.object({
+  data: z.array(adminTenantDirectoryRowSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});

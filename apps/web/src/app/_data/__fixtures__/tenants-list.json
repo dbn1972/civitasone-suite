@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "id": "6f1f2b0e-8a52-4f6c-9d57-1c2f6b7a9e01",
+      "name": "Directorate of Rural Development",
+      "domain": "drd.example.test",
+      "edition": "govt",
+      "status": "active",
+      "region": "ap-south-1",
+      "residency": "IN",
+      "isolationTier": "pool",
+      "createdDate": "2026-09-12T00:00:00.000Z",
+      "users": null
+    }
+  ],
+  "total": 1,
+  "limit": 500,
+  "offset": 0
+}
