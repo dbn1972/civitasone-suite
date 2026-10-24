@@ -98,6 +98,36 @@ describe("POST /api/sandbox/enter", () => {
     expect(res.status).toBe(413);
   });
 
+  it("returns 413 for a chunked body over 16 KiB with no Content-Length", async () => {
+    const { POST } = await load();
+    const chunk = new TextEncoder().encode("x".repeat(4096));
+    let sent = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent >= 8) {
+          controller.close();
+          return;
+        }
+        sent += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    const req = new Request("https://demo.test/api/sandbox/enter", {
+      method: "POST",
+      headers: {
+        host: "demo.test",
+        origin: "https://demo.test",
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body,
+      duplex: "half",
+    } as RequestInit);
+    expect(req.headers.get("content-length")).toBeNull();
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+    expect(sent).toBeLessThan(8);
+  });
+
   it("returns 400 when role is missing", async () => {
     const { POST } = await load();
     const res = await POST(enterReq(null));
