@@ -21,11 +21,16 @@ import {
   setIsolationBody,
   updateQuotasBody,
   msmeOnboardBody,
+  listTenantsQuery,
 } from "./validators.js";
 import { randomUUID } from "node:crypto";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { createTenantPipeline } from "./onboard.js";
+import { listAllTenants } from "./federation.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+import { runWithTenant } from "@civitasone/db";
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 
@@ -38,6 +43,50 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     const res = await commands.createTenant(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, res);
   });
+
+  // LIST ALL - platform operators only (super_admin / platform_admin). Feeds
+  // the /admin/tenants screen: { data: row[], total, limit, offset } with row =
+  // { id, name, domain, edition, status, region, residency, isolationTier,
+  // createdDate, users }. Cross-tenant by nature, so: strict role gate, reads
+  // through the SECURITY DEFINER control-plane function (migration 0030, not
+  // tenant RLS), and every call is audited via the outbox. `users` is null:
+  // user counts live in identity-service, not in tenant.* (never fabricated).
+  app.get(
+    "/v1/tenants",
+    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, PLATFORM_ADMIN);
+      const q = listTenantsQuery.parse(req.query);
+      const search = q.q && q.q.length > 0 ? q.q.replace(/[\\%_]/g, "\\$&") : null;
+      const { rows, total } = await listAllTenants({ q: search, limit: q.limit, offset: q.offset });
+      await runWithTenant(ctx.tenantId, () =>
+        db.transaction((tx) =>
+          enqueue(tx as never, {
+            topic: "audit.event.record",
+            eventType: "audit.event.record",
+            tenantId: ctx.tenantId,
+            actorId: ctx.actorId,
+            correlationId: ctx.correlationId,
+            payload: {
+              service: "tenant-service",
+              action: "list_all_tenants",
+              resourceType: "tenant_directory",
+              resourceId: ctx.tenantId,
+              outcome: "success",
+              metadata: { q: q.q ?? null, limit: q.limit, offset: q.offset, returned: rows.length },
+            },
+          }),
+        ),
+      );
+      return reply.send({
+        data: rows.map((r) => ({ ...r, users: null })),
+        total,
+        limit: q.limit,
+        offset: q.offset,
+      });
+    },
+  );
 
   // READ — the current actor's own tenant (resolved from the session).
   // Static path registered before the parametric :tenantId route. Powers the

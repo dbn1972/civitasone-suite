@@ -4,7 +4,6 @@
     { "module": "admin", "screen": "/admin/editions" },
     { "module": "admin", "screen": "/admin/entitlements" },
     { "module": "admin", "screen": "/admin/gateways" },
-    { "module": "admin", "screen": "/admin/operators" },
-    { "module": "admin", "screen": "/admin/tenants" }
+    { "module": "admin", "screen": "/admin/operators" }
   ]
 }
