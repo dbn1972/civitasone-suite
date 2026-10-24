@@ -82,6 +82,22 @@ describe("POST /api/sandbox/enter", () => {
     expect(res.status).toBe(400);
   });
 
+  it("returns 413 for a declared body over 16 KiB, before buffering the form", async () => {
+    const { POST } = await load();
+    const req = new Request("https://demo.test/api/sandbox/enter", {
+      method: "POST",
+      headers: {
+        host: "demo.test",
+        origin: "https://demo.test",
+        "content-type": "application/x-www-form-urlencoded",
+        "content-length": String(1024 * 1024),
+      },
+      body: "role=admin",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(413);
+  });
+
   it("returns 400 when role is missing", async () => {
     const { POST } = await load();
     const res = await POST(enterReq(null));

@@ -26,7 +26,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   // form writes encrypted name/email/phone columns and must never fall back to
   // plaintext. No-op outside production so dev and tests boot without the key.
   assertPiiKeyConfigured();
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
+  const app = Fastify({ bodyLimit: 1_048_576, /* SEC: explicit 1 MiB body cap (see fastify-bodylimit-guard) */ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
   await app.register(authPlugin as any);
   app.addHook("onRequest", createTenantTxHook(db));
   app.addHook("onRequest", async (req) => { const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId; if (tid) tenantStorage.enterWith({ tenantId: tid }); });

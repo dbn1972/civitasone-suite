@@ -182,6 +182,11 @@ export async function POST(req: Request): Promise<NextResponse> {
   // pass ?role=, but the marketing page posts it in the body.
   let roleParam: string | null = null;
   const contentType = req.headers.get("content-type") ?? "";
+  // The only field is a short role name: refuse anything larger before buffering the form.
+  const declaredLength = Number(req.headers.get("content-length") ?? "0");
+  if (!Number.isFinite(declaredLength) || declaredLength > 16 * 1024) {
+    return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+  }
   if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
     const form = await req.formData();
     const r = form.get("role");
