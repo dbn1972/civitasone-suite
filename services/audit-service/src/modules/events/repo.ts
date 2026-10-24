@@ -92,6 +92,8 @@ export interface ListEventsFilters {
   resourceType?: string;
   /** Exact actorId, or a case-insensitive substring of the actor's email/name. */
   actor?: string;
+  /** payload->>'outcome' IN (...) -- e.g. ["failure"] for failed-authentication counts. */
+  outcomes?: string[];
 }
 
 /** Escapes LIKE wildcards so user input is matched literally. */
@@ -112,6 +114,9 @@ function eventConditions(tenantId: string, from: Date, to: Date, type: string | 
   }
   if (filters.resourceType) {
     conditions.push(sql`${auditEvents.payload}->>'resourceType' = ${filters.resourceType}`);
+  }
+  if (filters.outcomes && filters.outcomes.length > 0) {
+    conditions.push(inArray(sql<string>`${auditEvents.payload}->>'outcome'`, filters.outcomes));
   }
   if (filters.actor) {
     const like = `%${escapeLike(filters.actor)}%`;

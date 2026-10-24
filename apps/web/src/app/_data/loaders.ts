@@ -357,6 +357,9 @@ import {
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
   crmActivityFeedListSchema,
+  AdminIdpProviderListSchema,
+  AdminSsoProviderListSchema,
+  AdminSecurityOverviewSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { mapBillingSettings, mapOfflinePayments, mapReminderStatus, type BillingSettingsView, type OfflinePaymentView, type ReminderView } from "@/lib/admin/invoiceOps";
@@ -6430,13 +6433,17 @@ export type SsoProvider = {
   protocol: string;
   entityId: string;
   status: string;
-  lastSync: string;
+  /** null until the provider has synced at least once. */
+  lastSync: string | null;
+  /** True when a client secret is stored. The secret itself is write-only and never returned. */
+  hasClientSecret?: boolean;
 };
 
 export async function getSsoProviders(): Promise<LoaderResult<SsoProvider[]>> {
   return fetchJson<unknown, SsoProvider[]>("/api/v1/admin/sso/providers", [], {
     revalidateSeconds: 60,
     telemetryKey: "admin.sso.providers",
+    responseSchema: AdminSsoProviderListSchema,
     mapResponse: (p) => getArrayPayload(p) as SsoProvider[] | null,
   });
 }
@@ -6594,6 +6601,7 @@ export async function getSecurityOverview(): Promise<LoaderResult<SecurityOvervi
     {
       revalidateSeconds: 30,
       telemetryKey: "admin.security.overview",
+      responseSchema: AdminSecurityOverviewSchema,
       mapResponse: mapSecurityOverview,
     },
   );
@@ -6667,14 +6675,18 @@ export type IdpProviderSummary = {
   protocol: string;
   status: string;
   usersSynced: number;
-  lastSync: string;
+  /** null until the provider has synced at least once. */
+  lastSync: string | null;
   endpoint: string;
+  /** True when a client secret is stored. The secret itself is write-only and never returned. */
+  hasClientSecret?: boolean;
 };
 
 export async function getIdpProviders(): Promise<LoaderResult<IdpProviderSummary[]>> {
   return fetchJson<unknown, IdpProviderSummary[]>("/api/v1/admin/idp/providers", [], {
     revalidateSeconds: 60,
     telemetryKey: "admin.idp.providers",
+    responseSchema: AdminIdpProviderListSchema,
     mapResponse: (p) => getArrayPayload(p) as IdpProviderSummary[] | null,
   });
 }

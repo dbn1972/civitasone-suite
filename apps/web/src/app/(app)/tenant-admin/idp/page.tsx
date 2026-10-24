@@ -20,7 +20,7 @@ export default async function IdpListPage() {
     ? []
     : providers
         .filter((p) => p.status === "active")
-        .map((p) => Date.parse(p.lastSync))
+        .map((p) => Date.parse(p.lastSync ?? ""))
         .filter((t) => !Number.isNaN(t));
   const oldestSyncMs = activeSyncTimes.length > 0 ? Math.min(...activeSyncTimes) : null;
   const lastSyncValue = errored || oldestSyncMs === null ? "—" : formatDateTimeIST(new Date(oldestSyncMs).toISOString());

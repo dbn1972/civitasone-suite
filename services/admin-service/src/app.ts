@@ -42,6 +42,9 @@ import { platformOpsRoutes } from "./modules/platform-ops/routes.js";
 import { apiMonitoringRoutes } from "./modules/api-monitoring/routes.js";
 import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
 import { tenantSettingsRoutes } from "./modules/tenant-settings/routes.js";
+import { identityProviderRoutes } from "./modules/identity-providers/routes.js";
+import { securityOverviewRoutes } from "./modules/gap/security-overview-routes.js";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
 import { platformCatalogueRoutes } from "./modules/platform-catalogue/routes.js";
 import { registerRateLimit } from "@civitasone/rate-limit";
@@ -116,6 +119,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(orgHierarchyLevelRoutes);
   await app.register(platformOpsRoutes);
   await app.register(tenantSettingsRoutes);
+  await app.register(identityProviderRoutes);
+  await app.register(securityOverviewRoutes);
   await app.register(discoveryRoutes);
   await app.register(platformIntegrationRoutes);
   await app.register(apiMonitoringRoutes);
