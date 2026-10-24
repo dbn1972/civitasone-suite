@@ -29,7 +29,10 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 describe("new opportunity loading/error copy (GAP-CRM-OPPORTUNITIES-NEW-04)", () => {
   it("loading heading matches the page title New Opportunity", async () => {
     render(await Loading());
-    expect(screen.getByRole("heading", { name: "New Opportunity" })).toBeInTheDocument();
+    // The route skeleton deliberately renders a non-heading div[data-skeleton-heading]
+    // (the real page owns the single #page-heading h1), so match that marker.
+    const heading = screen.getByText("New Opportunity");
+    expect(heading).toHaveAttribute("data-skeleton-heading");
   });
 
   it("error boundary names the new opportunity form, not CRM New", () => {
