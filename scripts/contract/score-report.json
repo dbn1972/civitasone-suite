@@ -1,21 +1,23 @@
 {
-  "generatedAt": "2026-06-21T05:55:08.153Z",
-  "overallScore": "10/10",
-  "overallScoreNum": 10,
+  "generatedAt": "2026-10-24T01:41:48.091Z",
+  "overallScore": "9.7/10",
+  "overallScoreNum": 9.7,
   "staticCounts": {
-    "wired": 139,
-    "missing": 0,
-    "mismatch": 0,
-    "noLoader": 27
+    "totalPages": 882,
+    "wired": 371,
+    "missing": 4,
+    "mismatch": 1,
+    "noLoader": 580,
+    "fabricatedData": 0
   },
   "modules": [
     {
       "module": "analytics",
-      "total": 1,
-      "wired": 1,
+      "total": 3,
+      "wired": 3,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "1/1",
+      "wiredStr": "3/3",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -133,11 +135,11 @@
     },
     {
       "module": "audit",
-      "total": 8,
-      "wired": 8,
+      "total": 11,
+      "wired": 11,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "8/8",
+      "wiredStr": "11/11",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -255,11 +257,11 @@
     },
     {
       "module": "citizen",
-      "total": 2,
-      "wired": 2,
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "2/2",
+      "wiredStr": "6/6",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -316,11 +318,11 @@
     },
     {
       "module": "contracts",
-      "total": 1,
-      "wired": 1,
+      "total": 8,
+      "wired": 8,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "1/1",
+      "wiredStr": "8/8",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -377,11 +379,11 @@
     },
     {
       "module": "crm",
-      "total": 6,
-      "wired": 6,
+      "total": 26,
+      "wired": 26,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "6/6",
+      "wiredStr": "26/26",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -438,11 +440,11 @@
     },
     {
       "module": "estab",
-      "total": 8,
-      "wired": 8,
+      "total": 14,
+      "wired": 14,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "8/8",
+      "wiredStr": "14/14",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -499,11 +501,11 @@
     },
     {
       "module": "finance",
-      "total": 13,
-      "wired": 13,
+      "total": 49,
+      "wired": 49,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "13/13",
+      "wiredStr": "49/49",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -560,11 +562,11 @@
     },
     {
       "module": "grants",
-      "total": 8,
-      "wired": 8,
+      "total": 11,
+      "wired": 11,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "8/8",
+      "wiredStr": "11/11",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -621,11 +623,11 @@
     },
     {
       "module": "helpdesk",
-      "total": 5,
-      "wired": 5,
+      "total": 16,
+      "wired": 16,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "5/5",
+      "wiredStr": "16/16",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -682,11 +684,11 @@
     },
     {
       "module": "hr",
-      "total": 16,
-      "wired": 16,
+      "total": 53,
+      "wired": 53,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "16/16",
+      "wiredStr": "53/53",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -709,8 +711,8 @@
         "A4_live_200": {
           "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 12,
-          "livePassedPaths": 12,
+          "liveTestedPaths": 13,
+          "livePassedPaths": 13,
           "note": ""
         },
         "B_hardening": {
@@ -743,11 +745,11 @@
     },
     {
       "module": "install",
-      "total": 1,
-      "wired": 1,
+      "total": 3,
+      "wired": 3,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "1/1",
+      "wiredStr": "3/3",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -804,11 +806,11 @@
     },
     {
       "module": "inventory",
-      "total": 2,
-      "wired": 2,
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "2/2",
+      "wiredStr": "6/6",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -831,8 +833,8 @@
         "A4_live_200": {
           "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 1,
-          "livePassedPaths": 1,
+          "liveTestedPaths": 2,
+          "livePassedPaths": 2,
           "note": ""
         },
         "B_hardening": {
@@ -865,11 +867,11 @@
     },
     {
       "module": "knowledge",
-      "total": 5,
-      "wired": 5,
+      "total": 4,
+      "wired": 4,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "5/5",
+      "wiredStr": "4/4",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -926,11 +928,11 @@
     },
     {
       "module": "legal",
-      "total": 6,
-      "wired": 6,
+      "total": 9,
+      "wired": 9,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "6/6",
+      "wiredStr": "9/9",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1048,11 +1050,11 @@
     },
     {
       "module": "notifications",
-      "total": 2,
-      "wired": 2,
+      "total": 3,
+      "wired": 3,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "2/2",
+      "wiredStr": "3/3",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1170,11 +1172,11 @@
     },
     {
       "module": "procurement",
-      "total": 14,
-      "wired": 14,
+      "total": 28,
+      "wired": 28,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "14/14",
+      "wiredStr": "28/28",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1231,11 +1233,11 @@
     },
     {
       "module": "projects",
-      "total": 8,
-      "wired": 8,
+      "total": 18,
+      "wired": 18,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "8/8",
+      "wiredStr": "18/18",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1292,11 +1294,11 @@
     },
     {
       "module": "reports",
-      "total": 5,
-      "wired": 5,
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "5/5",
+      "wiredStr": "6/6",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1380,69 +1382,8 @@
         "A4_live_200": {
           "earned": "1.50",
           "max": 1.5,
-          "liveTestedPaths": 3,
-          "livePassedPaths": 3,
-          "note": ""
-        },
-        "B_hardening": {
-          "earned": "1.00",
-          "max": 1,
-          "note": "static proxy via chain wired%"
-        },
-        "C_frontend": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "loading.tsx present"
-        },
-        "D_tests": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "service tests present"
-        },
-        "D_typecheck": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "typecheck script present"
-        },
-        "D_playwright": {
-          "earned": "0.50",
-          "max": 0.5,
-          "note": "e2e spec present"
-        }
-      },
-      "topBlocker": "—"
-    },
-    {
-      "module": "telephony",
-      "total": 1,
-      "wired": 1,
-      "missing": 0,
-      "mismatch": 0,
-      "wiredStr": "1/1",
-      "score": "10/10",
-      "scoreNum": 10,
-      "blockers": [],
-      "checks": {
-        "A1_gateway_resolves": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A2_route_exists": {
-          "earned": "2.00",
-          "max": 2,
-          "pct": "100%"
-        },
-        "A3_table_exists": {
-          "earned": "1.50",
-          "max": 1.5,
-          "pct": "100%"
-        },
-        "A4_live_200": {
-          "earned": "1.50",
-          "max": 1.5,
-          "liveTestedPaths": 1,
-          "livePassedPaths": 1,
+          "liveTestedPaths": 2,
+          "livePassedPaths": 2,
           "note": ""
         },
         "B_hardening": {
@@ -1475,11 +1416,11 @@
     },
     {
       "module": "tenant-admin",
-      "total": 12,
-      "wired": 12,
+      "total": 30,
+      "wired": 30,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "12/12",
+      "wiredStr": "30/30",
       "score": "10/10",
       "scoreNum": 10,
       "blockers": [],
@@ -1596,15 +1537,17 @@
       "topBlocker": "—"
     },
     {
-      "module": "workflow",
-      "total": 1,
-      "wired": 1,
+      "module": "ai",
+      "total": 6,
+      "wired": 6,
       "missing": 0,
       "mismatch": 0,
-      "wiredStr": "1/1",
-      "score": "10/10",
-      "scoreNum": 10,
-      "blockers": [],
+      "wiredStr": "6/6",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/ai.spec.ts"
+      ],
       "checks": {
         "A1_gateway_resolves": {
           "earned": "2.00",
@@ -1622,10 +1565,10 @@
           "pct": "100%"
         },
         "A4_live_200": {
-          "earned": "1.50",
+          "earned": "0.00",
           "max": 1.5,
-          "liveTestedPaths": 1,
-          "livePassedPaths": 1,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
           "note": ""
         },
         "B_hardening": {
@@ -1649,12 +1592,506 @@
           "note": "typecheck script present"
         },
         "D_playwright": {
-          "earned": "0.50",
+          "earned": "0.00",
           "max": 0.5,
-          "note": "e2e spec present"
+          "note": "no playwright spec"
         }
       },
-      "topBlocker": "—"
+      "topBlocker": "D_playwright: no apps/web/e2e/ai.spec.ts"
+    },
+    {
+      "module": "approvals",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "1/1",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/approvals.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/approvals.spec.ts"
+    },
+    {
+      "module": "developer-portal",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "1/1",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
+    },
+    {
+      "module": "learning",
+      "total": 2,
+      "wired": 2,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "2/2",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/learning.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/learning.spec.ts"
+    },
+    {
+      "module": "meeting",
+      "total": 1,
+      "wired": 1,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "1/1",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/meeting.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/meeting.spec.ts"
+    },
+    {
+      "module": "platform-admin",
+      "total": 11,
+      "wired": 11,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "11/11",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
+    },
+    {
+      "module": "policy",
+      "total": 3,
+      "wired": 3,
+      "missing": 0,
+      "mismatch": 0,
+      "wiredStr": "3/3",
+      "score": "8/10",
+      "scoreNum": 8,
+      "blockers": [
+        "D_playwright: no apps/web/e2e/policy.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A3_table_exists": {
+          "earned": "1.50",
+          "max": 1.5,
+          "pct": "100%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "1.00",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "D_playwright: no apps/web/e2e/policy.spec.ts"
+    },
+    {
+      "module": "admin",
+      "total": 33,
+      "wired": 28,
+      "missing": 4,
+      "mismatch": 1,
+      "wiredStr": "28/33",
+      "score": "7.6/10",
+      "scoreNum": 7.6,
+      "blockers": [
+        "/admin/editions: MISSING route — route-not-found: /v1/admin/editions",
+        "/admin/entitlements: MISSING route — route-not-found: /v1/admin/entitlements",
+        "/admin/gateways: MISSING route — route-not-found: /v1/admin/gateways",
+        "/admin/operators: MISSING route — service-missing: /identity/operators/",
+        "/admin/tenants: MISMATCH — method-mismatch: /v1/tenants/",
+        "D_playwright: no apps/web/e2e/admin.spec.ts"
+      ],
+      "checks": {
+        "A1_gateway_resolves": {
+          "earned": "2.00",
+          "max": 2,
+          "pct": "100%"
+        },
+        "A2_route_exists": {
+          "earned": "1.76",
+          "max": 2,
+          "pct": "88%"
+        },
+        "A3_table_exists": {
+          "earned": "1.45",
+          "max": 1.5,
+          "pct": "97%"
+        },
+        "A4_live_200": {
+          "earned": "0.00",
+          "max": 1.5,
+          "liveTestedPaths": 0,
+          "livePassedPaths": 0,
+          "note": ""
+        },
+        "B_hardening": {
+          "earned": "0.85",
+          "max": 1,
+          "note": "static proxy via chain wired%"
+        },
+        "C_frontend": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "loading.tsx present"
+        },
+        "D_tests": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "service tests present"
+        },
+        "D_typecheck": {
+          "earned": "0.50",
+          "max": 0.5,
+          "note": "typecheck script present"
+        },
+        "D_playwright": {
+          "earned": "0.00",
+          "max": 0.5,
+          "note": "no playwright spec"
+        }
+      },
+      "topBlocker": "/admin/editions: MISSING route — route-not-found: /v1/admin/editions"
+    },
+    {
+      "module": "catalogue",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "cdp",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "change",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "court",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
     },
     {
       "module": "dashboard",
@@ -1669,7 +2106,259 @@
       "detail": "No loader screens (navigation hub only)"
     },
     {
-      "module": "developer-portal",
+      "module": "designer",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "documents",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "domains",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "field",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "fleet",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "help",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "identity",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "inspection",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "journeys",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "library",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "loyalty",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "metadata",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "municipal",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "recommendations",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "revenue",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "settings",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "setup",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "telephony",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "tenant",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "visitor",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "workflow",
+      "total": 0,
+      "score": "N/A",
+      "scoreNum": null,
+      "wired": "0/0",
+      "blockers": [
+        "No loader screens (navigation hub only)"
+      ],
+      "checks": {},
+      "detail": "No loader screens (navigation hub only)"
+    },
+    {
+      "module": "works",
       "total": 0,
       "score": "N/A",
       "scoreNum": null,

@@ -49,6 +49,16 @@ const RUBRIC = {
 // ── Module → service / e2e mapping ──────────────────────────────────────────
 
 const MODULE_SERVICE = {
+  // Loader-screen modules mapped to the service that owns their API (derived from each
+  // module's loaders / gateway registry, not from the module name).
+  admin: 'admin-service',
+  ai: 'ai-agent-service',
+  approvals: 'workflow-service',
+  'developer-portal': 'admin-service',
+  learning: 'hrms-service',
+  meeting: 'meeting-service',
+  'platform-admin': 'admin-service',
+  policy: 'policy-service',
   analytics: 'analytics-service',
   assets: 'asset-service',
   audit: 'audit-service',

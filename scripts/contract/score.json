@@ -1,9 +1,9 @@
 {
-  "overall": 10,
+  "overall": 9.7,
   "modules": {
     "analytics": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "3/3",
       "blockers": []
     },
     "assets": {
@@ -13,7 +13,7 @@
     },
     "audit": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "11/11",
       "blockers": []
     },
     "billing": {
@@ -23,62 +23,62 @@
     },
     "citizen": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "6/6",
       "blockers": []
     },
     "contracts": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "8/8",
       "blockers": []
     },
     "crm": {
       "score": 10,
-      "wired": "6/6",
+      "wired": "26/26",
       "blockers": []
     },
     "estab": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "14/14",
       "blockers": []
     },
     "finance": {
       "score": 10,
-      "wired": "13/13",
+      "wired": "49/49",
       "blockers": []
     },
     "grants": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "11/11",
       "blockers": []
     },
     "helpdesk": {
       "score": 10,
-      "wired": "5/5",
+      "wired": "16/16",
       "blockers": []
     },
     "hr": {
       "score": 10,
-      "wired": "16/16",
+      "wired": "53/53",
       "blockers": []
     },
     "install": {
       "score": 10,
-      "wired": "1/1",
+      "wired": "3/3",
       "blockers": []
     },
     "inventory": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "6/6",
       "blockers": []
     },
     "knowledge": {
       "score": 10,
-      "wired": "5/5",
+      "wired": "4/4",
       "blockers": []
     },
     "legal": {
       "score": 10,
-      "wired": "6/6",
+      "wired": "9/9",
       "blockers": []
     },
     "locations": {
@@ -88,7 +88,7 @@
     },
     "notifications": {
       "score": 10,
-      "wired": "2/2",
+      "wired": "3/3",
       "blockers": []
     },
     "plugins": {
@@ -98,17 +98,17 @@
     },
     "procurement": {
       "score": 10,
-      "wired": "14/14",
+      "wired": "28/28",
       "blockers": []
     },
     "projects": {
       "score": 10,
-      "wired": "8/8",
+      "wired": "18/18",
       "blockers": []
     },
     "reports": {
       "score": 10,
-      "wired": "5/5",
+      "wired": "6/6",
       "blockers": []
     },
     "stock": {
@@ -116,14 +116,9 @@
       "wired": "4/4",
       "blockers": []
     },
-    "telephony": {
-      "score": 10,
-      "wired": "1/1",
-      "blockers": []
-    },
     "tenant-admin": {
       "score": 10,
-      "wired": "12/12",
+      "wired": "30/30",
       "blockers": []
     },
     "themes": {
@@ -131,11 +126,76 @@
       "wired": "1/1",
       "blockers": []
     },
-    "workflow": {
-      "score": 10,
+    "ai": {
+      "score": 8,
+      "wired": "6/6",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/ai.spec.ts"
+      ]
+    },
+    "approvals": {
+      "score": 8,
       "wired": "1/1",
-      "blockers": []
+      "blockers": [
+        "D_playwright: no apps/web/e2e/approvals.spec.ts"
+      ]
+    },
+    "developer-portal": {
+      "score": 8,
+      "wired": "1/1",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/developer-portal.spec.ts"
+      ]
+    },
+    "learning": {
+      "score": 8,
+      "wired": "2/2",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/learning.spec.ts"
+      ]
+    },
+    "meeting": {
+      "score": 8,
+      "wired": "1/1",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/meeting.spec.ts"
+      ]
+    },
+    "platform-admin": {
+      "score": 8,
+      "wired": "11/11",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/platform-admin.spec.ts"
+      ]
+    },
+    "policy": {
+      "score": 8,
+      "wired": "3/3",
+      "blockers": [
+        "D_playwright: no apps/web/e2e/policy.spec.ts"
+      ]
+    },
+    "admin": {
+      "score": 7.6,
+      "wired": "28/33",
+      "blockers": [
+        "/admin/editions: MISSING route — route-not-found: /v1/admin/editions",
+        "/admin/entitlements: MISSING route — route-not-found: /v1/admin/entitlements",
+        "/admin/gateways: MISSING route — route-not-found: /v1/admin/gateways",
+        "/admin/operators: MISSING route — service-missing: /identity/operators/",
+        "/admin/tenants: MISMATCH — method-mismatch: /v1/tenants/",
+        "D_playwright: no apps/web/e2e/admin.spec.ts"
+      ]
     }
   },
-  "failing": []
+  "failing": [
+    "ai",
+    "approvals",
+    "developer-portal",
+    "learning",
+    "meeting",
+    "platform-admin",
+    "policy",
+    "admin"
+  ]
 }
