@@ -10,6 +10,9 @@ import type { SecurityEvent } from "@/app/_data/loaders";
 // GAP-TENANT-ADMIN-SECURITY-05: human labels for known raw event codes, with a
 // fallback to a humanised code so an unknown code never renders as a bare slug.
 const EVENT_LABELS: Record<string, string> = {
+  mfa_verify_failed: "MFA verification failed",
+  mfa_enable: "MFA enabled",
+  mfa_setup: "MFA set up",
   login_success: "Login succeeded",
   login_failed: "Login failed",
   mfa_challenge: "MFA challenge",

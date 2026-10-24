@@ -840,19 +840,22 @@ describe("GET /v1/admin/org-hierarchy", () => {
 });
 
 // ══════════════════════════════════════════════════════════════════════════
-// Honest 501s — no trustworthy real backing store exists for these within
-// the scope of this single gap. Never a fabricated 2xx.
+// The three routes that used to answer an honest 501 are now real:
+//   /v1/admin/idp/providers, /v1/admin/sso/providers -> tests/identity-providers.test.ts
+//   /v1/admin/security/overview                      -> tests/security-overview.test.ts
+// This only pins that the old stubs are gone (no NOT_IMPLEMENTED for an allowed role).
 // ══════════════════════════════════════════════════════════════════════════
-describe("honest 501s (no real backing store in scope)", () => {
-  for (const path of [
-    "/v1/admin/security/overview",
-    "/v1/admin/idp/providers",
-    "/v1/admin/sso/providers",
-  ]) {
-    it(`GET ${path} returns 501 NOT_IMPLEMENTED, never a fabricated 2xx`, async () => {
+describe("former 501 stubs are real routes now", () => {
+  for (const path of ["/v1/admin/idp/providers", "/v1/admin/sso/providers"]) {
+    it(`GET ${path} no longer answers NOT_IMPLEMENTED`, async () => {
       const res = await app.inject({ method: "GET", url: path, headers: authHeader(["tenant_admin"]) });
-      expect(res.statusCode).toBe(501);
-      expect(res.json().code).toBe("NOT_IMPLEMENTED");
+      expect(res.statusCode).not.toBe(501);
     });
   }
+  it("GET /v1/admin/security/overview no longer answers NOT_IMPLEMENTED", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    const res = await app.inject({ method: "GET", url: "/v1/admin/security/overview", headers: authHeader(["super_admin"]) });
+    vi.unstubAllGlobals();
+    expect(res.statusCode).not.toBe(501);
+  });
 });

@@ -42,6 +42,9 @@ import { platformOpsRoutes } from "./modules/platform-ops/routes.js";
 import { apiMonitoringRoutes } from "./modules/api-monitoring/routes.js";
 import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
 import { tenantSettingsRoutes } from "./modules/tenant-settings/routes.js";
+import { identityProviderRoutes } from "./modules/identity-providers/routes.js";
+import { securityOverviewRoutes } from "./modules/gap/security-overview-routes.js";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { discoveryRoutes } from "./modules/discovery/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -57,6 +60,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // Per-actor rate limiting (300 req/min, ops paths excluded), same shape as audit-service/hrms-service,
+  // so routes can carry route-level limits (config.rateLimit). Registered after authPlugin so req.ctx is set.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.
@@ -105,6 +117,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(orgHierarchyLevelRoutes);
   await app.register(platformOpsRoutes);
   await app.register(tenantSettingsRoutes);
+  await app.register(identityProviderRoutes);
+  await app.register(securityOverviewRoutes);
   await app.register(discoveryRoutes);
   await app.register(platformIntegrationRoutes);
   await app.register(apiMonitoringRoutes);

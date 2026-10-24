@@ -828,29 +828,8 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: resources, meta: pageMeta(Math.max(resources.length, 1), 0, resources.length) });
   });
 
-  // ─── The remainder have no trustworthy real backing store to build on within
-  // the scope of this single gap. Each 501s honestly instead of fabricating a
-  // 2xx — see the module-level comment above for why per route. ───
-
-  app.get("/v1/admin/security/overview", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    return reply.code(501).send(NOT_IMPLEMENTED(
-      "no service in this platform tracks failed-login counts; activeSessions/trustedDevices/mfaAdoptionRate are individually queryable but this dashboard cannot be answered honestly as a whole until that gap is closed",
-    ));
-  });
-
-  app.get("/v1/admin/idp/providers", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    return reply.code(501).send(NOT_IMPLEMENTED("no distinct IdP-provider store exists; identity-service's own SAML config endpoint is itself an unfinished stub"));
-  });
-
-  app.get("/v1/admin/sso/providers", async (req, reply) => {
-    const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
-    return reply.code(501).send(NOT_IMPLEMENTED("no real SSO-provider store exists; identity-service's SAML config route (PUT/GET /v1/identity/saml/config) is itself a TODO stub that persists nothing, so there is nothing honest to relay yet"));
-  });
+  // /v1/admin/security/overview lives in ./security-overview-routes.ts; /v1/admin/{idp,sso}/providers in
+  // ../identity-providers/routes.ts (both used to answer 501 here).
 
   // ─── Org hierarchy ─── real, forwarded to tenant-service's org-hierarchy module ───
   // Correction (post-review): the original PR description/comment claimed
