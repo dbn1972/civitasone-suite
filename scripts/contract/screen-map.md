@@ -1,8 +1,8 @@
 # Screen Contract Map
 
-Generated: 2026-10-24T01:50:46.375Z
+Generated: 2026-10-24T05:07:46.489Z
 
-**Summary:** 379 WIRED | 4 MISSING | 0 MISMATCH | 585 NO_LOADER | 0 FABRICATED_DATA
+**Summary:** 383 WIRED | 0 MISSING | 0 MISMATCH | 585 NO_LOADER | 0 FABRICATED_DATA
 
 | module | screen | loader | apiPath | upstream | route? | table? | status |
 |--------|--------|--------|---------|----------|--------|--------|--------|
@@ -20,12 +20,12 @@ Generated: 2026-10-24T01:50:46.375Z
 | admin | /admin/config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/devices | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/discovery | getAdminDiscovery | /api/v1/admin/discovery/services | admin → /v1/admin/discovery/services | ✓ `/v1/admin/discovery/services` | ✓ | ✅ WIRED |
-| admin | /admin/editions | getSAEditions | /api/v1/admin/editions | admin → /v1/admin/editions | ✗ | ✓ | ❌ MISSING |
-| admin | /admin/entitlements | getSAEntitlements | /api/v1/admin/entitlements | admin → /v1/admin/entitlements | ✗ | ✓ | ❌ MISSING |
+| admin | /admin/editions | getSAEditions | /api/v1/admin/editions | admin → /v1/admin/editions | ✓ `/v1/admin/editions` | ✓ | ✅ WIRED |
+| admin | /admin/entitlements | getSAEntitlements | /api/v1/admin/entitlements | admin → /v1/admin/entitlements | ✓ `/v1/admin/entitlements` | ✓ | ✅ WIRED |
 | admin | /admin/feature-flags | getAdminFeatureFlagsManage | /api/v1/admin/feature-flags/manage | admin → /v1/admin/feature-flags/manage | ✓ `/v1/admin/feature-flags/manage` | ✓ | ✅ WIRED |
 | admin | /admin/gateway-config | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/gateway-routes | — | — | — | — | — | — NO_LOADER |
-| admin | /admin/gateways | getSAGateways | /api/v1/admin/gateways | admin → /v1/admin/gateways | ✗ | ✓ | ❌ MISSING |
+| admin | /admin/gateways | getSAGateways | /api/v1/admin/gateways | admin → /v1/admin/gateways | ✓ `/v1/admin/gateways` | ✓ | ✅ WIRED |
 | admin | /admin/integrations | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/integrations/platform | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/invoices/[id] | getAdminInvoiceDetail | /api/v1/billing/invoices/:param | billing → /v1/billing/invoices/:param | ✓ `/v1/billing/invoices/:id` | ✓ | ✅ WIRED |
@@ -34,7 +34,7 @@ Generated: 2026-10-24T01:50:46.375Z
 | admin | /admin/metering | getSAMetering | /api/v1/billing/metering | billing → /v1/billing/metering | ✓ `/v1/billing/metering` | ✓ | ✅ WIRED |
 | admin | /admin/metering | getUsageQuotas | /api/v1/admin/usage | admin → /v1/admin/usage | ✓ `/v1/admin/usage` | ✓ | ✅ WIRED |
 | admin | /admin/onboarding | getSAOnboarding | /api/v1/admin/onboarding | admin → /v1/admin/onboarding | ✓ `/v1/admin/onboarding` | ✓ | ✅ WIRED |
-| admin | /admin/operators | getSAOperators | /api/v1/admin/operators | admin-operators → /identity/operators/ | ✗ | ✗ | ❌ MISSING |
+| admin | /admin/operators | getSAOperators | /api/v1/admin/operators | admin-operators → /identity/operators/ | ✓ `/identity/operators` | ✓ | ✅ WIRED |
 | admin | /admin/org | getAdminOrgUnits | /api/v1/admin/org-hierarchy | admin → /v1/admin/org-hierarchy | ✓ `/v1/admin/org-hierarchy` | ✓ | ✅ WIRED |
 | admin | /admin | — | — | — | — | — | — NO_LOADER |
 | admin | /admin/platform/integrations | — | — | — | — | — | — NO_LOADER |

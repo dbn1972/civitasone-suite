@@ -115,6 +115,9 @@ const SERVICE_DIR_MAP = {
   // previously missing from this map, which made every such chain read as
   // 'service-missing' even though the real identity-service route exists.
   'admin-users': 'identity-service',
+  // COMP-020: registry.ts admin-operators -> identity-service /identity/operators (a real route). The
+  // screen read MISSING only because this alias was absent (a screen-map false positive).
+  'admin-operators': 'identity-service',
   'queue': 'queue-service',
 };
 

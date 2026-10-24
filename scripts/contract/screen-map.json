@@ -176,10 +176,10 @@
         "/api/v1/admin/editions"
       ],
       "upstream": "admin → /v1/admin/editions",
-      "routeHandler": null,
+      "routeHandler": "/v1/admin/editions",
       "tablesPresent": true,
-      "status": "MISSING",
-      "detail": "route-not-found: /v1/admin/editions"
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -191,10 +191,10 @@
         "/api/v1/admin/entitlements"
       ],
       "upstream": "admin → /v1/admin/entitlements",
-      "routeHandler": null,
+      "routeHandler": "/v1/admin/entitlements",
       "tablesPresent": true,
-      "status": "MISSING",
-      "detail": "route-not-found: /v1/admin/entitlements"
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -243,10 +243,10 @@
         "/api/v1/admin/gateways"
       ],
       "upstream": "admin → /v1/admin/gateways",
-      "routeHandler": null,
+      "routeHandler": "/v1/admin/gateways",
       "tablesPresent": true,
-      "status": "MISSING",
-      "detail": "route-not-found: /v1/admin/gateways"
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -370,10 +370,10 @@
         "/api/v1/admin/operators"
       ],
       "upstream": "admin-operators → /identity/operators/",
-      "routeHandler": null,
-      "tablesPresent": false,
-      "status": "MISSING",
-      "detail": "service-missing: /identity/operators/"
+      "routeHandler": "/identity/operators",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "admin",
@@ -12183,8 +12183,8 @@
   ],
   "counts": {
     "totalPages": 886,
-    "wired": 379,
-    "missing": 4,
+    "wired": 383,
+    "missing": 0,
     "mismatch": 0,
     "noLoader": 585,
     "fabricatedData": 0
