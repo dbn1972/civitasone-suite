@@ -44,7 +44,12 @@ async function listSteps(tenant = TENANT): Promise<Step[]> {
 
 async function waitForStatus(id: string, status: string): Promise<Step> {
   let last: Step | undefined;
-  for (let i = 0; i < 60; i++) {
+  // Deadline-based, not a fixed iteration count: each listSteps() is an HTTP round trip plus a
+  // DB read, so a count of 60 x 50ms gave well under the intended 3s on a loaded CI runner
+  // (the first request of the file also pays cold-start cost). Polls just as fast, ends as soon
+  // as the consumer has applied the change, and still fails when it never does.
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
     last = (await listSteps()).find((s) => s.id === id);
     if (last?.status === status) return last;
     await new Promise((r) => setTimeout(r, 50));

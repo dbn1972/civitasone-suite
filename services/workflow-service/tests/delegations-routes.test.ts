@@ -13,11 +13,13 @@ import { registerDelegationConsumers } from "../src/modules/delegations/consumer
 import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "aaaaaaaa-1111-4000-8000-aaa000000001";
+// Unique per run: a fixed tenant id is shared across files/runs on a reused DB, so a
+// "fresh tenant" assertion would see rows left behind by other suites.
+const TENANT = globalThis.crypto.randomUUID();
 const ACTOR_ID = "aaaaaaaa-2222-4000-8000-aaa000000001";
 
-function makeToken(roles: string[] = ["workflow_user"], actorId = ACTOR_ID) {
-  return signToken({ sub: actorId, tid: TENANT, roles, sid: "sess-001" }, SECRET);
+function makeToken(roles: string[] = ["workflow_user"], actorId = ACTOR_ID, tenant = TENANT) {
+  return signToken({ sub: actorId, tid: tenant, roles, sid: "sess-001" }, SECRET);
 }
 
 registerDelegationConsumers(queue);
@@ -88,15 +90,24 @@ describe("POST /v1/workflow/delegations", () => {
 
   it("rejects a delegation longer than 90 days with 400, accepts exactly 90", async () => {
     const app = await buildApp();
-    const post = (toDate: string) => app.inject({
+    const okDelegateId = randomUUID();
+    const post = (toDate: string, delegateId = randomUUID()) => app.inject({
       method: "POST",
       url: "/v1/workflow/delegations",
       headers: { authorization: `Bearer ${makeToken()}` },
-      payload: { delegateId: randomUUID(), roles: ["workflow_user"], fromDate: "2025-01-01", toDate },
+      payload: { delegateId, roles: ["workflow_user"], fromDate: "2025-01-01", toDate },
     });
     const tooLong = await post("2025-04-02"); // 91 days
-    const ok = await post("2025-04-01");      // 90 days
+    const ok = await post("2025-04-01", okDelegateId); // 90 days
     const backwards = await post("2024-12-31");
+    // The accepted (202) command is persisted asynchronously by the queue consumer. Wait for
+    // that row so it lands BEFORE afterEach's DELETE; otherwise it is inserted after the
+    // cleanup and leaks into later tests / later runs on a reused DB.
+    await waitFor(async () => {
+      const g = await app.inject({ method: "GET", url: "/v1/workflow/delegations",
+        headers: { authorization: `Bearer ${makeToken()}` } });
+      return (g.json().data as Array<{ delegateId: string }>).find((r) => r.delegateId === okDelegateId) ?? null;
+    });
     await app.close();
     expect(tooLong.statusCode).toBe(400);
     expect(tooLong.json().code).toBe("DELEGATION_TOO_LONG");
@@ -142,10 +153,12 @@ describe("POST /v1/workflow/delegations", () => {
 describe("GET /v1/workflow/delegations", () => {
   it("returns empty list for a fresh tenant", async () => {
     const app = await buildApp();
+    // A genuinely fresh tenant: unique per test, so no row from any other test/file/run can be in it.
+    const freshTenant = globalThis.crypto.randomUUID();
     const res = await app.inject({
       method: "GET",
       url: "/v1/workflow/delegations",
-      headers: { authorization: `Bearer ${makeToken()}` },
+      headers: { authorization: `Bearer ${makeToken(["workflow_user"], ACTOR_ID, freshTenant)}` },
     });
     await app.close();
     expect(res.statusCode).toBe(200);

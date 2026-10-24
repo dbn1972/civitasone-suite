@@ -31,7 +31,11 @@ const auth = { authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, rol
 let app: FastifyInstance;
 
 async function until<T>(fn: () => Promise<T | undefined | false>): Promise<T> {
-  for (let i = 0; i < 80; i++) {
+  // Deadline-based, not a fixed iteration count: each probe is an HTTP round trip plus a DB
+  // read, so 80 x 50ms gave well under the intended 4s on a loaded CI runner. Polls just as
+  // fast, ends as soon as the consumer has applied the change, and still fails when it never does.
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
     const v = await fn();
     if (v) return v;
     await new Promise((r) => setTimeout(r, 50));

@@ -52,7 +52,7 @@ test.describe('S12 — Onboarding list page', () => {
     await mockOnboardingRoutes(page);
     await page.goto('/hr/onboarding');
 
-    const heading = page.locator('#page-heading');
+    const heading = page.locator('#page-heading:visible');
     await expect(heading).toBeVisible();
     await expect(heading).toContainText('Onboarding Tracker');
   });

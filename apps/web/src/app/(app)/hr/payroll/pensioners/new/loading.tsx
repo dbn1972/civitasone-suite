@@ -10,7 +10,7 @@ export default async function Loading() {
     <div className="page-main wrap">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("loadingHeading")}</h1>
+          <div data-skeleton-heading="">{t("loadingHeading")}</div>
           <div className="sub">{t("loadingSub")}</div>
         </div>
       </div>

@@ -37,8 +37,8 @@ test.describe('Onboarding — manager list', () => {
   test('page heading renders', async ({ page }) => {
     await mockOnboarding(page);
     await page.goto('/hr/onboarding');
-    await expect(page.locator('#page-heading')).toBeVisible();
-    await expect(page.locator('#page-heading')).toContainText('Onboarding Tracker');
+    await expect(page.locator('#page-heading:visible')).toBeVisible();
+    await expect(page.locator('#page-heading:visible')).toContainText('Onboarding Tracker');
   });
 
   test('stat cards render total, in-progress, completed, overdue counts', async ({ page }) => {

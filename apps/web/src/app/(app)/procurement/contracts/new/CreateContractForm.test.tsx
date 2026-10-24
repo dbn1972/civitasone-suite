@@ -76,7 +76,9 @@ describe("CreateContractForm", () => {
     expect(screen.queryByText(/Searching/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
     // NEW-02: submit stays disabled while the vendor list cannot be loaded.
-    expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled();
+    // The parent learns of the picker's error state via a callback after the alert
+    // renders, so await the real state change rather than reading it synchronously.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled());
   });
 
   it("GAP-CONTRACTS-NEW-02: Retry with the API now healthy renders the options and re-enables submit", async () => {
@@ -90,11 +92,13 @@ describe("CreateContractForm", () => {
     render(<CreateContractForm />);
     fireEvent.focus(await screen.findByRole("combobox"));
     await screen.findByRole("alert");
-    expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled();
+    // The parent learns of the picker's error state via a callback after the alert
+    // renders, so await the real state change rather than reading it synchronously.
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled());
     healthy = true;
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("option", { name: "Acme" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create contract" })).not.toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create contract" })).not.toBeDisabled());
   });
 
   it("GAP-CONTRACTS-NEW-05: typing searches the SERVER (?q=) so a vendor beyond the first page is reachable", async () => {

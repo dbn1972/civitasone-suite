@@ -107,6 +107,30 @@ async function drainOutbox(db: unknown, queue: MemoryQueue, service: string): Pr
   return total;
 }
 
+/**
+ * Look up the GL journal the second hop posts, re-draining finance's outbox while it is
+ * absent. civitas_finance is shared with finance-service's own suite, which runs
+ * concurrently in CI (turbo) and whose relayOnce() drains EVERY pending row, including
+ * this test's finance.gl.post row, into its own queue. The journal then lands moments
+ * after this test's own drain found the outbox empty, so a single immediate read raced
+ * it. Bounded (about 10s), and it still fails with the original message when the
+ * journal never appears.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function awaitJournal(journalId: string, q: MemoryQueue): Promise<any> {
+  for (let i = 0; i < 40; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [row] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
+      tx.select().from(finance.financeJournals).where(eq(finance.financeJournals.id, journalId)).limit(1),
+    );
+    if (row) return row;
+    await drainOutbox(finance.db, q, "finance-service");
+    await q.drain();
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return undefined;
+}
+
 const FINANCE_URL =
   process.env.SEWERAGE_TEST_FINANCE_DATABASE_URL ??
   "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
@@ -256,9 +280,7 @@ describe("sewerage-service cross-events wiring — fee challan, real DB, no mock
 
     // ── real GL journal row, correct amount, no precision loss ──
     const journalId = finance.deterministicId(`challan:${challanRow.id}`);
-    const [journalRow] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
-      tx.select().from(finance.financeJournals).where(eq(finance.financeJournals.id, journalId)).limit(1),
-    );
+    const journalRow = await awaitJournal(journalId, q);
     expect(journalRow, "GL journal row must have been posted by the second hop (finance.gl.post)").toBeTruthy();
     expect(journalRow.lines).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -348,9 +370,7 @@ describe("sewerage-service cross-events wiring — fee challan, real DB, no mock
 
     // ── real GL journal row, correct amount, no precision loss ──
     const journalId = finance.deterministicId(`challan:${challanRow.id}`);
-    const [journalRow] = await withTenantScope(finance.db as never, TENANT, (tx: any) =>
-      tx.select().from(finance.financeJournals).where(eq(finance.financeJournals.id, journalId)).limit(1),
-    );
+    const journalRow = await awaitJournal(journalId, q);
     expect(journalRow, "GL journal row must have been posted by the second hop (finance.gl.post)").toBeTruthy();
     expect(journalRow.lines).toHaveLength(2);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

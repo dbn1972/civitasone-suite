@@ -17,8 +17,8 @@
  * real Postgres connection (this service's own DB, RLS included) — not the
  * mocked-db unit tests in treasury-consumer.test.ts.
  */
-import { describe, it, expect, beforeAll } from "vitest";
-import { eq, and } from "drizzle-orm";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
@@ -29,6 +29,7 @@ import {
 } from "@civitasone/events";
 import { db } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
+import { purgeLedgerRows } from "./_purge-ledger.js";
 import { registerTreasuryConsumers } from "../src/modules/treasury/consumer.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -99,6 +100,21 @@ beforeAll(async () => {
   );
 });
 
+// Journal ids this file posted (via the GL consumer); their ledger rows carry an
+// above-2^53 amount and the ledger is append-only, so they are purged in afterAll.
+const postedJournalIds: string[] = [];
+
+afterAll(async () => {
+  for (const journalId of postedJournalIds) {
+    const [j] = await scoped(TENANT, (tx: any) =>
+      tx.select().from(financeJournals).where(eq(financeJournals.id, journalId)).limit(1),
+    );
+    // Voucher numbers are counter-allocated (unique per posted journal), so this removes only
+    // THIS run's ledger rows from the shared platform tenant, never another test's.
+    if (j?.voucherNo) await purgeLedgerRows(TENANT, sql`voucher_no = ${j.voucherNo}`);
+  }
+});
+
 describe("municipal cross-service challan — real DB, no mocks", () => {
   it("resolves receiptHeadCode, preserves amountMinor precision, and persists the source back-link", async () => {
     // Confirm migration 0070 actually seeded the head this test (and the
@@ -115,6 +131,7 @@ describe("municipal cross-service challan — real DB, no mocks", () => {
 
     const sourceRef = randomUUID();
     const challanId = randomUUID();
+    postedJournalIds.push(deterministicId(`challan:${challanId}`));
     // Exactly what municipal-cross.ts's buildMunicipalFeeChallanPayload +
     // a service's cross-events.ts emitMunicipalFeeChallan would publish.
     const payload = buildMunicipalFeeChallanPayload({

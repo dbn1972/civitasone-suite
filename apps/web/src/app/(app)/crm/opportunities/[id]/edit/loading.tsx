@@ -6,7 +6,7 @@ export default function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("editOpportunityTitle")}</h1>
+          <div data-skeleton-heading="">{t("editOpportunityTitle")}</div>
         </div>
       </div>
       {/* The page is a single form card — mirror that shape, not a tile grid. */}

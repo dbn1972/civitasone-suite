@@ -23,7 +23,7 @@ test.describe('Employee Lifecycle', () => {
   test.describe('Employee List', () => {
     test('displays page header and stat cards', async ({ page }) => {
       await page.goto('/hr/employees');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('renders employee table with correct columns', async ({ page }) => {
@@ -49,7 +49,7 @@ test.describe('Employee Lifecycle', () => {
       const link = page.locator('tbody tr').first().getByRole('link').first();
       if (await link.isVisible()) {
         await link.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
   });
@@ -62,9 +62,9 @@ test.describe('Employee Lifecycle', () => {
       const empLink = page.locator('tbody tr').first().getByRole('link').first();
       if (!await empLink.isVisible()) { return; }
       await empLink.click();
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
       // Check for any profile content visible on the detail page
-      await expect(page.locator('main').getByText(/department|designation|email|employee/i).first().or(page.locator('#page-heading'))).toBeVisible();
+      await expect(page.locator('main').getByText(/department|designation|email|employee/i).first().or(page.locator('#page-heading:visible'))).toBeVisible();
     });
 
     test('shows personal information section', async ({ page }) => {
@@ -73,7 +73,7 @@ test.describe('Employee Lifecycle', () => {
       if (!await empLink.isVisible()) { return; }
       await empLink.click();
       // Personal info section may exist on real employee detail page
-      await expect(page.locator('#page-heading').or(page.locator('[data-section]').first())).toBeVisible();
+      await expect(page.locator('#page-heading:visible').or(page.locator('[data-section]').first())).toBeVisible();
     });
 
     test('breadcrumb links back to employee list', async ({ page }) => {
@@ -117,7 +117,7 @@ test.describe('Employee Lifecycle', () => {
   test.describe('Transfer', () => {
     test('transfer page loads with stat cards', async ({ page }) => {
       await page.goto('/hr/transfer');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
       await expect(page.getByText(/total transfers/i)).toBeVisible();
     });
 
@@ -161,12 +161,12 @@ test.describe('Employee Lifecycle', () => {
   test.describe('Promotion', () => {
     test('promotion page loads with stat cards', async ({ page }) => {
       await page.goto('/hr/promotion');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows promotion data', async ({ page }) => {
       await page.goto('/hr/promotion');
-      await expect(page.locator('#page-heading').or(page.locator('tbody tr').first()).first()).toBeVisible();
+      await expect(page.locator('#page-heading:visible').or(page.locator('tbody tr').first()).first()).toBeVisible();
     });
   });
 
@@ -175,7 +175,7 @@ test.describe('Employee Lifecycle', () => {
   test.describe('Retirement', () => {
     test('retirement page loads', async ({ page }) => {
       await page.goto('/hr/retirement');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -186,14 +186,14 @@ test.describe('Employee Lifecycle', () => {
     const firstEmpLink = page.locator('tbody tr').first().getByRole('link').first();
     if (await firstEmpLink.isVisible()) {
       await firstEmpLink.click();
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     }
 
     // Navigate back
     const backLink = page.getByRole('link', { name: /employees|back/i }).first();
     if (await backLink.isVisible()) {
       await backLink.click();
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     }
   });
 });

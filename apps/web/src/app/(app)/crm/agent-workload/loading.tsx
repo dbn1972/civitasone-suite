@@ -6,7 +6,7 @@ export default function Loading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("agentWorkloadTitle")}</h1>
+          <div data-skeleton-heading="">{t("agentWorkloadTitle")}</div>
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
