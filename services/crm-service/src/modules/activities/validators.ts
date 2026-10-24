@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
+import { crmActivityFeedItemSchema, crmActivityFeedListSchema } from "@civitasone/schemas/web";
 
 /**
  * AC-001 typed activities. The six BRD activity types plus the two legacy types
@@ -123,3 +124,29 @@ export const activityViewSchema = z.object({
 });
 
 export const activitiesListSchema = paginatedSchema(activityViewSchema);
+
+/**
+ * Scoped activity FEED (no subject): GET /v1/crm/activities with neither subjectType nor
+ * subjectId. crm_user is limited to activities they own/are assigned or that hang off a
+ * contact/deal/account they own; crm_admin/super_admin see the tenant. `relatedType` (not
+ * subjectType) is the feed filter so the two modes can never be confused.
+ */
+export const FEED_STATUSES = ["open", "overdue", "completed", "cancelled"] as const;
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const activityFeedQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  type: z.enum(ACTIVITY_TYPES).optional(),
+  status: z.enum(FEED_STATUSES).optional(),
+  ownerId: z.string().uuid().optional(),
+  mine: z.enum(["true", "false"]).transform((b) => b === "true").optional(),
+  relatedType: z.enum(ACTIVITY_SUBJECT_TYPES).optional(),
+  dueFrom: isoDate.optional(),
+  dueTo: isoDate.optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+});
+export type ActivityFeedQuery = z.infer<typeof activityFeedQuery>;
+
+export const activityFeedItemSchema = crmActivityFeedItemSchema;
+export const activityFeedListSchema = crmActivityFeedListSchema;
+export type ActivityFeedItem = z.infer<typeof activityFeedItemSchema>;

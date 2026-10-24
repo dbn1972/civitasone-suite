@@ -1597,6 +1597,34 @@ export const CRMActivityEntrySchema = z.object({
 });
 export const CRMActivityEntryListSchema = z.array(CRMActivityEntrySchema);
 
+/**
+ * Wire shape of one row of GET /v1/crm/activities (scoped feed: no subjectType/subjectId),
+ * shared by crm-service (response validation) and the web loader/contract tests. "overdue" is
+ * derived server-side (open + past due in IST); `owner` is the resolved display name.
+ */
+export const crmActivityFeedItemSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  actorName: z.string(),
+  text: z.string(),
+  contactId: z.string().uuid().nullable().optional(),
+  dealId: z.string().uuid().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
+  type: z.string(),
+  subject: z.string().nullable().optional(),
+  status: z.enum(["open", "overdue", "completed", "cancelled"]),
+  dueDate: z.string().nullable().optional(),
+  remindAt: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  ownerId: z.string().uuid().nullable(),
+  owner: z.string(),
+  relatedType: z.enum(["contact", "deal", "other"]).nullable(),
+  relatedTo: z.string().nullable(),
+});
+export const crmActivityFeedListSchema = paginatedSchema(crmActivityFeedItemSchema);
+
 export const TicketDetailSchema = z.object({
   id: z.string(),
   ticketNo: z.string(),
