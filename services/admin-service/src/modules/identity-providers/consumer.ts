@@ -45,6 +45,29 @@ async function emit(
   });
 }
 
+/** A command that could not take effect (e.g. name collision): recorded, never silent. No domain event, no secret. */
+async function emitFailure(
+  tx: unknown,
+  msg: { messageId: string; tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  provider: { providerId: string; kind: string },
+  reason: string,
+): Promise<void> {
+  log.warn({ messageId: msg.messageId, tenantId: msg.tenantId, providerId: provider.providerId, action, reason }, "Identity provider command rejected");
+  await enqueue(tx as Tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "admin", action, resourceType: RESOURCE, resourceId: provider.providerId, outcome: "failure",
+      kind: provider.kind, reason,
+    },
+  });
+}
+
+const isUniqueViolation = (err: unknown): boolean => {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+};
+
 const fieldNames = (f: Fields): string[] =>
   Object.keys(f).filter((k) => k !== "clientSecretLast4").map((k) => (k === "clientSecretCiphertext" ? "clientSecret" : k));
 
@@ -62,8 +85,11 @@ export function registerIdentityProviderConsumers(queue: Queue): void {
             clientSecretCiphertext: p.clientSecretCiphertext ?? null, clientSecretLast4: p.clientSecretLast4 ?? null,
             status: p.status ?? "inactive", createdBy: msg.actorId, updatedBy: msg.actorId,
           }).onConflictDoNothing().returning({ id: identityProviders.id });
-          // A concurrent create of the same (kind, name) lost the race: nothing was written, so nothing is audited.
-          if (inserted.length === 0) return;
+          // A concurrent create of the same (kind, name) lost the race: nothing was written; record the failure.
+          if (inserted.length === 0) {
+            await emitFailure(tx, msg, `identity_provider.${p.kind}.create`, p, "name_conflict");
+            return;
+          }
           const { tenantId: _t, providerId: _p, kind: _k, ...fields } = p;
           await emit(tx, msg, IDP_EVENTS.created, `identity_provider.${p.kind}.create`, p, fieldNames(fields));
         });
@@ -91,6 +117,15 @@ export function registerIdentityProviderConsumers(queue: Queue): void {
           await emit(tx, msg, IDP_EVENTS.updated, `identity_provider.${p.kind}.update`, p, fieldNames(fields));
         });
       } catch (err) {
+        if (isUniqueViolation(err)) {
+          // A rename colliding with an existing (kind, name) can never succeed on redelivery: record it and ack.
+          const p = msg.payload;
+          await db.transaction(async (tx) => {
+            if (!(await markProcessed(tx, msg.messageId))) return;
+            await emitFailure(tx, msg, `identity_provider.${p.kind}.update`, p, "name_conflict");
+          });
+          return;
+        }
         log.error({ err, messageId: msg.messageId, type: IDP_COMMANDS.update }, "Consumer processing failed");
         throw err;
       }
