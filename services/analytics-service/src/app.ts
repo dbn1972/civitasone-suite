@@ -17,7 +17,7 @@ import { exportRoutes } from "./modules/exports/routes.js";
 import { analyticsQueryRoutes } from "./modules/analytics-query/routes.js";
 import { streamRoutes } from "./modules/stream/routes.js";
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
+  const app = Fastify({ bodyLimit: 1_048_576, /* SEC: explicit 1 MiB body cap (see fastify-bodylimit-guard) */ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
 

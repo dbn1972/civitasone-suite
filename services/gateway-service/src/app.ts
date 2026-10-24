@@ -417,7 +417,8 @@ export async function buildApp(): Promise<FastifyInstance> {
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     // SEC REM-10: hard cap on inbound body size. Prevents memory-exhaustion attacks
     // via large-body requests at 1000 TPS. Default 1MB; tune via GATEWAY_BODY_LIMIT env.
-    bodyLimit: Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576), // 1 MB
+    // Clamped to a 10 MiB ceiling so the env var cannot lift the cap past what scripts/ci/fastify-bodylimit-guard.mjs allows.
+    bodyLimit: Math.min(Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576) || 1_048_576, 10_485_760), // 1 MB default
     // req.ip is forwarded upstream as X-Forwarded-For and keys rate limits. Believe an incoming X-Forwarded-For only
     // from internal peers (the web tier): an external caller hitting the gateway directly cannot choose its own IP.
     // Deliberately not `true`. (Same list as hrms-service's INTERNAL_PROXY_TRUST.)

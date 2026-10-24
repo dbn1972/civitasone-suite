@@ -126,6 +126,8 @@ import { loadModuleProfile, type NonCoreModule } from "./shared/module-profile.j
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
+    // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
+    bodyLimit: 1_048_576,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
     // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an

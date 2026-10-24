@@ -521,6 +521,18 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/raw-session-guc-guard.mjs
 
+      # Compensating control for the allow-listed zod 3.x advisory GHSA-mrhx-c7xc-m3w5
+      # (scripts/ci/cve-allowlist.json): every Fastify app must declare an explicit,
+      # bounded bodyLimit so no request can build an oversized zod collection.
+      - name: Fastify bodyLimit guard unit tests
+        id: fastify-bodylimit-guard-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/fastify-bodylimit-guard.test.ts
+      - name: Fastify bodyLimit guard (explicit request-size cap, zod DoS control)
+        id: fastify-bodylimit-guard
+        continue-on-error: true
+        run: node scripts/ci/fastify-bodylimit-guard.mjs
+
       # UX-001: fetchJson() never throws (apiClient.ts) — it resolves
       # { data: empty, source: "error" } on any failure — but the large
       # majority of page.tsx files decided "nothing to show" from
@@ -745,6 +757,8 @@ jobs:
           R_TENANT_ROUTER: ${{ steps.tenant-router-guard.outcome }}
           R_RAW_SESSION_GUC_TESTS: ${{ steps.raw-session-guc-guard-tests.outcome }}
           R_RAW_SESSION_GUC: ${{ steps.raw-session-guc-guard.outcome }}
+          R_FASTIFY_BODYLIMIT_TESTS: ${{ steps.fastify-bodylimit-guard-tests.outcome }}
+          R_FASTIFY_BODYLIMIT: ${{ steps.fastify-bodylimit-guard.outcome }}
           R_EMPTY_VS_ERROR_TESTS: ${{ steps.empty-vs-error-guard-tests.outcome }}
           R_EMPTY_VS_ERROR: ${{ steps.empty-vs-error-guard.outcome }}
           R_TENANT_TABLE_RLS_TESTS: ${{ steps.tenant-table-rls-guard-tests.outcome }}
@@ -792,6 +806,8 @@ jobs:
           check "Tenant router adoption guard" "$R_TENANT_ROUTER"
           check "Raw session GUC guard unit tests" "$R_RAW_SESSION_GUC_TESTS"
           check "Raw session GUC guard" "$R_RAW_SESSION_GUC"
+          check "Fastify bodyLimit guard unit tests" "$R_FASTIFY_BODYLIMIT_TESTS"
+          check "Fastify bodyLimit guard" "$R_FASTIFY_BODYLIMIT"
           check "Empty-vs-error guard unit tests" "$R_EMPTY_VS_ERROR_TESTS"
           check "Empty-vs-error guard" "$R_EMPTY_VS_ERROR"
           check "Tenant table RLS guard unit tests" "$R_TENANT_TABLE_RLS_TESTS"
