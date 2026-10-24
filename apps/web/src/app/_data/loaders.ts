@@ -292,6 +292,9 @@ import {
   CitizenRequestSummaryListSchema,
   RTISummaryListSchema,
   ProjectsDashboardSchema,
+  CitizenAlertListSchema,
+  CitizenNoticeListSchema,
+  CitizenSurveyListSchema,
   ProjectSummaryListSchema,
   ProjectDetailSchema,
   MilestoneSummaryListSchema,
@@ -4742,6 +4745,7 @@ export async function getCitizenAlerts(): Promise<LoaderResult<CitizenAlert[]>> 
   return fetchJson<unknown, CitizenAlert[]>("/api/v1/citizen/alerts", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.alerts",
+    responseSchema: CitizenAlertListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenAlert[] | null,
   });
 }
@@ -4760,6 +4764,7 @@ export async function getCitizenNotices(): Promise<LoaderResult<CitizenNotice[]>
   return fetchJson<unknown, CitizenNotice[]>("/api/v1/citizen/notices", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.notices",
+    responseSchema: CitizenNoticeListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenNotice[] | null,
   });
 }
@@ -4772,6 +4777,7 @@ export async function getCitizenSurveys(): Promise<LoaderResult<CitizenSurvey[]>
   return fetchJson<unknown, CitizenSurvey[]>("/api/v1/citizen/surveys", [], {
     revalidateSeconds: 60,
     telemetryKey: "citizen.surveys",
+    responseSchema: CitizenSurveyListSchema,
     mapResponse: (p) => getArrayPayload(p) as CitizenSurvey[] | null,
   });
 }

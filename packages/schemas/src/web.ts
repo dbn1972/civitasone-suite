@@ -3438,3 +3438,38 @@ export const catalogueProductListSchema = z.object({
 });
 
 export type CatalogueProductRow = z.infer<typeof catalogueProductRowSchema>;
+
+// Citizen engagement screens (/citizen/alerts, /citizen/notices, /citizen/surveys).
+// Row shapes are the exact objects the screens read (loaders.ts CitizenAlert /
+// CitizenNotice, lib/citizenSurveys.ts CitizenSurvey). citizen-service answers
+// `{ data: [...] }`; a bare array is accepted too, matching getArrayPayload().
+export const CitizenAlertSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: z.string(),
+  publishedDate: z.string(),
+  targetAudience: z.string(),
+  status: z.string(),
+});
+export const CitizenNoticeSchema = z.object({
+  id: z.string(),
+  noticeNo: z.string(),
+  subject: z.string(),
+  department: z.string(),
+  published: z.string(),
+  expiry: z.string(),
+  type: z.string(),
+});
+export const CitizenSurveySchema = z.object({
+  id: z.string(),
+  surveyName: z.string(),
+  responses: z.number(),
+  completion: z.string(),
+  period: z.string(),
+  status: z.string(),
+});
+const listEnvelope = <T extends z.ZodTypeAny>(row: T) =>
+  z.union([z.array(row), z.object({ data: z.array(row) }).passthrough()]);
+export const CitizenAlertListSchema = listEnvelope(CitizenAlertSchema);
+export const CitizenNoticeListSchema = listEnvelope(CitizenNoticeSchema);
+export const CitizenSurveyListSchema = listEnvelope(CitizenSurveySchema);

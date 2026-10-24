@@ -22,6 +22,7 @@ import { registerDiscoveryConsumers }   from "./modules/discovery/consumer.js";
 import { registerDocumentsConsumers }   from "./modules/documents/consumer.js";
 import { registerEligibilityConsumers } from "./modules/eligibility/consumer.js";
 import { registerServiceRequestConsumers } from "./modules/requests/consumer.js";
+import { registerEngagementConsumers } from "./modules/engagement/consumer.js";
 import { registerCpioConsumers }         from "./modules/cpio/consumer.js";
 
 const log = pino({ name: "citizen-worker" });
@@ -57,6 +58,7 @@ registerDiscoveryConsumers(queue);
 registerDocumentsConsumers(queue);
 registerEligibilityConsumers(queue);
 registerServiceRequestConsumers(queue);
+registerEngagementConsumers(queue);
 registerCpioConsumers(queue);
 
 await queue.start();
