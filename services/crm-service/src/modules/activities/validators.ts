@@ -132,7 +132,14 @@ export const activitiesListSchema = paginatedSchema(activityViewSchema);
  * subjectType) is the feed filter so the two modes can never be confused.
  */
 export const FEED_STATUSES = ["open", "overdue", "completed", "cancelled"] as const;
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((v) => {
+    // Real calendar date only (rejects 2026-02-31, which Postgres ::date would 500 on).
+    const d = new Date(`${v}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+  }, "must be a valid calendar date (YYYY-MM-DD)");
 export const activityFeedQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),

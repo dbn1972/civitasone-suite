@@ -167,6 +167,11 @@ describe("GET /v1/crm/activities (scoped feed)", () => {
     expect((await get("/v1/crm/activities?status=bogus", adm)).statusCode).toBe(400);
     expect((await get("/v1/crm/activities?limit=201", adm)).statusCode).toBe(400);
     expect((await get("/v1/crm/activities?ownerId=not-a-uuid", adm)).statusCode).toBe(400);
+    // Impossible calendar dates must be a 400, not a Postgres ::date cast 500.
+    expect((await get("/v1/crm/activities?dueFrom=2026-02-31", adm)).statusCode).toBe(400);
+    expect((await get("/v1/crm/activities?dueTo=2026-13-01", adm)).statusCode).toBe(400);
+    expect((await get("/v1/crm/activities?dueFrom=2026-04-31&dueTo=2026-05-01", adm)).statusCode).toBe(400);
+    expect((await get("/v1/crm/activities?dueFrom=2024-02-29&dueTo=2024-03-01", adm)).statusCode).toBe(200);
   });
 
   it("the real response satisfies the shared wire schema the web loader validates against", async () => {
