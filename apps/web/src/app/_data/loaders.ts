@@ -353,6 +353,7 @@ import {
   KnowledgeRecordListSchema,
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
+  crmActivityFeedListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { mapBillingSettings, mapOfflinePayments, mapReminderStatus, type BillingSettingsView, type OfflinePaymentView, type ReminderView } from "@/lib/admin/invoiceOps";
@@ -4488,26 +4489,24 @@ export function mapCRMActivityEntries(payload: unknown): CRMActivityEntry[] | nu
   return mapped;
 }
 
-// Wire-level guard for GET /v1/crm/activities. The previous schema here
-// (CRMActivityEntryListSchema) described the MAPPED CRMActivityEntry shape
-// (owner, non-null subject) as a bare array, but crm-service returns the
-// `{ data, pagination }` envelope of activityViewSchema rows (actorName / text,
-// nullable subject, no owner). Every real response therefore failed validation and
-// /crm/activities always rendered "We couldn't load interactions". Validate only
-// the envelope here; mapCRMActivityEntries() does the per-row field validation and
-// the enum fallbacks.
-const crmActivitiesWireSchema = z.union([
-  z.array(z.record(z.string(), z.unknown())),
-  z.object({ data: z.array(z.record(z.string(), z.unknown())) }).passthrough(),
-]);
+// Wire contract for GET /v1/crm/activities with NO subject: the caller-scoped feed (crm_user: own /
+// assigned / own-record activities; crm_admin: the tenant). The envelope + row shape is the shared
+// crmActivityFeedListSchema that crm-service validates its response against; mapCRMActivityEntries()
+// then applies the enum fallbacks. (The subject-scoped timeline is a different mode of the same
+// route and is not used by this screen.)
+export const CRM_ACTIVITIES_FEED_LIMIT = 200;
 
 export async function getCRMActivities(): Promise<LoaderResult<CRMActivityEntry[]>> {
-  return fetchJson<unknown, CRMActivityEntry[]>("/api/v1/crm/activities", [], {
-    revalidateSeconds: 60,
-    telemetryKey: "crm.activities.full",
-    responseSchema: crmActivitiesWireSchema,
-    mapResponse: mapCRMActivityEntries,
-  });
+  return fetchJson<z.infer<typeof crmActivityFeedListSchema>, CRMActivityEntry[]>(
+    `/api/v1/crm/activities?limit=${CRM_ACTIVITIES_FEED_LIMIT}&offset=0`,
+    [],
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "crm.activities.full",
+      responseSchema: crmActivityFeedListSchema,
+      mapResponse: mapCRMActivityEntries,
+    },
+  );
 }
 
 // Helpdesk detail loaders

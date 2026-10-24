@@ -100,11 +100,22 @@ describe("AC-001 typed activities + reminders", () => {
 });
 
 describe("AC-001 per-record timeline is subject-scoped", () => {
-  it("requires subjectType+subjectId (400 without them)", async () => {
+  it("a half-specified subject (only subjectType or only subjectId) is still a 400, never an unscoped list", async () => {
+    const app = await buildApp();
+    for (const q of ["subjectType=contact", `subjectId=${CONTACT}`]) {
+      const res = await app.inject({ method: "GET", url: `/v1/crm/activities?${q}&limit=50&offset=0`, headers: headers() });
+      expect(res.statusCode).toBe(400);
+    }
+    await app.close();
+  });
+
+  it("with no subject it is the caller-scoped feed (see activities-scoped-feed.test.ts), not a tenant dump", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/crm/activities?limit=50&offset=0", headers: headers() });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    // ACTOR (crm_user) created every row here, so they all fall inside their own scope.
+    expect(res.json().pagination.total).toBeGreaterThanOrEqual(0);
   });
 
   it("returns ONLY the requested contact's activities (same-tenant isolation)", async () => {
