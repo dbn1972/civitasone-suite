@@ -268,6 +268,51 @@ describe("consumer", () => {
     expect(audits.filter((a) => JSON.stringify(a.payload).includes(providerId))).toHaveLength(1);
   });
 
+  it("a create that loses the unique-name race writes no row but records a failure audit", async () => {
+    const first = randomUUID();
+    const second = randomUUID();
+    const base = { tenantId: T_A, actorId: ACTOR_A, schemaVersion: "1.0", type: IDP_COMMANDS.create };
+    const body = (providerId: string) => ({ kind: "idp", providerId, tenantId: T_A, name: "Race Loser", protocol: "OIDC", endpoint: "https://idp.example.gov.in", entityId: "", status: "active" });
+    await queue.publish(IDP_COMMANDS.create, { ...base, messageId: randomUUID(), correlationId: randomUUID(), payload: body(first) });
+    await waitFor(async () => (await list("idp", A())).body.data.find((p) => p.id === first));
+    await queue.publish(IDP_COMMANDS.create, { ...base, messageId: randomUUID(), correlationId: randomUUID(), payload: body(second) });
+    const audit = await waitFor(async () => {
+      const r = await asTenant(T_A, (sql) => sql<Array<{ payload: unknown }>>`
+        SELECT payload FROM _outbox.messages WHERE tenant_id = ${T_A} AND topic = 'audit.event.record'`);
+      return r.find((a) => JSON.stringify(a.payload).includes(second));
+    });
+    const p = (typeof audit.payload === "string" ? JSON.parse(audit.payload) : audit.payload) as Record<string, unknown>;
+    expect(p).toMatchObject({ action: "identity_provider.idp.create", outcome: "failure", reason: "name_conflict", resourceId: second });
+    const rows = await asTenant(T_A, (sql) => sql<Array<{ n: number }>>`SELECT count(*)::int AS n FROM identity_providers.providers WHERE id = ${second}`);
+    expect(rows[0]!.n).toBe(0);
+  });
+
+  it("a rename that collides with an existing name is recorded as a failure, not redelivered forever", async () => {
+    const a = randomUUID();
+    const b = randomUUID();
+    const mk = (providerId: string, name: string) => ({
+      messageId: randomUUID(), type: IDP_COMMANDS.create, tenantId: T_A, actorId: ACTOR_A, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { tenantId: T_A, providerId, kind: "idp", name, protocol: "OIDC", endpoint: "https://idp.example.gov.in", entityId: "", status: "active" },
+    });
+    await queue.publish(IDP_COMMANDS.create, mk(a, "Rename Target"));
+    await queue.publish(IDP_COMMANDS.create, mk(b, "Rename Source"));
+    await waitFor(async () => (await list("idp", A())).body.data.find((p) => p.id === b));
+    await waitFor(async () => (await list("idp", A())).body.data.find((p) => p.id === a));
+    await queue.publish(IDP_COMMANDS.update, {
+      messageId: randomUUID(), type: IDP_COMMANDS.update, tenantId: T_A, actorId: ACTOR_A, correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: { tenantId: T_A, providerId: b, kind: "idp", name: "rename target" },
+    });
+    const audit = await waitFor(async () => {
+      const r = await asTenant(T_A, (sql) => sql<Array<{ payload: unknown }>>`
+        SELECT payload FROM _outbox.messages WHERE tenant_id = ${T_A} AND topic = 'audit.event.record'`);
+      return r.find((x) => JSON.stringify(x.payload).includes(b) && JSON.stringify(x.payload).includes("failure"));
+    });
+    const p = (typeof audit.payload === "string" ? JSON.parse(audit.payload) : audit.payload) as Record<string, unknown>;
+    expect(p).toMatchObject({ action: "identity_provider.idp.update", outcome: "failure", reason: "name_conflict" });
+    const row = (await list("idp", A())).body.data.find((x) => x.id === b)!;
+    expect(row.name).toBe("Rename Source");
+  });
+
   it("a command for another tenant's provider id changes nothing and writes no audit", async () => {
     const aRow = (await list("idp", A())).body.data.find((p) => p.name === "Idempotent")!;
     await queue.publish(IDP_COMMANDS.remove, {
