@@ -76,3 +76,12 @@ CVE-2026-84504 exp:2026-11-08
 # 2026-10-07: removed the brace-expansion/browserslist/fast-uri/js-yaml entries
 # (exp 2026-10-09). They were already cleared by version-scoped pnpm.overrides
 # on 2026-09-16; a current `trivy fs` of pnpm-lock.yaml no longer reports them.
+
+# zod 3.x (3.23.8 / 3.25.76) -> fixed only in 4.6.6 (CVE-2023-54404 = GHSA-mrhx-c7xc-m3w5,
+# "exhaust memory while validating oversized constrained collections"). Owner-approved dated
+# exception (2026-10-24), the same as scripts/ci/cve-allowlist.json: request bodies are capped
+# (explicit Fastify bodyLimit on every service, enforced by scripts/ci/fastify-bodylimit-guard.mjs),
+# so no collection can reach a memory-exhausting size. The real fix is the zod 3->4 major upgrade
+# across ~70 packages, scheduled post-release. The dev-only zod 4.6.5 copy is already patched to 4.6.6.
+CVE-2023-54404 exp:2026-11-23
+GHSA-mrhx-c7xc-m3w5 exp:2026-11-23
