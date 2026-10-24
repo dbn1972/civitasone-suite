@@ -3,16 +3,25 @@
 --
 -- tenant.tenants is FORCE RLS (tenant_id = tenant.current_tenant_id()), so a
 -- cross-tenant list cannot be a plain SELECT. Same sanctioned control-plane
--- pattern as 0016 (tenant_ancestry/_descendants): a SECURITY DEFINER function,
--- executable ONLY by tenant_svc. It drops FORCE RLS for its own transaction (see body)
--- so it also works when the owner is the non-BYPASSRLS service role (CI bootstrap).
--- The HTTP route is the authority on WHO may call it (super_admin /
--- platform_admin only) and audits every call; the function only ever returns
--- the directory columns (never settings / dsn / kms refs).
+-- pattern as admin-service 0053 (platform_bypass_read_policy): an additional
+-- permissive SELECT-only policy gated by the transaction-local GUC
+-- app.platform_bypass. The SECURITY DEFINER function below, executable ONLY by
+-- tenant_svc, sets that GUC for its own transaction and restores the previous
+-- value before returning. No ALTER TABLE (no ACCESS EXCLUSIVE lock) is taken on
+-- the request path. INSERT/UPDATE/DELETE stay governed solely by the strict
+-- tenant policy. The HTTP route is the authority on WHO may call it
+-- (super_admin / platform_admin only) and audits every call; the function only
+-- ever returns the directory columns (never settings / dsn / kms refs).
 --
 -- Additive + idempotent. Rollback: DROP FUNCTION IF EXISTS tenant.list_tenants_admin(text, int, int);
+--   DROP POLICY IF EXISTS platform_bypass_read_policy ON tenant.tenants;
 
 SET lock_timeout = '5s';
+
+DROP POLICY IF EXISTS platform_bypass_read_policy ON tenant.tenants;
+CREATE POLICY platform_bypass_read_policy ON tenant.tenants
+  FOR SELECT
+  USING (current_setting('app.platform_bypass', true) = 'true');
 
 CREATE OR REPLACE FUNCTION tenant.list_tenants_admin(p_q text, p_limit int, p_offset int)
   RETURNS TABLE (
@@ -26,18 +35,10 @@ CREATE OR REPLACE FUNCTION tenant.list_tenants_admin(p_q text, p_limit int, p_of
   SET search_path = tenant, pg_temp
   AS $$
   #variable_conflict use_column
+  DECLARE
+    v_prev text := current_setting('app.platform_bypass', true);
   BEGIN
-    -- FORCE RLS applies to the table OWNER too. When migrations are applied by
-    -- the service role itself (scripts/ci/bootstrap-postgres.sh runs them as
-    -- tenant_svc: non-superuser, non-BYPASSRLS, and the owner of tenant.tenants)
-    -- the definer is subject to the tenant_isolation policy and a plain SELECT
-    -- returns zero rows -- indistinguishable from "no tenants". Owner-bypass is
-    -- restored by dropping FORCE for this transaction only: ALTER TABLE takes
-    -- ACCESS EXCLUSIVE, so no other session can observe the NO FORCE state, and
-    -- FORCE is re-asserted before returning. If the call errors, the whole
-    -- transaction (including the ALTER) rolls back.
-    -- Requires the definer to own tenant.tenants (true for the migrator role).
-    ALTER TABLE tenant.tenants NO FORCE ROW LEVEL SECURITY;
+    PERFORM set_config('app.platform_bypass', 'true', true);
     RETURN QUERY
       SELECT t.id, t.name, t.domain, t.edition, t.status, t.region, t.residency,
              t.isolation_tier, t.created_at,
@@ -49,7 +50,7 @@ CREATE OR REPLACE FUNCTION tenant.list_tenants_admin(p_q text, p_limit int, p_of
       ORDER BY t.created_at DESC, t.id
       LIMIT greatest(least(p_limit, 500), 1)
       OFFSET greatest(p_offset, 0);
-    ALTER TABLE tenant.tenants FORCE ROW LEVEL SECURITY;
+    PERFORM set_config('app.platform_bypass', coalesce(v_prev, ''), true);
   END;
   $$;
 
