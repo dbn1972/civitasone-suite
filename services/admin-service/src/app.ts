@@ -46,6 +46,8 @@ import { discoveryRoutes } from "./modules/discovery/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
+    // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
+    bodyLimit: 1_048_576,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
     // GET /v1/admin/uploads/:key takes a whole storage key as ONE url-encoded param (uploads/<tenant>/<category>/...,
