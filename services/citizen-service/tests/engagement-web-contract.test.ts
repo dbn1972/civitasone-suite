@@ -25,6 +25,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "c3c3c3c3-0000-4000-8000-000000000042";
 const ADMIN = "44444444-0000-4000-8000-000000000042";
 const CITIZEN = "11111111-0000-4000-8000-000000000042";
+const OFFICER = "33333333-0000-4000-8000-000000000042"; // maker (maker-checker: the admin checker must not be the creator)
 const h = (actor: string, roles: string[]) => ({
   authorization: `Bearer ${signToken({ sub: actor, tid: TENANT, roles, sid: "sess-contract" }, SECRET, 3600)}`,
   "content-type": "application/json", "x-tenant-id": TENANT,
@@ -48,7 +49,7 @@ async function seedPublished(kind: "alerts" | "notices" | "surveys"): Promise<st
   const body = kind === "alerts" ? { title: "Contract alert" }
     : kind === "notices" ? { subject: "Contract notice", department: "Revenue", type: "statutory" }
     : { surveyName: "Contract survey", questions: [{ id: "q1", text: "Rate us", type: "rating" }], targetResponses: 4, startsOn: "2026-11-01" };
-  const created = await app.inject({ method: "POST", url: `/v1/citizen/${kind}`, headers: h(ADMIN, ["citizen_admin"]), payload: body });
+  const created = await app.inject({ method: "POST", url: `/v1/citizen/${kind}`, headers: h(OFFICER, ["citizen_officer"]), payload: body });
   expect(created.statusCode).toBe(202);
   const id = created.json().id as string;
   await waitFor(async () => (await app.inject({ method: "GET", url: `/v1/citizen/${kind}/${id}`, headers: h(ADMIN, ["citizen_admin"]) })).statusCode === 200);

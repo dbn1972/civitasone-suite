@@ -15,6 +15,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerEngagementConsumers } from "../src/modules/engagement/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
 
 registerEngagementConsumers(queue);
@@ -313,5 +314,75 @@ describe("surveys — list/create/publish/respond, owner-scoped responses", () =
     expect((await post("/v1/citizen/surveys", officer(), { surveyName: "s", questions: [{ id: "a", text: "t", type: "single_choice" }] })).statusCode).toBe(400);
     expect((await post("/v1/citizen/surveys", officer(), { surveyName: "s", questions: [{ id: "a", text: "t", type: "text" }, { id: "a", text: "u", type: "text" }] })).statusCode).toBe(400);
     expect((await post("/v1/citizen/surveys", officer(), { surveyName: "s", questions: [{ id: "a", text: "t", type: "text" }], startsOn: "2026-10-31", endsOn: "2026-10-01" })).statusCode).toBe(400);
+  });
+});
+
+// ═════════════════ maker-checker + create-conflict (review round 1) ═════════════════
+const ADMIN_2 = "77777777-0000-4000-8000-000000000041";
+const admin2 = () => hdr(tok(TENANT_A, ADMIN_2, ["citizen_admin"]));
+const settle = () => new Promise((r) => setTimeout(r, 400));
+const cmd = (topic: string, actorId: string, payload: Record<string, unknown>) =>
+  queue.publish(topic, {
+    messageId: randomUUID(), type: topic, tenantId: TENANT_A, actorId,
+    correlationId: randomUUID(), schemaVersion: "1.0", payload: { tenantId: TENANT_A, ...payload },
+  });
+
+describe("maker-checker: the creator of a draft can never publish it", () => {
+  it("alert: admin creates -> own publish is 403 at the route AND a bypassing command is a no-op in the consumer; a different admin can publish", async () => {
+    const created = await post("/v1/citizen/alerts", admin(), { title: "Self-publish attempt" });
+    expect(created.statusCode).toBe(202);
+    const id = created.json().id as string;
+    await waitFor(async () => (await listRows("/v1/citizen/alerts?status=draft", admin())).find((a) => a.id === id));
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, admin())).statusCode).toBe(403);
+    await cmd(COMMANDS.alertPublish, ADMIN, { id });
+    await settle();
+    expect((await listRows("/v1/citizen/alerts?status=draft", admin())).find((a) => a.id === id)).toBeDefined();
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, admin2())).statusCode).toBe(202);
+    await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).find((a) => a.id === id));
+  });
+
+  it("notice: same admin create -> publish is blocked in route and consumer; another admin publishes", async () => {
+    const created = await post("/v1/citizen/notices", admin(), { subject: "Self-publish notice", department: "Estates" });
+    expect(created.statusCode).toBe(202);
+    const id = created.json().id as string;
+    await waitFor(async () => (await listRows("/v1/citizen/notices?status=draft", admin())).find((n) => n.id === id));
+    expect((await post(`/v1/citizen/notices/${id}/publish`, admin())).statusCode).toBe(403);
+    await cmd(COMMANDS.noticePublish, ADMIN, { id });
+    await settle();
+    expect((await listRows("/v1/citizen/notices?status=draft", admin())).find((n) => n.id === id)).toBeDefined();
+    expect((await post(`/v1/citizen/notices/${id}/publish`, admin2())).statusCode).toBe(202);
+    await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === id));
+  });
+
+  it("survey: same admin create -> publish is blocked in route and consumer; another admin publishes", async () => {
+    const created = await post("/v1/citizen/surveys", admin(), {
+      surveyName: "Self-publish survey", questions: [{ id: "q1", text: "rate", type: "rating", required: true }],
+    });
+    expect(created.statusCode).toBe(202);
+    const id = created.json().id as string;
+    await waitFor(async () => (await listRows("/v1/citizen/surveys?status=draft", admin())).find((s) => s.id === id));
+    expect((await post(`/v1/citizen/surveys/${id}/publish`, admin())).statusCode).toBe(403);
+    await cmd(COMMANDS.surveyPublish, ADMIN, { id });
+    await settle();
+    expect((await listRows("/v1/citizen/surveys?status=draft", admin())).find((s) => s.id === id)).toBeDefined();
+    expect((await post(`/v1/citizen/surveys/${id}/publish`, admin2())).statusCode).toBe(202);
+    await waitFor(async () => (await listRows("/v1/citizen/surveys", citizen1())).find((s) => s.id === id));
+  });
+});
+
+describe("notice create: a unique violation is not audited as success", () => {
+  it("two concurrent creates with the same noticeNo insert one row and audit exactly one create", async () => {
+    const NO = `RACE/${randomUUID().slice(0, 8)}`;
+    const before = (await auditActions(TENANT_A)).filter((a) => a === "citizen_notice:create").length;
+    const a = randomUUID(); const b = randomUUID();
+    await Promise.all([
+      cmd(COMMANDS.noticeCreate, OFFICER, { id: a, noticeNo: NO, subject: "first", department: "Estates" }),
+      cmd(COMMANDS.noticeCreate, OFFICER, { id: b, noticeNo: NO, subject: "second", department: "Estates" }),
+    ]);
+    await waitFor(async () => (await listRows("/v1/citizen/notices?status=draft", officer())).find((n) => n.noticeNo === NO));
+    await settle();
+    expect((await listRows("/v1/citizen/notices?status=draft", officer())).filter((n) => n.noticeNo === NO)).toHaveLength(1);
+    const after = (await auditActions(TENANT_A)).filter((a2) => a2 === "citizen_notice:create").length;
+    expect(after - before).toBe(1);
   });
 });

@@ -62,6 +62,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
     const row = await queries.getAlert(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "alert not found");
     if (row.status !== "draft") throw new HttpError(409, "CONFLICT", `alert is ${row.status}; only a draft can be published`);
+    if (row.createdBy === ctx.actorId) throw new HttpError(403, "FORBIDDEN", "maker-checker: the creator of a alert cannot publish it");
     if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) throw new HttpError(409, "CONFLICT", "alert expiry is already in the past");
     return sendAccepted(reply, acceptedResponseSchema, await commands.publishAlert(ctx, id));
   });
@@ -111,6 +112,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
     const row = await queries.getNotice(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "notice not found");
     if (row.status !== "draft") throw new HttpError(409, "CONFLICT", `notice is ${row.status}; only a draft can be published`);
+    if (row.createdBy === ctx.actorId) throw new HttpError(403, "FORBIDDEN", "maker-checker: the creator of a notice cannot publish it");
     if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) throw new HttpError(409, "CONFLICT", "notice expiry is already in the past");
     return sendAccepted(reply, acceptedResponseSchema, await commands.publishNotice(ctx, id));
   });
@@ -158,6 +160,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
     const row = await queries.getSurvey(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "survey not found");
     if (row.status !== "draft") throw new HttpError(409, "CONFLICT", `survey is ${row.status}; only a draft can be published`);
+    if (row.createdBy === ctx.actorId) throw new HttpError(403, "FORBIDDEN", "maker-checker: the creator of a survey cannot publish it");
     return sendAccepted(reply, acceptedResponseSchema, await commands.publishSurvey(ctx, id));
   });
 

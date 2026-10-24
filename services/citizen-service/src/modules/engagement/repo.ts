@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, ne, and, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   citizenAlerts, citizenNotices, citizenSurveys, citizenSurveyResponses,
@@ -31,17 +31,23 @@ export async function listAlerts(tenantId: string, statuses: string[] | null, li
 /** Guarded transition: only rows currently in `from` are touched. Returns rows changed. */
 export async function transitionAlert(
   tx: Writer, tenantId: string, id: string, from: string[], patch: Partial<CitizenAlertInsert>,
+  /** Maker-checker: when set, a row created by this actor is NOT transitioned. */
+  notCreatedBy?: string,
 ): Promise<number> {
   const rows = await (tx as typeof db).update(citizenAlerts)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(citizenAlerts.id, id), eq(citizenAlerts.tenantId, tenantId), inArray(citizenAlerts.status, from)))
+    .where(and(eq(citizenAlerts.id, id), eq(citizenAlerts.tenantId, tenantId), inArray(citizenAlerts.status, from),
+      ...(notCreatedBy ? [ne(citizenAlerts.createdBy, notCreatedBy)] : [])))
     .returning({ id: citizenAlerts.id });
   return rows.length;
 }
 
 // ── notices ──────────────────────────────────────────────────────────────
-export async function insertNotice(tx: Writer, row: CitizenNoticeInsert): Promise<void> {
-  await tx.insert(citizenNotices).values(row).onConflictDoNothing();
+/** Returns false when nothing was inserted (unique violation, e.g. a concurrent same-noticeNo create). */
+export async function insertNotice(tx: Writer, row: CitizenNoticeInsert): Promise<boolean> {
+  const rows = await tx.insert(citizenNotices).values(row).onConflictDoNothing()
+    .returning({ id: citizenNotices.id });
+  return rows.length > 0;
 }
 export async function findNotice(tenantId: string, id: string): Promise<CitizenNoticeRow | null> {
   const rows = await db.transaction((tx) => tx.select().from(citizenNotices)
@@ -62,10 +68,13 @@ export async function listNotices(tenantId: string, statuses: string[] | null, l
 }
 export async function transitionNotice(
   tx: Writer, tenantId: string, id: string, from: string[], patch: Partial<CitizenNoticeInsert>,
+  /** Maker-checker: when set, a row created by this actor is NOT transitioned. */
+  notCreatedBy?: string,
 ): Promise<number> {
   const rows = await (tx as typeof db).update(citizenNotices)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(citizenNotices.id, id), eq(citizenNotices.tenantId, tenantId), inArray(citizenNotices.status, from)))
+    .where(and(eq(citizenNotices.id, id), eq(citizenNotices.tenantId, tenantId), inArray(citizenNotices.status, from),
+      ...(notCreatedBy ? [ne(citizenNotices.createdBy, notCreatedBy)] : [])))
     .returning({ id: citizenNotices.id });
   return rows.length;
 }
@@ -92,10 +101,13 @@ export async function listSurveys(tenantId: string, statuses: string[] | null, l
 }
 export async function transitionSurvey(
   tx: Writer, tenantId: string, id: string, from: string[], patch: Partial<CitizenSurveyInsert>,
+  /** Maker-checker: when set, a row created by this actor is NOT transitioned. */
+  notCreatedBy?: string,
 ): Promise<number> {
   const rows = await (tx as typeof db).update(citizenSurveys)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(citizenSurveys.id, id), eq(citizenSurveys.tenantId, tenantId), inArray(citizenSurveys.status, from)))
+    .where(and(eq(citizenSurveys.id, id), eq(citizenSurveys.tenantId, tenantId), inArray(citizenSurveys.status, from),
+      ...(notCreatedBy ? [ne(citizenSurveys.createdBy, notCreatedBy)] : [])))
     .returning({ id: citizenSurveys.id });
   return rows.length;
 }
