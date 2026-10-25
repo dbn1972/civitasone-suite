@@ -1203,7 +1203,8 @@ describe("Payment eOffice decision consumers — coverage", () => {
       expect.anything(), "pay-001", expect.objectContaining({ status: "released" }),
     );
     const domainEvts = enqueuedMessages.filter((m) => m.topic === "finance.payment.made");
-    expect(domainEvts).toHaveLength(1);
+    // finance.payment.made is emitted once at payment time (paymentInitiate); approval must NOT re-emit it.
+    expect(domainEvts).toHaveLength(0);
     await q.stop();
   });
 
