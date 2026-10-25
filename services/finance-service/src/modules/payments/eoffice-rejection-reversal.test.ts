@@ -106,7 +106,9 @@ async function run(decision: "approved" | "rejected" | "returned") {
   const ours = [deterministicId(`payment:${paymentId}`), deterministicId(`payment-reversal:${paymentId}`)];
   const journals = outbox.filter((m) => m.topic === COMMANDS.journalPost && ours.includes((m.payload as { id: string }).id))
     .map((m) => m.payload as { lines: { accountCode: string; debitMinor: string; creditMinor: string }[] });
-  return { payment, bill, alloc, cash, outbox, journals };
+  // finance.payment.made is emitted once, at payment time (paymentInitiate); the eOffice decision must not add another.
+  const made = outbox.filter((m) => m.topic === "finance.payment.made" && (m.payload as { paymentId?: string }).paymentId === paymentId);
+  return { payment, bill, alloc, cash, outbox, journals, made };
 }
 
 describe("eOffice rejection of an already-posted payment (V4-D-02)", () => {
@@ -116,6 +118,7 @@ describe("eOffice rejection of an already-posted payment (V4-D-02)", () => {
     expect(r.bill?.status).toBe("passed");
     expect(r.alloc?.committedMinor).toBe(NET);
     expect(r.alloc?.actualMinor).toBe(0n);
+    expect(r.made).toHaveLength(1);
     // Cash book: the OUT row is offset by an IN row of the same amount.
     expect(r.cash.map((c) => [c.r, c.p])).toEqual([["0", NET.toString()], [NET.toString(), "0"]]);
     // GL: the original Dr AP / Cr Bank journal plus its Dr Bank / Cr AP mirror.
@@ -135,6 +138,8 @@ describe("eOffice rejection of an already-posted payment (V4-D-02)", () => {
     expect(r.alloc?.actualMinor).toBe(NET);
     expect(r.cash).toHaveLength(1);
     expect(r.journals).toHaveLength(1);
+    // Full pay -> approve flow: exactly ONE finance.payment.made overall (the payment-time emit; none on approval).
+    expect(r.made).toHaveLength(1);
   });
 
   it("returned: no state change, nothing reversed", async () => {
@@ -142,5 +147,6 @@ describe("eOffice rejection of an already-posted payment (V4-D-02)", () => {
     expect(r.payment?.status).toBe("initiated");
     expect(r.bill?.status).toBe("paid");
     expect(r.cash).toHaveLength(1);
+    expect(r.made).toHaveLength(1);
   });
 });
