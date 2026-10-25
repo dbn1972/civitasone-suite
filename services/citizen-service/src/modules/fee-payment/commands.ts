@@ -13,9 +13,12 @@ import type {
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(ctx: RequestContext, type: string, id: string, payload: Record<string, unknown>): Promise<Accepted> {
+async function publish(
+  ctx: RequestContext, type: string, id: string, payload: Record<string, unknown>,
+  messageId: string = id,
+): Promise<Accepted> {
   await queue.publish(type, {
-    messageId: id,
+    messageId,
     type,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -44,7 +47,9 @@ export async function updateSchedule(ctx: RequestContext, id: string, body: Upda
     return { id, status: "unchanged", correlationId: ctx.correlationId, supersedes: id };
   }
   const newId = randomUUID();
-  const accepted = await publish(ctx, COMMANDS.feeScheduleSupersede, newId, { id: newId, supersedes: id, ...body });
+  // Per-command messageId (house rule): never the entity id, so a replayed/duplicate command is the
+  // only thing the inbox dedupes on.
+  const accepted = await publish(ctx, COMMANDS.feeScheduleSupersede, newId, { id: newId, supersedes: id, ...body }, randomUUID());
   return { ...accepted, supersedes: id };
 }
 
