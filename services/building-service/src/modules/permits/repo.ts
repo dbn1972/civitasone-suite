@@ -83,3 +83,12 @@ export async function updateValidUntil(
     .returning({ id: buildingPermits.id });
   return result.length > 0;
 }
+
+// CLOS3-S4-09: reference numbers come from a Postgres SEQUENCE (migration, same fix as drainage #2182),
+// allocated inside the transaction that inserts the row. A randomInt() number collided on the UNIQUE
+// column after the caller already held a 202 and the accepted request was lost. A rolled-back
+// transaction leaves a gap but never a duplicate.
+export async function nextPermitNumberSeq(tx: ScopedTx): Promise<number> {
+  const rows = (await tx.execute(sql`SELECT nextval('building.permit_number_seq')::bigint AS seq`)) as unknown as Array<{ seq: string | number }>;
+  return Number(rows[0]!.seq);
+}
