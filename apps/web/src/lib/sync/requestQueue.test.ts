@@ -242,3 +242,41 @@ describe("requestQueue — CLOS3-S3-03 flush re-entrancy", () => {
     expect(r.flushed).toBe(1);
   });
 });
+
+describe("requestQueue — CLOS3-S3-04 transient 4xx", () => {
+  const fetchMock = vi.fn();
+  let idb: ReturnType<typeof createFakeIDB>;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    idb = createFakeIDB();
+    vi.stubGlobal("indexedDB", idb.fakeIndexedDB);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([408, 425, 429])("keeps the item queued with retryCount+1 on transient %i", async (status) => {
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: false, status, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 0, remaining: 1 });
+    expect(idb.records.get(IDEMPOTENCY_KEY)?.retryCount).toBe(1);
+  });
+
+  it.each([400, 409])("still deletes and counts permanent %i rejections", async (status) => {
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: false, status, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 1, remaining: 0 });
+  });
+
+  it("dead-letters a transient-4xx item at the retry cap without counting it as flushed", async () => {
+    seed(idb, IDEMPOTENCY_KEY, 7);
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 429, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 0, remaining: 0 });
+  });
+});

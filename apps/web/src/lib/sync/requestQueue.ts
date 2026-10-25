@@ -172,7 +172,9 @@ async function doFlush(): Promise<FlushResult> {
         body: JSON.stringify(body),
         credentials: "same-origin",
       });
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      // Timeout / too-early / throttled replies are transient: keep the write and retry (CLOS3-S3-04).
+      const transient = res.status === 408 || res.status === 425 || res.status === 429;
+      if (res.ok || (res.status >= 400 && res.status < 500 && !transient)) {
         // Success, or a permanent client rejection — stop retrying either way.
         await run(name, "readwrite", (s) => s.delete(q.id));
         flushed++;
