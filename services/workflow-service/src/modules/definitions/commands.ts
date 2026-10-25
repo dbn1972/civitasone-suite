@@ -59,7 +59,8 @@ export async function rollbackDefinition(ctx: RequestContext, code: string, vers
 }
 
 export async function importBpmnDefinition(ctx: RequestContext, body: {
-  code: string; name: string; nodes: NodeSpec[]; edges: EdgeSpec[];
+  name: string; nodes: NodeSpec[]; edges: EdgeSpec[];
 }): Promise<Accepted> {
+  // The definition code is allocated by the consumer from a sequence (shared/numbers.ts), never here.
   return publish(ctx, COMMANDS.importBpmnDefinition, { ...body, id: randomUUID() });
 }
