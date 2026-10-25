@@ -207,7 +207,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notificationId }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) throw new Error("mark-read-failed");
     } catch {
       // Revert on failure
       setItems((prev) =>
@@ -231,7 +231,7 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all: true }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) throw new Error("mark-read-failed");
     } catch {
       setItems(prevItems);
       setLocalUnreadCount(prevCount);
