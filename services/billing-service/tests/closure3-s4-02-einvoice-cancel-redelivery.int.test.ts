@@ -93,7 +93,8 @@ describe.skipIf(!reachable)("CLOS3-S4-02 e-invoice cancel redelivery (real Postg
     H.cancelIrn.mockImplementation(async () => {
       if (!redelivered) {
         redelivered = true;
-        await cancel(cancelMsg(id, inv, MID("c1"))); // redelivery arrives mid-call
+        // redelivery arrives mid-call: it must defer (retryable throw) without calling NIC
+        await expect(cancel(cancelMsg(id, inv, MID("c1")))).rejects.toThrow(/in flight/);
       }
     });
     await cancel(cancelMsg(id, inv, MID("c1")));
@@ -112,7 +113,9 @@ describe.skipIf(!reachable)("CLOS3-S4-02 e-invoice cancel redelivery (real Postg
   it("S4-02: concurrent duplicate deliveries call NIC once", async () => {
     const { id, inv } = await seedGenerated();
     H.cancelIrn.mockImplementation(() => new Promise((r) => setTimeout(r, 150)));
-    await Promise.all([cancel(cancelMsg(id, inv, MID("c2"))), cancel(cancelMsg(id, inv, MID("c2")))]);
+    const results = await Promise.allSettled([cancel(cancelMsg(id, inv, MID("c2"))), cancel(cancelMsg(id, inv, MID("c2")))]);
+    // the loser either saw the claim (retryable throw, redelivered later) or the final row (acked)
+    for (const r of results) if (r.status === "rejected") expect(String(r.reason)).toContain("in flight");
     expect(H.cancelIrn).toHaveBeenCalledTimes(1);
     expect((await rowOf(id))?.status).toBe("cancelled");
   });
@@ -135,8 +138,28 @@ describe.skipIf(!reachable)("CLOS3-S4-02 e-invoice cancel redelivery (real Postg
       await tx.update(einvoiceRequests).set({ status: "cancelling", updatedAt: new Date() }).where(eq(einvoiceRequests.id, id));
       await markProcessed(tx, MID("c4"));
     }));
-    await cancel(cancelMsg(id, inv, MID("c4")));
+    // fresh claim: the handler throws (retryable) so the queue redelivers instead of acking and losing the cancel
+    await expect(cancel(cancelMsg(id, inv, MID("c4")))).rejects.toThrow(/in flight/);
     expect(H.cancelIrn).not.toHaveBeenCalled();
     expect((await rowOf(id))?.status).toBe("cancelling");
+  });
+
+  it("S4-02: realistic queue timing (60 s visibility): 60 s redelivery is deferred, 120 s redelivery retries NIC", async () => {
+    const { id, inv } = await seedGenerated();
+    const claimedAt = Date.now();
+    await asTenant(() => db.transaction(async (tx) => {
+      await tx.update(einvoiceRequests).set({ status: "cancelling", updatedAt: new Date(claimedAt) }).where(eq(einvoiceRequests.id, id));
+      await markProcessed(tx, MID("c6"));
+    }));
+    const spy = vi.spyOn(Date, "now");
+    try {
+      spy.mockReturnValue(claimedAt + 60_000);
+      await expect(cancel(cancelMsg(id, inv, MID("c6")))).rejects.toThrow(/in flight/);
+      expect(H.cancelIrn).not.toHaveBeenCalled();
+      spy.mockReturnValue(claimedAt + 120_000);
+      await cancel(cancelMsg(id, inv, MID("c6")));
+    } finally { spy.mockRestore(); }
+    expect(H.cancelIrn).toHaveBeenCalledTimes(1);
+    expect((await rowOf(id))?.status).toBe("cancelled");
   });
 });

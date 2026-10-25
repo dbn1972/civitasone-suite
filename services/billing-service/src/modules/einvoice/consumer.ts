@@ -16,8 +16,21 @@ const AUDIT_TOPIC = "audit.event.record";
 /**
  * How long a `cancelling` claim is considered in flight. NIC calls time out well inside this
  * (EINVOICE_TIMEOUT_MS), so an older claim belongs to a crashed attempt and may be taken over.
+ *
+ * It MUST be shorter than the queue redelivery window or a crashed cancel is never retried:
+ * queue-service uses a 60 s visibility timeout and 5 receives (redeliveries at ~60/120/180/240 s),
+ * so with a 90 s lease the ~60 s redelivery is deferred (see CancelInFlightError) and the ~120 s one
+ * takes the claim over.
  */
-export const CANCEL_LEASE_MS = 5 * 60 * 1000;
+export const CANCEL_LEASE_MS = 90 * 1000;
+
+/** Thrown (retryable) when a redelivery finds a fresh `cancelling` claim: leave the message unacked. */
+export class CancelInFlightError extends Error {
+  constructor(invoiceId: string) {
+    super(`e-invoice cancel for invoice ${invoiceId} is in flight; retry after the lease`);
+    this.name = "CancelInFlightError";
+  }
+}
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -187,11 +200,12 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
         const row = await repo.findLatestByInvoiceIdForUpdate(tx, invoiceId, tenantId);
 
         if (!isNew) {
-          const stale =
-            row?.status === "cancelling" &&
-            !!row.irn &&
-            Date.now() - row.updatedAt.getTime() >= CANCEL_LEASE_MS;
-          if (!row || !stale) return undefined;
+          const claimed = row?.status === "cancelling" && !!row.irn;
+          if (!row || !claimed) return undefined; // already cancelled/failed: ack
+          if (Date.now() - row.updatedAt.getTime() < CANCEL_LEASE_MS) {
+            // attempt may still be in flight: do NOT ack, let the queue redeliver after the lease
+            throw new CancelInFlightError(invoiceId);
+          }
           await repo.updateRequestWhenStatus(tx, row.id, ["cancelling"], { updatedBy: msg.actorId });
           return row;
         }
