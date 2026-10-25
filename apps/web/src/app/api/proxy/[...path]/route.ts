@@ -41,10 +41,24 @@ const FORWARD_RESPONSE = [
 // Status codes that must not carry a body (undici constraint)
 const NO_BODY_STATUSES = new Set([204, 205, 304]);
 
+const UNSAFE_CHARS = /[/\\?#]/;
+
+function isSafeSegment(raw: string): boolean {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(raw);
+  } catch {
+    return false;
+  }
+  return [raw, decoded].every((v) => v !== "" && v !== "." && v !== ".." && !UNSAFE_CHARS.test(v));
+}
+
 async function proxy(req: Request, segments: string[], method: string) {
-  // M1: block path-traversal segments
-  if (segments.some(s => decodeURIComponent(s) === '..' || decodeURIComponent(s) === '.')) {
-    return NextResponse.json({ code: 'BAD_REQUEST', message: 'Invalid path' }, { status: 400 });
+  // M1 / V4-A-03: a catch-all segment must be a single plain path component.
+  // Next hands %2F-encoded slashes through inside one segment, so reject any
+  // separator / query / fragment / dot segment (raw or decoded) and bad escapes.
+  if (!segments.every(isSafeSegment)) {
+    return NextResponse.json({ code: "BAD_REQUEST", message: "Invalid path" }, { status: 400 });
   }
   const token = (await cookies()).get(COOKIE.ACCESS)?.value;
   if (!token) return NextResponse.json({ code: "UNAUTHORIZED" }, { status: 401 });
@@ -52,6 +66,10 @@ async function proxy(req: Request, segments: string[], method: string) {
   const subpath = segments.join("/");
   const url = new URL(req.url);
   const target = `${GATEWAY}/api/${subpath}${url.search}`;
+  // Defence in depth: the normalised target must still live under GATEWAY/api/.
+  if (!new URL(target).pathname.startsWith("/api/")) {
+    return NextResponse.json({ code: "BAD_REQUEST", message: "Invalid path" }, { status: 400 });
+  }
 
   const headers: Record<string, string> = { authorization: `Bearer ${token}` };
   for (const h of FORWARD) {
