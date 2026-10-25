@@ -47,10 +47,31 @@ const ALLOWED_TYPES: Record<string, { maxSizeMb: number; extensions: string[] }>
   photo: { maxSizeMb: 2, extensions: ["jpg", "jpeg", "png", "webp"] },
 };
 
+// V4-E-05: MIME types a browser legitimately reports per extension. The
+// client-declared contentType must be one of the MIME types of the category's
+// allowed extensions (a closed set -- never text/html, image/svg+xml, octet-stream...).
+// Browsers/OSes disagree on legacy Office types, so the check is per category, not per extension.
+const MIME_BY_EXT: Record<string, string[]> = {
+  pdf: ["application/pdf"],
+  doc: ["application/msword"],
+  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  xls: ["application/vnd.ms-excel"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  ppt: ["application/vnd.ms-powerpoint"],
+  pptx: ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+};
+
 const requestBody = z.object({
   category: z.enum(["resume", "attachment", "document", "photo"]),
   filename: z.string().min(1).max(255),
   contentType: z.string().min(1).max(100),
+  // V4-E-05: optional, additive. When given it is capped at the category limit
+  // and signed into the URL as the exact content-length. Clients should send it.
+  sizeBytes: z.number().int().positive().optional(),
 });
 
 export async function uploadRoutes(app: FastifyInstance): Promise<void> {
@@ -58,7 +79,9 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/uploads/presign", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const body = requestBody.parse(req.body);
+    const parsed = requestBody.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid upload request" });
+    const body = parsed.data;
     
     const cat = ALLOWED_TYPES[body.category];
     if (!cat) return reply.code(400).send({ code: "INVALID_CATEGORY", message: "unknown upload category" });
@@ -68,13 +91,24 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "INVALID_FILE_TYPE", message: `Allowed types for ${body.category}: ${cat.extensions.join(", ")}` });
     }
 
+    const contentType = body.contentType.trim().toLowerCase();
+    const allowedMimes = new Set(cat.extensions.flatMap((e) => MIME_BY_EXT[e] ?? []));
+    if (!allowedMimes.has(contentType)) {
+      return reply.code(400).send({ code: "INVALID_CONTENT_TYPE", message: `Content type is not allowed for ${body.category} uploads` });
+    }
+    if (body.sizeBytes !== undefined && body.sizeBytes > cat.maxSizeMb * 1024 * 1024) {
+      return reply.code(400).send({ code: "FILE_TOO_LARGE", message: `Maximum size for ${body.category} is ${cat.maxSizeMb} MB` });
+    }
+
     // The uploader's id is part of the key, so a consumer (e.g. an insurance claim) can require that an attached
     // document is the caller's own upload.
     const key = `uploads/${ctx.tenantId}/${body.category}/${ctx.actorId}/${randomUUID()}.${ext}`;
     
     const uploadUrl = await presignedPutUrl({
       key,
-      contentType: body.contentType,
+      contentType,
+      signContentType: true,
+      ...(body.sizeBytes !== undefined ? { contentLength: body.sizeBytes } : {}),
       expiresIn: 300,
     });
 
@@ -85,7 +119,7 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
       expiresIn: 300,
       maxSizeMb: cat.maxSizeMb,
       headers: {
-        "Content-Type": body.contentType,
+        "Content-Type": contentType,
       },
     });
   });
