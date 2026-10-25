@@ -109,7 +109,7 @@ describe("alerts — GET/POST /v1/citizen/alerts", () => {
     expect((await get("/v1/citizen/alerts?status=bogus", officer())).statusCode).toBe(400);
   });
 
-  it("publishing is admin-only: officer 403, admin 202 -> citizen sees status 'active' with the web row shape", async () => {
+  it("publishing: the creating officer 403, citizen 403, admin 202 -> citizen sees status 'active' with the web row shape", async () => {
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, officer())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, citizen1())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, admin())).statusCode).toBe(202);
@@ -123,6 +123,16 @@ describe("alerts — GET/POST /v1/citizen/alerts", () => {
 
   it("publishing again is a 409 (state guard)", async () => {
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, admin())).statusCode).toBe(409);
+  });
+
+  it("a second officer (not the creator) publishes an officer's draft: 202, then a citizen sees it", async () => {
+    const title = `Power cut ${randomUUID().slice(0, 8)}`;
+    expect((await post("/v1/citizen/alerts", officer(), { title, category: "Utilities", targetAudience: "All" })).statusCode).toBe(202);
+    const id = (await waitFor(async () => (await listRows("/v1/citizen/alerts?status=draft", officer())).find((a) => a.title === title))).id as string;
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, officer())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, officer2())).statusCode).toBe(202);
+    const row = await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).find((a) => a.id === id));
+    expect(row.status).toBe("active");
   });
 
   it("admin keeps full rights: admin publishes an officer draft, a citizen cannot withdraw, an officer can", async () => {
@@ -196,7 +206,7 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
     expect((await get(`/v1/citizen/notices/${noticeId}`, citizen1())).statusCode).toBe(404);
   });
 
-  it("admin publishes -> citizen row has the exact web shape (type label, '' expiry)", async () => {
+  it("publishing: creating officer 403, admin 202 -> citizen row has the exact web shape (type label, '' expiry)", async () => {
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, officer())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, admin())).statusCode).toBe(202);
     const row = await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === noticeId));
@@ -204,6 +214,16 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
       id: noticeId, noticeNo: expect.stringMatching(/^NTC-\d{4}-[0-9A-F]{8}$/), subject: "Public hearing on road widening",
       department: "Public Works", published: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), expiry: "", type: "Public Hearing",
     });
+  });
+
+  it("a second officer (not the creator) publishes an officer's notice: 202, then a citizen sees it", async () => {
+    const subject = `Water notice ${randomUUID().slice(0, 8)}`;
+    expect((await post("/v1/citizen/notices", officer(), { subject, department: "Public Works", type: "tender" })).statusCode).toBe(202);
+    const id = (await waitFor(async () => (await listRows("/v1/citizen/notices?status=draft", officer())).find((n) => n.subject === subject))).id as string;
+    expect((await post(`/v1/citizen/notices/${id}/publish`, officer())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/notices/${id}/publish`, officer2())).statusCode).toBe(202);
+    const row = await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === id));
+    expect(row.subject).toBe(subject);
   });
 
   it("a duplicate supplied noticeNo is a 409; a supplied noticeNo is honoured", async () => {
