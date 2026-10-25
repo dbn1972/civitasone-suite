@@ -71,6 +71,16 @@ export function assertWithinFilingWindow(
   return { filingDeadline: deadlineDay };
 }
 
+/**
+ * V4-G-12: a decision cannot be dated in the future. A future decisionDate would
+ * push the computed deadline out and defeat the statutory limitation window.
+ */
+export function assertDecisionDateNotFuture(decisionDate: Date, now: Date = new Date()): void {
+  if (Number.isNaN(decisionDate.getTime()) || toDateString(decisionDate) > toDateString(now)) {
+    throw new Error("INVALID_DECISION_DATE");
+  }
+}
+
 /** Map an order type to the appeal's terminal outcome + resulting status. */
 export function orderOutcome(orderType: OrderType): { status: AppealStatus; outcome: string } {
   if (orderType === "remanded") return { status: "remanded", outcome: "remanded" };
