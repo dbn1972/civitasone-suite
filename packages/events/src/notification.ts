@@ -32,6 +32,11 @@ export const SYSTEM_TEMPLATE_IDS = {
   candidateLoginOtp:         "00000000-0000-4000-8001-00000000000d",
   /** Invoice payment reminder (email) — notification-service migration 0050. */
   invoiceReminder:           "00000000-0000-4000-8001-00000000000e",
+  /** Workflow delegation created/revoked notices (in-app + email) — notification-service migration 0051. */
+  workflowDelegationCreated:      "00000000-0000-4000-8001-000000000010",
+  workflowDelegationRevoked:      "00000000-0000-4000-8001-000000000011",
+  workflowDelegationCreatedEmail: "00000000-0000-4000-8001-000000000012",
+  workflowDelegationRevokedEmail: "00000000-0000-4000-8001-000000000013",
 } as const;
 
 const EVENT_TEMPLATE_MAP: Record<string, string> = {
@@ -51,6 +56,8 @@ const EVENT_TEMPLATE_MAP: Record<string, string> = {
   "payroll.run.approved":           SYSTEM_TEMPLATE_IDS.payrollRunApproved,
   "hrms.candidate.login_otp":       SYSTEM_TEMPLATE_IDS.candidateLoginOtp,
   "billing.invoice.reminder":       SYSTEM_TEMPLATE_IDS.invoiceReminder,
+  "workflow.delegation.created":    SYSTEM_TEMPLATE_IDS.workflowDelegationCreated,
+  "workflow.delegation.revoked":    SYSTEM_TEMPLATE_IDS.workflowDelegationRevoked,
   // Municipal Sec5 (advertisement, vendor, sewerage, shop, trade, animal, fire,
   // crematorium, drainage, event, parking, parks, roadcut, building, refund,
   // market, swm) — canonical event types from packages/events/src/municipal-cross.ts
