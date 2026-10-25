@@ -28,12 +28,34 @@ function deviceHeaders(): Record<string, string> {
   return headers;
 }
 
-export async function browserFetch(path: string, init: RequestInit = {}): Promise<Response> {
+/** Client calls get a generous bound: uploads and exports are slow, a hung socket is not. */
+export const DEFAULT_BROWSER_FETCH_TIMEOUT_MS = 60_000;
+
+export type BrowserFetchInit = RequestInit & {
+  /** CLOS3-S3-24: abort a request that has produced no response headers after this many ms. */
+  timeoutMs?: number;
+};
+
+export async function browserFetch(path: string, init: BrowserFetchInit = {}): Promise<Response> {
   const normalized = path.startsWith("/") ? path.slice(1) : path;
+  const { timeoutMs = DEFAULT_BROWSER_FETCH_TIMEOUT_MS, signal: callerSignal, ...rest } = init;
+  // Merge the caller's signal with our timeout (AbortSignal.any is not in older Safari).
+  const controller = new AbortController();
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  const onCallerAbort = () => controller.abort(callerSignal?.reason);
+  if (callerSignal) {
+    if (callerSignal.aborted) onCallerAbort();
+    else callerSignal.addEventListener("abort", onCallerAbort, { once: true });
+  }
   try {
     return await fetch(`/api/proxy/${normalized}`, {
-      ...init,
+      ...rest,
       credentials: "same-origin",
+      signal: controller.signal,
       headers: {
         "content-type": "application/json",
         ...deviceHeaders(),
@@ -41,6 +63,11 @@ export async function browserFetch(path: string, init: RequestInit = {}): Promis
       },
     });
   } catch (err) {
+    // Our own timeout is a network failure for the user, not a caller abort.
+    if (timedOut && !callerSignal?.aborted) {
+      const human = humanErrorFromFailure({ kind: "offline" });
+      throw new UserFacingError(`${human.what} ${human.next}`);
+    }
     // A fetch that never got a response rejects with a raw browser TypeError
     // ("Failed to fetch"). Callers render `e.message`, so convert it here to the
     // standard network copy. A caller-initiated abort is left alone: callers
@@ -51,6 +78,9 @@ export async function browserFetch(path: string, init: RequestInit = {}): Promis
       throw new UserFacingError(`${human.what} ${human.next}`);
     }
     throw err;
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", onCallerAbort);
   }
 }
 

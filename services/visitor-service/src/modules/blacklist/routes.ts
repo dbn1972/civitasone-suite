@@ -17,8 +17,8 @@ export async function blacklistRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = listBlacklistQuery.parse(req.query);
-    const rows = await repo.listBlacklistEntries(ctx.tenantId, query, { actorId: ctx.actorId, correlationId: ctx.correlationId });
-    return reply.send({ data: rows });
+    const { rows, hasMore } = await repo.listBlacklistEntries(ctx.tenantId, query, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    return reply.send({ data: rows, meta: { limit: query.limit, offset: query.offset, hasMore } });
   });
 
   app.post("/v1/visitor/blacklist", async (req, reply) => {
@@ -73,8 +73,8 @@ export async function blacklistRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const query = listWatchlistQuery.parse(req.query);
-    const rows = await repo.listWatchlistEntries(ctx.tenantId, query, { actorId: ctx.actorId, correlationId: ctx.correlationId });
-    return reply.send({ data: rows });
+    const { rows, hasMore } = await repo.listWatchlistEntries(ctx.tenantId, query, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    return reply.send({ data: rows, meta: { limit: query.limit, offset: query.offset, hasMore } });
   });
 
   app.post("/v1/visitor/watchlist", async (req, reply) => {

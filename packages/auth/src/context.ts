@@ -1,6 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { timingSafeEqual } from "node:crypto";
-import { verifyToken, toRequestContext } from "./index.js";
+import { verifyToken, toRequestContext, isDevOrTestEnv } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 
 /** Thrown when route context cannot be resolved (map to service HttpError). */
@@ -72,7 +72,7 @@ function resolveServiceContextInner(req: FastifyRequest): RequestContext {
 
   // SEC-1: the HS256 shared-secret fallback is a TEST/DEV convenience only.
   // It must NEVER run in production, even if JWT_SECRET happens to be set.
-  const isProduction = process.env.NODE_ENV === "production";
+  const isProduction = !isDevOrTestEnv();
   const useHs256 =
     !isProduction &&
     (process.env.JWT_ALGORITHM === "HS256" ||

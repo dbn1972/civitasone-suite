@@ -1,4 +1,4 @@
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, gt, asc } from "drizzle-orm";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { db } from "../../shared/db.js";
 import {
@@ -108,6 +108,18 @@ export async function listMilestonesByProject(projectId: string, tenantId: strin
     .where(and(eq(projectMilestones.projectId, projectId), eq(projectMilestones.tenantId, tenantId))));
 }
 
+/**
+ * CLOS3-S5-21 batch loader: milestones of many projects of ONE tenant in a single
+ * query (the RAG tick used to open one transaction per project). Caller establishes
+ * the tenant context (runWithTenant) so db.transaction() injects app.tenant_id and
+ * FORCE RLS stays in force; the tenant_id predicate is kept as defence in depth.
+ */
+export async function listMilestonesByProjects(projectIds: string[], tenantId: string): Promise<(typeof projectMilestones.$inferSelect)[]> {
+  if (projectIds.length === 0) return [];
+  return db.transaction((tx) => tx.select().from(projectMilestones)
+    .where(and(inArray(projectMilestones.projectId, projectIds), eq(projectMilestones.tenantId, tenantId))));
+}
+
 export async function listMilestonesByTenant(tenantId: string, limit: number): Promise<(typeof projectMilestones.$inferSelect)[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
@@ -134,9 +146,17 @@ export async function updateProjectProgressTx(
 // reads through the BYPASSRLS scanner pool (read-only; migration 0019).
 // Per-project writes derived from this scan are still applied later, per
 // project, inside runWithTenant + db.transaction() as project_svc.
-export async function listActiveProjects(limit: number): Promise<ProjectRow[]> {
+//
+// CLOS3-S5-21: keyset-paged (id > afterId ORDER BY id) so a sweep with more than
+// `limit` active projects covers every project across successive ticks instead of
+// re-reading the same arbitrary slice.
+export async function listActiveProjects(limit: number, afterId?: string | null): Promise<ProjectRow[]> {
+  const where = afterId
+    ? and(eq(projectProjects.status, "active"), gt(projectProjects.id, afterId))
+    : eq(projectProjects.status, "active");
   return scannerDb.select().from(projectProjects)
-    .where(eq(projectProjects.status, "active"))
+    .where(where)
+    .orderBy(asc(projectProjects.id))
     .limit(limit);
 }
 

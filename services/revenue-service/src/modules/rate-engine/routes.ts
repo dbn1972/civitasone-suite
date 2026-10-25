@@ -7,6 +7,8 @@ import * as repo from "./repo.js";
 import {
   createRateHeadBody,
   createRateSlabBody,
+  replaceRateSlabsBody,
+  rateHeadParam,
   createPenaltyRuleBody,
   createRebateRuleBody,
   rateHeadIdQuery,
@@ -46,6 +48,20 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, REVENUE_ROLES);
     const body = createRateSlabBody.parse(req.body);
     const result = await commands.createRateSlab(ctx, body);
+    return reply.code(202).send({ data: result });
+  });
+
+  /**
+   * CLOS3-S1-11: edit a rate head's slabs. Upsert/supersede -- the posted set becomes the live
+   * set from `effectiveFrom`; slabs it replaces are end-dated (or deactivated if they start on or
+   * after that date), never duplicated. An identical set is a no-op. Atomic (one transaction).
+   */
+  app.put("/v1/revenue/rate-heads/:rateHeadId/slabs", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { rateHeadId } = rateHeadParam.parse(req.params);
+    const body = replaceRateSlabsBody.parse(req.body);
+    const result = await commands.replaceRateSlabs(ctx, rateHeadId, body);
     return reply.code(202).send({ data: result });
   });
 

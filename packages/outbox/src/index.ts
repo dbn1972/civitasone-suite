@@ -203,6 +203,28 @@ export async function getCommandOutcome(
   return rows[0] ?? null;
 }
 
+export type EnqueueEvent = {
+  topic: string;
+  eventType: string;
+  tenantId: string;
+  actorId: string;
+  correlationId: string;
+  payload: Record<string, unknown>;
+  schemaVersion?: string;
+  causationId?: string;
+};
+
+function toOutboxRow(e: EnqueueEvent) {
+  const { schemaVersion, causationId, payload, ...rest } = e;
+  return {
+    ...rest,
+    schemaVersion: schemaVersion ?? getTopicSchemaVersion(e.topic),
+    // Reserved-key stash (see enqueue() doc comment): only present when a causationId was
+    // supplied, so existing callers' stored payloads are unchanged.
+    payload: causationId ? { ...payload, [OUTBOX_CAUSATION_KEY]: causationId } : payload,
+  };
+}
+
 /**
  * Enqueue an event into the outbox — MUST be called inside the same tx as the
  * business write.
@@ -229,27 +251,23 @@ export async function getCommandOutcome(
  * `causationId` (every existing call site) leaves the stored payload and the
  * delivered envelope byte-for-byte unchanged.
  */
-export async function enqueue(
-  tx: DrizzleTx,
-  e: {
-    topic: string;
-    eventType: string;
-    tenantId: string;
-    actorId: string;
-    correlationId: string;
-    payload: Record<string, unknown>;
-    schemaVersion?: string;
-    causationId?: string;
+export async function enqueue(tx: DrizzleTx, e: EnqueueEvent): Promise<void> {
+  await tx.insert(outboxMessages).values(toOutboxRow(e));
+}
+
+/** Rows per multi-row INSERT in enqueueMany (8 columns x 1000 stays far under PG's 65535-parameter cap). */
+export const ENQUEUE_MANY_CHUNK = 1000;
+
+/**
+ * Batch form of enqueue(): the same rows enqueue() would write, one per event and in
+ * order, but inserted with multi-row statements (ceil(N / ENQUEUE_MANY_CHUNK) round
+ * trips instead of N). Same transactional contract as enqueue(): call inside the
+ * business tx. An empty list is a no-op.
+ */
+export async function enqueueMany(tx: DrizzleTx, events: readonly EnqueueEvent[]): Promise<void> {
+  for (let i = 0; i < events.length; i += ENQUEUE_MANY_CHUNK) {
+    await tx.insert(outboxMessages).values(events.slice(i, i + ENQUEUE_MANY_CHUNK).map(toOutboxRow));
   }
-): Promise<void> {
-  const { schemaVersion, causationId, payload, ...rest } = e;
-  await tx.insert(outboxMessages).values({
-    ...rest,
-    schemaVersion: schemaVersion ?? getTopicSchemaVersion(e.topic),
-    // Reserved-key stash (see doc comment): only present when a causationId was
-    // supplied, so existing callers' stored payloads are unchanged.
-    payload: causationId ? { ...payload, [OUTBOX_CAUSATION_KEY]: causationId } : payload,
-  });
 }
 
 /**

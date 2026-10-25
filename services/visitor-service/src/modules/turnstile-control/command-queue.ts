@@ -12,6 +12,7 @@
  * Requirements validated: 7.1, 7.9, 7.10
  */
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 import { pino } from "pino";
 
 const log = pino({ name: "turnstile-command-queue" });
@@ -40,7 +41,7 @@ function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
+  _redis = new Redis(url, redisClientOptions());
   return _redis;
 }
 

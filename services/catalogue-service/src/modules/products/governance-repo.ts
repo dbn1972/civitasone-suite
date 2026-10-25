@@ -57,6 +57,41 @@ export async function listVersionNumbers(productId: string, tenantId: string): P
   return rows.map((r) => r.n);
 }
 
+/** First draft / pending_approval version of a product, regardless of how many versions exist. */
+export async function findOpenVersion(productId: string, tenantId: string): Promise<ProductVersionRow | undefined> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(productVersions)
+      .where(and(
+        eq(productVersions.tenantId, tenantId),
+        eq(productVersions.productId, productId),
+        inArray(productVersions.status, ["draft", "pending_approval"]),
+      ))
+      .orderBy(desc(productVersions.versionNumber))
+      .limit(1),
+  );
+  return rows[0];
+}
+
+/**
+ * Write-side guard for openProductVersion (CLOS3-S4-05): serialise per product for the rest of the
+ * transaction, then report the open version (if any) and the next version number from the
+ * transaction's own view. Take the lock BEFORE reading.
+ */
+export async function lockAndReadVersionState(
+  tx: ScopedTx,
+  tenantId: string,
+  productId: string,
+): Promise<{ open: ProductVersionRow | undefined; nextVersionNumber: number }> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"product-versions:" + tenantId + ":" + productId}))`);
+  const where = and(eq(productVersions.tenantId, tenantId), eq(productVersions.productId, productId))!;
+  const [open] = await tx.select().from(productVersions)
+    .where(and(where, inArray(productVersions.status, ["draft", "pending_approval"])))
+    .orderBy(desc(productVersions.versionNumber)).limit(1);
+  const [agg] = await tx.select({ max: sql<number>`coalesce(max(${productVersions.versionNumber}), 0)::int` })
+    .from(productVersions).where(where);
+  return { open, nextVersionNumber: (agg?.max ?? 0) + 1 };
+}
+
 export async function insertVersion(tx: ScopedTx, row: ProductVersionInsert): Promise<void> {
   await tx.insert(productVersions).values(row);
 }

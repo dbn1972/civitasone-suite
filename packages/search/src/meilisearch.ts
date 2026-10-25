@@ -7,6 +7,15 @@ import type { SearchEngine, SearchEngineConfig, SearchDocument, SearchQuery, Sea
 
 const log = pino({ name: "search.meilisearch" });
 
+/** Per-request timeout (ms) for normal calls; override with MEILISEARCH_TIMEOUT_MS. */
+function defaultTimeoutMs(): number {
+  return Number(process.env.MEILISEARCH_TIMEOUT_MS) || 10_000;
+}
+/** Longer timeout (ms) for bulk writes; override with MEILISEARCH_BULK_TIMEOUT_MS. */
+function bulkTimeoutMs(): number {
+  return Number(process.env.MEILISEARCH_BULK_TIMEOUT_MS) || 60_000;
+}
+
 export interface MeilisearchOptions {
   /** Meilisearch host URL (default: http://localhost:7700). */
   host?: string | undefined;
@@ -68,7 +77,7 @@ export class MeilisearchEngine implements SearchEngine {
       const res = await this.fetch(`/indexes/${this.indexName}/documents`, {
         method: "POST",
         body: JSON.stringify(batch),
-      });
+      }, bulkTimeoutMs());
       if (!res.ok) throw new Error(`Meilisearch bulkIndex failed: ${res.status}`);
     }
   }
@@ -143,7 +152,7 @@ export class MeilisearchEngine implements SearchEngine {
       body: JSON.stringify({
         filter: `tenantId = "${this.escape(tenantId)}"`,
       }),
-    });
+    }, bulkTimeoutMs());
     if (!res.ok) throw new Error(`Meilisearch removeAll failed: ${res.status}`);
   }
 
@@ -178,9 +187,15 @@ export class MeilisearchEngine implements SearchEngine {
     return value.replace(/[^a-zA-Z0-9\-_.: /]/g, "").replace(/"/g, '\\"');
   }
 
-  private async fetch(path: string, init: RequestInit): Promise<Response> {
+  /**
+   * CLOS3-S6-14: every request is bounded. Without a signal a Meilisearch host
+   * that accepts the connection and never answers hung index/search/remove and
+   * the document-index consumers forever. A caller-supplied signal wins.
+   * Bulk operations (bulkIndex/removeAll) get the longer BULK timeout.
+   */
+  private async fetch(path: string, init: RequestInit, timeoutMs: number = defaultTimeoutMs()): Promise<Response> {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
-    return globalThis.fetch(`${this.host}${path}`, { ...init, headers: { ...headers, ...(init.headers as Record<string, string> | undefined) } });
+    return globalThis.fetch(`${this.host}${path}`, { ...init, signal: init.signal ?? AbortSignal.timeout(timeoutMs), headers: { ...headers, ...(init.headers as Record<string, string> | undefined) } });
   }
 }

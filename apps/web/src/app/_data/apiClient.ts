@@ -52,7 +52,16 @@ export interface FetchJsonOptions<TApi, TOutput> {
    * not yet been rolled out.
    */
   responseSchema?: ZodType<TApi, ZodTypeDef, unknown>;
+  /**
+   * CLOS3-S3-24: abort the upstream call after this many ms and fall into the existing
+   * `source: "error"` state. Defaults to DEFAULT_FETCH_TIMEOUT_MS; raise it per loader for
+   * known-slow report endpoints.
+   */
+  timeoutMs?: number;
 }
+
+/** Without a bound, a hung gateway pins the SSR render, a socket and a request slot per page view. */
+export const DEFAULT_FETCH_TIMEOUT_MS = 20_000;
 
 function getGatewayBaseUrl(): string | null {
   const base =
@@ -130,6 +139,8 @@ export async function fetchJson<TApi, TOutput>(
   const normalized = path.startsWith("/") ? path : `/${path}`;
   const apiPath = normalized.startsWith("/api/") ? normalized : `/api${normalized}`;
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(`${baseUrl}${apiPath}`, {
       headers: {
@@ -138,6 +149,7 @@ export async function fetchJson<TApi, TOutput>(
       },
       next: options.revalidateSeconds ? { revalidate: options.revalidateSeconds } : undefined,
       cache: options.revalidateSeconds ? undefined : "no-store",
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -172,6 +184,9 @@ export async function fetchJson<TApi, TOutput>(
   } catch {
     emitError(options.telemetryKey, "network_error", path);
     return { data: empty, source: "error" };
+  } finally {
+    // Cleared only after the body is read too, so a stalled body is bounded by the same timer.
+    clearTimeout(timer);
   }
 }
 

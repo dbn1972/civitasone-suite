@@ -17,6 +17,7 @@
  * The consumer call sites are responsible for try/catch after commit.
  */
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 
 const REVOKED_SET_KEY = (tenantId: string): string => `visitor:${tenantId}:revoked`;
 
@@ -68,7 +69,7 @@ function getStore(): RevocationStore {
   _store =
     !url || process.env.CACHE_DRIVER === "memory"
       ? new MemoryRevocationStore()
-      : new RedisRevocationStore(new Redis(url));
+      : new RedisRevocationStore(new Redis(url, redisClientOptions()));
   return _store;
 }
 

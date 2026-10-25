@@ -5,6 +5,12 @@ export type SqlClientOptions = {
   prepare?: boolean;
   idle_timeout?: number;
   connect_timeout?: number;
+  /** Server-side per-statement cap in ms (0 disables). Default DB_STATEMENT_TIMEOUT_MS or 300000. */
+  statement_timeout_ms?: number;
+  /** Server-side idle-in-transaction cap in ms (0 disables). Default DB_IDLE_IN_TX_TIMEOUT_MS or 60000. */
+  idle_in_transaction_timeout_ms?: number;
+  /** Seconds before a pooled connection is recycled. Default DB_MAX_LIFETIME_S or 1800. */
+  max_lifetime?: number;
 };
 
 /** Postgres OID for `json`. postgres-js keys its serializer table by OID. */
@@ -141,8 +147,22 @@ export function createSqlClient(connectionString?: string, overrides?: SqlClient
   // signature. Without the annotation T infers as `{ json: PostgresType<unknown> }`
   // and the return type becomes `Sql<{ json: unknown }>`, which would leak into
   // every service's shared/db.ts.
+  // V4-F-04: bound query / idle-in-transaction time so one stuck session cannot pin a
+  // pool slot forever. Sent as startup parameters, which PgBouncer rejects unless listed
+  // in ignore_startup_parameters, so they are skipped on the bouncer path.
+  const stmtMs = overrides?.statement_timeout_ms ?? Number(process.env.DB_STATEMENT_TIMEOUT_MS ?? 300_000);
+  const idleTxMs = overrides?.idle_in_transaction_timeout_ms ?? Number(process.env.DB_IDLE_IN_TX_TIMEOUT_MS ?? 60_000);
+  const maxLifetime = overrides?.max_lifetime ?? Number(process.env.DB_MAX_LIFETIME_S ?? 1800);
+  const connection: Record<string, number> = {};
+  if (!viaBouncer) {
+    if (stmtMs > 0) connection.statement_timeout = stmtMs;
+    if (idleTxMs > 0) connection.idle_in_transaction_session_timeout = idleTxMs;
+  }
+
   const options: postgres.Options<Record<string, postgres.PostgresType<unknown>>> = {
     max,
+    ...(Object.keys(connection).length ? { connection } : {}),
+    ...(maxLifetime > 0 ? { max_lifetime: maxLifetime } : {}),
     prepare: overrides?.prepare ?? !viaBouncer,
     idle_timeout: overrides?.idle_timeout ?? 20,
     connect_timeout: overrides?.connect_timeout ?? 10,

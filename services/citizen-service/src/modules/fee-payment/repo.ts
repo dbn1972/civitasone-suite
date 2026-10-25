@@ -19,6 +19,16 @@ export async function findScheduleByIdTx(tx: Writer, id: string, tenantId: strin
   return rows[0] ?? null;
 }
 
+export async function findScheduleById(tenantId: string, id: string): Promise<FeeScheduleRow | null> {
+  return db.transaction((tx) => findScheduleByIdTx(tx, id, tenantId));
+}
+
+export async function retireSchedule(tx: Writer, id: string, tenantId: string, supersededBy: string, actorId: string): Promise<void> {
+  await tx.update(feeSchedules)
+    .set({ active: false, supersededBy, updatedBy: actorId, updatedAt: new Date(), rowVersion: sql`${feeSchedules.rowVersion} + 1` })
+    .where(and(eq(feeSchedules.id, id), eq(feeSchedules.tenantId, tenantId)));
+}
+
 export async function findActiveScheduleForService(tx: Writer, tenantId: string, serviceId: string): Promise<FeeScheduleRow | null> {
   const rows = await (tx as typeof db).select().from(feeSchedules)
     .where(and(eq(feeSchedules.tenantId, tenantId), eq(feeSchedules.serviceId, serviceId), eq(feeSchedules.active, true)))

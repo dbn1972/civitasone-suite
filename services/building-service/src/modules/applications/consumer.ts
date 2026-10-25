@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -46,14 +45,13 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       log.error({ id: p.id, feeMinor: feeMinor.toString() }, "computed application fee exceeds sanity ceiling — refusing to create application or raise a challan");
       throw new Error(`building application fee ${feeMinor.toString()} exceeds MAX_FEE_MINOR ceiling`);
     }
-    // See services/building-service/src/modules/permits/consumer.ts for why
-    // Date.now() % N is a deterministic-collision hazard on a UNIQUE column,
-    // not a source of randomness — same fix applied here for applicationNumber.
-    const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
+    // Allocated from a Postgres sequence inside the transaction below (CLOS3-S4-09).
+    let applicationNumber = "";
     const farComputed = (p.builtUpArea && p.plotArea) ? computeFAR(p.builtUpArea, p.plotArea) : undefined;
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      applicationNumber = generateApplicationNumber("ULB", await repo.nextApplicationNumberSeq(tx));
       await repo.insertApplication(tx, {
         id: p.id, tenantId: msg.tenantId, applicationNumber, status: "draft",
         siteAddress: p.siteAddress as never,
@@ -90,7 +88,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       });
       await writeAudit(tx, ctxOf(msg), { action: "application.create", resourceType: "building_application", resourceId: p.id });
     });
-    log.info({ id: p.id, applicationNumber }, "building application created");
+    if (applicationNumber) log.info({ id: p.id, applicationNumber }, "building application created");
   });
 
   queue.subscribe(COMMANDS.submitApplication, async (msg) => {

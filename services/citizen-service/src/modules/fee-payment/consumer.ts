@@ -71,11 +71,12 @@ async function audit(
   resourceType: string,
   resourceId: string,
   newValue?: Record<string, unknown>,
+  outcome: "success" | "failure" = "success",
 ) {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
+    payload: { service: "citizen", action, resourceType, resourceId, outcome, ...(newValue ? { newValue } : {}) },
   });
 }
 
@@ -126,6 +127,35 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "fee_schedule_create", "fee_schedule", p.id);
     });
     log.info({ id: p.id }, "fee schedule created");
+  });
+
+  queue.subscribe(COMMANDS.feeScheduleSupersede, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; supersedes: string; name: string;
+      baseAmount: number; currency: string; exemptions: unknown;
+    };
+    let applied = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const old = await repo.findScheduleByIdTx(tx, p.supersedes, p.tenantId);
+      // Lost a race with another edit (or the row is gone): never fork the chain, but never drop
+      // silently either -- the caller already got a 202, so record the rejection.
+      if (!old || !old.active) {
+        await audit(tx, msg, "fee_schedule_supersede_rejected", "fee_schedule", p.id, {
+          supersedes: p.supersedes, reason: old ? "SCHEDULE_SUPERSEDED" : "SCHEDULE_NOT_FOUND",
+        }, "failure");
+        return;
+      }
+      await repo.retireSchedule(tx, old.id, p.tenantId, p.id, msg.actorId);
+      await repo.insertSchedule(tx, {
+        id: p.id, tenantId: p.tenantId, serviceId: old.serviceId, name: p.name,
+        baseAmount: p.baseAmount, currency: p.currency, exemptions: p.exemptions as never,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "fee_schedule_supersede", "fee_schedule", p.id, { supersedes: old.id });
+      applied = true;
+    });
+    log.info({ id: p.id, supersedes: p.supersedes, applied }, "fee schedule superseded");
   });
 
   queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {

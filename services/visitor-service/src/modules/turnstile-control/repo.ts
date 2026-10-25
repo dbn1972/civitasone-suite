@@ -8,6 +8,7 @@
  */
 import { eq, and, desc, count } from "drizzle-orm";
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { passageEvents, deviceCommands } from "./schema.js";
@@ -20,7 +21,7 @@ function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
+  _redis = new Redis(url, redisClientOptions());
   return _redis;
 }
 

@@ -17,6 +17,10 @@ vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
   ...auth,
 }));
 
+const order: string[] = [];
+const purge = vi.hoisted(() => ({ purgeInventoryCache: vi.fn() }));
+vi.mock("../_revalidate", () => purge);
+
 const { QcPolicyToggle } = await import("./QcPolicyToggle");
 const { default: SettingsPage } = await import("./page");
 
@@ -29,6 +33,27 @@ beforeEach(() => {
 });
 
 describe("QcPolicyToggle (GAP-INVENTORY-GOODS-RETURNS-DETAIL-04)", () => {
+  // CLOS3-S2-02: router.refresh() alone leaves the fetch Data Cache stale for 15-60 s.
+  it("CLOS3-S2-02: purges the inventory data cache BEFORE refreshing after a saved change", async () => {
+    order.length = 0;
+    purge.purgeInventoryCache.mockImplementation(async () => { order.push("purge"); });
+    refresh.mockImplementation(() => { order.push("refresh"); });
+    fetchMock.mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<QcPolicyToggle initial />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    await waitFor(() => expect(refresh).toHaveBeenCalled());
+    expect(order).toEqual(["purge", "refresh"]);
+  });
+
+  it("CLOS3-S2-02: a failed save does not purge", async () => {
+    purge.purgeInventoryCache.mockClear();
+    fetchMock.mockResolvedValue(new Response("{}", { status: 500 }));
+    render(<QcPolicyToggle initial />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(purge.purgeInventoryCache).not.toHaveBeenCalled();
+  });
+
   it("PUTs the new value and announces success", async () => {
     fetchMock.mockResolvedValue(new Response("{}", { status: 202 }));
     render(<QcPolicyToggle initial />);

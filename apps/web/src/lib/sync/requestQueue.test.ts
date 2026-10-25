@@ -280,3 +280,52 @@ describe("requestQueue — CLOS3-S3-04 transient 4xx", () => {
     expect(r).toEqual({ flushed: 0, remaining: 0 });
   });
 });
+
+
+describe("requestQueue — CLOS3-S3-05 replay timeout", () => {
+  const fetchMock = vi.fn();
+  let idb: ReturnType<typeof createFakeIDB>;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    idb = createFakeIDB();
+    vi.stubGlobal("indexedDB", idb.fakeIndexedDB);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("a hung replay aborts after 30 s: flush settles, the item stays queued and retryCount is untouched", async () => {
+    vi.useFakeTimers();
+    seed(idb);
+    seed(idb, "second-key");
+    // Honours the abort signal, otherwise never resolves (a hung connection).
+    fetchMock.mockImplementation((_url: string, init: { signal?: AbortSignal }) =>
+      new Promise((_res, rej) => {
+        init.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+      }));
+
+    let settled = false;
+    const p = flushRequestQueue().then((r) => { settled = true; return r; });
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    const r = await p;
+
+    expect(r).toEqual({ flushed: 0, remaining: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // loop stops, later writes retry on the next flush
+    expect(idb.records.get(IDEMPOTENCY_KEY)?.retryCount).toBe(0);
+  });
+
+  it("a prompt reply is unaffected and clears its timer", async () => {
+    vi.useFakeTimers();
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 1, remaining: 0 });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

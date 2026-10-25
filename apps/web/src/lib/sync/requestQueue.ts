@@ -133,6 +133,9 @@ export async function fetchOrQueue(
 
 const MAX_REQUEST_RETRIES = 8;
 
+/** CLOS3-S3-05: a hung replay must not block the sequential flush (and every later write) forever. */
+const REPLAY_TIMEOUT_MS = 30_000;
+
 type FlushResult = { flushed: number; remaining: number };
 
 /** In-flight flush for this tab (CLOS3-S3-03): concurrent triggers share it instead of replaying every item twice.
@@ -165,12 +168,16 @@ async function doFlush(): Promise<FlushResult> {
       await run(name, "readwrite", (s) => s.delete(q.id));
       continue;
     }
+    // AbortController + timer (not AbortSignal.timeout) so older Safari works and tests can fake time.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), REPLAY_TIMEOUT_MS);
     try {
       const res = await fetch(`/api/proxy${q.path}`, {
         method: q.method,
         headers: { "content-type": "application/json", "x-idempotency-key": q.idempotencyKey, ...buildSyncHeaders() },
         body: JSON.stringify(body),
         credentials: "same-origin",
+        signal: controller.signal,
       });
       // Timeout / too-early / throttled replies are transient: keep the write and retry (CLOS3-S3-04).
       const transient = res.status === 408 || res.status === 425 || res.status === 429;
@@ -184,8 +191,11 @@ async function doFlush(): Promise<FlushResult> {
         await run(name, "readwrite", (s) => s.put({ ...q, retryCount: q.retryCount + 1 }));
       }
     } catch {
-      // Still offline — leave it queued.
+      // Still offline, or the replay timed out (abort) — leave it queued, without bumping
+      // retryCount (the server may still have processed it), and stop; the next flush retries.
       break;
+    } finally {
+      clearTimeout(abortTimer);
     }
   }
 

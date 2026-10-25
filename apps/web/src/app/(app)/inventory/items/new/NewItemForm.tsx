@@ -7,6 +7,7 @@ import { z } from "zod";
 import { Field, Input, Select, useToast } from "@/app/_components/ds";
 import { parseRupeesToPaise } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
+import { purgeInventoryCache } from "../../_revalidate";
 
 export type Option = { id: string; name: string };
 
@@ -92,6 +93,7 @@ export function NewItemForm({ categories, uoms }: { categories: Option[]; uoms: 
         return;
       }
       toast.success("Item request received. It will appear in the item master shortly.");
+      await purgeInventoryCache();
       router.push("/inventory/items");
       router.refresh();
     } catch (caught) {

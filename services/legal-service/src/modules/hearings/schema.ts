@@ -1,4 +1,5 @@
-import { pgSchema, uuid, text, integer, varchar, timestamp, date, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, varchar, timestamp, date, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const hearingsSchema = pgSchema("hearings");
 
@@ -20,7 +21,13 @@ export const legalHearings = hearingsSchema.table("legal_hearings", {
   createdBy:    uuid("created_by").notNull(),
   updatedBy:    uuid("updated_by").notNull(),
   version:      integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // CLOS3-S5-15 (migration 0029): at most one e-Courts-synced hearing per case+date.
+  // Partial on the sync's system actor so user-recorded hearings stay unconstrained.
+  ecourtsSyncUnique: uniqueIndex("uq_legal_hearings_ecourts_sync")
+    .on(t.tenantId, t.caseId, t.hearingDate)
+    .where(sql`created_by = '00000000-0000-4000-8000-000000000000'`),
+}));
 
 export const legalOrders = hearingsSchema.table("legal_orders", {
   id:        uuid("id").primaryKey().defaultRandom(),

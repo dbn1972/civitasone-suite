@@ -1,11 +1,11 @@
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
 import { rateHeads, rateSlabs, penaltyRules, rebateRules } from "./schema.js";
-import { assertNoSlabOverlap } from "./domain.js";
+import { assertNoSlabOverlap, planSlabReplace, DomainError, type ExistingSlab, type SlabSpec } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -16,6 +16,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
       const p = msg.payload as {
+        id?: string;
         code: string;
         name: string;
         category: string;
@@ -23,6 +24,7 @@ export function registerRateEngineConsumers(queue: Queue): void {
       };
 
       await tx.insert(rateHeads).values({
+        ...(p.id ? { id: p.id } : {}),
         tenantId: msg.tenantId,
         code: p.code,
         name: p.name,
@@ -141,6 +143,93 @@ export function registerRateEngineConsumers(queue: Queue): void {
     });
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:rate_slabs:${(msg.payload as { rateHeadId: string }).rateHeadId}`);
+  });
+
+  // ─── rateSlabReplace (CLOS3-S1-11) ──────────────────────────────────────
+  queue.subscribe(COMMANDS.rateSlabReplace, async (msg) => {
+    const p = msg.payload as { rateHeadId: string; effectiveFrom: string; slabs: SlabSpec[] };
+    let changed = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const head = await tx
+        .select({ id: rateHeads.id })
+        .from(rateHeads)
+        .where(and(eq(rateHeads.tenantId, msg.tenantId), eq(rateHeads.id, p.rateHeadId)));
+      if (head.length === 0) throw new DomainError("RATE_HEAD_NOT_FOUND", "rate head not found");
+
+      const rows = await tx
+        .select()
+        .from(rateSlabs)
+        .where(and(eq(rateSlabs.tenantId, msg.tenantId), eq(rateSlabs.rateHeadId, p.rateHeadId)));
+      const existing: ExistingSlab[] = rows.map((s) => ({
+        id: s.id,
+        slabType: s.slabType,
+        bandFrom: s.bandFrom ?? null,
+        bandTo: s.bandTo ?? null,
+        rateValue: s.rateValue,
+        effectiveFrom: typeof s.effectiveFrom === "string" ? s.effectiveFrom : String(s.effectiveFrom),
+        effectiveTo: s.effectiveTo == null ? null : typeof s.effectiveTo === "string" ? s.effectiveTo : String(s.effectiveTo),
+        isActive: s.isActive,
+      }));
+
+      // Throws (SLAB_OVERLAP) before any write, so a bad set leaves the live set untouched.
+      const plan = planSlabReplace(existing, p.slabs, p.effectiveFrom);
+      if (plan.noop) return;
+
+      for (const r of plan.retire) {
+        await tx
+          .update(rateSlabs)
+          .set(
+            r.mode === "close"
+              ? { effectiveTo: p.effectiveFrom, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${rateSlabs.version} + 1` }
+              : { isActive: false, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${rateSlabs.version} + 1` },
+          )
+          .where(and(eq(rateSlabs.tenantId, msg.tenantId), eq(rateSlabs.id, r.id)));
+      }
+
+      for (const s of plan.insert) {
+        await tx.insert(rateSlabs).values({
+          tenantId: msg.tenantId,
+          rateHeadId: p.rateHeadId,
+          slabType: s.slabType,
+          bandFrom: s.bandFrom == null ? null : BigInt(s.bandFrom),
+          bandTo: s.bandTo == null ? null : BigInt(s.bandTo),
+          rateValue: BigInt(s.rateValue),
+          effectiveFrom: p.effectiveFrom,
+          effectiveTo: null,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+      }
+
+      await enqueue(tx, {
+        topic: EVENTS.rateSlabCreated,
+        eventType: EVENTS.rateSlabCreated,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { rateHeadId: p.rateHeadId, effectiveFrom: p.effectiveFrom, slabCount: plan.insert.length, retired: plan.retire.length },
+      });
+
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: SERVICE,
+          action: "supersede",
+          resourceType: "rate_slab",
+          resourceId: p.rateHeadId,
+          outcome: "success",
+        },
+      });
+      changed = true;
+    });
+
+    if (changed) await cache.invalidate(`${SERVICE}:${msg.tenantId}:rate_slabs:${p.rateHeadId}`);
   });
 
   // ─── penaltyRuleCreate ──────────────────────────────────────────────────

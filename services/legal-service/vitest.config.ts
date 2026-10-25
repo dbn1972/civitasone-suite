@@ -16,6 +16,17 @@ export default defineConfig({
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
               );
             })()),
+      // S5-07 / S5-15 real-database tests read through the BYPASSRLS scanner
+      // role; without this DSN they silently skip in CI.
+      ...(process.env.LEGAL_SCANNER_DATABASE_URL ||
+      process.env.CI === "true" ||
+      process.env.GITHUB_ACTIONS === "true"
+        ? {
+            LEGAL_SCANNER_DATABASE_URL:
+              process.env.LEGAL_SCANNER_DATABASE_URL ??
+              "postgres://legal_scanner:legal_scanner_dev_pw@localhost:5435/civitas_legal",
+          }
+        : {}),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

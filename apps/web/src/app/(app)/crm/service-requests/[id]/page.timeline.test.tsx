@@ -87,3 +87,32 @@ describe("F6-01 SR detail timeline wiring", () => {
     expect(urls.some((u) => u.endsWith("/service-requests/sr-1/history"))).toBe(true);
   });
 });
+
+describe("CLOS3-S1-14 detail and history are fetched in parallel", () => {
+  it("issues both GETs before either resolves, and still renders history", async () => {
+    const resolvers: Record<string, (v: unknown) => void> = {};
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockImplementation((url: string) => {
+      const key = url.endsWith("/history") ? "history" : "detail";
+      return new Promise((res) => { resolvers[key] = res; });
+    });
+
+    const pending = Page({ params: Promise.resolve({ id: "sr-1" }) });
+    // Let the page reach its first await.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(Object.keys(resolvers).sort()).toEqual(["detail", "history"]);
+
+    resolvers.detail!({ data: detail, source: "api" });
+    resolvers.history!({ data: history, source: "api" });
+    render(await pending);
+    expect(screen.getByText("Status timeline")).toBeInTheDocument();
+  });
+
+  it("a failing history request degrades to an empty timeline, never breaks the page", async () => {
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockImplementation((url: string) =>
+      url.endsWith("/history") ? Promise.reject(new Error("boom")) : Promise.resolve({ data: detail, source: "api" }));
+    render(await Page({ params: Promise.resolve({ id: "sr-1" }) }));
+    expect(screen.getByText("Certificate correction")).toBeInTheDocument();
+  });
+});
