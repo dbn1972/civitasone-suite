@@ -84,3 +84,16 @@ export async function updateFeePayment(
     .returning({ id: buildingApplications.id });
   return result.length > 0;
 }
+
+/**
+ * V4-C-04: next applicationNumber sequence value from building.application_number_seq
+ * (migrations/0004). Replaces crypto.randomInt(1, 999999), which collided
+ * (birthday paradox) against the global UNIQUE column. Call inside the
+ * transaction that inserts the row.
+ */
+export async function nextApplicationSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"building"."application_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}
