@@ -10,20 +10,29 @@ import type { StoreNamespace } from "./indexedDb";
  */
 let cached: Promise<StoreNamespace | null> | null = null;
 
+async function fetchNamespace(): Promise<{ ns: StoreNamespace | null; definite: boolean }> {
+  try {
+    const res = await fetch("/api/auth/session", { credentials: "same-origin" });
+    if (!res.ok) return { ns: null, definite: false };
+    const data = (await res.json()) as { authenticated?: boolean; tenantId?: string; userId?: string };
+    if (!data.authenticated) return { ns: null, definite: true };
+    return { ns: { tenantId: data.tenantId ?? "", userId: data.userId ?? "" }, definite: true };
+  } catch {
+    return { ns: null, definite: false };
+  }
+}
+
 export function resolveNamespace(): Promise<StoreNamespace | null> {
   if (cached) return cached;
-  cached = (async () => {
-    try {
-      const res = await fetch("/api/auth/session", { credentials: "same-origin" });
-      if (!res.ok) return null;
-      const data = (await res.json()) as { authenticated?: boolean; tenantId?: string; userId?: string };
-      if (!data.authenticated) return null;
-      return { tenantId: data.tenantId ?? "", userId: data.userId ?? "" };
-    } catch {
-      return null;
-    }
-  })();
-  return cached;
+  // CLOS3-S3-06: only a definite answer (authenticated or not) stays memoised. A transient failure
+  // (network error / non-OK) resolves null for THIS call but drops the memo, so the next call
+  // retries instead of pinning the tab to the un-namespaced shared stores until logout.
+  const p: Promise<StoreNamespace | null> = fetchNamespace().then((r) => {
+    if (!r.definite && cached === p) cached = null;
+    return r.ns;
+  });
+  cached = p;
+  return p;
 }
 
 /** Clear the cached namespace (call on logout). */
