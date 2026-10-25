@@ -39,6 +39,10 @@ export function EligibilityBuilder({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
+  // CLOS3-S1-03: last persisted design. Seeded only when a rule set already exists, so a new service
+  // (no ruleSetId) still runs its first POST on mount. Known, out of scope: setDesign(saved) can
+  // overwrite edits made while a save is in flight.
+  const lastPersisted = useRef<EligibilityDesignState | null>(initial.ruleSetId ? initial : null);
 
   const sampleFields = useMemo(
     () => buildSampleSubjectFields(design.rules, formFields),
@@ -65,10 +69,12 @@ export function EligibilityBuilder({
 
   const schedulePersist = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
+    if (lastPersisted.current && JSON.stringify(lastPersisted.current) === JSON.stringify(latest.current)) return;
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
         const saved = await persistEligibilityDesign(latest.current, serviceId, serviceName);
+        lastPersisted.current = saved;
         setDesign(saved);
         onDesignPersisted?.(saved);
         onSaveState?.("saved");
