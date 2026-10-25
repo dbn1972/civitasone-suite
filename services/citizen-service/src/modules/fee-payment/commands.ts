@@ -5,9 +5,9 @@ import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled } from "./domain.js";
+import { scheduleContentEquals, assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled } from "./domain.js";
 import type {
-  CreateScheduleBody, CreateIntentBody, RecordOfflineBody,
+  CreateScheduleBody, UpdateScheduleBody, CreateIntentBody, RecordOfflineBody,
   ConfirmPaymentBody, RefundRequestBody, RefundDecisionBody,
 } from "./validators.js";
 
@@ -29,6 +29,23 @@ async function publish(ctx: RequestContext, type: string, id: string, payload: R
 export async function createSchedule(ctx: RequestContext, body: CreateScheduleBody): Promise<Accepted> {
   const id = randomUUID();
   return publish(ctx, COMMANDS.feeScheduleCreate, id, { id, ...body });
+}
+
+/**
+ * CLOS3-S1-11: edit a saved schedule. Idempotent: an unchanged body publishes nothing
+ * and returns the same id. A changed body retires the active row and inserts a
+ * successor (new id, returned now so the caller can keep editing the chain).
+ */
+export async function updateSchedule(ctx: RequestContext, id: string, body: UpdateScheduleBody): Promise<Accepted & { supersedes: string }> {
+  const current = await repo.findScheduleById(ctx.tenantId, id);
+  if (!current) throw new HttpError(404, "NOT_FOUND", "fee schedule not found");
+  if (!current.active) throw new HttpError(409, "SCHEDULE_SUPERSEDED", "fee schedule was already replaced; reload and edit the current one");
+  if (scheduleContentEquals(current, body)) {
+    return { id, status: "unchanged", correlationId: ctx.correlationId, supersedes: id };
+  }
+  const newId = randomUUID();
+  const accepted = await publish(ctx, COMMANDS.feeScheduleSupersede, newId, { id: newId, supersedes: id, ...body });
+  return { ...accepted, supersedes: id };
 }
 
 export async function createPaymentIntent(ctx: RequestContext, body: CreateIntentBody): Promise<Accepted> {

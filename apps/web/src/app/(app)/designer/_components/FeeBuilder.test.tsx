@@ -116,6 +116,9 @@ describe("FeeBuilder", () => {
           if (url.includes("/finance/major-heads")) {
             return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
           }
+          if (url.endsWith("/revenue/rate-heads") && method === "GET") {
+            return { ok: true, status: 200, json: async () => ({ data: [{ id: "head-1" }] }) } as Response;
+          }
           if (url.includes("/revenue/rate-heads")) {
             return { ok: true, status: 202, json: async () => ({ data: { id: "head-1" } }) } as Response;
           }
@@ -167,7 +170,7 @@ describe("FeeBuilder", () => {
           await vi.advanceTimersByTimeAsync(2100);
         });
       }
-      const slabWrites = calls.filter((c) => c.url.includes("/revenue/rate-slabs") || c.url.includes("/slabs"));
+      const slabWrites = calls.filter((c) => c.url.includes("/slabs"));
       expect(slabWrites).toHaveLength(1);
     });
   });

@@ -24,6 +24,10 @@ export const createScheduleBody = z.object({
 });
 export type CreateScheduleBody = z.infer<typeof createScheduleBody>;
 
+/** CLOS3-S1-11: edit of a saved schedule. serviceId is immutable (taken from the stored row). */
+export const updateScheduleBody = createScheduleBody.omit({ serviceId: true });
+export type UpdateScheduleBody = z.infer<typeof updateScheduleBody>;
+
 export const computeFeeBody = z.object({
   // Optional: compute is a pure read (no mutation) and the apply screen needs the
   // breakup BEFORE an application id exists. Nothing downstream reads it.

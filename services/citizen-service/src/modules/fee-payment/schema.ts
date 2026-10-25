@@ -20,6 +20,8 @@ export const feeSchedules = feeSchema.table("schedules", {
   currency:    varchar("currency", { length: 3 }).notNull().default("INR"),
   exemptions:  jsonb("exemptions").$type<ExemptionRule[]>().notNull().default([]),
   active:      boolean("active").notNull().default(true),
+  /** CLOS3-S1-11: id of the schedule that replaced this one (set when retired by PATCH). */
+  supersededBy: uuid("superseded_by"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),
