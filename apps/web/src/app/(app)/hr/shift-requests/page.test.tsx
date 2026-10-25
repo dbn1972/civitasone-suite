@@ -125,3 +125,56 @@ describe("ShiftRequestsPage", () => {
     expect(screen.getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
   });
 });
+
+// CLOS3-S2-05: getData() and getEmployees() are independent; awaiting them serially added a backend round trip to
+// every render. They must start together, while getMyProfile() stays conditional on the roster result.
+describe("ShiftRequestsPage -- loaders run concurrently (CLOS3-S2-05)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getEmployeesMock.mockReset();
+    getMyProfileMock.mockReset();
+    mockRoles = ["employee"];
+  });
+
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((res) => { resolve = res; });
+    return { promise, resolve };
+  }
+  const tick = () => new Promise((r) => setTimeout(r, 0));
+
+  it("starts getEmployees() without waiting for the shift-requests fetch to finish", async () => {
+    const requests = deferred<{ data: unknown[]; source: string }>();
+    const roster = deferred<{ data: unknown[]; source: string }>();
+    fetchJsonMock.mockReturnValue(requests.promise);
+    getEmployeesMock.mockReturnValue(roster.promise);
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "S", department: "IT", employeeNo: "E-1", status: "active", designation: "O" }, source: "api" });
+
+    const page = ShiftRequestsPage();
+    await vi.waitFor(() => expect(fetchJsonMock).toHaveBeenCalled());
+    await tick();
+    // Neither deferred promise has been resolved yet.
+    expect(getEmployeesMock).toHaveBeenCalledTimes(1);
+
+    requests.resolve({ data: [], source: "api" });
+    roster.resolve({ data: [{ id: "e1", name: "A" }], source: "api" });
+    await page;
+  });
+
+  it("still calls getMyProfile() after the roster resolves to an empty list (conditional behaviour preserved)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "S", department: "IT", employeeNo: "E-1", status: "active", designation: "O" }, source: "api" });
+
+    await ShiftRequestsPage();
+    expect(getMyProfileMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call getMyProfile() when the roster is non-empty", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    getEmployeesMock.mockResolvedValue({ data: [{ id: "e1", name: "A" }], source: "api" });
+
+    await ShiftRequestsPage();
+    expect(getMyProfileMock).not.toHaveBeenCalled();
+  });
+});
