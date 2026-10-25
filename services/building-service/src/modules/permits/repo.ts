@@ -9,11 +9,27 @@ export async function findById(id: string, tenantId: string): Promise<BuildingPe
   return rows[0] ?? null;
 }
 
-export async function findByVerificationCode(code: string): Promise<BuildingPermitRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(buildingPermits).where(eq(buildingPermits.verificationCode, code)).limit(1),
-  );
-  return rows[0] ?? null;
+/**
+ * Public QR verification lookup (GET /v1/building/permits/verify). Reads the NON-RLS
+ * building_permit_directory (public facts only) -- an anonymous request has no tenant GUC, so the
+ * FORCE-RLS building_permits table would return zero rows for every code. See
+ * migrations/0004_permit_public_directory.sql.
+ */
+export async function findPublicByVerificationCode(code: string) {
+  return scopedRead(async (tx) => {
+    const rows = (await tx.execute(
+      sql`SELECT permit_number AS "permitNumber", status, issued_at AS "issuedAt", valid_until AS "validUntil"
+          FROM building.building_permit_directory
+          WHERE verification_code = ${code}
+          LIMIT 1`,
+    )) as unknown as Array<{
+      permitNumber: string;
+      status: string;
+      issuedAt: Date | null;
+      validUntil: Date | null;
+    }>;
+    return rows[0] ?? null;
+  });
 }
 
 // Used by permits/routes.ts's POST /v1/building/permits pre-accept
@@ -60,6 +76,14 @@ export async function list(
 
 export async function insertPermit(tx: ScopedTx, row: BuildingPermitInsert): Promise<void> {
   await tx.insert(buildingPermits).values(row);
+  // Public verification directory, same transaction (migrations/0004_permit_public_directory.sql).
+  await tx.execute(
+    sql`INSERT INTO building.building_permit_directory
+          (verification_code, tenant_id, permit_id, permit_number, status, issued_at, valid_until)
+        VALUES (${row.verificationCode}, ${row.tenantId}, ${row.id ?? null}, ${row.permitNumber}, ${row.status ?? "active"},
+                ${row.issuedAt ? row.issuedAt.toISOString() : null}, ${row.validUntil ? row.validUntil.toISOString() : null})
+        ON CONFLICT (verification_code) DO NOTHING`,
+  );
 }
 
 export async function updatePermitStatus(
@@ -71,6 +95,12 @@ export async function updatePermitStatus(
     .set({ status, ...fields, updatedBy, updatedAt: new Date(), version: sql`${buildingPermits.version} + 1` })
     .where(and(eq(buildingPermits.id, id), eq(buildingPermits.tenantId, tenantId)))
     .returning({ id: buildingPermits.id });
+  if (result.length > 0) {
+    await tx.execute(
+      sql`UPDATE building.building_permit_directory SET status = ${status}, updated_at = now()
+          WHERE permit_id = ${id} AND tenant_id = ${tenantId}`,
+    );
+  }
   return result.length > 0;
 }
 
@@ -81,5 +111,11 @@ export async function updateValidUntil(
     .set({ validUntil, updatedBy, updatedAt: new Date(), version: sql`${buildingPermits.version} + 1` })
     .where(and(eq(buildingPermits.id, id), eq(buildingPermits.tenantId, tenantId)))
     .returning({ id: buildingPermits.id });
+  if (result.length > 0) {
+    await tx.execute(
+      sql`UPDATE building.building_permit_directory SET valid_until = ${validUntil.toISOString()}, updated_at = now()
+          WHERE permit_id = ${id} AND tenant_id = ${tenantId}`,
+    );
+  }
   return result.length > 0;
 }

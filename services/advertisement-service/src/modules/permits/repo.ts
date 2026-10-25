@@ -11,13 +11,30 @@ export async function findById(id: string, tenantId: string): Promise<AdvPermitR
   return rows[0] ?? null;
 }
 
-export async function findByVerificationCode(code: string): Promise<AdvPermitRow | null> {
-  const rows = await scopedRead((tx) =>
-    tx.select().from(advPermits)
-      .where(eq(advPermits.verificationCode, code))
-      .limit(1),
-  );
-  return rows[0] ?? null;
+/**
+ * Public QR verification lookup (GET /v1/advertisement/permits/verify). Reads the NON-RLS
+ * adv_permit_directory (public facts only) -- an anonymous request has no tenant GUC, so the
+ * FORCE-RLS adv_permits table would return zero rows for every code. See
+ * migrations/0006_permit_public_directory.sql.
+ */
+export async function findPublicByVerificationCode(code: string) {
+  return scopedRead(async (tx) => {
+    const rows = (await tx.execute(
+      sql`SELECT permit_number AS "permitNumber", advertisement_type AS "advertisementType", status,
+                 issued_at AS "issuedAt", valid_from AS "validFrom", valid_until AS "validUntil"
+          FROM adv_permits.adv_permit_directory
+          WHERE verification_code = ${code}
+          LIMIT 1`,
+    )) as unknown as Array<{
+      permitNumber: string;
+      advertisementType: string;
+      status: string;
+      issuedAt: Date | null;
+      validFrom: string | null;
+      validUntil: string | null;
+    }>;
+    return rows[0] ?? null;
+  });
 }
 
 // Added for the POST /v1/advertisement/permits pre-accept check (mirrors
@@ -75,6 +92,15 @@ export async function list(
 
 export async function insertPermit(tx: ScopedTx, row: AdvPermitInsert): Promise<void> {
   await tx.insert(advPermits).values(row);
+  // Public verification directory, same transaction (migrations/0006_permit_public_directory.sql).
+  await tx.execute(
+    sql`INSERT INTO adv_permits.adv_permit_directory
+          (verification_code, tenant_id, permit_id, permit_number, advertisement_type, status, issued_at, valid_from, valid_until)
+        VALUES (${row.verificationCode}, ${row.tenantId}, ${row.id ?? null}, ${row.permitNumber}, ${row.advertisementType},
+                ${row.status ?? "issued"}, ${row.issuedAt ? row.issuedAt.toISOString() : null},
+                ${row.validFrom ?? null}, ${row.validUntil ?? null})
+        ON CONFLICT (verification_code) DO NOTHING`,
+  );
 }
 
 export async function updateStatus(
@@ -95,6 +121,12 @@ export async function updateStatus(
     })
     .where(and(eq(advPermits.id, id), eq(advPermits.tenantId, tenantId)))
     .returning({ id: advPermits.id });
+  if (result.length > 0) {
+    await tx.execute(
+      sql`UPDATE adv_permits.adv_permit_directory SET status = ${status}, updated_at = now()
+          WHERE permit_id = ${id} AND tenant_id = ${tenantId}`,
+    );
+  }
   return result.length > 0;
 }
 
@@ -113,6 +145,12 @@ export async function updateValidUntil(
     .set({ validUntil, updatedBy, updatedAt: new Date(), version: sql`${advPermits.version} + 1` })
     .where(and(eq(advPermits.id, id), eq(advPermits.tenantId, tenantId)))
     .returning({ id: advPermits.id });
+  if (result.length > 0) {
+    await tx.execute(
+      sql`UPDATE adv_permits.adv_permit_directory SET valid_until = ${validUntil}, updated_at = now()
+          WHERE permit_id = ${id} AND tenant_id = ${tenantId}`,
+    );
+  }
   return result.length > 0;
 }
 

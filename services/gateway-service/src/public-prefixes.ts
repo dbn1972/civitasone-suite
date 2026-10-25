@@ -47,6 +47,9 @@
 export const PUBLIC_PREFIXES = [
   "/api/identity",
   "/api/v1/install",
+  // V4-B-06: anonymous permit QR verification (exact paths, not the whole service prefix).
+  "/api/v1/advertisement/permits/verify",
+  "/api/v1/building/permits/verify",
   "/api/v1/careers",
   "/api/v1/crm/public",
   "/api/v1/court/public",
