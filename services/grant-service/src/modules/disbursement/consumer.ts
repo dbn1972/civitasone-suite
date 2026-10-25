@@ -33,6 +33,26 @@ async function notifyDisbursementOutcome(
   });
 }
 
+/**
+ * V4-D-04: compensation for a terminally failed payout. The scheme budget was reserved and the installment flipped to
+ * `disbursed` at initiation; the money never left, so give the reservation back and re-open the installment for release.
+ * Callers invoke this only for the one delivery that actually moved the disbursement to `failed`
+ * (repo.failInitiatedDisbursementTx), so it runs exactly once.
+ */
+async function compensateFailedDisbursement(
+  tx: Parameters<typeof enqueue>[0],
+  disbursement: { installmentId: string; tenantId: string; amountMinor: bigint },
+  actorId: string,
+): Promise<void> {
+  const installment = await repo.findInstallmentByIdTx(tx, disbursement.installmentId, disbursement.tenantId);
+  if (!installment) return;
+  const app = await appRepo.findApplicationByIdTx(tx, installment.applicationId, disbursement.tenantId);
+  if (app?.schemeId) {
+    await schemeRepo.releaseSchemeBudget(tx, app.schemeId, disbursement.tenantId, disbursement.amountMinor);
+  }
+  await repo.updateInstallment(tx, disbursement.installmentId, { status: "pending", updatedBy: actorId });
+}
+
 export function registerDisbursementConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.installmentCreate, async (msg) => {
     const p = msg.payload as {
@@ -81,6 +101,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // Guard: total disbursed must not exceed approved amount
       // M1 FIX: use FOR UPDATE lock to prevent concurrent over-disbursement.
       const app = await appRepo.findApplicationByIdForUpdate(tx, installment.applicationId, installment.tenantId);
+
       if (app) {
         // GAP-GRANTS-INSTALLMENTS-03: never release while the funding scheme is
         // suspended or closed (a "suspended grant"). The UI blocks the control,
@@ -308,12 +329,21 @@ export function registerDisbursementConsumers(queue: Queue): void {
         return;
       }
 
-      await repo.updateDisbursement(tx, disbursement.id, {
-        status: isSuccess ? "completed" : "failed",
-        disbursedAt: isSuccess ? new Date() : null,
-        failureReason: !isSuccess ? "finance.payment.made: outcome=failure" : null,
-        updatedBy: msg.actorId,
-      });
+      if (isSuccess) {
+        await repo.updateDisbursement(tx, disbursement.id, {
+          status: "completed",
+          disbursedAt: new Date(),
+          failureReason: null,
+          updatedBy: msg.actorId,
+        });
+      } else {
+        // V4-D-04: terminal failure -- guarded transition, then give the budget back and re-open the installment.
+        const failed = await repo.failInitiatedDisbursementTx(tx, disbursement.id, disbursement.tenantId, {
+          failureReason: "finance.payment.made: outcome=failure", updatedBy: msg.actorId,
+        });
+        if (!failed) return;
+        await compensateFailedDisbursement(tx, disbursement, msg.actorId);
+      }
       if (isSuccess && disbursement.pfmsTxnId) {
         await repo.markPfmsReconciled(tx, disbursement.id);
       }
@@ -345,12 +375,21 @@ export function registerDisbursementConsumers(queue: Queue): void {
         const disbursement = await repo.findDisbursementByPfmsTxnIdTx(tx, rec.pfmsTxnId, p.tenantId);
         if (!disbursement) continue;
         const isSuccess = rec.status === "completed";
-        await repo.updateDisbursement(tx, disbursement.id, {
-          status: isSuccess ? "completed" : "failed",
-          disbursedAt: isSuccess ? new Date() : null,
-          failureReason: !isSuccess ? `pfms_reconcile: ${rec.status}` : null,
-          updatedBy: msg.actorId,
-        });
+        if (isSuccess) {
+          await repo.updateDisbursement(tx, disbursement.id, {
+            status: "completed",
+            disbursedAt: new Date(),
+            failureReason: null,
+            updatedBy: msg.actorId,
+          });
+        } else {
+          // V4-D-04: guarded failure transition + compensation, once per disbursement.
+          const failed = await repo.failInitiatedDisbursementTx(tx, disbursement.id, disbursement.tenantId, {
+            failureReason: `pfms_reconcile: ${rec.status}`, updatedBy: msg.actorId,
+          });
+          if (!failed) continue;
+          await compensateFailedDisbursement(tx, disbursement, msg.actorId);
+        }
         if (isSuccess) await repo.markPfmsReconciled(tx, disbursement.id);
         const eventTopic = isSuccess ? EVENTS.disbursementCompleted : EVENTS.disbursementFailed;
         await enqueue(tx, {
