@@ -13,6 +13,12 @@ import { einvoiceRequests } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/**
+ * How long a `cancelling` claim is considered in flight. NIC calls time out well inside this
+ * (EINVOICE_TIMEOUT_MS), so an older claim belongs to a crashed attempt and may be taken over.
+ */
+export const CANCEL_LEASE_MS = 5 * 60 * 1000;
+
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export function registerEInvoiceConsumers(rawQueue: Queue): void {
@@ -171,13 +177,26 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
     async (msg) => {
       const { id, invoiceId, tenantId, reason } = msg.payload;
 
-      // Find the existing e-invoice request for this invoice
-      const existing = await repo.findByInvoiceId(invoiceId, tenantId);
+      // CLOS3-S4-02: claim the request atomically. The row is locked and re-read INSIDE the
+      // transaction that records the inbox message, the status/24h checks run on that locked row,
+      // and the winner flips it generated -> cancelling before NIC is called. A redelivered or
+      // concurrent duplicate therefore never reaches cancelIrn(); only a claim older than
+      // CANCEL_LEASE_MS (a crashed attempt) is taken over.
+      const existing = await db.transaction(async (tx) => {
+        const isNew = await markProcessed(tx, msg.messageId);
+        const row = await repo.findLatestByInvoiceIdForUpdate(tx, invoiceId, tenantId);
 
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
+        if (!isNew) {
+          const stale =
+            row?.status === "cancelling" &&
+            !!row.irn &&
+            Date.now() - row.updatedAt.getTime() >= CANCEL_LEASE_MS;
+          if (!row || !stale) return undefined;
+          await repo.updateRequestWhenStatus(tx, row.id, ["cancelling"], { updatedBy: msg.actorId });
+          return row;
+        }
 
-        if (!existing || existing.status !== "generated" || !existing.irn) {
+        if (!row || row.status !== "generated" || !row.irn) {
           // Nothing to cancel or already cancelled/failed
           await enqueue(tx, {
             topic: AUDIT_TOPIC,
@@ -194,14 +213,14 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
               reason: "No active IRN found",
             },
           });
-          return;
+          return undefined;
         }
 
         // NIC rule: cancellation only within 24 hours of generation
-        const ackDate = existing.ackDate ?? existing.createdAt;
+        const ackDate = row.ackDate ?? row.createdAt;
         const hoursSinceGeneration = (Date.now() - ackDate.getTime()) / (1000 * 60 * 60);
         if (hoursSinceGeneration > 24) {
-          await repo.updateRequest(tx, existing.id, {
+          await repo.updateRequestWhenStatus(tx, row.id, ["generated"], {
             status: "failed",
             errorMessage: "Cannot cancel IRN: 24-hour cancellation window exceeded",
             updatedBy: msg.actorId,
@@ -216,21 +235,19 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
               service: "billing",
               action: "einvoice_cancel_failed",
               resourceType: "einvoice",
-              resourceId: existing.id,
+              resourceId: row.id,
               outcome: "failed",
               reason: "24h window exceeded",
             },
           });
-          return;
+          return undefined;
         }
+
+        await repo.updateRequestWhenStatus(tx, row.id, ["generated"], { status: "cancelling", updatedBy: msg.actorId });
+        return row;
       });
 
-      if (!existing || existing.status !== "generated" || !existing.irn) return;
-
-      // Check time window again (race condition guard)
-      const ackDate = existing.ackDate ?? existing.createdAt;
-      const hoursSinceGeneration = (Date.now() - ackDate.getTime()) / (1000 * 60 * 60);
-      if (hoursSinceGeneration > 24) return;
+      if (!existing?.irn) return;
 
       try {
         await cancelIrn(existing.irn, reason);
@@ -252,11 +269,12 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error cancelling IRN";
         await db.transaction(async (tx) => {
-          await repo.updateRequest(tx, existing.id, {
+          const marked = await repo.updateRequestWhenStatus(tx, existing.id, ["cancelling"], {
             status: "failed",
             errorMessage,
             updatedBy: msg.actorId,
           });
+          if (!marked) return;
           await enqueue(tx, {
             topic: AUDIT_TOPIC,
             eventType: AUDIT_TOPIC,

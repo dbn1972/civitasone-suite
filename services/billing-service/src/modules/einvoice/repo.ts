@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { einvoiceRequests, type EInvoiceRequestRow, type EInvoiceRequestInsert } from "./schema.js";
 
@@ -29,6 +29,22 @@ export async function updateRequestWhenStatus(
     .where(and(eq(einvoiceRequests.id, id), inArray(einvoiceRequests.status, [...allowed])))
     .returning({ id: einvoiceRequests.id });
   return rows.length > 0;
+}
+
+/** Newest request for an invoice, row-locked for the rest of the transaction (cancel claim). */
+export async function findLatestByInvoiceIdForUpdate(
+  tx: Writer,
+  invoiceId: string,
+  tenantId: string,
+): Promise<EInvoiceRequestRow | undefined> {
+  const rows = await tx
+    .select()
+    .from(einvoiceRequests)
+    .where(and(eq(einvoiceRequests.invoiceId, invoiceId), eq(einvoiceRequests.tenantId, tenantId)))
+    .orderBy(desc(einvoiceRequests.createdAt))
+    .limit(1)
+    .for("update");
+  return rows[0];
 }
 
 export async function findByIdTx(tx: Writer, id: string): Promise<EInvoiceRequestRow | undefined> {
