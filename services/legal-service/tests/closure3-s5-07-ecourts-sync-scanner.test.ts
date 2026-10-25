@@ -32,7 +32,7 @@ vi.mock("../src/shared/db.js", () => ({
   },
 }));
 vi.mock("../src/shared/scanner-db.js", () => ({
-  scannerDb: { select: () => ({ from: () => ({ limit: async () => H.rows }) }) },
+  scannerDb: { select: () => ({ from: () => ({ orderBy: () => ({ limit: async () => H.rows }), limit: async () => H.rows }) }) },
 }));
 vi.mock("../src/modules/ecourts/adapter.js", () => ({
   isEnabled: () => true,

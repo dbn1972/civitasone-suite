@@ -15,6 +15,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
+import { acquireEcourtsDbLock } from "./helpers/ecourts-db-lock.js";
 
 const H = vi.hoisted(() => ({ failCnr: new Set<string>() }));
 vi.mock("../src/modules/ecourts/adapter.js", () => ({
@@ -55,7 +56,10 @@ describe.skipIf(!HAVE_SCANNER)("CLOS3-S5-07 e-Courts sync runs per tenant under 
       }),
     );
 
+  let unlock: () => Promise<void> = async () => {};
+
   beforeAll(async () => {
+    unlock = await acquireEcourtsDbLock();
     ({ db, sqlClient } = await import("../src/shared/db.js"));
     ({ causeListSyncs } = await import("../src/modules/ecourts/sync-schema.js"));
     ({ legalHearings } = await import("../src/modules/hearings/schema.js"));
@@ -75,6 +79,7 @@ describe.skipIf(!HAVE_SCANNER)("CLOS3-S5-07 e-Courts sync runs per tenant under 
     for (const t of [TENANT_A, TENANT_B]) await clean(t);
     await scannerSqlClient?.end();
     await sqlClient.end();
+    await unlock();
   });
 
   it("syncs matters of every tenant, recording success and failure under that tenant's context", async () => {
