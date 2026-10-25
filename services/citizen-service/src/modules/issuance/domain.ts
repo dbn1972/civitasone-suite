@@ -116,3 +116,23 @@ export function issuanceBlockReason(input: {
   if (input.feeBearing && !input.paymentSatisfied) return "fee-bearing service has no collected payment";
   return null;
 }
+
+/**
+ * Real client address for the anonymous per-IP limiter. The app runs without `trustProxy`, so
+ * `req.ip` is the gateway; the gateway SETS `x-forwarded-for` to the single address it observed.
+ * TRUSTED_PROXY_HOPS (default 0 = ignore the header) says how many trailing entries were appended
+ * by trusted proxies; the entry at `length - hops` is read because the leading entries are client
+ * controlled. A header shorter than the chain means the trusted chain did not write it, so fall
+ * back to the socket peer (fail closed). Mirrors crm-service public-capture-rate-limit.ts.
+ */
+export function resolveClientIp(req: { ip: string; headers: Record<string, string | string[] | undefined> }): string {
+  const raw = Number(process.env.TRUSTED_PROXY_HOPS);
+  const hops = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+  if (hops === 0) return req.ip;
+  const header = req.headers["x-forwarded-for"];
+  const joined = Array.isArray(header) ? header.join(",") : header;
+  if (typeof joined !== "string") return req.ip;
+  const list = joined.split(",").map((v) => v.trim()).filter((v) => v !== "");
+  if (list.length === 0 || list.length < hops) return req.ip;
+  return list[list.length - hops] ?? req.ip;
+}
