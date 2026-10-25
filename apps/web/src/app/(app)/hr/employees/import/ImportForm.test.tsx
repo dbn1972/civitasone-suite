@@ -702,6 +702,33 @@ describe("ImportForm — confirms the real outcome through the status route", ()
     expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
   });
 
+  // CLOS3-S2-04: a status fetch that never answers used to block the deadline check forever (Promise.all over a
+  // hung request), leaving the form in "processing". Each status request now carries a timeout signal bounded by
+  // the remaining poll budget, so a hang is a transient failure and the loop reaches the deadline.
+  it("a status request that never answers is aborted at the poll budget: the form leaves 'processing' and reports unconfirmed", async () => {
+    const hung = vi.fn(async (url: string, init?: RequestInit) => {
+      const m = MASTERS(url);
+      if (m) return m;
+      if (url === "/api/proxy/v1/hrms/employees/bulk" && init?.method === "POST") {
+        return { ok: true, status: 202, text: async () => JSON.stringify({ id: "batch-1", status: "accepted" }) } as Response;
+      }
+      if (url.startsWith("/api/proxy/v1/hrms/employees/bulk/status/")) {
+        // Hangs forever unless the caller supplied a signal that later aborts.
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        });
+      }
+      return { ok: false, status: 404, text: async () => "" } as Response;
+    });
+    vi.stubGlobal("fetch", hung);
+    renderForm({ pollIntervalMs: 5, pollMaxMs: 150 });
+    await chooseAndSubmit(TWO_ROW_CSV);
+
+    expect(await screen.findByText(/2 submitted\. 0 confirmed created so far, 2 still being processed/)).toBeInTheDocument();
+    expect(screen.queryByText(/^\d+ created/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /review file/i })).toBeEnabled();
+  });
+
   it("does not claim success when the status route cannot find the batch (404)", async () => {
     vi.stubGlobal("fetch", backend({ statuses: () => ({ ok: false, status: 404 }) }));
     renderForm({ pollIntervalMs: 5, pollMaxMs: 500, notRecordedGraceMs: 0 });
