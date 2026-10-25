@@ -6,9 +6,10 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError, resolveCitizenId, isOfficer } from "../../shared/context.js";
 import { idParam, trackingParam, listDraftsQuery, saveDraftBody, updateDraftBody, submitDraftBody } from "./intake-validators.js";
 import {
-  buildTrackingNumber, resolveAssistedBy, isAssistedChannel, resolveAndGateApplicantType,
+  resolveAssistedBy, isAssistedChannel, resolveAndGateApplicantType,
   hasFormAnswers, ApplicantTypeRejectedError, type IntakeChannel,
 } from "./intake-domain.js";
+import { allocateNumber } from "../../shared/numbers.js";
 import * as intake from "./intake.js";
 import * as commands from "./commands.js";
 
@@ -162,7 +163,8 @@ export async function intakeRoutes(app: FastifyInstance): Promise<void> {
     const def = await intake.resolveDefinitionForIntake(ctx.tenantId, draft.serviceId, draft.serviceKey);
     const applicantType = gateApplicantType(def, body.applicantType ?? draft.applicantType ?? undefined);
     const applicationId = randomUUID();
-    const trackingNo = buildTrackingNumber();
+    // Returned in the 202 body, so allocated here from a Postgres sequence (unique by construction).
+    const trackingNo = await allocateNumber("tracking_no");
     const accepted = await commands.submitDraft(ctx, id, {
       documentTypes: body.documentTypes,
       trackingNo,

@@ -2,6 +2,7 @@ import { randomUUID, createHash } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { allocateNumber } from "../../shared/numbers.js";
 import type {
   CreateTicketBody, TicketNoteBody, CloseTicketBody,
   AssignTicketBody, ResolveTicketBody, EscalateTicketBody,
@@ -23,7 +24,9 @@ function stableMessageId(ticketId: string, command: string, correlationId: strin
 
 export async function createTicket(ctx: RequestContext, body: CreateTicketBody & { citizenId: string }): Promise<Accepted & { data: { id: string; ticketNo: string } }> {
   const id = randomUUID();
-  const ticketNo = `HD-${id.slice(0, 8).toUpperCase()}`;
+  // The 202 ack carries ticketNo back to the caller (web contract), so it is allocated here, from a
+  // Postgres sequence (unique by construction) -- not derived from the random row id.
+  const ticketNo = await allocateNumber("ticket_no");
   await queue.publish(COMMANDS.ticketCreate, {
     messageId: id, type: COMMANDS.ticketCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

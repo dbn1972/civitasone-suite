@@ -123,7 +123,7 @@ export function registerDiscoveryConsumers(rawQueue: Queue): void {
         topic: COMMANDS.applicationSubmit, eventType: COMMANDS.applicationSubmit,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          id: p.applicationId, tenantId: msg.tenantId, refNo: `APP-${Date.now()}`,
+          id: p.applicationId, tenantId: msg.tenantId,
           citizenId: match.citizenId, serviceId: match.serviceId,
           serviceType: p.serviceType, documentTypes: [],
         },

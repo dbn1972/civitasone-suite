@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
@@ -19,7 +20,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.applicationSubmit, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; citizenId: string; serviceId: string;
-      refNo: string; serviceType: string; documentTypes?: string[];
+      serviceType: string; documentTypes?: string[];
     };
     const service = await portalRepo.findServiceById(p.serviceId, p.tenantId);
     const requiredDocs = service?.requiredDocs ?? [];
@@ -36,9 +37,11 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+      const refNo = await nextNumber(tx, "application_ref");
       await repo.insertApplication(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId, serviceId: p.serviceId,
-        refNo: p.refNo, status: initialStatus, deadline,
+        refNo, status: initialStatus, deadline,
         submittedAt: new Date(), createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.insertStatusHistory(tx, {
@@ -52,13 +55,13 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         serviceId: p.serviceId, lifecycleEvent: "submitted",
         recipient: p.citizenId, recipientId: p.citizenId,
-        variables: { applicationId: p.id, app_no: p.refNo },
+        variables: { applicationId: p.id, app_no: refNo },
         eventType: "citizen.application.submitted",
       });
       await audit(tx, msg, "submit", "citizen_application", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
-  });
+  }, auditFailedCreate("submit", "citizen_application"));
 
   queue.subscribe(COMMANDS.applicationStatusUpdate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; status: string; note?: string };
@@ -253,7 +256,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "draft_submit", "application_intake", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.id));
-  });
+  }, auditFailedCreate("draft_submit", "application_intake"));
 }
 
 async function audit(

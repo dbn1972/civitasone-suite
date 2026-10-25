@@ -9,8 +9,8 @@
  *     operatorId succeeds and the operator is attributed on the draft.
  *   TRACK-02: GET /intake/track/:no is scoped to the owning citizen — citizen B
  *     requesting citizen A's tracking number gets 404 (existence not leaked);
- *     the owner gets 200. Tracking numbers are random (CIT-YYYY-8hex), not
- *     sequential, so they are not trivially enumerable.
+ *     the owner gets 200. Tracking numbers are sequence-allocated
+ *     (CIT-YYYY-NNNNNN); the ownership check, not unguessability, is the access control.
  */
 import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -164,7 +164,7 @@ describe("citizen intake authz (SERVICES-02 counter / TRACK-02 ownership)", () =
     });
     expect(submit.statusCode).toBe(202);
     const trackingNo = submit.json().trackingNo as string;
-    expect(trackingNo).toMatch(/^CIT-\d{4}-[0-9A-F]{8}$/); // random, non-sequential
+    expect(trackingNo).toMatch(/^CIT-\d{4}-\d{6}$/); // sequence-allocated; access control is the ownership check below
 
     // Owner (A) can read it.
     const owner = await waitFor(async () => {

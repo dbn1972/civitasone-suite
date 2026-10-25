@@ -6,7 +6,6 @@
  * allow-list at draft save and submit. FN-23 applicant-type gating is delegated
  * to applicant-identity/domain.
  */
-import { randomBytes } from "node:crypto";
 import {
   assertApplicantTypeAllowed,
   coerceAllowedApplicantTypes,
@@ -46,16 +45,6 @@ export function assertChannelAllowed(channel: string, allowedChannels: readonly 
 export function channelNotAllowedMessage(channel: string, allowedChannels: readonly string[]): string {
   const allowed = allowedChannels.length > 0 ? allowedChannels.join(", ") : "none";
   return `This service does not accept applications via the ${channel} channel. Allowed channels: ${allowed}.`;
-}
-
-/**
- * A unique, human-readable tracking number for the acknowledgement.
- * Format: CIT-{YYYY}-{8 hex}. The random suffix is unique per acknowledgement;
- * the DB carries a UNIQUE(tenant, tracking_no) index as the hard guarantee.
- */
-export function buildTrackingNumber(now: Date = new Date()): string {
-  const suffix = randomBytes(4).toString("hex").toUpperCase();
-  return `CIT-${now.getUTCFullYear()}-${suffix}`;
 }
 
 /**
