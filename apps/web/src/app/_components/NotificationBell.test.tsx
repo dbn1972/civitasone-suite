@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NotificationBell, notificationActionUrl, type Notification } from "./NotificationBell";
 
 describe("NotificationBell", () => {
@@ -101,5 +101,50 @@ describe("notificationActionUrl", () => {
 
   it("returns undefined for an unknown type with no reviewUrl", () => {
     expect(notificationActionUrl("something.else", {})).toBeUndefined();
+  });
+});
+
+describe("NotificationBell mark-read server rejection (CLOS3-S3-11)", () => {
+  const items: Notification[] = [
+    { id: "1", title: "Budget approved", time: "5 min ago", read: false, icon: "✅" },
+    { id: "2", title: "Payment sent", time: "1 hr ago", read: true, icon: "💳" },
+  ];
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  function mockMarkRead(res: { ok: boolean; status: number }): ReturnType<typeof vi.fn> {
+    const f = vi.fn(async () => res as Response);
+    vi.stubGlobal("fetch", f);
+    return f;
+  }
+
+  it("reverts the optimistic read state when the server answers 500 to a single mark-read", async () => {
+    const f = mockMarkRead({ ok: false, status: 500 });
+    render(<NotificationBell notifications={items} />);
+    fireEvent.click(screen.getByTitle("Notifications"));
+    fireEvent.click(screen.getByText("Budget approved"));
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTitle("Notifications")).toHaveAttribute("aria-label", "Notifications, 1 unread"));
+    expect(screen.getAllByLabelText("Unread")).toHaveLength(1);
+  });
+
+  it("reverts Mark all read when the server answers 403", async () => {
+    const f = mockMarkRead({ ok: false, status: 403 });
+    render(<NotificationBell notifications={items} />);
+    fireEvent.click(screen.getByTitle("Notifications"));
+    fireEvent.click(screen.getByText("Mark all read"));
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByTitle("Notifications")).toHaveAttribute("aria-label", "Notifications, 1 unread"));
+    expect(screen.getAllByLabelText("Unread")).toHaveLength(1);
+  });
+
+  it("keeps the read state when the server accepts the update", async () => {
+    const f = mockMarkRead({ ok: true, status: 200 });
+    render(<NotificationBell notifications={items} />);
+    fireEvent.click(screen.getByTitle("Notifications"));
+    fireEvent.click(screen.getByText("Budget approved"));
+    await waitFor(() => expect(f).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByTitle("Notifications")).toHaveAttribute("aria-label", "Notifications");
+    expect(screen.queryAllByLabelText("Unread")).toHaveLength(0);
   });
 });

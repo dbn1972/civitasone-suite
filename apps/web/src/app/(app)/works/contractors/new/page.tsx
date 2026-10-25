@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button } from "@/app/_components/ds";
 import { DpdpNotice } from "@/app/_components/ds/DpdpNotice";
@@ -27,6 +27,9 @@ export default function NewContractorPage() {
     address: "",
   });
   const [busy, setBusy] = useState(false);
+  // CLOS3-S3-19: latches so a second submit during the post-save redirect delay cannot create a duplicate contractor.
+  const [saved, setSaved] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<IndianIdFieldErrors>({});
@@ -43,6 +46,7 @@ export default function NewContractorPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (saved || inFlight.current) return;
     setMessage("");
     setError("");
     formError.clear();
@@ -60,7 +64,9 @@ export default function NewContractorPage() {
     setFieldErrors(idErrors);
     if (Object.keys(idErrors).length > 0) return;
 
+    inFlight.current = true;
     setBusy(true);
+    let ok = false;
     try {
       const body: Record<string, unknown> = {
         name: form.name.trim(),
@@ -81,13 +87,16 @@ export default function NewContractorPage() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      ok = true;
+      setSaved(true);
       setMessage("Contractor registered. Redirecting to the register…");
       toast.success("Contractor registered.");
       setTimeout(() => router.push("/works/contractors"), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
-      setBusy(false);
+      inFlight.current = false;
+      if (!ok) setBusy(false);
     }
   }
 
@@ -218,16 +227,16 @@ export default function NewContractorPage() {
           <Button
             variant="ghost"
             onClick={() => router.push("/works/contractors")}
-            disabled={busy}
+            disabled={busy || saved}
           >
             Cancel
           </Button>
           <Button
             type="submit"
             variant="primary"
-            disabled={busy}
+            disabled={busy || saved}
           >
-            {busy ? "Saving…" : "Register Contractor"}
+            {busy || saved ? "Saving…" : "Register Contractor"}
           </Button>
         </div>
       </form>

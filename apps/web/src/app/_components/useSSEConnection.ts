@@ -131,6 +131,10 @@ export function useSSEConnection(options: SSEConnectionOptions) {
 
     if (enabled) {
       connect();
+    } else {
+      // CLOS3-S3-22: the cleanup below clears mountedRef before updateState could run, so reflect the
+      // disabled stream here; setState with an unchanged value is a no-op.
+      setState("disconnected");
     }
 
     return () => {

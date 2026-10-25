@@ -152,3 +152,41 @@ describe("NewProposalPage — work type picker error state (PROPOSALS-NEW-01)", 
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
   });
 });
+
+describe("NewProposalPage — CLOS3-S3-16 duplicate-submit latch", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+  const posts = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  it("a second submit while the redirect is pending does not create a duplicate draft", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ id: "p9" }), { status: 201, headers: { "content-type": "application/json" } }),
+    );
+    render(<NewProposalPage />);
+    fillValid();
+    const btn = screen.getByRole("button", { name: /create draft/i });
+    const form = btn.closest("form") as HTMLFormElement;
+    fireEvent.click(btn);
+    await screen.findByText("Draft proposal created.");
+    expect(screen.getByRole("button", { name: /creating|create draft/i })).toBeDisabled();
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(posts(spy)).toHaveLength(1);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("a failed save does not latch: a resubmit sends a new POST", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+    render(<NewProposalPage />);
+    fillValid();
+    fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: /create draft/i })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: /create draft/i }));
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});

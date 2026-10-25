@@ -283,3 +283,45 @@ describe("Generate Bill form - duplicate bill number (GAP-WORKS-BILLING-BILLS-NE
     expect(screen.queryByText(/already used for this work/)).not.toBeInTheDocument();
   });
 });
+
+describe("Generate Bill duplicate-submit latch (CLOS3-S3-14)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
+  });
+
+  async function fillValid(): Promise<HTMLElement> {
+    render(<NewBillPage />);
+    await screen.findByLabelText(/^Work/i);
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/777" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
+    return screen.getByRole("button", { name: "Generate Bill" });
+  }
+  const posts = (spy: ReturnType<typeof mockFetch>) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  it("a second submit while the redirect is pending does not create a duplicate bill", async () => {
+    const spy = mockFetch(201);
+    const submitBtn = await fillValid();
+    const form = submitBtn.closest("form") as HTMLFormElement;
+    fireEvent.click(submitBtn);
+    await screen.findByText("Bill created.");
+    expect(screen.getByRole("button", { name: /Creating/i })).toBeDisabled();
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(posts(spy)).toHaveLength(1);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("a failed save re-enables the form so the user can retry", async () => {
+    const spy = mockFetch(500);
+    const submitBtn = await fillValid();
+    fireEvent.click(submitBtn);
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Generate Bill" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});

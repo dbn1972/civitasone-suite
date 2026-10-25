@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { ActionButton } from "./ActionButton";
+import { render, screen, fireEvent, waitFor, renderHook, act } from "@testing-library/react";
+import { ActionButton, useConfirmAction } from "./ActionButton";
 import { UserFacingError } from "@/lib/userFacingError";
 
 describe("ActionButton", () => {
@@ -169,5 +169,31 @@ describe("ActionButton", () => {
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(undefined));
+  });
+});
+
+describe("useConfirmAction onSuccess isolation (CLOS3-S3-23)", () => {
+  it("a throwing onSuccess after a completed confirm is not reported as an action failure", async () => {
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSuccess = vi.fn(() => { throw new Error("x"); });
+    const { result } = renderHook(() => useConfirmAction({ onConfirm: async () => {}, onSuccess }));
+    act(() => { result.current.trigger(); });
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.error).toBeUndefined();
+    expect(result.current.open).toBe(false);
+    expect(result.current.busy).toBe(false);
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(errSpy).toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
+
+  it("a rejecting onConfirm still sets the error and does not call onSuccess", async () => {
+    const onSuccess = vi.fn();
+    const { result } = renderHook(() =>
+      useConfirmAction({ onConfirm: async () => { throw new Error("denied"); }, onSuccess }),
+    );
+    await act(async () => { await result.current.confirm(); });
+    expect(result.current.error).toBe("denied");
+    expect(onSuccess).not.toHaveBeenCalled();
   });
 });

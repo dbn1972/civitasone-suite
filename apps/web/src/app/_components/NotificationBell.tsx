@@ -201,12 +201,13 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
     setLocalUnreadCount((prev) => Math.max(0, prev - 1));
 
     try {
-      await fetch("/api/notification/mark-read", {
+      const res = await fetch("/api/notification/mark-read", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ notificationId }),
       });
+      if (!res.ok) throw new Error(String(res.status));
     } catch {
       // Revert on failure
       setItems((prev) =>
@@ -224,12 +225,13 @@ export function NotificationBell({ notifications: propNotifications, unreadCount
     setLocalUnreadCount(0);
 
     try {
-      await fetch("/api/notification/mark-read", {
+      const res = await fetch("/api/notification/mark-read", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ all: true }),
       });
+      if (!res.ok) throw new Error(String(res.status));
     } catch {
       setItems(prevItems);
       setLocalUnreadCount(prevCount);

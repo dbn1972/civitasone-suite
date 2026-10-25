@@ -187,3 +187,46 @@ describe("Suspense fallback (BILLS-NEW-04 / MEASUREMENTS-NEW-04 / NEW-MB-04)", (
     }
   });
 });
+
+describe("Issue Measurement Book duplicate-submit latch (CLOS3-S3-15)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    toastSuccess.mockReset();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+  });
+
+  async function fillValid(): Promise<HTMLElement> {
+    render(<NewMbPage />);
+    await screen.findByPlaceholderText("UUID of the work");
+    fireEvent.change(screen.getByPlaceholderText("UUID of the award"), { target: { value: AWARD } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. MB/2024-25/001"), { target: { value: "MB/2024-25/009" } });
+    return screen.getByRole("button", { name: "Submit" });
+  }
+  const posts = (spy: ReturnType<typeof mockFetch>) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  it("a second submit while the redirect is pending does not create a duplicate MB", async () => {
+    const spy = mockFetch({ postStatus: 201 });
+    const btn = await fillValid();
+    const form = btn.closest("form") as HTMLFormElement;
+    fireEvent.click(btn);
+    await screen.findByText("Measurement book issued.");
+    expect(screen.getByRole("button", { name: /Submit|Submitting/ })).toBeDisabled();
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(posts(spy)).toHaveLength(1);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("a failed save leaves the form retryable", async () => {
+    const spy = mockFetch({ postStatus: 500 });
+    const btn = await fillValid();
+    fireEvent.click(btn);
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Submit" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});
