@@ -79,6 +79,9 @@ export async function proxyFetch(
       // Treat 5xx from upstream as a "failure" for the circuit breaker.
       // 4xx is the client's fault, not the upstream's — don't penalise.
       if (res.status >= 500) {
+        // The Response is discarded: cancel its body so the undici socket is
+        // released now rather than pinned until GC (V4-F-06).
+        await res.body?.cancel().catch(() => undefined);
         throw new UpstreamServerError(init.serviceName, res.status);
       }
       return res;
