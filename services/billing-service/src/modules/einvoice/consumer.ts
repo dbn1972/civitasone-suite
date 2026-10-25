@@ -25,8 +25,14 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
     async (msg) => {
       const { id, invoiceId, tenantId } = msg.payload;
 
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
+      // CLOS3-S4-01: the decision is STATE-based, not "did markProcessed win". A redelivered
+      // message (markProcessed false) or a replay under a new messageId must never reach NIC for a
+      // request that is already generated / failed / cancelled; only a still-`pending` request
+      // (crash after this tx committed) is resumed, so crash recovery is preserved.
+      const run = await db.transaction(async (tx) => {
+        await markProcessed(tx, msg.messageId);
+        const existing = await repo.findByIdTx(tx, id);
+        if (existing) return existing.status === "pending";
 
         // Insert a pending request record
         await repo.insertRequest(tx, {
@@ -37,13 +43,15 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
           createdBy: msg.actorId,
           updatedBy: msg.actorId,
         });
+        return true;
       });
+      if (!run) return;
 
       // Fetch the invoice + items outside the initial tx for payload building
       const invoice = await invoiceRepo.findById(invoiceId);
       if (!invoice || invoice.tenantId !== tenantId) {
         await db.transaction(async (tx) => {
-          await repo.updateRequest(tx, id, {
+          await repo.updateRequestWhenStatus(tx, id, ["pending"], {
             status: "failed",
             errorMessage: `Invoice ${invoiceId} not found or tenant mismatch`,
             updatedBy: msg.actorId,
@@ -128,11 +136,13 @@ export function registerEInvoiceConsumers(rawQueue: Queue): void {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Unknown error generating IRN";
         await db.transaction(async (tx) => {
-          await repo.updateRequest(tx, id, {
+          // never overwrite a row another delivery already generated / cancelled
+          const marked = await repo.updateRequestWhenStatus(tx, id, ["pending"], {
             status: "failed",
             errorMessage,
             updatedBy: msg.actorId,
           });
+          if (!marked) return;
           await enqueue(tx, {
             topic: AUDIT_TOPIC,
             eventType: AUDIT_TOPIC,
