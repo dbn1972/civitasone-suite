@@ -19,7 +19,9 @@
 import { pino } from "pino";
 import { eq, and, sql } from "drizzle-orm";
 import { putObject } from "@civitasone/storage";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { scannerDb } from "../../shared/scanner-db.js";
 import { legalCases } from "../cases/schema.js";
 import { legalHearings } from "../hearings/schema.js";
 import { causeListSyncs } from "./sync-schema.js";
@@ -196,57 +198,64 @@ export async function syncMatter(
     }
   }
 
-  // Update the case's nextDate
-  if (nextHearingDate) {
-    await db
-      .update(legalCases)
-      .set({
-        nextDate: nextHearingDate,
-        updatedAt: new Date(),
-        updatedBy: SYSTEM_ACTOR,
-      })
-      .where(eq(legalCases.id, caseId));
-  }
+  // CLOS3-S5-07: bare db.update/select/insert statements do not carry the tenant
+  // GUC (only db.transaction does), so under FORCE RLS they fail. Run every DB
+  // write for this matter in ONE transaction (after the network lookup, so no
+  // connection is held across the e-Courts call), under the caller's
+  // runWithTenant(tenantId) context.
+  await db.transaction(async (tx) => {
+    // Update the case's nextDate
+    if (nextHearingDate) {
+      await tx
+        .update(legalCases)
+        .set({
+          nextDate: nextHearingDate,
+          updatedAt: new Date(),
+          updatedBy: SYSTEM_ACTOR,
+        })
+        .where(eq(legalCases.id, caseId));
+    }
 
-  // Upsert hearing records from e-Courts data
-  if (result.hearingDates.length > 0 && nextHearingDate) {
-    // Check if a hearing for this date already exists
-    const existing = await db
-      .select()
-      .from(legalHearings)
-      .where(and(
-        eq(legalHearings.caseId, caseId),
-        eq(legalHearings.hearingDate, nextHearingDate),
-      ))
-      .limit(1);
+    // Upsert hearing records from e-Courts data
+    if (result.hearingDates.length > 0 && nextHearingDate) {
+      // Check if a hearing for this date already exists
+      const existing = await tx
+        .select()
+        .from(legalHearings)
+        .where(and(
+          eq(legalHearings.caseId, caseId),
+          eq(legalHearings.hearingDate, nextHearingDate),
+        ))
+        .limit(1);
 
-    if (existing.length === 0) {
-      // Insert a new scheduled hearing
-      await db.insert(legalHearings).values({
-        tenantId,
-        caseId,
-        hearingDate: nextHearingDate,
-        court: result.courtName || "e-Courts",
-        purpose: nextHearingPurpose ?? null,
-        status: "scheduled",
-        createdBy: SYSTEM_ACTOR,
-        updatedBy: SYSTEM_ACTOR,
-      });
-    } else {
-      // Update purpose if changed
-      const existingHearing = existing[0]!;
-      if (nextHearingPurpose && existingHearing.purpose !== nextHearingPurpose) {
-        await db
-          .update(legalHearings)
-          .set({
-            purpose: nextHearingPurpose,
-            updatedAt: new Date(),
-            updatedBy: SYSTEM_ACTOR,
-          })
-          .where(eq(legalHearings.id, existingHearing.id));
+      if (existing.length === 0) {
+        // Insert a new scheduled hearing
+        await tx.insert(legalHearings).values({
+          tenantId,
+          caseId,
+          hearingDate: nextHearingDate,
+          court: result.courtName || "e-Courts",
+          purpose: nextHearingPurpose ?? null,
+          status: "scheduled",
+          createdBy: SYSTEM_ACTOR,
+          updatedBy: SYSTEM_ACTOR,
+        });
+      } else {
+        // Update purpose if changed
+        const existingHearing = existing[0]!;
+        if (nextHearingPurpose && existingHearing.purpose !== nextHearingPurpose) {
+          await tx
+            .update(legalHearings)
+            .set({
+              purpose: nextHearingPurpose,
+              updatedAt: new Date(),
+              updatedBy: SYSTEM_ACTOR,
+            })
+            .where(eq(legalHearings.id, existingHearing.id));
+        }
       }
     }
-  }
+  });
 
   // Download court orders as PDFs
   let ordersDownloaded = 0;
@@ -283,9 +292,17 @@ export async function tick(): Promise<{ synced: number; failed: number }> {
     return { synced: 0, failed: 0 };
   }
 
-  // Fetch all matters with CNR numbers from cause_list_syncs
-  const trackedMatters = await db
-    .select()
+  // CLOS3-S5-07: cause_list_syncs is FORCE RLS, so a cross-tenant read on the
+  // tenant pool has no app.tenant_id and errors/returns nothing. Discovery
+  // (SELECT-only, ids only) goes through the BYPASSRLS scanner pool; every read
+  // and write for a matter then runs under that matter's own tenant context.
+  const trackedMatters = await scannerDb
+    .select({
+      id: causeListSyncs.id,
+      tenantId: causeListSyncs.tenantId,
+      caseId: causeListSyncs.caseId,
+      cnrNumber: causeListSyncs.cnrNumber,
+    })
     .from(causeListSyncs)
     .limit(500); // cap per tick
 
@@ -298,55 +315,57 @@ export async function tick(): Promise<{ synced: number; failed: number }> {
   let failed = 0;
 
   for (const matter of trackedMatters) {
-    try {
-      const result = await withRetry(
-        () => syncMatter(matter.caseId, matter.cnrNumber, matter.tenantId),
-        `sync:${matter.cnrNumber}`,
-      );
+    await runWithTenant(matter.tenantId, async () => {
+      try {
+        const result = await withRetry(
+          () => syncMatter(matter.caseId, matter.cnrNumber, matter.tenantId),
+          `sync:${matter.cnrNumber}`,
+        );
 
-      // Update sync tracking record
-      await db
-        .update(causeListSyncs)
-        .set({
-          lastSyncAt: new Date(),
-          lastSyncStatus: "success",
-          lastError: null,
-          nextHearingDate: result.nextHearingDate ?? null,
-          nextHearingPurpose: result.nextHearingPurpose ?? null,
-          ordersDownloaded: sql`${causeListSyncs.ordersDownloaded} + ${result.ordersDownloaded}`,
-          updatedAt: new Date(),
-          updatedBy: SYSTEM_ACTOR,
-          version: sql`${causeListSyncs.version} + 1`,
-        })
-        .where(eq(causeListSyncs.id, matter.id));
+        // Update sync tracking record
+        await db.transaction((tx) => tx
+          .update(causeListSyncs)
+          .set({
+            lastSyncAt: new Date(),
+            lastSyncStatus: "success",
+            lastError: null,
+            nextHearingDate: result.nextHearingDate ?? null,
+            nextHearingPurpose: result.nextHearingPurpose ?? null,
+            ordersDownloaded: sql`${causeListSyncs.ordersDownloaded} + ${result.ordersDownloaded}`,
+            updatedAt: new Date(),
+            updatedBy: SYSTEM_ACTOR,
+            version: sql`${causeListSyncs.version} + 1`,
+          })
+          .where(and(eq(causeListSyncs.id, matter.id), eq(causeListSyncs.tenantId, matter.tenantId))));
 
-      synced++;
-      log.info(
-        { caseId: matter.caseId, cnr: matter.cnrNumber, nextHearing: result.nextHearingDate },
-        "sync: matter synced successfully",
-      );
-    } catch (err) {
-      // After 3 retries exhausted — log failure, skip, continue to next matter
-      failed++;
-      const errorMsg = err instanceof Error ? err.message : String(err);
+        synced++;
+        log.info(
+          { caseId: matter.caseId, cnr: matter.cnrNumber, nextHearing: result.nextHearingDate },
+          "sync: matter synced successfully",
+        );
+      } catch (err) {
+        // After 3 retries exhausted — log failure, skip, continue to next matter
+        failed++;
+        const errorMsg = err instanceof Error ? err.message : String(err);
 
-      await db
-        .update(causeListSyncs)
-        .set({
-          lastSyncAt: new Date(),
-          lastSyncStatus: "failed",
-          lastError: errorMsg.slice(0, 4000),
-          updatedAt: new Date(),
-          updatedBy: SYSTEM_ACTOR,
-          version: sql`${causeListSyncs.version} + 1`,
-        })
-        .where(eq(causeListSyncs.id, matter.id));
+        await db.transaction((tx) => tx
+          .update(causeListSyncs)
+          .set({
+            lastSyncAt: new Date(),
+            lastSyncStatus: "failed",
+            lastError: errorMsg.slice(0, 4000),
+            updatedAt: new Date(),
+            updatedBy: SYSTEM_ACTOR,
+            version: sql`${causeListSyncs.version} + 1`,
+          })
+          .where(and(eq(causeListSyncs.id, matter.id), eq(causeListSyncs.tenantId, matter.tenantId))));
 
-      log.error(
-        { caseId: matter.caseId, cnr: matter.cnrNumber, error: errorMsg },
-        "sync: matter sync failed after retries",
-      );
-    }
+        log.error(
+          { caseId: matter.caseId, cnr: matter.cnrNumber, error: errorMsg },
+          "sync: matter sync failed after retries",
+        );
+      }
+    });
   }
 
   log.info({ synced, failed, total: trackedMatters.length }, "sync: poll tick complete");
