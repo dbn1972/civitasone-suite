@@ -55,13 +55,11 @@ export function registerQuotaConsumers(queue: Queue): void {
         const p = msg.payload;
         const existing = await repo.findByTenantAndResourceTx(tx as unknown as repo.Writer, p.tenantId, p.resource);
         if (!existing) throw new Error(`quota for ${p.tenantId}/${p.resource} not found — set quota first`);
-        const newUsed = Math.max(0, existing.used + p.delta);
-        await repo.update(tx as unknown as repo.Writer, existing.id, {
-          used: newUsed,
-          updatedBy: msg.actorId,
-          version: existing.version + 1,
-        });
-        const overLimit = newUsed >= existing.limit;
+        // CLOS3-S6-04: atomic in-SQL increment; never write back a JS-computed sum from the read above.
+        const updated = await repo.incrementUsed(tx as unknown as repo.Writer, existing.id, p.delta, msg.actorId);
+        if (!updated) throw new Error(`quota for ${p.tenantId}/${p.resource} not found — set quota first`);
+        const newUsed = updated.used;
+        const overLimit = newUsed >= updated.limit;
         await emit(tx, msg, EVENTS.quotaIncremented, {
           tenantId: p.tenantId, resource: p.resource, delta: p.delta, newUsed, overLimit,
         }, "increment", existing.id);
