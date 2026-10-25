@@ -17,6 +17,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { purgeInventoryCache } from "../../_revalidate";
 import { rupeesInputToMinorNumber, rupeesToMinorString } from "@/lib/money";
 import { ItemPicker } from "@/app/_components/ItemPicker";
 import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
@@ -103,11 +104,12 @@ export default function NewStockEntryPage() {
 
   const post = useConfirmAction({
     onConfirm: postEntry,
-    onSuccess: () => {
+    onSuccess: async () => {
       setIsError(false);
       setMessage("Stock entry posted.");
       setQty("");
       setRate("");
+      await purgeInventoryCache();
       router.refresh();
       setTimeout(() => router.push("/inventory/reconcile"), 700);
     },
