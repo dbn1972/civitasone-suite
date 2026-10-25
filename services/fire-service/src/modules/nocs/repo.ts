@@ -158,6 +158,24 @@ export async function findActiveByApplicationId(tenantId: string, applicationId:
   });
 }
 
+/**
+ * Same query as findActiveByApplicationId, but on the caller's transaction. Used inside the
+ * issueNoc write transaction, after taking the per-application advisory lock, so the check
+ * and the insert are serialised (CLOS3-S4-03).
+ */
+export async function findActiveByApplicationIdTx(tx: ScopedTx, tenantId: string, applicationId: string) {
+  const rows = await tx
+    .select()
+    .from(fireNocsTable)
+    .where(and(
+      eq(fireNocsTable.tenantId, tenantId),
+      eq(fireNocsTable.applicationId, applicationId),
+      inArray(fireNocsTable.status, ["issued", "active"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateStatus(
   tx: ScopedTx,
   tenantId: string,
