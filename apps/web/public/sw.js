@@ -12,8 +12,8 @@
  *
  * V4-A-01: Cache Storage is keyed by URL only and outlives logout, so nothing
  * authenticated may be stored in it: navigation responses are cached only when
- * not Cache-Control no-store/private, /api/proxy is never cached, and the page
- * sends CIVITASONE_PURGE on logout to drop every civitasone-* cache.
+ * not Cache-Control no-store/private (except the public /offline fallback),
+ * /api/proxy is never cached, and the page sends CIVITASONE_PURGE on logout to drop every civitasone-* cache.
  *
  * Cache names are versioned; bumping CACHE_VERSION invalidates old caches on
  * activate so a deploy never serves stale shells indefinitely.
@@ -37,7 +37,7 @@ self.addEventListener("install", (event) => {
         PRECACHE_URLS.map(async (url) => {
           try {
             const res = await fetch(url, { credentials: "same-origin" });
-            if (isCacheable(res)) await cache.put(url, res.clone());
+            if (cacheableFor(url, res)) await cache.put(url, res.clone());
           } catch {
             /* offline at install time — runtime cache will fill in later */
           }
@@ -71,13 +71,26 @@ function isCacheable(res) {
   return !/(?:^|[\s,])(?:no-store|private)(?:[\s,=]|$)/i.test(cc);
 }
 
+// /offline is the one exemption from the no-store/private rule: Next.js renders it
+// per request (locale cookie via next-intl) and so marks it private/no-store, but it
+// is public and user-agnostic (middleware PUBLIC_SEGMENT; locale + static copy only).
+// Without this the fallback would never be stored and an offline navigation would get
+// the JSON 503 instead of the page. It must still be a direct 200, never a redirect.
+function isCacheableOffline(res) {
+  return res.ok && !res.redirected;
+}
+
+function cacheableFor(path, res) {
+  return path === OFFLINE_URL ? isCacheableOffline(res) : isCacheable(res);
+}
+
 // Drop every civitasone-* cache (logout), then restore only the public offline page.
 async function purgeCaches() {
   const keys = await caches.keys();
   await Promise.all(keys.filter((k) => k.startsWith("civitasone-")).map((k) => caches.delete(k)));
   try {
     const res = await fetch(OFFLINE_URL, { credentials: "omit" });
-    if (isCacheable(res)) await (await caches.open(SHELL_CACHE)).put(OFFLINE_URL, res.clone());
+    if (isCacheableOffline(res)) await (await caches.open(SHELL_CACHE)).put(OFFLINE_URL, res.clone());
   } catch {
     /* offline: the fallback is re-precached on the next install */
   }
@@ -97,12 +110,12 @@ function isApiGet(request, url) {
 }
 
 // Network-first for navigations: try the network, fall back to a cached copy
-// (only ever stored when isCacheable) or the offline page.
-async function networkFirst(request, cacheName, fallbackUrl) {
+// (only ever stored when cacheableFor allows it) or the offline page.
+async function networkFirst(request, path, cacheName, fallbackUrl) {
   const cache = await caches.open(cacheName);
   try {
     const res = await fetch(request);
-    if (isCacheable(res)) cache.put(request, res.clone());
+    if (cacheableFor(path, res)) cache.put(request, res.clone());
     return res;
   } catch {
     const cached = await cache.match(request);
@@ -154,7 +167,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/auth/")) return;
 
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, SHELL_CACHE, OFFLINE_URL));
+    event.respondWith(networkFirst(request, url.pathname, SHELL_CACHE, OFFLINE_URL));
     return;
   }
   if (isStaticAsset(url)) {

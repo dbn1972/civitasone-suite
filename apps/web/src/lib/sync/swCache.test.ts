@@ -120,6 +120,46 @@ describe("service worker cache hygiene (V4-A-01)", () => {
     expect(await res!.text()).toBe("offline page");
   });
 
+  // Next.js renders /offline per request (next-intl reads the locale cookie), so the
+  // real response carries private/no-store. The fallback must still be cached at install
+  // and re-cached after a logout purge, or an offline navigation gets the JSON 503.
+  it("caches the /offline fallback despite Next.js private/no-store headers, at install and after CIVITASONE_PURGE", async () => {
+    const NEXT_DYNAMIC_CC = "private, no-cache, no-store, max-age=0, must-revalidate";
+    let online = true;
+    const sw = boot(async (req) => {
+      if (!online) throw new TypeError("offline");
+      const path = new URL(req.url).pathname;
+      if (path === "/offline") return new Response("offline page", { status: 200, headers: { "cache-control": NEXT_DYNAMIC_CC } });
+      return new Response("<html>hello Asha</html>", { status: 200, headers: { "cache-control": NEXT_DYNAMIC_CC } });
+    });
+    const nav = new Proxy(new Request(`${ORIGIN}/hr/payroll`), { get: (t, k) => (k === "mode" ? "navigate" : (t as any)[k] instanceof Function ? (t as any)[k].bind(t) : (t as any)[k]) });
+
+    await sw.install();
+    // Only the public fallback is stored; the personalised shells ("/", "/dashboard") are not.
+    expect(await sw.allCachedUrls()).toEqual([`${ORIGIN}/offline`]);
+    online = false;
+    expect(await (await sw.dispatchFetch(nav as Request))!.text()).toBe("offline page");
+
+    online = true;
+    await sw.dispatchMessage({ type: "CIVITASONE_PURGE" });
+    expect(await sw.allCachedUrls()).toEqual([`${ORIGIN}/offline`]);
+    online = false;
+    const res = await sw.dispatchFetch(nav as Request);
+    expect(res!.status).toBe(200);
+    expect(await res!.text()).toBe("offline page");
+  });
+
+  it("does not cache a redirected /offline response (e.g. bounced to login)", async () => {
+    const sw = boot(async () => {
+      const r = new Response("login", { status: 200 });
+      Object.defineProperty(r, "redirected", { value: true });
+      return r;
+    });
+    await sw.install();
+    await sw.dispatchMessage({ type: "CIVITASONE_PURGE" });
+    expect(await sw.allCachedUrls()).toEqual([]);
+  });
+
   it("purges every civitasone-* cache on CIVITASONE_PURGE and leaves foreign caches alone", async () => {
     const sw = boot(async () => new Response("x", { status: 200 }));
     for (const n of ["civitasone-shell-v1", "civitasone-data-v1", "civitasone-static-v1", "other-app-cache"]) {
