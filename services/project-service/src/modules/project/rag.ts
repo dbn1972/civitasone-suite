@@ -47,18 +47,75 @@ function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Re-entrancy guard (CLOS3-S5-21): a slow tick must not overlap the next one. */
+let ragBusy = false;
+/** Keyset cursor: each tick takes the next page of active projects; wraps to the start after the last. */
+let ragCursor: string | null = null;
+const MILESTONE_BATCH = 500;
+
+/** Test hook: reset the module-level scheduler state. */
+export function _resetRagState(): void {
+  ragBusy = false;
+  ragCursor = null;
+}
+
+type Project = Awaited<ReturnType<typeof repo.listActiveProjects>>[number];
+type Milestone = Awaited<ReturnType<typeof repo.listMilestonesByProject>>[number];
+
+/** One milestone query per tenant (chunked), under that tenant's RLS context -- not one per project. */
+async function loadMilestonesByProject(projects: Project[]): Promise<Map<string, Milestone[]>> {
+  const idsByTenant = new Map<string, string[]>();
+  for (const p of projects) {
+    const ids = idsByTenant.get(p.tenantId) ?? [];
+    ids.push(p.id);
+    idsByTenant.set(p.tenantId, ids);
+  }
+  const out = new Map<string, Milestone[]>();
+  for (const [tenantId, ids] of idsByTenant) {
+    for (let i = 0; i < ids.length; i += MILESTONE_BATCH) {
+      const rows = await runWithTenant(tenantId, () => repo.listMilestonesByProjects(ids.slice(i, i + MILESTONE_BATCH), tenantId));
+      for (const m of rows) {
+        const list = out.get(m.projectId) ?? [];
+        list.push(m);
+        out.set(m.projectId, list);
+      }
+    }
+  }
+  return out;
+}
+
 /**
- * One scheduler tick: recompute RAG for active projects and persist rag + delayed status.
+ * One scheduler tick: recompute RAG for the next page of active projects and persist rag + delayed status.
  * A project flipped to delayed keeps status 'delayed' (an extension of 'active' in the dashboard);
  * recovering projects revert to 'active'.
+ * Skipped (not queued) while a previous tick is still running.
  */
-export async function runRagTick(limit = 1000): Promise<{ scanned: number; flipped: number }> {
+export async function runRagTick(limit = 1000): Promise<{ scanned: number; flipped: number; skipped?: boolean }> {
+  if (ragBusy) {
+    log.warn("rag tick skipped: previous tick still running");
+    return { scanned: 0, flipped: 0, skipped: true };
+  }
+  ragBusy = true;
+  try {
+    return await ragTickBody(limit);
+  } finally {
+    ragBusy = false;
+  }
+}
+
+async function ragTickBody(limit: number): Promise<{ scanned: number; flipped: number }> {
   const today = todayIso();
-  const projects = await repo.listActiveProjects(limit);
+  let projects = await repo.listActiveProjects(limit, ragCursor);
+  if (projects.length === 0 && ragCursor !== null) {
+    ragCursor = null; // swept past the last project: wrap and start over
+    projects = await repo.listActiveProjects(limit, null);
+  }
+  ragCursor = projects.length < limit ? null : projects[projects.length - 1]!.id;
+  const milestonesByProject = await loadMilestonesByProject(projects);
   let flipped = 0;
 
   for (const project of projects) {
-    const milestones = await repo.listMilestonesByProject(project.id, project.tenantId);
+    const milestones = milestonesByProject.get(project.id) ?? [];
     const openPlanned = milestones
       .filter((m) => m.status !== "completed" && m.status !== "cancelled")
       .map((m) => m.plannedDate.toString());
