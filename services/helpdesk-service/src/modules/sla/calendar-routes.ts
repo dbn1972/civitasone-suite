@@ -143,8 +143,13 @@ export async function calendarRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/helpdesk/csat/ces", async (req, reply) => {
     const ctx = resolveContext(req);
     const body = cesBody.parse(req.body);
-    if (!(await queries.ticketExists(ctx.tenantId, body.ticketId))) {
+    const requesterId = await queries.ticketRequesterId(ctx.tenantId, body.ticketId);
+    if (!requesterId) {
       throw new HttpError(404, "NOT_FOUND", "ticket not found");
+    }
+    // V4-B-07: only the ticket requester may submit CES for their own ticket.
+    if (requesterId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "only the ticket requester can submit CES");
     }
     if (await queries.findCesForTicket(ctx.tenantId, body.ticketId)) {
       throw new HttpError(409, "ALREADY_SUBMITTED", "CES response already submitted for this ticket");
