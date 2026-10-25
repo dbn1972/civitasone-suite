@@ -237,7 +237,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
       WHERE tenant_id = ${ctx.tenantId}::uuid
         AND entry_date >= ${start}::date AND entry_date <= ${end}::date
       GROUP BY EXTRACT(MONTH FROM entry_date)
-      ORDER BY month
+      ORDER BY (EXTRACT(MONTH FROM entry_date)::int + 8) % 12
     `));
     return reply.send({ fiscalYear: fy, monthlyFlows: rows });
   });
