@@ -9,7 +9,7 @@ import * as repo from "./repo.js";
 import * as intakeRepo from "./intake-repo.js";
 import * as portalRepo from "../portal/repo.js";
 import * as analyticsRepo from "../analytics/repo.js";
-import { enqueuePackNotifications } from "../catalogue/notification-bindings.js";
+import { enqueuePackNotifications, resolveCitizenAddress } from "../catalogue/notification-bindings.js";
 import { assertStatusTransition, assertRequiredDocuments, buildPresignedUploadUrl, computeDeadline, toDateString, isSlaBreached } from "./domain.js";
 
 export function registerApplicationConsumers(rawQueue: Queue): void {
@@ -101,13 +101,18 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
               ? EVENTS.applicationApproved
               : `citizen.application.${packEvent}`,
         });
-        if (packEvent === "approved" && sent === 0) {
+        // V4-G-06: the system "approved" template is an SMS; address it to the
+        // citizen's mobile, not their profile UUID (skip when none on file).
+        const approvedTo = packEvent === "approved" && sent === 0
+          ? await resolveCitizenAddress(tx, msg.tenantId, app.citizenId ?? p.id, "sms")
+          : null;
+        if (packEvent === "approved" && sent === 0 && approvedTo !== null) {
           await enqueue(tx, {
             topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
             tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
             payload: buildNotificationPayload({
               eventType: EVENTS.applicationApproved,
-              recipient: app.citizenId ?? p.id,
+              recipient: approvedTo,
               recipientId: app.citizenId ?? undefined,
               variables: { applicationId: p.id },
             }),
