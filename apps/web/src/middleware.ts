@@ -21,7 +21,9 @@ import { tileImgSource } from "@/lib/mapTiles";
 // "/pricing" and "/docs" are matched on a path-segment boundary so an unrelated
 // route that merely starts with the same letters stays private.
 const PUBLIC_EXACT = ["/"];
-const PUBLIC_SEGMENT = ["/pricing", "/docs"];
+// /offline: the service-worker fallback page; user-agnostic (locale only) and must be
+// fetchable anonymously so the SW can (re)precache it after logout (V4-A-01).
+const PUBLIC_SEGMENT = ["/pricing", "/docs", "/offline"];
 const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
