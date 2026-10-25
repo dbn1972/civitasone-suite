@@ -81,6 +81,13 @@ export function FeeBuilder({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
+  // CLOS3-S1-01: last design the server acknowledged. Without this guard the
+  // setDesign(saved) below re-arms the autosave effect and re-POSTs forever
+  // (same guard as FormBuilder, GAP-DESIGNER-DETAIL-B2-01). Seeded from a
+  // loaded, already-persisted fee so merely opening the step does not write.
+  const lastPersisted = useRef<FeeDesignState | null>(
+    initial.scheduleId || initial.rateHeadId ? initial : null,
+  );
 
   const patchDesign = useCallback((updater: (d: FeeDesignState) => FeeDesignState) => {
     setDesign((prev) => {
@@ -136,10 +143,14 @@ export function FeeBuilder({
   const schedulePersist = useCallback(() => {
     if (!design.feeModel || design.feeModel === "engine") return;
     if (timer.current) clearTimeout(timer.current);
+    if (lastPersisted.current && JSON.stringify(lastPersisted.current) === JSON.stringify(latest.current)) {
+      return;
+    }
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
         const saved = await persistFeeDesign(latest.current, serviceId, serviceName);
+        lastPersisted.current = saved;
         setDesign(saved);
         onDesignPersisted?.(saved);
         onDesignChange?.(saved);
