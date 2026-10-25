@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { aggregateFunnel, FUNNEL_STEPS, type ActivationEvent } from "./activation";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { aggregateFunnel, FUNNEL_STEPS, trackActivation, type ActivationEvent } from "./activation";
 
 const t0 = "2026-06-27T10:00:00.000Z";
 const min = (n: number) => new Date(Date.parse(t0) + n * 60000).toISOString();
@@ -57,5 +57,45 @@ describe("activation funnel aggregation (north star: TTFRT)", () => {
   it("exposes all golden-path steps in order", () => {
     expect(FUNNEL_STEPS[0]).toBe("signin");
     expect(FUNNEL_STEPS[FUNNEL_STEPS.length - 1]).toBe("first_transaction");
+  });
+});
+
+describe("trackActivation (CLOS3-S3-21)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Reflect.deleteProperty(navigator, "sendBeacon");
+  });
+
+  it("swallows a network failure of the fetch fallback (no unhandled rejection)", async () => {
+    Object.defineProperty(navigator, "sendBeacon", { value: undefined, configurable: true });
+    // A plain function, not vi.fn(): the spy wrapper attaches its own handler to a returned promise and would
+    // mask the unhandled rejection this test is looking for.
+    const calls: Array<[string, RequestInit]> = [];
+    const fetchMock = (url: string, init: RequestInit): Promise<Response> => {
+      calls.push([url, init]);
+      return Promise.reject(new Error("net"));
+    };
+    vi.stubGlobal("fetch", fetchMock);
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      trackActivation("signin");
+      await new Promise((r) => setTimeout(r, 0));
+      expect(calls).toHaveLength(1);
+      expect(calls[0]![1].keepalive).toBe(true);
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("uses sendBeacon when available and does not call fetch", () => {
+    const beacon = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, "sendBeacon", { value: beacon, configurable: true });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    trackActivation("signin");
+    expect(beacon).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
