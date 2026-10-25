@@ -101,7 +101,6 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // Guard: total disbursed must not exceed approved amount
       // M1 FIX: use FOR UPDATE lock to prevent concurrent over-disbursement.
       const app = await appRepo.findApplicationByIdForUpdate(tx, installment.applicationId, installment.tenantId);
-
       if (app) {
         // GAP-GRANTS-INSTALLMENTS-03: never release while the funding scheme is
         // suspended or closed (a "suspended grant"). The UI blocks the control,
