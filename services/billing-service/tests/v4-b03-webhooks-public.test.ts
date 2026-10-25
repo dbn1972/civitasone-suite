@@ -69,6 +69,22 @@ describe("POST /v1/billing/webhooks/razorpay", () => {
     expect(published).toHaveLength(0);
   });
 
+  it("rejects an oversize unsigned body (413) without queuing anything", async () => {
+    const raw = JSON.stringify({ event: "x", pad: "a".repeat(1_048_576 + 1024) });
+    const res = await app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json" }, payload: raw });
+    expect(res.statusCode).toBe(413);
+    expect(published).toHaveLength(0);
+  });
+
+  it("rejects an oversize chunked body (no content-length) with 413 and queues nothing", async () => {
+    const { Readable } = await import("node:stream");
+    const big = Buffer.alloc(1_048_576 + 1024, 97);
+    const stream = Readable.from([big.subarray(0, 600_000), big.subarray(600_000)]);
+    const res = await app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json" }, payload: stream });
+    expect(res.statusCode).toBe(413);
+    expect(published).toHaveLength(0);
+  });
+
   it("falls back to the system tenant when the signed notes carry no valid tenant id", async () => {
     const raw = JSON.stringify(rzpEvent("not-a-uuid"));
     const res = await app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json", "x-razorpay-signature": rzpSig(raw) }, payload: raw });

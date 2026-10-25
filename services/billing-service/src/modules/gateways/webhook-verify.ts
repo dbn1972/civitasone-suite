@@ -7,6 +7,10 @@
  */
 import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { HttpError } from "../../shared/context.js";
+
+/** Hard cap on an anonymous webhook body (matches the app-level bodyLimit of 1 MiB). */
+export const WEBHOOK_MAX_BODY_BYTES = 1_048_576;
 
 export type RawBodyRequest = FastifyRequest & { rawBody?: string };
 
@@ -20,8 +24,23 @@ export async function captureRawBody(
   _reply: FastifyReply,
   payload: NodeJS.ReadableStream,
 ): Promise<NodeJS.ReadableStream> {
+  const declared = Number(req.headers["content-length"]);
+  if (Number.isFinite(declared) && declared > WEBHOOK_MAX_BODY_BYTES) {
+    (payload as { destroy?: () => void }).destroy?.();
+    throw new HttpError(413, "PAYLOAD_TOO_LARGE", "webhook body too large");
+  }
   const chunks: Buffer[] = [];
-  for await (const chunk of payload) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
+  let total = 0;
+  for await (const chunk of payload) {
+    const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
+    total += buf.length;
+    // Enforce the cap while streaming (chunked bodies have no content-length): never buffer past it.
+    if (total > WEBHOOK_MAX_BODY_BYTES) {
+      (payload as { destroy?: () => void }).destroy?.();
+      throw new HttpError(413, "PAYLOAD_TOO_LARGE", "webhook body too large");
+    }
+    chunks.push(buf);
+  }
   const raw = Buffer.concat(chunks);
   (req as RawBodyRequest).rawBody = raw.toString("utf8");
   const replay = new Readable({ read() {} });
