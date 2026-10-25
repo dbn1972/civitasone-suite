@@ -500,7 +500,8 @@
     "validationNotDistinct": "यह व्यक्ति ऊपर किसी अन्य भूमिका के लिए पहले से चयनित है।",
     "cancelBtn": "रद्द करें",
     "initiatingBtn": "प्रारंभ किया जा रहा है…",
-    "initiateBtn": "APAR प्रारंभ करें"
+    "initiateBtn": "APAR प्रारंभ करें",
+    "backToList": "APAR सूची पर वापस जाएँ"
   },
   "aparStageActions": {
     "title": "वर्कफ़्लो कार्रवाई",
