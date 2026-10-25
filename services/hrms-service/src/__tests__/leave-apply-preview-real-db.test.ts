@@ -109,6 +109,14 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
+  // A 202 submit hands the command to the in-memory queue, which delivers on a
+  // setTimeout(0) and then runs the consumer DB writes in the background.
+  // Tests that submit without draining (the EOL "within balance" one) used to
+  // leave that delivery in flight across the test boundary: under CI load it
+  // landed AFTER the DELETE below and inserted a leave_apps row (or spent an
+  // allocation) into the next test, which asserts "no applications". Settle
+  // every in-flight delivery before resetting the shared tenant state.
+  await drainQueue();
   // Each test starts from "no applications" so date ranges can be reused, and
   // from the seeded balances (the consumer test lowers one on purpose).
   await asTenant((tx) => tx`DELETE FROM leave.hrms_leave_apps WHERE tenant_id = ${TENANT}`);
