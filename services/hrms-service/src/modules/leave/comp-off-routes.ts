@@ -8,9 +8,22 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { randomUUID } from "node:crypto";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
+// V4-B-01: comp-off is an entitlement grant. Only HR may grant it (the
+// approval step); every other role may only read/redeem its OWN entries.
+function isHr(ctx: { roles: readonly string[] }): boolean {
+  return ctx.roles.some((r) => HR_ROLES.includes(r));
+}
+
+async function ownEmployeeId(ctx: { tenantId: string; actorId: string }): Promise<string> {
+  const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!emp) throw new HttpError(403, "FORBIDDEN", "no employee record is linked to this account");
+  return emp.id;
+}
 
 const earnCompOffBody = z.object({
   employeeId: z.string().uuid(),
@@ -45,7 +58,7 @@ export async function compOffRoutes(app: FastifyInstance): Promise<void> {
   // Earn comp-off for working on holiday
   app.post("/v1/hrms/comp-off", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
+    requireRole(ctx, HR_ROLES);
     const body = earnCompOffBody.parse(req.body);
 
     const compOff = {
@@ -77,8 +90,16 @@ export async function compOffRoutes(app: FastifyInstance): Promise<void> {
     const q = querySchema.parse(req.query);
 
     let results = compOffStore.filter((c) => c.tenantId === ctx.tenantId);
-    if (q.employeeId) {
-      results = results.filter((c) => c.employeeId === q.employeeId);
+    let scopeTo = q.employeeId;
+    if (!isHr(ctx)) {
+      const own = await ownEmployeeId(ctx);
+      if (q.employeeId && q.employeeId !== own) {
+        throw new HttpError(403, "FORBIDDEN", "cannot view another employee's comp-off");
+      }
+      scopeTo = own;
+    }
+    if (scopeTo) {
+      results = results.filter((c) => c.employeeId === scopeTo);
     }
     if (q.status !== "all") {
       results = results.filter((c) => c.status === q.status);
@@ -93,7 +114,10 @@ export async function compOffRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const { id } = req.params as { id: string };
 
-    const compOff = compOffStore.find((c) => c.id === id && c.tenantId === ctx.tenantId);
+    const callerEmployeeId = isHr(ctx) ? undefined : await ownEmployeeId(ctx);
+    const compOff = compOffStore.find(
+      (c) => c.id === id && c.tenantId === ctx.tenantId && (!callerEmployeeId || c.employeeId === callerEmployeeId),
+    );
     if (!compOff) throw new HttpError(404, "NOT_FOUND", "comp-off not found");
     if (compOff.status === "redeemed") {
       throw new HttpError(409, "ALREADY_REDEEMED", "comp-off has already been redeemed");
