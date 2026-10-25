@@ -152,7 +152,6 @@ export async function bpmnRoutes(app: FastifyInstance): Promise<void> {
       exclusiveGateway: "xor", parallelGateway: "split", intermediateEvent: "message_catch",
     };
     return sendAccepted(reply, acceptedResponseSchema, await definitionCommands.importBpmnDefinition(ctx, {
-      code: `imported_${Date.now()}`,
       name: body.name ?? parsed.processName,
       nodes: parsed.nodes.map((node, index) => ({ nodeKey: node.id, name: node.name, nodeType: typeMap[node.type], sortOrder: index + 1 })),
       edges: parsed.edges.map((edge) => ({ fromNode: edge.sourceRef, toNode: edge.targetRef, condition: edge.condition })),

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { db, scopedRead, type Db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
+import { nextCaseNumber } from "../../shared/numbers.js";
 import { cases, caseDeviations } from "./schema.js";
 
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -50,7 +51,8 @@ export interface RegisterInput {
  */
 export async function registerCaseTx(tx: Tx, input: RegisterInput): Promise<{ id: string; created: boolean }> {
   const id = randomUUID();
-  const caseNumber = input.caseNumber ?? `CASE-${Date.now()}-${id.slice(0, 6)}`;
+  // Allocated from a Postgres sequence INSIDE this transaction (shared/numbers.ts): a retry re-allocates.
+  const caseNumber = input.caseNumber ?? (await nextCaseNumber(tx));
   const inserted = await tx.insert(cases).values({
     id, tenantId: input.tenantId, caseNumber, title: input.title,
     caseType: input.caseType, sourceService: input.sourceService, sourceRefId: input.sourceRefId,

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
+import { nextCaseNumber } from "../../shared/numbers.js";
 import { caseLinks, type CaseLinkRow } from "./schema.js";
 import { cases } from "../case-registry/schema.js";
 import { assembleLinkGuardResult, containmentEdge, type CaseLink, type LinkType } from "./domain.js";
@@ -255,7 +256,7 @@ export async function persistSplit(input: SplitPersistInput, outer?: Tx): Promis
       childIds.push(childId);
       await tx.insert(cases).values({
         id: childId, tenantId: input.tenantId,
-        caseNumber: `${parent.caseNumber}-${childId.slice(0, 4)}`,
+        caseNumber: await nextCaseNumber(tx),
         title: c.title, caseType: c.caseType, sourceService: parent.sourceService,
         sourceRefId: childId as unknown as string, priority: parent.priority, status: "open",
         parentCaseId: input.parentCaseId, assigneeId: c.assigneeId ?? null,
