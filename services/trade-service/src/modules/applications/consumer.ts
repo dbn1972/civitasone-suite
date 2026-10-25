@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -63,14 +62,12 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       areaInSqft: p.areaInSqft,
       employeeCount: p.employeeCount,
     });
-    // See services/trade-service/src/modules/licences/consumer.ts for why
-    // Date.now() % N is a deterministic-collision hazard on a UNIQUE column
-    // (application_number), not a source of randomness — same fix applied
-    // here for applicationNumber.
-    const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
+    let applicationNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      applicationNumber = generateApplicationNumber("ULB", await repo.nextApplicationSeq(tx));
       await repo.insertApplication(tx, {
         id: p.id,
         tenantId: msg.tenantId,
