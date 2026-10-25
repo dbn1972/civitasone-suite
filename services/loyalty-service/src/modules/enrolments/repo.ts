@@ -170,3 +170,20 @@ export async function adjustBalance(
     .returning({ id: enrolments.id });
   return result.length > 0;
 }
+
+/**
+ * CLOS3-S5-02/03: adjustBalance() is optimistic-lock guarded and returns false
+ * when it matched 0 rows. Consumers must call this inside their db.transaction
+ * so the thrown error rolls back the ledger row, outbox event and audit row
+ * instead of committing a ledger entry with no balance effect.
+ */
+export class BalanceConflictError extends Error {
+  constructor(enrolmentId: string, action: string) {
+    super(`${action}: enrolment ${enrolmentId} balance not adjusted (version conflict or missing row)`);
+    this.name = "BalanceConflictError";
+  }
+}
+
+export function assertBalanceAdjusted(ok: boolean, enrolmentId: string, action: string): void {
+  if (!ok) throw new BalanceConflictError(enrolmentId, action);
+}
