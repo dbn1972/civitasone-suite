@@ -6,6 +6,7 @@
  * convention as `modules/location/validators.ts`.
  */
 import { z } from "zod";
+import { pageQueryShape } from "../../shared/pagination.js";
 
 export const idParam = z.object({ id: z.string().uuid("invalid id") });
 
@@ -33,10 +34,12 @@ export type WatchlistAddBody = z.infer<typeof watchlistAddBody>;
 export const listBlacklistQuery = z.object({
   status: z.enum(["pending", "active", "expired", "archived"]).optional(),
   locationId: z.string().uuid("invalid locationId").optional(),
+  ...pageQueryShape,
 });
 export type ListBlacklistQuery = z.infer<typeof listBlacklistQuery>;
 
 export const listWatchlistQuery = z.object({
   locationId: z.string().uuid("invalid locationId").optional(),
+  ...pageQueryShape,
 });
 export type ListWatchlistQuery = z.infer<typeof listWatchlistQuery>;

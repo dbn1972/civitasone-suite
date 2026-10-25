@@ -48,9 +48,9 @@ vi.mock("../src/modules/location/commands.js", () => ({
 
 /* ─── Mock blacklist repo & commands ─── */
 vi.mock("../src/modules/blacklist/repo.js", () => ({
-  listBlacklistEntries: vi.fn(async () => [fakeBlacklist]),
+  listBlacklistEntries: vi.fn(async () => ({ rows: [fakeBlacklist], hasMore: false })),
   getBlacklistEntryById: vi.fn(async (_tid: string, id: string) => (id === FAKE_ID ? fakeBlacklist : null)),
-  listWatchlistEntries: vi.fn(async () => []),
+  listWatchlistEntries: vi.fn(async () => ({ rows: [], hasMore: false })),
   fuzzyScreenName: vi.fn(async () => []),
 }));
 vi.mock("../src/modules/blacklist/commands.js", () => ({
@@ -406,6 +406,17 @@ describe("Blacklist routes — auth", () => {
   it("GET /v1/visitor/blacklist → 403 employee role", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/visitor/blacklist", headers: headers(["employee"]) });
     expect(res.statusCode).toBe(403);
+  });
+  it("GET blacklist/watchlist → paged envelope + limit validation (CLOS3-S6-16)", async () => {
+    for (const u of ["blacklist", "watchlist"]) {
+      const ok = await app.inject({ method: "GET", url: `/v1/visitor/${u}?limit=10&offset=20`, headers: headers(["security_admin"]) });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json().meta).toEqual({ limit: 10, offset: 20, hasMore: false });
+      const dflt = await app.inject({ method: "GET", url: `/v1/visitor/${u}`, headers: headers(["security_admin"]) });
+      expect(dflt.json().meta).toEqual({ limit: 500, offset: 0, hasMore: false });
+      const bad = await app.inject({ method: "GET", url: `/v1/visitor/${u}?limit=100000`, headers: headers(["security_admin"]) });
+      expect(bad.statusCode).toBe(400);
+    }
   });
   it("POST /v1/visitor/blacklist → 401 without token", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/visitor/blacklist", payload: { personName: "X", reason: "theft" } });
