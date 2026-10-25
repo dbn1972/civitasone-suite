@@ -64,6 +64,8 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
 
   const [job, setJob] = useState<ExportStatus | null>(null);
   const [polling, setPolling] = useState(false);
+  // CLOS3-S1-12: true once the 120 s safety stop fired on a job that had not finished.
+  const [stalled, setStalled] = useState(false);
   const [toast, setToast] = useState<{ kind: "ok" | "err" | "info"; text: string } | null>(null);
 
   const [verifyBusy, setVerifyBusy] = useState(false);
@@ -176,6 +178,7 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
     (id: string) => {
       stopPolling();
       activeJobRef.current = id;
+      setStalled(false);
       setPolling(true);
       try {
         window.sessionStorage.setItem(RESUME_KEY, id);
@@ -186,7 +189,11 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
       pollRef.current = setInterval(() => void pollOnce(id), 2500);
       // safety stop after 2 minutes — kept in a ref so a later job's polling
       // is never stopped by an earlier job's stale timer.
-      safetyRef.current = setTimeout(() => stopPolling(), 120_000);
+      // CLOS3-S1-12: say so instead of freezing on the last status; the card offers "Check status".
+      safetyRef.current = setTimeout(() => {
+        stopPolling();
+        setStalled(true);
+      }, 120_000);
     },
     [pollOnce, stopPolling],
   );
@@ -363,7 +370,7 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
                   <div className="v">
                     {job.status === "completed" ? <span className="pill good">Ready</span>
                       : job.status === "failed" ? <span className="pill bad">Failed</span>
-                      : <span className="pill warn">{polling ? "Generating…" : job.status}</span>}
+                      : <span className="pill warn">{polling ? "Generating…" : stalled ? "Still running" : job.status}</span>}
                   </div>
                 </div>
                 <div className="fld"><div className="l">Format</div><div className="v">{job.format.toUpperCase()}</div></div>
@@ -381,6 +388,13 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
 
               {job.error && (
                 <div style={{ color: "var(--bad)", fontSize: 13 }}>{job.error}</div>
+              )}
+
+              {stalled && !polling && !TERMINAL.has(job.status) && (
+                <div role="status" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 13, color: "var(--mut)" }}>
+                  <span>This export is still running. We stopped checking automatically.</span>
+                  <Button size="sm" onClick={() => startPolling(job.id)}>Check status</Button>
+                </div>
               )}
 
               {job.status === "completed" && (

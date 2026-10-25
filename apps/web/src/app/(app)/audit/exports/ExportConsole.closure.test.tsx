@@ -101,4 +101,36 @@ describe("ExportConsole closure defects", () => {
     expect(getB.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(Object.values(window.sessionStorage).includes("B")).toBe(true);
   });
+
+  // CLOS3-S1-12: the 120 s safety stop must tell the user the job is still running and let them resume.
+  it("CLOS3-S1-12: after the safety stop a still-running job shows a notice and a Check status button that resumes polling", async () => {
+    vi.useFakeTimers();
+    let gets = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === "/api/proxy/v1/audit/exports" && init?.method === "POST") {
+        return new Response(JSON.stringify({ id: "A", data: { id: "A" } }), { status: 202 });
+      }
+      if (url === "/api/proxy/v1/audit/exports/A") {
+        gets++;
+        return new Response(JSON.stringify({ data: { ...STATUS.data, id: "A", status: "processing", ready: false, download: null } }), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    render(<ExportConsole />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate export" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(125_000); });
+
+    expect(screen.getByText(/stopped checking automatically/i)).toBeInTheDocument();
+    const stoppedAt = gets;
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(gets).toBe(stoppedAt); // polling really stopped
+
+    fireEvent.click(screen.getByRole("button", { name: "Check status" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(gets).toBeGreaterThan(stoppedAt); // resumed
+    expect(screen.queryByRole("button", { name: "Check status" })).not.toBeInTheDocument();
+  });
 });
