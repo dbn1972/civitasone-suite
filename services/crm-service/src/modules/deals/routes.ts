@@ -120,7 +120,8 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     const { pipelineId } = pipelineScopeQuery.parse(req.query ?? {});
     // GAP-CRM-ONBOARDING-01: optional `ids` looks specific deals up by id (<= 50, one request).
     const { ids } = dealIdsQuery.parse(req.query ?? {});
-    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId, ids));
+    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId, ids,
+      ctx.roles.some((r) => r === "crm_admin" || r === "super_admin") ? undefined : ctx.actorId));
   });
 
   // OP-005: stage-ageing dashboard — opportunities exceeding their configured stage limit.

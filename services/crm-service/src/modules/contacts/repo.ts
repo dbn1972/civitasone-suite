@@ -5,6 +5,7 @@ import { contacts, accounts, contactImportBatches, type ContactRow, type Contact
 import { deals } from "../deals/schema.js";
 import { activities } from "../activities/schema.js";
 import { blindIndex } from "../../shared/pii-crypto.js";
+import { ownerVisibleSql } from "../../shared/team-scope.js";
 
 function toView(r: ContactRow): ContactView {
   return {
@@ -145,6 +146,8 @@ export type ListFilters = {
   expectedValueMax?: string;
   segment?: "all" | "mine" | "recent";
   actorId?: string;
+  /** Non-admin caller id: restrict to records owned by them / their team(s) (or unowned). */
+  visibleTo?: string;
 };
 
 export async function listByTenant(
@@ -174,6 +177,7 @@ export async function listByTenant(
   if (filters.expectedValueMax) conditions.push(sql`${contacts.expectedValueMinor} <= ${filters.expectedValueMax}::bigint`);
   if (filters.ownerId) conditions.push(eq(contacts.ownerId, filters.ownerId));
   if (filters.accountId) conditions.push(eq(contacts.accountId, filters.accountId));
+  if (filters.visibleTo) conditions.push(ownerVisibleSql(contacts.ownerId, tenantId, filters.visibleTo));
   if (filters.segment === "mine" && filters.actorId) conditions.push(eq(contacts.ownerId, filters.actorId));
   if (filters.segment === "recent") {
     // Parenthesised: drizzle's and() joins conditions with a bare " and ", so an
@@ -445,6 +449,8 @@ export interface AccountListFilters {
   excludeSubtreeOf?: string;
   /** Only these account ids (a lookup of known ids, not a page). An empty list matches nothing. */
   ids?: string[];
+  /** Non-admin caller id: restrict to accounts owned by them / their team(s) (or unowned). Ignored for an `ids` lookup. */
+  visibleTo?: string;
 }
 
 /** Escape LIKE metacharacters so a typed `%` or `_` matches literally. */
@@ -457,6 +463,7 @@ function accountListConditions(tenantId: string, filters: AccountListFilters): S
   const search = filters.search?.trim();
   if (search) conditions.push(ilike(accounts.name, `%${escapeLike(search)}%`));
   if (filters.ids) conditions.push(filters.ids.length > 0 ? inArray(accounts.id, filters.ids) : sql`false`);
+  if (filters.visibleTo && !filters.ids) conditions.push(ownerVisibleSql(accounts.ownerId, tenantId, filters.visibleTo));
   if (filters.excludeSubtreeOf) {
     conditions.push(sql`${accounts.id} NOT IN (
       WITH RECURSIVE sub(id) AS (

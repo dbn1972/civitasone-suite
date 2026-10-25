@@ -97,6 +97,8 @@ export async function contactExportRoutes(app: FastifyInstance): Promise<void> {
       ...(q.region ? { region: q.region } : {}),
       ...(q.source ? { leadSource: q.source } : {}),
       ...(q.status ? { contactStatus: q.status } : {}),
+      // Team-scoped visibility applies to the export too (it must not widen the list).
+      ...(ctx.roles.some((r) => r === "crm_admin" || r === "super_admin") ? {} : { visibleTo: ctx.actorId }),
     };
 
     const rows = await queries.exportContactsFiltered(ctx.tenantId, reveal, q.limit, filters);

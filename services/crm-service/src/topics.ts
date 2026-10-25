@@ -36,6 +36,8 @@ export const COMMANDS = {
   createContactRole: "crm.contact_role.create",
   deleteContactRole: "crm.contact_role.delete",
   createTeam: "crm.team.create",
+  addTeamMember: "crm.team.member.add",
+  removeTeamMember: "crm.team.member.remove",
   updateAgentCapacity: "crm.agent_workload.update_capacity",
   createQuotation: "crm.quotation.create",
   versionQuotation: "crm.quotation.version",
