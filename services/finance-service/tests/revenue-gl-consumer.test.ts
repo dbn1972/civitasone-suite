@@ -132,13 +132,14 @@ describe("revenue-gl consumer — citizen.receipt.issued", () => {
     const q = new TestMemoryQueue();
     registerRevenueGlConsumers(q as never);
 
-    await q.publish(CONSUMED_EVENTS.citizenReceiptIssued, makeMsg({
+    // V4-G-08: the refusal is also dead-lettered (not silently acked) so it is alertable and replayable.
+    await expect(q.publish(CONSUMED_EVENTS.citizenReceiptIssued, makeMsg({
       id: randomUUID(),
       applicationId: randomUUID(),
       receiptNo: "RCT-2026-00000002",
       amountMinor: "100",
       hoaCode: "9999",
-    }));
+    }))).rejects.toThrow(/INVALID_HEAD_CODE/);
 
     const rejected = enqueueMock.mock.calls.find(
       ([, msg]: [unknown, { topic: string }]) => msg.topic === "finance.gl.rejected",

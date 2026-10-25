@@ -134,6 +134,8 @@ export const EVENTS = {
 
 export const CONSUMED_EVENTS = {
   estabRtiResponded: "estab.rti.responded",
+  /** V4-G-08: finance could not post a collected citizen fee (payload carries paymentId). */
+  financeGlRejected: "finance.gl.rejected",
 } as const;
 
 export const SERVICE = "citizen";

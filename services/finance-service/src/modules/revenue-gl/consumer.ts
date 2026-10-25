@@ -5,7 +5,8 @@
  * a counter/offline receipt is recorded. Posts Dr Bank / Cr revenue head (HOA
  * from the pack/service definition, or FINANCE_CITIZEN_REVENUE_CODE fallback).
  */
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
+import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -90,6 +91,15 @@ export function registerRevenueGlConsumers(queue: Queue): void {
     } catch (err: unknown) {
       const reason = err instanceof Error ? err.message : String(err);
       if (reason.startsWith("INVALID_HEAD_CODE")) {
+        // V4-G-08: the fee is already collected and receipted, so an unpostable receipt must never be
+        // acked silently. Tell the producer (finance.gl.rejected, now carrying the code), raise an
+        // alertable error, then dead-letter. The posting transaction rolled back WITHOUT marking the
+        // message processed, so replaying it from the DLQ after the chart of accounts is fixed posts
+        // the journal (idempotent on sourceKey citizen_receipt:<id>).
+        captureError(err, {
+          service: "finance-service", alert: "GL_CITIZEN_RECEIPT_UNPOSTED", topic: CONSUMED_EVENTS.citizenReceiptIssued,
+          code: "INVALID_HEAD_CODE", paymentId: p.id, receiptNo: p.receiptNo, tenantId: msg.tenantId,
+        });
         await db.transaction(async (tx) => {
           await enqueue(tx, {
             topic: EVENTS.glRejected,
@@ -97,10 +107,10 @@ export function registerRevenueGlConsumers(queue: Queue): void {
             tenantId: msg.tenantId,
             actorId: msg.actorId,
             correlationId: msg.correlationId,
-            payload: { paymentId: p.id, receiptNo: p.receiptNo, reason },
+            payload: { paymentId: p.id, receiptNo: p.receiptNo, code: "INVALID_HEAD_CODE", reason },
           });
         });
-        return;
+        throw new NonRetryableError(reason);
       }
       throw err;
     }

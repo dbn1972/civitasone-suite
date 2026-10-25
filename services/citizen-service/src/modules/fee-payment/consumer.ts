@@ -3,7 +3,7 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as catalogueRepo from "../catalogue/repo.js";
@@ -88,6 +88,27 @@ async function resolveSchedule(
 
 export function registerFeePaymentConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+
+  // V4-G-08: finance refused to post a collected fee (missing revenue/bank head). The payment is
+  // already paid + receipted, so leave a failure audit trail against it instead of dropping the news.
+  queue.subscribe(CONSUMED_EVENTS.financeGlRejected, async (msg) => {
+    const p = msg.payload as { paymentId?: string; receiptNo?: string; code?: string; reason?: string };
+    if (typeof p.paymentId !== "string") return; // not a citizen receipt (e.g. an asset journal)
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const pay = await repo.findPaymentByIdTx(tx, p.paymentId as string, msg.tenantId);
+      if (!pay) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "citizen", action: "payment_gl_post_failed", resourceType: "payment", resourceId: pay.id,
+          outcome: "failure", newValue: { receiptNo: p.receiptNo ?? pay.receiptNo ?? null, code: p.code ?? null },
+        },
+      });
+    });
+    log.error({ paymentId: p.paymentId, code: p.code }, "collected citizen fee was not posted to the GL");
+  });
 
   queue.subscribe(COMMANDS.feeScheduleCreate, async (msg) => {
     const p = msg.payload as {
