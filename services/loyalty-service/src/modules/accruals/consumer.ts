@@ -46,14 +46,11 @@ export function registerAccrualConsumers(rawQueue: Queue): void {
         accrualDate: now,
         createdBy: msg.actorId,
       });
-      await enrolmentRepo.adjustBalance(
-        tx,
-        p.enrolmentId,
-        msg.tenantId,
-        pointsBigInt,
-        pointsBigInt,
-        p.enrolmentVersion,
-      );
+      // CLOS3-S5-03: accrual is additive, so apply it independent of the
+      // enqueue-time enrolmentVersion and roll the ledger row back if the
+      // credit cannot be applied (e.g. enrolment gone).
+      const credited = await enrolmentRepo.creditPoints(tx, p.enrolmentId, msg.tenantId, pointsBigInt, pointsBigInt);
+      enrolmentRepo.assertBalanceAdjusted(credited, p.enrolmentId, "accruePoints");
       await enqueue(tx, {
         topic: EVENTS.pointsAccrued,
         eventType: EVENTS.pointsAccrued,
