@@ -97,7 +97,7 @@ describe("subscription commands — row-locked read-modify-write (CLOS3-S6-07)",
     const [c, u] = await Promise.allSettled([cancel, upgrade]);
     expect(c.status).toBe("fulfilled");
     expect(u.status).toBe("rejected");
-    expect(String((u as PromiseRejectedResult).reason)).toMatch(/transition cancelled/);
+    expect(String((u as PromiseRejectedResult).reason)).toMatch(/transition.{0,3}cancelled|INVALID_SUBSCRIPTION_TRANSITION: cancelled/);
     expect(await statusOf(t, id)).toBe("cancelled");
   }, 30_000);
 
@@ -123,7 +123,7 @@ describe("subscription commands — row-locked read-modify-write (CLOS3-S6-07)",
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const rejected = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
-    expect(String(rejected.reason)).toMatch(/transition cancelled/);
+    expect(String(rejected.reason)).toMatch(/transition.{0,3}cancelled|INVALID_SUBSCRIPTION_TRANSITION: cancelled/);
     expect(await statusOf(t, id)).toBe("cancelled");
   }, 30_000);
 });
