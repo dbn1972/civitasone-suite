@@ -256,11 +256,20 @@ export function useSeededResource<T>(
         setData(initialData);
         setFromCache(false);
         setProvenance("live");
-        await writeCache(cacheKey, initialData);
+        try {
+          await writeCache(cacheKey, initialData);
+        } catch {
+          /* cache unavailable: ignore, live data already rendered (CLOS3-S3-10) */
+        }
         return;
       }
       // Server FAILED (error) — fall back to the cached copy if one exists.
-      const cached = await readCache<T>(cacheKey);
+      let cached: Awaited<ReturnType<typeof readCache<T>>> = null;
+      try {
+        cached = await readCache<T>(cacheKey);
+      } catch {
+        /* treat as cache miss (CLOS3-S3-10) */
+      }
       const cacheHit = Boolean(active && cached && !isEmpty(cached.value));
       if (cacheHit && cached) {
         setData(cached.value);

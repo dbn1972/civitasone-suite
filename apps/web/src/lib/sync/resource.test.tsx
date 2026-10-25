@@ -180,3 +180,46 @@ describe("useOfflineResource — CLOS3-S3-09 best-effort cache write", () => {
     expect(mockedWriteCache).not.toHaveBeenCalled();
   });
 });
+
+describe("useSeededResource — CLOS3-S3-10 unavailable cache storage", () => {
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+  });
+
+  it("api source: a rejecting writeCache leaves live data and raises no unhandled rejection", async () => {
+    mockedWriteCache.mockRejectedValue(new Error("quota"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() =>
+        useSeededResource("k.s310a", [{ id: 1 }], "api", (d: unknown[]) => d.length === 0),
+      );
+      await waitFor(() => expect(mockedWriteCache).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(result.current.data).toEqual([{ id: 1 }]);
+      expect(result.current.provenance).toBe("live");
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("error source: a rejecting readCache is a cache miss -> error-no-data, no throw", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() =>
+        useSeededResource("k.s310b", [] as unknown[], "error", (d: unknown[]) => d.length === 0),
+      );
+      await waitFor(() => expect(mockedReadCache).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(result.current.provenance).toBe("error-no-data");
+      expect(result.current.fromCache).toBe(false);
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+});
