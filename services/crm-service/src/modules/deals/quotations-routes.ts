@@ -187,8 +187,11 @@ async function assertSingleCurrency(
 
 /** QP-001/QP-003: every product-sourced line must reference an active, enabled product. */
 async function assertProductsSelectable(tenantId: string, items: z.infer<typeof lineItem>[]): Promise<void> {
+  const productIds = items.map((i) => i.productId).filter((id): id is string => !!id);
+  if (productIds.length === 0) return;
+  const selectable = await productRepo.selectableByIds(tenantId, productIds);
   for (const item of items) {
-    if (item.productId && !(await productRepo.isSelectable(tenantId, item.productId))) {
+    if (item.productId && !selectable.has(item.productId)) {
       throw new HttpError(422, "PRODUCT_NOT_SELECTABLE", `product ${item.productId} is not active/enabled and cannot be quoted`);
     }
   }
