@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as catalogueRepo from "../catalogue/repo.js";
+import * as applicationRepo from "../application/repo.js";
 import {
   enqueuePackNotifications,
   formatAmountMajor,
@@ -107,22 +108,28 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {
+    // V4-G-02: only the application id is trusted from the payload. The owner, the service, the
+    // schedule and the exemption subject are all derived here from the server-side application, so
+    // a caller cannot supply {subject:{category:"BPL"}} (or another citizen/service) to cut the fee.
     const p = msg.payload as {
-      id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;
-      citizenId?: string; subject: Record<string, unknown>;
+      id: string; tenantId: string; applicationId: string; scheduleId?: string;
     };
     const configured = isGatewayConfigured();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
-      if (!sched) return;
+      const app = await applicationRepo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
+      if (!app) return;
+      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, app.serviceId);
+      if (!sched || sched.serviceId !== app.serviceId) return;
+      const subject = await repo.findDraftFormDataByApplicationTx(tx, p.tenantId, app.id);
+      const citizenId = app.citizenId;
       // sched.baseAmount is a bigint({mode:"number"}) column (validator-capped at 100_000_000_00
       // paise, far below 2^53): already a safe-integer number, so passed with no coercion.
-      const fee = computeFee(sched.baseAmount, sched.exemptions, p.subject ?? {});
+      const fee = computeFee(sched.baseAmount, sched.exemptions, subject);
       const gatewayRef = configured ? `pi_${p.id}` : null;
       await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
-        citizenId: p.citizenId ?? null, amount: fee.amount, currency: sched.currency,
+        citizenId, amount: fee.amount, currency: sched.currency,
         exemptionApplied: fee.exemptionApplied, method: "online", status: "pending",
         gatewayRef, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -135,12 +142,12 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         },
       });
       // FN-08: payment_due bindings (amount + pay_link merge fields)
-      const serviceId = p.serviceId ?? sched.serviceId;
-      const recipient = p.citizenId ?? p.applicationId;
+      const serviceId = app.serviceId;
+      const recipient = citizenId;
       await enqueuePackNotifications(tx, {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         serviceId, lifecycleEvent: "payment_due",
-        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
+        recipient, recipientId: citizenId,
         variables: {
           applicationId: p.applicationId,
           app_no: p.applicationId,
