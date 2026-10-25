@@ -4,7 +4,6 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
-import { randomInt } from "node:crypto";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
@@ -31,15 +30,11 @@ export function registerAllotmentConsumers(rawQueue: Queue): void {
       monthlyRentMinor?: string;
       securityDepositMinor?: string;
     };
-    // Mitigation, not a full fix — Date.now() % 999999 repeats every ~16.7min
-    // against a table-wide (non-tenant-scoped) .unique() column; crypto.randomInt
-    // reduces collision probability without a schema change. Real fix (a
-    // per-tenant DB sequence) is a follow-up — this exact pattern recurs
-    // fleet-wide across every service audited in this pass.
-    const allotmentNumber = generateAllotmentNumber("ULB", randomInt(1, 999999));
-
+    let allotmentNumber = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      allotmentNumber = generateAllotmentNumber("ULB", await repo.nextAllotmentSeq(tx));
       await repo.insertAllotment(tx, {
         id: p.id,
         tenantId: msg.tenantId,

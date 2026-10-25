@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -30,12 +29,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
       transfereeAadhaar?: string;
       reason?: string;
     };
-    // Mitigation, not a full fix — same Date.now()%999999 collision pattern
-    // flagged across every service in this pass; see the PR description.
-    const requestNumber = generateRequestNumber("ULB", randomInt(1, 999999));
-
+    let requestNumber = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      requestNumber = generateRequestNumber("ULB", await repo.nextRequestSeq(tx));
       await repo.insertRequest(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -70,12 +68,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.requestCancellation, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; allotmentId: string; reason?: string };
-    // Mitigation, not a full fix — same Date.now()%999999 collision pattern
-    // flagged across every service in this pass; see the PR description.
-    const requestNumber = generateRequestNumber("ULB", randomInt(1, 999999));
-
+    let requestNumber = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      requestNumber = generateRequestNumber("ULB", await repo.nextRequestSeq(tx));
       await repo.insertRequest(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -109,12 +106,11 @@ export function registerLifecycleConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.initiateEviction, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; allotmentId: string; reason: string };
-    // Mitigation, not a full fix — same Date.now()%999999 collision pattern
-    // flagged across every service in this pass; see the PR description.
-    const requestNumber = generateRequestNumber("ULB", randomInt(1, 999999));
-
+    let requestNumber = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      requestNumber = generateRequestNumber("ULB", await repo.nextRequestSeq(tx));
       await repo.insertRequest(tx, {
         id: p.id,
         tenantId: msg.tenantId,
