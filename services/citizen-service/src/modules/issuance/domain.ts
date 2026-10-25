@@ -45,7 +45,13 @@ export function hashPayload(payload: unknown): string {
 }
 
 function issuanceSecret(env: NodeJS.ProcessEnv = process.env): string {
-  return env.CITIZEN_ISSUANCE_SECRET ?? env.CITIZEN_PII_KEY ?? "civitasone-issuance-dev-secret";
+  // V4-E-07: fail CLOSED. A hardcoded fallback would let anyone who reads this
+  // source forge a valid certificate seal. A non-empty secret is mandatory
+  // outside NODE_ENV=test (the unit-test literal is never reachable in prod).
+  const configured = [env.CITIZEN_ISSUANCE_SECRET, env.CITIZEN_PII_KEY].find((v) => typeof v === "string" && v.trim().length > 0);
+  if (configured) return configured;
+  if (env.NODE_ENV === "test") return "test-only-issuance-seal-secret";
+  throw new Error("ISSUANCE_SEAL_KEY_UNSET: set CITIZEN_ISSUANCE_SECRET (or CITIZEN_PII_KEY) to seal certificates");
 }
 
 /**
