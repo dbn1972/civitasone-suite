@@ -24,11 +24,14 @@ export function createInMemoryQuotaStore(): QuotaCheckStore {
 
 // ── Redis-backed (production, fleet-wide) ─────────────────────────
 
+const INCR_WITH_TTL_LUA =
+  "local v=redis.call('INCR',KEYS[1]); if v==1 or redis.call('TTL',KEYS[1])<0 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end; return v";
+
 export async function createRedisQuotaStore(url: string): Promise<QuotaCheckStore> {
   // Dynamic import — ioredis is an optional runtime dep for the gateway.
   // At runtime, ioredis must be installed when REDIS_URL is set.
   // We use a type-only cast here since the dep is optional.
-  const mod = await import("ioredis" as string) as { default: new (url: string, opts: object) => { connect(): Promise<void>; get(k: string): Promise<string | null>; set(k: string, v: string, mode: string, ttl: number): Promise<unknown>; incr(k: string): Promise<number>; expire(k: string, s: number): Promise<unknown> } };
+  const mod = await import("ioredis" as string) as { default: new (url: string, opts: object) => { connect(): Promise<void>; get(k: string): Promise<string | null>; set(k: string, v: string, mode: string, ttl: number): Promise<unknown>; incr(k: string): Promise<number>; expire(k: string, s: number): Promise<unknown>; eval(script: string, numKeys: number, ...args: Array<string | number>): Promise<unknown> } };
   const Redis = mod.default;
   const redis = new Redis(url, { maxRetriesPerRequest: 2, lazyConnect: true });
   await redis.connect();
@@ -42,11 +45,10 @@ export async function createRedisQuotaStore(url: string): Promise<QuotaCheckStor
     },
     async incr(k: string, ttlSeconds: number): Promise<number> {
       const key = `gw:quota:ctr:${k}`;
-      const val = await redis.incr(key);
-      if (val === 1) {
-        // First increment — set TTL
-        await redis.expire(key, ttlSeconds);
-      }
+      // Single atomic round trip: INCR and (re)arm the TTL together. Setting the TTL only when the
+      // key has none (first hit, or a key orphaned by a crash between INCR and EXPIRE) means the
+      // window is fixed from the first hit and a TTL-less counter can never persist (CLOS3-S5-11).
+      const val = await redis.eval(INCR_WITH_TTL_LUA, 1, key, ttlSeconds) as number;
       return val;
     },
   };

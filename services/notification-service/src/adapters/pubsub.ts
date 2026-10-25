@@ -1,4 +1,7 @@
 import { Redis } from "ioredis";
+import { pino } from "pino";
+
+const log = pino({ name: "notification:pubsub" });
 
 export interface NotificationPublisher {
   publish(channel: string, payload: Record<string, unknown>): Promise<void>;
@@ -26,9 +29,13 @@ class RedisNotificationPublisher implements NotificationPublisher {
 
 let testPublisher: NotificationPublisher | null = null;
 
+/** Process-wide Redis publisher, reused across calls (one connection, not one per call). */
+let redisPublisher: { url: string; publisher: NotificationPublisher } | null = null;
+
 /** Override publisher in tests. Pass `null` to reset. */
 export function setNotificationPublisherForTests(publisher: NotificationPublisher | null): void {
   testPublisher = publisher;
+  if (publisher === null) redisPublisher = null;
 }
 
 export function createNotificationPublisher(): NotificationPublisher {
@@ -41,5 +48,13 @@ export function createNotificationPublisher(): NotificationPublisher {
   if (!url) {
     throw new Error("in_app not configured: set REDIS_URL or NOTIFICATION_IN_APP_DRIVER=memory");
   }
-  return new RedisNotificationPublisher(new Redis(url));
+  if (redisPublisher && redisPublisher.url === url) return redisPublisher.publisher;
+
+  const client = new Redis(url);
+  client.on("error", (err: Error) => {
+    log.warn({ err }, "notification pubsub redis connection error");
+  });
+  const publisher = new RedisNotificationPublisher(client);
+  redisPublisher = { url, publisher };
+  return publisher;
 }

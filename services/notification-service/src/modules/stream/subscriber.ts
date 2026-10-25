@@ -82,22 +82,38 @@ class RedisStreamSubscriber implements StreamSubscriber {
   }
 
   async connect(): Promise<void> {
-    await this.redis.connect();
-    await this.redis.subscribe(this.channel);
-    this.redis.on("message", (ch: string, message: string) => {
-      if (ch === this.channel) {
-        this.handler(message);
-      }
-    });
+    try {
+      await this.redis.connect();
+      await this.redis.subscribe(this.channel);
+      this.redis.on("message", (ch: string, message: string) => {
+        if (ch === this.channel) {
+          this.handler(message);
+        }
+      });
+    } catch (err) {
+      // Do not leak a reconnecting client when connect/subscribe fails (CLOS3-S5-16).
+      this.safeDisconnect();
+      throw err;
+    }
     log.info({ channel: this.channel }, "Redis subscriber connected");
   }
 
   async unsubscribe(): Promise<void> {
     try {
       await this.redis.unsubscribe(this.channel);
-      this.redis.disconnect();
     } catch (err) {
       log.warn({ err, channel: this.channel }, "Error during Redis unsubscribe");
+    } finally {
+      // Always release the dedicated connection, even if UNSUBSCRIBE failed.
+      this.safeDisconnect();
+    }
+  }
+
+  private safeDisconnect(): void {
+    try {
+      this.redis.disconnect();
+    } catch (err) {
+      log.warn({ err, channel: this.channel }, "Error disconnecting Redis subscriber");
     }
   }
 }

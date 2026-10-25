@@ -94,15 +94,12 @@ export async function downloadAndStoreOrder(
 ): Promise<string | null> {
   if (!order.downloadUrl) return null;
 
+  // The 30s timeout covers the whole download (headers AND body), so a server that sends
+  // headers and then stalls the body cannot hang the sequential sync tick (CLOS3-S5-14).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30_000);
   try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30_000); // 30s download timeout
-    let response: Response;
-    try {
-      response = await fetch(order.downloadUrl, { signal: controller.signal });
-    } finally {
-      clearTimeout(timer);
-    }
+    const response = await fetch(order.downloadUrl, { signal: controller.signal });
 
     if (!response.ok) {
       log.warn(
@@ -144,6 +141,8 @@ export async function downloadAndStoreOrder(
   } catch (err) {
     log.error({ caseId, orderDate: order.date, err: String(err) }, "sync: order download failed");
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

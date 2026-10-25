@@ -122,10 +122,10 @@ partitionMaint.unref();
 // ── Overdue findings detection (Requirement 9.5) ─────────────────────────────
 // Runs every hour. Finds findings in notice_issued state with past-due compliance
 // notices, transitions them to overdue, and publishes escalation notification events.
-import { findOverdueFindings, findOverdueFindingTenantIds, updateFindingState } from "./modules/findings/repo.js";
+import { findOverdueFindings, findOverdueFindingTenantIds } from "./modules/findings/repo.js";
+import { transitionFindingOverdue } from "./modules/findings/overdue.js";
 import { runWithTenant } from "@civitasone/db";
 import { scopedPlatformRead } from "./shared/db.js";
-import { EVENTS } from "./topics.js";
 
 async function processOverdueFindings(): Promise<void> {
   try {
@@ -146,44 +146,12 @@ async function processOverdueFindings(): Promise<void> {
 
         for (const finding of overdueFindings) {
           try {
-            await db.transaction(async (tx) => {
-              // Transition to overdue
-              await updateFindingState(tx, finding.id, tenantId, "overdue", "system");
-
-              // Emit overdue event via outbox for notification escalation
-              const { enqueue: outboxEnqueue } = await import("./shared/outbox.js");
-              await outboxEnqueue(tx, {
-                topic: EVENTS.findingOverdue,
-                eventType: EVENTS.findingOverdue,
-                tenantId,
-                actorId: SYSTEM_ACTOR_ID,
-                correlationId: `overdue-check-${finding.id}`,
-                payload: {
-                  findingId: finding.id,
-                  findingNumber: finding.findingNumber,
-                  inspectionId: finding.inspectionId,
-                  entityId: finding.inspectionId,
-                  dueDate: "past",
-                },
-              });
-
-              // Notification escalation event
-              await outboxEnqueue(tx, {
-                topic: "notification.send",
-                eventType: "notification.send",
-                tenantId,
-                actorId: SYSTEM_ACTOR_ID,
-                correlationId: `overdue-notif-${finding.id}`,
-                payload: {
-                  type: "finding.overdue_escalation",
-                  data: {
-                    findingId: finding.id,
-                    findingNumber: finding.findingNumber,
-                    inspectionId: finding.inspectionId,
-                  },
-                },
-              });
-            });
+            const transitioned = await db.transaction((tx) => transitionFindingOverdue(tx, finding, tenantId));
+            if (!transitioned) {
+              log.debug({ findingId: finding.id, tenantId, event: "overdue_transition_skipped" },
+                "finding no longer in notice_issued; overdue transition skipped");
+              continue;
+            }
 
             log.info({ event: "finding_transitioned_overdue", findingId: finding.id, tenantId },
               "finding transitioned to overdue");
