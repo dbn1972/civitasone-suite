@@ -34,12 +34,17 @@ export async function registerSubscription(
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function revokeSubscription(ctx: RequestContext, subscriptionId: string): Promise<Accepted> {
+export async function revokeSubscription(
+  ctx: RequestContext, subscriptionId: string, ownerUserId?: string,
+): Promise<Accepted> {
   const messageId = randomUUID();
   await queue.publish(COMMANDS.revokePushSubscription, {
     messageId, type: COMMANDS.revokePushSubscription, tenantId: ctx.tenantId,
     actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id: subscriptionId, tenantId: ctx.tenantId },
+    payload: {
+      id: subscriptionId, tenantId: ctx.tenantId,
+      ...(ownerUserId !== undefined ? { userId: ownerUserId } : {}),
+    },
   });
   return { id: subscriptionId, status: "accepted", correlationId: ctx.correlationId };
 }
