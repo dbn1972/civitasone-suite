@@ -1,4 +1,17 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+
+/**
+ * V4-G-07: the original send content a retry needs to reproduce the first
+ * attempt (merge fields, marketing/consent classification, inline body).
+ */
+export type RetryPayload = {
+  variables?: Record<string, string>;
+  eventType?: string;
+  category?: "transactional" | "marketing";
+  campaignId?: string;
+  subject?: string;
+  body?: string;
+};
 
 export const deliveriesSchema = pgSchema("deliveries");
 
@@ -15,6 +28,8 @@ export const notificationDeliveries = deliveriesSchema.table("deliveries", {
   retryCount:   integer("retry_count").notNull().default(0),
   nextRetryAt:  timestamp("next_retry_at", { withTimezone: true }),
   errorDetail:  text("error_detail"),
+  /** V4-G-07: original send content, set when a retry is scheduled. */
+  retryPayload: jsonb("retry_payload").$type<RetryPayload>(),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:  uuid("created_by").notNull(),

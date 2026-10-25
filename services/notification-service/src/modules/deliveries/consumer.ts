@@ -13,6 +13,7 @@ import {
   CHANNEL_NONE,
 } from "./channel.js";
 import { notificationTemplates } from "../templates/schema.js";
+import type { RetryPayload } from "./schema.js";
 import { eq } from "drizzle-orm";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as dndRepo from "../dnd/repo.js";
@@ -293,7 +294,17 @@ async function processSend(msg: CommandEnvelope<SendPayload>): Promise<void> {
         // DB-backed sweeper (worker.ts) republish once due. No setTimeout — survives
         // a worker restart because the due row is stored in Postgres.
         const nextRetryAt = computeNextRetryAt(retryCount);
-        await repo.scheduleDeliveryRetry(tx, deliveryId, nextRetry, nextRetryAt, msg.actorId, sendResult.error);
+        // V4-G-07: persist the original content so the sweeper's republish
+        // renders the same message and re-applies the marketing-consent gate.
+        const retryPayload: RetryPayload = {
+          ...(p.variables !== undefined ? { variables: p.variables } : {}),
+          ...(p.eventType !== undefined ? { eventType: p.eventType } : {}),
+          ...(p.category !== undefined ? { category: p.category } : {}),
+          ...(p.campaignId !== undefined ? { campaignId: p.campaignId } : {}),
+          ...(p.subject !== undefined ? { subject: p.subject } : {}),
+          ...(p.body !== undefined ? { body: p.body } : {}),
+        };
+        await repo.scheduleDeliveryRetry(tx, deliveryId, nextRetry, nextRetryAt, msg.actorId, sendResult.error, retryPayload);
         await enqueue(tx as Parameters<typeof enqueue>[0], {
           topic: EVENTS.failed, eventType: EVENTS.failed, tenantId: msg.tenantId,
           actorId: msg.actorId, correlationId: msg.correlationId,
