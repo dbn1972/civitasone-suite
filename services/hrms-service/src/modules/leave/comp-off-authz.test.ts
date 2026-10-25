@@ -22,6 +22,11 @@ vi.mock("../employee/actor-link.js", () => ({
 
 import { buildApp } from "../../app.js";
 import { sqlClient } from "../../shared/db.js";
+import { queue } from "../../shared/infra.js";
+import { registerLeaveConsumers } from "./consumer.js";
+
+registerLeaveConsumers(queue);
+const drain = (): Promise<void> => (queue as unknown as { drain: () => Promise<void> }).drain();
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const tok = (sub: string, roles: string[]) => signToken({ sub, tid: TENANT, roles, sid: "s1" }, SECRET);
@@ -48,8 +53,9 @@ describe("V4-B-01 -- comp-off authorization", () => {
   it("scopes list and redeem to the owning employee; HR can grant and see all", async () => {
     const app = await buildApp();
     const created = await app.inject({ method: "POST", url: "/v1/hrms/comp-off", headers: auth(ACTOR_HR, ["hr_admin"]), payload: grant });
-    expect(created.statusCode).toBe(201);
+    expect(created.statusCode).toBe(202);
     const id = created.json().id as string;
+    await drain();
 
     // B cannot read A's comp-off by filter, nor see it in the unfiltered list.
     const peek = await app.inject({ method: "GET", url: `/v1/hrms/comp-off?employeeId=${EMP_A}`, headers: auth(ACTOR_B, ["employee"]) });
@@ -66,7 +72,8 @@ describe("V4-B-01 -- comp-off authorization", () => {
     const mine = await app.inject({ method: "GET", url: "/v1/hrms/comp-off", headers: auth(ACTOR_A, ["employee"]) });
     expect(mine.json().data.map((c: { id: string }) => c.id)).toEqual([id]);
     const redeem = await app.inject({ method: "POST", url: `/v1/hrms/comp-off/${id}/redeem`, headers: auth(ACTOR_A, ["employee"]) });
-    expect(redeem.statusCode).toBe(200);
+    expect(redeem.statusCode).toBe(202);
+    await drain();
 
     // HR sees everything in the tenant.
     const all = await app.inject({ method: "GET", url: "/v1/hrms/comp-off?status=all", headers: auth(ACTOR_HR, ["hr_admin"]) });
