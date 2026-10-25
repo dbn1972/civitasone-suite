@@ -29,11 +29,13 @@ export async function listGrievancesByCitizen(tenantId: string, citizenId: strin
     .limit(limit));
 }
 
-export async function listGrievancesByTenant(tenantId: string, limit: number, offset: number): Promise<GrievanceRow[]> {
+export async function listGrievancesByTenant(tenantId: string, limit: number, offset: number, citizenId?: string): Promise<GrievanceRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(citizenGrievances)
-    .where(eq(citizenGrievances.tenantId, tenantId))
+    .where(citizenId === undefined
+      ? eq(citizenGrievances.tenantId, tenantId)
+      : and(eq(citizenGrievances.tenantId, tenantId), eq(citizenGrievances.citizenId, citizenId)))
     .limit(limit)
     .offset(offset));
 }

@@ -107,7 +107,11 @@ export async function grievanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, CitizenRequestSummaryListSchema, await queries.listRequests(ctx.tenantId, q.limit, q.offset));
+    const { citizenId } = citizenIdQuery.parse(req.query);
+    // V4-E-02: a citizen sees only their own requests (a foreign citizenId is
+    // rejected 403); officers list tenant-wide, or filter by citizenId.
+    const scope = isOfficer(ctx) ? citizenId : resolveCitizenId(ctx, citizenId);
+    sendValidated(reply, CitizenRequestSummaryListSchema, await queries.listRequests(ctx.tenantId, q.limit, q.offset, scope));
   });
 
   app.setErrorHandler((err, req, reply) => {
