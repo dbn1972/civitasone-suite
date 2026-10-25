@@ -52,6 +52,9 @@
  * config:{public:true}, is keyed on an unguessable token (migration 0043 token-scoped SELECT
  * policy), returns non-PII attestation fields only and rate-limits per client IP.
  */
+/** Payment-gateway callbacks: passed through with the RAW body (provider signatures cover the exact bytes). */
+export const BILLING_WEBHOOK_PREFIX = "/api/v1/billing/webhooks";
+
 export const PUBLIC_PREFIXES = [
   "/api/identity",
   "/api/v1/install",
@@ -64,4 +67,7 @@ export const PUBLIC_PREFIXES = [
   "/api/v1/tenant/msme-onboard",
   "/api/v1/hrms/visiting-card/public",
   "/api/v1/citizen/certificates/verify",
+  // V4-B-03: payment-gateway server-to-server callbacks (Razorpay/PayU/CCAvenue). No bearer token
+  // exists on them; billing-service authenticates each by the provider signature / hash.
+  BILLING_WEBHOOK_PREFIX,
 ];

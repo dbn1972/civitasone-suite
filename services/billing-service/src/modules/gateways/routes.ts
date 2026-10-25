@@ -20,11 +20,33 @@ import { COMMANDS } from "../../topics.js";
 import { initiatePaymentBody, paymentIdParam, refundPaymentBody } from "./validators.js";
 import * as gateways from "./index.js";
 import * as upiAutopay from "./upi-autopay.js";
+import { verifyPayuWebhookHash } from "./payu-adapter.js";
+import { decryptCcavenueCallback } from "./ccavenue-adapter.js";
 import { GatewayError } from "./types.js";
+import { providerEventMessageId } from "./webhook-verify.js";
 
 const BILLING_ROLES = ["billing_admin", "finance_officer", "tenant_admin", "super_admin", "platform_admin"];
 
 export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
+  // PayU / CCAvenue server-to-server callbacks are application/x-www-form-urlencoded.
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_req, body, done) => {
+    done(null, Object.fromEntries(new URLSearchParams(body as string)));
+  });
+
+  /** A webhook for a gateway whose credentials are not configured fails closed (503), never accepts. */
+  const authenticate = (check: () => boolean): void => {
+    let ok: boolean;
+    try {
+      ok = check();
+    } catch (err) {
+      if (err instanceof GatewayError && err.code === "GATEWAY_NOT_CONFIGURED") {
+        throw new HttpError(503, "WEBHOOK_NOT_CONFIGURED", "webhook endpoint is not configured");
+      }
+      throw err;
+    }
+    if (!ok) throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
+  };
+
   /**
    * POST /v1/billing/payments/initiate
    *
@@ -241,15 +263,17 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * POST /v1/billing/webhooks/payu
-   * PUBLIC route — no auth. PayU sends server-to-server callbacks here.
+   * PUBLIC route (config.public); authenticated by PayU's reverse hash (verifyPayuWebhookHash).
    */
-  app.post("/v1/billing/webhooks/payu", async (req, reply) => {
+  app.post("/v1/billing/webhooks/payu", { config: { public: true } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
+    authenticate(() => typeof body === "object" && body !== null && verifyPayuWebhookHash(body));
     const status = body?.["status"];
     const txnId = body?.["txnid"] ?? "";
     const mihpayid = body?.["mihpayid"] ?? "";
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id: txnid + status are both covered by the verified reverse hash.
+    const messageId = providerEventMessageId("payu", txnId, status);
     await queue.publish(COMMANDS.webhookPayu, {
       messageId,
       type: COMMANDS.webhookPayu,
@@ -265,13 +289,17 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * POST /v1/billing/webhooks/ccavenue
-   * PUBLIC route — no auth. CCAvenue sends encrypted callbacks here.
+   * PUBLIC route (config.public); authenticated by decrypting encResp with the working key.
    */
-  app.post("/v1/billing/webhooks/ccavenue", async (req, reply) => {
+  app.post("/v1/billing/webhooks/ccavenue", { config: { public: true } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const encResp = body?.["encResp"] ?? "";
+    let fields: Record<string, string> | null = null;
+    authenticate(() => (fields = decryptCcavenueCallback(encResp)) !== null);
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id taken from the DECRYPTED (authenticated) fields.
+    const f = (fields ?? {}) as Record<string, string>;
+    const messageId = providerEventMessageId("ccavenue", f["order_id"], f["tracking_id"], f["order_status"]);
     await queue.publish(COMMANDS.webhookCcavenue, {
       messageId,
       type: COMMANDS.webhookCcavenue,
