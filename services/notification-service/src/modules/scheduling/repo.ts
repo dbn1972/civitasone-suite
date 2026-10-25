@@ -37,6 +37,24 @@ export async function claimSchedule(
   return updated.length > 0;
 }
 
+/**
+ * Compensate a claim whose publish failed: 'queued' → 'scheduled' so findDueSchedules re-selects it.
+ * Guarded on the version the claim wrote, so a row since touched by another instance is left alone.
+ * Returns true if the claim was reverted.
+ */
+export async function revertClaim(
+  tx: Writer, id: string, claimedVersion: number,
+): Promise<boolean> {
+  const updated = await tx.update(scheduledNotifications).set({
+    status: "scheduled", updatedAt: new Date(), version: claimedVersion + 1,
+  }).where(and(
+    eq(scheduledNotifications.id, id),
+    eq(scheduledNotifications.version, claimedVersion),
+    eq(scheduledNotifications.status, "queued"),
+  )).returning({ id: scheduledNotifications.id });
+  return updated.length > 0;
+}
+
 /** Paginated list of scheduled notifications for a tenant. */
 export async function listScheduled(
   tenantId: string, pagination: { limit: number; offset: number } = { limit: 50, offset: 0 },

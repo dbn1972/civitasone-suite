@@ -45,6 +45,15 @@ export async function sweepDueSchedules(queue: Queue, now = new Date()): Promise
       log.info({ scheduleId: row.id, scheduledAt: row.scheduledAt }, "dispatched scheduled notification");
     } catch (err) {
       log.warn({ err, scheduleId: row.id }, "failed to dispatch scheduled notification; will retry next sweep");
+      // Compensate the claim so the row is 'scheduled' again and the next sweep re-selects it.
+      // claimSchedule bumped version to row.version + 1.
+      try {
+        await runWithTenant(row.tenantId, () =>
+          db.transaction((tx) => repo.revertClaim(tx, row.id, row.version + 1)),
+        );
+      } catch (revertErr) {
+        log.error({ err: revertErr, scheduleId: row.id }, "failed to revert schedule claim after publish failure");
+      }
     }
   }
 
