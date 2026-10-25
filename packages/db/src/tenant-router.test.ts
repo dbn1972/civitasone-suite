@@ -47,7 +47,7 @@ describe("TenantRouter", () => {
     const { factory, created } = fakeFactory();
     let n = 0;
     const resolver: TenantResolver = () => ({ tier: "silo", connectionString: `postgres://silo/${n++}` });
-    const r = new TenantRouter({ poolDsn: "postgres://shared", resolver, clientFactory: factory, maxSiloClients: 2 });
+    const r = new TenantRouter({ poolDsn: "postgres://shared", resolver, clientFactory: factory, maxSiloClients: 2, evictGraceMs: 0 });
     await r.sqlFor(T1); // dsn 0
     await r.sqlFor(T2); // dsn 1
     await r.sqlFor(T3); // dsn 2 → evicts dsn 0
