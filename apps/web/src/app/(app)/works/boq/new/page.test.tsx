@@ -268,3 +268,47 @@ describe("Add BoQ Item form - Suspense fallback", () => {
     }
   });
 });
+
+describe("Add BoQ Item duplicate-submit latch (CLOS3-S3-18)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+  });
+
+  function fillValid() {
+    fireEvent.change(screen.getByLabelText(/Item description/i), { target: { value: "PCC 1:4:8" } });
+    fireEvent.change(screen.getByLabelText(/^Unit/i), { target: { value: "cum" } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "12.50" } });
+  }
+  const posts = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  it("a second submit while the redirect is pending does not create a duplicate BoQ item", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ id: "boq-1" }), { status: 202 }));
+    render(<NewBoqItemPage />);
+    fillValid();
+    const btn = screen.getByRole("button", { name: "Add BoQ Item" });
+    const form = btn.closest("form") as HTMLFormElement;
+    fireEvent.click(btn);
+    await screen.findByText("BoQ item added.");
+    expect(screen.getByRole("button", { name: /Saving|Add BoQ Item/ })).toBeDisabled();
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(posts(spy)).toHaveLength(1);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("a failed save does not latch: a resubmit POSTs again", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("", { status: 500 }));
+    render(<NewBoqItemPage />);
+    fillValid();
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Add BoQ Item" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});
