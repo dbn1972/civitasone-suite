@@ -51,13 +51,16 @@ vi.mock("../src/shared/infra.js", () => ({
 
 vi.mock("../src/modules/analytics/repo.js", () => ({
   getTrends: vi.fn(async () => [
-    { period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, efficiencyBps: 6000 },
+    { period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, cashCollectionMinor: 50000n, waivedMinor: 6000n, writtenOffMinor: 4000n, efficiencyBps: 5000 },
   ]),
   getEfficiency: vi.fn(async () => ({
     totalDemandMinor: 100000n,
     totalCollectionMinor: 60000n,
-    efficiencyBps: 6000,
-    perPeriod: [{ period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, efficiencyBps: 6000 }],
+    totalCashCollectionMinor: 50000n,
+    totalWaivedMinor: 6000n,
+    totalWrittenOffMinor: 4000n,
+    efficiencyBps: 5000,
+    perPeriod: [{ period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, cashCollectionMinor: 50000n, waivedMinor: 6000n, writtenOffMinor: 4000n, efficiencyBps: 5000 }],
   })),
   getArrearsAging: vi.fn(async () => ({ bucket0_30: "0", bucket31_60: "150000", bucket61_90: "40000", bucket90Plus: "0" })),
   getDefaulters: vi.fn(async () => [{ assesseeId: "as2", outstandingMinor: 150000n, rank: 1 }]),
@@ -102,7 +105,7 @@ describe("GET /v1/revenue/analytics/trends", () => {
     const res = await app.inject({ method: "GET", url: "/v1/revenue/analytics/trends", headers: AUTH });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.data[0]).toEqual({ period: "2024-04", demandMinor: "100000", collectionMinor: "60000", efficiencyBps: 6000 });
+    expect(body.data[0]).toEqual({ period: "2024-04", demandMinor: "100000", collectionMinor: "60000", cashCollectionMinor: "50000", waivedMinor: "6000", writtenOffMinor: "4000", efficiencyBps: 5000 });
     expect(body.meta.granularity).toBe("month");
   });
   it("honours the granularity query param", async () => {
@@ -127,8 +130,14 @@ describe("GET /v1/revenue/analytics/efficiency", () => {
     const d = res.json().data;
     expect(d.totalDemandMinor).toBe("100000");
     expect(d.totalCollectionMinor).toBe("60000");
-    expect(d.efficiencyBps).toBe(6000);
+    // Q18: efficiency is cash/demand; waivers and write-offs are reported separately.
+    expect(d.efficiencyBps).toBe(5000);
+    expect(d.totalCashCollectionMinor).toBe("50000");
+    expect(d.totalWaivedMinor).toBe("6000");
+    expect(d.totalWrittenOffMinor).toBe("4000");
     expect(d.perPeriod[0].collectionMinor).toBe("60000");
+    expect(d.perPeriod[0].waivedMinor).toBe("6000");
+    expect(d.perPeriod[0].writtenOffMinor).toBe("4000");
   });
 });
 

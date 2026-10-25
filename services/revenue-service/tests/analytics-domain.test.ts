@@ -54,11 +54,27 @@ describe("aggregatePeriodSeries", () => {
       { period: "2024-04", entryType: "refund", amountMinor: 20000n },
       { period: "2024-04", entryType: "write_off", amountMinor: 10000n },
       { period: "2024-04", entryType: "waiver", amountMinor: 5000n },
-      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, narration: "Adjustment debit: x" },
-      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, narration: "Adjustment credit: x" },
+      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, adjustmentDirection: "debit" },
+      { period: "2024-04", entryType: "adjustment", amountMinor: 7000n, adjustmentDirection: "credit" },
     ]);
     // 50000 - 20000 + 10000 + 5000 + (7000 - 7000)
     expect(out[0]!.collectionMinor).toBe(45000n);
+    // Q18: waivers / write-offs are NOT cash; efficiency counts cash net of refunds only.
+    expect(out[0]!.cashCollectionMinor).toBe(30000n);
+    expect(out[0]!.waivedMinor).toBe(5000n);
+    expect(out[0]!.writtenOffMinor).toBe(10000n);
+    expect(out[0]!.efficiencyBps).toBe(3000);
+  });
+
+  it("efficiency does not reward waivers or write-offs", () => {
+    const out = aggregatePeriodSeries([
+      { period: "2024-04", entryType: "demand", amountMinor: 100000n },
+      { period: "2024-04", entryType: "waiver", amountMinor: 40000n },
+      { period: "2024-04", entryType: "write_off", amountMinor: 30000n },
+      { period: "2024-04", entryType: "collection", amountMinor: 10000n },
+    ]);
+    expect(out[0]!.collectionMinor).toBe(80000n);
+    expect(out[0]!.efficiencyBps).toBe(1000);
   });
 
   it("handles empty input", () => {
