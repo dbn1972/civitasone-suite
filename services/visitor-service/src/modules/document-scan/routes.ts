@@ -23,6 +23,7 @@ import { uploadScanParams, getResultParams, listScansQuery } from "./validators.
 import { validateImage } from "./domain.js";
 import { publishScanProcess } from "./commands.js";
 import { getScanSession, getOcrResult, listScans } from "./repo.js";
+import { getS3Client } from "../../shared/s3-client.js";
 
 // Roles permitted for admin scan management endpoints.
 const ADMIN_ROLES = ["facility_admin", "security_admin", "tenant_admin", "super_admin"];
@@ -34,16 +35,8 @@ async function uploadToStorage(key: string, buffer: Buffer, mimeType: string): P
     throw new Error("S3_BUCKET must be configured for image upload");
   }
 
-  const endpoint = process.env.S3_ENDPOINT ?? "https://s3.amazonaws.com";
-  const region = process.env.S3_REGION ?? "ap-south-1";
-
-  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
-  const client = new S3Client({
-    region,
-    ...(endpoint.includes("localhost") || endpoint.includes("localstack")
-      ? { endpoint, forcePathStyle: true }
-      : {}),
-  });
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const client = await getS3Client();
 
   await client.send(new PutObjectCommand({
     Bucket: bucket,

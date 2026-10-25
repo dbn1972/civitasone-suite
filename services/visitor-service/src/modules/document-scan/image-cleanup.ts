@@ -16,6 +16,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { scanSessions } from "./schema.js";
+import { getS3Client } from "../../shared/s3-client.js";
 
 const log = pino({ name: "document-scan-image-cleanup" });
 
@@ -37,18 +38,9 @@ export async function deleteFromStorage(key: string): Promise<void> {
     return;
   }
 
-  const endpoint = process.env.S3_ENDPOINT ?? "https://s3.amazonaws.com";
-  const region = process.env.S3_REGION ?? "ap-south-1";
-
   try {
-    // Use the AWS SDK S3 client or MinIO client
-    const { S3Client, DeleteObjectCommand } = await import("@aws-sdk/client-s3");
-    const client = new S3Client({
-      region,
-      ...(endpoint.includes("localhost") || endpoint.includes("localstack")
-        ? { endpoint, forcePathStyle: true }
-        : {}),
-    });
+    const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+    const client = await getS3Client();
 
     await client.send(new DeleteObjectCommand({
       Bucket: bucket,

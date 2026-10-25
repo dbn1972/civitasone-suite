@@ -32,6 +32,7 @@ import { performOcr } from "./ocr-adapter.js";
 import { isLowConfidence, detectDocumentType, mapOcrFields, shouldScreenBlacklist } from "./domain.js";
 import { isBlacklisted, isWatchlisted } from "../blacklist/screening-store.js";
 import { identityDocHash } from "../blacklist/blind-index.js";
+import { getS3Client } from "../../shared/s3-client.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -49,16 +50,8 @@ async function downloadFromStorage(key: string): Promise<Buffer> {
     throw new Error("S3_BUCKET must be configured for image download");
   }
 
-  const endpoint = process.env.S3_ENDPOINT ?? "https://s3.amazonaws.com";
-  const region = process.env.S3_REGION ?? "ap-south-1";
-
-  const { S3Client, GetObjectCommand } = await import("@aws-sdk/client-s3");
-  const client = new S3Client({
-    region,
-    ...(endpoint.includes("localhost") || endpoint.includes("localstack")
-      ? { endpoint, forcePathStyle: true }
-      : {}),
-  });
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  const client = await getS3Client();
 
   const response = await client.send(new GetObjectCommand({
     Bucket: bucket,
