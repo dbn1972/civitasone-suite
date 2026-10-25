@@ -21,6 +21,12 @@
 
 SET lock_timeout = '5s';
 
+-- Both tables are FORCE RLS; with no tenant GUC the DELETE below (and its
+-- NOT EXISTS on briefs) would see zero rows. Lift FORCE for the one-off
+-- cross-tenant dedupe on BOTH tables, then restore it (as 0027 does).
+ALTER TABLE hearings.legal_hearings NO FORCE ROW LEVEL SECURITY;
+ALTER TABLE counsel.legal_counsel_briefs NO FORCE ROW LEVEL SECURITY;
+
 DELETE FROM hearings.legal_hearings h
 USING (
   SELECT id,
@@ -31,6 +37,9 @@ USING (
 WHERE h.id = d.id
   AND d.rn > 1
   AND NOT EXISTS (SELECT 1 FROM counsel.legal_counsel_briefs b WHERE b.hearing_id = h.id);
+
+ALTER TABLE counsel.legal_counsel_briefs FORCE ROW LEVEL SECURITY;
+ALTER TABLE hearings.legal_hearings FORCE ROW LEVEL SECURITY;
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_legal_hearings_ecourts_sync
   ON hearings.legal_hearings (tenant_id, case_id, hearing_date)
