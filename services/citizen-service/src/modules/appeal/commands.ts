@@ -2,11 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { HttpError } from "../../shared/context.js";
+import { HttpError, assertOwnership } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as applicationRepo from "../application/repo.js";
 import {
-  assertWithinFilingWindow, canIssueOrder,
-  deriveFilingWindowDays,
+  assertWithinFilingWindow, assertDecisionDateNotFuture, canIssueOrder,
+  deriveFilingWindowDays, toDateString,
 } from "./domain.js";
 import type { FileAppealBody, AssignBody, ScheduleHearingBody, RecordHearingBody, PrepareOrderBody } from "./validators.js";
 
@@ -42,9 +43,35 @@ export async function fileAppeal(
   // applied here. A per-service override, when wired, is passed as the second
   // arg to deriveFilingWindowDays — still never from the request body.
   const windowDays = deriveFilingWindowDays();
+  // V4-G-12: when an application is referenced it is the source of truth. It must
+  // exist in the caller tenant, belong to the filer (citizens), be rejected, and
+  // the window runs from the SERVER-recorded rejection time; the client-supplied
+  // decisionDate is ignored. Without an application the date cannot be verified,
+  // so it is only bounded (never in the future).
+  let decisionDate = body.decisionDate;
+  let citizenId = body.citizenId ?? null;
+  if (body.applicationId) {
+    const application = await applicationRepo.findApplicationById(body.applicationId);
+    if (!application || application.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "application not found");
+    assertOwnership(ctx, application.citizenId);
+    if (application.status !== "rejected") {
+      throw new HttpError(409, "NOT_APPEALABLE", "only a rejected application can be appealed");
+    }
+    const history = await applicationRepo.listStatusHistory(body.applicationId);
+    const rejectedAt = history.filter((h) => h.toStatus === "rejected")
+      .map((h) => h.createdAt).sort((a, b) => b.getTime() - a.getTime())[0] ?? application.updatedAt;
+    decisionDate = toDateString(rejectedAt);
+    citizenId = application.citizenId;
+  } else {
+    try {
+      assertDecisionDateNotFuture(new Date(body.decisionDate));
+    } catch {
+      throw new HttpError(422, "INVALID_DECISION_DATE", "decisionDate cannot be in the future");
+    }
+  }
   let filingDeadline: string;
   try {
-    ({ filingDeadline } = assertWithinFilingWindow(new Date(body.decisionDate), windowDays));
+    ({ filingDeadline } = assertWithinFilingWindow(new Date(decisionDate), windowDays));
   } catch {
     throw new HttpError(422, "FILING_WINDOW_EXPIRED", `appeal must be filed within ${windowDays} days of the decision`);
   }
@@ -52,10 +79,10 @@ export async function fileAppeal(
     id,
     applicationId: body.applicationId ?? null,
     decisionRef: body.decisionRef ?? null,
-    citizenId: body.citizenId ?? null,
+    citizenId,
     appealType: body.appealType,
     grounds: body.grounds,
-    decisionDate: body.decisionDate,
+    decisionDate,
     filingDeadline,
   });
   return { ...accepted, filingDeadline };
