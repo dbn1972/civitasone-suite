@@ -181,3 +181,83 @@ describe("parseRupeesToPaise (GAP-DESIGNER-DETAIL-B5-02)", () => {
     expect(r).toEqual({ ok: true, paise: 0 });
   });
 });
+
+
+describe("CLOS3-S1-11 persistFeeDesign edit semantics", () => {
+  type Call = { url: string; method: string; body?: unknown };
+  let calls: Call[];
+
+  function stub(opts: { failSlabPut?: boolean } = {}) {
+    calls = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url.endsWith("/revenue/rate-heads") && method === "GET") {
+        return { ok: true, status: 200, json: async () => ({ data: [{ id: "head-1" }] }) } as Response;
+      }
+      if (url.endsWith("/revenue/rate-heads")) {
+        return { ok: true, status: 202, json: async () => ({ data: { id: "head-1" } }) } as Response;
+      }
+      if (url.includes("/slabs") && opts.failSlabPut) return { ok: false, status: 500, json: async () => ({}) } as Response;
+      if (url.includes("/citizen/fees/schedules/")) {
+        return { ok: true, status: 202, json: async () => ({ id: "sched-2" }) } as Response;
+      }
+      return { ok: true, status: 202, json: async () => ({ id: "sched-1" }) } as Response;
+    }));
+  }
+  afterEach(() => vi.unstubAllGlobals());
+
+  const flat = { ...emptyFeeDesign("T"), feeModel: "flat" as const, baseAmountPaise: 5000 };
+
+  it("a saved flat fee is PATCHed (bigint paise body), never POSTed again; successor id is kept", async () => {
+    stub();
+    const saved = await persistFeeDesign({ ...flat, scheduleId: "sched-1" }, "svc-1", "T");
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["PATCH /api/proxy/v1/citizen/fees/schedules/sched-1"]);
+    expect(calls[0]!.body).toMatchObject({ baseAmount: 5000, currency: "INR" });
+    expect(calls[0]!.body).not.toHaveProperty("serviceId");
+    expect(saved.scheduleId).toBe("sched-2");
+  });
+
+  it("a new flat fee is POSTed once with its serviceId", async () => {
+    stub();
+    const saved = await persistFeeDesign(flat, "svc-1", "T");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({ method: "POST", url: "/api/proxy/v1/citizen/fees/schedules" });
+    expect(calls[0]!.body).toMatchObject({ serviceId: "svc-1" });
+    expect(saved.scheduleId).toBe("sched-1");
+  });
+
+  const slabDesign = {
+    ...emptyFeeDesign("T"),
+    feeModel: "slab" as const,
+    slabs: [
+      { id: "a", type: "band" as const, from: "0", to: "1000", rate: "10" },
+      { id: "b", type: "band" as const, from: "1000", to: "", rate: "20" },
+    ],
+  };
+
+  it("slabs are written as ONE atomic PUT (not N POSTs) against the head", async () => {
+    stub();
+    const saved = await persistFeeDesign(slabDesign, "svc-1", "T");
+    const puts = calls.filter((c) => c.method === "PUT");
+    expect(puts).toHaveLength(1);
+    expect(puts[0]!.url).toBe("/api/proxy/v1/revenue/rate-heads/head-1/slabs");
+    expect((puts[0]!.body as { slabs: unknown[] }).slabs).toHaveLength(2);
+    expect(calls.filter((c) => c.url.includes("/rate-slabs"))).toHaveLength(0);
+    expect(saved.rateHeadId).toBe("head-1");
+  });
+
+  it("an existing head is reused; a retry after a failed slab write does not create another head", async () => {
+    stub({ failSlabPut: true });
+    await expect(persistFeeDesign(slabDesign, "svc-retry", "T")).rejects.toThrow();
+    stub();
+    await persistFeeDesign(slabDesign, "svc-retry", "T");
+    expect(calls.filter((c) => c.method === "POST" && c.url.endsWith("/revenue/rate-heads"))).toHaveLength(0);
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    stub();
+    await persistFeeDesign({ ...slabDesign, rateHeadId: "head-9" }, "svc-2", "T");
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    expect(calls.find((c) => c.method === "PUT")!.url).toContain("/rate-heads/head-9/slabs");
+  });
+});

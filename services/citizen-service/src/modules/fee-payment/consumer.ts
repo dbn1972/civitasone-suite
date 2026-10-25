@@ -106,6 +106,29 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "fee schedule created");
   });
 
+  queue.subscribe(COMMANDS.feeScheduleSupersede, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; supersedes: string; name: string;
+      baseAmount: number; currency: string; exemptions: unknown;
+    };
+    let applied = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const old = await repo.findScheduleByIdTx(tx, p.supersedes, p.tenantId);
+      // Lost a race with another edit (or the row is gone): never fork the chain.
+      if (!old || !old.active) return;
+      await repo.retireSchedule(tx, old.id, p.tenantId, p.id, msg.actorId);
+      await repo.insertSchedule(tx, {
+        id: p.id, tenantId: p.tenantId, serviceId: old.serviceId, name: p.name,
+        baseAmount: p.baseAmount, currency: p.currency, exemptions: p.exemptions as never,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "fee_schedule_supersede", "fee_schedule", p.id, { supersedes: old.id });
+      applied = true;
+    });
+    log.info({ id: p.id, supersedes: p.supersedes, applied }, "fee schedule superseded");
+  });
+
   queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;

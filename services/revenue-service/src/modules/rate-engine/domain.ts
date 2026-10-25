@@ -362,6 +362,76 @@ export function assertNoSlabOverlap(existing: SlabWindow[], candidate: SlabWindo
   }
 }
 
+// ── CLOS3-S1-11: effective-dated slab-set replace ────────────────────────────
+
+export interface SlabSpec {
+  slabType: string;
+  bandFrom?: bigint | string | null;
+  bandTo?: bigint | string | null;
+  rateValue: bigint | string;
+}
+
+export interface ExistingSlab {
+  id: string;
+  slabType: string;
+  bandFrom: bigint | null;
+  bandTo: bigint | null;
+  rateValue: bigint;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+}
+
+export interface SlabReplacePlan {
+  /** True when the live set already equals the requested one: write nothing. */
+  noop: boolean;
+  /** Existing slabs to retire: `close` end-dates at effectiveFrom, `deactivate` for slabs starting on/after it. */
+  retire: { id: string; mode: "close" | "deactivate" }[];
+  insert: SlabSpec[];
+}
+
+const slabKey = (s: { slabType: string; bandFrom?: bigint | string | null; bandTo?: bigint | string | null; rateValue: bigint | string }) =>
+  [s.slabType, s.bandFrom == null ? "" : BigInt(s.bandFrom).toString(), s.bandTo == null ? "" : BigInt(s.bandTo).toString(), BigInt(s.rateValue).toString()].join("|");
+
+/**
+ * Pure planner for PUT /v1/revenue/rate-heads/:id/slabs. Effective windows are half-open
+ * [from, to) (lookupEffectiveSlabs uses `< to`), so closing at `effectiveFrom` leaves no gap and
+ * no overlap. The incoming set must itself be overlap-free (SLAB_OVERLAP) once the old live set
+ * is retired -- checked here so a bad set fails BEFORE any write.
+ */
+export function planSlabReplace(existing: ExistingSlab[], incoming: SlabSpec[], effectiveFrom: string): SlabReplacePlan {
+  const from = Date.parse(`${effectiveFrom}T00:00:00Z`);
+  const live = existing.filter((s) => s.isActive && (s.effectiveTo === null || Date.parse(`${s.effectiveTo}T00:00:00Z`) > from));
+
+  const liveKeys = live.map(slabKey).sort();
+  const wantKeys = incoming.map(slabKey).sort();
+  const sameSet = liveKeys.length === wantKeys.length && liveKeys.every((k, i) => k === wantKeys[i]);
+  const settled = live.every((s) => s.effectiveTo === null && Date.parse(`${s.effectiveFrom}T00:00:00Z`) <= from);
+  if (sameSet && settled) return { noop: true, retire: [], insert: [] };
+
+  const retire = live.map((s) => ({
+    id: s.id,
+    mode: (Date.parse(`${s.effectiveFrom}T00:00:00Z`) >= from ? "deactivate" : "close") as "close" | "deactivate",
+  }));
+
+  const kept = existing.filter((s) => !live.some((l) => l.id === s.id));
+  const accepted: SlabWindow[] = kept.map((s) => ({
+    slabType: s.slabType, bandFrom: s.bandFrom, bandTo: s.bandTo,
+    effectiveFrom: s.effectiveFrom, effectiveTo: s.effectiveTo, isActive: s.isActive,
+  }));
+  for (const spec of incoming) {
+    const cand: SlabWindow = {
+      slabType: spec.slabType,
+      bandFrom: spec.bandFrom == null ? null : BigInt(spec.bandFrom),
+      bandTo: spec.bandTo == null ? null : BigInt(spec.bandTo),
+      effectiveFrom, effectiveTo: null, isActive: true,
+    };
+    assertNoSlabOverlap(accepted, cand);
+    accepted.push(cand);
+  }
+  return { noop: false, retire, insert: incoming };
+}
+
 /**
  * Full compute: given rate head config, base value, dates, exemptions → tax breakdown.
  *

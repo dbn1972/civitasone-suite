@@ -18,6 +18,11 @@ export const COMMANDS = {
   rateHeadCreate: "revenue.rate_head.create",
   /** payload: { rateHeadId, slabType: "flat"|"band"|"ad_valorem", bandFrom?, bandTo?, rateValue (bigint string), effectiveFrom, effectiveTo?, unitOfMeasure? } */
   rateSlabCreate: "revenue.rate_slab.create",
+  /**
+   * CLOS3-S1-11: atomic, effective-dated replace of a rate head's live slab set.
+   * payload: { rateHeadId, effectiveFrom, slabs: [{ slabType, bandFrom?, bandTo?, rateValue }] }
+   */
+  rateSlabReplace: "revenue.rate_slab.replace",
   /** payload: { rateHeadId, interestType: "simple"|"compound", annualRateBps, graceDays, capMonths?, roundingMode? } */
   penaltyRuleCreate: "revenue.penalty_rule.create",
   /** payload: { rateHeadId, rebateType: "early_payment"|"category", discountBps, validUntilDaysBeforeDue? } */

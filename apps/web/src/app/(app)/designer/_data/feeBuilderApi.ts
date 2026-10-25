@@ -31,6 +31,8 @@ interface FeeScheduleDto {
   baseAmount: number;
   currency: string;
   exemptions: ApiExemption[];
+  /** False once a later edit superseded this schedule (CLOS3-S1-11). */
+  active?: boolean;
 }
 
 interface MajorHeadDto {
@@ -310,7 +312,7 @@ export async function loadFeeDesign(
     const listRes = await fetch("/api/proxy/v1/citizen/fees/schedules", { cache: "no-store" });
     if (listRes.ok) {
       const payload = (await listRes.json()) as { data?: FeeScheduleDto[] };
-      const sched = (payload.data ?? []).find((s) => s.serviceId === serviceId);
+      const sched = (payload.data ?? []).find((s) => s.serviceId === serviceId && s.active !== false);
       if (sched) {
         base.scheduleId = sched.id;
         base.name = sched.name;
@@ -334,6 +336,21 @@ export async function fetchHoaOptions(): Promise<{ code: string; label: string }
   }));
 }
 
+/** Rate heads created by a save whose slab write has not succeeded yet, keyed by service. */
+const pendingRateHeads = new Map<string, string>();
+
+/** Rate-head creation is a 202 command; wait (bounded) until it is readable before writing slabs to it. */
+async function waitForRateHead(id: string): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    const res = await fetch("/api/proxy/v1/revenue/rate-heads", { cache: "no-store" });
+    if (res.ok) {
+      const payload = (await res.json()) as { data?: { id: string }[] };
+      if ((payload.data ?? []).some((h) => h.id === id)) return;
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+}
+
 export async function persistFeeDesign(
   design: FeeDesignState,
   serviceId: string,
@@ -346,21 +363,35 @@ export async function persistFeeDesign(
 
   if (design.feeModel === "flat") {
     const body = {
-      serviceId,
       name: design.name || `${serviceName} fee`,
       baseAmount: design.baseAmountPaise,
       currency: "INR",
       exemptions: exemptionsUiToApi(design.exemptions),
     };
-    const created = (await parseJson(await fetch("/api/proxy/v1/citizen/fees/schedules", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    }))) as { id: string };
-    scheduleId = created.id;
+    if (scheduleId) {
+      // CLOS3-S1-11: a saved fee is edited in place (server supersedes the old
+      // schedule and returns the successor id; an unchanged body is a no-op).
+      const updated = (await parseJson(await fetch(`/api/proxy/v1/citizen/fees/schedules/${scheduleId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }))) as { id: string };
+      scheduleId = updated.id;
+    } else {
+      const created = (await parseJson(await fetch("/api/proxy/v1/citizen/fees/schedules", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ serviceId, ...body }),
+      }))) as { id: string };
+      scheduleId = created.id;
+    }
   }
 
   if (design.feeModel === "slab" && design.slabs.length > 0) {
+    if (!rateHeadId) {
+      // Reuse a head created by an earlier failed attempt so a retry never orphans another one.
+      rateHeadId = pendingRateHeads.get(serviceId);
+    }
     if (!rateHeadId) {
       const slug = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20);
       const head = (await parseJson(await fetch("/api/proxy/v1/revenue/rate-heads", {
@@ -374,24 +405,30 @@ export async function persistFeeDesign(
         }),
       }))) as { data?: { id: string } };
       rateHeadId = head.data?.id;
+      if (rateHeadId) {
+        pendingRateHeads.set(serviceId, rateHeadId);
+        await waitForRateHead(rateHeadId);
+      }
     }
 
     if (rateHeadId) {
-      const today = todayIST();
-      for (const slab of design.slabs) {
-        await parseJson(await fetch("/api/proxy/v1/revenue/rate-slabs", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            rateHeadId,
+      // CLOS3-S1-11: one atomic, effective-dated replace of the head's slab set. The server
+      // retires the slabs it supersedes (end-dated, never duplicated) and treats an identical
+      // set as a no-op, so a mid-set failure cannot leave a half-written rate card.
+      await parseJson(await fetch(`/api/proxy/v1/revenue/rate-heads/${rateHeadId}/slabs`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          effectiveFrom: todayIST(),
+          slabs: design.slabs.map((slab) => ({
             slabType: slab.type,
             bandFrom: slab.type === "flat" ? undefined : slab.from || "0",
             bandTo: slab.type === "flat" || slab.to === "" ? undefined : slab.to,
             rateValue: slab.rate || "0",
-            effectiveFrom: today,
-          }),
-        }));
-      }
+          })),
+        }),
+      }));
+      pendingRateHeads.delete(serviceId);
     }
   }
 

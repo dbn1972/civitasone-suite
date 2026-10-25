@@ -18,6 +18,21 @@ export const createRateSlabBody = z.object({
   effectiveTo: z.string().date().optional(),
 });
 
+/** CLOS3-S1-11: one slab of a replace-set. rateValue is paise (flat/band) or bps (ad_valorem), as a bigint string. */
+export const slabSpec = z.object({
+  slabType: z.enum(["flat", "ad_valorem", "band"]),
+  bandFrom: bigintString.optional(),
+  bandTo: bigintString.optional(),
+  rateValue: bigintString,
+});
+
+export const replaceRateSlabsBody = z.object({
+  effectiveFrom: z.string().date(),
+  slabs: z.array(slabSpec).min(1).max(50),
+});
+
+export const rateHeadParam = z.object({ rateHeadId: z.string().uuid() });
+
 export const createPenaltyRuleBody = z.object({
   rateHeadId: z.string().uuid(),
   interestType: z.enum(["simple", "compound"]),
