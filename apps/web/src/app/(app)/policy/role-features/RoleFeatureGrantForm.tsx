@@ -17,7 +17,7 @@ const FEATURE_KEY_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
  *  - Feature key is validated against the dotted-key pattern; an unknown shape
  *    shows an inline error and blocks submission (no silent dangling grant).
  *  - Fields start empty; submit is disabled until both are set and opens a
- *    ConfirmDialog ("Grant <feature> to <role>?") with an optional reason.
+ *    ConfirmDialog ("Grant <feature> to <role>?") with a required reason (min 5 characters).
  *  - On success the list refreshes, fields clear, and the 202 (async) nature is
  *    explained.
  */
@@ -43,7 +43,7 @@ export function RoleFeatureGrantForm() {
       const res = await fetch("/api/proxy/v1/policy/role-features", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ roleName, featureKey: trimmedKey, granted: true, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ roleName, featureKey: trimmedKey, granted: true, reason }),
       });
       if (!res.ok) {
         setStatus("error");
@@ -135,8 +135,10 @@ export function RoleFeatureGrantForm() {
           </>
         }
         confirmLabel="Grant"
-        optionalReason
-        reasonLabel="Reason (optional)"
+        requireReason
+        minReasonLength={5}
+        maxReasonLength={500}
+        reasonLabel="Reason for this grant (min 5 characters)"
         busy={status === "pending"}
         onConfirm={(reason) => {
           setConfirmOpen(false);

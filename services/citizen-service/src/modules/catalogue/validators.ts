@@ -58,6 +58,15 @@ const officeOverrideSchema = z.object({
   // Why the fee differs (the designer requires one for a Rs 0 waiver). Was silently
   // stripped by this schema, so the justification never reached the stored override.
   feeWaiverReason:     safeText({ max: 500, multiline: true }).optional(),
+}).superRefine((o, ctx) => {
+  // Q23: a Rs 0 office fee is a waiver; the reason is mandatory server-side.
+  if (o.feeFromMinor === 0 && (o.feeWaiverReason ?? "").trim().length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["feeWaiverReason"],
+      message: "feeWaiverReason is required when feeFromMinor is 0",
+    });
+  }
 });
 
 const webhookSubscriptionSchema = z.object({

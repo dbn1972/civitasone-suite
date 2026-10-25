@@ -142,8 +142,17 @@ describe("FN-22 assertOfficeOverrides — publish gate", () => {
     expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 10.5 }])).toThrow(/OVERRIDE_BAD_FEE/);
   });
 
-  it("accepts a zero fee — a free zone is legitimate", () => {
-    expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 0 }])).not.toThrow();
+  it("accepts a zero fee when a waiver reason is given — a free zone is legitimate", () => {
+    expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 0, feeWaiverReason: "statutory exemption" }])).not.toThrow();
+  });
+
+  it("Q23: rejects a Rs 0 fee with no (or blank) waiver reason", () => {
+    expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 0 }])).toThrow(/OVERRIDE_WAIVER_REASON_REQUIRED/);
+    expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 0, feeWaiverReason: "   " }])).toThrow(/OVERRIDE_WAIVER_REASON_REQUIRED/);
+  });
+
+  it("Q23: a non-zero fee needs no waiver reason", () => {
+    expect(() => assertOfficeOverrides([{ officeId: ZONE_A, feeFromMinor: 100 }])).not.toThrow();
   });
 
   it("rejects a non-positive SLA", () => {

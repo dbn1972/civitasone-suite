@@ -133,7 +133,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/policy/bindings",
-      payload: { userId: USER_ID, roleId: ROLE_ID },
+      payload: { userId: USER_ID, roleId: ROLE_ID, reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -143,7 +143,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "POST",
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["staff"])}` },
-      payload: { userId: USER_ID, roleId: ROLE_ID },
+      payload: { userId: USER_ID, roleId: ROLE_ID, reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -172,7 +172,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
       // userId === the token's own `sub` (ACTOR_SUB) -> self-escalation
-      payload: { userId: ACTOR_SUB, roleId: ROLE_ID },
+      payload: { userId: ACTOR_SUB, roleId: ROLE_ID, reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe("SELF_BINDING_FORBIDDEN");
@@ -196,7 +196,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "POST",
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId: USER_ID, roleId: ROLE_ID },
+      payload: { userId: USER_ID, roleId: ROLE_ID, reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
     const { id } = res.json();
@@ -212,6 +212,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "DELETE",
       url: `/v1/policy/bindings/${id}`,
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { reason: "access review for audit" },
     });
     expect(del.statusCode).toBe(202);
 
@@ -257,27 +258,26 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
     expect(revokedEvt.payload.reason).toBe("left the desk");
   }, 25000);
 
-  it("GAP-POLICY-BINDINGS-01: DELETE without a body still revokes (reason optional)", async () => {
-    const res = await app.inject({
-      method: "POST",
-      url: "/v1/policy/bindings",
-      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId: randomUUID(), roleId: randomUUID() },
-    });
-    const { id } = res.json();
-    await waitFor(() => findBinding(id, TENANT_A));
-    const del = await app.inject({
-      method: "DELETE",
-      url: `/v1/policy/bindings/${id}`,
-      headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-    });
-    expect(del.statusCode).toBe(202);
+  it("Q28: grant and revoke without a reason (or with one under 5 chars) are 400", async () => {
+    const hdr = { authorization: `Bearer ${token(["tenant_admin"])}` };
+    const base = { userId: randomUUID(), roleId: randomUUID() };
+    for (const payload of [base, { ...base, reason: "" }, { ...base, reason: "   " }, { ...base, reason: "abcd" }]) {
+      const r = await app.inject({ method: "POST", url: "/v1/policy/bindings", headers: hdr, payload });
+      expect(r.statusCode).toBe(400);
+    }
+    const id = randomUUID();
+    for (const payload of [undefined, {}, { reason: "" }, { reason: "abcd" }]) {
+      const r = await app.inject({ method: "DELETE", url: `/v1/policy/bindings/${id}`, headers: hdr, ...(payload ? { payload } : {}) });
+      expect(r.statusCode).toBe(400);
+    }
+    const ok = await app.inject({ method: "DELETE", url: `/v1/policy/bindings/${id}`, headers: hdr, payload: { reason: "abcde" } });
+    expect(ok.statusCode).toBe(202);
   }, 15000);
 
   it("GET paginates with limit/offset/total in a stable order", async () => {
     const mk = () => app.inject({ method: "POST", url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId: randomUUID(), roleId: randomUUID() } });
+      payload: { userId: randomUUID(), roleId: randomUUID(), reason: "access review for audit" } });
     const ids: string[] = [];
     for (let i = 0; i < 3; i++) { const r = await mk(); ids.push(r.json().id); }
     for (const id of ids) await waitFor(() => findBinding(id, TENANT_A));
@@ -301,7 +301,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "POST",
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId: randomUUID(), roleId: randomUUID() },
+      payload: { userId: randomUUID(), roleId: randomUUID(), reason: "access review for audit" },
     });
     const { id } = res.json();
     await waitFor(() => findBinding(id, TENANT_A));
@@ -322,7 +322,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "POST",
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId, roleId },
+      payload: { userId, roleId, reason: "access review for audit" },
     });
     const firstId = first.json().id;
     await waitFor(() => findBinding(firstId, TENANT_A));
@@ -331,6 +331,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "DELETE",
       url: `/v1/policy/bindings/${firstId}`,
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
+      payload: { reason: "access review for audit" },
     });
     expect(revoke.statusCode).toBe(202);
     await waitFor(async () => {
@@ -343,7 +344,7 @@ describe("COMP-007: bindings -- POST /policy/bindings", () => {
       method: "POST",
       url: "/v1/policy/bindings",
       headers: { authorization: `Bearer ${token(["tenant_admin"])}` },
-      payload: { userId, roleId },
+      payload: { userId, roleId, reason: "access review for audit" },
     });
     expect(second.statusCode).toBe(202);
     const secondId = second.json().id;

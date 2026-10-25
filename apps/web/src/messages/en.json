@@ -7079,6 +7079,7 @@
     "confirmRevokeTitle": "Revoke {feature} from {role}?",
     "confirmGrantBody": "This changes which features users with this role can see.",
     "confirmRevokeBody": "Users with this role will lose access to this feature.",
+    "confirmReasonLabel": "Reason (required, at least 5 characters)",
     "confirmAdminNote": "This is an administration feature — double-check before confirming.",
     "confirmPresetTitle": "{label} for {role}?",
     "confirmPresetBody": "{count, plural, one {# feature will be granted} other {# features will be granted}}, one at a time. If one fails, the ones already granted are kept.",

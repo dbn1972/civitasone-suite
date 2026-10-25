@@ -158,11 +158,19 @@ function unwrapValue(v: unknown): unknown {
     : v;
 }
 
+/** The visitor_policy key registry: every numeric knob plus every boolean knob. */
+export function isKnownPolicyKey(configKey: string): boolean {
+  return Object.prototype.hasOwnProperty.call(POLICY_NUMBER_BOUNDS, configKey) || POLICY_BOOLEAN_KEYS.has(configKey);
+}
+
 /**
- * Validate a visitor_policy value against its key's type + bounds. Returns an error
- * message, or null when valid / when the key is not a known scalar knob.
+ * Validate a visitor_policy entry against the key registry, then its type +
+ * bounds. Returns an error message, or null when valid. Q29: a key that is not
+ * in the registry is rejected (a typo such as "retention.pii_day" used to be
+ * stored silently and never read by any worker).
  */
 export function policyValueError(configKey: string, value: unknown): string | null {
+  if (!isKnownPolicyKey(configKey)) return `unknown visitor_policy key '${configKey}'`;
   const bounds = POLICY_NUMBER_BOUNDS[configKey];
   if (bounds) {
     const raw = unwrapValue(value);

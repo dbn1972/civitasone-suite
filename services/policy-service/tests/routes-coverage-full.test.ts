@@ -274,7 +274,7 @@ describe("POST /policy/bindings", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/bindings",
       headers: adminH(),
-      payload: { userId: randomUUID(), roleId: randomUUID() },
+      payload: { userId: randomUUID(), roleId: randomUUID(), reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");
@@ -294,7 +294,7 @@ describe("POST /policy/bindings", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/bindings",
       headers: adminH(),
-      payload: { userId: "bad", roleId: "bad" },
+      payload: { userId: "bad", roleId: "bad", reason: "access review for audit" },
     });
     expect(res.statusCode).toBeGreaterThanOrEqual(400);
     expect(res.statusCode).toBeLessThan(600);
@@ -304,7 +304,7 @@ describe("POST /policy/bindings", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/bindings",
       headers: staffH(),
-      payload: { userId: randomUUID(), roleId: randomUUID() },
+      payload: { userId: randomUUID(), roleId: randomUUID(), reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -312,7 +312,7 @@ describe("POST /policy/bindings", () => {
   it("returns 401 without token", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/bindings",
-      payload: { userId: randomUUID(), roleId: randomUUID() },
+      payload: { userId: randomUUID(), roleId: randomUUID(), reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(401);
   });
@@ -323,6 +323,7 @@ describe("DELETE /policy/bindings/:id", () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/policy/bindings/${randomUUID()}`,
       headers: adminH(),
+      payload: { reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");
@@ -341,6 +342,7 @@ describe("DELETE /policy/bindings/:id", () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/policy/bindings/${randomUUID()}`,
       headers: staffH(),
+      payload: { reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
   });

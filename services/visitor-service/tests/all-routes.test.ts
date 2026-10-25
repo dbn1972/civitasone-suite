@@ -174,7 +174,7 @@ vi.mock("../src/modules/analytics/domain.js", () => ({
 /* ─── Mock config-registry repo, commands, presets, domain ─── */
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   listByNamespace: vi.fn(async () => [fakeConfig]),
-  getConfig: vi.fn(async (_tid: string, ns: string, key: string) => (key === "max_lead_days" ? fakeConfig : null)),
+  getConfig: vi.fn(async (_tid: string, ns: string, key: string) => (["max_lead_days", "visit_request.max_lead_days"].includes(key) ? fakeConfig : null)),
 }));
 vi.mock("../src/modules/config-registry/commands.js", () => ({
   setConfig: vi.fn(async () => fakeAccepted),
@@ -987,7 +987,7 @@ describe("Config-registry routes — 404", () => {
 
 describe("Config-registry routes — happy paths", () => {
   it("POST /v1/visitor/config → 202", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "30" } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "30" } });
     expect(res.statusCode).toBe(202);
   });
   it("GET /v1/visitor/config/:namespace → 200", async () => {
@@ -1005,12 +1005,12 @@ describe("Config-registry routes — happy paths", () => {
     expect(res.statusCode).toBe(202);
   });
   it("POST /v1/visitor/config with stale expectedVersion → 409 VERSION_CONFLICT (ADMIN-02)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 7 } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "31", expectedVersion: 7 } });
     expect(res.statusCode).toBe(409);
     expect(JSON.stringify(res.json())).toContain("VERSION_CONFLICT");
   });
   it("POST /v1/visitor/config with matching expectedVersion → 202 (ADMIN-02)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 1 } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "31", expectedVersion: 1 } });
     expect(res.statusCode).toBe(202);
   });
   it("PATCH /v1/visitor/config/:id/deactivate → 202", async () => {
