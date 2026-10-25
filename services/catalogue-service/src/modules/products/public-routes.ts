@@ -87,8 +87,9 @@ function toProjection(product: ProductRow, lifecycleState: string, approvedVersi
 
 /**
  * Build the full publishable projection for a tenant.
- * Batched, not per-row: three set reads then an in-memory intersection, so the
- * cost is independent of catalogue size per product (no N+1).
+ * Batched, not per-row: four set reads (active ids, approved ids, products, latest
+ * approved versions) then an in-memory intersection, so the query count is constant
+ * regardless of catalogue size (no N+1).
  */
 async function loadPublishable(tenantId: string): Promise<PublicProductProjection[]> {
   const [activeIds, approvedIds] = await Promise.all([
@@ -101,10 +102,14 @@ async function loadPublishable(tenantId: string): Promise<PublicProductProjectio
   if (publishableIds.length === 0) return [];
 
   const products = await productRepo.findByIds(publishableIds, tenantId);
+  const approvedVersions = await repo.findLatestApprovedVersionsByProductIds(
+    products.map((p) => p.id),
+    tenantId,
+  );
 
   const projections: PublicProductProjection[] = [];
   for (const product of products) {
-    const approved = await repo.findLatestApprovedVersion(product.id, tenantId);
+    const approved = approvedVersions.get(product.id);
     if (!approved) continue;
     projections.push(toProjection(product, "active", approved.versionNumber));
   }

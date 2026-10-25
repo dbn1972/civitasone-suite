@@ -2,7 +2,7 @@
  * Reads + optimistic-locked writes for the PC-001..PC-004 / PC-008 tables.
  * All reads go through scopedRead() so PostgreSQL RLS is enforced.
  */
-import { eq, and, sql, isNotNull, lte, desc, asc, type SQL } from "drizzle-orm";
+import { eq, and, sql, isNotNull, lte, desc, asc, inArray, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
   productVersions,
@@ -97,6 +97,30 @@ export async function findLatestApprovedVersion(productId: string, tenantId: str
       .limit(1),
   );
   return rows[0] ?? null;
+}
+
+/**
+ * Latest approved version for each of many products in ONE query (DISTINCT ON product_id,
+ * highest version_number). Products with no approved version are absent from the map.
+ * Always tenant-predicated, on top of RLS.
+ */
+export async function findLatestApprovedVersionsByProductIds(
+  productIds: string[],
+  tenantId: string,
+): Promise<Map<string, ProductVersionRow>> {
+  const out = new Map<string, ProductVersionRow>();
+  if (productIds.length === 0) return out;
+  const rows = await scopedRead((tx) =>
+    tx.selectDistinctOn([productVersions.productId]).from(productVersions)
+      .where(and(
+        eq(productVersions.tenantId, tenantId),
+        eq(productVersions.status, "approved"),
+        inArray(productVersions.productId, productIds),
+      ))
+      .orderBy(productVersions.productId, desc(productVersions.versionNumber)),
+  );
+  for (const row of rows) out.set(row.productId, row);
+  return out;
 }
 
 /** Product ids that currently have at least one approved version. */
