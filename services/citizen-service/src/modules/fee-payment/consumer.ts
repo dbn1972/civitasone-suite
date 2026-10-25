@@ -12,7 +12,7 @@ import {
   enqueuePackNotifications,
   formatAmountMajor,
 } from "../catalogue/notification-bindings.js";
-import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
+import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, refundableBalance } from "./domain.js";
 import type { FeeScheduleRow } from "./schema.js";
 
 async function resolveHoaForSchedule(
@@ -318,8 +318,9 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pay = await repo.findPaymentByIdTx(tx, p.paymentId, p.tenantId);
       if (!pay || !isRefundable(pay.status)) return;
-      if (p.amount > pay.amount) return; // both safe-integer paise numbers (see schema.ts mode:"number")
       const existing = await repo.listRefundsByPaymentTx(tx, p.tenantId, p.paymentId);
+      // both safe-integer paise numbers (see schema.ts mode:"number"); V4-G-09: net of approved refunds
+      if (p.amount > refundableBalance(pay.amount, existing)) return;
       if (existing.some((r) => r.status === "requested")) return;
       await repo.insertRefund(tx, {
         id: p.id, tenantId: p.tenantId, paymentId: p.paymentId, amount: p.amount,
@@ -338,13 +339,36 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!refund || refund.status !== "requested") return;
       if (refund.requestedBy === msg.actorId) return;
       const approved = p.decision === "approve";
+      const pay = approved ? await repo.findPaymentByIdTx(tx, refund.paymentId, msg.tenantId) : null;
+      let balance = 0;
+      if (approved) {
+        if (!pay) return;
+        // V4-G-09: never approve more than is still refundable (earlier approved refunds count).
+        balance = refundableBalance(pay.amount, await repo.listRefundsByPaymentTx(tx, msg.tenantId, refund.paymentId));
+        if (refund.amount > balance) return;
+      }
       await repo.updateRefund(tx, p.refundId, msg.tenantId, {
         status: approved ? "approved" : "rejected",
         approvedBy: msg.actorId, decidedAt: new Date(), updatedBy: msg.actorId,
       });
-      if (approved) {
-        await repo.updatePayment(tx, refund.paymentId, msg.tenantId, {
-          status: "refunded", updatedBy: msg.actorId,
+      if (approved && pay) {
+        // The payment is only "refunded" once the approved refunds cover it; a partial refund leaves it
+        // collected so the remaining balance can still be refunded.
+        const fullyRefunded = refund.amount >= balance;
+        if (fullyRefunded) {
+          await repo.updatePayment(tx, refund.paymentId, msg.tenantId, { status: "refunded", updatedBy: msg.actorId });
+        }
+        const hoa = await resolveHoaForSchedule(tx, msg.tenantId, pay.scheduleId);
+        await enqueue(tx, {
+          topic: EVENTS.refundApproved, eventType: EVENTS.refundApproved,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            id: refund.id, paymentId: pay.id, applicationId: pay.applicationId,
+            receiptNo: pay.receiptNo ?? null,
+            amountMinor: BigInt(refund.amount).toString(), currency: pay.currency, fullyRefunded,
+            ...(hoa.hoaCode ? { hoaCode: hoa.hoaCode } : {}),
+            ...(hoa.serviceKey ? { serviceKey: hoa.serviceKey } : {}),
+          },
         });
       }
       await audit(tx, msg, approved ? "refund_approve" : "refund_reject", "refund", p.refundId);

@@ -114,3 +114,12 @@ export function assertPaymentConfirmable(input: {
 export function isRefundable(status: string): boolean {
   return status === "paid" || status === "offline_recorded";
 }
+
+/**
+ * V4-G-09 -- what can still be refunded: the payment amount less refunds already APPROVED.
+ * (A requested refund holds nothing; at most one request is pending at a time.)
+ */
+export function refundableBalance(paymentAmount: number, refunds: ReadonlyArray<{ status: string; amount: number }>): number {
+  const approved = refunds.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.amount, 0);
+  return Math.max(0, paymentAmount - approved);
+}

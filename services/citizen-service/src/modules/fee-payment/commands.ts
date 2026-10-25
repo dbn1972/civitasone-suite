@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import { HttpError, assertOwnership } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as applicationRepo from "../application/repo.js";
-import { assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled } from "./domain.js";
+import { assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled, refundableBalance } from "./domain.js";
 import type {
   CreateScheduleBody, CreateIntentBody, RecordOfflineBody,
   ConfirmPaymentBody, RefundRequestBody, RefundDecisionBody,
@@ -108,8 +108,11 @@ export async function requestRefund(ctx: RequestContext, paymentId: string, body
   if (!isRefundable(pay.status)) throw new HttpError(409, "NOT_REFUNDABLE", "payment is not in a refundable state");
   // pay.amount is a bigint({mode:"number"}) column (a JS number, validator-capped at
   // ₹100 Cr in paise, far below 2^53), so it is compared directly with no coercion.
-  if (body.amount > pay.amount) throw new HttpError(422, "AMOUNT_TOO_HIGH", "refund exceeds payment amount");
   const existing = await repo.listRefundsByPayment(ctx.tenantId, paymentId);
+  // V4-G-09: bounded by what is still refundable after earlier APPROVED (partial) refunds.
+  if (body.amount > refundableBalance(pay.amount, existing)) {
+    throw new HttpError(422, "AMOUNT_TOO_HIGH", "refund exceeds the refundable balance of the payment");
+  }
   if (existing.some((r) => r.status === "requested")) {
     throw new HttpError(409, "REFUND_PENDING", "a refund request is already pending for this payment");
   }
