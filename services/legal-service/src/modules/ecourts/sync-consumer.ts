@@ -17,7 +17,7 @@
  */
 
 import { pino } from "pino";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, asc } from "drizzle-orm";
 import { putObject } from "@civitasone/storage";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
@@ -230,6 +230,8 @@ export async function syncMatter(
 
       if (existing.length === 0) {
         // Insert a new scheduled hearing
+        // CLOS3-S5-15: ON CONFLICT DO NOTHING against uq_legal_hearings_ecourts_sync
+        // (migration 0029) makes this check-then-insert atomic across overlapping ticks.
         await tx.insert(legalHearings).values({
           tenantId,
           caseId,
@@ -239,7 +241,7 @@ export async function syncMatter(
           status: "scheduled",
           createdBy: SYSTEM_ACTOR,
           updatedBy: SYSTEM_ACTOR,
-        });
+        }).onConflictDoNothing();
       } else {
         // Update purpose if changed
         const existingHearing = existing[0]!;
@@ -281,6 +283,8 @@ export async function syncMatter(
 
 // ── Poll tick ─────────────────────────────────────────────────────
 
+let tickBusy = false;
+
 /**
  * Single poll tick: fetch all tracked matters and sync each one.
  * Exported for testing.
@@ -291,6 +295,22 @@ export async function tick(): Promise<{ synced: number; failed: number }> {
     log.info("sync: e-Courts adapter disabled, skipping sync");
     return { synced: 0, failed: 0 };
   }
+
+  // CLOS3-S5-15: setInterval does not wait for the previous tick. A slow tick
+  // (retries back off up to 7s per matter) must not overlap the next one.
+  if (tickBusy) {
+    log.warn("sync: previous tick still running, skipping this one");
+    return { synced: 0, failed: 0 };
+  }
+  tickBusy = true;
+  try {
+    return await runTick();
+  } finally {
+    tickBusy = false;
+  }
+}
+
+async function runTick(): Promise<{ synced: number; failed: number }> {
 
   // CLOS3-S5-07: cause_list_syncs is FORCE RLS, so a cross-tenant read on the
   // tenant pool has no app.tenant_id and errors/returns nothing. Discovery
@@ -304,6 +324,10 @@ export async function tick(): Promise<{ synced: number; failed: number }> {
       cnrNumber: causeListSyncs.cnrNumber,
     })
     .from(causeListSyncs)
+    // CLOS3-S5-15: rotate. Never-synced first, then least-recently synced (a failed
+    // attempt also stamps last_sync_at), id as a stable tiebreaker -- an unordered
+    // LIMIT re-selected the same arbitrary subset and starved the rest.
+    .orderBy(sql`${causeListSyncs.lastSyncAt} ASC NULLS FIRST`, asc(causeListSyncs.id))
     .limit(500); // cap per tick
 
   if (trackedMatters.length === 0) {
