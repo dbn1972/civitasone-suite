@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -57,10 +56,7 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
       expectedAttendance: p.expectedAttendance,
       soundPermission: p.soundPermission ?? false,
     });
-    // Mitigation, not a full fix — see the PR description for the collision
-    // mechanism (Date.now() % 999999 vs. a globally-unique column); this pattern
-    // recurs across every module audited in this pass.
-    const applicationNumber = generateApplicationNumber("ULB", randomInt(1, 999999));
+    let applicationNumber = "";
 
     // CORRECTED (independent review of this PR, cross-checked against
     // finance-service's actual GL code in services/finance-service/src/modules/treasury/consumer.ts):
@@ -90,6 +86,8 @@ export function registerApplicationConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      applicationNumber = generateApplicationNumber("ULB", await repo.nextApplicationSeq(tx));
       await repo.insertApplication(tx, {
         id: p.id,
         tenantId: msg.tenantId,
