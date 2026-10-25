@@ -37,9 +37,9 @@ export function registerRefundGlConsumer(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const heads = tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0];
         const bankHead = await budgetRepo.findHeadByCodeTx(heads, msg.tenantId, BANK_CODE);
-        if (!bankHead) throw new Error(`INVALID_HEAD_CODE: bank head code  not found in Chart of Accounts`);
+        if (!bankHead) throw new Error(`INVALID_HEAD_CODE: bank head code '${BANK_CODE}' not found in Chart of Accounts`);
         const revenueHead = await budgetRepo.findHeadByCodeTx(heads, msg.tenantId, revenueCode);
-        if (!revenueHead) throw new Error(`INVALID_HEAD_CODE: revenue head code  not found in Chart of Accounts`);
+        if (!revenueHead) throw new Error(`INVALID_HEAD_CODE: revenue head code '${revenueCode}' not found in Chart of Accounts`);
 
         const narration = p.receiptNo ? `Refund against receipt ${p.receiptNo}` : "Citizen fee refund";
         const lines: JournalLine[] = [
