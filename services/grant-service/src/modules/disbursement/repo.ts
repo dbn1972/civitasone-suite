@@ -102,6 +102,22 @@ export async function updateDisbursement(tx: Writer, id: string, patch: Partial<
   await tx.update(grantDisbursements).set({ ...patch, updatedAt: new Date() }).where(eq(grantDisbursements.id, id));
 }
 
+/**
+ * V4-D-03: the live (not failed / not cancelled) disbursement for an installment, if any. An installment may be
+ * paid at most once, so a second initiate while one of these exists is a duplicate -- even when the first is still
+ * `pending_approval` and the installment itself has not been flipped to `disbursed` yet.
+ */
+export async function findActiveDisbursementForInstallmentTx(tx: Writer, installmentId: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(
+      eq(grantDisbursements.installmentId, installmentId),
+      eq(grantDisbursements.tenantId, tenantId),
+      inArray(grantDisbursements.status, ["pending_approval", "initiated", "completed"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: string): Promise<DisbursementRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx.select().from(grantDisbursements)

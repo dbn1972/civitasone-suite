@@ -81,6 +81,19 @@ export function registerDisbursementConsumers(queue: Queue): void {
       // Guard: total disbursed must not exceed approved amount
       // M1 FIX: use FOR UPDATE lock to prevent concurrent over-disbursement.
       const app = await appRepo.findApplicationByIdForUpdate(tx, installment.applicationId, installment.tenantId);
+
+      // V4-D-03: an installment is paid at most once. The `disbursed` status above only flips at payout, so a
+      // disbursement still held in pending_approval (or in flight / completed) must also count as a duplicate.
+      // Checked AFTER the application row lock so two concurrent initiates for the same installment serialise here.
+      // A failed or cancelled disbursement does not block a re-release.
+      if (await repo.findActiveDisbursementForInstallmentTx(tx, p.installmentId, p.tenantId)) {
+        await enqueue(tx, {
+          topic: "grant.disbursement.duplicate", eventType: "grant.disbursement.duplicate",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { installmentId: p.installmentId, reason: "DUPLICATE_DISBURSEMENT: a disbursement for this installment is already pending, in flight or completed" },
+        });
+        return;
+      }
       if (app) {
         // GAP-GRANTS-INSTALLMENTS-03: never release while the funding scheme is
         // suspended or closed (a "suspended grant"). The UI blocks the control,
