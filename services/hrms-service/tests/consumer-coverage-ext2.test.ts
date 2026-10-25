@@ -57,6 +57,8 @@ const MSG_MED_APPROVE = "cc000008-0000-4000-8000-000000000077";
 // Message IDs — seniority
 const MSG_SEN_GEN = "cc000009-0000-4000-8000-000000000077";
 const MSG_SEN_APR = "cc00000a-0000-4000-8000-000000000077";
+// DOM-004: persisted uuid PK of the generated list. Unique per run so a reused DB never hits a duplicate key.
+const SEN_LIST_ID = globalThis.crypto.randomUUID();
 
 // Message IDs — pay-matrix
 const MSG_PM_INC = "cc00000b-0000-4000-8000-000000000077";
@@ -356,7 +358,7 @@ describe("Seniority consumers — coverage", () => {
       payload: {
         // DOM-004: this is now a real persisted uuid primary key (the
         // consumer used to be a no-op stub, so any string worked before).
-        id: "cc000009-dddd-4000-8000-000000000077", tenantId: TENANT,
+        id: SEN_LIST_ID, tenantId: TENANT,
         asOf: "2025-01-01", requestedBy: ACTOR,
       },
     });
@@ -384,7 +386,7 @@ describe("Seniority consumers — coverage", () => {
         // rows and the consumer no-ops without emitting an audit event —
         // this test only asserts idempotency-ledger coverage, not that.
         id: "cc00000a-dddd-4000-8000-000000000077", tenantId: TENANT,
-        seniorityListId: "cc000009-dddd-4000-8000-000000000077", approvedBy: ACTOR,
+        seniorityListId: SEN_LIST_ID, approvedBy: ACTOR,
       },
     });
 
