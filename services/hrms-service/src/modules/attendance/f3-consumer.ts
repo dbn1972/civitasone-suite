@@ -117,6 +117,8 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
       ? (await resolveEmployeeForActor(p.tenantId, msg.actorId))?.id ?? null
       : null;
     let invalidateRegList = false;
+    // Approving a regularisation upserts hrms_attendance, so the cached tenant-wide list is stale too (CLOS3-S5-19).
+    let invalidateAttendanceList = false;
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -208,6 +210,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
               },
             });
             invalidateRegList = true;
+            invalidateAttendanceList = true;
             break;
           }
           case "attendance_routes__1": {
@@ -356,6 +359,9 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
       });
       if (invalidateRegList) {
         await cache.invalidate(cache.listKey(p.tenantId, "attendance_reg", "list:100"));
+      }
+      if (invalidateAttendanceList) {
+        await cache.invalidateResource(p.tenantId, "attendance");
       }
     } catch (err) {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
