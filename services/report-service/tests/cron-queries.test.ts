@@ -159,7 +159,8 @@ describe("tick()", () => {
     expect(notifyPub).toBeDefined();
     // Should have updated nextRunAt
     expect(mockState.updateCalls.length).toBeGreaterThan(0);
-    const updateWithNextRun = mockState.updateCalls.find((u) => u.nextRunAt !== undefined);
+    // (CLOS3-S6-06: the first update is the lease claim; the schedule advance carries lastRunAt)
+    const updateWithNextRun = mockState.updateCalls.find((u) => u.nextRunAt !== undefined && u.lastRunAt !== undefined);
     expect(updateWithNextRun).toBeDefined();
   });
 

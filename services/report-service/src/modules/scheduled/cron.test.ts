@@ -27,6 +27,10 @@ import {
 const state = vi.hoisted(() => ({
   dueReports: [] as unknown[],
   throwOnQuery: false,
+  claimed: false,
+  limitCalls: 0,
+  gate: null as Promise<void> | null,
+  claimValues: [] as Record<string, unknown>[],
 }));
 
 vi.mock("../../shared/scanner-db.js", () => ({
@@ -35,6 +39,8 @@ vi.mock("../../shared/scanner-db.js", () => ({
       from: () => ({
         where: () => ({
           limit: async () => {
+            state.limitCalls++;
+            if (state.gate) await state.gate;
             if (state.throwOnQuery) throw new Error("scanner db unavailable");
             return state.dueReports;
           },
@@ -47,7 +53,22 @@ vi.mock("../../shared/scanner-db.js", () => ({
 vi.mock("../../shared/db.js", () => ({
   db: {
     transaction: async (fn: (tx: unknown) => unknown) =>
-      fn({ update: () => ({ set: () => ({ where: async () => undefined }) }) }),
+      fn({
+        update: () => ({
+          set: (values: Record<string, unknown>) => ({
+            where: () => {
+              // Simulates the atomic compare-and-set: the first UPDATE that pushes
+              // next_run_at into the future (the lease claim) wins; later ones match 0 rows.
+              const isClaim = !("lastRunAt" in values);
+              const result = isClaim
+                ? (state.claimed ? [] : (state.claimed = true, [{ id: "claimed" }]))
+                : [];
+              if (isClaim) state.claimValues.push(values);
+              return Object.assign(Promise.resolve(undefined), { returning: async () => result });
+            },
+          }),
+        }),
+      }),
   },
 }));
 
@@ -65,6 +86,8 @@ describe("ScheduledReportCron — PERF-011 scheduler observability", () => {
     resetScheduledJobMetrics();
     state.dueReports = [];
     state.throwOnQuery = false;
+    state.claimed = false;
+    state.claimValues = [];
   });
 
   it("a healthy no-op tick records a success run, a last-success timestamp, and a duration sample", async () => {
@@ -114,6 +137,8 @@ describe("ScheduledReportCron — CLOS3-S6-01 notification envelope validity", (
     vi.mocked(queue.publish).mockClear();
     state.dueReports = [];
     state.throwOnQuery = false;
+    state.claimed = false;
+    state.claimValues = [];
   });
 
   it("publishes NOTIFICATION_SEND with a UUID messageId that parseEnvelope accepts", async () => {
@@ -137,5 +162,71 @@ describe("ScheduledReportCron — CLOS3-S6-01 notification envelope validity", (
     const jobId = (first!.payload as { variables: { jobId: string } }).variables.jobId;
     expect(first!.messageId).toBe(stableUuid(`notify-${jobId}-a@b.gov.in-0`));
     expect(stableUuid(`notify-${jobId}-a@b.gov.in-1`)).not.toBe(first!.messageId);
+  });
+});
+
+describe("ScheduledReportCron — CLOS3-S6-06 atomic lease claim + overlap guard", () => {
+  const row = {
+    id: "11111111-1111-4111-8111-111111111111",
+    tenantId: "22222222-2222-4222-8222-222222222222",
+    templateId: "33333333-3333-4333-8333-333333333333",
+    format: "pdf",
+    cadence: "daily",
+    recipients: ["a@b.gov.in"],
+  };
+  const renderPublishes = () =>
+    vi.mocked(queue.publish).mock.calls.filter((c) => c[0] === "reports.job.render");
+
+  beforeEach(() => {
+    vi.mocked(queue.publish).mockReset();
+    vi.mocked(queue.publish).mockImplementation(async () => "id");
+    state.dueReports = [row];
+    state.throwOnQuery = false;
+    state.claimed = false;
+    state.claimValues = [];
+  });
+
+  it("two concurrent ticks dispatch the same due report exactly once", async () => {
+    const [a, b] = await Promise.all([tick(), tick()]);
+    expect(a + b).toBe(1);
+    expect(renderPublishes()).toHaveLength(1);
+  });
+
+  it("claims with a lease in the future before publishing", async () => {
+    const before = Date.now();
+    await tick();
+    expect(state.claimValues).toHaveLength(1);
+    const lease = state.claimValues[0]!.nextRunAt as Date;
+    expect(lease.getTime()).toBeGreaterThan(before + 60_000);
+  });
+
+  it("a dispatch failure after the claim leaves the lease (retry after expiry), not a lost report", async () => {
+    vi.mocked(queue.publish).mockRejectedValueOnce(new Error("broker down"));
+    expect(await tick()).toBe(0);
+    // lease claimed; no lastRunAt written, nextRunAt not advanced to the real schedule
+    expect(state.claimValues).toHaveLength(1);
+  });
+
+  it("startScheduledReportCron skips an overlapping tick while the previous one is still running", async () => {
+    vi.useFakeTimers();
+    try {
+      process.env.REPORT_SCHEDULER_ENABLED = "true";
+      state.dueReports = [];
+      state.limitCalls = 0;
+      let release!: () => void;
+      state.gate = new Promise<void>((r) => { release = r; });
+      const { startScheduledReportCron } = await import("./cron.js");
+      const timer = startScheduledReportCron(1000)!;
+      await vi.advanceTimersByTimeAsync(3500); // 3 interval firings while tick #1 is blocked
+      expect(state.limitCalls).toBe(1);
+      release();
+      await vi.advanceTimersByTimeAsync(1000); // guard reset -> next firing runs
+      expect(state.limitCalls).toBe(2);
+      clearInterval(timer);
+    } finally {
+      state.gate = null;
+      delete process.env.REPORT_SCHEDULER_ENABLED;
+      vi.useRealTimers();
+    }
   });
 });
