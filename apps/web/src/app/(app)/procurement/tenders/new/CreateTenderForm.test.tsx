@@ -98,6 +98,26 @@ describe("CreateTenderForm (GAP-PROCUREMENT-TENDERS-NEW-01/02/03/04/05)", () => 
     expect(body.estimatedMinor).toBe(123456); // 1234.56 -> exact paise, no float drift
   });
 
+  it("V4-A-07: an estimated value beyond Number.MAX_SAFE_INTEGER paise is rejected, never posted", async () => {
+    const spy = wireFetch();
+    render(<CreateTenderForm />);
+    await fillValid();
+    fireEvent.change(screen.getByLabelText("Estimated value (₹) *"), { target: { value: "100000000000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save tender" }));
+    expect(await screen.findByText(/too large/i)).toBeInTheDocument();
+    expect(spy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("V4-A-07: an EMD beyond Number.MAX_SAFE_INTEGER paise is rejected, never posted", async () => {
+    const spy = wireFetch();
+    render(<CreateTenderForm />);
+    await fillValid();
+    fireEvent.change(screen.getByLabelText(/EMD amount/i), { target: { value: "100000000000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save tender" }));
+    expect(await screen.findByText(/too large/i)).toBeInTheDocument();
+    expect(spy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
   it("NEW-05: the Scope and Eligibility textareas enforce a max length", async () => {
     wireFetch();
     render(<CreateTenderForm />);
