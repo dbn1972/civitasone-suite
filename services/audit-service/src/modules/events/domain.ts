@@ -31,10 +31,33 @@ export type IngestPayload = {
 };
 
 /**
- * Tamper-evident chain hash. P1-4: the digest now binds the full event content
+ * V4-G-05: canonical, key-order-independent JSON. Postgres jsonb does not
+ * preserve object key order, so a digest over plain JSON.stringify of the
+ * pre-insert object can never be reproduced from the stored row. The value is
+ * first normalised through a JSON round-trip (drops undefined, applies toJSON,
+ * exactly what the jsonb column keeps) and object keys are then sorted
+ * recursively.
+ */
+export function canonicalJson(value: unknown): string {
+  const normalised: unknown = JSON.parse(JSON.stringify(value ?? null));
+  const ser = (v: unknown): string => {
+    if (Array.isArray(v)) return `[${v.map(ser).join(",")}]`;
+    if (v !== null && typeof v === "object") {
+      const o = v as Record<string, unknown>;
+      return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${ser(o[k])}`).join(",")}}`;
+    }
+    return JSON.stringify(v);
+  };
+  return ser(normalised);
+}
+
+/**
+ * Tamper-evident chain hash. P1-4: the digest binds the full event content
  * (actor, target, payload) in addition to identity + prevHash, so a row's body
  * cannot be altered without breaking the chain. Content is folded into a stable
  * SHA-256 digest of canonical JSON to keep the chained string bounded.
+ * V4-G-05: `occurredAt` MUST be the exact instant persisted in occurred_at and
+ * the content is canonicalised, so the hash is reproducible from stored rows.
  */
 export function computeHash(
   id: string,
@@ -45,12 +68,61 @@ export function computeHash(
   content: { actor: unknown; target: unknown; payload: unknown },
 ): string {
   const contentDigest = createHash("sha256")
-    .update(JSON.stringify({ actor: content.actor ?? null, target: content.target ?? null, payload: content.payload ?? null }))
+    .update(canonicalJson({ actor: content.actor ?? null, target: content.target ?? null, payload: content.payload ?? null }))
     .digest("hex");
   return createHash("sha256")
     .update(`${id}:${tenantId}:${type}:${prevHash ?? ""}:${occurredAt}:${contentDigest}`)
     .digest("hex")
     .slice(0, 64);
+}
+
+/**
+ * V4-G-05: the instant to hash AND persist as occurred_at for the next chain
+ * link. Strictly later than the previous link (ms resolution) so chain order
+ * by occurred_at is unambiguous even when two appends land in the same ms.
+ */
+export function nextOccurredAt(latestOccurredAt: string | null | undefined, nowMs: number = Date.now()): Date {
+  const prev = latestOccurredAt ? Date.parse(latestOccurredAt) : NaN;
+  return new Date(Number.isFinite(prev) && prev >= nowMs ? prev + 1 : nowMs);
+}
+
+export type ChainRow = {
+  id: string;
+  tenantId: string;
+  type: string;
+  actor: unknown;
+  target: unknown;
+  payload: unknown;
+  prevHash: string | null;
+  eventHash: string | null;
+  occurredAt: string;
+};
+
+export type ChainVerification = {
+  ok: boolean;
+  checked: number;
+  /** ids whose prevHash is not the preceding row's eventHash (first row is the anchor and is not link-checked). */
+  linkBreaks: string[];
+  /** ids whose stored eventHash is not reproducible from the stored row. */
+  hashMismatches: string[];
+};
+
+/**
+ * V4-G-05: re-verify a tenant's chain from STORED rows (ordered oldest first).
+ * Rows written before this fix hashed an instant that was never persisted and
+ * therefore report as hashMismatches; their linkage is still checked.
+ */
+export function verifyChain(rows: readonly ChainRow[]): ChainVerification {
+  const linkBreaks: string[] = [];
+  const hashMismatches: string[] = [];
+  rows.forEach((r, i) => {
+    if (i > 0 && r.prevHash !== rows[i - 1]!.eventHash) linkBreaks.push(r.id);
+    const expected = computeHash(r.id, r.tenantId, r.type, r.prevHash, r.occurredAt, {
+      actor: r.actor, target: r.target, payload: r.payload,
+    });
+    if (expected !== r.eventHash) hashMismatches.push(r.id);
+  });
+  return { ok: linkBreaks.length === 0 && hashMismatches.length === 0, checked: rows.length, linkBreaks, hashMismatches };
 }
 
 /**
