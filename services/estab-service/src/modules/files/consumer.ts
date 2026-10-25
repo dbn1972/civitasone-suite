@@ -521,6 +521,8 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       const base = await repo.findFileByIdTx(tx, p.baseFileId, p.tenantId);
       if (!base) return;
       const rootId = base.parentFileId ?? base.id;
+      // CLOS3-S4-06: serialise MAX(part_no)+1 per (tenant, root); see fileOpenVolume above.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${p.tenantId}:part:${rootId}`}))`);
       const maxRows = await tx.execute(sql`
         SELECT MAX(part_no) AS max_part FROM files.estab_files
         WHERE tenant_id = ${p.tenantId} AND parent_file_id = ${rootId} AND file_type = 'part'

@@ -81,6 +81,15 @@ describe("CLOS3-S4-06 concurrent volume / part allocation (real DB)", () => {
     expect(new Set(vols.map((v) => v.fileNo)).size).toBe(N);
   });
 
+  it(`${N} concurrent fileOpenPart on one root all succeed with distinct part_no and file_no`, async () => {
+    const results = await Promise.allSettled(Array.from({ length: N }, () => openPart(TENANT, ROOT)));
+    expect(results.filter((r) => r.status === "rejected").map((r) => String((r as PromiseRejectedResult).reason))).toEqual([]);
+    const parts = await childrenOf(TENANT, ROOT, "part");
+    expect(parts).toHaveLength(N);
+    expect(parts.map((p) => p.partNo!).sort((a, b) => a - b)).toEqual([1, 2, 3, 4]);
+    expect(new Set(parts.map((p) => p.fileNo)).size).toBe(N);
+  });
+
   it("opening volumes on a different root, and in a different tenant, is independent (each starts at volume 2)", async () => {
     const results = await Promise.allSettled([openVolume(TENANT, ROOT_B), openVolume(TENANT_2, ROOT_T2)]);
     expect(results.every((r) => r.status === "fulfilled")).toBe(true);
