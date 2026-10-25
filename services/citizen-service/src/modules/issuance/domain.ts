@@ -94,3 +94,19 @@ export function publicValidity(status: string, validTo: string | Date | null | u
   if (isExpired(validTo, now)) return "expired";
   return "valid";
 }
+
+/**
+ * V4-G-11: why a certificate linked to an application may NOT be issued yet, or
+ * null when issuance may proceed. The application must exist and be `approved`;
+ * a fee-bearing service additionally needs a collected (or fully exempt) payment.
+ */
+export function issuanceBlockReason(input: {
+  applicationStatus: string | null;
+  feeBearing: boolean;
+  paymentSatisfied: boolean;
+}): string | null {
+  if (input.applicationStatus === null) return "linked application not found";
+  if (input.applicationStatus !== "approved") return `application is ${input.applicationStatus}, not approved`;
+  if (input.feeBearing && !input.paymentSatisfied) return "fee-bearing service has no collected payment";
+  return null;
+}
