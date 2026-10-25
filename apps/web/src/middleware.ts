@@ -116,7 +116,9 @@ function isPublicPath(pathname: string): boolean {
   return (
     PUBLIC_EXACT.includes(pathname) ||
     PUBLIC_SEGMENT.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    PUBLIC.some((p) => pathname.startsWith(p))
+    // V4-A-04: boundary match (p or p + "/"), never a bare prefix, so /contacts,
+    // /authz or /verifyx stay private. Entries ending in "/" are directory prefixes.
+    PUBLIC.some((p) => (p.endsWith("/") ? pathname.startsWith(p) : pathname === p || pathname.startsWith(`${p}/`)))
   );
 }
 
