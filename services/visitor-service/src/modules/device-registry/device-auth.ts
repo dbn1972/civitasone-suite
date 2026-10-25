@@ -24,6 +24,8 @@ import { createHash } from "node:crypto";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { TLSSocket } from "node:tls";
 import { Redis } from "ioredis";
+import { pino } from "pino";
+import { redisClientOptions } from "@civitasone/cache";
 import { HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import { isInRotationGracePeriod, BEARER_ROTATION_GRACE_MS } from "./domain.js";
@@ -98,6 +100,8 @@ const RATE_LIMITS: Record<DeviceType, number> = {
   barrier: 120,
 };
 
+const log = pino({ name: "device-auth" });
+
 /** Rate limit window in seconds. */
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 
@@ -122,7 +126,7 @@ function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
+  _redis = new Redis(url, redisClientOptions());
   return _redis;
 }
 
@@ -150,8 +154,17 @@ export async function checkRateLimit(deviceId: string, tenantId: string, deviceT
     // with no TTL, so the count only ever grew and the device was 429-blocked
     // permanently. The script also re-arms the TTL when it finds none (-1), so
     // a key orphaned by the old code self-heals on its next request.
-    const count = Number(await redis.eval(RATE_LIMIT_INCR_SCRIPT, 1, key, RATE_LIMIT_WINDOW_SECONDS));
-    return count <= limit;
+    try {
+      const count = Number(await redis.eval(RATE_LIMIT_INCR_SCRIPT, 1, key, RATE_LIMIT_WINDOW_SECONDS));
+      return count <= limit;
+    } catch (err) {
+      // CLOS3-S6-18: the client now fails fast (~1-2s) on an outage instead of stalling
+      // through ioredis' default retries. Rate limiting is a protective throttle, not an
+      // authorization decision (identity was already verified in steps 1-3), so on a Redis
+      // error degrade to the per-process in-memory window rather than failing device
+      // traffic closed; the limit still applies, just per instance.
+      log.warn({ err: err instanceof Error ? err.message : String(err), deviceId }, "device rate-limit redis error; using in-memory fallback");
+    }
   }
 
   // In-memory fallback for dev/test

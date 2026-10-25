@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -50,7 +51,7 @@ function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
+  _redis = new Redis(url, redisClientOptions());
   return _redis;
 }
 

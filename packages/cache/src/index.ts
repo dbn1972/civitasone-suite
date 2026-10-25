@@ -470,11 +470,28 @@ export class Cache {
  * not tens of seconds — and `isSessionDenylisted`'s fail-open catch fires
  * promptly instead of the request hanging.
  */
-const REDIS_CLIENT_OPTIONS = {
+export const REDIS_CLIENT_OPTIONS = {
   maxRetriesPerRequest: 1,
   connectTimeout: 1500,
   commandTimeout: 1000,
 } as const;
+
+/**
+ * CLOS3-S6-18: the fail-fast ioredis options as a reusable factory, so services that
+ * must own a dedicated Redis client (their own key spaces / data structures, not the
+ * tenant-scoped `Cache`) bound their outage latency exactly like the shared client
+ * instead of constructing a bare `new Redis(url)` (10s connect, 20 retries, no command
+ * timeout). `overrides` lets a caller opt out per-option, e.g. `{ commandTimeout: undefined }`
+ * for a blocking read (XREADGROUP BLOCK / BRPOP) that legitimately outlives 1s.
+ */
+export function redisClientOptions(overrides: Partial<Record<keyof typeof REDIS_CLIENT_OPTIONS, number | null | undefined>> = {}) {
+  const merged: Record<string, unknown> = { ...REDIS_CLIENT_OPTIONS };
+  for (const [k, v] of Object.entries(overrides)) {
+    if (v === undefined) delete merged[k];
+    else merged[k] = v;
+  }
+  return merged as { maxRetriesPerRequest?: number | null; connectTimeout?: number; commandTimeout?: number };
+}
 
 function defaultStore(): CacheStore {
   const url = process.env.REDIS_URL;
