@@ -324,4 +324,27 @@ describe("RtiDetailPage", () => {
     expect(buttonLabels.length).toBeGreaterThan(0);
     expect(buttonLabels.every((label) => label === "Reveal")).toBe(true);
   });
+
+  // CLOS3-S1-13: the history request does not depend on the detail result, so both must be issued
+  // before either resolves (was a sequential waterfall: page time = detail + history).
+  it("issues the detail and history requests concurrently", async () => {
+    let resolveDetail: (v: unknown) => void = () => {};
+    let resolveHistory: (v: unknown) => void = () => {};
+    fetchJsonMock.mockImplementation((url: string) =>
+      new Promise((res) => {
+        if (String(url).includes("/history")) resolveHistory = res;
+        else resolveDetail = res;
+      }),
+    );
+
+    const pending = RtiDetailPage({ params: Promise.resolve({ id: RTI.id }) });
+    await vi.waitFor(() => expect(fetchJsonMock).toHaveBeenCalledTimes(2), { timeout: 300 });
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toBe(`/api/v1/crm/rti/${RTI.id}?maskPii=true`);
+    expect(String(fetchJsonMock.mock.calls[1]![0])).toBe(`/api/v1/crm/rti/${RTI.id}/history`);
+
+    resolveDetail({ data: RTI, source: "api" });
+    resolveHistory({ data: [], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await pending}</NextIntlClientProvider>);
+    expect(screen.getAllByText(RTI.referenceNo).length).toBeGreaterThan(0);
+  });
 });
