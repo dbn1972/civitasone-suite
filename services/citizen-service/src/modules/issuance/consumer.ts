@@ -7,9 +7,13 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as applicationRepo from "../application/repo.js";
+import * as feeRepo from "../fee-payment/repo.js";
+import { feePayments } from "../fee-payment/schema.js";
+import { assertStatusTransition } from "../application/domain.js";
+import { and, eq } from "drizzle-orm";
 import { enqueuePackNotifications } from "../catalogue/notification-bindings.js";
 import {
-  buildCertNumber, hashPayload, signPayloadHash, generateVerifyToken,
+  buildCertNumber, hashPayload, signPayloadHash, generateVerifyToken, issuanceBlockReason,
 } from "./domain.js";
 import type { CertificateRow } from "./schema.js";
 
@@ -68,11 +72,39 @@ export function registerIssuanceConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.issuanceApprove, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let appliedApplicationId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const cert = await repo.findCertByIdTx(tx, p.id, msg.tenantId);
       if (!cert || cert.status !== "requested") return;
       if (cert.requestedBy === msg.actorId) return;
+      // V4-G-11: a certificate tied to an application is issued only for an
+      // approved (and, if fee-bearing, paid) application; otherwise leave it
+      // `requested` and record why, so the checker can see the block.
+      let linkedApp: Awaited<ReturnType<typeof applicationRepo.findApplicationByIdTx>> = null;
+      if (cert.applicationId) {
+        linkedApp = await applicationRepo.findApplicationByIdTx(tx, cert.applicationId, msg.tenantId);
+        let feeBearing = false;
+        let paymentSatisfied = false;
+        if (linkedApp) {
+          const schedule = await feeRepo.findActiveScheduleForService(tx, msg.tenantId, linkedApp.serviceId);
+          feeBearing = !!schedule && schedule.baseAmount > 0;
+          if (feeBearing) {
+            const payments = await (tx as typeof db).select().from(feePayments)
+              .where(and(eq(feePayments.tenantId, msg.tenantId), eq(feePayments.applicationId, linkedApp.id)));
+            paymentSatisfied = payments.some((x) => x.status === "paid" || x.status === "offline_recorded" || x.amount === 0);
+          }
+        }
+        const blocked = issuanceBlockReason({ applicationStatus: linkedApp?.status ?? null, feeBearing, paymentSatisfied });
+        if (blocked) {
+          await repo.insertEvent(tx, {
+            tenantId: msg.tenantId, certificateId: p.id, eventType: "issue_blocked",
+            note: `Issuance blocked: ${blocked}`, createdBy: msg.actorId, updatedBy: msg.actorId,
+          });
+          await audit(tx, msg, "issuance_blocked", p.id);
+          return;
+        }
+      }
       const year = new Date().getUTCFullYear();
       const seq = await repo.nextSequence(tx, msg.tenantId, cert.certType, year);
       const certNo = buildCertNumber(cert.certType, year, seq);
@@ -98,27 +130,34 @@ export function registerIssuanceConsumers(rawQueue: Queue): void {
         },
       });
       // FN-08: issued bindings with cert_no (when linked to a pack-backed application)
-      if (cert.applicationId) {
-        const app = await applicationRepo.findApplicationByIdTx(tx, cert.applicationId, msg.tenantId);
-        if (app) {
-          await enqueuePackNotifications(tx, {
-            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-            serviceId: app.serviceId, lifecycleEvent: "issued",
-            recipient: app.citizenId, recipientId: app.citizenId,
-            variables: {
-              applicationId: app.id,
-              app_no: app.refNo ?? app.trackingNo ?? app.id,
-              cert_no: certNo,
-              cert_type: cert.certType,
-              verify_token: verifyToken,
-            },
-            eventType: EVENTS.certificateIssued,
-          });
-        }
+      if (cert.applicationId && linkedApp) {
+        const app = linkedApp;
+        appliedApplicationId = app.id;
+        // V4-G-11: close the application (approved -> issued) in the same transaction.
+        assertStatusTransition(app.status, "issued");
+        await applicationRepo.updateApplication(tx, app.id, msg.tenantId, { status: "issued", updatedBy: msg.actorId });
+        await applicationRepo.insertStatusHistory(tx, {
+          tenantId: msg.tenantId, applicationId: app.id, fromStatus: app.status, toStatus: "issued",
+          note: `Certificate ${certNo} issued`, createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await enqueuePackNotifications(tx, {
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          serviceId: app.serviceId, lifecycleEvent: "issued",
+          recipient: app.citizenId, recipientId: app.citizenId,
+          variables: {
+            applicationId: app.id,
+            app_no: app.refNo ?? app.trackingNo ?? app.id,
+            cert_no: certNo,
+            cert_type: cert.certType,
+            verify_token: verifyToken,
+          },
+          eventType: EVENTS.certificateIssued,
+        });
       }
       await audit(tx, msg, "issuance_approve", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "certificate", p.id));
+    if (appliedApplicationId) await cache.invalidate(cache.makeKey(msg.tenantId, "application", appliedApplicationId));
   });
 
   queue.subscribe(COMMANDS.issuanceAmend, async (msg) => {
