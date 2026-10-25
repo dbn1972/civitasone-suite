@@ -1,7 +1,12 @@
 /** zod validators for role-features commands. */
 import { z } from "zod";
 
-const reason = z.string().trim().min(1).max(500).optional();
+/**
+ * Q28: every grant and revoke carries an auditable reason (min 5 chars after
+ * trimming). Required at the API, not just prompted by the matrix UI.
+ */
+export const MIN_REASON_LENGTH = 5;
+const reason = z.string().trim().min(MIN_REASON_LENGTH, `reason must be at least ${MIN_REASON_LENGTH} characters`).max(500);
 
 export const grantFeatureBody = z.object({
   roleName: z.string().min(1).max(100),
@@ -12,8 +17,8 @@ export const grantFeatureBody = z.object({
 export type GrantFeatureBody = z.infer<typeof grantFeatureBody>;
 
 export const roleParam = z.object({ role: z.string().min(1).max(100) });
-/** DELETE body: the audited reason for the revocation (optional for back-compat; persisted when sent). */
-export const revokeFeatureBody = z.object({ reason }).default({});
+/** DELETE body: the audited reason for the revocation (required, persisted with the revoke). */
+export const revokeFeatureBody = z.object({ reason });
 export type RevokeFeatureBody = z.infer<typeof revokeFeatureBody>;
 
 export const grantIdParam = z.object({ id: z.string().uuid() });

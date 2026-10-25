@@ -27,9 +27,9 @@ import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateFaultNumber, generateRequestNumber } from "./domain.js";
 
 const log = pino({ name: "streetlight-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -89,9 +89,11 @@ export function registerStreetlightConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const faultNumber = await nextNumber(tx, "streetlightFault");
         await repo.insertFault(tx, {
           id: p.id, tenantId: p.tenantId, streetlightId: p.streetlightId,
-          faultNumber: generateFaultNumber(), reportedBy: msg.actorId,
+          faultNumber, reportedBy: msg.actorId,
           faultType: p.faultType, description: p.description ?? null, photo: p.photo ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
         });
@@ -102,8 +104,8 @@ export function registerStreetlightConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "fault_report", "streetlight_fault", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "streetlightFaultReport failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "streetlightFaultReport failed"); throw err; }
+  }, auditFailedCreate("fault_report", "streetlight_fault"));
 
   queue.subscribe(COMMANDS.streetlightFaultAssign, async (msg) => {
     try {
@@ -138,8 +140,10 @@ export function registerStreetlightConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const requestNumber = await nextNumber(tx, "streetlightRequest");
         await repo.insertRequest(tx, {
-          id: p.id, tenantId: p.tenantId, requestNumber: generateRequestNumber(),
+          id: p.id, tenantId: p.tenantId, requestNumber,
           requestedBy: msg.actorId, requestType: p.requestType,
           location: p.location ?? null, justification: p.justification ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -151,8 +155,8 @@ export function registerStreetlightConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "request_create", "streetlight_request", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "streetlightRequestCreate failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "streetlightRequestCreate failed"); throw err; }
+  }, auditFailedCreate("request_create", "streetlight_request"));
 
   queue.subscribe(COMMANDS.streetlightRequestSurvey, async (msg) => {
     try {

@@ -23,6 +23,8 @@ export function usePolling(tick: () => Promise<PollOutcome>, opts: { enabled: bo
   const attempt = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopped = useRef(false);
+  /** Generation token: a run superseded by a newer run (or unmount) must not set state or re-arm. */
+  const runId = useRef(0);
   const [failedLast, setFailedLast] = useState(false);
   const [lastRunAt, setLastRunAt] = useState<number | null>(null);
 
@@ -30,17 +32,19 @@ export function usePolling(tick: () => Promise<PollOutcome>, opts: { enabled: bo
 
   const run = useCallback(async (): Promise<void> => {
     clear();
+    const id = ++runId.current;
     if (stopped.current) return;
     if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      clear();
       timer.current = setTimeout(() => { void run(); }, maxMs);
       return;
     }
     const out = await tickRef.current();
-    if (stopped.current) return;
+    if (stopped.current || id !== runId.current) return;
     setFailedLast(out.failed);
     setLastRunAt(Date.now());
     attempt.current = out.changed && !out.failed ? 0 : attempt.current + 1;
-    if (out.keepGoing) timer.current = setTimeout(() => { void run(); }, pollDelayMs(attempt.current, { baseMs, maxMs }));
+    if (out.keepGoing) { clear(); timer.current = setTimeout(() => { void run(); }, pollDelayMs(attempt.current, { baseMs, maxMs })); }
   }, [clear, baseMs, maxMs]);
 
   useEffect(() => {
@@ -50,7 +54,7 @@ export function usePolling(tick: () => Promise<PollOutcome>, opts: { enabled: bo
     timer.current = setTimeout(() => { void run(); }, pollDelayMs(0, { baseMs, maxMs }));
     const onVisible = (): void => { if (document.visibilityState === "visible") { attempt.current = 0; void run(); } };
     document.addEventListener("visibilitychange", onVisible);
-    return () => { stopped.current = true; clear(); document.removeEventListener("visibilitychange", onVisible); };
+    return () => { stopped.current = true; runId.current += 1; clear(); document.removeEventListener("visibilitychange", onVisible); };
   }, [enabled, run, clear, baseMs, maxMs]);
 
   /** Poll right now (after an action) and restart the schedule. */

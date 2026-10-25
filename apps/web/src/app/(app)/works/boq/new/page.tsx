@@ -82,6 +82,9 @@ function NewBoqItemForm() {
   const [srItemId, setSrItemId] = useState<string | null>(null);
   const [srCache, setSrCache] = useState<Record<string, { itemCode: string; description: string; unit: string; rate: string }>>({});
   const [busy, setBusy] = useState(false);
+  // CLOS3-S3-18: latches so a second submit during the post-save redirect delay cannot create a duplicate item.
+  const [saved, setSaved] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("BoQ item");
@@ -159,6 +162,7 @@ function NewBoqItemForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (inFlight.current || saved) return;
     setMessage("");
     setError("");
     setDupError(null);
@@ -181,7 +185,9 @@ function NewBoqItemForm() {
       return;
     }
 
+    inFlight.current = true;
     setBusy(true);
+    let ok = false;
     try {
       const body: Record<string, unknown> = {
         workId: parsed.data.workId,
@@ -211,13 +217,16 @@ function NewBoqItemForm() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      ok = true;
+      setSaved(true);
       setMessage("BoQ item added.");
       toast.success("BoQ item added.");
       setTimeout(() => router.push(parsed.data.workId ? `/works/boq/${parsed.data.workId}` : "/works/boq"), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
-      setBusy(false);
+      inFlight.current = false;
+      if (!ok) setBusy(false);
     }
   }
 
@@ -388,16 +397,16 @@ function NewBoqItemForm() {
             <Button
               variant="ghost"
               onClick={() => router.push(form.workId.trim() ? `/works/boq/${form.workId.trim()}` : "/works/boq")}
-              disabled={busy}
+              disabled={busy || saved}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
-              disabled={busy}
+              disabled={busy || saved}
             >
-              {busy ? "Saving…" : "Add BoQ Item"}
+              {busy || saved ? "Saving…" : "Add BoQ Item"}
             </Button>
           </div>
         </form>

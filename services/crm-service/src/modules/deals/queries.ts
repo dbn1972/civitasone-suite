@@ -16,6 +16,7 @@ export async function listDeals(
   offset: number,
   pipelineId?: string,
   ids?: readonly string[],
+  visibleTo?: string,
 ): Promise<{ data: DealView[]; pagination: { hasMore: boolean; pageSize: number; total: number; cursor?: string } }> {
   // A by-id lookup is small and bounded (<= 50 ids) and its key space is unbounded, so it
   // skips the list cache and always reads the live rows.
@@ -34,12 +35,12 @@ export async function listDeals(
       },
     };
   }
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${pipelineId ?? "*"}`, async () => {
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${pipelineId ?? "*"}:v${visibleTo ?? ""}`, async () => {
     const [rows, total] = await Promise.all([
-      repo.listByTenant(tenantId, limit, offset, pipelineId),
+      repo.listByTenant(tenantId, limit, offset, pipelineId, undefined, visibleTo),
       // GAP-CRM-PIPELINE-05: the tenant-wide (or pipeline-scoped) live-deal total,
       // so the board shows "N of M" instead of guessing truncation from a full page.
-      repo.countByTenant(tenantId, pipelineId),
+      repo.countByTenant(tenantId, pipelineId, undefined, visibleTo),
     ]);
     return {
       data: rows,

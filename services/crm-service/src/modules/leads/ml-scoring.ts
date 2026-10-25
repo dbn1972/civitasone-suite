@@ -364,7 +364,11 @@ function emitLeadScoredEvent(
   confidence: number,
   correlationId: string,
 ): void {
+  const logFailure = (err: unknown): void => {
+    log.error({ tenantId, entityId, err: (err as Error).message }, "failed to emit lead_scored event");
+  };
   try {
+    // Not awaited (best-effort), but .catch is required: the try/catch only sees sync throws.
     queue.publish(CONSUMED_EVENTS.mlLeadScored, {
       messageId: randomUUID(),
       type: CONSUMED_EVENTS.mlLeadScored,
@@ -383,8 +387,8 @@ function emitLeadScoredEvent(
         timestamp: new Date().toISOString(),
         correlationId,
       },
-    });
+    }).catch(logFailure);
   } catch (err) {
-    log.error({ tenantId, entityId, err: (err as Error).message }, "failed to emit lead_scored event");
+    logFailure(err);
   }
 }

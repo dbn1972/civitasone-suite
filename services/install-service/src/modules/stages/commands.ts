@@ -39,7 +39,7 @@ export async function createStage(ctx: RequestContext, body: CreateStageBody): P
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export type StageTransitionPayload = { id: string; verb: StageVerb };
+export type StageTransitionPayload = { id: string; verb: StageVerb; remarks?: string };
 
 /**
  * PATCH /v1/install/steps/:id/:verb. The id is an install.stages row (the
@@ -48,7 +48,7 @@ export type StageTransitionPayload = { id: string; verb: StageVerb };
  * owns — never on install.step.start/skip, whose consumer expects a wizard
  * {wizardId, stepKey} and silently ignored this payload.
  */
-export async function transitionStage(ctx: RequestContext, id: string, verb: StageVerb): Promise<Accepted> {
+export async function transitionStage(ctx: RequestContext, id: string, verb: StageVerb, remarks?: string): Promise<Accepted> {
   const stage = await queries.getStage(id, ctx.tenantId);
   if (!stage) throw new HttpError(404, "NOT_FOUND", "stage not found");
   if (!nextStageStatus(verb, stage.status)) {
@@ -61,7 +61,7 @@ export async function transitionStage(ctx: RequestContext, id: string, verb: Sta
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id, verb } satisfies StageTransitionPayload,
+    payload: { id, verb, ...(remarks ? { remarks } : {}) } satisfies StageTransitionPayload,
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

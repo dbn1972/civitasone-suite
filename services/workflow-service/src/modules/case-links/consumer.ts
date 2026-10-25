@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import { auditFailedCreate } from "../../shared/numbers.js";
 import type { LinkType } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -81,7 +82,7 @@ export function registerCaseLinksConsumers(queue: Queue): void {
       log.error({ err, messageId: msg.messageId }, "splitCase failed");
       throw err;
     }
-  });
+  }, auditFailedCreate("split", "case"));
 
   queue.subscribe(COMMANDS.mergeCases, async (msg) => {
     const p = msg.payload as {

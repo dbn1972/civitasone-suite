@@ -22,9 +22,9 @@ export const withdrawAlert = (ctx: RequestContext, id: string): Promise<Accepted
 
 export function createNotice(ctx: RequestContext, body: CreateNoticeBody): Promise<Accepted> {
   const id = randomUUID();
-  // Auto-numbered from the row id when staff do not supply one (collision-free, no counter race).
-  const noticeNo = body.noticeNo ?? `NTC-${new Date().getUTCFullYear()}-${id.slice(0, 8).toUpperCase()}`;
-  return send(ctx, COMMANDS.noticeCreate, id, { ...body, noticeNo });
+  // When staff do not supply a noticeNo the CONSUMER allocates NTC-YYYY-NNNNNN from a Postgres
+  // sequence inside the insert transaction (shared/numbers.ts); a supplied one is passed through.
+  return send(ctx, COMMANDS.noticeCreate, id, { ...body });
 }
 export const publishNotice = (ctx: RequestContext, id: string): Promise<Accepted> => send(ctx, COMMANDS.noticePublish, id, {});
 export const withdrawNotice = (ctx: RequestContext, id: string): Promise<Accepted> => send(ctx, COMMANDS.noticeWithdraw, id, {});

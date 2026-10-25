@@ -49,7 +49,8 @@ const SHIFT_APPROVER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 export default async function ShiftRequestsPage() {
   const t = await getTranslations("shiftRequests");
-  const { data: items, source } = await getData();
+  // The list and the employee roster are independent: fetch them together, not one round trip after the other.
+  const [{ data: items, source }, { data: employees }] = await Promise.all([getData(), getEmployees()]);
   const roles = getSessionRoles();
   const canApprove = roles.some((r: string) => SHIFT_APPROVER_ROLES.includes(r));
 
@@ -59,7 +60,6 @@ export default async function ShiftRequestsPage() {
   // `employee` role is correctly 403'd from that endpoint and falls back to
   // their own self-service profile, so they get a prefilled form with the
   // employee picker hidden entirely.
-  const { data: employees } = await getEmployees();
   let prefillEmployeeId: string | undefined;
   let noLinkedProfile = false;
   if (employees.length === 0) {

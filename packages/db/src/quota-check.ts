@@ -61,11 +61,15 @@ const DEFAULT_QUOTA: TenantQuota = {
 
 const SKIP_PATHS = new Set(["/health", "/ready", "/metrics"]);
 
+/** CLOS3-S6-12: TTL for a cached FALLBACK quota (tenant-service unreachable) - short, so recovery is picked up fast. */
+const FALLBACK_QUOTA_CACHE_TTL_SECONDS = 5;
+
 async function fetchQuotaFromService(
   tenantServiceUrl: string,
   tenantId: string,
-): Promise<TenantQuota> {
+): Promise<{ quota: TenantQuota; fromFallback: boolean }> {
   const url = `${tenantServiceUrl}/v1/tenant/${tenantId}/quotas`;
+  const fallback = { quota: { ...DEFAULT_QUOTA, tenantId }, fromFallback: true };
   try {
     const res = await fetch(url, {
       headers: {
@@ -75,11 +79,11 @@ async function fetchQuotaFromService(
       },
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return { ...DEFAULT_QUOTA, tenantId };
-    return (await res.json()) as TenantQuota;
+    if (!res.ok) return fallback;
+    return { quota: (await res.json()) as TenantQuota, fromFallback: false };
   } catch {
     // On failure, fall back to defaults (don't block traffic)
-    return { ...DEFAULT_QUOTA, tenantId };
+    return fallback;
   }
 }
 
@@ -116,8 +120,14 @@ const quotaCheckPluginImpl: FastifyPluginAsync<QuotaCheckOptions> = async (fasti
       }
     }
     if (!quota) {
-      quota = await fetchQuotaFromService(tenantServiceUrl, tenantId);
-      await store.set(cacheKey, JSON.stringify(quota), quotaCacheTtlSeconds);
+      const fetched = await fetchQuotaFromService(tenantServiceUrl, tenantId);
+      quota = fetched.quota;
+      // A fallback is not authoritative: cache it only briefly (not 0, so an outage does not cost a 3s
+      // fetch on every request) so a recovered tenant-service's real quota is picked up promptly.
+      const ttl = fetched.fromFallback
+        ? Math.min(FALLBACK_QUOTA_CACHE_TTL_SECONDS, quotaCacheTtlSeconds)
+        : quotaCacheTtlSeconds;
+      await store.set(cacheKey, JSON.stringify(quota), ttl);
     }
 
     // 2. Sliding window rate check

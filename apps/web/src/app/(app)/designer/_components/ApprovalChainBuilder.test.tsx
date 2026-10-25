@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { emptyWorkflowDesign } from "../_data/workflowConstants";
 
@@ -55,6 +55,8 @@ vi.mock("@/app/_components/ds", () => ({
 }));
 
 import { ApprovalChainBuilder } from "./ApprovalChainBuilder";
+import { persistWorkflowDesign } from "../_data/workflowBuilderApi";
+import type { WorkflowDesignState } from "../_data/workflowConstants";
 
 describe("ApprovalChainBuilder B4 round-trip UX", () => {
   beforeEach(() => {
@@ -156,5 +158,56 @@ describe("ApprovalChainBuilder B4-02 per-lane escalation warning", () => {
     // GAP-DESIGNER-DETAIL-B4-02: no missing_escalation warning should appear
     // when all lanes have an escalation designation set.
     expect(screen.queryByText(/but no escalation designation is set/i)).not.toBeInTheDocument();
+  });
+});
+
+// CLOS3-S1-02: persistWorkflowDesign returns a NEW object (version+1) every call; feeding it back via
+// setDesign re-armed the autosave effect forever (PATCH every 2s, version climbing with no edits).
+describe("ApprovalChainBuilder CLOS3-S1-02 autosave settles", () => {
+  const advance = async (times: number) => {
+    for (let i = 0; i < times; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2100);
+      });
+    }
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.mocked(persistWorkflowDesign).mockImplementation(async (d: WorkflowDesignState) => ({ ...d, version: d.version + 1 }));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("does not keep re-saving an unedited draft", async () => {
+    const seen: number[] = [];
+    render(
+      <ApprovalChainBuilder
+        serviceName="T"
+        initial={{ ...emptyWorkflowDesign("T"), definitionId: "d1", version: 1 }}
+        onDesignPersisted={(d) => { seen.push(d.version); }}
+      />,
+    );
+    await advance(5);
+    expect(vi.mocked(persistWorkflowDesign).mock.calls.length).toBeLessThanOrEqual(1);
+    expect(seen.length).toBeLessThanOrEqual(1);
+    if (seen.length === 1) expect(seen[0]).toBe(2);
+  });
+
+  it("saves exactly once more after a lane edit", async () => {
+    render(
+      <ApprovalChainBuilder
+        serviceName="T"
+        initial={{ ...emptyWorkflowDesign("T"), definitionId: "d1", version: 1 }}
+      />,
+    );
+    await advance(5);
+    const before = vi.mocked(persistWorkflowDesign).mock.calls.length;
+    const input = screen.getAllByLabelText("Step name")[0] as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "Edited step" } });
+    await advance(5);
+    expect(vi.mocked(persistWorkflowDesign).mock.calls.length).toBe(before + 1);
   });
 });

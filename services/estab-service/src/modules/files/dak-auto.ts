@@ -34,8 +34,4 @@ export async function autoRegisterDak(
   return id;
 }
 
-export function generateDakNo(prefix: string): string {
-  const year = new Date().getFullYear();
-  const seq = String(Math.floor(Math.random() * 9000) + 1000);
-  return `${prefix}/${year}/${seq}`;
-}
+// Diary numbers for auto-registered DAK (MTG/YYYY/000123) come from a Postgres sequence: see shared/numbers.ts.

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { nextImportedDefinitionCode, recordFailedCreate } from "../../shared/numbers.js";
 import { subscribeWithDlq } from "../dlq/wrap.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { definitions, definitionEdges, definitionNodes } from "./schema.js";
@@ -71,10 +72,13 @@ export function registerDefinitionConsumers(queue: Queue): void {
   subscribeWithDlq<Payload>(queue, COMMANDS.importBpmnDefinition, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const p = msg.payload; const latest = await repo.findLatestVersionTx(tx, p.tenantId, p.code as string);
-      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code: p.code as string, name: p.name as string, version: (latest?.version ?? 0) + 1, status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId });
+      const p = msg.payload;
+      // Allocated here, inside the insert transaction: a retry re-runs nextval(), so it cannot collide.
+      const code = await nextImportedDefinitionCode(tx);
+      const latest = await repo.findLatestVersionTx(tx, p.tenantId, code);
+      await tx.insert(definitions).values({ id: p.id, tenantId: p.tenantId, code, name: p.name as string, version: (latest?.version ?? 0) + 1, status: "draft", createdBy: msg.actorId, updatedBy: msg.actorId });
       await repo.insertGraphTx(tx, p.id, p.nodes as never, p.edges as never);
       await emit(tx, msg, EVENTS.definitionBpmnImported, "bpmn_import", p.id);
     });
-  });
+  }, (msg, reason, attempt) => recordFailedCreate("bpmn_import", "definition", { messageId: msg.messageId, tenantId: msg.tenantId, status: "failed", reason: `${reason} (attempt ${attempt})` }));
 }

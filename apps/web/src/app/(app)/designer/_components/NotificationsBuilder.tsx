@@ -50,6 +50,8 @@ export function NotificationsBuilder({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
+  // CLOS3-S1-04: last design the server returned; skip autosave when nothing changed since.
+  const lastPersisted = useRef<NotificationsDesignState | null>(null);
 
   useEffect(() => {
     setSampleValues((prev) => ({ ...prev, service_name: serviceName }));
@@ -57,10 +59,12 @@ export function NotificationsBuilder({
 
   const schedulePersist = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
+    if (lastPersisted.current && JSON.stringify(lastPersisted.current) === JSON.stringify(latest.current)) return;
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
         const saved = await persistNotificationTemplates(latest.current, serviceKey);
+        lastPersisted.current = saved;
         setDesign(saved);
         onDesignPersisted?.(saved);
         onSaveState?.("saved");

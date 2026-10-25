@@ -13,6 +13,17 @@ export const INVENTORY_LEDGER_LIMIT = 500;
 /** stock-service ledger page ceiling (its ledgerQueryParams max); its default is only 100 (GAP-INVENTORY-RECONCILE-05). */
 export const STOCK_LEDGER_LIMIT = 500;
 
+/**
+ * Q37: "Showing 500 of 1,234 ..." when the service reported an exact total larger than the page;
+ * otherwise falls back to the generic cap note. Null when everything is on screen.
+ */
+export function totalNote(count: number, total: number | undefined, limit: number, noun: string): string | null {
+  if (typeof total === "number" && total > count) {
+    return `Showing ${count.toLocaleString("en-IN")} of ${total.toLocaleString("en-IN")} ${noun}.`;
+  }
+  return capNote(count, limit, noun);
+}
+
 /** Plain-language note for a register whose page is full, or null when it is not. */
 export function capNote(count: number, limit: number, noun: string): string | null {
   return count >= limit

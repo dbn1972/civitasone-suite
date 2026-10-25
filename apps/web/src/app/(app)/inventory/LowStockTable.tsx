@@ -6,7 +6,7 @@ import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_componen
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryLowStockRow } from "./_data";
-import { LOW_STOCK_LIMIT, capNote } from "./_limits";
+import { LOW_STOCK_LIMIT, totalNote } from "./_limits";
 import { lowStockSeverity, nameOrDash, raiseIndentHref } from "./_labels";
 
 /** The row plus a render-only `action` column, which has no data of its own. */
@@ -47,7 +47,7 @@ const columns: Col[] = [
   },
 ];
 
-export function LowStockTable({ rows: initial, source = "api" }: { rows: InventoryLowStockRow[]; source?: "api" | "error" }) {
+export function LowStockTable({ rows: initial, source = "api", total }: { rows: InventoryLowStockRow[]; source?: "api" | "error"; total?: number }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryLowStockRow[]>(
     "inventory.low-stock",
     initial,
@@ -64,7 +64,7 @@ export function LowStockTable({ rows: initial, source = "api" }: { rows: Invento
           <StatCard icon="🛒" tone="warn" label="Total Suggested Reorder" value={statValue(provenance, totalSuggested)} />
       </StatGrid>
       <Card title="Low Stock Items">
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts" capNote={capNote(rows.length, LOW_STOCK_LIMIT, "low-stock items (most urgent first)")}>
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts" capNote={totalNote(rows.length, total, LOW_STOCK_LIMIT, "low-stock items (most urgent first)")}>
           <DataTable<Row>
             columns={columns}
             rows={rows}

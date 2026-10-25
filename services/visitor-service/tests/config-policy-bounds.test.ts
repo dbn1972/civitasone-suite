@@ -32,6 +32,23 @@ describe("visitor_policy value bounds", () => {
   ])("accepts %s = %j", (k, v) => {
     expect(setConfigBody.safeParse(body(k, v)).success).toBe(true);
   });
+  it.each(["retention.pii_day", "max_lead_days", "turnstile.unknown", "", "RETENTION.PII_DAYS", "constructor", "__proto__"])(
+    "Q29: rejects the unknown visitor_policy key %j",
+    (k) => {
+      const r = setConfigBody.safeParse(body(k || "x", 30));
+      expect(r.success).toBe(false);
+      if (!r.success && k) expect(r.error.issues.some((i) => /unknown visitor_policy key/.test(i.message) || i.path.includes("configKey"))).toBe(true);
+    },
+  );
+  it("Q29: accepts every key in the registry (numeric and boolean)", () => {
+    for (const k of Object.keys(POLICY_NUMBER_BOUNDS)) {
+      expect(setConfigBody.safeParse(body(k, POLICY_NUMBER_BOUNDS[k]!.min)).success, k).toBe(true);
+    }
+    for (const k of POLICY_BOOLEAN_KEYS) expect(setConfigBody.safeParse(body(k, true)).success, k).toBe(true);
+  });
+  it("Q29: unknown keys remain free-form outside visitor_policy", () => {
+    expect(setConfigBody.safeParse(body("anything.goes", 1, "visitor_approval")).success).toBe(true);
+  });
   it("only constrains the visitor_policy namespace (approval categories keep free-form values)", () => {
     expect(setConfigBody.safeParse(body("retention.pii_days", 999999, "visitor_approval")).success).toBe(true);
     expect(setConfigBody.safeParse(body("vip", { autoApprove: true }, "visitor_approval")).success).toBe(true);

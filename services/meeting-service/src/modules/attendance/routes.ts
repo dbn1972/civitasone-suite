@@ -44,7 +44,7 @@ import {
   meetingIdParam,
   attendanceQueryParams,
 } from "./validators.js";
-import { generateMeetingQrToken, verifyMeetingQrToken } from "./domain.js";
+import { generateMeetingQrToken, verifyMeetingQrToken, participantDisplayName } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { resolveUserNames } from "../../shared/identity-client.js";
@@ -152,11 +152,15 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // Rows carry only employeeId; resolve display names from identity-service so
     // a secretary does not run attendance against raw UUIDs. Best-effort: an
     // unresolved id keeps displayName null and the web falls back to the id.
-    const names = await resolveUserNames(ctx.tenantId, dashboard.participants.map((p) => p.employeeId));
+    // participants.employeeId is assumed to be an identity user id (Q13); if it is not, the lookup
+    // simply finds nothing and the row degrades to the raw id / "Unknown participant" — never a 500.
+    const names = await resolveUserNames(ctx.tenantId, dashboard.participants.map((p) => p.employeeId)).catch(
+      () => new Map<string, string>(),
+    );
     return reply.send({
       data: {
         ...dashboard,
-        participants: dashboard.participants.map((p) => ({ ...p, displayName: names.get(p.employeeId) ?? null })),
+        participants: dashboard.participants.map((p) => ({ ...p, displayName: participantDisplayName(names, p.employeeId) })),
       },
     });
   });

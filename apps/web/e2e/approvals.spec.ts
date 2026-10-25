@@ -65,6 +65,12 @@ test.describe('Approvals', () => {
     await expect(pager).toContainText('Page 1');
     await expect(pager.getByRole('link', { name: /Previous/ })).toHaveCount(0);
     await expect(pager.getByRole('link', { name: /Next/ })).toHaveAttribute('href', '/approvals?page=2');
+    // Client-side Next: the table must swap to the page-2 rows, not keep page 1 rows.
+    await pager.getByRole('link', { name: /Next/ }).click();
+    await expect(page).toHaveURL(/\/approvals\?page=2/);
+    await expect(page.getByText('Showing 16–17 of 17.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Estab file movement 13' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Leave approval - Ravi Kumar' })).toHaveCount(0);
     // A full load of page 2: the API is asked for offset 15 and answers the last two tasks.
     await page.goto('/approvals?page=2');
     await expect(pager).toContainText('Page 2');

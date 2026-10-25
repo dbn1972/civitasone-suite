@@ -1,17 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
+import { allocateModuleFileNo } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import type { FileFromModuleBody } from "./validators.js";
 
 export type Accepted = { id: string; fileNo: string; status: string; correlationId: string };
 
-function nextFileNo(refType: string): string {
-  const year = new Date().getFullYear();
-  const prefix = refType.split("_")[0]?.toUpperCase().slice(0, 3) ?? "GEN";
-  const seq = String(Math.floor(Math.random() * 9000) + 1000);
-  return `${prefix}/${year}/${seq}`;
-}
 
 /**
  * Any module raises an eFile for formal approval.
@@ -23,7 +18,10 @@ export async function raiseFileFromModule(
   body: FileFromModuleBody & { initiatedBy: string },
 ): Promise<Accepted> {
   const id = randomUUID();
-  const fileNo = nextFileNo(body.refType);
+  // The file number is part of the 202 body (the web UI shows it), so it is drawn from a Postgres SEQUENCE here
+  // rather than in the consumer. A sequence value is unique by construction and a replayed command carries its
+  // own number, so a retry can never collide (unlike the old random 4-digit suffix).
+  const fileNo = await allocateModuleFileNo(body.refType);
 
   await queue.publish(COMMANDS.fileFromModule, {
     messageId: id,

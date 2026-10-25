@@ -50,19 +50,7 @@ export function assertRequestTransition(current: string, target: string): void {
   }
 }
 
-// ── Number Generators ─────────────────────────────────────────────────────
-
-export function generateLeaseNumber(): string {
-  const ts = Date.now().toString(36).toUpperCase();
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `LS-${ts}-${rand}`;
-}
-
-export function generateRequestNumber(): string {
-  const ts = Date.now().toString(36).toUpperCase();
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `LR-${ts}-${rand}`;
-}
+// Lease (LS-YYYY-000123) and lease-request (LR-YYYY-000123) numbers come from Postgres sequences: see shared/numbers.ts.
 
 // ── Late Fee ──────────────────────────────────────────────────────────────
 

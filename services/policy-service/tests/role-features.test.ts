@@ -77,7 +77,7 @@ describe("POST /v1/policy/role-features", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/role-features",
       headers: authHeader(["super_admin"]),
-      payload: { roleName: "finance_clerk", featureKey: "finance.dashboard", granted: true },
+      payload: { roleName: "finance_clerk", featureKey: "finance.dashboard", granted: true, reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
     const body = res.json();
@@ -89,7 +89,7 @@ describe("POST /v1/policy/role-features", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/role-features",
       headers: authHeader(["tenant_admin"]),
-      payload: { roleName: "hr_admin", featureKey: "hrms.employees" },
+      payload: { roleName: "hr_admin", featureKey: "hrms.employees", reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
   });
@@ -116,16 +116,27 @@ describe("POST /v1/policy/role-features", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/role-features",
       headers: authHeader(["super_admin"]),
-      payload: { roleName: "", featureKey: "finance.dashboard" },
+      payload: { roleName: "", featureKey: "finance.dashboard", reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  it("Q28: returns 400 when the grant reason is missing, blank or under 5 chars", async () => {
+    for (const extra of [{}, { reason: "" }, { reason: "     " }, { reason: "abcd" }]) {
+      const res = await app.inject({
+        method: "POST", url: "/v1/policy/role-features",
+        headers: authHeader(["super_admin"]),
+        payload: { roleName: "hr_admin", featureKey: "hrms.employees", ...extra },
+      });
+      expect(res.statusCode).toBe(400);
+    }
   });
 
   it("returns 403 for employee", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/policy/role-features",
       headers: authHeader(["employee"]),
-      payload: { roleName: "hr_admin", featureKey: "hrms.employees" },
+      payload: { roleName: "hr_admin", featureKey: "hrms.employees", reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
   });
@@ -139,8 +150,20 @@ describe("DELETE /v1/policy/role-features/:id", () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/policy/role-features/${VALID_UUID}`,
       headers: authHeader(["super_admin"]),
+      payload: { reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  it("Q28: returns 400 when the revoke reason is missing, blank or under 5 chars", async () => {
+    for (const payload of [undefined, {}, { reason: "" }, { reason: "    " }, { reason: "abcd" }]) {
+      const res = await app.inject({
+        method: "DELETE", url: `/v1/policy/role-features/${VALID_UUID}`,
+        headers: authHeader(["super_admin"]),
+        ...(payload ? { payload } : {}),
+      });
+      expect(res.statusCode).toBe(400);
+    }
   });
 
   it("returns 400 with invalid uuid", async () => {
@@ -155,6 +178,7 @@ describe("DELETE /v1/policy/role-features/:id", () => {
     const res = await app.inject({
       method: "DELETE", url: `/v1/policy/role-features/${VALID_UUID}`,
       headers: authHeader(["employee"]),
+      payload: { reason: "access review for audit" },
     });
     expect(res.statusCode).toBe(403);
   });

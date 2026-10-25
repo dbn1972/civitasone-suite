@@ -51,13 +51,26 @@ export function isKeycloakEnabled(): boolean {
   return readConfig() !== null;
 }
 
+const DEFAULT_KC_TIMEOUT_MS = 10_000;
+
+/** Per-request timeout so a hung Keycloak cannot stall provisioning or the reconciler tick (CLOS3-S5-12). */
+function kcTimeoutMs(): number {
+  const n = Number(process.env.KEYCLOAK_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_KC_TIMEOUT_MS;
+}
+
+/** fetch with an AbortSignal timeout; the aborts surface as rejections the callers' try/catch already map to { ok:false }. */
+function kcFetch(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(kcTimeoutMs()) });
+}
+
 // Cached admin token (Keycloak access tokens are short-lived; cache with margin).
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
 async function getAdminToken(cfg: KcConfig): Promise<string> {
   const now = Date.now();
   if (tokenCache && tokenCache.expiresAt > now + 5000) return tokenCache.token;
-  const res = await fetch(`${cfg.url}/realms/${cfg.adminRealm}/protocol/openid-connect/token`, {
+  const res = await kcFetch(`${cfg.url}/realms/${cfg.adminRealm}/protocol/openid-connect/token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -94,7 +107,7 @@ function kcUsername(tenantId: string, email: string): string {
  */
 async function findUser(cfg: KcConfig, token: string, tenantId: string, email: string): Promise<{ id: string; enabled: boolean } | null> {
   const username = kcUsername(tenantId, email);
-  const res = await fetch(
+  const res = await kcFetch(
     `${cfg.url}/admin/realms/${cfg.realm}/users?username=${encodeURIComponent(username)}&exact=true`,
     { headers: { authorization: `Bearer ${token}` } },
   );
@@ -122,7 +135,7 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
     const existing = await findUser(cfg, token, u.tenantId, u.email);
     if (existing) return { ok: true, kcUserId: existing.id, reason: "already exists" };
     const [firstName, ...rest] = u.name.trim().split(/\s+/);
-    const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users`, {
+    const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({
@@ -196,7 +209,7 @@ export async function assignRealmRoles(
 
     const resolved: Array<{ id: string; name: string }> = [];
     for (const name of roleNames) {
-      const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, {
+      const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, {
         headers: { authorization: `Bearer ${token}` },
       });
       if (res.status === 200) {
@@ -212,7 +225,7 @@ export async function assignRealmRoles(
       return { ok: false, reason: "none of the requested roles exist in the realm catalog" };
     }
 
-    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm`, {
+    const upd = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(resolved),
@@ -249,14 +262,14 @@ export async function deactivateUser(tenantId: string, email: string, log?: { wa
     const token = await getAdminToken(cfg);
     const existing = await findUser(cfg, token, tenantId, email);
     if (!existing) return { ok: true, reason: "user not present in keycloak" };
-    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+    const upd = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ enabled: false }),
     });
     if (!upd.ok && upd.status !== 204) throw new Error(`keycloak disable failed: ${upd.status}`);
     // Logout all sessions.
-    await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, {
+    await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
     });
@@ -282,7 +295,7 @@ export async function deactivateUser(tenantId: string, email: string, log?: { wa
       return provisionUser(u, log);
     }
     if (existing.enabled !== u.active) {
-      const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+      const upd = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
         method: "PUT",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
         body: JSON.stringify({ enabled: u.active }),
@@ -322,7 +335,7 @@ export async function requestPasswordReset(tenantId: string, email: string, log?
     const existing = await findUser(cfg, token, tenantId, email);
     if (!existing) return { ok: true, reason: "user not present in keycloak" };
     // 1) Force a password change on next login by setting the required action.
-    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+    const upd = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ requiredActions: ["UPDATE_PASSWORD"] }),
@@ -331,7 +344,7 @@ export async function requestPasswordReset(tenantId: string, email: string, log?
     // 2) Best-effort: email the user the reset/update-password action link. A
     //    failure here (e.g. SMTP not configured in the realm) must not fail the
     //    reset — the required action above still enforces the change at login.
-    await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/execute-actions-email`, {
+    await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/execute-actions-email`, {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify(["UPDATE_PASSWORD"]),
@@ -358,7 +371,7 @@ export async function enableUser(tenantId: string, email: string, log?: KcLog): 
     const existing = await findUser(cfg, token, tenantId, email);
     if (!existing) return { ok: false, reason: "user not present in keycloak" };
     if (existing.enabled) return { ok: true, kcUserId: existing.id, reason: "already enabled" };
-    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
+    const upd = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}`, {
       method: "PUT",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({ enabled: true }),
@@ -392,7 +405,7 @@ export async function replaceRealmRoles(
     const lookup = async (names: string[]) => {
       const out: Array<{ id: string; name: string }> = [];
       for (const name of names) {
-        const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, { headers: { authorization: `Bearer ${token}` } });
+        const res = await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, { headers: { authorization: `Bearer ${token}` } });
         if (res.status === 200) out.push((await res.json()) as { id: string; name: string });
         else if (res.status !== 404) throw new Error(`keycloak role lookup failed: ${res.status} (role=${name})`);
       }
@@ -402,15 +415,15 @@ export async function replaceRealmRoles(
     const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
     const toRemove = await lookup(remove);
     if (toRemove.length > 0) {
-      const del = await fetch(mapping, { method: "DELETE", headers, body: JSON.stringify(toRemove) });
+      const del = await kcFetch(mapping, { method: "DELETE", headers, body: JSON.stringify(toRemove) });
       if (!del.ok && del.status !== 204) throw new Error(`keycloak role-mapping remove failed: ${del.status}`);
     }
     const toAdd = await lookup(add);
     if (toAdd.length > 0) {
-      const post = await fetch(mapping, { method: "POST", headers, body: JSON.stringify(toAdd) });
+      const post = await kcFetch(mapping, { method: "POST", headers, body: JSON.stringify(toAdd) });
       if (!post.ok && post.status !== 204) throw new Error(`keycloak role-mapping assign failed: ${post.status}`);
     }
-    await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
+    await kcFetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/logout`, { method: "POST", headers: { authorization: `Bearer ${token}` } });
     return { ok: true, kcUserId: existing.id };
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_role_replace_failed", tenantId: u.tenantId, email: u.email });

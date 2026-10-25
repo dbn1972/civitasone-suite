@@ -527,7 +527,10 @@ export function ImportForm({
             .filter((b) => latest.get(b.batchId)?.status !== "completed" && !unconfirmable.has(b.batchId))
             .map(async (b) => {
               try {
-                const res = await fetch(`/api/proxy/v1/hrms/employees/bulk/status/${encodeURIComponent(b.batchId)}`);
+                // Bound each request by the remaining poll budget: a hung request must not stall the deadline check.
+                const res = await fetch(`/api/proxy/v1/hrms/employees/bulk/status/${encodeURIComponent(b.batchId)}`, {
+                  signal: AbortSignal.timeout(Math.max(1, Math.min(10_000, deadline - Date.now()))),
+                });
                 if (res.status === 404) {
                   // Not recorded YET (see DEFAULT_NOT_RECORDED_GRACE_MS) -> keep polling; past the grace -> unconfirmable.
                   if (Date.now() - acceptedAt >= notRecordedGraceMs) unconfirmable.add(b.batchId);

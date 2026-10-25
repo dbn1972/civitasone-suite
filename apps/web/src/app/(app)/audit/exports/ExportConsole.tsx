@@ -78,8 +78,11 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
   // CLOS-S1-14: hold the toast dismiss timer so a newer toast is not cleared
   // early by an older toast's timer, and nothing fires after unmount.
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // CLOS3-S1-05: id of the export currently being polled; a late reply for any other id is ignored.
+  const activeJobRef = useRef<string | null>(null);
 
   const stopPolling = useCallback(() => {
+    activeJobRef.current = null;
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
@@ -155,6 +158,7 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
         // there is nothing to build here, human-safe or otherwise.
         if (!res.ok) return;
         const body = (await res.json()) as { data: ExportStatus };
+        if (activeJobRef.current !== id) return;
         setJob(body.data);
         if (TERMINAL.has(body.data.status)) {
           stopPolling();
@@ -171,6 +175,7 @@ export function ExportConsole({ canExportPii = false }: { canExportPii?: boolean
   const startPolling = useCallback(
     (id: string) => {
       stopPolling();
+      activeJobRef.current = id;
       setPolling(true);
       try {
         window.sessionStorage.setItem(RESUME_KEY, id);

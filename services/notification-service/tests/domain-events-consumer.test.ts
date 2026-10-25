@@ -67,9 +67,9 @@ describe("domain-events templates", () => {
     }
   });
 
-  it("getRegisteredEventTypes returns all 21 event types", () => {
+  it("getRegisteredEventTypes returns all 23 event types", () => {
     const types = getRegisteredEventTypes();
-    expect(types).toHaveLength(21);
+    expect(types).toHaveLength(23);
     expect(types).toContain("hrms.leave.approved");
     expect(types).toContain("audit.para.issued");
     // Visitor security/safety events wired into the notification choreography.

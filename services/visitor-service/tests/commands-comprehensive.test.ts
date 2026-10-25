@@ -273,7 +273,7 @@ describe("config-registry/commands", () => {
   beforeEach(async () => { mod = await import("../src/modules/config-registry/commands.js"); });
 
   it("setConfig publishes correct topic", async () => {
-    await mod.setConfig(CTX as never, { namespace: "visitor_policy", configKey: "auto_approve", value: "vip" } as never);
+    await mod.setConfig(CTX as never, { namespace: "visitor_policy", configKey: "retention.pii_days", value: 90 } as never);
     expect(publishMock).toHaveBeenCalledWith(COMMANDS.setConfig, expect.objectContaining({ type: COMMANDS.setConfig }));
   });
 

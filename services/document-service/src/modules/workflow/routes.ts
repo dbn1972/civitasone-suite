@@ -40,7 +40,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const body = createDakBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, commands.createDak(ctx, body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createDak(ctx, body));
   });
 
   app.get("/v1/documents/daks", async (req, reply) => {
@@ -73,7 +73,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const body = forwardDakBody.parse(req.body);
     await loadHandleable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.forwardDak(ctx, id, body.assignedTo, isAdmin(ctx)));
   });
 
   app.post("/v1/documents/daks/:id/acknowledge", async (req, reply) => {
@@ -81,7 +81,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     await loadHandleable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.acknowledgeDak(ctx, id, isAdmin(ctx)));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.acknowledgeDak(ctx, id, isAdmin(ctx)));
   });
 
   // Notings
@@ -100,7 +100,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const body = createNotingBody.parse(req.body);
     await loadReadable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.createNoting(ctx, id, body.body));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createNoting(ctx, id, body.body));
   });
 
   // Approvals
@@ -109,7 +109,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     await loadReadable(ctx, id);
-    return sendAccepted(reply, acceptedResponseSchema, commands.submitApproval(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.submitApproval(ctx, id));
   });
 
   app.post("/v1/documents/approvals/:id/decide", async (req, reply) => {
@@ -130,7 +130,7 @@ export async function workflowRoutes(app: FastifyInstance): Promise<void> {
     if (approval.status !== "pending") {
       throw new HttpError(409, "CONFLICT", "approval already decided");
     }
-    return sendAccepted(reply, acceptedResponseSchema, commands.decideApproval(ctx, id, body.decision, body.remarks ?? null, isAdmin(ctx)));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.decideApproval(ctx, id, body.decision, body.remarks ?? null, isAdmin(ctx)));
   });
 
   // Dashboard stats

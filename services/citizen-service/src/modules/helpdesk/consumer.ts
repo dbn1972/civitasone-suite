@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import { computeSlaDueAt, computeSlaStatus } from "./sla.js";
 import type { TicketRow } from "./schema.js";
@@ -25,7 +26,8 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertTicket(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId,
-        ticketNo: p.ticketNo ?? `HD-${p.id.slice(0, 8).toUpperCase()}`,
+        // The route allocates and returns ticketNo in the 202 ack; a payload without one (older publisher) gets a sequence number here.
+        ticketNo: p.ticketNo ?? (await nextNumber(tx, "ticket_no")),
         subject: p.subject, description: p.description, status: "open",
         priority, category: p.category ?? "general", channel: p.channel ?? "web",
         requesterName: p.requesterName ?? null,
@@ -35,7 +37,7 @@ export function registerHelpdeskConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "create", "citizen_ticket", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "ticket", p.id));
-  });
+  }, auditFailedCreate("create", "citizen_ticket"));
 
   queue.subscribe(COMMANDS.ticketNote, async (msg) => {
     const p = msg.payload as { id: string; ticketId: string; tenantId: string; body: string; isInternal?: boolean };

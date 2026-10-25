@@ -54,13 +54,12 @@ describe("notificationBuilderApi — persistNotificationTemplates stays best-eff
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("does not throw and returns the matrix unchanged when the template list call fails", async () => {
+  it("rejects (so the builder shows offline, not saved) when the template list call fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     let matrix = seedMatrixForPattern("certificate");
     matrix = disableCell(matrix, "submitted", "sms");
 
-    const result = await persistNotificationTemplates({ matrix }, "svc-1");
-    expect(result.matrix).toEqual(matrix);
+    await expect(persistNotificationTemplates({ matrix }, "svc-1")).rejects.toThrow(/unavailable/);
   });
 
   it("does not throw when the template list loads but the create call fails", async () => {
@@ -76,5 +75,41 @@ describe("notificationBuilderApi — persistNotificationTemplates stays best-eff
     const matrix = seedMatrixForPattern("certificate");
 
     await expect(persistNotificationTemplates({ matrix }, "svc-1")).resolves.toBeTruthy();
+  });
+});
+
+// CLOS3-S1-09: a non-OK template list used to be treated as "no templates exist", so every enabled
+// cell POSTed a duplicate template under the same name.
+describe("notificationBuilderApi — persistNotificationTemplates with an unreadable template list (CLOS3-S1-09)", () => {
+  const fetchMock = vi.fn();
+  const design = {
+    matrix: { submitted: { email: { enabled: true, body: { en: "Hello" } } } },
+  } as unknown as Parameters<typeof persistNotificationTemplates>[0];
+  const writes = () => fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method);
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("creates nothing and rejects so the caller can show offline when the list answers 503", async () => {
+    fetchMock.mockImplementation(async (_i: RequestInfo | URL, init?: RequestInit) =>
+      init?.method ? new Response(JSON.stringify({ id: "new" }), { status: 200 }) : new Response("", { status: 503 }),
+    );
+    await expect(persistNotificationTemplates(design, "k")).rejects.toThrow(/unavailable/);
+    expect(writes()).toHaveLength(0);
+  });
+
+  it("still creates the template when the list is readable and empty", async () => {
+    fetchMock.mockImplementation(async (_i: RequestInfo | URL, init?: RequestInit) =>
+      init?.method
+        ? new Response(JSON.stringify({ id: "new" }), { status: 200 })
+        : new Response(JSON.stringify([]), { status: 200 }),
+    );
+    await persistNotificationTemplates(design, "k");
+    const w = writes();
+    expect(w).toHaveLength(1);
+    expect((w[0][1] as RequestInit).method).toBe("POST");
   });
 });

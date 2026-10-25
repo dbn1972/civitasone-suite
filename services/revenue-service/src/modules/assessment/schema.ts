@@ -63,6 +63,9 @@ export const dcbEntries = assessmentSchema.table("dcb_entries", {
   referenceId:    uuid("reference_id"), // receipt/refund/adjustment/writeoff ID
   referenceType:  varchar("reference_type", { length: 24 }), // receipt, refund, adjustment, write_off
   narration:      text("narration"),
+  // Q19: explicit leg of an adjustment pair (credit | debit); NULL for every
+  // other entry type. Replaces parsing the narration text.
+  adjustmentDirection: varchar("adjustment_direction", { length: 8 }).$type<"credit" | "debit">(),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
 });

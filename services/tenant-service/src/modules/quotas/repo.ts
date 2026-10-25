@@ -1,7 +1,7 @@
 /**
  * quotas repo — Drizzle queries against `quotas.*` ONLY (L2).
  */
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { quotas, type QuotaRow, type QuotaInsert } from "./schema.js";
 
@@ -79,6 +79,27 @@ export async function insert(tx: Writer, row: QuotaInsert): Promise<void> {
 
 export async function update(tx: Writer, id: string, patch: Partial<QuotaInsert>): Promise<void> {
   await tx.update(quotas).set({ ...patch, updatedAt: new Date() }).where(eq(quotas.id, id));
+}
+
+/**
+ * CLOS3-S6-04 — atomic increment. `used` is computed IN the UPDATE (GREATEST(0, used + delta)),
+ * so Postgres row-locks the row and concurrent increments serialise; the second re-evaluates against
+ * the committed value instead of overwriting it with a stale JS-side sum. Returns the committed
+ * used/limit (RETURNING), or null if the row does not exist.
+ */
+export async function incrementUsed(
+  tx: Writer, id: string, delta: number, updatedBy: string,
+): Promise<{ used: number; limit: number } | null> {
+  const rows = await tx.update(quotas)
+    .set({
+      used: sql`GREATEST(0, ${quotas.used} + ${delta})`,
+      version: sql`${quotas.version} + 1`,
+      updatedBy,
+      updatedAt: new Date(),
+    })
+    .where(eq(quotas.id, id))
+    .returning({ used: quotas.used, limit: quotas.limit });
+  return rows[0] ?? null;
 }
 
 export async function findByIdTx(tx: Writer, id: string): Promise<QuotaView | null> {

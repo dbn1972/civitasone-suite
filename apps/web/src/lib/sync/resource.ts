@@ -79,7 +79,13 @@ export function useOfflineResource<TApi, T>(
       setError(null);
 
       // 1) instant paint from cache.
-      const cached = await readCache<T>(cacheKey);
+      // Unavailable storage (private mode, blocked IndexedDB) is a cache miss, not a fatal error (CLOS3-S3-08).
+      let cached: Awaited<ReturnType<typeof readCache<T>>> = null;
+      try {
+        cached = await readCache<T>(cacheKey);
+      } catch {
+        /* unavailable storage = cache miss */
+      }
       if (active && cached) {
         setData(cached.value);
         setCachedAt(cached.cachedAt);
@@ -111,7 +117,12 @@ export function useOfflineResource<TApi, T>(
         setData(mapped);
         setSource("live");
         setCachedAt(null);
-        await writeCache(cacheKey, mapped);
+        // Cache persistence is best-effort; the live data is already shown (CLOS3-S3-09).
+        try {
+          await writeCache(cacheKey, mapped);
+        } catch {
+          /* quota / blocked storage: ignore */
+        }
       } catch {
         // Network failed mid-session: fall back to cache if we have it.
         if (active) {
@@ -245,11 +256,20 @@ export function useSeededResource<T>(
         setData(initialData);
         setFromCache(false);
         setProvenance("live");
-        await writeCache(cacheKey, initialData);
+        try {
+          await writeCache(cacheKey, initialData);
+        } catch {
+          /* cache unavailable: ignore, live data already rendered (CLOS3-S3-10) */
+        }
         return;
       }
       // Server FAILED (error) — fall back to the cached copy if one exists.
-      const cached = await readCache<T>(cacheKey);
+      let cached: Awaited<ReturnType<typeof readCache<T>>> = null;
+      try {
+        cached = await readCache<T>(cacheKey);
+      } catch {
+        /* treat as cache miss (CLOS3-S3-10) */
+      }
       const cacheHit = Boolean(active && cached && !isEmpty(cached.value));
       if (cacheHit && cached) {
         setData(cached.value);

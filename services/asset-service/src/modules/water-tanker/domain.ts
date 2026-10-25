@@ -11,13 +11,6 @@ export function assertTransition(from: string, to: string): void {
   }
 }
 
-let bookingSeq = 0;
-export function generateBookingNumber(): string {
-  bookingSeq += 1;
-  const ts = Date.now().toString(36).toUpperCase();
-  return `WT-${ts}-${String(bookingSeq).padStart(4, "0")}`;
-}
-
 const CAPACITY_FEES: Record<number, bigint> = {
   5000:  500_00n,
   10000: 900_00n,

@@ -55,6 +55,7 @@ let app: FastifyInstance;
 let db: typeof import("../src/shared/db.js")["db"];
 let sqlClient: typeof import("../src/shared/db.js")["sqlClient"];
 let auditExports: typeof import("../src/modules/exports/schema.js")["auditExports"];
+let downloadRedemptions: typeof import("../src/modules/exports/schema.js")["downloadRedemptions"];
 let registerAuditConsumers: typeof import("../src/modules/events/consumer.js")["registerAuditConsumers"];
 let registerExportConsumers: typeof import("../src/modules/exports/consumer.js")["registerExportConsumers"];
 
@@ -66,7 +67,7 @@ beforeAll(async () => {
   app = await buildApp();
 
   ({ db, sqlClient } = await import("../src/shared/db.js"));
-  ({ auditExports } = await import("../src/modules/exports/schema.js"));
+  ({ auditExports, downloadRedemptions } = await import("../src/modules/exports/schema.js"));
   ({ registerAuditConsumers } = await import("../src/modules/events/consumer.js"));
   ({ registerExportConsumers } = await import("../src/modules/exports/consumer.js"));
 
@@ -109,6 +110,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await runWithTenant(TENANT, () =>
+    db.transaction((tx) => tx.delete(downloadRedemptions).where(eq(downloadRedemptions.tenantId, TENANT))),
+  ).catch(() => {});
   await runWithTenant(TENANT, () =>
     db.transaction((tx) => tx.delete(auditExports).where(eq(auditExports.tenantId, TENANT))),
   ).catch(() => {});
@@ -301,6 +305,53 @@ describe("GET /v1/audit/exports/:id/download", () => {
     expect(res.payload).toBe(onDisk);
   });
 
+  // Q34: the query-string token is single-use. Each case mints its own token (a
+  // distinct expiry second) so the shared `downloadToken` above is not consumed.
+  const freshToken = (offsetSec: number) =>
+    mintDownloadToken({ exportId, tenantId: TENANT, actorId: ACTOR }, Date.now() + offsetSec * 1000).token;
+  const dl = (t: string, jwt: string) =>
+    app.inject({
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${t}`,
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+
+  it("Q34: a successful download sends Referrer-Policy: no-referrer and no-store", async () => {
+    const res = await dl(freshToken(61), token(["audit_officer"], TENANT, ACTOR));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["referrer-policy"]).toBe("no-referrer");
+    expect(res.headers["cache-control"]).toBe("no-store");
+  });
+
+  it("Q34: the same token cannot be used twice (replay is 410 TOKEN_USED)", async () => {
+    const t = freshToken(62);
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const first = await dl(t, jwt);
+    expect(first.statusCode).toBe(200);
+    const second = await dl(t, jwt);
+    expect(second.statusCode).toBe(410);
+    expect(second.json().code).toBe("TOKEN_USED");
+    expect(second.payload).not.toContain(t);
+  });
+
+  it("Q34: a refused attempt does not burn the token (wrong role, then the right one succeeds)", async () => {
+    const t = freshToken(63);
+    const denied = await dl(t, token(["employee"], TENANT, ACTOR));
+    expect(denied.statusCode).toBe(403);
+    const ok = await dl(t, token(["audit_officer"], TENANT, ACTOR));
+    expect(ok.statusCode).toBe(200);
+  });
+
+  it("Q34: only a hash of the redeemed token is stored, never the token", async () => {
+    const t = freshToken(64);
+    expect((await dl(t, token(["audit_officer"], TENANT, ACTOR))).statusCode).toBe(200);
+    const rows = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => tx.select().from(downloadRedemptions).where(eq(downloadRedemptions.exportId, exportId))),
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => /^[0-9a-f]{64}$/.test(r.tokenSha256) && r.tokenSha256 !== t)).toBe(true);
+    expect(rows.every((r) => r.redeemedBy === ACTOR)).toBe(true);
+  });
+
   it("404 for a caller in a different tenant, even with an EXPORT_ROLES role and the correct token", async () => {
     const jwt = token(["audit_admin"], OTHER_TENANT, OTHER_ACTOR);
     const res = await app.inject({
@@ -409,9 +460,11 @@ describe("GAP-AUDIT-EXPORTS-07 — each export mutation writes exactly one audit
     );
     expect(rows[0]!.downloadToken).toBeNull();
     expect(rows[0]!.signedUrl).not.toContain("token=");
-    // 2) The requester can download with the minted token.
+    // 2) The requester can download with a freshly minted token (single-use: the
+    //    shared `downloadToken` was already spent by the earlier download tests).
+    const mine = mintDownloadToken({ exportId, tenantId: TENANT, actorId: ACTOR }, Date.now() + 90_000).token;
     const ok = await app.inject({
-      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${mine}`,
       headers: { authorization: `Bearer ${jwt}` },
     });
     expect(ok.statusCode).toBe(200);
@@ -419,7 +472,7 @@ describe("GAP-AUDIT-EXPORTS-07 — each export mutation writes exactly one audit
     // 3) Replay by ANOTHER reader in the same tenant with the leaked token is rejected.
     const other = token(["audit_admin"], TENANT, randomUUID());
     const replay = await app.inject({
-      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+      method: "GET", url: `/v1/audit/exports/${exportId}/download?token=${mine}`,
       headers: { authorization: `Bearer ${other}` },
     });
     expect(replay.statusCode).toBe(403);

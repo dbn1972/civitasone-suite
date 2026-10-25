@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createStageBody, idParam, stagesListSchema, stepVerbParam } from "./validators.js";
+import { createStageBody, idParam, stagesListSchema, stepVerbParam, stepVerbBody } from "./validators.js";
 import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
 import * as commands from "./commands.js";
 import * as domainPackCommands from "./domain-pack-commands.js";
@@ -125,12 +125,16 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry) */
+  /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry, complete, fail) */
   app.patch("/v1/install/steps/:id/:verb", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, MUTATE_ROLES);
     const { id, verb } = stepVerbParam.parse(req.params);
-    sendAccepted(reply, acceptedResponseSchema, await commands.transitionStage(ctx, id, verb));
+    const { remarks } = stepVerbBody.parse(req.body ?? {});
+    if (verb === "fail" && !remarks) {
+      throw new HttpError(400, "VALIDATION_FAILED", "remarks are required to mark a step failed");
+    }
+    sendAccepted(reply, acceptedResponseSchema, await commands.transitionStage(ctx, id, verb, verb === "fail" || verb === "complete" ? remarks : undefined));
   });
 
   app.setErrorHandler((err, req, reply) => {

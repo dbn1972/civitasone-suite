@@ -179,19 +179,19 @@ export async function listFundReleaseSummaries(tenantId: string, limit: number) 
     cache.makeKey(tenantId, "fund_releases", `list:${limit}`),
     () => repo.listFundReleasesByTenant(tenantId, limit),
   );
-  const summaries = [];
-  for (const row of rows ?? []) {
-    const scheme = await repo.findSchemeById(row.schemeId, tenantId);
-    summaries.push({
-      id: row.id,
-      releaseNo: row.releaseNo,
-      projectId: row.schemeId,
-      projectName: scheme?.name ?? row.schemeId,
-      amount: minorToAmount(row.amountMinor),
-      releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
-      releasedBy: row.sanctionedBy ?? undefined,
-      status: (row.status === "disbursed" ? "released" : row.status === "utilised" ? "utilized" : "sanctioned") as "sanctioned" | "released" | "utilized",
-    });
-  }
-  return summaries;
+  const list = rows ?? [];
+  // One batched lookup instead of one findSchemeById per row (N+1, up to `limit` rows).
+  const schemeIds = [...new Set(list.map((row) => row.schemeId))];
+  const schemes = await repo.findSchemesByIds(schemeIds, tenantId);
+  const schemeById = new Map(schemes.map((scheme) => [scheme.id, scheme]));
+  return list.map((row) => ({
+    id: row.id,
+    releaseNo: row.releaseNo,
+    projectId: row.schemeId,
+    projectName: schemeById.get(row.schemeId)?.name ?? row.schemeId,
+    amount: minorToAmount(row.amountMinor),
+    releaseDate: toDateOnly(row.disbursedAt ?? row.createdAt),
+    releasedBy: row.sanctionedBy ?? undefined,
+    status: (row.status === "disbursed" ? "released" : row.status === "utilised" ? "utilized" : "sanctioned") as "sanctioned" | "released" | "utilized",
+  }));
 }

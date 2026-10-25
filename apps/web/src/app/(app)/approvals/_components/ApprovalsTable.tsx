@@ -10,6 +10,8 @@ import { isTaskOverdue } from "./overdue";
 interface ApprovalsTableProps {
   initialData: MyApprovalItem[];
   source: "api" | "error";
+  /** 1-based page of the server-paged queue; part of the resource key. */
+  page?: number;
 }
 
 // GAP-APPROVALS-HOME-05: module is derived from refType.split("_")[0]
@@ -56,9 +58,13 @@ function formatRelativeDate(iso: string): string {
 
 type ApprovalRow = MyApprovalItem & Record<string, unknown>;
 
-export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
+export function ApprovalsTable({ initialData, source, page = 1 }: ApprovalsTableProps) {
+  // The key carries the page: useSeededResource only re-seeds its state when the
+  // key (or source) changes, so a fixed key kept showing page-1 rows after a
+  // client-side Next/Previous navigation while the server-rendered notice and
+  // stat tiles moved on. The only server-side filter today is page.
   const { data, fromCache, offline, cachedAt } = useSeededResource<MyApprovalItem[]>(
-    "my-approvals",
+    `my-approvals:page-${page}`,
     initialData,
     source === "error" ? "error" : "api",
     (d) => d.length === 0,

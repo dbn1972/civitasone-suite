@@ -22,14 +22,19 @@ export function InstallStepActions({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmSkip, setConfirmSkip] = useState(false);
+  const [confirmFail, setConfirmFail] = useState(false);
+  const [confirmComplete, setConfirmComplete] = useState(false);
 
   const done = status === "completed";
 
-  async function action(verb: "run" | "skip" | "retry") {
+  async function action(verb: "run" | "skip" | "retry" | "complete" | "fail", remarks?: string) {
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/proxy/v1/install/steps/${id}/${verb}`, { method: "PATCH" });
+      const res = await fetch(`/api/proxy/v1/install/steps/${id}/${verb}`, {
+        method: "PATCH",
+        ...(remarks ? { headers: { "content-type": "application/json" }, body: JSON.stringify({ remarks }) } : {}),
+      });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       router.refresh();
     } catch (e) {
@@ -56,17 +61,13 @@ export function InstallStepActions({
   const canRun = status === "pending" || status === "skipped";
   const canRetry = status === "failed";
   const canSkip = status === "pending" || status === "failed";
+  // Q9: nothing else advances a step past in_progress, so an install admin closes it by hand.
+  const canClose = status === "in_progress";
 
   const btn =
     "inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50";
 
-  if (!canRun && !canRetry && !canSkip) {
-    return status === "in_progress" ? (
-      <p className="mt-3 text-xs text-slate-500" role="status">
-        This step is running…
-      </p>
-    ) : null;
-  }
+  if (!canRun && !canRetry && !canSkip && !canClose) return null;
 
   return (
     <div className="mt-3">
@@ -92,6 +93,31 @@ export function InstallStepActions({
           >
             {busy ? "Retrying…" : "Retry"}
           </button>
+        ) : null}
+        {canClose ? (
+          <>
+            <p className="w-full text-xs text-slate-500" role="status">
+              This step is running…
+            </p>
+            <button
+              type="button"
+              className={`${btn} bg-emerald-600 text-white hover:bg-emerald-700`}
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => setConfirmComplete(true)}
+            >
+              Mark complete
+            </button>
+            <button
+              type="button"
+              className={`${btn} border border-red-300 bg-white text-red-700 hover:bg-red-50`}
+              disabled={busy}
+              aria-busy={busy}
+              onClick={() => setConfirmFail(true)}
+            >
+              Mark failed
+            </button>
+          </>
         ) : null}
         {canSkip ? (
           <button
@@ -129,6 +155,37 @@ export function InstallStepActions({
           void action("skip");
         }}
         onCancel={() => setConfirmSkip(false)}
+      />
+      <ConfirmDialog
+        open={confirmComplete}
+        title={`Mark step "${title}" complete?`}
+        description="Use this once the step's work has finished. The action is recorded in the audit trail."
+        confirmLabel="Mark complete"
+        cancelLabel="Cancel"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmComplete(false);
+          void action("complete");
+        }}
+        onCancel={() => setConfirmComplete(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmFail}
+        title={`Mark step "${title}" failed?`}
+        description="Record why the step failed. The remarks are shown on the step and stored in the audit trail. You can retry it afterwards."
+        confirmLabel="Mark failed"
+        cancelLabel="Cancel"
+        danger
+        requireReason
+        reasonLabel="Remarks (required)"
+        maxReasonLength={500}
+        busy={busy}
+        onConfirm={(reason) => {
+          setConfirmFail(false);
+          void action("fail", reason?.trim());
+        }}
+        onCancel={() => setConfirmFail(false)}
       />
     </div>
   );

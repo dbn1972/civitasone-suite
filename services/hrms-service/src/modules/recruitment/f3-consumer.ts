@@ -1204,6 +1204,8 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "corrigendum", changes: body.changes, actorId: msg.actorId });
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__2": {
@@ -1219,6 +1221,8 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                   });
                   // Extending REOPENS a closed vacancy so applications can resume (R-RA-0069).
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { applicationDeadline: newDeadline, status: "open", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__3": {
@@ -1229,6 +1233,8 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "cancellation", changes: body.reason, actorId: msg.actorId });
                   // Cancel preserves the advert (row untouched except status) — R-RA-0068.
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { status: "cancelled", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__4": {

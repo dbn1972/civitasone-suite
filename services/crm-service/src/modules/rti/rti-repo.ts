@@ -7,6 +7,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
+import { nextRtiRef } from "../../shared/reference-numbers.js";
 import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
 import { EVENTS } from "../../topics.js";
 
@@ -42,7 +43,6 @@ export type RtiCreateData = {
   actorId: string;
   /** GAP2-CRM-RTI-AUDIT-03: correlation id for the audit event emitted on create. */
   correlationId?: string;
-  referenceNo: string;
   section: string;
   departmentRef: string;
   applicantName: string;
@@ -234,6 +234,8 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
         : sql`NULL`;
 
   const rows = (await scopedRead(async (tx) => {
+    // Allocated inside the insert transaction from a Postgres sequence, so a retry re-allocates.
+    const referenceNo = await nextRtiRef(tx, data.departmentRef);
     const inserted = (await tx.execute(sql`
       INSERT INTO crm.rti_requests (
         tenant_id, reference_no, section, department_ref,
@@ -242,7 +244,7 @@ export async function createRti(data: RtiCreateData): Promise<RtiRow> {
         fee_paid, fee_amount, fee_amount_minor, received_at, mode, created_by
       ) VALUES (
         ${data.tenantId}::uuid,
-        ${data.referenceNo},
+        ${referenceNo},
         ${data.section},
         ${data.departmentRef},
         ${data.applicantName},

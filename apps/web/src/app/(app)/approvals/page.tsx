@@ -94,7 +94,7 @@ export default async function MyApprovalsPage(
                 Showing {(page - 1) * PAGE_SIZE + 1}–{loadedUpTo} of {total}.
               </p>
             )}
-            <ApprovalsTable initialData={approvals} source={source} />
+            <ApprovalsTable key={page} initialData={approvals} source={source} page={page} />
             {(hasPrev || hasNext) && (
               <nav
                 aria-label="Approvals pages"

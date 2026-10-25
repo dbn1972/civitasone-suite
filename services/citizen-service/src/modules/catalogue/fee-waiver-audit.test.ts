@@ -26,3 +26,18 @@ describe("officeOverrides keep feeWaiverReason through validation", () => {
     expect(parsed.officeOverrides?.[0]?.feeWaiverReason).toBe("statutory exemption");
   });
 });
+
+describe("Q23: a Rs 0 office fee requires feeWaiverReason at save", () => {
+  const officeId = "11111111-1111-4111-8111-111111111111";
+  it("rejects feeFromMinor 0 with no reason", () => {
+    const r = updateDefinitionBody.safeParse({ officeOverrides: [{ officeId, feeFromMinor: 0 }] });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues[0]?.path.join(".")).toBe("officeOverrides.0.feeWaiverReason");
+  });
+  it("rejects feeFromMinor 0 with a blank reason", () => {
+    expect(updateDefinitionBody.safeParse({ officeOverrides: [{ officeId, feeFromMinor: 0, feeWaiverReason: "   " }] }).success).toBe(false);
+  });
+  it("accepts a non-zero fee without a reason", () => {
+    expect(updateDefinitionBody.safeParse({ officeOverrides: [{ officeId, feeFromMinor: 500 }] }).success).toBe(true);
+  });
+});

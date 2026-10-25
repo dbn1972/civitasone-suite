@@ -112,14 +112,14 @@ export function RoleFeaturesManager({
     return fresh;
   }
 
-  async function doToggle(role: string, feature: string) {
+  async function doToggle(role: string, feature: string, reason: string) {
     const cellKey = `${role}:${feature}`;
     setBusyKey(cellKey);
     setError(null);
     setNotice(null);
     const existing = grantByCell.get(cellKey);
     if (existing) {
-      const result = await callApi(`/${existing.id}`, "DELETE");
+      const result = await callApi(`/${existing.id}`, "DELETE", { reason });
       if (!result.ok) {
         setError(result.message ?? t("revokeFailed"));
       } else {
@@ -127,7 +127,7 @@ export function RoleFeaturesManager({
         setNotice(t("noticeRevoked"));
       }
     } else {
-      const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true });
+      const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true, reason });
       if (!result.ok) {
         setError(result.message ?? t("grantFailed"));
       } else {
@@ -147,7 +147,7 @@ export function RoleFeaturesManager({
     setBusyKey(null);
   }
 
-  async function doPreset(role: string, features: string[]) {
+  async function doPreset(role: string, features: string[], reason: string) {
     setError(null);
     setNotice(null);
     const todo = features.filter((f) => !isGranted(role, f));
@@ -156,7 +156,7 @@ export function RoleFeaturesManager({
     let failedAt: string | null = null;
     for (const feature of todo) {
       setBusyKey(`${role}:${feature}`);
-      const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true });
+      const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true, reason });
       if (!result.ok) {
         failedAt = feature;
         break;
@@ -182,12 +182,12 @@ export function RoleFeaturesManager({
     setPending({ kind: "toggle", role: role.key, roleName: role.name, feature, revoke: isGranted(role.key, feature) });
   }
 
-  async function confirmPending() {
+  async function confirmPending(reason: string) {
     const p = pending;
     setPending(null);
     if (!p) return;
-    if (p.kind === "toggle") await doToggle(p.role, p.feature);
-    else await doPreset(p.role, p.features);
+    if (p.kind === "toggle") await doToggle(p.role, p.feature, reason);
+    else await doPreset(p.role, p.features, reason);
   }
 
   const roleGrants = grants.filter((g) => g.roleName === selectedRole && g.granted);
@@ -327,8 +327,8 @@ export function RoleFeaturesManager({
       </div>
 
       {/* GAP-ADMIN-ROLE-FEATURES-03/-04: every grant/revoke and every preset is confirmed first.
-          policy-service accepts an optional reason on grant/revoke and stores it, but this UI does
-          not collect one yet; the audit trail records the actor and the grant. */}
+          Q28: policy-service requires a reason (min 5 chars) on every grant/revoke; it is collected
+          here once per confirmation (a preset applies the same reason to each grant) and audited. */}
       <ConfirmDialog
         open={pending !== null}
         title={
@@ -348,7 +348,11 @@ export function RoleFeaturesManager({
         confirmLabel={pending?.kind === "toggle" && pending.revoke ? t("confirmRevokeAction") : t("confirmGrantAction")}
         cancelLabel={t("cancel")}
         danger={pending?.kind === "toggle" && (pending.revoke || adminKey(pending.feature))}
-        onConfirm={() => void confirmPending()}
+        requireReason
+        minReasonLength={5}
+        maxReasonLength={500}
+        reasonLabel={t("confirmReasonLabel")}
+        onConfirm={(reason) => void confirmPending((reason ?? "").trim())}
         onCancel={() => setPending(null)}
       />
 

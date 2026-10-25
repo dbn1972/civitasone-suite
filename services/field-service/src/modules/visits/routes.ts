@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, isFieldSupervisor, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, isFieldSupervisor, assertAssignedOrSupervisor, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as taskRepo from "../tasks/repo.js";
 import { validateCheckIn, validateCheckOut, calculateDurationMinutes, classifyVisitOutcome } from "./domain.js";
@@ -57,6 +57,7 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
     if (!task) {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
+    await assertAssignedOrSupervisor(ctx, task, "check-in", req.log);
 
     return reply.code(202).send(
       await commands.checkIn(ctx, {

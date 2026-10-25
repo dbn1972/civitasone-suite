@@ -51,6 +51,36 @@ const EINVOICE_API_URL = process.env.EINVOICE_API_URL ?? "https://einv-apisandbo
 const EINVOICE_CLIENT_ID = process.env.EINVOICE_CLIENT_ID ?? "";
 const EINVOICE_CLIENT_SECRET = process.env.EINVOICE_CLIENT_SECRET ?? "";
 const EINVOICE_GSTIN = process.env.EINVOICE_GSTIN ?? "";
+const EINVOICE_TIMEOUT_MS = Number(process.env.EINVOICE_TIMEOUT_MS) || 15000;
+
+/**
+ * One deadline covers the whole exchange: connect, headers AND body read (the
+ * `handle` callback must perform every res.text()/res.json()). A NIC endpoint
+ * that sends headers and then stalls the body therefore cannot hang the consumer.
+ * The abort signal tears down a real socket; the race guarantees the rejection
+ * even if the body stream ignores the signal.
+ */
+async function nicCall<T>(
+  url: string,
+  init: RequestInit,
+  handle: (res: Response) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`NIC request timed out after ${EINVOICE_TIMEOUT_MS}ms`));
+    }, EINVOICE_TIMEOUT_MS);
+  });
+  const work = (async () => handle(await fetch(url, { ...init, signal: controller.signal })))();
+  work.catch(() => undefined); // loser of the race must not surface as unhandled
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ── Token cache (1h TTL) ──────────────────────────────────────────
 
@@ -61,7 +91,7 @@ async function getAuthToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  const res = await fetch(`${EINVOICE_API_URL}/eivital/v1.04/auth`, {
+  return nicCall(`${EINVOICE_API_URL}/eivital/v1.04/auth`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -74,18 +104,18 @@ async function getAuthToken(): Promise<string> {
       password: EINVOICE_CLIENT_SECRET,
       appKey: EINVOICE_CLIENT_ID,
     }),
+  }, async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NIC auth failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json() as { authToken: string; tokenExpiry: number };
+    // NIC returns tokenExpiry in seconds; cache with 5-minute safety margin
+    const ttlMs = (data.tokenExpiry - 300) * 1000;
+    cachedToken = { token: data.authToken, expiresAt: Date.now() + ttlMs };
+    return cachedToken.token;
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NIC auth failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json() as { authToken: string; tokenExpiry: number };
-  // NIC returns tokenExpiry in seconds; cache with 5-minute safety margin
-  const ttlMs = (data.tokenExpiry - 300) * 1000;
-  cachedToken = { token: data.authToken, expiresAt: Date.now() + ttlMs };
-  return cachedToken.token;
 }
 
 // ── Mock helpers ──────────────────────────────────────────────────
@@ -115,7 +145,7 @@ export async function generateIrn(payload: EInvoicePayload): Promise<GenerateIrn
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice`, {
+  return nicCall(`${EINVOICE_API_URL}/eicore/v1.03/Invoice`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -124,24 +154,24 @@ export async function generateIrn(payload: EInvoicePayload): Promise<GenerateIrn
       "client_id": EINVOICE_CLIENT_ID,
     },
     body: JSON.stringify(payload),
+  }, async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NIC generateIrn failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json() as {
+      Irn: string; AckNo: string; AckDt: string; SignedInvoice: string; SignedQRCode: string;
+    };
+
+    return {
+      irn: data.Irn,
+      ackNo: data.AckNo,
+      ackDate: data.AckDt,
+      signedInvoice: data.SignedInvoice,
+      signedQrCode: data.SignedQRCode,
+    };
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NIC generateIrn failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json() as {
-    Irn: string; AckNo: string; AckDt: string; SignedInvoice: string; SignedQRCode: string;
-  };
-
-  return {
-    irn: data.Irn,
-    ackNo: data.AckNo,
-    ackDate: data.AckDt,
-    signedInvoice: data.SignedInvoice,
-    signedQrCode: data.SignedQRCode,
-  };
 }
 
 export async function cancelIrn(irn: string, reason: string): Promise<CancelIrnResponse> {
@@ -150,7 +180,7 @@ export async function cancelIrn(irn: string, reason: string): Promise<CancelIrnR
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/Cancel`, {
+  return nicCall(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/Cancel`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -159,15 +189,15 @@ export async function cancelIrn(irn: string, reason: string): Promise<CancelIrnR
       "client_id": EINVOICE_CLIENT_ID,
     },
     body: JSON.stringify({ Irn: irn, CnlRsn: "1", CnlRem: reason }),
+  }, async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NIC cancelIrn failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json() as { CancelDate: string };
+    return { success: true, cancelDate: data.CancelDate };
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NIC cancelIrn failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json() as { CancelDate: string };
-  return { success: true, cancelDate: data.CancelDate };
 }
 
 export async function getIrnByDocNo(gstin: string, docNo: string, fy: string): Promise<GetIrnResponse> {
@@ -182,26 +212,26 @@ export async function getIrnByDocNo(gstin: string, docNo: string, fy: string): P
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/irnbydocdetails?doctype=INV&docnum=${encodeURIComponent(docNo)}&docdate=${fy}`, {
+  return nicCall(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/irnbydocdetails?doctype=INV&docnum=${encodeURIComponent(docNo)}&docdate=${fy}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${token}`,
       "gstin": gstin,
       "client_id": EINVOICE_CLIENT_ID,
     },
+  }, async (res) => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`NIC getIrnByDocNo failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json() as { Irn: string; AckNo: string; AckDt: string; Status: string; DocNo: string };
+    return {
+      irn: data.Irn,
+      ackNo: data.AckNo,
+      ackDate: data.AckDt,
+      status: data.Status,
+      docNo: data.DocNo,
+    };
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`NIC getIrnByDocNo failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json() as { Irn: string; AckNo: string; AckDt: string; Status: string; DocNo: string };
-  return {
-    irn: data.Irn,
-    ackNo: data.AckNo,
-    ackDate: data.AckDt,
-    status: data.Status,
-    docNo: data.DocNo,
-  };
 }

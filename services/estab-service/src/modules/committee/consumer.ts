@@ -5,7 +5,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { estabAttendees } from "./schema.js";
-import { autoRegisterDak, generateDakNo } from "../files/dak-auto.js";
+import { autoRegisterDak } from "../files/dak-auto.js";
+import { nextMeetingDakNo, auditFailedCreate } from "../../shared/numbers.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -34,7 +35,7 @@ export function registerCommitteeConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await autoRegisterDak(tx, msg, {
-        dakNo: generateDakNo("MTG"),
+        dakNo: await nextMeetingDakNo(tx),
         fromAddress: "Committee Secretariat",
         subject: `Meeting: ${p.title}`,
         sourceSection: "meeting",
@@ -42,7 +43,7 @@ export function registerCommitteeConsumers(queue: Queue): void {
       await audit(tx, msg, "create", "meeting", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "committee_meetings", (msg.payload as any).committeeId));
-  });
+  }, auditFailedCreate("meeting.create", "meeting"));
 
   queue.subscribe(COMMANDS.resolutionCreate, async (msg) => {
     const p = msg.payload as { id: string; meetingId: string; tenantId: string; body: string; actionOwner?: string; dueDate?: string };

@@ -11,8 +11,11 @@
  * Writes are optimistic: local state updates immediately so typing is not
  * blocked on the round trip, and a failure flips the footer to "offline" rather
  * than silently discarding what was typed. It does not roll the value back — a
- * designer who saw their text appear and then vanish would retype it, and the
- * PATCH is idempotent so the next successful save carries it.
+ * designer who saw their text appear and then vanish would retype it. A failed
+ * save puts its unsent fields back into the pending batch (newer edits win per
+ * key) and the next patch() re-arms the timer, so the next successful save
+ * carries them. Saves are serialised, and there is no automatic retry. A failed
+ * flush-on-unmount has no later patch, so that last edit is still lost.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -86,22 +89,40 @@ export function usePhase3Config(definitionId: string) {
   const pending = useRef<Partial<Phase3Config>>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const flush = useCallback(async () => {
-    const next = pending.current;
-    pending.current = {};
-    if (Object.keys(next).length === 0) return;
-    setSaveState("saving");
-    try {
-      // offeringOfficeIds is read-only here — it belongs to B1 and is loaded
-      // only so the override panel can offer the right offices. Sending it
-      // back would let this hook silently overwrite a B1 edit.
-      const writable: Record<string, unknown> = { ...next };
-      delete writable.offeringOfficeIds;
-      await updateServiceDefinition(definitionId, writable as never);
-      setSaveState("saved");
-    } catch {
-      setSaveState("offline");
-    }
+  // CLOS3-S1-08: saves are serialised through this promise. A save takes its batch only after the
+  // previous save settled, so a failed batch is always restored into `pending` first and a slow
+  // failure can never overwrite a newer edit that was saved in the meantime. While nothing is in
+  // flight the first save still starts synchronously (the unmount flush relies on that).
+  const inFlight = useRef<Promise<void> | null>(null);
+
+  const flush = useCallback((): Promise<void> => {
+    const step = async () => {
+      const next = pending.current;
+      pending.current = {};
+      if (Object.keys(next).length === 0) return;
+      setSaveState("saving");
+      try {
+        // offeringOfficeIds is read-only here — it belongs to B1 and is loaded
+        // only so the override panel can offer the right offices. Sending it
+        // back would let this hook silently overwrite a B1 edit.
+        const writable: Record<string, unknown> = { ...next };
+        delete writable.offeringOfficeIds;
+        await updateServiceDefinition(definitionId, writable as never);
+        setSaveState("saved");
+      } catch {
+        // Restore the unsent fields; edits made since win per key. No timer is re-armed, so there is
+        // no retry storm while the backend is down — the next patch() carries them. (A failed
+        // flush-on-unmount has no later patch, so that edit is still lost.)
+        pending.current = { ...next, ...pending.current };
+        setSaveState("offline");
+      }
+    };
+    const prev = inFlight.current;
+    const run: Promise<void> = (prev ? prev.then(step) : step()).then(() => {
+      if (inFlight.current === run) inFlight.current = null;
+    });
+    inFlight.current = run;
+    return run;
   }, [definitionId]);
 
   const patch = useCallback(

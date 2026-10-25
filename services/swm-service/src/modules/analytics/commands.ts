@@ -13,8 +13,8 @@ export interface IdentifyHotspotInput {
 
 export async function identifyHotspot(ctx: RequestContext, body: IdentifyHotspotInput): Promise<Accepted> {
   const id = randomUUID();
-  const hotspotCode = `SWMH-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.hotspotIdentify, id, { id, hotspotCode, ...body });
+  // hotspotCode is allocated by the consumer from a Postgres sequence, inside the insert transaction (shared/numbers.ts).
+  return publishCommand(ctx, COMMANDS.hotspotIdentify, id, { id, ...body });
 }
 
 export async function resolveHotspot(ctx: RequestContext, id: string, version: number): Promise<Accepted> {

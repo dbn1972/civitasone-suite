@@ -16,6 +16,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import { getTemplateForEvent, interpolate } from "./templates.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { resolveDelegationRecipients, type DelegationEventPayload, type PlannedSend } from "./delegation-notice.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -212,10 +213,16 @@ type ResolvedNotification = {
   recipientId: string;
   recipient: string;
   variables: Record<string, string>;
+  /** Explicit per-channel sends (template + channel). Absent -> one send via the event's default template. */
+  sends?: PlannedSend[];
 };
 
 function resolveRecipients(eventType: string, payload: Record<string, unknown>): ResolvedNotification[] {
   switch (eventType) {
+    case CONSUMED_EVENTS.workflowDelegationCreated:
+    case CONSUMED_EVENTS.workflowDelegationRevoked:
+      return resolveDelegationRecipients(eventType, payload as DelegationEventPayload);
+
     case CONSUMED_EVENTS.hrmsLeaveApproved: {
       const p = payload as LeaveApprovedPayload;
       return [{
@@ -486,21 +493,24 @@ async function handleDomainEvent(msg: CommandEnvelope): Promise<void> {
     if (!(await markProcessed(tx, msg.messageId))) return;
 
     for (const r of recipients) {
-      const notificationPayload = buildNotificationPayload({
-        eventType,
-        recipient: r.recipient,
-        recipientId: r.recipientId,
-        variables: r.variables,
-      });
+      for (const send of r.sends ?? [undefined]) {
+        const notificationPayload = buildNotificationPayload({
+          eventType,
+          recipient: r.recipient,
+          recipientId: r.recipientId,
+          variables: r.variables,
+          ...(send ? { channel: send.channel, templateId: send.templateId } : {}),
+        });
 
-      await enqueue(tx as Parameters<typeof enqueue>[0], {
-        topic: NOTIFICATION_SEND,
-        eventType: NOTIFICATION_SEND,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: notificationPayload,
-      });
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: NOTIFICATION_SEND,
+          eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: notificationPayload,
+        });
+      }
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "notification-service", action: "process", resourceType: "domain_events", resourceId: msg.messageId, outcome: "success" } });
     }
   });
