@@ -94,4 +94,124 @@ describe("usePagedRegister", () => {
     expect(result.current.failed).toBe(true);
     expect(result.current.loading).toBe(false);
   });
+
+  // CLOS3-S1-06: loadMore had no request token, so a slow reply for the OLD query appended stale rows
+  // to the NEW results and overwrote the total.
+  describe("loadMore vs query/reload changes (CLOS3-S1-06)", () => {
+    async function mountWithFirstPage(pageSize = 2) {
+      const held = installHeldFetch();
+      const hook = renderHook(() => usePagedRegister<Row>("/api/x", pageSize));
+      await flush();
+      await act(async () => held.pending[0].resolve(rowsOf("a1", "a2"), 10));
+      await flush();
+      expect(hook.result.current.rows).toEqual(rowsOf("a1", "a2"));
+      return { ...held, ...hook };
+    }
+
+    it("drops a late loadMore reply for the previous query", async () => {
+      const { pending, result } = await mountWithFirstPage();
+      let more!: Promise<void>;
+      act(() => {
+        more = result.current.loadMore();
+      });
+      await flush();
+      expect(pending).toHaveLength(2);
+
+      act(() => result.current.setSearchInput("zz"));
+      await flush(400);
+      expect(pending).toHaveLength(3);
+      await act(async () => pending[2].resolve(rowsOf("z1"), 1));
+      await flush();
+      await act(async () => {
+        pending[1].resolve(rowsOf("a3", "a4"), 10);
+        await more;
+      });
+      await flush();
+
+      expect(result.current.rows).toEqual(rowsOf("z1"));
+      expect(result.current.total).toBe(1);
+      expect(result.current.hasMore).toBe(false);
+      expect(result.current.loadingMore).toBe(false);
+    });
+
+    it("a plain loadMore still appends and de-duplicates", async () => {
+      const { pending, result } = await mountWithFirstPage();
+      let more!: Promise<void>;
+      act(() => {
+        more = result.current.loadMore();
+      });
+      await flush();
+      await act(async () => {
+        pending[1].resolve(rowsOf("a2", "a3"), 10);
+        await more;
+      });
+      expect(result.current.rows).toEqual(rowsOf("a1", "a2", "a3"));
+      expect(result.current.total).toBe(10);
+      expect(result.current.loadingMore).toBe(false);
+    });
+
+    it("reload() during an in-flight loadMore keeps the reload result", async () => {
+      const { pending, result } = await mountWithFirstPage();
+      let more!: Promise<void>;
+      let reloading!: Promise<void>;
+      act(() => {
+        more = result.current.loadMore();
+      });
+      await flush();
+      act(() => {
+        reloading = result.current.reload();
+      });
+      await flush();
+      expect(pending).toHaveLength(3);
+      await act(async () => {
+        pending[2].resolve(rowsOf("r1"), 1);
+        await reloading;
+      });
+      await act(async () => {
+        pending[1].resolve(rowsOf("a3", "a4"), 10);
+        await more;
+      });
+      await flush();
+      expect(result.current.rows).toEqual(rowsOf("r1"));
+      expect(result.current.total).toBe(1);
+      expect(result.current.loading).toBe(false);
+      expect(result.current.loadingMore).toBe(false);
+    });
+
+    it("a loadMore failure on the current query sets moreError", async () => {
+      const { pending, result } = await mountWithFirstPage();
+      let more!: Promise<void>;
+      act(() => {
+        more = result.current.loadMore();
+      });
+      await flush();
+      const err = new Error("page 2 down");
+      await act(async () => {
+        pending[1].fail(err);
+        await more;
+      });
+      expect(result.current.moreError).toBe(err);
+      expect(result.current.rows).toEqual(rowsOf("a1", "a2"));
+      expect(result.current.loadingMore).toBe(false);
+    });
+
+    it("a loadMore failure for a stale query is ignored", async () => {
+      const { pending, result } = await mountWithFirstPage();
+      let more!: Promise<void>;
+      act(() => {
+        more = result.current.loadMore();
+      });
+      await flush();
+      act(() => result.current.setSearchInput("zz"));
+      await flush(400);
+      await act(async () => pending[2].resolve(rowsOf("z1"), 1));
+      await flush();
+      await act(async () => {
+        pending[1].fail(new Error("old query page 2 down"));
+        await more;
+      });
+      expect(result.current.moreError).toBeNull();
+      expect(result.current.rows).toEqual(rowsOf("z1"));
+    });
+  });
 });
