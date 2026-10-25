@@ -39,17 +39,30 @@ export async function upsertSubscription(tx: Writer, row: PushSubscriptionInsert
   });
 }
 
+/** Owner of a subscription (tenant-scoped), or null when it does not exist. */
+export async function findSubscriptionOwner(tenantId: string, id: string): Promise<string | null> {
+  const rows = await readScoped(tenantId, (tx) => tx.select({ userId: pushSubscriptions.userId })
+    .from(pushSubscriptions)
+    .where(and(eq(pushSubscriptions.tenantId, tenantId), eq(pushSubscriptions.id, id))).limit(1));
+  return rows[0]?.userId ?? null;
+}
+
+/**
+ * When ownerUserId is given the write is also scoped by user_id, so a command
+ * naming a subscription owned by someone else revokes nothing (V4-B-04).
+ */
 export async function revokeSubscription(
-  tx: Writer, tenantId: string, id: string, actorId: string,
+  tx: Writer, tenantId: string, id: string, actorId: string, ownerUserId?: string,
 ): Promise<boolean> {
+  const scope = ownerUserId !== undefined ? [eq(pushSubscriptions.userId, ownerUserId)] : [];
   const rows = await tx.select({ version: pushSubscriptions.version }).from(pushSubscriptions)
-    .where(and(eq(pushSubscriptions.tenantId, tenantId), eq(pushSubscriptions.id, id))).limit(1);
+    .where(and(eq(pushSubscriptions.tenantId, tenantId), eq(pushSubscriptions.id, id), ...scope)).limit(1);
   const current = rows[0];
   if (!current) return false;
   await tx.update(pushSubscriptions).set({
     enabled: false, revokedAt: new Date(), updatedAt: new Date(),
     updatedBy: actorId, version: current.version + 1,
-  }).where(and(eq(pushSubscriptions.tenantId, tenantId), eq(pushSubscriptions.id, id)));
+  }).where(and(eq(pushSubscriptions.tenantId, tenantId), eq(pushSubscriptions.id, id), ...scope));
   return true;
 }
 
