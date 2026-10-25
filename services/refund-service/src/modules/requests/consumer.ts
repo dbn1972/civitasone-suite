@@ -32,10 +32,11 @@ export function registerRequestConsumers(rawQueue: Queue): void {
       description?: string;
       documents?: Array<{ docType: string; fileId: string; uploadedAt: string }>;
     };
-    const requestNumber = generateRequestNumber("ULB", Date.now() % 999999);
-
+    let requestNumber = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-05: DB sequence drawn inside the txn (was Date.now() % 999999 -> global-UNIQUE collisions).
+      requestNumber = generateRequestNumber("ULB", await repo.nextRequestSeq(tx));
       await repo.insertRequest(tx, {
         id: p.id,
         tenantId: msg.tenantId,
