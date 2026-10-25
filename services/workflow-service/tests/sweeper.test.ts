@@ -19,6 +19,7 @@ import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./hel
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
+import { queue } from "../src/shared/infra.js";
 
 const tenants: string[] = [];
 function newTenant(): string { const t = randomUUID(); tenants.push(t); return t; }
@@ -253,5 +254,83 @@ describe("sweeper — start functions (interval-based)", () => {
     const timer = startTimerSweeper(60_000);
     expect(timer).toBeDefined();
     clearInterval(timer);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLOS3-S6-03 — a failed completeTask publish must not strand a claimed timer.
+// ---------------------------------------------------------------------------
+describe("sweeper — sweepTimerTasks publish failure (CLOS3-S6-03)", () => {
+  async function seedTimerTasks(tenantId: string, n: number) {
+    const actorId = randomUUID();
+    const defId = randomUUID();
+    await sqlAsTenant(tenantId, sql`
+      INSERT INTO workflow.definitions (id, tenant_id, code, name, version, status, created_by, updated_by)
+      VALUES (${defId}, ${tenantId}, ${"timer_" + defId.slice(0, 8)}, 'Timer Def', 1, 'active', ${actorId}, ${actorId})
+    `);
+    await sqlAsTenant(tenantId, sql`
+      INSERT INTO workflow.definition_nodes (id, definition_id, node_key, name, node_type, sort_order, deemed_approval)
+      VALUES (${randomUUID()}, ${defId}, 'wait_node', 'Wait', 'timer', 1, true)
+    `);
+    const ids: string[] = [];
+    const fireAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    for (let i = 0; i < n; i++) {
+      const instanceId = randomUUID();
+      await sqlAsTenant(tenantId, sql`
+        INSERT INTO workflow.instances (id, tenant_id, name, status, definition_id, created_by, updated_by)
+        VALUES (${instanceId}, ${tenantId}, ${"timer-inst-" + i}, 'active', ${defId}, ${actorId}, ${actorId})
+      `);
+      const taskId = randomUUID();
+      await sqlAsTenant(tenantId, sql`
+        INSERT INTO workflow.tasks (id, tenant_id, instance_id, name, status, node_key, fire_at, created_by, updated_by)
+        VALUES (${taskId}, ${tenantId}, ${instanceId}, ${"Timer Wait " + i}, 'pending', 'wait_node', ${fireAt}::timestamptz, ${actorId}, ${actorId})
+      `);
+      ids.push(taskId);
+    }
+    return { ids, fireAt };
+  }
+  const taskRow = async (tenantId: string, id: string) =>
+    (await sqlAsTenant(tenantId, sql`SELECT status, fire_at FROM workflow.tasks WHERE id = ${id}`) as unknown as Array<{ status: string; fire_at: Date | null }>)[0]!;
+
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it("a publish failure does not abort the batch and the failed timer is restored, then retried", async () => {
+    const tenantId = newTenant();
+    const { ids } = await seedTimerTasks(tenantId, 2);
+    const mine = new Set(ids);
+    const published: string[] = [];
+    let failed: string | undefined;
+    vi.spyOn(queue, "publish").mockImplementation((async (_topic: string, env: { payload: { id: string } }) => {
+      if (!mine.has(env.payload.id)) return "other";
+      if (failed === undefined) { failed = env.payload.id; throw new Error("broker down"); }
+      published.push(env.payload.id);
+      return "ok";
+    }) as never);
+
+    await expect(sweepTimerTasks(new Date(), 100)).resolves.toBeGreaterThanOrEqual(1);
+    expect(published).toHaveLength(1);            // the other timer in the batch still fired
+    expect(published[0]).not.toBe(failed);
+    const restored = await taskRow(tenantId, failed!);
+    expect(restored.status).toBe("pending");
+    expect(restored.fire_at).not.toBeNull();       // eligible again
+
+    await sweepTimerTasks(new Date(), 100);         // second sweep retries it
+    expect(published).toContain(failed);
+    expect((await taskRow(tenantId, failed!)).fire_at).toBeNull();
+  });
+
+  it("does not restore a timer whose task changed status while the publish was failing", async () => {
+    const tenantId = newTenant();
+    const { ids } = await seedTimerTasks(tenantId, 1);
+    vi.spyOn(queue, "publish").mockImplementation((async (_t: string, env: { payload: { id: string } }) => {
+      if (env.payload.id !== ids[0]) return "other";
+      await sqlAsTenant(tenantId, sql`UPDATE workflow.tasks SET status = 'completed' WHERE id = ${ids[0]!}`);
+      throw new Error("broker down");
+    }) as never);
+
+    await sweepTimerTasks(new Date(), 100);
+    const row = await taskRow(tenantId, ids[0]!);
+    expect(row.status).toBe("completed");
+    expect(row.fire_at).toBeNull();
   });
 });

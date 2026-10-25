@@ -76,6 +76,27 @@ function loadConfig(): StorageConfig {
 let _client: S3Client | null = null;
 let _config: StorageConfig | null = null;
 
+const DEFAULT_S3_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_S3_REQUEST_TIMEOUT_MS = 60_000;
+
+function envMs(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : fallback;
+}
+
+/**
+ * CLOS3-S6-13: socket timeouts for the S3 client. The SDK's NodeHttpHandler has NO default
+ * timeouts, so a stalled endpoint hung every call (and the body stream) forever. requestTimeout is a
+ * socket-idle timeout, so a large but progressing download is not cut off.
+ * Overridable via S3_CONNECT_TIMEOUT_MS / S3_REQUEST_TIMEOUT_MS; invalid values fall back to the defaults.
+ */
+export function s3TimeoutConfig(): { connectionTimeout: number; requestTimeout: number } {
+  return {
+    connectionTimeout: envMs("S3_CONNECT_TIMEOUT_MS", DEFAULT_S3_CONNECT_TIMEOUT_MS),
+    requestTimeout: envMs("S3_REQUEST_TIMEOUT_MS", DEFAULT_S3_REQUEST_TIMEOUT_MS),
+  };
+}
+
 function getClient(): S3Client {
   if (_client) return _client;
   _config = loadConfig();
@@ -83,6 +104,10 @@ function getClient(): S3Client {
     region: _config.region,
     ..._config.endpoint ? { endpoint: _config.endpoint } : {},
     forcePathStyle: _config.forcePathStyle,
+    // The SDK builds a NodeHttpHandler from these options (no extra dependency needed).
+    // throwOnRequestTimeout: without it recent @smithy/node-http-handler only WARNS when
+    // requestTimeout elapses and the call still hangs.
+    requestHandler: { ...s3TimeoutConfig(), throwOnRequestTimeout: true },
     credentials: {
       accessKeyId: _config.accessKeyId,
       secretAccessKey: _config.secretAccessKey,

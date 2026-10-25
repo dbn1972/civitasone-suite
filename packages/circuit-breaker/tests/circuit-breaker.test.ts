@@ -175,3 +175,77 @@ describe("CircuitBreaker — half-open single probe (CLOS2-S6-03)", () => {
     expect(cb.state).toBe("closed");
   });
 });
+
+describe("CircuitBreaker — stale in-flight calls (CLOS3-S6-10)", () => {
+  const gated = <T,>(result: () => Promise<T>) => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    return { fn: async () => { await gate; return result(); }, release };
+  };
+
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("a stale in-flight SUCCESS after a trip leaves the breaker open", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 2, recoveryMs: 10_000 });
+    const slow = gated(async () => "late-ok");
+    const slowCall = cb.call(slow.fn);
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    expect(cb.state).toBe("open");
+
+    slow.release();
+    await expect(slowCall).resolves.toBe("late-ok");
+
+    expect(cb.state).toBe("open");
+    await expect(cb.call(OK)).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+
+  it("a stale in-flight FAILURE while open does not extend openedAt or re-trip", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 1_000 });
+    const slow = gated(FAIL);
+    const slowCall = cb.call(slow.fn);
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    expect(cb.state).toBe("open");
+
+    vi.advanceTimersByTime(900);
+    slow.release();
+    await expect(slowCall).rejects.toThrow("upstream failure");
+    vi.advanceTimersByTime(200); // 1100ms since the real trip: must be half-open
+    expect(cb.state).toBe("half-open");
+  });
+
+  it("a normal closed-state success still resets the consecutive-failure counter", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 2, recoveryMs: 1_000 });
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    await cb.call(OK);
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    expect(cb.state).toBe("closed");
+  });
+
+  it("half-open probe: success closes, failure re-opens", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 1_000 });
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    vi.advanceTimersByTime(1_000);
+    await expect(cb.call(OK)).resolves.toBe("ok");
+    expect(cb.state).toBe("closed");
+
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    vi.advanceTimersByTime(1_000);
+    await expect(cb.call(FAIL)).rejects.toThrow();
+    expect(cb.state).toBe("open");
+  });
+
+  it("a call from a previous epoch resolving after recovery has no effect on the half-open probe", async () => {
+    const cb = new CircuitBreaker({ name: "svc", failureThreshold: 1, recoveryMs: 1_000 });
+    const slow = gated(async () => "stale");
+    const slowCall = cb.call(slow.fn); // started while closed
+    await expect(cb.call(FAIL)).rejects.toThrow(); // trips
+    vi.advanceTimersByTime(1_000);
+    expect(cb.state).toBe("half-open");
+
+    slow.release();
+    await slowCall;
+    expect(cb.state).toBe("half-open"); // the stale success did not close it
+  });
+});

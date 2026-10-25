@@ -45,6 +45,11 @@ export class CircuitBreaker {
   private _openedAt: number | null = null;
   /** True while the single half-open probe is in flight. */
   private _probing = false;
+  /**
+   * CLOS3-S6-10: bumped on EVERY state transition. A call remembers the epoch it started in; if the breaker has
+   * transitioned since, its outcome is stale (it says nothing about the dependency's current health) and is ignored.
+   */
+  private _epoch = 0;
 
   constructor(private readonly opts: CircuitBreakerOptions) {
     if (opts.failureThreshold < 1) throw new RangeError("failureThreshold must be >= 1");
@@ -57,6 +62,7 @@ export class CircuitBreaker {
     if (this._state === "open" && this._openedAt !== null) {
       if (Date.now() - this._openedAt >= this.opts.recoveryMs) {
         this._state = "half-open";
+        this._epoch++;
       }
     }
     return this._state;
@@ -75,6 +81,7 @@ export class CircuitBreaker {
    */
   async call<T>(fn: () => Promise<T>): Promise<T> {
     const currentState = this.state; // triggers lazy open→half-open transition
+    const epoch = this._epoch; // read AFTER the lazy transition above
 
     if (currentState === "open") {
       throw new CircuitBreakerOpenError(this.opts.name);
@@ -91,10 +98,10 @@ export class CircuitBreaker {
     try {
       try {
         const result = await fn();
-        this._onSuccess();
+        this._onSuccess(epoch, isProbe);
         return result;
       } catch (err) {
-        if (this.opts.countsAsFailure?.(err) !== false) this._onFailure();
+        if (this.opts.countsAsFailure?.(err) !== false) this._onFailure(epoch, isProbe);
         throw err;
       }
     } finally {
@@ -102,16 +109,20 @@ export class CircuitBreaker {
     }
   }
 
-  private _onSuccess(): void {
+  private _onSuccess(epoch: number, isProbe: boolean): void {
+    if (!isProbe && epoch !== this._epoch) return; // stale: started before a state transition
+    if (this._state !== "closed") this._epoch++;
     this._failures = 0;
     this._openedAt = null;
     this._state = "closed";
   }
 
-  private _onFailure(): void {
+  private _onFailure(epoch: number, isProbe: boolean): void {
+    if (!isProbe && epoch !== this._epoch) return; // stale: started before a state transition
     this._failures++;
     if (this._state === "half-open" || this._failures >= this.opts.failureThreshold) {
       this._state = "open";
+      this._epoch++;
       this._openedAt = Date.now();
       this._failures = 0; // reset so the count starts fresh after recovery
     }

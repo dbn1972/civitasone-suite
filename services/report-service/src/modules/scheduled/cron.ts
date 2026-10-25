@@ -16,6 +16,7 @@ import { eq, and, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { stableUuid } from "../../shared/outbox.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { queue } from "../../shared/infra.js";
 import { scheduledReports } from "./schema.js";
@@ -35,6 +36,18 @@ const log = pino({ name: SCHEDULED_REPORT_CRON_JOB });
 const SYSTEM_ACTOR = "00000000-0000-4000-8000-000000000000";
 
 /**
+ * CLOS3-S6-06: lease taken on a due report before it is dispatched. Pushing
+ * next_run_at this far out makes the claim an atomic compare-and-set (a second
+ * tick or replica matches 0 rows) while keeping at-least-once semantics: if the
+ * dispatch crashes, the lease expires and the report is picked up again.
+ */
+const CLAIM_LEASE_MS = 15 * 60_000;
+
+// CLOS3-S6-06: a tick that outlasts the interval (delivery retries sleep 1+2+4s per
+// recipient) must not overlap with the next one in this process.
+let ticking = false;
+
+/**
  * Start the ScheduledReportCron if REPORT_SCHEDULER_ENABLED=true.
  *
  * @param intervalMs - Poll interval in milliseconds (default 60_000 = 1 min)
@@ -51,9 +64,20 @@ export function startScheduledReportCron(intervalMs = 60_000): ReturnType<typeof
   // silently-failing sweep shows up as a stale
   // scheduled_job_last_success_timestamp / a
   // scheduled_job_runs_total{status="failure"} increment, not just silence.
-  const timer = setInterval(() => void withScheduledJobMetrics(SCHEDULED_REPORT_CRON_JOB, tick, { logger: log }).catch((e) => {
-    log.error({ err: e }, "ScheduledReportCron: sweep error");
-  }), intervalMs);
+  const timer = setInterval(() => {
+    if (ticking) {
+      log.warn("ScheduledReportCron: previous tick still running, skipping this interval");
+      return;
+    }
+    ticking = true;
+    void withScheduledJobMetrics(SCHEDULED_REPORT_CRON_JOB, tick, { logger: log })
+      .catch((e) => {
+        log.error({ err: e }, "ScheduledReportCron: sweep error");
+      })
+      .finally(() => {
+        ticking = false;
+      });
+  }, intervalMs);
   timer.unref();
 
   log.info({ intervalMs }, "ScheduledReportCron: started");
@@ -87,6 +111,23 @@ export async function tick(): Promise<number> {
     const correlationId = randomUUID();
 
     try {
+      // CLOS3-S6-06: atomically claim the report (compare-and-set on next_run_at)
+      // before dispatching. No row back => another tick/replica already claimed it.
+      const claimed = await runWithTenant(scheduled.tenantId, () =>
+        db.transaction((tx) =>
+          tx.update(scheduledReports)
+            .set({ nextRunAt: new Date(now.getTime() + CLAIM_LEASE_MS), updatedAt: now })
+            .where(and(
+              eq(scheduledReports.id, scheduled.id),
+              eq(scheduledReports.tenantId, scheduled.tenantId),
+              eq(scheduledReports.enabled, true),
+              lte(scheduledReports.nextRunAt, now),
+            ))
+            .returning({ id: scheduledReports.id }),
+        ),
+      );
+      if (claimed.length === 0) continue;
+
       // Publish render job command with 120s timeout enforcement
       await queue.publish(COMMANDS.renderJob, {
         messageId: jobId,
@@ -188,7 +229,8 @@ async function deliverToRecipients(
         });
 
         await queue.publish(NOTIFICATION_SEND, {
-          messageId: `notify-${meta.jobId}-${recipient}-${attempt}`,
+          // Envelope schema requires a UUID messageId; stableUuid keeps it deterministic per attempt.
+          messageId: stableUuid(`notify-${meta.jobId}-${recipient}-${attempt}`),
           type: NOTIFICATION_SEND,
           tenantId,
           actorId: SYSTEM_ACTOR,
