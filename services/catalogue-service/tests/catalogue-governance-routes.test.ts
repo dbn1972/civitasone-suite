@@ -35,6 +35,7 @@ const H = vi.hoisted(() => ({
   insertVersionMock: vi.fn(),
   updateVersionStatusMock: vi.fn(),
   findLatestApprovedVersionMock: vi.fn(),
+  findLatestApprovedVersionsByProductIdsMock: vi.fn(),
   productIdsWithApprovedVersionMock: vi.fn(),
   listLifecycleHistoryMock: vi.fn(),
   findCurrentLifecycleMock: vi.fn(),
@@ -88,6 +89,7 @@ vi.mock("../src/modules/products/governance-repo.js", () => ({
   insertVersion: (...a: unknown[]) => H.insertVersionMock(...a),
   updateVersionStatus: (...a: unknown[]) => H.updateVersionStatusMock(...a),
   findLatestApprovedVersion: (...a: unknown[]) => H.findLatestApprovedVersionMock(...a),
+  findLatestApprovedVersionsByProductIds: (...a: unknown[]) => H.findLatestApprovedVersionsByProductIdsMock(...a),
   productIdsWithApprovedVersion: (...a: unknown[]) => H.productIdsWithApprovedVersionMock(...a),
   listLifecycleHistory: (...a: unknown[]) => H.listLifecycleHistoryMock(...a),
   findCurrentLifecycle: (...a: unknown[]) => H.findCurrentLifecycleMock(...a),
@@ -1252,7 +1254,9 @@ describe("PC-007 GET /v1/catalogue/public/products", () => {
     H.activeLifecycleProductIdsMock.mockResolvedValue([APPROVED_ACTIVE, ACTIVE_ONLY]);
     H.productIdsWithApprovedVersionMock.mockResolvedValue([APPROVED_ACTIVE]);
     H.productFindByIdsMock.mockResolvedValue([makeProduct({ id: APPROVED_ACTIVE })]);
-    H.findLatestApprovedVersionMock.mockResolvedValue(makeVersion({ status: "approved", versionNumber: 3 }));
+    H.findLatestApprovedVersionsByProductIdsMock.mockResolvedValue(
+      new Map([[APPROVED_ACTIVE, makeVersion({ status: "approved", versionNumber: 3 })]]),
+    );
 
     const app = await buildApp();
     const res = await app.inject({
@@ -1341,7 +1345,7 @@ describe("PC-007 GET /v1/catalogue/public/products", () => {
     H.activeLifecycleProductIdsMock.mockResolvedValue([PRODUCT_ID]);
     H.productIdsWithApprovedVersionMock.mockResolvedValue([PRODUCT_ID]);
     H.productFindByIdsMock.mockResolvedValue([makeProduct()]);
-    H.findLatestApprovedVersionMock.mockResolvedValue(null);
+    H.findLatestApprovedVersionsByProductIdsMock.mockResolvedValue(new Map());
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
