@@ -6,6 +6,8 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as applicationRepo from "../application/repo.js";
+import { assertAppealOutcomeTransition } from "../application/domain.js";
 import { orderOutcome } from "./domain.js";
 
 const AUDIT = "audit.event.record";
@@ -133,6 +135,7 @@ export function registerAppealConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.appealIssueOrder, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string };
+    let reopenedApplicationId: string | null = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ap = await repo.findAppealByIdTx(tx, p.id, msg.tenantId);
@@ -159,8 +162,26 @@ export function registerAppealConsumers(rawQueue: Queue): void {
           }) as unknown as Record<string, unknown>,
         });
       }
+      // V4-G-10: carry an overturned / remanded order into the application in the
+      // SAME transaction. Only a still-rejected application is touched.
+      if (ap.applicationId && (ap.orderType === "overturned" || ap.orderType === "remanded")) {
+        const target = ap.orderType === "overturned" ? "approved" : "under_review";
+        const application = await applicationRepo.findApplicationByIdTx(tx, ap.applicationId, msg.tenantId);
+        if (application && application.status === "rejected") {
+          assertAppealOutcomeTransition(application.status, target);
+          await applicationRepo.updateApplication(tx, application.id, msg.tenantId, { status: target, updatedBy: msg.actorId });
+          await applicationRepo.insertStatusHistory(tx, {
+            tenantId: msg.tenantId, applicationId: application.id,
+            fromStatus: application.status, toStatus: target,
+            note: `Appeal ${p.id} ${ap.orderType}`,
+            createdBy: msg.actorId, updatedBy: msg.actorId,
+          });
+          reopenedApplicationId = application.id;
+        }
+      }
       await audit(tx, msg, "issue_order", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "appeal", p.id));
+    if (reopenedApplicationId) await cache.invalidate(cache.makeKey(msg.tenantId, "application", reopenedApplicationId));
   });
 }
