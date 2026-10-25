@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextRegistrationNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, type GeneratorType, type WasteCategory } from "./domain.js";
 
@@ -25,8 +26,10 @@ export function registerBulkGeneratorConsumers(rawQueue: Queue): void {
     const feeMinor = calculateFeeMinor(p.generatorType as GeneratorType, p.category as WasteCategory);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated inside the transaction: a retry re-runs nextval(), so it can never collide or be lost.
+      const registrationNumber: string = await nextRegistrationNumber(tx);
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, registrationNumber: p.registrationNumber,
+        id: p.id, tenantId: msg.tenantId, registrationNumber,
         generatorName: p.generatorName, generatorType: p.generatorType,
         address: p.address, estimatedWasteKgPerDay: p.estimatedWasteKgPerDay,
         category: p.category, status: "registered", feeMinor,
@@ -35,12 +38,12 @@ export function registerBulkGeneratorConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.bulkGeneratorRegistered, eventType: EVENTS.bulkGeneratorRegistered,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { generatorId: p.id, registrationNumber: p.registrationNumber },
+        payload: { generatorId: p.id, registrationNumber },
       });
       await writeAudit(tx, ctxOf(msg), { action: "bulk_generator.register", resourceType: "swm_bulk_generator", resourceId: p.id });
     });
     log.info({ id: p.id }, "bulk generator registered");
-  });
+  }, auditFailedCreate("bulk_generator.register", "swm_bulk_generator"));
 
   queue.subscribe(COMMANDS.bulkGeneratorUpdate, async (msg) => {
     const p = msg.payload as any;
