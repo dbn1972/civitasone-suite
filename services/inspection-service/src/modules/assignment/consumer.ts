@@ -74,14 +74,23 @@ const hrmsCircuitBreaker = new CircuitBreaker({
 const HRMS_TIMEOUT_MS = 10_000; // 10s timeout
 
 /** Fetch inspector leave schedule from hrms-service with circuit breaker + timeout. */
-async function fetchInspectorLeave(
+export async function fetchInspectorLeave(
   tenantId: string,
   inspectorId: string,
   periodStart: string,
   periodEnd: string,
 ): Promise<Array<{ startDate: string; endDate: string }>> {
   const hrmsBaseUrl = process.env.HRMS_SERVICE_URL ?? "http://localhost:3012";
-  const url = `${hrmsBaseUrl}/v1/hrms/leave?employeeId=${inspectorId}&startDate=${periodStart}&endDate=${periodEnd}`;
+  // CLOS3-S5-08: the real route is the internal leave-periods read (the old
+  // /v1/hrms/leave never existed), authenticated service-to-service like the other
+  // *-client.ts files. The secret is read from the environment at call time.
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) {
+    log.warn({ event: "hrms_leave_auth_unconfigured", tenantId }, "INTERNAL_SERVICE_SECRET unset — generating tour plan without leave data");
+    return [];
+  }
+  const qs = new URLSearchParams({ employeeId: inspectorId, startDate: periodStart, endDate: periodEnd });
+  const url = `${hrmsBaseUrl}/v1/hrms/internal/leave-periods?${qs.toString()}`;
 
   return hrmsCircuitBreaker.call(async () => {
     const controller = new AbortController();
@@ -92,6 +101,8 @@ async function fetchInspectorLeave(
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          "x-internal": "1",
+          "x-service-secret": secret,
           "x-tenant-id": tenantId,
         },
         signal: controller.signal,
@@ -101,8 +112,10 @@ async function fetchInspectorLeave(
         throw new Error(`HRMS responded with status ${resp.status}`);
       }
 
-      const body = (await resp.json()) as { data: Array<{ startDate: string; endDate: string }> };
-      return body.data ?? [];
+      const body = (await resp.json()) as
+        | Array<{ startDate: string; endDate: string }>
+        | { data?: Array<{ startDate: string; endDate: string }> };
+      return Array.isArray(body) ? body : (body.data ?? []);
     } finally {
       clearTimeout(timeout);
     }

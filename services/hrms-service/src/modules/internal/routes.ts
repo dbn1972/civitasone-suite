@@ -500,6 +500,21 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ exists: emp !== null });
   });
 
+  // CLOS3-S5-08: approved leave periods for ONE employee, for inspection-service's
+  // tour-plan generation (it used to call a non-existent GET /v1/hrms/leave with no
+  // credentials, so plans were always generated without leave data). Internal-only
+  // (x-internal + x-service-secret via resolveContext), tenant-scoped by x-tenant-id,
+  // approved leave only, and returns dates only -- no reason/leave-type (PII).
+  app.get("/v1/hrms/internal/leave-periods", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    const q = z.object({ employeeId: z.string().uuid(), startDate: iso, endDate: iso }).parse(req.query);
+    if (q.endDate < q.startDate) throw new HttpError(400, "VALIDATION_ERROR", "endDate must be on or after startDate");
+    const periods = await leaveRepo.findApprovedLeavePeriods(ctx.tenantId, q.employeeId, q.startDate, q.endDate);
+    return reply.send(periods);
+  });
+
   // BUG-2 fix: single-employee DIC engagement LOP-applicability check.
   // payroll-service's integration/consumer.ts writes to a local LOP ledger
   // (payrollLopLedger, via lopRepo.upsertLopDays) whenever hrms-service
