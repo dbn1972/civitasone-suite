@@ -114,4 +114,23 @@ export const hrmsLeaveTenantConfig = leaveSchema.table("hrms_leave_tenant_config
 });
 export type LeaveTenantConfigRow = typeof hrmsLeaveTenantConfig.$inferSelect;
 
-export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions, hrmsLeaveTenantConfig };
+// V4-B-01 (migration 0252): persisted comp-off entitlements (was an in-memory array).
+export const hrmsCompOff = leaveSchema.table("hrms_comp_off", {
+  id:          uuid("id").primaryKey(),
+  tenantId:    uuid("tenant_id").notNull(),
+  employeeId:  uuid("employee_id").notNull(),
+  workedDate:  date("worked_date", { mode: "string" }).notNull(),
+  holidayName: text("holiday_name").notNull(),
+  hours:       integer("hours").notNull(),
+  reason:      text("reason").notNull().default(""),
+  status:      text("status").notNull().default("available"),
+  redeemedAt:  timestamp("redeemed_at", { withTimezone: true }),
+  createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:   uuid("created_by").notNull(),
+  updatedBy:   uuid("updated_by").notNull(),
+  version:     integer("version").notNull().default(1),
+});
+export type CompOffRow = typeof hrmsCompOff.$inferSelect;
+
+export const schema = { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveConversions, hrmsLeaveTenantConfig, hrmsCompOff };
