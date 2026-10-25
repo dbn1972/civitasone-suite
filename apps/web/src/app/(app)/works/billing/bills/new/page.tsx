@@ -1,7 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
@@ -35,6 +35,9 @@ function NewBillForm() {
     deductions: "",
   });
   const [busy, setBusy] = useState(false);
+  // Latches (CLOS3-S3-14): once the POST succeeded the form stays locked through the redirect delay.
+  const [saved, setSaved] = useState(false);
+  const inFlight = useRef(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   // Server said this bill number is already used on the work (409 DUPLICATE_BILL_NUMBER): shown under the field.
@@ -151,6 +154,7 @@ function NewBillForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (inFlight.current || saved) return;
     setError("");
     setMessage("");
     setBillNumberError("");
@@ -180,8 +184,10 @@ function NewBillForm() {
       return;
     }
 
+    inFlight.current = true;
     setBusy(true);
     formError.clear();
+    let ok = false;
     try {
       const body: Record<string, unknown> = {
         workId: form.workId.trim(),
@@ -211,13 +217,18 @@ function NewBillForm() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      ok = true;
+      setSaved(true);
       setMessage("Bill created.");
       toast.success("Bill created.");
       setTimeout(() => router.push(`/works/billing/${safeWorkId(form.workId)}`), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
-      setBusy(false);
+      if (!ok) {
+        inFlight.current = false;
+        setBusy(false);
+      }
     }
   }
 
@@ -405,17 +416,17 @@ function NewBillForm() {
             <Button
               variant="ghost"
               onClick={() => router.push(backHref)}
-              disabled={busy}
+              disabled={busy || saved}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
-              disabled={busy}
+              disabled={busy || saved}
               style={{ minHeight: 44, padding: "10px 24px" }}
             >
-              {busy ? "Creating…" : "Generate Bill"}
+              {busy || saved ? "Creating…" : "Generate Bill"}
             </Button>
           </div>
         </form>
