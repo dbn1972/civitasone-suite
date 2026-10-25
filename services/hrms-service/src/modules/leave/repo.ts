@@ -213,6 +213,31 @@ export async function lockEmployeeLeave(tx: Writer, tenantId: string, employeeId
   await (tx as typeof db).execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`leave-apply:${tenantId}:${employeeId}`}, 0))`);
 }
 
+/**
+ * CLOS3-S5-08: approved leave periods of ONE employee overlapping [fromDate, toDate]
+ * (inclusive), as bare {startDate,endDate} pairs. Approved only -- pending/rejected/
+ * cancelled leave must not remove a day from another service's schedule.
+ */
+export async function findApprovedLeavePeriods(
+  tenantId: string,
+  employeeId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<Array<{ startDate: string; endDate: string }>> {
+  const rows = await scopedRead((tx) => tx.select({ fromDate: hrmsLeaveApps.fromDate, toDate: hrmsLeaveApps.toDate })
+    .from(hrmsLeaveApps)
+    .where(and(
+      eq(hrmsLeaveApps.tenantId, tenantId),
+      eq(hrmsLeaveApps.employeeId, employeeId),
+      eq(hrmsLeaveApps.status, "approved"),
+      lte(hrmsLeaveApps.fromDate, toDate),
+      gte(hrmsLeaveApps.toDate, fromDate),
+    ))
+    .orderBy(hrmsLeaveApps.fromDate)
+    .limit(200));
+  return rows.map((r) => ({ startDate: r.fromDate, endDate: r.toDate }));
+}
+
 export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")))
