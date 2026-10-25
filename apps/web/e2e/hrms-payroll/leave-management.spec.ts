@@ -101,7 +101,7 @@ test.describe('Leave Management', () => {
 
     test('shows submit button', async ({ page }) => {
       await page.goto('/hr/leave/apply');
-      await expect(page.getByRole('button', { name: /submit|apply/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /submit leave request/i })).toBeVisible();
     });
 
     test('validates required fields on empty submit', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Leave Management', () => {
       // Settle the form first: Submit is disabled until the employee list has loaded, so
       // reading isDisabled() straight after goto() raced it (and click() then waited forever).
       await page.waitForLoadState('networkidle');
-      const submitBtn = page.getByRole('button', { name: /submit|apply/i });
+      const submitBtn = page.getByRole('button', { name: /submit leave request/i });
       // Form uses disabled-button pattern: button disabled until fields filled
       if (await submitBtn.isDisabled()) {
         await expect(submitBtn).toBeDisabled();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFormError } from "@/lib/useFormError";
 import { Button, ConfirmDialog, DataTable, PageHeader } from "../../../../_components/ds";
 import {
@@ -101,6 +101,15 @@ export default function ImportContactsPage() {
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([]);
   const [checking, setChecking] = useState(false);
   const [ackDuplicates, setAckDuplicates] = useState(false);
+  // The batch-status poll outlives the click that started it. Stop it (and never set state)
+  // once the page unmounts, instead of polling a torn-down tree.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const { rows: preview, rejected } = useMemo(() => parseContactCsv(csv), [csv]);
   const overRowCap = preview.length > MAX_ROWS;
@@ -174,6 +183,7 @@ export default function ImportContactsPage() {
             if (r) pending.set(id, r);
           }),
       );
+      if (!mountedRef.current) return;
       const results = [...pending.values()].filter((v): v is BatchResult => v !== null);
       const stillPending = results.length < batchIds.length;
       // Fold whatever we have so far into the summary.
@@ -194,6 +204,7 @@ export default function ImportContactsPage() {
       );
       if (!stillPending) return;
       await new Promise((r) => setTimeout(r, DELAY_MS));
+      if (!mountedRef.current) return;
     }
   }
 

@@ -137,7 +137,13 @@ test.describe('Workforce Operations — S16', () => {
       // The canonical page's <form> has no aria-label, so it isn't exposed
       // with an accessible "form" role -- assert the labelled fields directly.
       // The employee is picked from a labelled "Employee" select (not a free-text "Employee ID" input).
-      await expect(page.getByLabel('Employee', { exact: true })).toBeVisible();
+      // The form renders disabled until the employee directory has loaded; the submit button is
+      // enabled only once it has (mode leaves "loading"), so await that real state first. The
+      // label also gains its required marker at that moment ("Employee" -> "Employee *"), so an
+      // exact getByLabel only ever matched during the loading window; match the select by its
+      // accessible name instead, which the marker does not change.
+      await expect(page.getByRole('button', { name: /^submit/i })).toBeEnabled();
+      await expect(page.getByRole('combobox', { name: 'Employee' })).toBeVisible();
       await expect(page.getByLabel(/Date/i).first()).toBeVisible();
       await expect(page.getByLabel(/Hours/i)).toBeVisible();
     });

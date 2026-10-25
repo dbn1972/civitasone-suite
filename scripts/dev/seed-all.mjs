@@ -1002,6 +1002,158 @@ ON CONFLICT (id) DO NOTHING;
 `);
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Contract-verify fixtures (live-stack verification, scripts/contract/verify-screens.mjs)
+//
+// Every screen whose loader reads a detail record (`/<collection>/:id`) is verified
+// against a REAL id, taken from its parent collection or from SEED_IDS in
+// verify-screens.mjs. A collection that is empty at verification time can only be
+// answered with a placeholder id, which proves the route exists but nothing about the
+// record round-trip (verdict ROUTE_OK, scored 0 for A4_live_200), and a bare `[]`
+// body is scored half (EMPTY). These fixtures give each such collection exactly one
+// row (fixed ids c0ffee00-*, idempotent) so the verifier proves the whole chain:
+// gateway -> service -> table -> serialised row, for the detail AND the list.
+// ─────────────────────────────────────────────────────────────────────────────
+const CF = (n) => `c0ffee00-0001-0000-0000-${String(n).padStart(12, "0")}`;
+const EMP = "eeeeeeee-0001-0000-0000-000000000005";
+
+console.log("=== contract-verify fixtures: finance-service ===");
+seed("civitas_finance", "audit-paras+debt+demands+guarantees+schemes+challans+instruments+deposits+vendors", `
+INSERT INTO audit.finance_audit_paras (id, tenant_id, para_no, source, dept, money_value_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(1)}', '${T}', 'CAG/2024-25/001', 'cag', 'Public Works Department', 125000000, 'INR', 'open', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO treasury.finance_debt (id, tenant_id, instrument, source, amount_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(2)}', '${T}', 'State Development Loan 2034', 'market_borrowing', 500000000, 'INR', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO budget.finance_demands (id, tenant_id, demand_no, service, amount_minor, currency, class, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(3)}', '${T}', 'DG-2024-25-01', 'General Education', 900000000, 'INR', 'voted', 'approved', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO treasury.finance_guarantees (id, tenant_id, entity, type, amount_minor, currency, fee_pct, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(4)}', '${T}', 'State Power Corporation', 'bg', 250000000, 'INR', 1.5, 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO budget.finance_schemes (id, tenant_id, code, name, outlay_minor, utilised_minor, currency, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(5)}', '${T}', 'SCH-2024-01', 'Rural Roads Scheme', 800000000, 320000000, 'INR', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO treasury.finance_challans (id, tenant_id, challan_no, receipt_head_id, depositor, amount_minor, currency, status, reconciled, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(6)}', '${T}', 'CH-2024-0001', 'dddddddd-0001-0000-0000-000000000020', 'Rakesh Kumar', 1500000, 'INR', 'deposited', false, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO treasury.finance_instruments (id, tenant_id, instrument_type, instrument_no, bank_name, payee, amount_minor, currency, issue_date, status, represent_count, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(7)}', '${T}', 'cheque', '000417', 'State Bank of India', 'Sharma Constructions', 2500000, 'INR', CURRENT_DATE, 'issued', 0, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO treasury.finance_deposits (id, tenant_id, pd_no, type, administrator, balance_minor, currency, status, forfeited_minor, refunded_minor, adjusted_minor, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(8)}', '${T}', 'PD-2024-0001', 'pd', 'District Collector', 7500000, 'INR', 'active', 0, 0, 0, now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO payments.finance_vendors (id, tenant_id, name, category, pan, address, bank_name, bank_account_no, ifsc, is_active, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(9)}', '${T}', 'Sharma Constructions Pvt Ltd', 'works', 'ABCPS1234F', '12 Civil Lines, New Delhi', 'State Bank of India', '30123456789', 'SBIN0001234', true, 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: estab-service ===");
+seed("civitas_estab", "library books+issues", `
+INSERT INTO facilities.estab_library_books (id, tenant_id, accession_no, title, author, isbn, category, copies_total, copies_available, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(10)}', '${T}', 'ACC-2024-0001', 'Manual of Office Procedure', 'Department of Administrative Reforms', '9788100000001', 'reference', 3, 2, 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO facilities.estab_issues (id, tenant_id, book_id, employee_ref, issued_at, due_at, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(11)}', '${T}', '${CF(10)}', '${EMP}', now(), now() + interval '14 days', 'issued', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: hrms-service ===");
+seed("civitas_hrms", "disciplinary case+event", `
+INSERT INTO disciplinary.hrms_disciplinary_cases (id, tenant_id, employee_id, case_no, proceeding_type, status, allegation, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(12)}', '${T}', '${EMP}', 'DISC/2024/001', 'minor', 'opened', 'Unauthorised absence from duty for three consecutive working days.', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO disciplinary.hrms_disciplinary_events (id, tenant_id, case_id, from_status, to_status, action, actor_id, occurred_at)
+VALUES ('${CF(13)}', '${T}', '${CF(12)}', NULL, 'opened', 'open', '${A}', now())
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: payroll-service ===");
+seed("civitas_payroll", "pensioner+gpf+nps statements", `
+INSERT INTO payroll.payroll_pensioners (id, tenant_id, ppo_no, full_name, date_of_birth, basic_pension_minor, commuted_pension_minor, medical_allowance_minor, tax_regime, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(14)}', '${T}', 'PPO/2020/00417', 'Ramesh Chandra Verma', '1958-03-14', 2250000, 0, 100000, 'new', 'active', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO statutory.payroll_gpf (id, tenant_id, slip_id, employee_id, run_id, basic_minor, contrib_pct, emp_contrib_minor, currency, period, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(15)}', '${T}', 'ffffffff-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000005', 'ffffffff-0001-0000-0000-000000000005', 14400000, 10, 1440000, 'INR', '2024-12', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO statutory.payroll_nps (id, tenant_id, slip_id, employee_id, run_id, basic_minor, emp_contrib_pct, er_contrib_pct, emp_contrib_minor, er_contrib_minor, currency, period, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(16)}', '${T}', 'ffffffff-0001-0000-0000-000000000007', 'eeeeeeee-0001-0000-0000-000000000005', 'ffffffff-0001-0000-0000-000000000005', 14400000, 10, 14, 1440000, 2016000, 'INR', '2024-12', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: helpdesk-service ===");
+seed("civitas_helpdesk", "catalogue offering+request", `
+INSERT INTO helpdesk.catalogue_offerings (id, tenant_id, name, category, status, approval_required, request_form_schema, fulfilment_stages, default_priority, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(17)}', '${T}', 'New laptop request', 'it', 'active', false, '[]', '[]', 'Medium', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO helpdesk.service_requests (id, tenant_id, offering_id, requested_by, form_data, status, sla_status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(18)}', '${T}', '${CF(17)}', '${A}', '{}', 'pending_fulfilment', 'within_sla', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: inventory-service ===");
+seed("civitas_inventory", "cycle count+goods return", `
+INSERT INTO inventory.cycle_counts (id, tenant_id, item_id, warehouse_id, system_qty, physical_qty, variance, abs_variance, auto_adjust_threshold, reason_code, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(19)}', '${T}', '55555555-0003-0000-0000-000000000001', '${CF(40)}', 50, 48, -2, 2, 5, 'count_error', 'pending', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO inventory.goods_returns (id, tenant_id, original_issue_id, item_id, store_id, qty, reason, qc_status, disposition, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(20)}', '${T}', '${CF(41)}', '55555555-0003-0000-0000-000000000001', '${CF(40)}', 1, 'wrong item issued', 'pending', 'pending', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: legal-service ===");
+seed("civitas_legal", "legal opinion", `
+INSERT INTO opinions.legal_opinions (id, tenant_id, opinion_no, subject, question, status, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(21)}', '${T}', 'LO/2024/001', 'Eligibility of contract staff for gratuity', 'Whether consolidated-pay contract employees are entitled to gratuity on completion of five years.', 'sought', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: procurement-service ===");
+seed("civitas_procurement", "annual procurement plan", `
+INSERT INTO planning.procurement_plans (id, tenant_id, plan_no, plan_year, title, department, status, total_estimated_minor, currency, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(22)}', '${T}', 'APP/2024-25/001', 2024, 'Annual procurement plan 2024-25', 'Public Works Department', 'approved', 1200000000, 'INR', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: ai-agent-service ===");
+seed("civitas_ai_agent", "conversation+copilot turn", `
+INSERT INTO ai_agent.conversations (id, tenant_id, channel_id, profile_id, status, language, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(23)}', '${T}', '${CF(42)}', '${CF(43)}', 'active', 'en', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO ai_agent.copilot_turns (id, tenant_id, user_id, prompt, source_citations, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(24)}', '${T}', '${A}', 'Summarise open audit paragraphs for this quarter.', '[]', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: crm-service ===");
+seed("civitas_crm", "campaign performance", `
+INSERT INTO crm.campaign_performance (id, tenant_id, campaign_id, campaign_name, responses, cost_minor, revenue_minor, currency, period_start, period_end, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(26)}', '${T}', '${CF(25)}', 'Citizen outreach Q3', 120, 5000000, 8000000, 'INR', '2024-07-01', '2024-09-30', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+console.log("=== contract-verify fixtures: recommendation-service ===");
+seed("civitas_recommendation", "account health score", `
+INSERT INTO recommendation.health_scores (id, tenant_id, account_id, score, factors, created_at, updated_at, created_by, updated_by, version)
+VALUES ('${CF(27)}', '${T}', '${CF(28)}', 72, '{"engagement":70,"support":75}', now(), now(), '${A}', '${A}', 1)
+ON CONFLICT (id) DO NOTHING;
+`);
+
+// ─────────────────────────────────────────────────────────────────────────────
 console.log("\n── Seed summary ─────────────────────────");
 console.log(`Batches seeded : ${seeded}`);
 console.log(`Errors         : ${errors}`);
