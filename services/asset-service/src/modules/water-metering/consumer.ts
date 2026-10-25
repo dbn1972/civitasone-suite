@@ -25,9 +25,10 @@ import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { validateMeterReading, calculateBillAmount, generateBillNumber } from "./domain.js";
+import { validateMeterReading, calculateBillAmount } from "./domain.js";
 
 const log = pino({ name: "water-metering-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -86,9 +87,11 @@ export function registerWaterMeteringConsumers(rawQueue: Queue): void {
       const { amountMinor, taxMinor, totalMinor } = calculateBillAmount(p.consumptionKl, ratePerKlMinor);
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const billNumber = await nextNumber(tx, "waterBill");
         await repo.insertBill(tx, {
           id: p.id, tenantId: p.tenantId, connectionId: p.connectionId,
-          billNumber: generateBillNumber(), billingPeriod: p.billingPeriod ?? null,
+          billNumber, billingPeriod: p.billingPeriod ?? null,
           readingId: p.readingId ?? null, consumptionKl: String(p.consumptionKl),
           ratePerKl: ratePerKlMinor, amountMinor, taxMinor, totalMinor,
           dueDate: p.dueDate,
@@ -101,8 +104,8 @@ export function registerWaterMeteringConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "generate", "water_bill", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterBillGenerate failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterBillGenerate failed"); throw err; }
+  }, auditFailedCreate("generate", "water_bill"));
 
   // ── service requests ─────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.waterServiceRequestCreate, async (msg) => {
