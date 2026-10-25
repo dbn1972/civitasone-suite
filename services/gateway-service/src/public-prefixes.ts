@@ -44,6 +44,9 @@
  * the gateway bearer pre-check. Narrow to the `public` sub-tree, NOT /api/v1/hrms/visiting-card
  * (the authenticated /me routes keep their edge check).
  */
+/** Payment-gateway callbacks: passed through with the RAW body (provider signatures cover the exact bytes). */
+export const BILLING_WEBHOOK_PREFIX = "/api/v1/billing/webhooks";
+
 export const PUBLIC_PREFIXES = [
   "/api/identity",
   "/api/v1/install",
@@ -54,5 +57,5 @@ export const PUBLIC_PREFIXES = [
   "/api/v1/hrms/visiting-card/public",
   // V4-B-03: payment-gateway server-to-server callbacks (Razorpay/PayU/CCAvenue). No bearer token
   // exists on them; billing-service authenticates each by the provider signature / hash.
-  "/api/v1/billing/webhooks",
+  BILLING_WEBHOOK_PREFIX,
 ];

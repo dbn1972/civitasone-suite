@@ -27,7 +27,7 @@ import { proxyFetch, getBreakerStates } from "./upstream-proxy.js";
 import { jwtEdgeVerify } from "./jwt-edge.js";
 import type { CivitasJwtPayload } from "@civitasone/auth";
 import { canonicalisePath, BAD_PATH_RESPONSE } from "./path-guard.js";
-import { PUBLIC_PREFIXES } from "./public-prefixes.js";
+import { BILLING_WEBHOOK_PREFIX, PUBLIC_PREFIXES } from "./public-prefixes.js";
 import {
   getConfig,
   applyConfig,
@@ -276,6 +276,20 @@ async function proxyHandler(
     delete (headers as Record<string, string | undefined>)[h];
   }
 
+  // V4-B-03: payment-gateway webhook pass-through. The provider signature is the ONLY auth and is
+  // computed over the exact bytes, so the raw body is forwarded unmodified (see the scoped parser
+  // below) together with the provider signature header; any client-supplied identity / bearer
+  // header is dropped so an anonymous caller cannot present a tenant to billing-service.
+  const isBillingWebhook =
+    pathname === BILLING_WEBHOOK_PREFIX || pathname.startsWith(BILLING_WEBHOOK_PREFIX + "/");
+  if (isBillingWebhook) {
+    const sig = req.headers["x-razorpay-signature"];
+    if (typeof sig === "string") headers["x-razorpay-signature"] = sig;
+    for (const h of ["authorization", "x-tenant-id", "x-actor-id", "x-idempotency-key"]) {
+      delete (headers as Record<string, string | undefined>)[h];
+    }
+  }
+
   // GAP2-SHELL-PROXY-01: authoritatively re-derive the tenant/actor identity headers
   // from a SERVER-VERIFIED source here, unconditionally, rather than relying on
   // jwtEdgeVerify to have overwritten them. jwtEdgeVerify only reaches its
@@ -349,7 +363,12 @@ async function proxyHandler(
   headers["x-gateway-request"] = "1";
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD";
-  const body = hasBody ? JSON.stringify(req.body ?? {}) : null;
+  // Webhook paths carry the raw string captured by the scoped parser; everything else is re-serialised JSON.
+  const body = hasBody
+    ? isBillingWebhook && typeof req.body === "string"
+      ? req.body
+      : JSON.stringify(req.body ?? {})
+    : null;
 
   // ── Per-upstream circuit breaker + timeout ──────────────────────────────────
   const result = await proxyFetch({
@@ -765,6 +784,23 @@ export async function buildApp(): Promise<FastifyInstance> {
     bodyLimit: CAREERS_RESUME_BODY_LIMIT_BYTES,
     config: { rateLimit: {} },
     handler: proxyHandler,
+  });
+
+  // V4-B-03: billing payment-gateway webhooks. Encapsulated so ONLY this sub-tree gets raw-string
+  // body parsers (JSON and form-urlencoded, as sent by Razorpay / PayU / CCAvenue); the global JSON
+  // parser would otherwise re-serialise the body and break the provider HMAC.
+  await app.register(async (webhookScope) => {
+    const rawString = (_req: unknown, body: string | Buffer, done: (e: Error | null, b?: unknown) => void) =>
+      done(null, body);
+    webhookScope.removeContentTypeParser("application/json"); // child-scope copy of the inherited JSON parser
+    webhookScope.addContentTypeParser("application/json", { parseAs: "string" }, rawString);
+    webhookScope.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, rawString);
+    webhookScope.route({
+      method: "POST",
+      url: `${BILLING_WEBHOOK_PREFIX}/*`,
+      config: { rateLimit: {} },
+      handler: proxyHandler,
+    });
   });
 
   app.route({
