@@ -500,7 +500,8 @@
     "validationNotDistinct": "This person is already selected for another role above.",
     "cancelBtn": "Cancel",
     "initiatingBtn": "Initiating…",
-    "initiateBtn": "Initiate APAR"
+    "initiateBtn": "Initiate APAR",
+    "backToList": "Back to APAR list"
   },
   "aparStageActions": {
     "title": "Workflow Action",
