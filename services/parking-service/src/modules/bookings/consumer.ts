@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -30,16 +29,12 @@ export function registerBookingConsumers(rawQueue: Queue): void {
       vehicleType: string;
       spaceNumber?: string;
     };
-    // Mitigation: was `Date.now() % 999999` — a deterministic sequence repeating
-    // every ~16.7 minutes, checked against a globally (not per-tenant) .unique()
-    // column, colliding across ALL tenants and throwing inside this transaction
-    // after the caller already got 202. crypto.randomInt makes collisions far
-    // less likely without a schema change; a real fix needs a per-tenant DB
-    // sequence (follow-up, not done here — same pattern recurs fleet-wide).
-    const bookingNumber = generateBookingNumber("ULB", randomInt(1, 999999));
+    let bookingNumber = "";
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      bookingNumber = generateBookingNumber("ULB", await repo.nextBookingSeq(tx));
       await repo.insertBooking(tx, {
         id: p.id,
         tenantId: msg.tenantId,
