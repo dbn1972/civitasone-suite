@@ -6,7 +6,7 @@ import type { CreateApprovalLevelBody, UpdateApprovalLevelBody } from "./validat
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-/** Queue-first create — ordinal is resolved by the route from a pre-publish count read. */
+/** Queue-first create — the ordinal sent here is advisory; the consumer allocates max(ordinal)+1 under a per-tenant lock (CLOS3-S4-04). */
 export async function createApprovalLevel(
   ctx: RequestContext, ordinal: number, body: CreateApprovalLevelBody,
 ): Promise<Accepted> {
