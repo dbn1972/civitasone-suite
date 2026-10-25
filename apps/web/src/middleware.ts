@@ -22,7 +22,7 @@ import { tileImgSource } from "@/lib/mapTiles";
 // route that merely starts with the same letters stays private.
 const PUBLIC_EXACT = ["/"];
 const PUBLIC_SEGMENT = ["/pricing", "/docs"];
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known", "/logout", "/offline"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).

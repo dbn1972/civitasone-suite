@@ -183,3 +183,17 @@ describe("middleware public allow-list segment boundary (V4-A-04)", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 });
+
+// V4-A-09: logout must work without a valid access cookie, and the offline
+// fallback page (precached by sw.js) must render without auth.
+describe("middleware /logout and /offline are public (V4-A-09)", () => {
+  it.each(["/logout", "/offline"])("lets an anonymous request to %s through", (path) => {
+    const res = middleware(anonReq(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it.each(["/logoutx", "/offline-admin"])("does not make %s public", (path) => {
+    expect(middleware(anonReq(path)).status).toBe(307);
+  });
+});
