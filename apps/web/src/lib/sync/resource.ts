@@ -79,7 +79,13 @@ export function useOfflineResource<TApi, T>(
       setError(null);
 
       // 1) instant paint from cache.
-      const cached = await readCache<T>(cacheKey);
+      // Unavailable storage (private mode, blocked IndexedDB) is a cache miss, not a fatal error (CLOS3-S3-08).
+      let cached: Awaited<ReturnType<typeof readCache<T>>> = null;
+      try {
+        cached = await readCache<T>(cacheKey);
+      } catch {
+        /* unavailable storage = cache miss */
+      }
       if (active && cached) {
         setData(cached.value);
         setCachedAt(cached.cachedAt);

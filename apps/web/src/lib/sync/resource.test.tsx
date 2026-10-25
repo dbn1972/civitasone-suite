@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
 // useSeededResource's cache fallback goes through these two functions. jsdom
@@ -11,7 +11,7 @@ vi.mock("./responseCache", () => ({
 }));
 
 import { readCache, writeCache } from "./responseCache";
-import { useSeededResource } from "./resource";
+import { useOfflineResource, useSeededResource } from "./resource";
 
 const mockedReadCache = vi.mocked(readCache);
 const mockedWriteCache = vi.mocked(writeCache);
@@ -98,5 +98,50 @@ describe("useSeededResource — UX-002 dataProvenance is the single source of tr
     expect(mockedWriteCache).toHaveBeenCalledWith("k.apiempty", []);
     // The stale cached rows are never read into state.
     expect(result.current.data).not.toEqual([{ id: 1 }]);
+  });
+});
+
+describe("useOfflineResource — CLOS3-S3-08 unavailable cache read", () => {
+  const map = (raw: { n: number }): { n: number } => ({ n: raw.n * 2 });
+  const initialData = { n: 0 };
+  const okJson = (body: unknown): Response =>
+    ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+    mockedWriteCache.mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a rejecting readCache as a cache miss and still fetches live", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    const fetchMock = vi.fn(async () => okJson({ n: 21 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useOfflineResource("k.s308a", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toEqual({ n: 42 });
+    expect(result.current.source).toBe("live");
+    expect(result.current.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the load error (no unhandled rejection) when readCache rejects and the fetch fails", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("net"); }));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() => useOfflineResource("k.s308b", "/v1/x", { map, initialData }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.error).not.toBeNull();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
   });
 });
