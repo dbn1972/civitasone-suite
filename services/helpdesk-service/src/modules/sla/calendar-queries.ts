@@ -37,6 +37,16 @@ export async function ticketExists(tenantId: string, ticketId: string): Promise<
   return !!row;
 }
 
+/** Ticket requester (creator) id, or null when the ticket does not exist in the tenant. */
+export async function ticketRequesterId(tenantId: string, ticketId: string): Promise<string | null> {
+  const [row] = await db.transaction((tx) =>
+    tx.select({ createdBy: tickets.createdBy }).from(tickets)
+      .where(and(eq(tickets.id, ticketId), eq(tickets.tenantId, tenantId)))
+      .limit(1),
+  );
+  return row?.createdBy ?? null;
+}
+
 export async function findActivePause(tenantId: string, ticketId: string) {
   const [row] = await db.transaction((tx) =>
     tx.select().from(slaPauses).where(and(
