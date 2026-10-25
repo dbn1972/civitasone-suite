@@ -14,8 +14,10 @@ export function registerAttendanceConsumers(queue: Queue): void {
       batchId: string; tenantId: string;
       records: Array<{ employeeId: string; attendanceDate: string; status: string; inTime?: string; outTime?: string; shiftId?: string; lateMins?: number; source?: string }>;
     };
+    let applied = false;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      applied = true;
       for (const r of p.records) {
         await repo.upsertAttendance(tx, {
           id: randomUUID(), tenantId: p.tenantId,
@@ -37,6 +39,9 @@ export function registerAttendanceConsumers(queue: Queue): void {
         payload: { service: "hrms", action: "mark_bulk", resourceType: "attendance", resourceId: p.batchId, count: p.records.length, outcome: "success" },
       });
     });
+    // The tenant-wide list (queries.ts listAttendance, resource "attendance") is cached separately from the
+    // per-employee-month keys cleared above; clear it once per committed batch (CLOS3-S5-19).
+    if (applied) await cache.invalidateResource(p.tenantId, "attendance");
   });
 
   const handleLockState = async (msg: Parameters<Parameters<Queue["subscribe"]>[1]>[0]): Promise<void> => {
