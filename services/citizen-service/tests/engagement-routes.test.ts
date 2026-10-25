@@ -5,7 +5,7 @@
  * stores (migration 0041). Real HTTP route -> memory queue -> consumer -> DB
  * round trip. Covers: role gates (403), tenant isolation (RLS + explicit
  * predicates), draft/withdrawn invisibility to bare citizens, derived "expired",
- * the maker/checker split (officer drafts, admin publishes), idempotent state
+ * the maker/checker split (officer drafts, a different officer or admin publishes), idempotent state
  * transitions, owner-scoped survey responses, and audit emission.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -27,6 +27,7 @@ const TENANT_B = "b2b2b2b2-0000-4000-8000-000000000041";
 const CITIZEN_1 = "11111111-0000-4000-8000-000000000041";
 const CITIZEN_2 = "22222222-0000-4000-8000-000000000041";
 const OFFICER   = "33333333-0000-4000-8000-000000000041";
+const OFFICER_2 = "77777777-0000-4000-8000-000000000041";
 const ADMIN     = "44444444-0000-4000-8000-000000000041";
 const ADMIN_B   = "55555555-0000-4000-8000-000000000041";
 const CITIZEN_B = "66666666-0000-4000-8000-000000000041";
@@ -38,6 +39,7 @@ const hdr = (t: string, tenant = TENANT_A) => ({ authorization: `Bearer ${t}`, "
 const citizen1 = () => hdr(tok(TENANT_A, CITIZEN_1, ["citizen"]));
 const citizen2 = () => hdr(tok(TENANT_A, CITIZEN_2, ["citizen"]));
 const officer  = () => hdr(tok(TENANT_A, OFFICER, ["citizen_officer"]));
+const officer2 = () => hdr(tok(TENANT_A, OFFICER_2, ["citizen_officer"]));
 const admin    = () => hdr(tok(TENANT_A, ADMIN, ["citizen_admin"]));
 const adminB   = () => hdr(tok(TENANT_B, ADMIN_B, ["citizen_admin"]), TENANT_B);
 const citizenB = () => hdr(tok(TENANT_B, CITIZEN_B, ["citizen"]), TENANT_B);
@@ -107,7 +109,7 @@ describe("alerts — GET/POST /v1/citizen/alerts", () => {
     expect((await get("/v1/citizen/alerts?status=bogus", officer())).statusCode).toBe(400);
   });
 
-  it("publishing is admin-only: officer 403, admin 202 -> citizen sees status 'active' with the web row shape", async () => {
+  it("publishing: the creating officer 403, citizen 403, admin 202 -> citizen sees status 'active' with the web row shape", async () => {
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, officer())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, citizen1())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, admin())).statusCode).toBe(202);
@@ -121,6 +123,27 @@ describe("alerts — GET/POST /v1/citizen/alerts", () => {
 
   it("publishing again is a 409 (state guard)", async () => {
     expect((await post(`/v1/citizen/alerts/${alertId}/publish`, admin())).statusCode).toBe(409);
+  });
+
+  it("a second officer (not the creator) publishes an officer's draft: 202, then a citizen sees it", async () => {
+    const title = `Power cut ${randomUUID().slice(0, 8)}`;
+    expect((await post("/v1/citizen/alerts", officer(), { title, category: "Utilities", targetAudience: "All" })).statusCode).toBe(202);
+    const id = (await waitFor(async () => (await listRows("/v1/citizen/alerts?status=draft", officer())).find((a) => a.title === title))).id as string;
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, officer())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, officer2())).statusCode).toBe(202);
+    const row = await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).find((a) => a.id === id));
+    expect(row.status).toBe("active");
+  });
+
+  it("admin keeps full rights: admin publishes an officer draft, a citizen cannot withdraw, an officer can", async () => {
+    const res = await post("/v1/citizen/alerts", officer(), { title: "Road closure", category: "Traffic", targetAudience: "All" });
+    expect(res.statusCode).toBe(202);
+    const id = (await waitFor(async () => (await listRows("/v1/citizen/alerts?status=draft", officer())).find((a) => a.title === "Road closure"))).id as string;
+    expect((await post(`/v1/citizen/alerts/${id}/publish`, admin())).statusCode).toBe(202);
+    await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).find((a) => a.id === id));
+    expect((await post(`/v1/citizen/alerts/${id}/withdraw`, citizen1())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/alerts/${id}/withdraw`, officer())).statusCode).toBe(202);
+    await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).every((a) => a.id !== id));
   });
 
   it("'expired' is derived from expires_at, never stored", async () => {
@@ -140,7 +163,8 @@ describe("alerts — GET/POST /v1/citizen/alerts", () => {
   });
 
   it("withdraw hides it from citizens; the audit trail recorded create/publish/withdraw", async () => {
-    expect((await post(`/v1/citizen/alerts/${alertId}/withdraw`, admin())).statusCode).toBe(202);
+    expect((await post(`/v1/citizen/alerts/${alertId}/withdraw`, citizen1())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/alerts/${alertId}/withdraw`, officer2())).statusCode).toBe(202);
     await waitFor(async () => (await listRows("/v1/citizen/alerts", citizen1())).every((a) => a.id !== alertId));
     expect((await post(`/v1/citizen/alerts/${alertId}/withdraw`, admin())).statusCode).toBe(409);
     const actions = await auditActions(TENANT_A);
@@ -182,7 +206,7 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
     expect((await get(`/v1/citizen/notices/${noticeId}`, citizen1())).statusCode).toBe(404);
   });
 
-  it("admin publishes -> citizen row has the exact web shape (type label, '' expiry)", async () => {
+  it("publishing: creating officer 403, admin 202 -> citizen row has the exact web shape (type label, '' expiry)", async () => {
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, officer())).statusCode).toBe(403);
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, admin())).statusCode).toBe(202);
     const row = await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === noticeId));
@@ -190,6 +214,16 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
       id: noticeId, noticeNo: expect.stringMatching(/^NTC-\d{4}-[0-9A-F]{8}$/), subject: "Public hearing on road widening",
       department: "Public Works", published: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), expiry: "", type: "Public Hearing",
     });
+  });
+
+  it("a second officer (not the creator) publishes an officer's notice: 202, then a citizen sees it", async () => {
+    const subject = `Water notice ${randomUUID().slice(0, 8)}`;
+    expect((await post("/v1/citizen/notices", officer(), { subject, department: "Public Works", type: "tender" })).statusCode).toBe(202);
+    const id = (await waitFor(async () => (await listRows("/v1/citizen/notices?status=draft", officer())).find((n) => n.subject === subject))).id as string;
+    expect((await post(`/v1/citizen/notices/${id}/publish`, officer())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/notices/${id}/publish`, officer2())).statusCode).toBe(202);
+    const row = await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === id));
+    expect(row.subject).toBe(subject);
   });
 
   it("a duplicate supplied noticeNo is a 409; a supplied noticeNo is honoured", async () => {
@@ -203,7 +237,8 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
     expect((await listRows("/v1/citizen/notices?status=all", adminB())).find((n) => n.id === noticeId)).toBeUndefined();
     expect((await post(`/v1/citizen/notices/${noticeId}/withdraw`, adminB())).statusCode).toBe(404);
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, admin())).statusCode).toBe(409);
-    expect((await post(`/v1/citizen/notices/${noticeId}/withdraw`, admin())).statusCode).toBe(202);
+    expect((await post(`/v1/citizen/notices/${noticeId}/withdraw`, citizen1())).statusCode).toBe(403);
+    expect((await post(`/v1/citizen/notices/${noticeId}/withdraw`, officer())).statusCode).toBe(202);
     await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).every((n) => n.id !== noticeId));
     expect(await auditActions(TENANT_A)).toEqual(expect.arrayContaining(["citizen_notice:create", "citizen_notice:publish", "citizen_notice:withdraw"]));
   });
