@@ -84,6 +84,57 @@ describe("CLOS3-S4-07 NIC client timeouts", () => {
     expect((r as Error).message).toMatch(/timed out/i);
   });
 
+  /**
+   * Headers arrive promptly but the body never resolves (ignores the abort signal
+   * on purpose, so only the deadline can end the call). `stallOn` = fetch call #s.
+   */
+  function stubStalledBody(stallOn: number) {
+    let n = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        n += 1;
+        if (n === stallOn) {
+          const never = () => new Promise<never>(() => undefined);
+          return Promise.resolve({ ok: true, status: 200, text: never, json: never } as unknown as Response);
+        }
+        return Promise.resolve(authOk());
+      }),
+    );
+  }
+
+  it("auth body stall times out", async () => {
+    stubStalledBody(1);
+    const nic = await load();
+    const r = await settle(nic.generateIrn(payload));
+    expect(r).toBeInstanceOf(Error);
+    expect((r as Error).message).toMatch(/timed out/i);
+  });
+
+  it("generateIrn body stall times out", async () => {
+    stubStalledBody(2);
+    const nic = await load();
+    const r = await settle(nic.generateIrn(payload));
+    expect(r).toBeInstanceOf(Error);
+    expect((r as Error).message).toMatch(/timed out/i);
+  });
+
+  it("cancelIrn body stall times out", async () => {
+    stubStalledBody(2);
+    const nic = await load();
+    const r = await settle(nic.cancelIrn("irn1", "dup"));
+    expect(r).toBeInstanceOf(Error);
+    expect((r as Error).message).toMatch(/timed out/i);
+  });
+
+  it("getIrnByDocNo body stall times out", async () => {
+    stubStalledBody(2);
+    const nic = await load();
+    const r = await settle(nic.getIrnByDocNo("27AAAAA0000A1Z5", "INV0001", "2025-26"));
+    expect(r).toBeInstanceOf(Error);
+    expect((r as Error).message).toMatch(/timed out/i);
+  });
+
   it("happy path still maps the response and passes a signal", async () => {
     const f = stubFetch([], {
       Irn: "i", AckNo: "a", AckDt: "d", SignedInvoice: "s", SignedQRCode: "q",
