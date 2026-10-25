@@ -58,15 +58,21 @@ export function usePagedRegister<T extends { id: string }>(path: string, pageSiz
     setLoading(true);
     setFailed(false);
     setMoreError(null);
+    // CLOS3-S1-07: an aborted load was superseded by a newer one (query/path/pageSize change) that has
+    // already set loading=true; its finally must not clear that flag.
+    let superseded = false;
     try {
       const page = await fetchPage(0, query, signal);
       setRows(page.rows);
       setTotal(page.total);
     } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") return;
+      if (e instanceof Error && e.name === "AbortError") {
+        superseded = true;
+        return;
+      }
       setFailed(true);
     } finally {
-      setLoading(false);
+      if (!superseded) setLoading(false);
     }
   }, [fetchPage, query]);
 
