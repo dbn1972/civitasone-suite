@@ -115,6 +115,8 @@ export const EVENTS = {
   eligibilityRuleSetPublished: "citizen.eligibility.ruleset_published",
   // SVC-085 fee & payment
   receiptIssued:          "citizen.receipt.issued",
+  /** V4-G-09: an approved (possibly partial) refund -> finance GL reversal. */
+  refundApproved:         "citizen.refund.approved",
   // SVC-086 issuance
   certificateIssued:      "citizen.certificate.issued",
   certificateRevoked:     "citizen.certificate.revoked",

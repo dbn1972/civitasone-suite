@@ -13,12 +13,14 @@ import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as budgetRepo from "../budget/repo.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import type { JournalLine } from "../gl/schema.js";
+import { registerRefundGlConsumer } from "./refund-consumer.js";
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
 const DEFAULT_REVENUE_CODE = process.env.FINANCE_CITIZEN_REVENUE_CODE ?? "4200";
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerRevenueGlConsumers(queue: Queue): void {
+  registerRefundGlConsumer(queue); // V4-G-09
   queue.subscribe(CONSUMED_EVENTS.citizenReceiptIssued, async (msg) => {
     const p = msg.payload as {
       id: string;
