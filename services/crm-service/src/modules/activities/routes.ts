@@ -13,7 +13,7 @@ import { isActiveTenantUser } from "../../shared/identity-client.js";
 import { resolveUserNames } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
-// Tenant-wide feed visibility (CRM admin tier; crm_user is record-scoped).
+// Tenant-wide feed visibility (CRM admin tier; crm_user is scoped to own + team-member records).
 const FEED_ADMIN_ROLES = ["crm_admin", "super_admin"];
 // GAP-CRM-TASK-ESCALATION-03: the overdue-task monitor is also open to tenant_admin. The web
 // CRM layout already admits tenant_admin to /crm/overdue-tasks, and the sibling escalation-rule

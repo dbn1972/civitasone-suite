@@ -7,13 +7,14 @@
  * is idempotent (markProcessed), and audits every mutation in the same tx.
  */
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { nextBookingNumber, auditFailedCreate } from "../../shared/numbers.js";
 import {
-  assertValidTransition, generateBookingNumber, calculateBookingAmount, DomainError,
+  assertValidTransition, calculateBookingAmount, DomainError,
 } from "./domain.js";
 import { estabFacilitiesCatalog, estabBookings } from "./schema.js";
 
@@ -94,7 +95,7 @@ export function registerBookingConsumers(queue: Queue): void {
         const { amountMinor, securityDepositMinor, totalMinor } =
           calculateBookingAmount(ratePerHour, durationHours, deposit);
         await tx.insert(estabBookings).values({
-          id: p.id, tenantId: p.tenantId, bookingNumber: generateBookingNumber(),
+          id: p.id, tenantId: p.tenantId, bookingNumber: await nextBookingNumber(tx),
           facilityId: p.facilityId, applicantName: String(p.applicantName),
           applicantPhone: String(p.applicantPhone),
           applicantEmail: (p.applicantEmail as string | undefined) ?? null,
@@ -110,8 +111,13 @@ export function registerBookingConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "booking_created", "booking", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "bookingCreate failed"); }
-  });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "bookingCreate failed");
+      // Rethrow so the queue retries (the tx rolled back, so a retry re-allocates the number); a deterministic
+      // domain rejection is not retried. Terminal failure is audited by auditFailedCreate.
+      throw err instanceof DomainError ? new NonRetryableError(err.message, err) : err;
+    }
+  }, auditFailedCreate("booking.create", "booking"));
 
   // ── Lifecycle transitions ────────────────────────────────────────────────
   const transition = (

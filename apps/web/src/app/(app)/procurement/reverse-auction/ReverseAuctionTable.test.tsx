@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
@@ -78,5 +78,38 @@ describe("ReverseAuctionTable (GAP-PROCUREMENT-REVERSE-AUCTION-01/02/03/05)", ()
     expect(screen.queryByText(/No auctions found/i)).not.toBeInTheDocument();
     expect(screen.getByText("Total Savings").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+});
+
+describe("ReverseAuctionTable live refresh ordering (CLOS3-S3-12)", () => {
+  beforeEach(() => {
+    mockedHook.mockReset();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("applies the newest refresh even when an older request resolves last, and aborts the superseded one", async () => {
+    seed(ROWS, "live");
+    const pending: Array<{ resolve: (r: Response) => void; signal: AbortSignal | undefined }> = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation((_url, init) =>
+      new Promise<Response>((resolve) => { pending.push({ resolve, signal: init?.signal ?? undefined }); }),
+    );
+    render(<ReverseAuctionTable auctions={ROWS} source="api" />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(15_000); });
+    expect(pending).toHaveLength(2);
+    expect(pending[0]!.signal?.aborted).toBe(true);
+
+    const body = (item: string) => new Response(JSON.stringify({ data: [{ ...ROWS[0]!, item }] }), { status: 200 });
+    await act(async () => { pending[1]!.resolve(body("NEWER-ITEM")); await Promise.resolve(); });
+    await act(async () => { pending[0]!.resolve(body("OLDER-ITEM")); await Promise.resolve(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+    expect(screen.getByRole("table").textContent).toContain("NEWER-ITEM");
+    expect(screen.getByRole("table").textContent).not.toContain("OLDER-ITEM");
   });
 });

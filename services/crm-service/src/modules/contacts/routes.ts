@@ -73,6 +73,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       ...(q.expectedValueMax !== undefined ? { expectedValueMax: String(q.expectedValueMax) } : {}),
       segment: q.segment,
       actorId: ctx.actorId,
+      ...(isAdmin(ctx.roles) ? {} : { visibleTo: ctx.actorId }),
     }, isAdmin(ctx.roles)));
   });
 
@@ -225,6 +226,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
       ...(q.search ? { search: q.search } : {}),
       ...(q.excludeSubtreeOf ? { excludeSubtreeOf: q.excludeSubtreeOf } : {}),
       ...(q.ids !== undefined ? { ids: q.ids } : {}),
+      ...(isAdmin(ctx.roles) ? {} : { visibleTo: ctx.actorId }),
     });
     sendValidated(reply, accountsListSchema, { data, meta: { total } });
   });

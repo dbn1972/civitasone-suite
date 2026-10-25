@@ -121,15 +121,11 @@ export async function persistNotificationTemplates(
   design: NotificationsDesignState,
   serviceKey: string,
 ): Promise<NotificationsDesignState> {
-  let templates: ApiTemplate[] = [];
-  try {
-    const listRes = await fetch("/api/proxy/v1/notification/templates", { cache: "no-store" });
-    if (listRes.ok) {
-      templates = (await listRes.json()) as ApiTemplate[];
-    }
-  } catch {
-    return design;
-  }
+  // CLOS3-S1-09: an unreadable list is not "no templates"; creating now would duplicate names.
+  // Throw (not return the design) so the caller shows "offline" and does not mark it persisted.
+  const listRes = await fetch("/api/proxy/v1/notification/templates", { cache: "no-store" });
+  if (!listRes.ok) throw new Error(`notification template list unavailable (${listRes.status})`);
+  const templates = (await listRes.json()) as ApiTemplate[];
 
   const nextMatrix = { ...design.matrix };
 

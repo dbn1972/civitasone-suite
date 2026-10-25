@@ -382,6 +382,34 @@ describe("GET /v1/meetings/:id/attendance/live", () => {
     }
   });
 
+  // Q13 contract: participants.employeeId is ASSUMED to be an identity user id. When identity
+  // answers with something unusable the board must still render (200), never throw.
+  it.each([
+    ["a non-array 200 body", () => new Response(JSON.stringify({ error: "nope" }), { status: 200 })],
+    ["an array containing null / junk rows", () => new Response(JSON.stringify([null, 7, { id: 5 }]), { status: 200 })],
+    ["a 500", () => new Response("boom", { status: 500 })],
+    ["unparseable JSON", () => new Response("<html>", { status: 200 })],
+  ])("Q13: live board still 200 with raw-id fallback when identity returns %s", async (_label, respond) => {
+    clearIdentityNameCache();
+    vi.stubGlobal("fetch", vi.fn(async () => respond()));
+    const app = await buildApp();
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/meetings/${MEETING}/attendance/live`,
+        headers: auth(["committee_chairperson"]),
+      });
+      expect(res.statusCode).toBe(200);
+      const ps = res.json().data.participants as Array<{ employeeId: string; displayName: string | null }>;
+      expect(ps).toHaveLength(2);
+      expect(ps.every((p) => p.displayName === null && p.employeeId.length > 0)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+      clearIdentityNameCache();
+      await app.close();
+    }
+  });
+
   it("returns 404 for an unknown meeting", async () => {
     const app = await buildApp();
     const res = await app.inject({

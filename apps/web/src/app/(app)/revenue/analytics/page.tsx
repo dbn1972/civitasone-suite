@@ -30,6 +30,10 @@ function mapTrends(payload: unknown): TrendRow[] | null {
       period,
       demandMinor: String(raw.demandMinor ?? 0),
       collectionMinor: String(raw.collectionMinor ?? 0),
+      // Older API builds omit the split; fall back to the legacy total as cash.
+      cashCollectionMinor: String(raw.cashCollectionMinor ?? raw.collectionMinor ?? 0),
+      waivedMinor: String(raw.waivedMinor ?? 0),
+      writtenOffMinor: String(raw.writtenOffMinor ?? 0),
       efficiencyBps: typeof raw.efficiencyBps === "number" ? raw.efficiencyBps : Number(raw.efficiencyBps ?? 0),
     });
   }
@@ -44,6 +48,9 @@ function mapEfficiency(payload: unknown): EfficiencyKpi | null {
   return {
     totalDemandMinor: String(data.totalDemandMinor ?? 0),
     totalCollectionMinor: String(data.totalCollectionMinor ?? 0),
+    totalCashCollectionMinor: String(data.totalCashCollectionMinor ?? data.totalCollectionMinor ?? 0),
+    totalWaivedMinor: String(data.totalWaivedMinor ?? 0),
+    totalWrittenOffMinor: String(data.totalWrittenOffMinor ?? 0),
     efficiencyBps: typeof data.efficiencyBps === "number" ? data.efficiencyBps : Number(data.efficiencyBps ?? 0),
     perPeriod: perPeriod ?? [],
   };

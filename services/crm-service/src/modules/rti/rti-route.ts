@@ -18,6 +18,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
 import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import * as repo from "./rti-repo.js";
+import { withCreateFailureAudit } from "../../shared/reference-numbers.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 
@@ -80,17 +81,6 @@ const disposeBody = z.object({ reason: z.string().trim().min(20).max(2000) });
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build reference: RTI/YYYY/DEPT/NNNNNN */
-function rtiRef(departmentRef: string): string {
-  const yr = new Date().getFullYear();
-  const dept = departmentRef
-    .slice(0, 6)
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "X");
-  const suffix = Date.now().toString(36).toUpperCase().slice(-6);
-  return `RTI/${yr}/${dept}/${suffix}`;
-}
-
 // ---------------------------------------------------------------------------
 // Route registration
 // ---------------------------------------------------------------------------
@@ -101,7 +91,6 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createBody.parse(req.body);
-    const referenceNo = rtiRef(body.departmentRef);
 
     // Bound fee inputs (would overflow numeric(10,2)/bigint -> 500) and require
     // feeAmount (rupees) / feeAmountMinor (paise) to agree exactly. 422 on failure.
@@ -123,11 +112,11 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const row = await repo.createRti({
+    // The RTI/YYYY/DEPT/NNNNNN reference is allocated inside createRti's insert transaction.
+    const row = await withCreateFailureAudit(ctx, "rti.create", "rti_request", () => repo.createRti({
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,
       correlationId: ctx.correlationId,
-      referenceNo,
       section: body.section,
       departmentRef: body.departmentRef,
       applicantName: body.applicantName,
@@ -139,7 +128,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
       ...(fee.feeAmountMinor !== undefined ? { feeAmountMinor: fee.feeAmountMinor } : {}),
       ...(body.receivedDate !== undefined ? { receivedDate: body.receivedDate } : {}),
       ...(body.mode !== undefined ? { mode: body.mode } : {}),
-    });
+    }));
 
     return reply.code(201).send({ data: row });
   });

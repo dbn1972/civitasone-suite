@@ -7,6 +7,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -16,6 +17,7 @@ import { registerApplicationConsumers } from "../src/modules/applications/consum
 import { registerInspectionConsumers } from "../src/modules/inspections/consumer.js";
 import { registerNocConsumers } from "../src/modules/nocs/consumer.js";
 import * as repo from "../src/modules/nocs/repo.js";
+import { COMMANDS, EVENTS } from "../src/topics.js";
 import { hdr, drainQueue, waitFor, OFFICER_ROLES, INSPECTOR_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
@@ -275,5 +277,62 @@ describe("nocs/repo.ts updateStatus — compare-and-swap guard", () => {
     const row = await findAsTenantA(id);
     expect(row?.status).toBe("suspended");
     expect(row?.version).toBe(2);
+  });
+});
+
+// CLOS3-S4-03: check-then-act race. Two issueNoc commands (different id + messageId) for ONE
+// application, processed concurrently, must yield exactly one active NOC. The handler is invoked
+// directly (captured from a stub queue) so both genuinely overlap -- the in-memory queue would
+// serialise them and hide the race.
+describe("nocs — concurrent issueNoc for the same application (CLOS3-S4-03)", () => {
+  type Handler = (msg: unknown) => Promise<void>;
+  const handlers = new Map<string, Handler>();
+  registerNocConsumers({ subscribe: (t: string, h: Handler) => { handlers.set(t, h); }, publish: async () => {} } as never);
+
+  const cmd = (applicationId: string) => ({
+    messageId: randomUUID(),
+    type: COMMANDS.issueNoc,
+    tenantId: TENANT_A,
+    actorId: ACTOR_A,
+    correlationId: randomUUID(),
+    schemaVersion: "1.0",
+    payload: { id: randomUUID(), applicationId, validFrom: "2027-02-01" },
+  });
+
+  const count = (q: ReturnType<typeof sql>) =>
+    runWithTenant(TENANT_A, () => db.transaction(async (tx) => {
+      const rows = (await tx.execute(q)) as unknown as Array<{ n: number }>;
+      return Number(rows[0]!.n);
+    }));
+
+  it("two racing commands produce exactly one active NOC, one directory row, one nocIssued event, one sequence number", async () => {
+    const applicationId = await createEligibleApplication();
+    const issue = handlers.get(COMMANDS.issueNoc)!;
+    expect(issue).toBeTypeOf("function");
+
+    const before = await runWithTenant(TENANT_A, () => db.transaction((tx) => repo.nextNocNumber(tx)));
+    const a = cmd(applicationId);
+    const b = cmd(applicationId);
+    await Promise.all([issue(a), issue(b)]);
+    const after = await runWithTenant(TENANT_A, () => db.transaction((tx) => repo.nextNocNumber(tx)));
+
+    expect(await count(sql`SELECT count(*)::int AS n FROM fire_nocs.fire_nocs
+      WHERE tenant_id = ${TENANT_A} AND application_id = ${applicationId} AND status IN ('issued','active')`)).toBe(1);
+    expect(await count(sql`SELECT count(*)::int AS n FROM fire_nocs.fire_noc_directory
+      WHERE tenant_id = ${TENANT_A} AND noc_id IN (${a.payload.id}::uuid, ${b.payload.id}::uuid)`)).toBe(1);
+    expect(await count(sql`SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${TENANT_A} AND topic = ${EVENTS.nocIssued} AND payload->>'applicationId' = ${applicationId}`)).toBe(1);
+    // the loser must not burn a sequence value: winner took before+1, our probe took before+2
+    expect(after - before).toBe(2);
+  });
+
+  it("does not serialise or block issuance for a different application", async () => {
+    const [app1, app2] = await Promise.all([createEligibleApplication(), createEligibleApplication()]);
+    const issue = handlers.get(COMMANDS.issueNoc)!;
+    await Promise.all([issue(cmd(app1)), issue(cmd(app2))]);
+    for (const id of [app1, app2]) {
+      expect(await count(sql`SELECT count(*)::int AS n FROM fire_nocs.fire_nocs
+        WHERE tenant_id = ${TENANT_A} AND application_id = ${id} AND status IN ('issued','active')`)).toBe(1);
+    }
   });
 });

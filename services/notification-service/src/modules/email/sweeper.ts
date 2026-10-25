@@ -14,7 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino } from "pino";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { COMMANDS } from "../../topics.js";
@@ -36,6 +36,9 @@ export async function sweepDomainAuthChecks(
     .select()
     .from(sendingDomains)
     .where(eq(sendingDomains.enabled, true))
+    // Rotate: never-checked domains first, then oldest-checked, so every domain is reached across sweeps
+    // even when there are more than `limit` enabled domains (CLOS3-S5-24).
+    .orderBy(sql`${sendingDomains.lastCheckedAt} ASC NULLS FIRST`, sendingDomains.id)
     .limit(limit);
 
   let submitted = 0;

@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, timestamp, boolean, primaryKey } from "drizzle-orm/pg-core";
 
 export const exportsSchema = pgSchema("exports");
 
@@ -31,7 +31,20 @@ export const auditExports = exportsSchema.table("exports", {
   version:        integer("version").notNull().default(1),
 });
 
+/**
+ * Q34: one row per redeemed download token (SHA-256 of the token), so a token
+ * works exactly once. PK (tenant_id, token_sha256) makes the redemption an atomic
+ * INSERT ... ON CONFLICT DO NOTHING (migration 0033).
+ */
+export const downloadRedemptions = exportsSchema.table("download_redemptions", {
+  tenantId:    uuid("tenant_id").notNull(),
+  tokenSha256: varchar("token_sha256", { length: 64 }).notNull(),
+  exportId:    uuid("export_id").notNull(),
+  redeemedBy:  uuid("redeemed_by").notNull(),
+  redeemedAt:  timestamp("redeemed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({ pk: primaryKey({ columns: [t.tenantId, t.tokenSha256] }) }));
+
 export type ExportRow    = typeof auditExports.$inferSelect;
 export type ExportInsert = typeof auditExports.$inferInsert;
 
-export const exportsModuleSchema = { auditExports };
+export const exportsModuleSchema = { auditExports, downloadRedemptions };

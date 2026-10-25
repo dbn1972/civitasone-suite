@@ -34,7 +34,11 @@ vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: vi.fn(async () => true),
 }));
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
+  cache: {
+    invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
+    makeKey: (...parts: string[]) => parts.join(":"),
+  },
 }));
 vi.mock("../src/modules/attendance/repo.js", () => ({
   upsertLock: vi.fn(async () => undefined),
@@ -44,6 +48,8 @@ vi.mock("../src/modules/attendance/repo.js", () => ({
 
 import { registerAttendanceConsumers } from "../src/modules/attendance/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
+import { cache } from "../src/shared/infra.js";
+import { markProcessed } from "../src/shared/outbox.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
@@ -100,6 +106,36 @@ describe("regularisationCreate command", () => {
     const row = insertRegularisationMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.status).toBe("pending");
     expect(row.requestedStatus).toBe("present");
+    await q.stop();
+  });
+});
+
+// CLOS3-S5-19: the tenant-wide attendance list (resource "attendance", cache.listOrLoad in queries.ts) was never
+// invalidated, so a marked record was missing from it for the cache TTL.
+describe("attendanceMark invalidates the cached attendance list", () => {
+  const rec = (employeeId: string) => ({ employeeId, attendanceDate: "2026-10-01", status: "present" });
+
+  it("invalidates the attendance resource exactly once per batch", async () => {
+    const q = await buildQueue();
+    await q.publish(COMMANDS.attendanceMark, makeMsg(COMMANDS.attendanceMark, {
+      batchId: randomUUID(), tenantId: TENANT, records: [rec("e1"), rec("e2")],
+    }));
+    await settle();
+    expect(upsertAttendanceMock).toHaveBeenCalledTimes(2);
+    expect(cache.invalidateResource).toHaveBeenCalledTimes(1);
+    expect(cache.invalidateResource).toHaveBeenCalledWith(TENANT, "attendance");
+    await q.stop();
+  });
+
+  it("does not invalidate for a duplicate message (markProcessed false)", async () => {
+    (markProcessed as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.attendanceMark, makeMsg(COMMANDS.attendanceMark, {
+      batchId: randomUUID(), tenantId: TENANT, records: [rec("e1")],
+    }));
+    await settle();
+    expect(upsertAttendanceMock).not.toHaveBeenCalled();
+    expect(cache.invalidateResource).not.toHaveBeenCalled();
     await q.stop();
   });
 });

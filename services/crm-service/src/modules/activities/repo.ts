@@ -1,4 +1,5 @@
 import { eq, desc, and, sql, type SQL } from "drizzle-orm";
+import { ownerVisibleSql } from "../../shared/team-scope.js";
 import type { ActivityFeedQuery } from "./validators.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { activities, type ActivityRow, type ActivityInsert, type ActivityView } from "./schema.js";
@@ -162,7 +163,9 @@ export async function listFeed(
 ): Promise<{ rows: FeedRow[]; total: number }> {
   const conds: SQL[] = [sql`a.tenant_id = ${tenantId}`];
   if (actorId) {
-    conds.push(sql`(COALESCE(a.owner_id, a.created_by) = ${actorId} OR c.owner_id = ${actorId} OR d.owner_id = ${actorId} OR ac.owner_id = ${actorId})`);
+    // Own records PLUS records owned by members of the caller's team(s) (crm.team_members).
+    const own = (col: string) => ownerVisibleSql(sql.raw(col), tenantId, actorId, false);
+    conds.push(sql`(${own("COALESCE(a.owner_id, a.created_by)")} OR ${own("c.owner_id")} OR ${own("d.owner_id")} OR ${own("ac.owner_id")})`);
   }
   if (q.type) conds.push(sql`a.type = ${q.type}`);
   if (q.status === "overdue") conds.push(sql`(a.status = 'open' AND a.due_date < (now() AT TIME ZONE 'Asia/Kolkata')::date)`);

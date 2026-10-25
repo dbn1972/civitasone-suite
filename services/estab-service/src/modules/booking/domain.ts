@@ -37,13 +37,7 @@ export function assertValidTransition(current: string, target: string): void {
   }
 }
 
-// ── Booking Number ────────────────────────────────────────────────────────
-
-export function generateBookingNumber(): string {
-  const ts = Date.now().toString(36).toUpperCase();
-  const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `BK-${ts}-${rand}`;
-}
+// Booking numbers (BK-YYYY-000123) come from a Postgres sequence: see shared/numbers.ts.
 
 // ── Amount Calculation ────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextRequestNumber, nextTaskNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import { calculateFeeMinor, type WasteType } from "./domain.js";
 
@@ -25,8 +26,10 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
     const feeMinor = calculateFeeMinor(p.wasteType as WasteType);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated inside the transaction: a retry re-runs nextval(), so it can never collide or be lost.
+      const requestNumber: string = await nextRequestNumber(tx);
       await repo.insertRequest(tx, {
-        id: p.id, tenantId: msg.tenantId, requestNumber: p.requestNumber,
+        id: p.id, tenantId: msg.tenantId, requestNumber,
         requestedBy: p.requestedBy, wasteType: p.wasteType,
         estimatedQuantity: p.estimatedQuantity, address: p.address,
         preferredDate: p.preferredDate, preferredSlot: p.preferredSlot,
@@ -36,12 +39,12 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.collectionRequested, eventType: EVENTS.collectionRequested,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { requestId: p.id, requestNumber: p.requestNumber, wasteType: p.wasteType },
+        payload: { requestId: p.id, requestNumber, wasteType: p.wasteType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "collection.request", resourceType: "swm_collection_request", resourceId: p.id });
     });
     log.info({ id: p.id }, "collection requested");
-  });
+  }, auditFailedCreate("collection.request", "swm_collection_request"));
 
   queue.subscribe(COMMANDS.collectionSchedule, async (msg) => {
     const p = msg.payload as any;
@@ -101,8 +104,10 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated inside the transaction: a retry re-runs nextval(), so it can never collide or be lost.
+      const taskNumber: string = await nextTaskNumber(tx);
       await repo.insertTask(tx, {
-        id: p.id, tenantId: msg.tenantId, taskNumber: p.taskNumber,
+        id: p.id, tenantId: msg.tenantId, taskNumber,
         routeId: p.routeId, zoneId: p.zoneId, assignedTo: p.assignedTo,
         taskDate: p.taskDate, assetRefs: p.assetRefs, status: "assigned",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -110,12 +115,12 @@ export function registerCollectionConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.fieldTaskCreated, eventType: EVENTS.fieldTaskCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { taskId: p.id, taskNumber: p.taskNumber },
+        payload: { taskId: p.id, taskNumber },
       });
       await writeAudit(tx, ctxOf(msg), { action: "field_task.create", resourceType: "swm_field_task", resourceId: p.id });
     });
     log.info({ id: p.id }, "field task created");
-  });
+  }, auditFailedCreate("field_task.create", "swm_field_task"));
 
   queue.subscribe(COMMANDS.fieldTaskComplete, async (msg) => {
     const p = msg.payload as any;

@@ -62,7 +62,7 @@ vi.mock("../src/shared/infra.js", async () => {
   // actually deliver them (and that drain() can await).
   const { MemoryQueue } = await import("@civitasone/queue");
   return {
-    cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
+    cache: { invalidate: async () => {}, invalidateResourceAfterCommit: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
     queue: new MemoryQueue(),
   };
 });

@@ -62,4 +62,63 @@ describe("ChecklistWithActions", () => {
 
     expect(screen.getByRole("button", { name: /mark "collect id badge" as complete/i })).toBeInTheDocument();
   });
+
+  describe("CLOS3-S2-01: rollback reverts only the failed step", () => {
+    function deferred() {
+      let resolve!: (v: Response) => void;
+      let reject!: (e: unknown) => void;
+      const promise = new Promise<Response>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    }
+    const failed500 = { ok: false, status: 500, clone: () => ({ json: async () => ({}) }) } as unknown as Response;
+
+    it("a failure on one step does not undo a concurrent successful completion of another", async () => {
+      const a = deferred();
+      const b = deferred();
+      global.fetch = vi.fn((url: RequestInfo | URL) =>
+        String(url).includes("/task-1/") ? a.promise : b.promise,
+      ) as unknown as typeof fetch;
+      render(<ChecklistWithActions steps={STEPS} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /mark "submit joining report" as complete/i }));
+      fireEvent.click(screen.getByRole("button", { name: /mark "collect id badge" as complete/i }));
+
+      b.resolve({ ok: true } as Response);
+      a.resolve(failed500);
+
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/couldn't save/i);
+      // A reverted to its own prior status (pending) -> button is back.
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /mark "submit joining report" as complete/i })).toBeInTheDocument();
+      });
+      // B stays completed -> its button must not come back.
+      expect(screen.queryByRole("button", { name: /mark "collect id badge" as complete/i })).not.toBeInTheDocument();
+    });
+
+    it("when both calls reject, each step returns to its own prior status", async () => {
+      const a = deferred();
+      const b = deferred();
+      global.fetch = vi.fn((url: RequestInfo | URL) =>
+        String(url).includes("/task-1/") ? a.promise : b.promise,
+      ) as unknown as typeof fetch;
+      render(<ChecklistWithActions steps={STEPS} />);
+
+      fireEvent.click(screen.getByRole("button", { name: /mark "submit joining report" as complete/i }));
+      fireEvent.click(screen.getByRole("button", { name: /mark "collect id badge" as complete/i }));
+
+      a.reject(new Error("network"));
+      b.reject(new Error("network"));
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: /mark "submit joining report" as complete/i })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: /mark "collect id badge" as complete/i })).toBeInTheDocument();
+      });
+      // No stale completed state: neither step is counted as done.
+      expect(screen.getByText(/0 \/ 2 steps completed/)).toBeInTheDocument();
+    });
+  });
 });

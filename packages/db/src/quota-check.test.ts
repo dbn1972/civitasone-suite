@@ -62,3 +62,61 @@ describe("quota-check: corrupt cached quota", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * CLOS3-S6-12 — the DEFAULT_QUOTA fallback used when tenant-service is unreachable must not be cached as if it
+ * were authoritative for the full TTL: a blip would pin every tenant to 200 calls/min for a minute.
+ */
+describe("quota-check: fallback quota is not cached as authoritative", () => {
+  const FULL_TTL = 60;
+  afterEach(() => vi.unstubAllGlobals());
+
+  function mapStore() {
+    const data = new Map<string, string>();
+    const ttls: number[] = [];
+    let n = 0;
+    const store: QuotaCheckStore = {
+      get: async (k) => data.get(k) ?? null,
+      set: async (k, v, ttl) => { data.set(k, v); ttls.push(ttl); },
+      incr: async () => ++n,
+    };
+    return { store, data, ttls, setCount: (v: number) => { n = v; } };
+  }
+
+  for (const [label, failure] of [
+    ["rejects", () => Promise.reject(new Error("ECONNREFUSED"))],
+    ["returns 503", () => Promise.resolve(new Response("down", { status: 503 }))],
+  ] as const) {
+    it(`fetch ${label}: request passes, fallback cached with a short TTL, then the real quota takes over`, async () => {
+      const { store, data, ttls, setCount } = mapStore();
+      const fetchMock = vi.fn()
+        .mockImplementationOnce(failure)
+        .mockImplementation(async () => new Response(JSON.stringify({ tenantId: "t-1", maxApiCallsPerMin: 5000 }), { status: 200 }));
+      vi.stubGlobal("fetch", fetchMock);
+      const hook = await buildHook(store);
+
+      const r1 = makeReply();
+      await hook(req, r1);
+      expect(r1.code).toBe(0); // not blocked
+      expect(ttls).toHaveLength(1);
+      expect(ttls[0]).toBeLessThanOrEqual(5);
+      expect(ttls[0]).toBeGreaterThan(0);
+      expect(JSON.parse(data.get("quota:t-1")!).maxApiCallsPerMin).toBe(200);
+
+      data.delete("quota:t-1"); // simulate the short fallback TTL expiring
+      setCount(250); // beyond the 200 default, within the real 5000
+      const r2 = makeReply();
+      await hook(req, r2);
+      expect(r2.code).toBe(0);
+      expect(JSON.parse(data.get("quota:t-1")!).maxApiCallsPerMin).toBe(5000);
+      expect(ttls[1]).toBe(FULL_TTL);
+    });
+  }
+
+  it("a successful first fetch is cached with the full TTL", async () => {
+    const { store, ttls } = mapStore();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ tenantId: "t-1", maxApiCallsPerMin: 5000 }), { status: 200 })));
+    await (await buildHook(store))(req, makeReply());
+    expect(ttls).toEqual([FULL_TTL]);
+  });
+});

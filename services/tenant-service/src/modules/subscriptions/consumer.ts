@@ -2,7 +2,7 @@
  * Subscriptions consumer — the ONLY code that writes Postgres for subscriptions.
  * idempotency-check → apply write + outbox → refresh cache.
  */
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -27,7 +27,8 @@ const TRANSITIONS: Record<string, string[]> = {
 function assertTransition(current: string, target: string): void {
   const allowed = TRANSITIONS[current] ?? [];
   if (!allowed.includes(target)) {
-    throw new Error(`subscription status transition ${current} → ${target} is not allowed`);
+    // Deterministic business rejection: retrying can never succeed, so dead-letter immediately (outcome "rejected").
+    throw new NonRetryableError(`INVALID_SUBSCRIPTION_TRANSITION: ${current} → ${target} is not allowed`);
   }
 }
 
@@ -109,7 +110,7 @@ export function registerSubscriptionConsumers(queue: Queue): void {
         if (!cur) throw new Error(`subscription ${msg.payload.id} not found`);
         // Only active/past_due can renew
         if (!["active", "past_due"].includes(cur.status)) {
-          throw new Error(`subscription ${cur.status} cannot renew`);
+          throw new NonRetryableError(`INVALID_SUBSCRIPTION_STATE: subscription ${cur.status} cannot renew`);
         }
         await repo.update(tx as unknown as repo.Writer, msg.payload.id, {
           status: "active",

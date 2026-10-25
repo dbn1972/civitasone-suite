@@ -24,7 +24,7 @@ function keyFor(tenantId: string, id: string): string {
   return cache.makeKey(tenantId, RESOURCE, id);
 }
 
-export function registerScheduledConsumers(queue: Queue, publishQueue: Queue = defaultQueue): void {
+export function registerScheduledConsumers(queue: Queue, _publishQueue: Queue = defaultQueue): void {
   queue = tenantScoped(queue);
 
   queue.subscribe<ScheduledReportView>(COMMANDS.createScheduled, async (msg) => {
@@ -166,26 +166,29 @@ export function registerScheduledConsumers(queue: Queue, publishQueue: Queue = d
         correlationId: msg.correlationId,
         payload: { scheduledReportId: p.scheduledReportId, jobId: p.jobId },
       });
+      // CLOS3-S6-05: the render command goes through the transactional outbox so
+      // "processed + lastRunAt" and "render will be triggered" commit atomically.
+      // A post-commit publish lost the render permanently if the broker threw,
+      // because a redelivery short-circuits on markProcessed. (Same pattern as
+      // jobs/consumer.ts TX-009; the outbox row id becomes the relayed messageId.)
+      await enqueue(tx, {
+        topic: COMMANDS.renderJob,
+        eventType: COMMANDS.renderJob,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId ?? randomUUID(),
+        payload: {
+          jobId: p.jobId,
+          tenantId: msg.tenantId,
+          templateId: p.templateId,
+          format: p.format,
+          scheduledReportId: p.scheduledReportId,
+        },
+      });
     });
 
     await cache.invalidate(keyFor(msg.tenantId, p.scheduledReportId));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
-
-    await publishQueue.publish(COMMANDS.renderJob, {
-      messageId: p.jobId,
-      type: COMMANDS.renderJob,
-      tenantId: msg.tenantId,
-      actorId: msg.actorId,
-      correlationId: msg.correlationId ?? randomUUID(),
-      schemaVersion: "1.0",
-      payload: {
-        jobId: p.jobId,
-        tenantId: msg.tenantId,
-        templateId: p.templateId,
-        format: p.format,
-        scheduledReportId: p.scheduledReportId,
-      },
-    });
   });
 }
 

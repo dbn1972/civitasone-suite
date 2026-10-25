@@ -1,9 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from "vitest";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+const pushMock = vi.fn();
+const routerStub = { push: pushMock, refresh: vi.fn() };
+vi.mock("next/navigation", () => ({ useRouter: () => routerStub }));
 
 import { VendorForm } from "./VendorForm";
 
@@ -85,5 +87,47 @@ describe("VendorForm (GAP-FINANCE-VENDORS-01)", () => {
     fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Create vendor" }));
     expect(await screen.findByText("Vendor created.")).toBeInTheDocument();
+  });
+});
+
+// CLOS3-S2-06: the post-create redirect is a 700 ms timer. If the officer leaves the page inside that window the
+// timer must not drag them back to the vendor list.
+describe("VendorForm redirect timer (CLOS3-S2-06)", () => {
+  // Let any 700 ms redirect timers armed by the suites above (real timers, shared router stub) run out first,
+  // so a stale push from an earlier test cannot be mistaken for one from these tests.
+  beforeAll(async () => { await new Promise((r) => setTimeout(r, 800)); });
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function createVendor() {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "v1", status: "active" }), { status: 201 }));
+    const view = render(<VendorForm />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
+    const create = await screen.findByRole("button", { name: "Create vendor" });
+    vi.useFakeTimers();
+    await act(async () => {
+      fireEvent.click(create);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText("Vendor created.")).toBeInTheDocument();
+    return view;
+  }
+
+  it("does not redirect to the list if the form is unmounted before the 700 ms elapse", async () => {
+    const view = await createVendor();
+    view.unmount();
+    await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("still redirects to the list after 700 ms when the officer stays on the page", async () => {
+    await createVendor();
+    expect(pushMock).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(700); });
+    expect(pushMock).toHaveBeenCalledWith("/finance/vendors");
   });
 });

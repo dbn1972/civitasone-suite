@@ -133,8 +133,24 @@ export async function fetchOrQueue(
 
 const MAX_REQUEST_RETRIES = 8;
 
+type FlushResult = { flushed: number; remaining: number };
+
+/** In-flight flush for this tab (CLOS3-S3-03): concurrent triggers share it instead of replaying every item twice.
+ *  Cross-tab races still need Web Locks or server-side idempotency dedup (04-T4). */
+let inFlight: Promise<FlushResult> | null = null;
+
 /** Replay all queued requests. Invoked on reconnect and on SW background-sync. */
-export async function flushRequestQueue(): Promise<{ flushed: number; remaining: number }> {
+export function flushRequestQueue(): Promise<FlushResult> {
+  if (inFlight) return inFlight;
+  // Cleared in finally so a rejection (e.g. resolveNamespace) cannot wedge the lock.
+  const p: Promise<FlushResult> = doFlush().finally(() => {
+    if (inFlight === p) inFlight = null;
+  });
+  inFlight = p;
+  return p;
+}
+
+async function doFlush(): Promise<FlushResult> {
   const ns = await resolveNamespace();
   const name = dbName(ns);
   const all = await run<QueuedRequest[]>(name, "readonly", (s) => s.getAll());
@@ -156,7 +172,9 @@ export async function flushRequestQueue(): Promise<{ flushed: number; remaining:
         body: JSON.stringify(body),
         credentials: "same-origin",
       });
-      if (res.ok || (res.status >= 400 && res.status < 500)) {
+      // Timeout / too-early / throttled replies are transient: keep the write and retry (CLOS3-S3-04).
+      const transient = res.status === 408 || res.status === 425 || res.status === 429;
+      if (res.ok || (res.status >= 400 && res.status < 500 && !transient)) {
         // Success, or a permanent client rejection — stop retrying either way.
         await run(name, "readwrite", (s) => s.delete(q.id));
         flushed++;

@@ -42,6 +42,8 @@ function NewMbForm() {
     mbNumber: "",
   });
   const [busy, setBusy] = useState(false);
+  // CLOS3-S3-15: latched after a successful POST so the pending redirect cannot be raced by a second submit.
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("measurement book");
@@ -88,6 +90,7 @@ function NewMbForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (saved) return;
     setMbNumberError("");
     if (!safeWorkId(form.workId)) {
       setError("Select the work this measurement book is for.");
@@ -124,6 +127,7 @@ function NewMbForm() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      setSaved(true);
       setMessage(SUCCESS_MESSAGE);
       toast.success(SUCCESS_MESSAGE);
       const target = `/works/billing/${safeWorkId(form.workId)}`;
@@ -237,14 +241,14 @@ function NewMbForm() {
             <Button
               variant="ghost"
               onClick={() => router.push(backHref)}
-              disabled={busy}
+              disabled={busy || saved}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               variant="primary"
-              disabled={busy}
+              disabled={busy || saved}
               style={{ minHeight: 44 }}
             >
               {busy ? "Submitting..." : "Submit"}

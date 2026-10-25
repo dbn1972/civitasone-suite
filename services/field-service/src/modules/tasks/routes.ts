@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, isFieldSupervisor, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, isFieldSupervisor, assertAssignedOrSupervisor, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import { validateTransition, validateAssignment, type TaskStatus } from "./domain.js";
@@ -206,6 +206,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
 
+    await assertAssignedOrSupervisor(ctx, existing, "start", req.log);
+
     const transitionError = validateTransition(existing.status as TaskStatus, "in_progress");
     if (transitionError) {
       throw new HttpError(422, "TRANSITION_INVALID", transitionError);
@@ -229,6 +231,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) {
       throw new HttpError(404, "NOT_FOUND", "task not found");
     }
+
+    await assertAssignedOrSupervisor(ctx, existing, "complete", req.log);
 
     const transitionError = validateTransition(existing.status as TaskStatus, "completed");
     if (transitionError) {

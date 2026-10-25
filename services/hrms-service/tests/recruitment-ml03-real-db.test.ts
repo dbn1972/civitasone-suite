@@ -26,8 +26,9 @@ async function drain(): Promise<void> {
 }
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "00000000-0000-0000-0000-000000000001";
-const OTHER_TENANT = "00000000-0000-0000-0000-0000000000f9";
+// Per-file tenant: the demo tenant is shared with other suites that run in parallel workers, and this file mutates tenant-wide state.
+const TENANT = globalThis.crypto.randomUUID();
+const OTHER_TENANT = globalThis.crypto.randomUUID();
 const HR = "aaaaaaaa-e2e2-4000-8000-000000000011";
 const DEPT_FIN = "eeeeeeee-0001-0000-0000-000000000001";
 const CT = { "content-type": "application/json" };

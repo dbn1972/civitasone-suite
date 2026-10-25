@@ -335,3 +335,24 @@ export function verifyMeetingQrToken(
 
   return { valid: true, payload };
 }
+
+// ─── Participant display name (Q13) ──────────────────────────────────────────
+
+/** Shown when a participant row carries no usable employee id at all. */
+export const UNKNOWN_PARTICIPANT = "Unknown participant";
+
+/**
+ * Display name for a participant row on the live board. `participants.employeeId` is ASSUMED to be
+ * an identity-service user id, but nothing enforces that (it can be a legacy employee code, blank,
+ * or an id identity does not know). Never throws:
+ *   - id resolved by identity        -> that name
+ *   - id present but not resolvable  -> null (the web falls back to showing the raw id)
+ *   - id missing / blank / not text  -> "Unknown participant"
+ */
+export function participantDisplayName(
+  names: ReadonlyMap<string, string> | null | undefined,
+  employeeId: unknown,
+): string | null {
+  if (typeof employeeId !== "string" || employeeId.trim().length === 0) return UNKNOWN_PARTICIPANT;
+  return names?.get(employeeId) ?? null;
+}

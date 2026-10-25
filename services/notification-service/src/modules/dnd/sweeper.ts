@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { COMMANDS } from "../../topics.js";
@@ -19,16 +18,12 @@ export async function sweepHeldNotifications(queue: Queue, now = new Date()): Pr
 
   for (const notification of held) {
     try {
-      // Transition from held to released — inside the row's tenant context so
-      // RLS admits the UPDATE under the NOBYPASSRLS role (#146).
-      await runWithTenant(notification.tenantId, () =>
-        db.transaction((tx) => repo.releaseHeld(tx, notification.id)),
-      );
-
-      // Re-enqueue the original delivery payload
+      // Publish FIRST, then release. A failed publish leaves the row 'held' so the next
+      // sweep retries it; a failed release after publish republishes the same messageId
+      // (the held row id), which the consumer drops via markProcessed (CLOS3-S5-05).
       const payload = notification.deliveryPayload as Record<string, unknown>;
       await queue.publish(COMMANDS.sendNotification, {
-        messageId: randomUUID(),
+        messageId: notification.id,
         type: COMMANDS.sendNotification,
         tenantId: notification.tenantId,
         actorId: notification.userId,
@@ -36,6 +31,12 @@ export async function sweepHeldNotifications(queue: Queue, now = new Date()): Pr
         schemaVersion: "1.0",
         payload,
       });
+
+      // Transition from held to released, inside the row's tenant context so
+      // RLS admits the UPDATE under the NOBYPASSRLS role (#146).
+      await runWithTenant(notification.tenantId, () =>
+        db.transaction((tx) => repo.releaseHeld(tx, notification.id)),
+      );
 
       released++;
       log.info({ heldId: notification.id, userId: notification.userId }, "released held notification");

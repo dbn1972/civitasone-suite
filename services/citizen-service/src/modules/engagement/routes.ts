@@ -11,8 +11,9 @@ import * as queries from "./queries.js";
 import { toAlertDto, toNoticeDto, toSurveyDto } from "./mappers.js";
 
 // Role sets mirror modules/catalogue/routes.ts: any citizen-portal role reads and
-// answers; officer tier drafts; only admin tier publishes / withdraws / closes
-// (maker-checker) and reads raw survey responses.
+// answers; officer tier drafts AND publishes / withdraws alerts and notices (owner
+// decision 2026-10-25; maker-checker: nobody publishes their own draft); only admin
+// tier publishes / closes surveys and reads raw survey responses.
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 const ADMIN_ROLES   = ["citizen_admin", "super_admin"];
@@ -57,7 +58,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/citizen/alerts/:id/publish", WRITE_LIMIT, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN_ROLES);
+    requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const row = await queries.getAlert(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "alert not found");
@@ -69,7 +70,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/citizen/alerts/:id/withdraw", WRITE_LIMIT, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN_ROLES);
+    requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const row = await queries.getAlert(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "alert not found");
@@ -107,7 +108,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/citizen/notices/:id/publish", WRITE_LIMIT, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN_ROLES);
+    requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const row = await queries.getNotice(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "notice not found");
@@ -119,7 +120,7 @@ export async function engagementRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/citizen/notices/:id/withdraw", WRITE_LIMIT, async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ADMIN_ROLES);
+    requireRole(ctx, OFFICER_ROLES);
     const { id } = idParam.parse(req.params);
     const row = await queries.getNotice(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "notice not found");

@@ -1,6 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { z } from "zod";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, EntityPicker, SkeletonCard } from "@/app/_components/ds";
@@ -39,6 +39,10 @@ function NewTenderForm() {
   });
   const [tenderTypes, setTenderTypes] = useState<TenderTypeOption[]>([]);
   const [busy, setBusy] = useState(false);
+  // CLOS3-S3-17: latched after a successful POST so the pending redirect cannot be raced by a second submit.
+  const savedRef = useRef(false);
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("pre-tender");
@@ -68,6 +72,7 @@ function NewTenderForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (savedRef.current) return;
     setMessage("");
     setError("");
     formError.clear();
@@ -114,13 +119,14 @@ function NewTenderForm() {
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
+      savedRef.current = true;
       setMessage("Created.");
       toast.success("Pre-tender created.");
-      setTimeout(() => router.push("/works/tenders"), 600);
+      redirectTimer.current = setTimeout(() => router.push("/works/tenders"), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
-      setBusy(false);
+      if (!savedRef.current) setBusy(false);
     }
   }
 

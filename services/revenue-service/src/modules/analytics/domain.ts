@@ -28,19 +28,27 @@ export interface PeriodDcbEntry {
   entryType: DcbEntryType;
   amountMinor: bigint;
   /** Distinguishes the two legs of an `adjustment` (see dcbBalanceEffect). */
-  narration?: string | null;
+  adjustmentDirection?: "credit" | "debit" | null;
 }
 
 export interface PeriodTrend {
   period: string;
   demandMinor: bigint;
+  /** Total balance-reducing movement (cash + waivers + write-offs, net of refunds). Kept for compatibility. */
   collectionMinor: bigint;
-  /** collection / demand in basis points (10000 = 100%). */
+  /** Cash actually collected: collection receipts net of refunds. */
+  cashCollectionMinor: bigint;
+  /** Amounts forgiven by approved waivers (not cash). */
+  waivedMinor: bigint;
+  /** Amounts written off as unrecoverable (not cash). */
+  writtenOffMinor: bigint;
+  /** cash collected / demand in basis points (10000 = 100%); waivers and write-offs are NOT counted. */
   efficiencyBps: number;
 }
 
 /**
- * Collection efficiency = collected / demanded, in basis points.
+ * Collection efficiency = cash collected / demanded, in basis points
+ * (callers pass the cash figure, never waivers or write-offs).
  * Returns 0 when there is no demand. May exceed 10000 when over-collected
  * (e.g. arrears cleared in a later period) — surfaced as-is, not clamped.
  */
@@ -61,12 +69,20 @@ export function collectionEfficiencyBps(demandMinor: bigint, collectionMinor: bi
  * Output is sorted ascending by period key for deterministic series ordering.
  */
 export function aggregatePeriodSeries(entries: PeriodDcbEntry[]): PeriodTrend[] {
-  const byPeriod = new Map<string, { demand: bigint; collection: bigint }>();
+  const byPeriod = new Map<string, { demand: bigint; collection: bigint; cash: bigint; waived: bigint; writtenOff: bigint }>();
 
   for (const e of entries) {
-    const bucket = byPeriod.get(e.period) ?? { demand: 0n, collection: 0n };
+    const bucket = byPeriod.get(e.period) ?? { demand: 0n, collection: 0n, cash: 0n, waived: 0n, writtenOff: 0n };
     if (e.entryType === "demand") bucket.demand += e.amountMinor;
-    else bucket.collection -= dcbBalanceEffect(e);
+    else {
+      const reduction = -dcbBalanceEffect(e);
+      bucket.collection += reduction;
+      // Q18: waivers and write-offs reduce the balance but are not cash, so
+      // they are reported separately and excluded from collection efficiency.
+      if (e.entryType === "waiver") bucket.waived += reduction;
+      else if (e.entryType === "write_off") bucket.writtenOff += reduction;
+      else if (e.entryType === "collection" || e.entryType === "refund") bucket.cash += reduction;
+    }
     byPeriod.set(e.period, bucket);
   }
 
@@ -76,7 +92,10 @@ export function aggregatePeriodSeries(entries: PeriodDcbEntry[]): PeriodTrend[] 
       period,
       demandMinor: v.demand,
       collectionMinor: v.collection,
-      efficiencyBps: collectionEfficiencyBps(v.demand, v.collection),
+      cashCollectionMinor: v.cash,
+      waivedMinor: v.waived,
+      writtenOffMinor: v.writtenOff,
+      efficiencyBps: collectionEfficiencyBps(v.demand, v.cash),
     }));
 }
 

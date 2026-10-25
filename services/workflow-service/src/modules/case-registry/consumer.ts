@@ -2,6 +2,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { registerCaseTx } from "./repo.js";
+import { auditFailedCreate } from "../../shared/numbers.js";
 import { caseDeviations } from "./schema.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -52,7 +53,7 @@ export function registerCaseRegistryConsumers(q: Queue): void {
         });
         await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "workflow-service", action: "register", resourceType: "case", resourceId: sourceRefId, outcome: "success" } });
       });
-    });
+    }, auditFailedCreate("register", "case"));
   }
 
   // CAP-031 — deviation observation recorder (simple register; the full waiver

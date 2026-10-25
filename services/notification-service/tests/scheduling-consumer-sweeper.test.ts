@@ -274,16 +274,46 @@ describe("scheduling sweeper — claim and dispatch", () => {
     expect(claimed).toBe(false);
   });
 
-  it("a publish failure leaves the row claimed and is swallowed for the next cycle", async () => {
+  it("a publish failure reverts the claim so the next sweep retries it (CLOS3-S5-04)", async () => {
     await seedSchedule(ID, new Date(Date.now() - 60_000));
     const q = new MemoryQueue();
-    vi.spyOn(q, "publish").mockRejectedValue(new Error("broker unreachable"));
+    vi.spyOn(q, "publish").mockRejectedValueOnce(new Error("broker unreachable"));
 
     // The sweeper must not throw — a broker outage is a retry-next-cycle concern.
     const dispatched = await sweepDueSchedules(q, new Date());
     expect(dispatched).toBe(0);
-    // Row stays claimed; operators replay from 'queued' rather than double-send.
+    // The claim is compensated: back to 'scheduled', version advanced by claim + revert.
+    const reverted = await scheduleById(ID);
+    expect(reverted?.status).toBe("scheduled");
+    expect(reverted?.version).toBe(3);
+
+    // A later sweep with a working broker dispatches it exactly once.
+    const sent: unknown[] = [];
+    q.subscribe(COMMANDS.sendNotification, async (msg) => { sent.push(msg); });
+    await q.start();
+    expect(await sweepDueSchedules(q, new Date())).toBe(1);
+    await q.drain();
+    expect(sent).toHaveLength(1);
     expect((await scheduleById(ID))?.status).toBe("queued");
+    vi.restoreAllMocks();
+  });
+
+  it("revertClaim does not touch a row whose version moved on (claimed by another instance)", async () => {
+    await seedSchedule(ID, new Date(Date.now() - 60_000), "queued", 5);
+    const reverted = await runWithTenant(TENANT, () =>
+      db.transaction((tx) => repo.revertClaim(tx, ID, 2)));
+    expect(reverted).toBe(false);
+    const row = await scheduleById(ID);
+    expect(row?.status).toBe("queued");
+    expect(row?.version).toBe(5);
+  });
+
+  it("a failing revert is logged and does not abort the sweep loop", async () => {
+    await seedSchedule(ID, new Date(Date.now() - 60_000));
+    const q = new MemoryQueue();
+    vi.spyOn(q, "publish").mockRejectedValue(new Error("broker unreachable"));
+    vi.spyOn(repo, "revertClaim").mockRejectedValue(new Error("db down"));
+    await expect(sweepDueSchedules(q, new Date())).resolves.toBe(0);
     vi.restoreAllMocks();
   });
 

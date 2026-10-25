@@ -206,3 +206,64 @@ describe("AdminConfig -- preset diff (GAP-VISITOR-ADMIN-01)", () => {
     expect(applyPresetMock).not.toHaveBeenCalled();
   });
 });
+
+describe("AdminConfig -- stale preset preview (CLOS3-S3-20)", () => {
+  beforeEach(() => {
+    fetchConfigNamespaceMock.mockReset().mockResolvedValue([]);
+    applyPresetMock.mockReset().mockResolvedValue(undefined);
+    fetchPresetMock.mockReset();
+  });
+
+  const retention365 = {
+    id: "c1", namespace: "visitor_policy", configKey: "retention.pii_days", value: 365,
+    label: null, description: null, active: true, sortOrder: 0, version: 1,
+  };
+  const row = (value: number) => [
+    { namespace: "visitor_policy", configKey: "retention.pii_days", value, label: "Retain visitor PII" },
+  ];
+  function deferred<T>() {
+    let resolve!: (v: T) => void;
+    let reject!: (e: unknown) => void;
+    const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+
+  it("a late preview for a cancelled preset never overwrites the newly opened preset's diff", async () => {
+    const a = deferred<ReturnType<typeof row>>();
+    const b = deferred<ReturnType<typeof row>>();
+    fetchPresetMock.mockImplementation((name: string) => (name === "secretariat" ? a.promise : b.promise));
+    render(<AdminConfig initialEntries={[retention365]} policySource="api" approvalSource="api" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Secretariat" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Hospital" }));
+
+    b.resolve(row(1825));
+    const dialog = screen.getByRole("alertdialog");
+    const list = await within(dialog).findByRole("list", { name: /Changes this preset will make/ });
+    a.resolve(row(730));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(list).toHaveTextContent(/1825/);
+    expect(list).not.toHaveTextContent(/730/);
+  });
+
+  it("a late failure for a cancelled preset does not mark the new preview as failed", async () => {
+    const a = deferred<ReturnType<typeof row>>();
+    const b = deferred<ReturnType<typeof row>>();
+    fetchPresetMock.mockImplementation((name: string) => (name === "secretariat" ? a.promise : b.promise));
+    render(<AdminConfig initialEntries={[retention365]} policySource="api" approvalSource="api" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Secretariat" }));
+    fireEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Hospital" }));
+
+    b.resolve(row(1825));
+    const dialog = screen.getByRole("alertdialog");
+    await within(dialog).findByRole("list", { name: /Changes this preset will make/ });
+    a.reject(new Error("late failure"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(within(dialog).queryByText(/Couldn.t load the list of changes/)).not.toBeInTheDocument();
+  });
+});

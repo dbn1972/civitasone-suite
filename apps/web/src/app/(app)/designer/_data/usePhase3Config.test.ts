@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, cleanup } from "@testing-library/react";
 
 const fetchServiceDefinition = vi.fn();
 const updateServiceDefinition = vi.fn();
@@ -134,5 +134,101 @@ describe("usePhase3Config", () => {
 
     expect(result.current.loaded).toBe(true);
     expect(result.current.saveState).toBe("offline");
+  });
+});
+
+// CLOS3-S1-08: flush() cleared `pending` before the request and never restored it on failure, so an
+// edit from a failed save was dropped from every later save while the screen still showed it.
+describe("usePhase3Config failed-save restore (CLOS3-S1-08)", () => {
+  const tick = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
+  // A restored (unsent) edit is flushed when the hook unmounts. Unmount here, inside this suite, so that
+  // flush is not counted against the next test.
+  afterEach(() => {
+    cleanup();
+    updateServiceDefinition.mockClear();
+  });
+
+  it("re-sends an edit from a failed save with the next successful save", async () => {
+    updateServiceDefinition.mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => usePhase3Config("def-1"));
+    await tick(0);
+
+    act(() => { result.current.patch({ locales: ["en", "hi"] }); });
+    await tick(2100);
+    expect(result.current.saveState).toBe("offline");
+
+    act(() => { result.current.patch({ renewalPolicy: { enabled: true } as never }); });
+    await tick(2100);
+
+    expect(updateServiceDefinition).toHaveBeenCalledTimes(2);
+    expect(updateServiceDefinition.mock.calls[1]![1]).toEqual({
+      locales: ["en", "hi"],
+      renewalPolicy: { enabled: true },
+    });
+    expect(result.current.saveState).toBe("saved");
+  });
+
+  it("a newer edit to the same key wins over the restored one", async () => {
+    updateServiceDefinition.mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => usePhase3Config("def-1"));
+    await tick(0);
+
+    act(() => { result.current.patch({ locales: ["en", "hi"] }); });
+    await tick(2100);
+    act(() => { result.current.patch({ locales: ["en", "or"] }); });
+    await tick(2100);
+
+    expect(updateServiceDefinition.mock.calls[1]![1]).toEqual({ locales: ["en", "or"] });
+  });
+
+  it("never sends offeringOfficeIds, even after a restore", async () => {
+    updateServiceDefinition.mockRejectedValueOnce(new Error("network"));
+    const { result } = renderHook(() => usePhase3Config("def-1"));
+    await tick(0);
+
+    act(() => { result.current.patch({ offeringOfficeIds: ["office-b"], locales: ["en", "hi"] }); });
+    await tick(2100);
+    act(() => { result.current.patch({ rtiLinkage: { published: true, pioDesignationId: "pio" } }); });
+    await tick(2100);
+
+    expect(updateServiceDefinition.mock.calls[1]![1]).toEqual({
+      locales: ["en", "hi"],
+      rtiLinkage: { published: true, pioDesignationId: "pio" },
+    });
+  });
+
+  it("does not retry on its own after a failure (no retry storm)", async () => {
+    updateServiceDefinition.mockRejectedValue(new Error("network"));
+    const { result } = renderHook(() => usePhase3Config("def-1"));
+    await tick(0);
+
+    act(() => { result.current.patch({ locales: ["en", "hi"] }); });
+    await tick(20000);
+
+    expect(updateServiceDefinition).toHaveBeenCalledTimes(1);
+  });
+
+  it("serialises saves so a slow failure cannot overwrite a newer edit", async () => {
+    let rejectFirst: (e: unknown) => void = () => {};
+    updateServiceDefinition.mockImplementationOnce(() => new Promise<void>((_, rej) => { rejectFirst = rej; }));
+    const { result } = renderHook(() => usePhase3Config("def-1"));
+    await tick(0);
+
+    act(() => { result.current.patch({ locales: ["en", "hi"] }); });
+    await tick(2100);
+    expect(updateServiceDefinition).toHaveBeenCalledTimes(1);
+
+    act(() => { result.current.patch({ locales: ["en", "or"] }); });
+    await tick(2100);
+    // The second save waits for the first to settle; it must not race it.
+    expect(updateServiceDefinition).toHaveBeenCalledTimes(1);
+
+    await act(async () => { rejectFirst(new Error("slow failure")); });
+    await tick(0);
+
+    expect(updateServiceDefinition).toHaveBeenCalledTimes(2);
+    expect(updateServiceDefinition.mock.calls[1]![1]).toEqual({ locales: ["en", "or"] });
+    expect(result.current.saveState).toBe("saved");
   });
 });

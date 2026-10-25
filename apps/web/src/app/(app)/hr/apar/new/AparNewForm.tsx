@@ -4,8 +4,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
 import Link from "next/link";
-import { PageHeader, Card, Button, Field, Select, EntityPicker } from "../../../../_components/ds";
+import { PageHeader, Card, Button, Field, Select, EntityPicker, AcceptedNotice } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 // GAP-HR-APAR-NEW-01: moved out of page.tsx (which is now a server
@@ -92,12 +93,24 @@ function financialYearOptions(count = 6): string[] {
   });
 }
 
+// CLOS3-S2-03: POST /v1/hrms/apar is a queued (F3) write -- it answers {id} before the consumer has written the
+// row, so the form waits (bounded, backed off) for GET /v1/hrms/apar/{id} to return 200 before opening the detail
+// page, and never navigates on a missing / malformed id.
+const createdIdSchema = z.string().uuid();
+
 export default function AparNewForm() {
   const t = useTranslations("aparNew");
   const router = useRouter();
-  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "submitting" | "queued" | "error">("idle");
   const [msg, setMsg] = useState("");
   const formError = useFormError("APAR");
+  const accepted = useAcceptedWrite<string, number>({
+    poll: async (id) => (await fetch(`/api/proxy/v1/hrms/apar/${id}`, { method: "GET" })).status,
+    isDone: (httpStatus) => httpStatus === 200,
+    onConfirmed: (_httpStatus, id) => router.push(`/hr/apar/${id}`),
+    maxAttempts: 6,
+    initialDelayMs: 400,
+  });
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
 
   const periodOptions = useMemo(() => financialYearOptions(), []);
@@ -156,8 +169,15 @@ export default function AparNewForm() {
         setStatus("error");
         return;
       }
-      const data = await res.json() as { id?: string };
-      router.push(`/hr/apar/${data.id}`);
+      const data = (await res.json()) as { id?: unknown };
+      const idCheck = createdIdSchema.safeParse(data?.id);
+      if (!idCheck.success) {
+        setMsg(formError.fromException("save").message);
+        setStatus("error");
+        return;
+      }
+      setStatus("queued");
+      void accepted.accept(idCheck.data);
     } catch (caught) {
       setMsg(formError.fromException("save", caught).message);
       setStatus("error");
@@ -229,6 +249,8 @@ export default function AparNewForm() {
             />
           </Field>
 
+          <AcceptedNotice {...accepted.noticeProps} />
+          {accepted.phase === "timed_out" && <Link href="/hr/apar">{t("backToList")}</Link>}
           {msg && (
             <p role="alert" style={{ color: "var(--red)", fontSize: 13 }}>
               {msg}
@@ -236,8 +258,8 @@ export default function AparNewForm() {
           )}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <Link href="/hr/apar" className="btn ghost">{t("cancelBtn")}</Link>
-            <Button type="submit" variant="primary" disabled={status === "submitting" || !canSubmit}>
-              {status === "submitting" ? t("initiatingBtn") : t("initiateBtn")}
+            <Button type="submit" variant="primary" disabled={status === "submitting" || status === "queued" || !canSubmit}>
+              {status === "submitting" || status === "queued" ? t("initiatingBtn") : t("initiateBtn")}
             </Button>
           </div>
         </form>

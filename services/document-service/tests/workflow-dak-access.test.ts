@@ -133,9 +133,9 @@ describe("approval decide scoping (segregation of duties)", () => {
     expect(await statusOf(tid, approvalId)).toBe("pending");
 
     // Consumer-side guard: a self-approval command published directly (bypassing the route) is dropped.
-    commands.decideApproval(ctxFor(tid, owner), approvalId, "approved", null, true);
+    await commands.decideApproval(ctxFor(tid, owner), approvalId, "approved", null, true);
     // ...and so is one from a non-holder who claims no admin.
-    commands.decideApproval(ctxFor(tid, stranger), approvalId, "approved", null, false);
+    await commands.decideApproval(ctxFor(tid, stranger), approvalId, "approved", null, false);
     await appQueue.drain();
     expect(await statusOf(tid, approvalId)).toBe("pending");
     // A rejected command is audited as denied, not dropped silently.
@@ -149,7 +149,7 @@ describe("approval decide scoping (segregation of duties)", () => {
 
     // Already decided: 409 from the route, and a replayed command cannot overwrite it.
     expect((await decide(tid, randomUUID(), ["document_admin"], approvalId, "rejected")).statusCode).toBe(409);
-    commands.decideApproval(ctxFor(tid, randomUUID()), approvalId, "rejected", null, true);
+    await commands.decideApproval(ctxFor(tid, randomUUID()), approvalId, "rejected", null, true);
     await appQueue.drain();
     expect(await statusOf(tid, approvalId)).toBe("approved");
   });
@@ -172,8 +172,8 @@ describe("consumer re-checks the current holder", () => {
     await appQueue.drain();
 
     // The owner passed the route check earlier, but is no longer the holder when the command is consumed.
-    commands.forwardDak(ctxFor(tid, owner), id, third, false);
-    commands.acknowledgeDak(ctxFor(tid, owner), id, false);
+    await commands.forwardDak(ctxFor(tid, owner), id, third, false);
+    await commands.acknowledgeDak(ctxFor(tid, owner), id, false);
     await appQueue.drain();
     const [row] = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select assigned_to, status from document.daks where tenant_id = ${tid} and id = ${id}`);
     expect(row.assigned_to).toBe(assignee);
@@ -185,7 +185,7 @@ describe("consumer re-checks the current holder", () => {
     }
 
     // The current holder's command still goes through.
-    commands.acknowledgeDak(ctxFor(tid, assignee), id, false);
+    await commands.acknowledgeDak(ctxFor(tid, assignee), id, false);
     await appQueue.drain();
     const [after] = await withRawTenantGuc(sqlClient, tid, (tx) => tx`select status from document.daks where tenant_id = ${tid} and id = ${id}`);
     expect(after.status).toBe("acknowledged");

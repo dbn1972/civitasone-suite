@@ -65,42 +65,42 @@ describe("role-feature write authority (routes)", () => {
   beforeEach(() => { held.features = new Set(); held.grantKey = null; });
 
   it("403 when a tenant_admin grants admin.users it does not hold", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users" } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users", reason: "access review for audit" } });
     expect(res.statusCode).toBe(403);
   });
   it("403 when a tenant_admin revokes an admin.* grant it does not hold", async () => {
     held.grantKey = "admin.settings";
-    const res = await app.inject({ method: "DELETE", url: `/v1/policy/role-features/${GRANT}`, headers: hdr(["tenant_admin"]) });
+    const res = await app.inject({ method: "DELETE", url: `/v1/policy/role-features/${GRANT}`, headers: hdr(["tenant_admin"]), payload: { reason: "access review for audit" } });
     expect(res.statusCode).toBe(403);
   });
   it.each(["rbac.admin", "tenant.users"])("403 when a tenant_admin grants %s it does not hold", async (featureKey) => {
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey, reason: "access review for audit" } });
     expect(res.statusCode).toBe(403);
   });
   it.each(["rbac.admin", "tenant.users"])("a super_admin may grant %s (202)", async (featureKey) => {
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["super_admin"]), payload: { roleName: "hr_admin", featureKey } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["super_admin"]), payload: { roleName: "hr_admin", featureKey, reason: "access review for audit" } });
     expect(res.statusCode).toBe(202);
   });
   it.each(["rbac.admin", "tenant.users"])("a tenant_admin who holds %s may grant it (202)", async (featureKey) => {
     held.features = new Set([featureKey]);
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey, reason: "access review for audit" } });
     expect(res.statusCode).toBe(202);
   });
   it("a tenant_admin may grant an ordinary feature (202)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "hrms.leave" } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "hrms.leave", reason: "access review for audit" } });
     expect(res.statusCode).toBe(202);
   });
   it("a tenant_admin who holds admin.users may grant it (202)", async () => {
     held.features = new Set(["admin.users"]);
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users" } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["tenant_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users", reason: "access review for audit" } });
     expect(res.statusCode).toBe(202);
   });
   it("a super_admin may grant admin.users (202)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["super_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users" } });
+    const res = await app.inject({ method: "POST", url: "/v1/policy/role-features", headers: hdr(["super_admin"]), payload: { roleName: "hr_admin", featureKey: "admin.users", reason: "access review for audit" } });
     expect(res.statusCode).toBe(202);
   });
   it("revoking an unknown grant id is 404 for a tenant_admin", async () => {
-    const res = await app.inject({ method: "DELETE", url: `/v1/policy/role-features/${GRANT}`, headers: hdr(["tenant_admin"]) });
+    const res = await app.inject({ method: "DELETE", url: `/v1/policy/role-features/${GRANT}`, headers: hdr(["tenant_admin"]), payload: { reason: "access review for audit" } });
     expect(res.statusCode).toBe(404);
   });
 });

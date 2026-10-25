@@ -36,9 +36,10 @@ const log = pino({ name: "estab-worker" });
   const q = queue as any;
   const rawSubscribe = q.subscribe.bind(q);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>, options?: unknown) =>
+    // Forward `options` (onOutcome): dropping it silently disables the audited-failure hook.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)), options);
 }
 
 registerFilesConsumers(queue);

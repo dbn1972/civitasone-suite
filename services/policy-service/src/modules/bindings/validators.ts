@@ -3,8 +3,8 @@ import { z } from "zod";
 export const createBindingBody = z.object({
   userId: z.string().uuid(),
   roleId: z.string().uuid(),
-  /** GAP-POLICY-BINDINGS-01: why the grant is made; carried into the audit payload. */
-  reason: z.string().trim().min(1).max(2000).optional(),
+  /** Q28: why the grant is made (required, min 5 chars); carried into the audit payload. */
+  reason: z.string().trim().min(5, "reason must be at least 5 characters").max(2000),
 });
 export type CreateBindingBody = z.infer<typeof createBindingBody>;
 
@@ -15,8 +15,8 @@ export const breakglassBody = z.object({
 });
 export type BreakglassBody = z.infer<typeof breakglassBody>;
 
-/** DELETE body: optional revocation reason (audited). */
-export const revokeBindingBody = z.object({ reason: z.string().trim().min(1).max(2000).optional() }).default({});
+/** DELETE body: revocation reason (required, min 5 chars; audited). */
+export const revokeBindingBody = z.object({ reason: z.string().trim().min(5, "reason must be at least 5 characters").max(2000) });
 export type RevokeBindingBody = z.infer<typeof revokeBindingBody>;
 
 export const listBindingsQuery = z.object({

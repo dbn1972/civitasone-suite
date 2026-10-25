@@ -43,6 +43,8 @@ export default function NewProposalPage() {
     remarks: "",
   });
   const [busy, setBusy] = useState(false);
+  // CLOS3-S3-16: latched after a successful POST so the pending redirect cannot be raced by a second submit.
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("proposal");
@@ -99,6 +101,7 @@ export default function NewProposalPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (saved || busy) return;
     setMessage("");
     setError("");
     formError.clear();
@@ -109,6 +112,7 @@ export default function NewProposalPage() {
     }
 
     setBusy(true);
+    let ok = false;
     try {
       const body: Record<string, string> = {
         description: form.description,
@@ -134,13 +138,15 @@ export default function NewProposalPage() {
       // page). Say so honestly rather than "submitted / for approval".
       const created = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       const newId = typeof created.id === "string" ? created.id : undefined;
+      ok = true;
+      setSaved(true);
       setMessage("Draft proposal created.");
       toast.success("Draft proposal created.");
       setTimeout(() => router.push(newId ? `/works/proposals/${newId}` : "/works/proposals"), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
-      setBusy(false);
+      if (!ok) setBusy(false);
     }
   }
 
@@ -301,15 +307,15 @@ export default function NewProposalPage() {
             <Button
               type="submit"
               variant="primary"
-              disabled={busy}
+              disabled={busy || saved}
               style={{ minHeight: 44 }}
             >
-              {busy ? "Creating…" : "Create draft"}
+              {busy || saved ? "Creating…" : "Create draft"}
             </Button>
             <Button
               type="button"
               variant="ghost"
-              disabled={busy}
+              disabled={busy || saved}
               onClick={handleCancel}
               style={{ minHeight: 44 }}
             >

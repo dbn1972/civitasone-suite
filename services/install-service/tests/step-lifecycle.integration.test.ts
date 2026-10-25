@@ -76,8 +76,8 @@ async function forceStage(id: string, patch: Partial<typeof stages.$inferInsert>
   );
 }
 
-const patch = (id: string, verb: string, tenant = TENANT) =>
-  app.inject({ method: "PATCH", url: `/v1/install/steps/${id}/${verb}`, headers: headers(tenant) });
+const patch = (id: string, verb: string, tenant = TENANT, body?: Record<string, unknown>, roles?: string[]) =>
+  app.inject({ method: "PATCH", url: `/v1/install/steps/${id}/${verb}`, headers: headers(tenant, roles), ...(body ? { payload: body } : {}) });
 
 beforeAll(async () => {
   app = await buildApp();
@@ -152,5 +152,51 @@ describe("PATCH /v1/install/steps/:id/:verb", () => {
     expect(topics).not.toContain(COMMANDS.stepStart);
     expect(topics).not.toContain(COMMANDS.stepSkip);
     await waitForStatus(id, "in_progress");
+  });
+});
+
+describe("Q9 Mark complete / Mark failed", () => {
+  it("complete moves an in_progress step to completed with completedAt", async () => {
+    const id = await createStage(20);
+    await patch(id, "run");
+    await waitForStatus(id, "in_progress");
+    expect((await patch(id, "complete")).statusCode).toBe(202);
+    const step = await waitForStatus(id, "completed");
+    expect(step.errorMessage).toBeUndefined();
+  });
+
+  it("fail needs remarks (400), then records them as the step error", async () => {
+    const id = await createStage(21);
+    await patch(id, "run");
+    await waitForStatus(id, "in_progress");
+    const noRemarks = await patch(id, "fail");
+    expect(noRemarks.statusCode).toBe(400);
+    expect(noRemarks.json().code).toBe("VALIDATION_FAILED");
+    expect((await patch(id, "fail", TENANT, { remarks: "   " })).statusCode).toBe(400);
+    expect((await patch(id, "fail", TENANT, { remarks: "DNS not delegated" })).statusCode).toBe(202);
+    const step = await waitForStatus(id, "failed");
+    expect(step.errorMessage).toBe("DNS not delegated");
+  });
+
+  it("complete/fail are illegal (409) from a pending step", async () => {
+    const id = await createStage(22);
+    expect((await patch(id, "complete")).statusCode).toBe(409);
+    expect((await patch(id, "fail", TENANT, { remarks: "x" })).statusCode).toBe(409);
+  });
+
+  it("install_user (read-only) is denied 403 on complete and fail", async () => {
+    const id = await createStage(23);
+    await patch(id, "run");
+    await waitForStatus(id, "in_progress");
+    expect((await patch(id, "complete", TENANT, undefined, ["install_user"])).statusCode).toBe(403);
+    expect((await patch(id, "fail", TENANT, { remarks: "x" }, ["install_user"])).statusCode).toBe(403);
+    expect((await listSteps()).find((s) => s.id === id)?.status).toBe("in_progress");
+  });
+
+  it("another tenant cannot complete this tenant's step (404)", async () => {
+    const id = await createStage(24);
+    await patch(id, "run");
+    await waitForStatus(id, "in_progress");
+    expect((await patch(id, "complete", OTHER_TENANT)).statusCode).toBe(404);
   });
 });

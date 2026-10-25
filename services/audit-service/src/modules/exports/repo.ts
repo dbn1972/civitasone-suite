@@ -1,6 +1,7 @@
 import { and, eq, desc } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { auditExports, type ExportInsert, type ExportRow } from "./schema.js";
+import { createHash } from "node:crypto";
+import { auditExports, downloadRedemptions, type ExportInsert, type ExportRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -56,4 +57,21 @@ export async function listExportsByTenant(tenantId: string, limit: number): Prom
     .where(eq(auditExports.tenantId, tenantId))
     .orderBy(desc(auditExports.createdAt))
     .limit(limit));
+}
+
+/**
+ * Q34: atomically redeem a download token. Returns true for the first caller and
+ * false for every later use of the same token (the PK on (tenant, sha256(token))
+ * makes the INSERT the single arbiter, so two concurrent requests cannot both win).
+ * Only a hash is stored, never the token itself.
+ */
+export async function redeemDownloadToken(
+  tx: Writer, row: { tenantId: string; exportId: string; redeemedBy: string; token: string },
+): Promise<boolean> {
+  const tokenSha256 = createHash("sha256").update(row.token).digest("hex");
+  const res = await tx.insert(downloadRedemptions)
+    .values({ tenantId: row.tenantId, tokenSha256, exportId: row.exportId, redeemedBy: row.redeemedBy })
+    .onConflictDoNothing()
+    .returning({ tokenSha256: downloadRedemptions.tokenSha256 });
+  return res.length === 1;
 }
