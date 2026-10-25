@@ -40,7 +40,7 @@ export function registerContractExpiryConsumers(queue: Queue): void {
       tx
         .selectDistinct({ tenantId: hrmsContracts.tenantId })
         .from(hrmsContracts)
-        .where(inArray(hrmsContracts.status, ["active", "expiring"])),
+        .where(inArray(hrmsContracts.status, ["active", "expiring", "escalated"])),
     );
 
     const tenantIds = tenantRows.map((r) => r.tenantId);
@@ -83,7 +83,7 @@ async function processTenant(
       .where(
         and(
           eq(hrmsContracts.tenantId, tenantId),
-          inArray(hrmsContracts.status, ["active", "expiring"]),
+          inArray(hrmsContracts.status, ["active", "expiring", "escalated"]),
           lte(hrmsContracts.endDate, windowEnd),
         ),
       ),
