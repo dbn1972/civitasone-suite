@@ -191,6 +191,22 @@ describe(`${N} concurrent creates -> ${N} distinct persisted numbers`, () => {
   });
 });
 
+describe("staff-supplied noticeNo vs the reserved auto-number space", () => {
+  it("rejects a noticeNo in the reserved NTC-YYYY-NNNNNN format with 400 VALIDATION_FAILED", async () => {
+    const res = await post("/v1/citizen/notices", { noticeNo: "NTC-2026-000123", subject: "Reserved", department: "Public Works" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
+  });
+
+  it("still accepts a non-reserved legacy noticeNo and stores it as given", async () => {
+    const legacy = `NTC-2026-1A${randomUUID().slice(0, 6).toUpperCase()}`;
+    const res = await post("/v1/citizen/notices", { noticeNo: legacy, subject: "Legacy", department: "Public Works" });
+    expect(res.statusCode).toBe(202);
+    const [row] = await waitForRows("engagement.citizen_notices", "notice_no", [res.json().id as string]);
+    expect(row!.no).toBe(legacy);
+  });
+});
+
 describe("a retried command persists exactly once", () => {
   async function countRows(table: string, id: string) {
     return (await persisted(table, "id", [id])).length;
