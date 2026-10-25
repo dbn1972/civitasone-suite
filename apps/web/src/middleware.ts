@@ -50,6 +50,27 @@ const KEYCLOAK_ORIGIN = (() => {
   }
 })();
 
+// V4-A-02: pages PUT files straight to object storage via a presigned URL (CRM
+// documents, onboarding, reimbursements, tax proofs, citizen documents). That is
+// a cross-origin fetch, so connect-src must name the storage origin. Resolved
+// once at module load, origin only (no path/query), http(s) only, from
+// NEXT_PUBLIC_STORAGE_ORIGIN (browser-facing; preferred), else AWS_ENDPOINT_URL
+// (LocalStack / S3-compatible), else the virtual-hosted AWS S3 origin derived from
+// AWS_S3_BUCKET + AWS_DEFAULT_REGION. Never a wildcard.
+const STORAGE_ORIGIN = (() => {
+  try {
+    let raw = process.env.NEXT_PUBLIC_STORAGE_ORIGIN || process.env.AWS_ENDPOINT_URL || '';
+    if (!raw && process.env.AWS_S3_BUCKET) {
+      raw = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_DEFAULT_REGION || 'ap-south-1'}.amazonaws.com`;
+    }
+    if (!raw) return '';
+    const u = new URL(raw);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.origin : '';
+  } catch {
+    return '';
+  }
+})();
+
 // H2-DEV (accounting-high-findings): `next dev`'s webpack HMR / React Refresh
 // runtime calls eval() to apply module updates; the strict H2 CSP below (no
 // 'unsafe-eval') blocks it, and the resulting CSP violation surfaces only in
@@ -96,7 +117,7 @@ function buildNextResponse(req: NextRequest): NextResponse {
     // Map base-map tiles (MAP_TILE_URL, default OpenStreetMap) -- the map iframe is a
     // srcdoc document and inherits this policy.
     `img-src 'self' data: blob: ${tileImgSource()}`,
-    `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,
+    `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}${STORAGE_ORIGIN ? ` ${STORAGE_ORIGIN}` : ''}`,
     "font-src 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
