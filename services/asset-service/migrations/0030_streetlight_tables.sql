@@ -25,18 +25,20 @@ SET lock_timeout = '5s';
 CREATE SCHEMA IF NOT EXISTS streetlight;
 
 -- ── asset_streetlights ──────────────────────────────────────────────────────
--- NOTE: pole_id is globally UNIQUE (not per-tenant) -- mirrors schema.ts's
--- `.unique()` (a single-column constraint, not a composite one) exactly as
--- already written. Flagging this as worth a second look separately:
--- register.asset_assets uses a composite UNIQUE(tenant_id, code) for the
--- equivalent case, so two tenants both wanting pole "SL-001" would collide
--- here. Not changed in this migration -- it mirrors the pre-existing
--- Drizzle schema faithfully rather than redesigning it.
+-- NOTE (V4-C-03): pole_id used to be a table-wide UNIQUE, so two tenants both
+-- wanting pole "SL-001" collided. Uniqueness is now per tenant (UNIQUE INDEX on
+-- (tenant_id, pole_id), created below). This file is re-applied in full on
+-- every migrate run (no ledger table), so the same block also drops the old
+-- single-column constraint on databases that already ran the original 0030.
+-- Down: DROP INDEX IF EXISTS streetlight.asset_streetlights_tenant_pole_uidx;
+--       ALTER TABLE streetlight.asset_streetlights
+--         ADD CONSTRAINT asset_streetlights_pole_id_key UNIQUE (pole_id);
+--       (valid only while no two tenants share a pole id)
 
 CREATE TABLE IF NOT EXISTS streetlight.asset_streetlights (
   id                    uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id             uuid        NOT NULL,
-  pole_id               text        NOT NULL UNIQUE,
+  pole_id               text        NOT NULL,
   location              jsonb,
   lamp_type             varchar(16) NOT NULL,
   wattage               integer     NOT NULL,
@@ -52,6 +54,11 @@ CREATE TABLE IF NOT EXISTS streetlight.asset_streetlights (
 );
 
 CREATE INDEX IF NOT EXISTS idx_streetlights_tenant ON streetlight.asset_streetlights (tenant_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS asset_streetlights_tenant_pole_uidx
+  ON streetlight.asset_streetlights (tenant_id, pole_id);
+ALTER TABLE streetlight.asset_streetlights
+  DROP CONSTRAINT IF EXISTS asset_streetlights_pole_id_key;
 
 -- ── asset_streetlight_faults ─────────────────────────────────────────────────
 
