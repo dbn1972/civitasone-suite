@@ -16,7 +16,7 @@ import { projectDprs } from "../progress/schema.js";
 // across modules for its read-only projections (see the progress import
 // above); this follows the same established pattern (read-only, same tx).
 import * as escalationRepo from "../escalation/repo.js";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 
 // project_manager MUST read these: the DPR review and escalation actions require it,
 // so a PM who can act on a DPR/escalation has to be able to list them too.
@@ -150,25 +150,27 @@ export async function mockEliminationRoutes(app: FastifyInstance): Promise<void>
             .orderBy(desc(projectDprs.dprDate))
             .limit(200);
 
-          const out = [];
-          for (const r of result) {
-            const proj = await tx.select({ name: projectProjects.name })
+          // One batched name lookup instead of one query per DPR row (N+1, up to 200 rows).
+          const projectIds = [...new Set(result.map((r) => r.projectId))];
+          const names = new Map<string, string>();
+          if (projectIds.length > 0) {
+            const projects = await tx.select({ id: projectProjects.id, name: projectProjects.name })
               .from(projectProjects)
-              .where(and(eq(projectProjects.id, r.projectId), eq(projectProjects.tenantId, tenantId)))
-              .limit(1);
-            out.push({
-              id: r.id,
-              dprNo: r.dprNo,
-              projectId: r.projectId,
-              projectTitle: proj[0]?.name ?? "Unknown Project",
-              submittedBy: r.submittedBy ?? "—",
-              submittedDate: r.dprDate?.toString() ?? "—",
-              estimatedCost: "—",
-              status: r.status,
-              reviewingAuthority: "PMU",
-            });
+              .where(and(inArray(projectProjects.id, projectIds), eq(projectProjects.tenantId, tenantId)))
+              .limit(projectIds.length);
+            for (const proj of projects) names.set(proj.id, proj.name);
           }
-          return out;
+          return result.map((r) => ({
+            id: r.id,
+            dprNo: r.dprNo,
+            projectId: r.projectId,
+            projectTitle: names.get(r.projectId) ?? "Unknown Project",
+            submittedBy: r.submittedBy ?? "—",
+            submittedDate: r.dprDate?.toString() ?? "—",
+            estimatedCost: "—",
+            status: r.status,
+            reviewingAuthority: "PMU",
+          }));
         });
       },
     );
