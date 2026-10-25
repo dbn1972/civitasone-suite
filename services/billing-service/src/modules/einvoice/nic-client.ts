@@ -51,6 +51,23 @@ const EINVOICE_API_URL = process.env.EINVOICE_API_URL ?? "https://einv-apisandbo
 const EINVOICE_CLIENT_ID = process.env.EINVOICE_CLIENT_ID ?? "";
 const EINVOICE_CLIENT_SECRET = process.env.EINVOICE_CLIENT_SECRET ?? "";
 const EINVOICE_GSTIN = process.env.EINVOICE_GSTIN ?? "";
+const EINVOICE_TIMEOUT_MS = Number(process.env.EINVOICE_TIMEOUT_MS) || 15000;
+
+/** fetch with an AbortController timeout so a hung NIC endpoint cannot stall the consumer. */
+async function fetchWithTimeout(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EINVOICE_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (controller.signal.aborted) {
+      throw new Error(`NIC request timed out after ${EINVOICE_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ── Token cache (1h TTL) ──────────────────────────────────────────
 
@@ -61,7 +78,7 @@ async function getAuthToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  const res = await fetch(`${EINVOICE_API_URL}/eivital/v1.04/auth`, {
+  const res = await fetchWithTimeout(`${EINVOICE_API_URL}/eivital/v1.04/auth`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -115,7 +132,7 @@ export async function generateIrn(payload: EInvoicePayload): Promise<GenerateIrn
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice`, {
+  const res = await fetchWithTimeout(`${EINVOICE_API_URL}/eicore/v1.03/Invoice`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -150,7 +167,7 @@ export async function cancelIrn(irn: string, reason: string): Promise<CancelIrnR
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/Cancel`, {
+  const res = await fetchWithTimeout(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/Cancel`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -182,7 +199,7 @@ export async function getIrnByDocNo(gstin: string, docNo: string, fy: string): P
   }
 
   const token = await getAuthToken();
-  const res = await fetch(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/irnbydocdetails?doctype=INV&docnum=${encodeURIComponent(docNo)}&docdate=${fy}`, {
+  const res = await fetchWithTimeout(`${EINVOICE_API_URL}/eicore/v1.03/Invoice/irnbydocdetails?doctype=INV&docnum=${encodeURIComponent(docNo)}&docdate=${fy}`, {
     method: "GET",
     headers: {
       "Authorization": `Bearer ${token}`,
