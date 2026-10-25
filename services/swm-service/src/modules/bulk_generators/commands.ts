@@ -15,8 +15,8 @@ export interface RegisterInput {
 
 export async function registerGenerator(ctx: RequestContext, body: RegisterInput): Promise<Accepted> {
   const id = randomUUID();
-  const registrationNumber = `SWMG-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.bulkGeneratorRegister, id, { id, registrationNumber, ...body });
+  // registrationNumber is allocated by the consumer from a Postgres sequence, inside the insert transaction (shared/numbers.ts).
+  return publishCommand(ctx, COMMANDS.bulkGeneratorRegister, id, { id, ...body });
 }
 
 export async function updateGenerator(ctx: RequestContext, id: string, patch: Record<string, unknown>, version: number): Promise<Accepted> {

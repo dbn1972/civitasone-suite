@@ -6,6 +6,7 @@ import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { calculateRiskScore } from "./domain.js";
+import { nextHotspotCode, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "swm.analytics.consumer" });
@@ -22,8 +23,10 @@ export function registerAnalyticsConsumers(rawQueue: Queue): void {
     const riskScore = calculateRiskScore(p.complaintCount);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated inside the transaction: a retry re-runs nextval(), so it can never collide or be lost.
+      const hotspotCode: string = await nextHotspotCode(tx);
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, hotspotCode: p.hotspotCode,
+        id: p.id, tenantId: msg.tenantId, hotspotCode,
         location: p.location, category: p.category,
         complaintCount: p.complaintCount, riskScore, status: "identified",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -31,12 +34,12 @@ export function registerAnalyticsConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.hotspotIdentified, eventType: EVENTS.hotspotIdentified,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { hotspotId: p.id, hotspotCode: p.hotspotCode, riskScore },
+        payload: { hotspotId: p.id, hotspotCode, riskScore },
       });
       await writeAudit(tx, ctxOf(msg), { action: "hotspot.identify", resourceType: "swm_hotspot", resourceId: p.id });
     });
     log.info({ id: p.id, riskScore }, "hotspot identified");
-  });
+  }, auditFailedCreate("hotspot.identify", "swm_hotspot"));
 
   queue.subscribe(COMMANDS.hotspotResolve, async (msg) => {
     const p = msg.payload as any;

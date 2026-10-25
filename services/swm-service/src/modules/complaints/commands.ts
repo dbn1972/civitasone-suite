@@ -15,8 +15,8 @@ export interface CreateComplaintInput {
 
 export async function createComplaint(ctx: RequestContext, body: CreateComplaintInput): Promise<Accepted> {
   const id = randomUUID();
-  const complaintNumber = `SWM-${Date.now()}`;
-  return publishCommand(ctx, COMMANDS.complaintCreate, id, { id, complaintNumber, reportedBy: ctx.actorId, ...body });
+  // complaintNumber is allocated by the consumer from a Postgres sequence, inside the insert transaction (shared/numbers.ts).
+  return publishCommand(ctx, COMMANDS.complaintCreate, id, { id, reportedBy: ctx.actorId, ...body });
 }
 
 export async function assignComplaint(ctx: RequestContext, id: string, assignedTo: string, version: number): Promise<Accepted> {
