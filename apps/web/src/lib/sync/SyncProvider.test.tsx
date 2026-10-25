@@ -60,6 +60,7 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();
+  flushRequestQueue.mockResolvedValue({ flushed: 0, remaining: 0 });
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -79,9 +80,36 @@ describe("SyncProvider (disabled while identity-worker is down in production)", 
     expect(requestBackgroundSync).not.toHaveBeenCalled();
     expect(syncMailbox).not.toHaveBeenCalled();
     expect(resolveNamespace).not.toHaveBeenCalled();
-    expect(flushRequestQueue).not.toHaveBeenCalled();
+    // CLOS3-S3-01: the domain-write outbox replay is independent of the mailbox-sync flag.
+    expect(flushRequestQueue).toHaveBeenCalledTimes(1);
     expect(getOrCreateDeviceId).not.toHaveBeenCalled();
     expect(computeBrowserFingerprint).not.toHaveBeenCalled();
+  });
+
+  it("CLOS3-S3-01: with the flag off, going online and the SW sync message still replay the queue", async () => {
+    flushRequestQueue.mockResolvedValue({ flushed: 0, remaining: 0 });
+    const { unmount } = render(<SyncProvider />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(flushRequestQueue).toHaveBeenCalledTimes(1); // on mount
+
+    window.dispatchEvent(new Event("online"));
+    expect(flushRequestQueue).toHaveBeenCalledTimes(2);
+
+    // Mailbox sync and registration stay parked.
+    expect(syncMailbox).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(requestBackgroundSync).not.toHaveBeenCalled();
+
+    unmount();
+    window.dispatchEvent(new Event("online"));
+    expect(flushRequestQueue).toHaveBeenCalledTimes(2); // listener removed
+  });
+
+  it("CLOS3-S3-01: a rejecting flush (offline) is swallowed", async () => {
+    flushRequestQueue.mockRejectedValue(new Error("offline"));
+    render(<SyncProvider />);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(flushRequestQueue).toHaveBeenCalled();
   });
 
   it("still registers the service worker (offline app shell does not depend on sync)", async () => {

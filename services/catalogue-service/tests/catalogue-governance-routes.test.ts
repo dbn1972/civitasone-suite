@@ -32,6 +32,7 @@ const H = vi.hoisted(() => ({
   listVersionsMock: vi.fn(),
   findVersionByIdMock: vi.fn(),
   listVersionNumbersMock: vi.fn(),
+  findOpenVersionMock: vi.fn(),
   insertVersionMock: vi.fn(),
   updateVersionStatusMock: vi.fn(),
   findLatestApprovedVersionMock: vi.fn(),
@@ -86,6 +87,7 @@ vi.mock("../src/modules/products/governance-repo.js", () => ({
   listVersions: (...a: unknown[]) => H.listVersionsMock(...a),
   findVersionById: (...a: unknown[]) => H.findVersionByIdMock(...a),
   listVersionNumbers: (...a: unknown[]) => H.listVersionNumbersMock(...a),
+  findOpenVersion: (...a: unknown[]) => H.findOpenVersionMock(...a),
   insertVersion: (...a: unknown[]) => H.insertVersionMock(...a),
   updateVersionStatus: (...a: unknown[]) => H.updateVersionStatusMock(...a),
   findLatestApprovedVersion: (...a: unknown[]) => H.findLatestApprovedVersionMock(...a),
@@ -224,6 +226,7 @@ beforeEach(() => {
   H.productUpdateMock.mockResolvedValue(true);
   H.listVersionsMock.mockResolvedValue({ rows: [], total: 0 });
   H.listVersionNumbersMock.mockResolvedValue([]);
+  H.findOpenVersionMock.mockResolvedValue(undefined);
   H.listLifecycleHistoryMock.mockResolvedValue([]);
   H.findCurrentLifecycleMock.mockResolvedValue(null);
   H.findRegulatoryMock.mockResolvedValue(null);
@@ -396,7 +399,7 @@ describe("PC-001 POST /v1/catalogue/products/:id/versions", () => {
 
   it("422 when a draft is already open", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
-    H.listVersionsMock.mockResolvedValue({ rows: [makeVersion({ status: "draft" })], total: 1 });
+    H.findOpenVersionMock.mockResolvedValue(makeVersion({ status: "draft" }));
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",
@@ -411,7 +414,7 @@ describe("PC-001 POST /v1/catalogue/products/:id/versions", () => {
 
   it("422 when a version is already pending approval", async () => {
     H.productFindByIdMock.mockResolvedValue(makeProduct());
-    H.listVersionsMock.mockResolvedValue({ rows: [makeVersion({ status: "pending_approval" })], total: 1 });
+    H.findOpenVersionMock.mockResolvedValue(makeVersion({ status: "pending_approval" }));
     const app = await buildApp();
     const res = await app.inject({
       method: "POST",

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { z } from "zod";
 import { Field, Input, Select, useToast } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { purgeInventoryCache } from "../../_revalidate";
 
 export type StoreOption = { id: string; name: string };
 
@@ -79,6 +80,7 @@ export function NewBinForm({ stores }: { stores: StoreOption[] }) {
       }
       // 202: the bin is created asynchronously, so it may take a moment to appear.
       toast.success("Bin request received. It will appear in the register shortly.");
+      await purgeInventoryCache();
       router.push("/inventory/bins");
       router.refresh();
     } catch (caught) {

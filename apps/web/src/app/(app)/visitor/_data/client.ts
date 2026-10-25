@@ -115,14 +115,25 @@ export async function rejectVisitRequest(id: string, reason: string): Promise<vo
   await post(`v1/visitor/visit-requests/${id}/reject`, { reason });
 }
 
-/** Refresh a status-filtered list of visit requests (interactive tables). */
+/**
+ * Refresh a status-filtered list of visit requests (interactive tables).
+ * Follows `meta.hasMore` across the server's per-page cap (CLOS3-S6-15) so the
+ * table never shows a silently truncated list.
+ */
 export async function fetchVisitRequests(status: string): Promise<VisitRequest[]> {
-  const res = await browserFetch(
-    `v1/visitor/visit-requests?status=${encodeURIComponent(status)}`,
-  );
-  if (!res.ok) throw new Error(readError("load"));
-  const out = (await res.json()) as { data?: VisitRequest[] };
-  return out.data ?? [];
+  const pageSize = 500;
+  const maxPages = 40;
+  const all: VisitRequest[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const res = await browserFetch(
+      `v1/visitor/visit-requests?status=${encodeURIComponent(status)}&limit=${pageSize}&offset=${page * pageSize}`,
+    );
+    if (!res.ok) throw new Error(readError("load"));
+    const out = (await res.json()) as { data?: VisitRequest[]; meta?: { hasMore?: boolean } };
+    all.push(...(out.data ?? []));
+    if (out.meta?.hasMore !== true) return all;
+  }
+  throw new Error(readError("load"));
 }
 
 export async function setConfig(input: {

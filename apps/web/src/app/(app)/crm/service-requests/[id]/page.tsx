@@ -90,7 +90,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default async function ServiceRequestDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
-  const { data: r, source } = await fetchJson<{ data?: ServiceRequestDetail } | ServiceRequestDetail, ServiceRequestDetail | null>(
+  const detailP = fetchJson<{ data?: ServiceRequestDetail } | ServiceRequestDetail, ServiceRequestDetail | null>(
     `/api/v1/crm/service-requests/${params.id}?maskPii=true`,
     null,
     {
@@ -103,6 +103,26 @@ export default async function ServiceRequestDetailPage(props: { params: Promise<
       },
     },
   );
+
+  // F6-01: status timeline — a separate GET so the detail contract is unchanged.
+  // CLOS3-S1-14: it depends only on params.id, so start it together with the detail GET
+  // (previously awaited after it: page latency was the sum of both calls).
+  const historyP = fetchJson<unknown, CaseHistoryEntry[]>(
+    `/api/v1/crm/service-requests/${params.id}/history`,
+    [],
+    {
+      revalidateSeconds: 0,
+      telemetryKey: "crm.service-request.history",
+      mapResponse: (p) => {
+        if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
+          return (p as { data: CaseHistoryEntry[] }).data;
+        }
+        return [];
+      },
+    },
+  ).catch(() => ({ data: [] as CaseHistoryEntry[] }));
+
+  const { data: r, source } = await detailP;
 
   const t = await getTranslations("crmServiceRequestDetail");
 
@@ -120,6 +140,7 @@ export default async function ServiceRequestDetailPage(props: { params: Promise<
     );
   }
 
+  const { data: history } = await historyP;
   const roles = getSessionRoles();
   const priorityKey = (r.priority ?? "normal").toLowerCase();
   const priorityLabel = ["urgent", "high", "normal", "low"].includes(priorityKey)
@@ -140,22 +161,6 @@ export default async function ServiceRequestDetailPage(props: { params: Promise<
     else if (note.outcome === "no_contact") noteText = t("notifyNoContact");
     else if (note.channel) noteText = t("notifyQueued", { channel: noteChannel });
   }
-
-  // F6-01: status timeline — a separate GET so the detail contract is unchanged.
-  const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
-    `/api/v1/crm/service-requests/${params.id}/history`,
-    [],
-    {
-      revalidateSeconds: 0,
-      telemetryKey: "crm.service-request.history",
-      mapResponse: (p) => {
-        if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
-          return (p as { data: CaseHistoryEntry[] }).data;
-        }
-        return [];
-      },
-    },
-  );
 
   return (
     <>

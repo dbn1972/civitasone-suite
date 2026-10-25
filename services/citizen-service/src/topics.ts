@@ -32,6 +32,8 @@ export const COMMANDS = {
   // SVC-085 fee & payment
   paymentRequested:        "citizen.payment.requested",
   feeScheduleCreate:       "citizen.fee_schedule.create",
+  /** CLOS3-S1-11: edit = retire the active schedule + insert its successor. */
+  feeScheduleSupersede:    "citizen.fee_schedule.supersede",
   paymentIntentCreate:     "citizen.payment.intent_create",
   /** FN-14: gateway callback or labelled sandbox capture → receipt + GL. */
   paymentConfirm:          "citizen.payment.confirm",

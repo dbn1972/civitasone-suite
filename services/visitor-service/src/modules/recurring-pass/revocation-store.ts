@@ -22,6 +22,7 @@
  * the DB transaction has already committed.
  */
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 
 const REVOKED_KEY = (tenantId: string): string => `visitor:${tenantId}:recurring_pass:revoked`;
 
@@ -79,7 +80,7 @@ function getStore(): RevocationStore {
   _store =
     !url || process.env.CACHE_DRIVER === "memory"
       ? new MemoryRevocationStore()
-      : new RedisRevocationStore(new Redis(url));
+      : new RedisRevocationStore(new Redis(url, redisClientOptions()));
   return _store;
 }
 

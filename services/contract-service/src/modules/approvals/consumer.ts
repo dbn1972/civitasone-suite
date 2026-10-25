@@ -1,11 +1,12 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { approvalLevels } from "./schema.js";
+import { MAX_APPROVAL_LEVELS } from "./domain.js";
 
 const log = pino({ name: "contract-approvals-consumer" });
 
@@ -28,13 +29,39 @@ export function registerApprovalConsumers(q: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
+      // CLOS3-S4-04: the route decided the cap and the ordinal from a read taken before publish, so
+      // concurrent creates all saw the same count. Decide here instead, serialised per tenant:
+      // the advisory lock is held to the end of this transaction, so the recount below sees every
+      // earlier create. The supplied p.ordinal is ignored in favour of max(ordinal)+1.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"approval-levels:" + msg.tenantId}))`);
+      const [agg] = await tx
+        .select({
+          count: sql<number>`count(*)::int`,
+          maxOrdinal: sql<number>`coalesce(max(${approvalLevels.ordinal}), 0)::int`,
+        })
+        .from(approvalLevels)
+        .where(eq(approvalLevels.tenantId, msg.tenantId));
+      if ((agg?.count ?? 0) >= MAX_APPROVAL_LEVELS) {
+        // Terminal outcome (not retryable): drop the command and leave an audit trail.
+        log.warn({ event: "level_limit_reached", messageId: msg.messageId, tenantId: msg.tenantId }, "approval level create dropped: limit reached");
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "contract", action: "create", resourceType: "approval_level", resourceId: p.id,
+            outcome: "failed", reason: `LEVEL_LIMIT_REACHED (max ${MAX_APPROVAL_LEVELS})`,
+          },
+        });
+        return;
+      }
+
       await tx.insert(approvalLevels).values({
         id: p.id,
         tenantId: msg.tenantId,
         minValuePaise: BigInt(p.minValuePaise),
         requiredRole: p.requiredRole,
         label: p.label ?? "",
-        ordinal: p.ordinal ?? 1,
+        ordinal: (agg?.maxOrdinal ?? 0) + 1,
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });

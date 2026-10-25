@@ -16,11 +16,12 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, eq, getTableColumns } from "drizzle-orm";
+import { and, desc, eq, getTableColumns } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { maskPhone } from "../../shared/pii-crypto.js";
-import { logPiiAccess } from "../dpdp/consent.js";
+import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
+import { resolvePage, splitPage, type PageOpts, type Paged } from "../../shared/pagination.js";
 import { visitRequests, type VisitRequestRow } from "./schema.js";
 
 const RESOURCE_VISIT_REQUEST = "visit_request";
@@ -31,7 +32,7 @@ export interface PiiAccessContext {
   correlationId?: string;
 }
 
-export interface ListVisitRequestsFilter {
+export interface ListVisitRequestsFilter extends PageOpts {
   status?: string | undefined;
   locationId?: string | undefined;
   hostEmployeeId?: string | undefined;
@@ -50,7 +51,7 @@ export interface ListVisitRequestsFilter {
  */
 export type VisitRequestListRow = Omit<VisitRequestRow, "visitorEmail" | "identityDocRef">;
 
-export async function listVisitRequests(tenantId: string, filter: ListVisitRequestsFilter = {}, piiCtx?: PiiAccessContext): Promise<VisitRequestListRow[]> {
+export async function listVisitRequests(tenantId: string, filter: ListVisitRequestsFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<VisitRequestListRow>> {
   const conditions = [eq(visitRequests.tenantId, tenantId)];
   if (filter.status !== undefined) conditions.push(eq(visitRequests.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(visitRequests.locationId, filter.locationId));
@@ -59,20 +60,25 @@ export async function listVisitRequests(tenantId: string, filter: ListVisitReque
   // selected but masked below, so raw contact PII never crosses the API boundary.
   const { visitorEmail: _e, identityDocRef: _d, ...listColumns } = getTableColumns(visitRequests);
   void _e; void _d;
-  const rawRows = await scopedRead((tx) => tx.select(listColumns).from(visitRequests).where(and(...conditions)));
+  // CLOS3-S6-15: bounded + deterministically ordered (newest first, id tiebreak) so
+  // offset paging is stable. Fetch one extra row to learn `hasMore` without a COUNT.
+  const { limit, offset } = resolvePage(filter);
+  const fetched = await scopedRead((tx) =>
+    tx.select(listColumns).from(visitRequests).where(and(...conditions))
+      .orderBy(desc(visitRequests.createdAt), desc(visitRequests.id))
+      .limit(limit + 1).offset(offset));
+  const { rows: rawRows, hasMore } = splitPage(fetched, limit);
   const rows: VisitRequestListRow[] = rawRows.map((r) => ({ ...r, visitorPhone: maskPhone(r.visitorPhone) ?? "" }));
 
   // Requirement 18.6: log PII access for each row (visitorName is still
   // decrypted + returned, so the access is auditable).
   if (piiCtx && rows.length > 0) {
-    await scopedRead(async (tx) => {
-      for (const row of rows) {
-        await logPiiAccess(tx, tenantId, piiCtx.actorId, "visit_request", row.id, "list_view", piiCtx.correlationId);
-      }
-    });
+    // CLOS3-S6-15: one batched write (a constant number of statements) instead of two
+    // awaited INSERTs per row; still one audit row + event per returned row.
+    await scopedRead((tx) => logPiiAccessBatch(tx, tenantId, piiCtx.actorId, "visit_request", rows.map((r) => r.id), "list_view", piiCtx.correlationId));
   }
 
-  return rows;
+  return { rows, hasMore };
 }
 
 /**

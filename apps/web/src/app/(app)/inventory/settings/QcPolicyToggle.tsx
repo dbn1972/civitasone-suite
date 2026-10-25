@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useToast } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { purgeInventoryCache } from "../_revalidate";
 
 /**
  * Turns the goods-return QC maker-checker rule on or off for the tenant. When on
@@ -33,6 +34,7 @@ export function QcPolicyToggle({ initial }: { initial: boolean }) {
       }
       setEnabled(next);
       toast.success("Policy saved.");
+      await purgeInventoryCache();
       router.refresh();
     } catch (caught) {
       setMessage(formError.fromException("save", caught).message);

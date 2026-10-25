@@ -1,5 +1,6 @@
 import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
+import { scannerSqlClient } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
@@ -21,6 +22,23 @@ import { startCauseListSync } from "./modules/ecourts/sync-consumer.js";
 import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "legal-worker" });
+
+// CLOS3-S5-07: fail closed in production if the BYPASSRLS scanner DSN is missing
+// or falls back to the NOBYPASSRLS service DSN -- the e-Courts sync discovery
+// read would otherwise silently find nothing under FORCE RLS. Mirrors
+// asset-service/worker.ts assertScannerConfigured().
+function assertScannerConfigured(): void {
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.LEGAL_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "LEGAL_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS legal_scanner role required for the e-Courts sync discovery scan)",
+    );
+  }
+}
+assertScannerConfigured();
 
 // Wrap queue.subscribe to set tenant context from message — consumers run
 // db.transaction() and RLS policies require app.tenant_id GUC to be set.
@@ -69,6 +87,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(relay);
   if (causeListSyncTimer) clearInterval(causeListSyncTimer);
   await queue.stop();
+  await scannerSqlClient.end();
   await sqlClient.end();
   process.exit(0);
 }
