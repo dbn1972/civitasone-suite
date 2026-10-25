@@ -114,4 +114,27 @@ describe("NotificationsBuilder autosave settles (CLOS3-S1-04)", () => {
     await advance(5);
     expect(writes()).toHaveLength(2);
   });
+  it("reports offline, not saved, and retries on the next edit when the template list is unreadable", async () => {
+    let listOk = false;
+    fetchMock.mockImplementation(async (_url: unknown, init?: RequestInit) => {
+      if (init?.method === undefined) {
+        return listOk
+          ? new Response(JSON.stringify([{ id: "t1", name: "svc:k:submitted:email" }]), { status: 200 })
+          : new Response("", { status: 503 });
+      }
+      return new Response(JSON.stringify({ id: "t1" }), { status: 200 });
+    });
+    const onSaveState = vi.fn();
+    render(<NotificationsBuilder serviceKey="k" pattern="certificate" initial={initial} onSaveState={onSaveState} />);
+    await advance(2);
+    expect(onSaveState).toHaveBeenCalledWith("offline");
+    expect(onSaveState).not.toHaveBeenCalledWith("saved");
+    expect(writes()).toHaveLength(0);
+    listOk = true;
+    fireEvent.click(screen.getByTestId("cell-submitted-email"));
+    fireEvent.change(screen.getByTestId("template-body"), { target: { value: "Changed wording" } });
+    await advance(2);
+    expect(onSaveState).toHaveBeenCalledWith("saved");
+    expect(writes()).toHaveLength(1);
+  });
 });

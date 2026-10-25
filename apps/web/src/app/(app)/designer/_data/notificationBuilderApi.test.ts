@@ -54,13 +54,12 @@ describe("notificationBuilderApi — persistNotificationTemplates stays best-eff
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it("does not throw and returns the matrix unchanged when the template list call fails", async () => {
+  it("rejects (so the builder shows offline, not saved) when the template list call fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     let matrix = seedMatrixForPattern("certificate");
     matrix = disableCell(matrix, "submitted", "sms");
 
-    const result = await persistNotificationTemplates({ matrix }, "svc-1");
-    expect(result.matrix).toEqual(matrix);
+    await expect(persistNotificationTemplates({ matrix }, "svc-1")).rejects.toThrow(/unavailable/);
   });
 
   it("does not throw when the template list loads but the create call fails", async () => {
@@ -94,13 +93,12 @@ describe("notificationBuilderApi — persistNotificationTemplates with an unread
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it("creates nothing and returns the design unchanged when the list answers 503", async () => {
+  it("creates nothing and rejects so the caller can show offline when the list answers 503", async () => {
     fetchMock.mockImplementation(async (_i: RequestInfo | URL, init?: RequestInit) =>
       init?.method ? new Response(JSON.stringify({ id: "new" }), { status: 200 }) : new Response("", { status: 503 }),
     );
-    const result = await persistNotificationTemplates(design, "k");
+    await expect(persistNotificationTemplates(design, "k")).rejects.toThrow(/unavailable/);
     expect(writes()).toHaveLength(0);
-    expect(result).toBe(design);
   });
 
   it("still creates the template when the list is readable and empty", async () => {
