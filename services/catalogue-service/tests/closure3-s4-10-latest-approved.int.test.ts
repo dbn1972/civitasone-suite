@@ -1,6 +1,6 @@
 /**
  * CLOS3-S4-10: findLatestApprovedVersionsByProductIds against REAL Postgres, connected as the
- * non-superuser catalogue_svc role (RLS enforced). Skips when Postgres is unreachable.
+ * non-superuser catalogue_svc role (RLS enforced). Fails loudly when Postgres is unreachable (CI bootstraps it).
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -20,6 +20,7 @@ async function probe(): Promise<boolean> {
   finally { await client.end({ timeout: 1 }).catch(() => undefined); }
 }
 const reachable = await probe();
+if (!reachable) throw new Error(`closure3-s4-10: Postgres not reachable at ${DSN.replace(/:[^:@/]+@/, ":***@")} (CI bootstraps it; locally run scripts/ci/bootstrap-postgres.sh)`);
 
 const { db, sqlClient } = await import("../src/shared/db.js");
 const { runWithTenant } = await import("@civitasone/db");
@@ -39,7 +40,7 @@ async function addVersion(tenantId: string, productId: string, versionNumber: nu
   );
 }
 
-describe.skipIf(!reachable)("findLatestApprovedVersionsByProductIds — real Postgres", () => {
+describe("findLatestApprovedVersionsByProductIds — real Postgres", () => {
   afterAll(async () => {
     for (const t of [TENANT, OTHER_TENANT]) {
       await asTenant(t, () => tx((x) => x.delete(productVersions).where(eq(productVersions.tenantId, t)))).catch(() => undefined);
