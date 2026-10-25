@@ -267,21 +267,23 @@ export function registerDisbursementConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.financePaid, async (msg) => {
     const p = msg.payload as { disbursementId?: string; pfmsTxnId?: string; outcome?: string };
     if (!p.disbursementId && !p.pfmsTxnId) return;
-    const disbursement = p.disbursementId
-      ? await (async () => {
-          const { grantDisbursements } = await import("./schema.js");
-          const { eq, and } = await import("drizzle-orm");
-          const rows = await db.transaction(async (tx) =>
-            tx.select().from(grantDisbursements)
-              .where(and(eq(grantDisbursements.id, p.disbursementId!), eq(grantDisbursements.tenantId, msg.tenantId)))
-              .limit(1));
-          return rows[0] ?? null;
-        })()
-      : p.pfmsTxnId ? await repo.findDisbursementByPfmsTxnId(p.pfmsTxnId, msg.tenantId) : null;
-    if (!disbursement) return;
     const isSuccess = p.outcome !== "failure";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const found = p.disbursementId
+        ? await repo.findDisbursementByIdTx(tx, p.disbursementId, msg.tenantId)
+        : await repo.findDisbursementByPfmsTxnIdTx(tx, p.pfmsTxnId!, msg.tenantId);
+      if (!found) return;
+      // V4-D-05: re-read FOR UPDATE inside the transaction and only act on an in-flight disbursement. A result that
+      // arrives for a completed / failed / cancelled / not-yet-paid disbursement is a late or re-delivered event:
+      // it must not move the state, re-emit outcome events, or re-issue an EFT (retryCount here is also the fresh value).
+      const disbursement = await repo.lockDisbursementByIdTx(tx, found.id, msg.tenantId);
+      if (!disbursement) return;
+      if (disbursement.status !== "initiated") {
+        await audit(tx, msg, "disbursement_result_ignored", "grant_disbursement", disbursement.id, "success",
+          { status: disbursement.status, outcome: isSuccess ? "success" : "failure" });
+        return;
+      }
 
       if (!isSuccess && canRetryDisbursement(disbursement.retryCount ?? 0)) {
         const nextRetry = (disbursement.retryCount ?? 0) + 1;
@@ -342,8 +344,16 @@ export function registerDisbursementConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       for (const rec of p.records) {
-        const disbursement = await repo.findDisbursementByPfmsTxnIdTx(tx, rec.pfmsTxnId, p.tenantId);
+        const found = await repo.findDisbursementByPfmsTxnIdTx(tx, rec.pfmsTxnId, p.tenantId);
+        if (!found) continue;
+        // V4-D-05: lock + validate the transition; only an in-flight disbursement accepts a reconcile result.
+        const disbursement = await repo.lockDisbursementByIdTx(tx, found.id, p.tenantId);
         if (!disbursement) continue;
+        if (disbursement.status !== "initiated") {
+          await audit(tx, msg, "pfms_reconcile_ignored", "grant_disbursement", disbursement.id, "success",
+            { status: disbursement.status, reconcileStatus: rec.status });
+          continue;
+        }
         const isSuccess = rec.status === "completed";
         await repo.updateDisbursement(tx, disbursement.id, {
           status: isSuccess ? "completed" : "failed",

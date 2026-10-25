@@ -134,6 +134,19 @@ export async function findDisbursementByIdTx(tx: Writer, id: string, tenantId: s
   return rows[0] ?? null;
 }
 
+/**
+ * V4-D-05: re-read a disbursement row `FOR UPDATE` inside the caller's transaction. Inbound payment-result events
+ * (finance.payment.made, PFMS reconcile) take this lock before validating the state transition, so two concurrent or
+ * re-delivered results for the same disbursement serialise and the second sees the first one's committed status.
+ */
+export async function lockDisbursementByIdTx(tx: Writer, id: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId)))
+    .limit(1)
+    .for("update");
+  return rows[0] ?? null;
+}
+
 export async function findDisbursementById(id: string, tenantId: string): Promise<DisbursementRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx.select().from(grantDisbursements)
