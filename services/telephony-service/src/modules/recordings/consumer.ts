@@ -39,21 +39,62 @@ export interface RecordingAttachPayload {
 type TxLike = Parameters<typeof markProcessed>[0];
 
 /**
- * Download a recording from the carrier URL with timeout.
+ * Upper bound on a downloaded carrier recording (V4-F-05). Carrier URLs are
+ * semi-trusted, so the body is never buffered unbounded. Override with
+ * RECORDING_MAX_BYTES.
+ */
+const DEFAULT_MAX_RECORDING_BYTES = 256 * 1024 * 1024;
+
+function maxRecordingBytes(): number {
+  const n = Number(process.env.RECORDING_MAX_BYTES);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : DEFAULT_MAX_RECORDING_BYTES;
+}
+
+/**
+ * Download a recording from the carrier URL with timeout and a byte cap.
+ * Rejects on a Content-Length over the cap, and streams the body with a running
+ * counter that aborts the transfer as soon as the cap is crossed.
  * Returns the Buffer content and detected content type.
  */
-async function downloadRecording(url: string): Promise<{ content: Buffer; contentType: string }> {
+export async function downloadRecording(
+  url: string,
+  maxBytes: number = maxRecordingBytes(),
+): Promise<{ content: Buffer; contentType: string }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
 
   try {
     const res = await fetch(url, { signal: controller.signal });
     if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
       throw new Error(`Download failed: HTTP ${res.status}`);
     }
-    const arrayBuffer = await res.arrayBuffer();
+    const tooLarge = (): Error => new Error(`Download failed: recording exceeds the ${maxBytes}-byte limit`);
+
+    const declared = Number(res.headers.get("content-length"));
+    if (Number.isFinite(declared) && declared > maxBytes) {
+      await res.body?.cancel().catch(() => undefined);
+      throw tooLarge();
+    }
+
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+    if (res.body) {
+      const reader = res.body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        received += value.byteLength;
+        if (received > maxBytes) {
+          await reader.cancel().catch(() => undefined);
+          controller.abort();
+          throw tooLarge();
+        }
+        chunks.push(value);
+      }
+    }
     const contentType = res.headers.get("content-type") ?? "audio/mpeg";
-    return { content: Buffer.from(arrayBuffer), contentType };
+    return { content: Buffer.concat(chunks, received), contentType };
   } finally {
     clearTimeout(timeout);
   }
