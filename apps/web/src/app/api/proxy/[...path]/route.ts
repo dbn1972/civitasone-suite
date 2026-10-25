@@ -4,6 +4,9 @@ import { COOKIE } from "@/lib/auth/config";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 
+// V4-A-05: bound every upstream call (bank-file downloads are the slowest legitimate case).
+const UPSTREAM_TIMEOUT_MS = 60_000;
+
 const FORWARD = ["content-type", "accept", "x-correlation-id", "x-device-id", "x-device-trust-token", "x-step-up-token", "x-idempotency-key", "if-match"];
 
 export async function GET(req: Request, ctx: { params: Promise<{ path: string[] }> }) {
@@ -80,7 +83,12 @@ async function proxy(req: Request, segments: string[], method: string) {
   const hasBody = method !== "GET" && method !== "HEAD";
   const body = hasBody ? await req.text() : undefined;
 
-  const upstream = await fetch(target, { method, headers, body });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, { method, headers, body, signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS) });
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "upstream service unavailable" }, { status: 502 });
+  }
   if (NO_BODY_STATUSES.has(upstream.status)) {
     return new NextResponse(null, { status: upstream.status });
   }
@@ -88,7 +96,12 @@ async function proxy(req: Request, segments: string[], method: string) {
   // body passed through byte-for-byte -- `upstream.text()` UTF-8-decoded a
   // NACH multi-file ZIP and corrupted it -- and need their filename and
   // signed-status headers, which were dropped here.
-  const responseBody = await upstream.arrayBuffer();
+  let responseBody: ArrayBuffer;
+  try {
+    responseBody = await upstream.arrayBuffer();
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "upstream service unavailable" }, { status: 502 });
+  }
   const responseHeaders: Record<string, string> = {
     "content-type": upstream.headers.get("content-type") ?? "application/json",
   };
