@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import { minorString } from "@civitasone/schemas/money";
 import * as repo from "./repo.js";
+import { reversePostedPayment } from "./payment-reversal.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -16,7 +17,7 @@ const AUDIT_TOPIC = "audit.event.record";
  * emits `finance.payment.file_decided` once the SO→US→DS chain concludes.
  * This consumer applies that decision to the payment:
  *   approved → status "released" (+ finance.payment.made event)
- *   rejected → status "cancelled"
+ *   rejected → status "cancelled" + compensating reversal of the already-posted payment
  *   returned → no state change
  *
  * Without this, the file was approved in eOffice but the payment never moved —
@@ -49,6 +50,8 @@ export function registerPaymentEOfficeDecisionConsumers(queue: Queue): void {
         await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
       } else if (cb.decision === "rejected") {
         await repo.updatePayment(tx, cb.refId, { status: "cancelled", updatedBy: cb.decidedBy });
+        // V4-D-02: the payment was fully posted at initiation — undo bill/appropriation/GL/cash book.
+        await reversePostedPayment(tx, payment, { tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId });
         await audit(tx, msg, "eoffice_rejected", cb.refId, { fileNo: cb.fileNo });
       } else {
         // "returned" — leave as-is for revision (no state change needed).
