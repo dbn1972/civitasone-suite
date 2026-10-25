@@ -12,7 +12,7 @@
  * exhaustion risk under load) even though this topic has no producer today
  * (dead path).
  *
- * After the fix, the batch row / paymentMade event / audit record all commit
+ * After the fix, the batch row / audit record commit
  * in ONE transaction *before* the SFTP call ever starts; the upload runs with
  * no transaction open; and a successful upload is recorded via a SEPARATE
  * follow-up transaction. These tests prove that ordering with a controllable
@@ -208,14 +208,15 @@ describe("finance.payment.eft.initiate — TX-007 transaction scope", () => {
     // call is made -- proving the network I/O is no longer nested inside it.
     expect(events).toEqual(["tx1:start", "tx1:commit", "sftp:start"]);
 
-    // The batch/event/audit writes already happened, independently of the
-    // (still-pending) SFTP call below.
+    // The batch/audit writes already happened, independently of the
+    // (still-pending) SFTP call below. V4-D-01: finance.payment.made is NOT
+    // among them -- the file has not been sent yet, so nothing may claim paid.
     expect(insertPfmsBatchMock).toHaveBeenCalledTimes(1);
     expect(insertPfmsBatchMock.mock.calls[0][1]).toMatchObject({ submissionStatus: "pending" });
-    const paymentMadeCall = enqueueMock.mock.calls.find(
+    const paymentMadeBeforeSend = enqueueMock.mock.calls.find(
       ([, m]: [unknown, { topic: string }]) => m.topic === EVENTS.paymentMade,
     );
-    expect(paymentMadeCall).toBeDefined();
+    expect(paymentMadeBeforeSend).toBeUndefined();
 
     // While the SFTP call is still pending, only ONE transaction has run --
     // the follow-up "record upload result" write has not started, because it
@@ -235,9 +236,15 @@ describe("finance.payment.eft.initiate — TX-007 transaction scope", () => {
     expect(updatePfmsBatchMock).toHaveBeenCalledTimes(1);
     expect(updatePfmsBatchMock.mock.calls[0][1]).toBe(insertPfmsBatchMock.mock.calls[0][1].id);
     expect(updatePfmsBatchMock.mock.calls[0][2]).toMatchObject({ submissionStatus: "file_sent" });
+    // V4-D-01: the success event is enqueued in that same second transaction, after the file went out.
+    const paymentMadeCalls = enqueueMock.mock.calls.filter(
+      ([, m]: [unknown, { topic: string }]) => m.topic === EVENTS.paymentMade,
+    );
+    expect(paymentMadeCalls).toHaveLength(1);
+    expect(paymentMadeCalls[0][1].payload).toMatchObject({ outcome: "success", pfmsTxnId: "PFMS-TXN-001" });
   });
 
-  it("a failing SFTP upload does not roll back or block the already-committed batch/event/audit writes, and skips the follow-up write", async () => {
+  it("a failing SFTP upload does not roll back or block the already-committed batch/audit writes, skips the follow-up write, and emits no payment.made", async () => {
     uploadBankFileMock.mockRejectedValue(new Error("ECONNREFUSED: sftp.pfms.gov.in"));
 
     const q = await buildQueue();
@@ -247,7 +254,8 @@ describe("finance.payment.eft.initiate — TX-007 transaction scope", () => {
     // The primary transaction committed regardless of the later SFTP failure.
     expect(insertPfmsBatchMock).toHaveBeenCalledTimes(1);
     expect(insertPfmsBatchMock.mock.calls[0][1]).toMatchObject({ submissionStatus: "pending" });
-    expect(enqueueMock.mock.calls.some(([, m]: [unknown, { topic: string }]) => m.topic === EVENTS.paymentMade)).toBe(true);
+    // V4-D-01: nothing was sent, so no "paid" event.
+    expect(enqueueMock.mock.calls.some(([, m]: [unknown, { topic: string }]) => m.topic === EVENTS.paymentMade)).toBe(false);
 
     // No follow-up write happens for a failed upload -- the row is left
     // "pending" for manual/scheduled retry, not silently marked file_sent.
