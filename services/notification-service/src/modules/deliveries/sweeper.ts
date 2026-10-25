@@ -58,6 +58,9 @@ export async function sweepDueRetries(queue: Queue, now = new Date()): Promise<n
           channel: row.channel,
           deliveryId: row.id,
           retryCount: row.retryCount,
+          // V4-G-07: original content (absent only for rows queued before the
+          // retry_payload column existed).
+          ...(row.retryPayload ?? {}),
         },
       });
       republished++;

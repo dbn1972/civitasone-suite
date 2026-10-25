@@ -2,7 +2,7 @@ import { eq, and, lte, desc, ne } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead, readScoped } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
-import { notificationDeliveries, type DeliveryInsert } from "./schema.js";
+import { notificationDeliveries, type DeliveryInsert, type RetryPayload } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -133,12 +133,14 @@ export async function deferDeliveryForDnd(
 
 export async function scheduleDeliveryRetry(
   tx: Writer, id: string, retryCount: number, nextRetryAt: Date, actorId: string, errorDetail: string,
+  retryPayload?: RetryPayload,
 ): Promise<void> {
   const rows = await tx.select().from(notificationDeliveries).where(eq(notificationDeliveries.id, id)).limit(1);
   const current = rows[0];
   if (!current) return;
   await tx.update(notificationDeliveries).set({
     status: "queued", retryCount, nextRetryAt, errorDetail,
+    ...(retryPayload !== undefined ? { retryPayload } : {}),
     updatedBy: actorId, updatedAt: new Date(), version: current.version + 1,
   }).where(eq(notificationDeliveries.id, id));
 }
