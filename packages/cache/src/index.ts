@@ -103,7 +103,7 @@ export interface CacheStore {
    * TTL semantics: the expiry is applied ONLY when this call created the key (return
    * value 1). Re-applying it on every increment would slide the window forward under
    * sustained traffic, so a counter could never expire and a caller could be locked out
-   * permanently.
+   * permanently (the Redis store arms it atomically with INCR; see RedisCache.incr).
    */
   incr(key: string, ttlSeconds: number): Promise<number>;
 }
@@ -121,20 +121,21 @@ export class RedisCache implements CacheStore {
     }
   }
   /**
-   * Redis INCR is atomic server-side, so concurrent callers get distinct values with no
-   * coordination here. EXPIRE is issued only on the 1 → the call that created the key —
-   * so the TTL is anchored to the start of the window, never extended by later hits.
-   *
-   * A crash between INCR and EXPIRE would leave a counter with no TTL. Acceptable and
-   * self-limiting for the intended use: limiter keys carry the time bucket in the key
-   * name, so a stranded counter stops being addressed when the window rolls over. It
-   * costs a few bytes, it cannot lock anyone out.
+   * INCR and the EXPIRE are issued as ONE server-side Lua script, so they cannot be
+   * separated by a command timeout, a dropped connection or a process crash. The
+   * expiry is armed only when this call created the key (value 1) OR when an existing
+   * key has no TTL at all (TTL === -1: stranded by an older non-atomic version, or by
+   * a manual SET), which self-heals it. A key that already has a TTL is never touched,
+   * so the window is anchored to its start and never slides under sustained traffic.
    */
   async incr(key: string, ttlSeconds: number): Promise<number> {
-    const value = await this.redis.incr(key);
-    if (value === 1) await this.redis.expire(key, ttlSeconds);
-    return value;
+    const result = await this.redis.eval(RedisCache.INCR_SCRIPT, 1, key, ttlSeconds);
+    return Number(result);
   }
+  private static readonly INCR_SCRIPT =
+    "local v = redis.call('INCR', KEYS[1]) " +
+    "if v == 1 or redis.call('TTL', KEYS[1]) == -1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end " +
+    "return v";
 }
 
 /** In-memory store for dev/tests (no Redis required). */
