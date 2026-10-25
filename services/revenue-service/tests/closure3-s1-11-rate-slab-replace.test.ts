@@ -14,7 +14,7 @@ import { registerRateEngineConsumers } from "../src/modules/rate-engine/consumer
 registerRateEngineConsumers(queue);
 await queue.start();
 
-const SECRET = "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET ?? globalThis.crypto.randomUUID();
 const TENANT = randomUUID();
 const USER = randomUUID();
 const hdr = (roles: string[]) => ({

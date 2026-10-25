@@ -187,14 +187,17 @@ describe("CLOS3-S1-11 persistFeeDesign edit semantics", () => {
   type Call = { url: string; method: string; body?: unknown };
   let calls: Call[];
 
-  function stub(opts: { failSlabPut?: boolean } = {}) {
+  function stub(opts: { failSlabPut?: boolean; headNeverReadable?: boolean; successorNeverReadable?: boolean } = {}) {
     calls = [];
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo, init?: RequestInit) => {
       const url = String(input);
       const method = init?.method ?? "GET";
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (url.endsWith("/revenue/rate-heads") && method === "GET") {
-        return { ok: true, status: 200, json: async () => ({ data: [{ id: "head-1" }] }) } as Response;
+        return { ok: true, status: 200, json: async () => ({ data: opts.headNeverReadable ? [] : [{ id: "head-1" }] }) } as Response;
+      }
+      if (url.endsWith("/citizen/fees/schedules") && method === "GET") {
+        return { ok: true, status: 200, json: async () => ({ data: opts.successorNeverReadable ? [] : [{ id: "sched-2" }] }) } as Response;
       }
       if (url.endsWith("/revenue/rate-heads")) {
         return { ok: true, status: 202, json: async () => ({ data: { id: "head-1" } }) } as Response;
@@ -213,7 +216,11 @@ describe("CLOS3-S1-11 persistFeeDesign edit semantics", () => {
   it("a saved flat fee is PATCHed (bigint paise body), never POSTed again; successor id is kept", async () => {
     stub();
     const saved = await persistFeeDesign({ ...flat, scheduleId: "sched-1" }, "svc-1", "T");
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["PATCH /api/proxy/v1/citizen/fees/schedules/sched-1"]);
+    // PATCH, then a read-back wait for the successor (the 202 returns its id before the row exists).
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "PATCH /api/proxy/v1/citizen/fees/schedules/sched-1",
+      "GET /api/proxy/v1/citizen/fees/schedules",
+    ]);
     expect(calls[0]!.body).toMatchObject({ baseAmount: 5000, currency: "INR" });
     expect(calls[0]!.body).not.toHaveProperty("serviceId");
     expect(saved.scheduleId).toBe("sched-2");
@@ -259,5 +266,34 @@ describe("CLOS3-S1-11 persistFeeDesign edit semantics", () => {
     await persistFeeDesign({ ...slabDesign, rateHeadId: "head-9" }, "svc-2", "T");
     expect(calls.some((c) => c.method === "POST")).toBe(false);
     expect(calls.find((c) => c.method === "PUT")!.url).toContain("/rate-heads/head-9/slabs");
+  });
+
+  it("waits until the superseding schedule is readable before returning its id", async () => {
+    stub();
+    await persistFeeDesign({ ...flat, scheduleId: "sched-1" }, "svc-1", "T");
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      "PATCH /api/proxy/v1/citizen/fees/schedules/sched-1",
+      "GET /api/proxy/v1/citizen/fees/schedules",
+    ]);
+  });
+
+  describe("bounded waits fail loudly", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => vi.useRealTimers());
+
+    it("throws (no silent success) when the successor schedule never becomes readable", async () => {
+      stub({ successorNeverReadable: true });
+      const p = persistFeeDesign({ ...flat, scheduleId: "sched-1" }, "svc-1", "T").catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await p).toBeInstanceOf(Error);
+    });
+
+    it("throws and issues NO slab PUT when the new rate head never becomes readable", async () => {
+      stub({ headNeverReadable: true });
+      const p = persistFeeDesign(slabDesign, "svc-nohead", "T").catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await p).toBeInstanceOf(Error);
+      expect(calls.some((c) => c.method === "PUT")).toBe(false);
+    });
   });
 });

@@ -349,6 +349,22 @@ async function waitForRateHead(id: string): Promise<void> {
     }
     await new Promise((r) => setTimeout(r, 300));
   }
+  // Never carry on to the slab PUT against a head the consumer has not inserted yet: it would
+  // 202 here and then fail RATE_HEAD_NOT_FOUND server-side while the user sees success.
+  throw new Error("The rate head is still being created. Please try saving again in a moment.");
+}
+
+/** Schedule supersede is a 202 command; wait (bounded) until the successor row is readable before the next edit uses its id. */
+async function waitForSchedule(id: string): Promise<void> {
+  for (let i = 0; i < 10; i++) {
+    const res = await fetch("/api/proxy/v1/citizen/fees/schedules", { cache: "no-store" });
+    if (res.ok) {
+      const payload = (await res.json()) as { data?: { id: string }[] };
+      if ((payload.data ?? []).some((s) => s.id === id)) return;
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  throw new Error("The fee update is still being applied. Please try saving again in a moment.");
 }
 
 export async function persistFeeDesign(
@@ -376,6 +392,9 @@ export async function persistFeeDesign(
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       }))) as { id: string };
+      // The successor id comes back on 202, before the consumer inserts that row: do not hand it
+      // to the next autosave PATCH (404 / forked chain) until it is readable.
+      if (updated.id !== scheduleId) await waitForSchedule(updated.id);
       scheduleId = updated.id;
     } else {
       const created = (await parseJson(await fetch("/api/proxy/v1/citizen/fees/schedules", {
@@ -391,6 +410,7 @@ export async function persistFeeDesign(
     if (!rateHeadId) {
       // Reuse a head created by an earlier failed attempt so a retry never orphans another one.
       rateHeadId = pendingRateHeads.get(serviceId);
+      if (rateHeadId) await waitForRateHead(rateHeadId);
     }
     if (!rateHeadId) {
       const slug = serviceName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 20);
