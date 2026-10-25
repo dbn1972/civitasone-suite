@@ -145,3 +145,38 @@ describe("useOfflineResource — CLOS3-S3-08 unavailable cache read", () => {
     }
   });
 });
+
+describe("useOfflineResource — CLOS3-S3-09 best-effort cache write", () => {
+  const map = (raw: { n: number }): { n: number } => ({ n: raw.n * 2 });
+  const initialData = { n: 0 };
+
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+    mockedReadCache.mockResolvedValue(null);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps live data and no error when writeCache rejects", async () => {
+    mockedWriteCache.mockRejectedValue(new Error("quota"));
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ n: 5 }) }) as unknown as Response));
+    const { result } = renderHook(() => useOfflineResource("k.s309a", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBeNull();
+    expect(result.current.source).toBe("live");
+    expect(result.current.data).toEqual({ n: 10 });
+    expect(mockedWriteCache).toHaveBeenCalledWith("k.s309a", { n: 10 });
+  });
+
+  it("still reports the load error when the live fetch fails and there is no cache", async () => {
+    mockedWriteCache.mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as unknown as Response));
+    const { result } = renderHook(() => useOfflineResource("k.s309b", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
+    expect(mockedWriteCache).not.toHaveBeenCalled();
+  });
+});

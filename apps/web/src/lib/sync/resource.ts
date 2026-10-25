@@ -117,7 +117,12 @@ export function useOfflineResource<TApi, T>(
         setData(mapped);
         setSource("live");
         setCachedAt(null);
-        await writeCache(cacheKey, mapped);
+        // Cache persistence is best-effort; the live data is already shown (CLOS3-S3-09).
+        try {
+          await writeCache(cacheKey, mapped);
+        } catch {
+          /* quota / blocked storage: ignore */
+        }
       } catch {
         // Network failed mid-session: fall back to cache if we have it.
         if (active) {
