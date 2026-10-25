@@ -8,6 +8,7 @@ import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/p
 import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
 import { enqueue } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
+import { nextServiceRequestRef, withCreateFailureAudit } from "../../shared/reference-numbers.js";
 import { isActiveTenantUser } from "../../shared/identity-client.js";
 import { resolveUserNames } from "../../shared/user-directory.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -100,21 +101,14 @@ const duplicateCheckBody = z
 /** Requests still being worked: the only ones a new request can duplicate. */
 const OPEN_STATUSES = ["open", "in_progress", "pending"] as const;
 
-function srRef(): string {
-  const yr = new Date().getFullYear();
-  const suffix = Date.now().toString(36).toUpperCase().slice(-6);
-  return `SRQ/${yr}/${suffix}`;
-}
-
 export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/crm/service-requests
   app.post("/v1/crm/service-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createBody.parse(req.body);
-    const refNo = srRef();
 
-    const row = await scopedRead(async (tx) => {
+    const row = await withCreateFailureAudit(ctx, "service_request.create", "service_request", () => scopedRead(async (tx) => {
       // GAP-CRM-HEALTH-ACCOUNTID-03: the related account must exist in THIS tenant and be
       // active; never persist another tenant's (or a made-up) account id, and never link a
       // new follow-up to an account that was merged away (status = 'inactive').
@@ -154,6 +148,9 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         }
       }
 
+      // Allocated here, inside the insert transaction, from a Postgres sequence:
+      // a retried create re-runs nextval() and can never collide.
+      const refNo = await nextServiceRequestRef(tx);
       const inserted = (await tx.execute(sql`
         INSERT INTO crm.service_requests (
           tenant_id, contact_id, citizen_name, citizen_phone, citizen_email,
@@ -202,7 +199,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
         },
       });
       return { ...inserted[0], dueSource };
-    });
+    }));
     return reply.code(201).send({ data: row });
   });
 
