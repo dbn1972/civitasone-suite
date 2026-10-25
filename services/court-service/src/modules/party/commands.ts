@@ -4,6 +4,7 @@ import { COMMANDS } from "../../topics.js";
 import { deterministicId, COURT_NAMESPACE } from "../court-registry/domain.js";
 import { derivePartyId } from "./domain.js";
 import { getPartyForPrecheck } from "./repo.js";
+import { getCaseForPrecheck } from "../case-lifecycle/repo.js";
 import { httpError } from "../../shared/context.js";
 import {
   addPartyBody, type AddPartyBody,
@@ -23,6 +24,12 @@ export async function addParty(
   ctx: RequestContext, caseId: string, input: AddPartyBody, seq = 0,
 ): Promise<AddPartyResult> {
   const body = addPartyBody.parse(input);
+  // V4-C-02: the URL case id is untrusted. Verify the case exists IN THIS TENANT before publishing; the consumer FK
+  // check bypasses RLS, so without this a registrar could attach a party row to another tenant case id and probe
+  // case-id existence. Uncached, tenant-scoped read.
+  if (!(await getCaseForPrecheck(ctx.tenantId, caseId))) {
+    throw httpError("CASE_NOT_FOUND", `Case not found: ${caseId}`);
+  }
   // Prefer the caller-supplied ordinal; fall back to the seq arg (default 0).
   const effectiveSeq = body.partyIndex ?? seq;
   const partyId = derivePartyId(ctx.tenantId, caseId, body.partyRole, effectiveSeq);
