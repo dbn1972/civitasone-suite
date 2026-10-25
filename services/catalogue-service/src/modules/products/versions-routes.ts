@@ -49,8 +49,8 @@ export async function productVersionRoutes(app: FastifyInstance): Promise<void> 
     const body = openVersionBody.parse(req.body);
     const product = await productRepo.findById(id, ctx.tenantId);
     if (!product) throw new HttpError(404, "NOT_FOUND", "Product not found");
-    const existing = await repo.listVersions(id, ctx.tenantId, 200, 0);
-    const open = existing.rows.find((v) => v.status === "draft" || v.status === "pending_approval");
+    // advisory fast-fail only: the consumer re-checks under a lock (CLOS3-S4-05)
+    const open = await repo.findOpenVersion(id, ctx.tenantId);
     if (open) {
       throw new HttpError(422, "VERSION_ALREADY_OPEN", `Version ${open.versionNumber} is still '${open.status}'; close it before opening another`);
     }

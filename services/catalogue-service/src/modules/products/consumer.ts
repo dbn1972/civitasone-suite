@@ -176,11 +176,26 @@ export function registerProductConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CLOS3-S4-05: the route decided "no open version" and the number from reads taken before
+      // publish. Decide here, under a per-product lock, so concurrent opens cannot both pass.
+      const state = await gov.lockAndReadVersionState(tx, msg.tenantId, p.productId);
+      if (state.open) {
+        log.warn({ productId: p.productId, openVersion: state.open.versionNumber }, "open product version dropped: VERSION_ALREADY_OPEN");
+        await writeAudit(tx, ctxOf(msg), {
+          action: "product_version.open",
+          resourceType: "catalogue_product_version",
+          resourceId: p.id,
+          outcome: "failed",
+          details: { reason: "VERSION_ALREADY_OPEN", openVersionId: state.open.id, openVersionNumber: state.open.versionNumber },
+        });
+        return;
+      }
+      p.versionNumber = state.nextVersionNumber;
       await gov.insertVersion(tx, {
         id: p.id,
         tenantId: msg.tenantId,
         productId: p.productId,
-        versionNumber: p.versionNumber,
+        versionNumber: state.nextVersionNumber,
         status: "draft",
         changeSummary: p.changeSummary,
         createdBy: msg.actorId,
