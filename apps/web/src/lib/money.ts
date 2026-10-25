@@ -287,3 +287,22 @@ export function rupeesInputToMinorNumber(input: string): number {
   const n = Number(minor);
   return Number.isSafeInteger(n) ? n : 0;
 }
+
+/**
+ * V4-A-07: paise digit-string (as returned by rupeesToMinorString) -> JS number
+ * for JSON bodies whose DTO takes an integer minor value. Returns null when the
+ * value is not a non-negative integer or exceeds Number.MAX_SAFE_INTEGER, where
+ * Number() would silently post a different amount. Callers must reject on null.
+ */
+export function minorToSafeNumber(minor: string | bigint | null | undefined): number | null {
+  if (minor === null || minor === undefined) return null;
+  let big: bigint;
+  if (typeof minor === "bigint") {
+    big = minor;
+  } else {
+    if (!/^[0-9]+$/.test(minor)) return null;
+    big = BigInt(minor);
+  }
+  if (big < 0n || big > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return Number(big);
+}

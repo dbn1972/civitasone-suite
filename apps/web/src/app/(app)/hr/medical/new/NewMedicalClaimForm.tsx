@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { useTranslations } from "next-intl";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToSafeNumber, rupeesToMinorString } from "@/lib/money";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { UserFacingError } from "@/lib/userFacingError";
 
@@ -51,7 +51,8 @@ export function NewMedicalClaimForm({
     setError(undefined);
     if (!employeeId) { setError(t("errorChooseEmployee")); return; }
     const amountMinor = rupeesToMinorString(amount);
-    if (amountMinor == null) { setError(t("errorInvalidAmount")); return; }
+    const amountMinorNum = minorToSafeNumber(amountMinor);
+    if (amountMinor == null || amountMinorNum === null) { setError(t("errorInvalidAmount")); return; }
     if (!hospitalName.trim()) { setError(t("errorHospitalRequired")); return; }
     if (!diagnosis.trim()) { setError(t("errorDiagnosisRequired")); return; }
     if (dependantRelation && !dependantName.trim()) { setError(t("errorDependantNameRequired")); return; }
@@ -64,7 +65,7 @@ export function NewMedicalClaimForm({
         body: JSON.stringify({
           employeeId,
           claimType,
-          amountMinor: Number(amountMinor),
+          amountMinor: amountMinorNum,
           hospitalName: hospitalName.trim(),
           diagnosis: diagnosis.trim(),
           documents: [],

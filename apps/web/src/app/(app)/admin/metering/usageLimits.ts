@@ -19,7 +19,7 @@ export type LimitCell = {
   used: number | null;
   limit: number | null;
   unit: string;
-  /** Whole percent, or null when there is no usable limit. */
+  /** Whole percent (floored), or null when there is no usable limit. */
   percent: number | null;
   level: LimitLevel;
   /** Always carries a text cue (never colour alone). */
@@ -37,8 +37,11 @@ export function limitCell(r: Pick<UsageResource, "resource" | "label" | "used" |
   if (used === null || limit === null) {
     return { ...base, used, limit, percent: null, level: "none", text: "—" };
   }
-  const percent = Math.round((used / limit) * 100);
-  const level: LimitLevel = percent >= BAD_AT_PERCENT ? "bad" : percent >= WARN_AT_PERCENT ? "warn" : "ok";
+  // V4-A-08: thresholds use the exact ratio (used*100 vs limit*threshold, no
+  // float division); only the displayed percent is floored, never rounded up.
+  const percent = Math.floor((used * 100) / limit);
+  const level: LimitLevel =
+    used * 100 >= limit * BAD_AT_PERCENT ? "bad" : used * 100 >= limit * WARN_AT_PERCENT ? "warn" : "ok";
   const text = level === "bad" ? `${percent}% of limit - over limit` : `${percent}% of limit`;
   return { ...base, used, limit, percent, level, text };
 }

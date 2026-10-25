@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { minorToSafeNumber } from "@/lib/money";
 import { checkSettlement } from "./claimRules";
 
 /**
@@ -26,11 +27,13 @@ export function ClaimActions({ claimId, claimAmountMinor }: { claimId: string; c
     onConfirm: async () => {
       const check = checkSettlement(amount, claimAmountMinor);
       if (!check.ok) throw new Error(check.error);
+      const settlementNum = minorToSafeNumber(check.minor);
+      if (settlementNum === null) throw new Error("The settlement amount is too large.");
       settleKey.current ??= crypto.randomUUID();
       await browserJson(`v1/assets/insurance/claims/${encodeURIComponent(claimId)}/settle`, {
         method: "PATCH",
         headers: { "x-idempotency-key": settleKey.current },
-        body: JSON.stringify({ settlementAmountMinor: Number(check.minor), currency: "INR" }),
+        body: JSON.stringify({ settlementAmountMinor: settlementNum, currency: "INR" }),
       });
       settleKey.current = null;
     },
