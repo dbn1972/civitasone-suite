@@ -33,13 +33,22 @@ export interface AssetLinkResult {
  * NEVER throws — graceful degradation is enforced.
  */
 export async function verifyAsset(assetId: string, tenantId: string): Promise<AssetLinkResult> {
+  // CLOS3-S5-09: service-to-service credentials, read at call time (never hardcoded).
+  const secret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!secret) {
+    logger.warn({ assetId, tenantId }, "INTERNAL_SERVICE_SECRET unset — cannot verify asset linkage");
+    return { assetId, verified: false, error: "asset_service_auth_unconfigured" };
+  }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ASSET_TIMEOUT_MS);
 
-    const res = await fetch(`${ASSET_SERVICE_URL}/v1/assets/${assetId}`, {
+    // asset-service serves detail at GET /v1/assets/assets/:id (there is no /v1/assets/:id).
+    const res = await fetch(`${ASSET_SERVICE_URL}/v1/assets/assets/${encodeURIComponent(assetId)}`, {
       method: "GET",
       headers: {
+        "x-internal": "1",
+        "x-service-secret": secret,
         "x-tenant-id": tenantId,
         "content-type": "application/json",
       },
@@ -49,11 +58,12 @@ export async function verifyAsset(assetId: string, tenantId: string): Promise<As
     clearTimeout(timeout);
 
     if (res.ok) {
-      const body = await res.json() as { data?: AssetInfo };
+      // The route returns the bare asset; tolerate a {data} envelope too.
+      const body = await res.json() as AssetInfo & { data?: AssetInfo };
       return {
         assetId,
         verified: true,
-        asset: body.data ?? { id: assetId },
+        asset: body.data ?? (body.id ? body : { id: assetId }),
       };
     }
 
