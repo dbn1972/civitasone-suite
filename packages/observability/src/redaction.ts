@@ -150,3 +150,80 @@ export function redactLogPayload<T extends Record<string, unknown>>(payload: T):
 export function redactReportPayload<T extends Record<string, unknown>>(payload: T): Record<string, unknown> {
   return redactValue(payload, "report") as Record<string, unknown>;
 }
+
+// ── URL query-string redaction (Q34) ────────────────────────────────────────
+//
+// Fastify's default request serializer logs `req.url` verbatim, query string
+// included. A credential-bearing query parameter (the audit export download
+// `?token=`, an OAuth `access_token`, a presigned `signature`) therefore lands
+// in every access log line. These helpers mask the VALUE of such parameters
+// while keeping the key, so a log line still shows that a token was sent.
+
+/** Query-parameter names (lowercased) whose value is credential-shaped. */
+const SECRET_QUERY_PARAMS = new Set([
+  "token",
+  "access_token",
+  "refresh_token",
+  "id_token",
+  "download_token",
+  "signature",
+  "sig",
+  "x-amz-signature",
+  "x-amz-security-token",
+  "secret",
+  "client_secret",
+  "password",
+  "apikey",
+  "api_key",
+]);
+
+/**
+ * Mask the value of every credential-shaped query parameter in a request URL
+ * (path-only or absolute). Non-secret parameters, the path and any `#fragment`
+ * are preserved untouched. Never throws: a URL without a query string is
+ * returned as-is.
+ */
+export function redactUrlSecrets(url: string): string {
+  const q = url.indexOf("?");
+  if (q === -1) return url;
+  const hash = url.indexOf("#", q);
+  const end = hash === -1 ? url.length : hash;
+  const query = url.slice(q + 1, end);
+  const masked = query
+    .split("&")
+    .map((pair) => {
+      const eq = pair.indexOf("=");
+      if (eq === -1) return pair;
+      let name = pair.slice(0, eq);
+      try {
+        name = decodeURIComponent(name.replace(/\+/g, " "));
+      } catch {
+        /* keep the raw name */
+      }
+      return SECRET_QUERY_PARAMS.has(name.toLowerCase()) ? `${pair.slice(0, eq)}=${REDACTED}` : pair;
+    })
+    .join("&");
+  return url.slice(0, q + 1) + masked + url.slice(end);
+}
+
+/**
+ * Drop-in replacement for Fastify's default `req` log serializer that redacts
+ * credential-shaped query parameters from the logged URL. Use as
+ * `Fastify({ logger: { serializers: { req: redactedReqSerializer } } })`.
+ */
+export function redactedReqSerializer(req: {
+  method?: string;
+  url?: string;
+  hostname?: string;
+  host?: string;
+  ip?: string;
+  socket?: { remotePort?: number | undefined } | undefined;
+}): Record<string, unknown> {
+  return {
+    method: req.method,
+    url: typeof req.url === "string" ? redactUrlSecrets(req.url) : req.url,
+    hostname: req.hostname ?? req.host,
+    remoteAddress: req.ip,
+    remotePort: req.socket?.remotePort,
+  };
+}

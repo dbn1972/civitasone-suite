@@ -17,6 +17,12 @@ function ui(grants: RoleFeatureGrant[], opts: { rolesSource?: "api" | "error"; g
   );
 }
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
+// Q28: every grant/revoke/preset needs a reason (min 5 chars) before the dialog confirms.
+const REASON = "quarterly access review";
+function confirmWithReason(name: "Grant" | "Revoke") {
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: REASON } });
+  fireEvent.click(screen.getByRole("button", { name }));
+}
 
 // GAP-ADMIN-ROLE-FEATURES-02
 describe("RoleFeaturesManager orphan grants", () => {
@@ -48,10 +54,11 @@ describe("RoleFeaturesManager orphan grants", () => {
     render(ui(grants));
     fireEvent.click(screen.getByRole("checkbox", { name: "HR Admin access to legacy.thing" }));
     expect(spy).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
+    confirmWithReason("Revoke");
     await waitFor(() => expect(spy).toHaveBeenCalled());
     expect(String(spy.mock.calls[0]![0])).toBe("/api/proxy/v1/policy/role-features/g2");
     expect((spy.mock.calls[0]![1] as RequestInit).method).toBe("DELETE");
+    expect(JSON.parse(String((spy.mock.calls[0]![1] as RequestInit).body))).toEqual({ reason: REASON });
   });
 });
 
@@ -75,9 +82,38 @@ describe("RoleFeaturesManager confirmation", () => {
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ id: "n1" }, 202));
     render(ui([]));
     fireEvent.click(screen.getByRole("checkbox", { name: "HR Admin access to hrms.leave" }));
-    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
+    confirmWithReason("Grant");
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "HR Admin access to hrms.leave" })).toBeChecked());
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("Q28: Confirm stays disabled until a reason of at least 5 characters is typed, and the reason is sent", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ id: "n1" }, 202));
+    render(ui([]));
+    fireEvent.click(screen.getByRole("checkbox", { name: "HR Admin access to hrms.leave" }));
+    const confirm = screen.getByRole("button", { name: "Grant" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "abcd" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "  " + REASON + "  " } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String((spy.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      roleName: "hr_admin", featureKey: "hrms.leave", granted: true, reason: REASON,
+    });
+  });
+
+  it("Q28: a preset sends the same reason with every grant", async () => {
+    let n = 0;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ id: `p${++n}` }, 202));
+    render(ui([]));
+    fireEvent.click(screen.getByRole("button", { name: "Grant all HR features" }));
+    confirmWithReason("Grant");
+    await waitFor(() => expect(spy.mock.calls.length).toBeGreaterThanOrEqual(3));
+    for (const [, init] of spy.mock.calls) {
+      expect(JSON.parse(String((init as RequestInit).body)).reason).toBe(REASON);
+    }
   });
 
   it("a 202 with no id triggers a refetch and the box ends checked instead of a false 'Granted'", async () => {
@@ -87,7 +123,7 @@ describe("RoleFeaturesManager confirmation", () => {
     });
     render(ui([]));
     fireEvent.click(screen.getByRole("checkbox", { name: "HR Admin access to hrms.leave" }));
-    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
+    confirmWithReason("Grant");
     await waitFor(() => expect(screen.getByRole("checkbox", { name: "HR Admin access to hrms.leave" })).toBeChecked());
     expect(spy.mock.calls.some(([u, i]) => String(u) === "/api/proxy/v1/policy/role-features" && !(i as RequestInit | undefined)?.method)).toBe(true);
   });
@@ -105,7 +141,7 @@ describe("RoleFeaturesManager presets", () => {
     });
     render(ui([]));
     fireEvent.click(screen.getByRole("button", { name: "Grant all Finance features" }));
-    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
+    confirmWithReason("Grant");
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Granted 2 of 4; failed at finance.budget.");
     expect(alert).toHaveTextContent("nothing was rolled back");
@@ -119,7 +155,7 @@ describe("RoleFeaturesManager presets", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => json({ id: `g${++n}` }, 202));
     render(ui([]));
     fireEvent.click(screen.getByRole("button", { name: "Grant all HR features" }));
-    fireEvent.click(screen.getByRole("button", { name: "Grant" }));
+    confirmWithReason("Grant");
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Granted 3 features"));
   });
 });

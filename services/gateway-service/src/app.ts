@@ -4,7 +4,7 @@ import Fastify, {
   type FastifyReply,
 } from "fastify";
 import { Readable } from "node:stream";
-import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { registerOpsRoutes, dbPing, redactedReqSerializer } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
@@ -414,7 +414,8 @@ export const CAREERS_RESUME_BODY_LIMIT_BYTES = 7_000_000;
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // Q34: credential-bearing query parameters (e.g. the audit export download token) must not reach access logs.
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: { req: redactedReqSerializer } },
     // SEC REM-10: hard cap on inbound body size. Prevents memory-exhaustion attacks
     // via large-body requests at 1000 TPS. Default 1MB; tune via GATEWAY_BODY_LIMIT env.
     // Clamped to a 10 MiB ceiling so the env var cannot lift the cap past what scripts/ci/fastify-bodylimit-guard.mjs allows.

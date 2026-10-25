@@ -5654,6 +5654,7 @@
     "confirmRevokeTitle": "{role} से {feature} वापस लें?",
     "confirmGrantBody": "इससे तय होता है कि इस भूमिका के उपयोगकर्ता कौन-से फ़ीचर देख सकते हैं।",
     "confirmRevokeBody": "इस भूमिका के उपयोगकर्ताओं की इस फ़ीचर तक पहुँच समाप्त हो जाएगी।",
+    "confirmReasonLabel": "कारण (अनिवार्य, कम से कम 5 अक्षर)",
     "confirmAdminNote": "यह एक प्रशासन फ़ीचर है — पुष्टि से पहले दोबारा जाँच लें।",
     "confirmPresetTitle": "{role} के लिए {label}?",
     "confirmPresetBody": "{count, plural, one {# फ़ीचर दिया जाएगा} other {# फ़ीचर दिए जाएँगे}}, एक-एक करके। यदि कोई विफल हो, तो पहले दिए जा चुके फ़ीचर बने रहेंगे।",

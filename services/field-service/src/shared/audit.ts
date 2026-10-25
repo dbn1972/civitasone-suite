@@ -21,6 +21,8 @@ export interface AuditPayload {
   resourceType: string;
   resourceId: string;
   details?: Record<string, unknown>;
+  /** Defaults to "success"; use "denied" for authorization refusals. */
+  outcome?: "success" | "denied";
 }
 
 export async function writeAudit(tx: ScopedTx, ctx: AuditCtx, payload: AuditPayload): Promise<void> {

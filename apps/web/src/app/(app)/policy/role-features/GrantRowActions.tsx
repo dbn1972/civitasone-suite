@@ -38,12 +38,12 @@ export function GrantRowActions({
         ? await fetch(`/api/proxy/v1/policy/role-features/${grantId}`, {
             method: "DELETE",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+            body: JSON.stringify({ reason }),
           })
         : await fetch("/api/proxy/v1/policy/role-features", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ roleName, featureKey, granted: true, ...(reason ? { reason } : {}) }),
+            body: JSON.stringify({ roleName, featureKey, granted: true, reason }),
           });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "save")).message);
@@ -81,9 +81,10 @@ export function GrantRowActions({
         }
         confirmLabel={granted ? "Revoke" : "Restore"}
         danger={granted}
-        requireReason={granted}
-        optionalReason={!granted}
-        reasonLabel={granted ? "Reason for revocation" : "Reason (optional)"}
+        requireReason
+        minReasonLength={5}
+        maxReasonLength={500}
+        reasonLabel={granted ? "Reason for revocation (min 5 characters)" : "Reason for restoring (min 5 characters)"}
         busy={busy}
         errorMessage={error || undefined}
         onConfirm={(reason) => void run(reason)}

@@ -78,6 +78,11 @@ export function assertOfficeOverrides(
         throw new OfficeOverrideError(`OVERRIDE_BAD_FEE: ${o.officeId}`);
       }
     }
+    // Q23: a Rs 0 office fee is a waiver and must say why (it is recorded in the
+    // audit event), enforced here as well as at save so it cannot be bypassed.
+    if (o.feeFromMinor === 0 && (typeof o.feeWaiverReason !== "string" || o.feeWaiverReason.trim().length === 0)) {
+      throw new OfficeOverrideError(`OVERRIDE_WAIVER_REASON_REQUIRED: ${o.officeId}`);
+    }
     if (o.slaDays !== undefined) {
       if (!Number.isInteger(o.slaDays) || o.slaDays <= 0) {
         throw new OfficeOverrideError(`OVERRIDE_BAD_SLA: ${o.officeId}`);
