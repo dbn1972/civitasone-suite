@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -25,11 +24,13 @@ export function registerPermitConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.issuePermit, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; applicationId: string; conditions?: Array<{ condition: string; category: string }>; validityMonths: number };
     const now = new Date();
-    const permitNumber = generatePermitNumber("ULB", randomInt(1, 999999));
+    // Allocated from a Postgres sequence inside the transaction below (CLOS3-S4-09).
+    let permitNumber = "";
     const verificationCode = generateVerificationCode();
     const validUntil = calculateValidUntil(now, p.validityMonths);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      permitNumber = generatePermitNumber("ULB", await repo.nextPermitNumberSeq(tx));
       await repo.insertPermit(tx, { id: p.id, tenantId: msg.tenantId, applicationId: p.applicationId, permitNumber, status: "active", issuedAt: now, validUntil, conditions: p.conditions ?? null, verificationCode, createdBy: msg.actorId, updatedBy: msg.actorId });
       await enqueue(tx, { topic: EVENTS.permitIssued, eventType: EVENTS.permitIssued, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { permitId: p.id, permitNumber, applicationId: p.applicationId, validUntil: validUntil.toISOString(), verificationCode } });
       // Cross-service wiring: permit issuance is a citizen-meaningful
@@ -54,7 +55,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       }
       await writeAudit(tx, ctxOf(msg), { action: "permit.issue", resourceType: "building_permit", resourceId: p.id });
     });
-    log.info({ id: p.id, permitNumber }, "building permit issued");
+    if (permitNumber) log.info({ id: p.id, permitNumber }, "building permit issued");
   });
 
   queue.subscribe(COMMANDS.suspendPermit, async (msg) => {
