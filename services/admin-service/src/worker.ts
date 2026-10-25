@@ -108,7 +108,7 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
 
 // P1-2: periodically auto-close break-glass grants past their TTL.
 const breakGlassSweepMs = Number(process.env.BREAK_GLASS_SWEEP_MS ?? 60_000);
-const breakGlassSweeper = startBreakGlassSweeper(breakGlassSweepMs);
+const breakGlassSweeper = startBreakGlassSweeper(breakGlassSweepMs, log);
 // Executes approved suspensions whose effective time has arrived.
 // GAP-ADMIN-API-MONITORING-06: bounded retention for the gateway metrics rollup.
 const apiMetricsPurge = startApiMetricsPurge();
