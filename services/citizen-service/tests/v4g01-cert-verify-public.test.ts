@@ -7,6 +7,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync } from "node:fs";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { resolveClientIp } from "../src/modules/issuance/domain.js";
 import type { FastifyInstance } from "fastify";
 
 const uuid = () => globalThis.crypto.randomUUID();
@@ -121,5 +122,37 @@ describe("V4-G-01 tenant isolation is not weakened", () => {
       .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
     expect(sql).toMatch(/CREATE POLICY public_verify_read[\s\S]*FOR SELECT/);
     expect(sql).not.toMatch(/FOR (ALL|INSERT|UPDATE|DELETE)|NO FORCE|DISABLE ROW|BYPASSRLS/i);
+  });
+
+  describe("per-client rate limit behind the gateway", () => {
+    const prev = process.env.TRUSTED_PROXY_HOPS;
+    beforeAll(() => { process.env.TRUSTED_PROXY_HOPS = "1"; });
+    afterAll(() => { if (prev === undefined) delete process.env.TRUSTED_PROXY_HOPS; else process.env.TRUSTED_PROXY_HOPS = prev; });
+    // remoteAddress = gateway peer (127.0.0.1 is on the limiter allowList)
+    const from = (xff: string) => app.inject({
+      method: "GET", url: `/v1/citizen/certificates/verify/${tokenA}`, remoteAddress: "172.16.0.5", headers: { "x-forwarded-for": xff },
+    });
+    const octet = () => 1 + Math.floor(Math.random() * 250);
+    const ip = () => `10.${octet()}.${octet()}.${octet()}`;
+
+    it("gives each forwarded client its own budget and ignores a spoofed leading entry", async () => {
+      const a = ip(), b = ip();
+      for (let i = 0; i < 30; i++) expect((await from(a)).statusCode).toBe(200);
+      expect((await from(a)).statusCode).toBe(429);
+      expect((await from(b)).statusCode).toBe(200);
+      // a spoofed leading entry does not mint a fresh bucket: the trusted (last) entry is still `a`
+      expect((await from(`${ip()}, ${a}`)).statusCode).toBe(429);
+    });
+
+    it("resolveClientIp: last-hop only, fail closed on short chain, ignored at hops=0", () => {
+      const req = (xff: string | undefined) => ({ ip: "172.0.0.9", headers: xff === undefined ? {} : { "x-forwarded-for": xff } });
+      expect(resolveClientIp(req("9.9.9.9, 10.1.1.1"))).toBe("10.1.1.1");
+      expect(resolveClientIp(req(undefined))).toBe("172.0.0.9");
+      process.env.TRUSTED_PROXY_HOPS = "2";
+      expect(resolveClientIp(req("6.6.6.6"))).toBe("172.0.0.9");
+      process.env.TRUSTED_PROXY_HOPS = "0";
+      expect(resolveClientIp(req("6.6.6.6"))).toBe("172.0.0.9");
+      process.env.TRUSTED_PROXY_HOPS = "1";
+    });
   });
 });

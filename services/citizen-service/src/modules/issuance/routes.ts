@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, resolvePublicContext, HttpError } from "../../shared/context.js";
 import { idParam, tokenParam, requestIssuanceBody, amendBody, renewBody, revokeBody } from "./validators.js";
+import { resolveClientIp } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -14,7 +15,7 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
       public: true,
       // Anonymous + token-keyed: bound brute-force probing per client IP (the global limiter would
       // put every anonymous caller in one bucket).
-      rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (req: { ip: string }) => `cert-verify:${req.ip}` },
+      rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (req: { ip: string; headers: Record<string, string | string[] | undefined> }) => `cert-verify:${resolveClientIp(req)}` },
     },
   }, async (req, reply) => {
     resolvePublicContext(req, "00000000-0000-4000-8000-000000000000");
@@ -90,6 +91,11 @@ export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
     }
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    // @fastify/rate-limit throws its errorResponseBuilder object (statusCode 429); surface it as a
+    // 429 so throttled QR scans are not reported as server faults.
+    if ((err as { statusCode?: number }).statusCode === 429) {
+      return reply.code(429).send({ code: "TOO_MANY_REQUESTS", message: "rate limit exceeded", correlationId, retryable: true });
     }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
