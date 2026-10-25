@@ -25,15 +25,20 @@ export async function GET(req: Request) {
   const controller = new AbortController();
   req.signal.addEventListener("abort", () => controller.abort());
 
-  const upstream = await fetch(target, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "text/event-stream",
-      "Cache-Control": "no-cache",
-    },
-    signal: controller.signal,
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(target, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "text/event-stream",
+        "Cache-Control": "no-cache",
+      },
+      signal: controller.signal,
+    });
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "upstream service unavailable" }, { status: 502 });
+  }
 
   if (!upstream.ok) {
     return new NextResponse(upstream.body, { status: upstream.status });
