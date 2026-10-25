@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AcceptedNotice, ActionButton } from "../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToSafeNumber, rupeesToMinorString } from "@/lib/money";
 import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
 
 export type ContractBond = {
@@ -145,6 +145,8 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       if (amountMinor === null) {
         throw new Error("Enter a positive bond amount in ₹ (up to two decimals)");
       }
+      const amountMinorNum = minorToSafeNumber(amountMinor);
+      if (amountMinorNum === null) throw new Error("The bond amount is too large");
       if (!referenceNo.trim()) throw new Error("Reference number is required");
       if (!validFrom) throw new Error("'Valid from' date is required");
       if (!validTo) throw new Error("'Valid to' date is required");
@@ -158,7 +160,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
         method: "POST",
         body: JSON.stringify({
           bondType,
-          amountMinor: Number(amountMinor),
+          amountMinor: amountMinorNum,
           currency: "INR",
           issuer,
           referenceNo: referenceNo.trim(),
