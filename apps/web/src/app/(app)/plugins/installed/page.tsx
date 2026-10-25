@@ -39,7 +39,10 @@ export default async function Page() {
 		plugins = res.data as PluginRow[];
 	}
 
-	const errored = source === "error";
+	// Q31: for a plugin_user (read-only listing) a failed load is most often a permission gap, not an
+	// outage, so show a permission-aware empty state instead of the red refresh/error state.
+	const restricted = !canManage && source === "error";
+	const errored = source === "error" && !restricted;
 	const total = errored ? null : plugins.length;
 	// GAP-PLUGINS-INSTALLED-04: count by real lifecycle, not "everything that
 	// isn't enabled". "Other" captures pending/error/unknown so a problem row is
@@ -65,7 +68,7 @@ export default async function Page() {
 				<StatCard icon="⚠️" tone="warn" label="Other" value={other === null ? "—" : other} />
 			</StatGrid>
 
-			{source === "error" && (
+			{source === "error" && !restricted && (
 				<div style={{ margin: "12px 0" }}>
 					<DataSourceBadge source={source} />
 				</div>
@@ -75,7 +78,13 @@ export default async function Page() {
 				<div className="card-h">
 					<h3>Installed plugins</h3>
 				</div>
-				{errored ? (
+				{restricted ? (
+					<EmptyState
+						icon="🔒"
+						title="No installed plugins to show"
+						message="Your role can only see plugins that have been shared with you. Ask a plugin administrator if you need access to the installed list."
+					/>
+				) : errored ? (
 					<RefreshErrorState error={toHumanError("load", { area: "plugins" })} />
 				) : plugins.length === 0 ? (
 					<EmptyState
