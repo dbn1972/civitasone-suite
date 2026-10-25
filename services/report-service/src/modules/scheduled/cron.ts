@@ -16,6 +16,7 @@ import { eq, and, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
+import { stableUuid } from "../../shared/outbox.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { queue } from "../../shared/infra.js";
 import { scheduledReports } from "./schema.js";
@@ -188,7 +189,8 @@ async function deliverToRecipients(
         });
 
         await queue.publish(NOTIFICATION_SEND, {
-          messageId: `notify-${meta.jobId}-${recipient}-${attempt}`,
+          // Envelope schema requires a UUID messageId; stableUuid keeps it deterministic per attempt.
+          messageId: stableUuid(`notify-${meta.jobId}-${recipient}-${attempt}`),
           type: NOTIFICATION_SEND,
           tenantId,
           actorId: SYSTEM_ACTOR,

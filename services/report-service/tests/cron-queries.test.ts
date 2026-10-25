@@ -82,6 +82,7 @@ vi.mock("../src/shared/infra.js", () => ({
 vi.mock("../src/shared/outbox.js", () => ({
   enqueue: async () => {},
   markProcessed: async () => true,
+  stableUuid: () => "00000000-0000-4000-8000-000000000000",
 }));
 
 vi.mock("drizzle-orm", () => ({
