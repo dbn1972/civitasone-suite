@@ -38,27 +38,11 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
   registerOpsRoutes(app, { service: "queue-service", checks: { queue: bus } });
 
-  function requireOpsAuth(req: FastifyRequest): void {
-    const auth = req.headers.authorization;
-    const internal = req.headers["x-internal"];
-    if ((!auth || typeof auth !== "string") && internal !== "1") {
-      const err = new Error("authentication or internal header required") as Error & {
-        statusCode?: number;
-        code?: string;
-      };
-      err.statusCode = 401;
-      err.code = "UNAUTHORIZED";
-      throw err;
-    }
-  }
+  // V4-B-10: these routes are NOT public. authPlugin verifies the bearer JWT (or
+  // x-internal + constant-time INTERNAL_SERVICE_SECRET) before the handler runs.
 
   /** Bus health + driver — primary ops probe for F2. */
-  app.get("/v1/queue/status", { config: { public: true } }, async (req: FastifyRequest, reply) => {
-    try {
-      requireOpsAuth(req);
-    } catch {
-      return reply.code(401).send({ code: "UNAUTHORIZED", message: "authentication or internal header required" });
-    }
+  app.get("/v1/queue/status", async () => {
     const status = await bus.healthCheck();
     return {
       driver: resolveQueueDriver(),
@@ -70,12 +54,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   /** Supported drivers + production fail-closed contract. */
-  app.get("/v1/queue/drivers", { config: { public: true } }, async (req: FastifyRequest, reply) => {
-    try {
-      requireOpsAuth(req);
-    } catch {
-      return reply.code(401).send({ code: "UNAUTHORIZED", message: "authentication or internal header required" });
-    }
+  app.get("/v1/queue/drivers", async (req: FastifyRequest) => {
     const q = z.object({}).parse(req.query ?? {});
     void q;
     return {
@@ -89,12 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   /** Minimal ops catalogue so F2 list/get has a real surface beyond /status. */
-  app.get("/v1/queue/ops", { config: { public: true } }, async (req: FastifyRequest, reply) => {
-    try {
-      requireOpsAuth(req);
-    } catch {
-      return reply.code(401).send({ code: "UNAUTHORIZED", message: "authentication or internal header required" });
-    }
+  app.get("/v1/queue/ops", async () => {
     const status = await bus.healthCheck();
     return {
       data: {
@@ -105,9 +79,9 @@ export async function buildApp(): Promise<FastifyInstance> {
         endpoints: [
           { method: "GET", path: "/health", auth: "public" },
           { method: "GET", path: "/ready", auth: "public" },
-          { method: "GET", path: "/v1/queue/status", auth: "bearer|x-internal" },
-          { method: "GET", path: "/v1/queue/drivers", auth: "bearer|x-internal" },
-          { method: "GET", path: "/v1/queue/ops", auth: "bearer|x-internal" },
+          { method: "GET", path: "/v1/queue/status", auth: "verified-bearer|x-internal+secret" },
+          { method: "GET", path: "/v1/queue/drivers", auth: "verified-bearer|x-internal+secret" },
+          { method: "GET", path: "/v1/queue/ops", auth: "verified-bearer|x-internal+secret" },
         ],
         cqrs: {
           f3: "n/a — no domain mutation routes (bus observability only)",
