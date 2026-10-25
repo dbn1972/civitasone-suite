@@ -5,6 +5,15 @@ import { auditPendingRegister, auditChecklists, type PendingRegisterRow, type Ch
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 /**
+ * Calendar date (YYYY-MM-DD) of `now` in India Standard Time. A due_date is a business day in IST, so
+ * "strictly in the past" must compare against the IST date; the UTC date lags it by one day between
+ * 00:00 and 05:30 IST (CLOS3-S4-14). en-CA formats as ISO year-month-day.
+ */
+export function istDateString(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+}
+
+/**
  * P2-4 / M3: ageing sweep — flip up to `limit` 'pending' register items whose due_date
  * is strictly in the past to 'overdue'. Runs inside the caller's transaction (Writer = tx)
  * so the status flip and its audit events are committed atomically. The LIMIT bounds each
@@ -27,7 +36,7 @@ export async function findOverdueTenantIds(tx: Writer, now: Date): Promise<strin
     .where(and(
       eq(auditPendingRegister.status, "pending"),
       sql`${auditPendingRegister.dueDate} IS NOT NULL`,
-      lt(auditPendingRegister.dueDate, now.toISOString().slice(0, 10)),
+      lt(auditPendingRegister.dueDate, istDateString(now)),
     ))
     .groupBy(auditPendingRegister.tenantId);
   return rows.map((r) => r.tenantId);
@@ -45,7 +54,7 @@ export async function sweepOverdueBatch(tx: Writer, now: Date, limit: number): P
     .where(and(
       eq(auditPendingRegister.status, "pending"),
       sql`${auditPendingRegister.dueDate} IS NOT NULL`,
-      lt(auditPendingRegister.dueDate, now.toISOString().slice(0, 10)),
+      lt(auditPendingRegister.dueDate, istDateString(now)),
     ))
     .limit(limit)
     .for("update", { skipLocked: true });
