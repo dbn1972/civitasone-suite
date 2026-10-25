@@ -52,4 +52,7 @@ export const PUBLIC_PREFIXES = [
   "/api/v1/court/public",
   "/api/v1/tenant/msme-onboard",
   "/api/v1/hrms/visiting-card/public",
+  // V4-B-03: payment-gateway server-to-server callbacks (Razorpay/PayU/CCAvenue). No bearer token
+  // exists on them; billing-service authenticates each by the provider signature / hash.
+  "/api/v1/billing/webhooks",
 ];

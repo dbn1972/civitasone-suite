@@ -269,3 +269,23 @@ export const ccavenueAdapter: PaymentGateway = {
     };
   },
 };
+
+/**
+ * Decrypt + parse a CCAvenue `encResp` callback with OUR working key. CCAvenue's scheme carries no
+ * MAC, so authenticity rests on the working key: a body that is not well-formed ciphertext, does not
+ * decrypt under the key, or does not decode to `order_id=...` key/value pairs returns null.
+ * Throws GatewayError(GATEWAY_NOT_CONFIGURED) when CCAVENUE_WORKING_KEY is not set.
+ */
+export function decryptCcavenueCallback(encResp: unknown): Record<string, string> | null {
+  const workingKey = getWorkingKey();
+  if (typeof encResp !== "string" || !/^[0-9a-fA-F]+$/.test(encResp)) return null;
+  if (encResp.length < 64 || (encResp.length - 32) % 32 !== 0) return null;
+  let plain: string;
+  try {
+    plain = decrypt(encResp, workingKey);
+  } catch {
+    return null;
+  }
+  const fields = Object.fromEntries(new URLSearchParams(plain));
+  return typeof fields["order_id"] === "string" && fields["order_id"] !== "" ? fields : null;
+}
