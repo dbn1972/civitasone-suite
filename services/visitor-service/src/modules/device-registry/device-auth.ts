@@ -107,6 +107,17 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 let _redis: Redis | null = null;
 
+/** Atomic INCR + (re)arm EXPIRE when the key is new or has lost its TTL. */
+const RATE_LIMIT_INCR_SCRIPT =
+  "local c=redis.call(INCR,KEYS[1]) " +
+  "if c==1 or redis.call(TTL,KEYS[1])==-1 then redis.call(EXPIRE,KEYS[1],ARGV[1]) end " +
+  "return c";
+
+/** Test seam: inject a Redis client (or null to force the in-memory path). */
+export function setRateLimitRedisForTests(client: Pick<Redis, "eval"> | null): void {
+  _redis = client as Redis | null;
+}
+
 function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
@@ -123,21 +134,23 @@ const _memoryRateStore = new Map<string, { count: number; expiresAt: number }>()
 
 /**
  * Increment request count for a device and check against the limit.
- * Uses Redis INCR + EXPIRE for atomic sliding window.
+ * Uses one atomic Redis EVAL (INCR + EXPIRE) for the fixed window (CLOS3-S6-09).
  * Falls back to in-memory map when Redis is unavailable.
  *
  * @returns true if the request is allowed, false if rate limit exceeded
  */
-async function checkRateLimit(deviceId: string, tenantId: string, deviceType: DeviceType): Promise<boolean> {
+export async function checkRateLimit(deviceId: string, tenantId: string, deviceType: DeviceType): Promise<boolean> {
   const limit = RATE_LIMITS[deviceType];
   const key = `visitor:${tenantId}:device:${deviceId}:rate`;
   const redis = getRedis();
 
   if (redis) {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS);
-    }
+    // CLOS3-S6-09: INCR and EXPIRE must be ONE atomic server-side step. As two
+    // round trips, a failed/crashed EXPIRE after the first INCR left the key
+    // with no TTL, so the count only ever grew and the device was 429-blocked
+    // permanently. The script also re-arms the TTL when it finds none (-1), so
+    // a key orphaned by the old code self-heals on its next request.
+    const count = Number(await redis.eval(RATE_LIMIT_INCR_SCRIPT, 1, key, RATE_LIMIT_WINDOW_SECONDS));
     return count <= limit;
   }
 
