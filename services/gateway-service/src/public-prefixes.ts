@@ -43,6 +43,14 @@
  * resolves the single card through a token-scoped RLS policy; this entry only lets the request past
  * the gateway bearer pre-check. Narrow to the `public` sub-tree, NOT /api/v1/hrms/visiting-card
  * (the authenticated /me routes keep their edge check).
+ *
+ * `/api/v1/citizen/certificates/verify` (V4-G-01) — the QR printed on an issued certificate opens
+ * GET .../verify/:token anonymously (a verifier scanning a paper certificate has no account), but
+ * the gateway 401d it before it could reach citizen-service. Narrowed to the `verify` sub-tree
+ * (`pathname === p || startsWith(p + "/")`), NOT /api/v1/citizen/certificates, so issuance,
+ * approval, list and lifecycle routes still require a bearer token. The upstream route is marked
+ * config:{public:true}, is keyed on an unguessable token (migration 0043 token-scoped SELECT
+ * policy), returns non-PII attestation fields only and rate-limits per client IP.
  */
 export const PUBLIC_PREFIXES = [
   "/api/identity",
@@ -52,4 +60,5 @@ export const PUBLIC_PREFIXES = [
   "/api/v1/court/public",
   "/api/v1/tenant/msme-onboard",
   "/api/v1/hrms/visiting-card/public",
+  "/api/v1/citizen/certificates/verify",
 ];

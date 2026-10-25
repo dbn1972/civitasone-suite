@@ -9,10 +9,18 @@ const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
 
 export async function issuanceRoutes(app: FastifyInstance): Promise<void> {
   // --- Public QR verify (no auth) ---------------------------------------------
-  app.get("/v1/citizen/certificates/verify/:token", { config: { public: true } }, async (req, reply) => {
+  app.get("/v1/citizen/certificates/verify/:token", {
+    config: {
+      public: true,
+      // Anonymous + token-keyed: bound brute-force probing per client IP (the global limiter would
+      // put every anonymous caller in one bucket).
+      rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (req: { ip: string }) => `cert-verify:${req.ip}` },
+    },
+  }, async (req, reply) => {
     resolvePublicContext(req, "00000000-0000-4000-8000-000000000000");
     const { token } = tokenParam.parse(req.params);
     const result = await queries.verifyByToken(token);
+    reply.header("Cache-Control", "no-store");
     if (!result.found) return reply.code(404).send({ found: false, validity: "invalid" });
     return reply.send(result);
   });
