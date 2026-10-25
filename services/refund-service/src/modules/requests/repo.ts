@@ -119,3 +119,16 @@ export async function updateStatus(
     .returning({ id: refundRequests.id });
   return result.length > 0;
 }
+
+/**
+ * V4-C-05: next request number from refund.request_number_seq
+ * (migrations/0004). Replaces `Date.now() % 999999`, which repeated every
+ * ~16.7 minutes and collided against the global UNIQUE request_number. Call
+ * inside the transaction that inserts the row.
+ */
+export async function nextRequestSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"refund"."request_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}
