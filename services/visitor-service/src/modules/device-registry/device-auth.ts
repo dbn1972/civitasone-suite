@@ -112,9 +112,9 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 let _redis: Redis | null = null;
 
 /** Atomic INCR + (re)arm EXPIRE when the key is new or has lost its TTL. */
-const RATE_LIMIT_INCR_SCRIPT =
-  "local c=redis.call(INCR,KEYS[1]) " +
-  "if c==1 or redis.call(TTL,KEYS[1])==-1 then redis.call(EXPIRE,KEYS[1],ARGV[1]) end " +
+export const RATE_LIMIT_INCR_SCRIPT =
+  "local c=redis.call('INCR',KEYS[1]) " +
+  "if c==1 or redis.call('TTL',KEYS[1])==-1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end " +
   "return c";
 
 /** Test seam: inject a Redis client (or null to force the in-memory path). */
