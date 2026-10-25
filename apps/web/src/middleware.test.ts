@@ -197,3 +197,18 @@ describe("middleware /logout and /offline are public (V4-A-09)", () => {
     expect(middleware(anonReq(path)).status).toBe(307);
   });
 });
+
+// V4-A-01: the SW purge/precache fetches /offline with credentials omitted; it must
+// not redirect to login or the offline fallback can never be cached.
+describe("middleware public offline fallback", () => {
+  it("lets an anonymous request to /offline through", () => {
+    const res = middleware(anonReq("/offline"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("keeps a path that merely shares the /offline prefix private", () => {
+    const res = middleware(anonReq("/offline-reports"));
+    expect(res.status).toBe(307);
+  });
+});
