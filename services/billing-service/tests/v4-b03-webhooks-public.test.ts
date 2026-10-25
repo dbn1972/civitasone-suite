@@ -63,7 +63,8 @@ describe("POST /v1/billing/webhooks/razorpay", () => {
   it("rejects a forged / missing signature and queues nothing", async () => {
     const raw = JSON.stringify(rzpEvent());
     const bad = await app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json", "x-razorpay-signature": rzpSig(raw + " ") }, payload: raw });
-    expect(bad.statusCode).toBe(400);
+    expect(bad.statusCode).toBe(401);
+    expect(bad.json()).toMatchObject({ code: "UNAUTHORIZED", message: "unauthorized" });
     const none = await app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json" }, payload: raw });
     expect(none.statusCode).toBe(400);
     expect(published).toHaveLength(0);
@@ -108,10 +109,10 @@ describe("POST /v1/billing/webhooks/payu", () => {
   });
   it("rejects a forged hash, a tampered amount and a missing hash", async () => {
     const h = { "content-type": "application/x-www-form-urlencoded" };
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: payuForm({}, true) })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: payuForm({}, true) })).statusCode).toBe(401);
     const tampered = payuForm().replace("amount=50.00", "amount=1.00");
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: tampered })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: "status=success&txnid=t" })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: tampered })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: "status=success&txnid=t" })).statusCode).toBe(401);
     expect(published).toHaveLength(0);
   });
 });
@@ -132,9 +133,43 @@ describe("POST /v1/billing/webhooks/ccavenue", () => {
   });
   it("rejects ciphertext under another key, garbage and a missing encResp", async () => {
     const wrong = new URLSearchParams({ encResp: encResp("order_id=o1&order_status=Success", rnd()) }).toString();
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: wrong })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: "encResp=zz" })).statusCode).toBe(400);
-    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: "x=1" })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: wrong })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: "encResp=zz" })).statusCode).toBe(401);
+    expect((await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: "x=1" })).statusCode).toBe(401);
     expect(published).toHaveLength(0);
+  });
+});
+
+describe("dedupe by provider event id", () => {
+  it("razorpay: a retried delivery (and a different x-razorpay-event-id header) carries the same messageId; a different event differs", async () => {
+    const raw = JSON.stringify(rzpEvent());
+    const send = (p: string, extra: Record<string, string> = {}) =>
+      app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", headers: { "content-type": "application/json", "x-razorpay-signature": rzpSig(p), ...extra }, payload: p });
+    await send(raw);
+    await send(raw, { "x-razorpay-event-id": rnd() });
+    const other = JSON.stringify({ ...rzpEvent(), event: "payment.failed" });
+    await send(other);
+    expect(published).toHaveLength(3);
+    expect(published[0]!.msg["messageId"]).toBe(published[1]!.msg["messageId"]);
+    expect(published[2]!.msg["messageId"]).not.toBe(published[0]!.msg["messageId"]);
+  });
+  it("payu: same txnid+status dedupes, a different status does not", async () => {
+    const h = { "content-type": "application/x-www-form-urlencoded" };
+    for (const p of [payuForm(), payuForm(), payuForm({ status: "failure" })]) {
+      await app.inject({ method: "POST", url: "/v1/billing/webhooks/payu", headers: h, payload: p });
+    }
+    expect(published).toHaveLength(3);
+    expect(published[0]!.msg["messageId"]).toBe(published[1]!.msg["messageId"]);
+    expect(published[2]!.msg["messageId"]).not.toBe(published[0]!.msg["messageId"]);
+  });
+  it("ccavenue: same decrypted order+status dedupes even though each ciphertext (random IV) differs", async () => {
+    const h = { "content-type": "application/x-www-form-urlencoded" };
+    for (const status of ["Success", "Success", "Failure"]) {
+      const body = new URLSearchParams({ encResp: encResp(`order_id=o1&tracking_id=t1&order_status=${status}`, CCA_KEY) }).toString();
+      await app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", headers: h, payload: body });
+    }
+    expect(published).toHaveLength(3);
+    expect(published[0]!.msg["messageId"]).toBe(published[1]!.msg["messageId"]);
+    expect(published[2]!.msg["messageId"]).not.toBe(published[0]!.msg["messageId"]);
   });
 });

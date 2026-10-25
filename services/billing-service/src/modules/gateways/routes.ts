@@ -23,6 +23,7 @@ import * as upiAutopay from "./upi-autopay.js";
 import { verifyPayuWebhookHash } from "./payu-adapter.js";
 import { decryptCcavenueCallback } from "./ccavenue-adapter.js";
 import { GatewayError } from "./types.js";
+import { providerEventMessageId } from "./webhook-verify.js";
 
 const BILLING_ROLES = ["billing_admin", "finance_officer", "tenant_admin", "super_admin", "platform_admin"];
 
@@ -43,7 +44,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       }
       throw err;
     }
-    if (!ok) throw new HttpError(400, "INVALID_WEBHOOK_SIGNATURE", "webhook signature verification failed");
+    if (!ok) throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
   };
 
   /**
@@ -271,7 +272,8 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
     const txnId = body?.["txnid"] ?? "";
     const mihpayid = body?.["mihpayid"] ?? "";
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id: txnid + status are both covered by the verified reverse hash.
+    const messageId = providerEventMessageId("payu", txnId, status);
     await queue.publish(COMMANDS.webhookPayu, {
       messageId,
       type: COMMANDS.webhookPayu,
@@ -292,9 +294,12 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/billing/webhooks/ccavenue", { config: { public: true } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const encResp = body?.["encResp"] ?? "";
-    authenticate(() => decryptCcavenueCallback(encResp) !== null);
+    let fields: Record<string, string> | null = null;
+    authenticate(() => (fields = decryptCcavenueCallback(encResp)) !== null);
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id taken from the DECRYPTED (authenticated) fields.
+    const f = (fields ?? {}) as Record<string, string>;
+    const messageId = providerEventMessageId("ccavenue", f["order_id"], f["tracking_id"], f["order_status"]);
     await queue.publish(COMMANDS.webhookCcavenue, {
       messageId,
       type: COMMANDS.webhookCcavenue,

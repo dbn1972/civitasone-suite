@@ -7,7 +7,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { checkoutBody, verifyPaymentBody } from "./checkout-validators.js";
 import * as razorpay from "./razorpay.js";
-import { captureRawBody, razorpayEventTenant, type RawBodyRequest } from "../gateways/webhook-verify.js";
+import { captureRawBody, providerEventMessageId, razorpayEventParts, razorpayEventTenant, type RawBodyRequest } from "../gateways/webhook-verify.js";
 
 export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -138,17 +138,18 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
 
     const rawBody = (req as RawBodyRequest).rawBody;
     if (typeof rawBody !== "string" || rawBody === "") {
-      throw new HttpError(400, "INVALID_WEBHOOK_SIGNATURE", "webhook signature verification failed");
+      throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
     }
     const valid = razorpay.verifyWebhookSignature(rawBody, signature);
 
     if (!valid) {
-      throw new HttpError(400, "INVALID_WEBHOOK_SIGNATURE", "webhook signature verification failed");
+      throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
     }
 
     const webhookPayload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id (signed body fields), so a retried delivery is a consumer no-op.
+    const messageId = providerEventMessageId("razorpay", ...razorpayEventParts(webhookPayload));
     await queue.publish(COMMANDS.webhookRazorpay, {
       messageId,
       type: COMMANDS.webhookRazorpay,

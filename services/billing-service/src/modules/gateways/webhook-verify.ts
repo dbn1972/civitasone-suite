@@ -5,6 +5,7 @@
  * These routes are `config.public` (no bearer token exists on a gateway callback), so the
  * provider-specific signature / hash check in each handler is the ONLY authentication.
  */
+import { createHash } from "node:crypto";
 import { Readable } from "node:stream";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { HttpError } from "../../shared/context.js";
@@ -61,4 +62,27 @@ export function razorpayEventTenant(payload: unknown): string {
     ?.["payment"] as Record<string, unknown> | undefined)?.["entity"] as Record<string, unknown> | undefined;
   const t = (entity?.["notes"] as Record<string, unknown> | undefined)?.["tenantId"];
   return typeof t === "string" && UUID_RE.test(t) ? t : "system";
+}
+
+/**
+ * Deterministic queue messageId for a (provider, signed event identity) pair, formatted as a UUID.
+ * Provider retries / replays of the same event therefore carry the SAME messageId, so the
+ * consumer's `markProcessed(tx, messageId)` makes redelivery a no-op. Callers must derive
+ * `parts` ONLY from fields covered by the provider signature/hash (an unsigned header could be
+ * rewritten by a replaying attacker to dodge the dedupe).
+ */
+export function providerEventMessageId(provider: string, ...parts: Array<string | undefined>): string {
+  const h = createHash("sha256").update([provider, ...parts.map((x) => x ?? "")].join("\u0000")).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+/** Signed identity of a Razorpay event: event name + the payment / refund / order entity ids. */
+export function razorpayEventParts(payload: unknown): string[] {
+  const root = (payload ?? {}) as Record<string, unknown>;
+  const inner = (root["payload"] ?? {}) as Record<string, unknown>;
+  const id = (k: string): string => {
+    const e = (inner[k] as Record<string, unknown> | undefined)?.["entity"] as Record<string, unknown> | undefined;
+    return typeof e?.["id"] === "string" ? (e["id"] as string) : "";
+  };
+  return [String(root["event"] ?? ""), id("payment"), id("refund"), id("order")];
 }
