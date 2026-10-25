@@ -124,9 +124,9 @@ export async function persistNotificationTemplates(
   let templates: ApiTemplate[] = [];
   try {
     const listRes = await fetch("/api/proxy/v1/notification/templates", { cache: "no-store" });
-    if (listRes.ok) {
-      templates = (await listRes.json()) as ApiTemplate[];
-    }
+    // CLOS3-S1-09: an unreadable list is not "no templates"; creating now would duplicate names.
+    if (!listRes.ok) return design;
+    templates = (await listRes.json()) as ApiTemplate[];
   } catch {
     return design;
   }
