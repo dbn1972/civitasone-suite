@@ -1,4 +1,4 @@
--- 0043_certificate_public_verify_policy.sql
+-- 0044_certificate_public_verify_policy.sql
 --
 -- V4-G-01: the public QR verification route GET /v1/citizen/certificates/verify/:token is
 -- anonymous, so the request carries no tenant and app.tenant_id is unset. issuance.certificates is

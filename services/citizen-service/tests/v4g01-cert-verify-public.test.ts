@@ -118,7 +118,7 @@ describe("V4-G-01 tenant isolation is not weakened", () => {
   });
 
   it("migration adds only a SELECT policy and leaves FORCE RLS alone", () => {
-    const sql = readFileSync(new URL("../migrations/0043_certificate_public_verify_policy.sql", import.meta.url), "utf8")
+    const sql = readFileSync(new URL("../migrations/0044_certificate_public_verify_policy.sql", import.meta.url), "utf8")
       .split("\n").filter((l) => !l.trim().startsWith("--")).join("\n");
     expect(sql).toMatch(/CREATE POLICY public_verify_read[\s\S]*FOR SELECT/);
     expect(sql).not.toMatch(/FOR (ALL|INSERT|UPDATE|DELETE)|NO FORCE|DISABLE ROW|BYPASSRLS/i);

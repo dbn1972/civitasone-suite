@@ -1,4 +1,4 @@
--- 0004_permit_public_directory.sql
+-- 0005_permit_public_directory.sql
 -- V4-B-06: GET /v1/building/permits/verify (public QR verification) was unreachable:
 --  1. the route was not `config.public`, so authPlugin 401'd every anonymous caller; and
 --  2. repo.findByVerificationCode selected straight from building.building_permits, which is

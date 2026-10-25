@@ -36,7 +36,7 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // PUBLIC (V4-B-06): anonymous QR verification, keyed on the opaque verification code. Reads the
-  // non-RLS public directory (migrations/0004_permit_public_directory.sql); without config.public
+  // non-RLS public directory (migrations/0005_permit_public_directory.sql); without config.public
   // authPlugin 401'd every caller.
   app.get("/v1/building/permits/verify", { config: { public: true } }, async (req, reply) => {
     const q = verifyQuery.parse(req.query);

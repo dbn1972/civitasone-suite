@@ -49,7 +49,7 @@
  * the gateway 401d it before it could reach citizen-service. Narrowed to the `verify` sub-tree
  * (`pathname === p || startsWith(p + "/")`), NOT /api/v1/citizen/certificates, so issuance,
  * approval, list and lifecycle routes still require a bearer token. The upstream route is marked
- * config:{public:true}, is keyed on an unguessable token (migration 0043 token-scoped SELECT
+ * config:{public:true}, is keyed on an unguessable token (migration 0044 token-scoped SELECT
  * policy), returns non-PII attestation fields only and rate-limits per client IP.
  */
 /** Payment-gateway callbacks: passed through with the RAW body (provider signatures cover the exact bytes). */

@@ -52,7 +52,7 @@ const VERIFY_TOKEN_RE = /^[A-Za-z0-9_-]{8,128}$/;
  *
  * issuance.certificates is FORCE RLS and an anonymous caller has no tenant, so the read sets the
  * transaction-local GUC app.cert_verify_token to the PRESENTED token; the SELECT-only policy
- * public_verify_read (migration 0043) then exposes exactly the row with that token. Nothing else
+ * public_verify_read (migration 0044) then exposes exactly the row with that token. Nothing else
  * becomes visible and FORCE RLS is untouched for every other access.
  */
 export async function findCertByToken(token: string): Promise<CertVerificationRow | null> {
