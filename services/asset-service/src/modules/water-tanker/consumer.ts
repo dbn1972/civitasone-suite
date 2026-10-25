@@ -25,9 +25,10 @@ import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateBookingNumber, calculateTankerFee } from "./domain.js";
+import { calculateTankerFee } from "./domain.js";
 
 const log = pino({ name: "water-tanker-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -46,8 +47,10 @@ export function registerWaterTankerConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const bookingNumber = await nextNumber(tx, "waterTankerBooking");
         await repo.insertBooking(tx, {
-          id: p.id, tenantId: p.tenantId, bookingNumber: generateBookingNumber(),
+          id: p.id, tenantId: p.tenantId, bookingNumber,
           requestedBy: msg.actorId, deliveryAddress: p.deliveryAddress ?? null,
           ward: p.ward ?? null, tankerCapacityLitres: p.tankerCapacityLitres,
           requestedDate: p.requestedDate, requestedSlot: p.requestedSlot ?? null,
@@ -61,8 +64,8 @@ export function registerWaterTankerConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "create", "water_tanker_booking", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterTankerBookingCreate failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterTankerBookingCreate failed"); throw err; }
+  }, auditFailedCreate("create", "water_tanker_booking"));
 
   queue.subscribe(COMMANDS.waterTankerBookingSchedule, async (msg) => {
     try {
