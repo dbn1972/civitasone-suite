@@ -10,6 +10,7 @@ import { computeFileDueBy } from "../files/domain.js";
 import * as repo from "../files/repo.js";
 import { invalidateFileLists } from "../files/queries.js";
 import { resolveApproval } from "../approval-rules/resolver.js";
+import { auditFailedCreate } from "../../shared/numbers.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
@@ -129,7 +130,7 @@ export function registerLinkageConsumers(queue: Queue): void {
 
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.id));
     await invalidateFileLists(msg.tenantId);
-  });
+  }, auditFailedCreate("raise_from_module", "file"));
 }
 
 /**
