@@ -105,14 +105,14 @@ describe("Assessment Domain — M2 SVC-131", () => {
       it("an adjustment's two equal legs net to zero (debit reduces, credit raises)", () => {
         const r = computeDcbSummary([
           ...base,
-          { entryType: "adjustment" as const, amountMinor: 200000n, narration: "Adjustment debit: move" },
-          { entryType: "adjustment" as const, amountMinor: 200000n, narration: "Adjustment credit: move" },
+          { entryType: "adjustment" as const, amountMinor: 200000n, adjustmentDirection: "debit" },
+          { entryType: "adjustment" as const, amountMinor: 200000n, adjustmentDirection: "credit" },
         ]);
         expect(r.totalCollection).toBe(0n);
         expect(r.balance).toBe(1000000n);
       });
 
-      it("a lone adjustment with no narration is treated as the debit leg", () => {
+      it("a lone adjustment with no direction is treated as the debit leg", () => {
         const r = computeDcbSummary([...base, { entryType: "adjustment" as const, amountMinor: 200000n }]);
         expect(r.balance).toBe(800000n);
       });
@@ -126,9 +126,11 @@ describe("Assessment Domain — M2 SVC-131", () => {
         expect(dcbBalanceEffect({ entryType: "collection", amountMinor: 5n })).toBe(-5n);
         expect(dcbBalanceEffect({ entryType: "write_off", amountMinor: 5n })).toBe(-5n);
         expect(dcbBalanceEffect({ entryType: "waiver", amountMinor: 5n })).toBe(-5n);
-        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: "Adjustment credit: x" })).toBe(5n);
-        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: "Adjustment debit: x" })).toBe(-5n);
-        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: null })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, adjustmentDirection: "credit" })).toBe(5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, adjustmentDirection: "debit" })).toBe(-5n);
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, adjustmentDirection: null })).toBe(-5n);
+        // Q19: the narration is NOT consulted; only the explicit direction decides the leg.
+        expect(dcbBalanceEffect({ entryType: "adjustment", amountMinor: 5n, narration: "Adjustment credit: x" } as never)).toBe(-5n);
         expect(dcbBalanceEffect({ entryType: "mystery", amountMinor: 5n })).toBe(-5n);
       });
     });
@@ -168,7 +170,7 @@ describe("Assessment Domain — M2 SVC-131", () => {
 
     it("refund and an adjustment credit leg increase the balance", () => {
       expect(computeNewBalance(100000n, "refund", 20000n)).toBe(120000n);
-      expect(computeNewBalance(100000n, "adjustment", 20000n, "Adjustment credit: x")).toBe(120000n);
+      expect(computeNewBalance(100000n, "adjustment", 20000n, "credit")).toBe(120000n);
     });
 
     it("waiver decreases balance", () => {

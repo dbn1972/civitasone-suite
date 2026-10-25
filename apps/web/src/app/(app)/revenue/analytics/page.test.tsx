@@ -20,7 +20,17 @@ describe("RevenueAnalyticsPage", () => {
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/trends")) {
         return Promise.resolve({
-          data: [{ period: "2026-06", demandMinor: "1000000", collectionMinor: "800000", efficiencyBps: 8000 }],
+          data: [
+            {
+              period: "2026-06",
+              demandMinor: "1000000",
+              collectionMinor: "800000",
+              cashCollectionMinor: "600000",
+              waivedMinor: "150000",
+              writtenOffMinor: "50000",
+              efficiencyBps: 6000,
+            },
+          ],
           source: "api",
         });
       }
@@ -62,6 +72,10 @@ describe("RevenueAnalyticsPage", () => {
     // GAP-REVENUE-ANALYTICS-05: monthly period renders as "Jun 2026", not "2026-06".
     expect(screen.getByText("Jun 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-06")).not.toBeInTheDocument();
+    // Q18: waivers and write-offs are shown apart from cash collected.
+    expect(screen.getByText("Cash collected")).toBeInTheDocument();
+    expect(screen.getByText("Waived")).toBeInTheDocument();
+    expect(screen.getByText("Written off")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("Arrears Aging"));
     expect(screen.getByText("0–30 days")).toBeInTheDocument();

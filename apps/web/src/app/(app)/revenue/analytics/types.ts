@@ -2,12 +2,20 @@ export type TrendRow = {
   period: string;
   demandMinor: string;
   collectionMinor: string;
+  // Q18: cash collected (net of refunds), waivers and write-offs are reported
+  // separately; efficiencyBps is cash collected / demand.
+  cashCollectionMinor: string;
+  waivedMinor: string;
+  writtenOffMinor: string;
   efficiencyBps: number;
 } & Record<string, unknown>;
 
 export type EfficiencyKpi = {
   totalDemandMinor: string;
   totalCollectionMinor: string;
+  totalCashCollectionMinor: string;
+  totalWaivedMinor: string;
+  totalWrittenOffMinor: string;
   efficiencyBps: number;
   perPeriod: TrendRow[];
 };

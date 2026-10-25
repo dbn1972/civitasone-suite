@@ -420,6 +420,7 @@ export function registerCollectionConsumers(queue: Queue): void {
           referenceId: adjustmentId,
           referenceType: "adjustment",
           narration: `Adjustment debit: ${adjustment.reason}`,
+          adjustmentDirection: "debit",
           createdBy: msg.actorId,
         });
 
@@ -436,6 +437,7 @@ export function registerCollectionConsumers(queue: Queue): void {
           referenceId: adjustmentId,
           referenceType: "adjustment",
           narration: `Adjustment credit: ${adjustment.reason}`,
+          adjustmentDirection: "credit",
           createdBy: msg.actorId,
         });
 

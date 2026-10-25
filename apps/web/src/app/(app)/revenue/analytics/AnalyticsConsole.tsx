@@ -63,7 +63,9 @@ export function AnalyticsConsole({
               columns={[
                 { key: "period", label: "Period", render: (r) => formatRevenuePeriod(r.period, granularity) },
                 { key: "demandMinor", label: "Demand", align: "right", cellType: "amount" },
-                { key: "collectionMinor", label: "Collection", align: "right", cellType: "amount" },
+                { key: "cashCollectionMinor", label: "Cash collected", align: "right", cellType: "amount" },
+                { key: "waivedMinor", label: "Waived", align: "right", cellType: "amount" },
+                { key: "writtenOffMinor", label: "Written off", align: "right", cellType: "amount" },
                 { key: "efficiencyDisplay", label: "Efficiency", align: "right" },
               ]}
               rows={trendRows}

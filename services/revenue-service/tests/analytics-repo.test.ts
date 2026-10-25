@@ -78,24 +78,24 @@ describe("pure helpers", () => {
     expect(bal.get("d1")).toBe(40000n);
     expect(bal.get("d2")).toBe(200000n);
   });
-  it("computeDemandBalances classifies refund (+), waiver (-) and adjustment legs by narration", () => {
+  it("computeDemandBalances classifies refund (+), waiver (-) and adjustment legs by adjustment direction", () => {
     const bal = repo.computeDemandBalances([
       { demandId: "d1", entryType: "demand", amountMinor: 100000n },
       { demandId: "d1", entryType: "collection", amountMinor: 60000n },
       { demandId: "d1", entryType: "refund", amountMinor: 10000n },
       { demandId: "d1", entryType: "waiver", amountMinor: 5000n },
-      { demandId: "d1", entryType: "adjustment", amountMinor: 20000n, narration: "Adjustment debit: move" },
-      { demandId: "d2", entryType: "adjustment", amountMinor: 20000n, narration: "Adjustment credit: move" },
+      { demandId: "d1", entryType: "adjustment", amountMinor: 20000n, adjustmentDirection: "debit" },
+      { demandId: "d2", entryType: "adjustment", amountMinor: 20000n, adjustmentDirection: "credit" },
     ]);
     expect(bal.get("d1")).toBe(25000n); // 100000-60000+10000-5000-20000
     expect(bal.get("d2")).toBe(20000n);
   });
-  it("toPeriodEntries carries the narration only when present (adjustment leg identification)", () => {
+  it("toPeriodEntries carries the adjustment direction only when present (adjustment leg identification)", () => {
     const e = repo.toPeriodEntries(
-      [{ createdAt: "2024-05-05T00:00:00Z", entryType: "adjustment", amountMinor: 1n, narration: "Adjustment credit: x" }],
+      [{ createdAt: "2024-05-05T00:00:00Z", entryType: "adjustment", amountMinor: 1n, adjustmentDirection: "credit" }],
       "month",
     );
-    expect(e[0]).toEqual({ period: "2024-05", entryType: "adjustment", amountMinor: 1n, narration: "Adjustment credit: x" });
+    expect(e[0]).toEqual({ period: "2024-05", entryType: "adjustment", amountMinor: 1n, adjustmentDirection: "credit" });
   });
   it("outstandingByAssessee rolls demand balances up to assessees", () => {
     const bal = new Map<string, bigint>([["d1", 40000n], ["d2", 150000n]]);
@@ -122,8 +122,8 @@ describe("DB read models", () => {
     seed();
     const t = await repo.getTrends(TENANT, "month");
     expect(t).toEqual([
-      { period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, efficiencyBps: 6000 },
-      { period: "2024-05", demandMinor: 200000n, collectionMinor: 50000n, efficiencyBps: 2500 },
+      { period: "2024-04", demandMinor: 100000n, collectionMinor: 60000n, cashCollectionMinor: 60000n, waivedMinor: 0n, writtenOffMinor: 0n, efficiencyBps: 6000 },
+      { period: "2024-05", demandMinor: 200000n, collectionMinor: 50000n, cashCollectionMinor: 50000n, waivedMinor: 0n, writtenOffMinor: 0n, efficiencyBps: 2500 },
     ]);
   });
 

@@ -210,6 +210,27 @@ describe("adjustment maker-checker (GAP-REVENUE-ADJUSTMENTS-01, real DB)", () =>
     );
     expect(events).toHaveLength(1);
 
+    // Q19: each leg carries an explicit adjustment_direction (never inferred from narration).
+    const legs = await runWithTenant(TENANT, () =>
+      db.transaction((tx) =>
+        tx.select().from(dcbEntries).where(
+          and(eq(dcbEntries.tenantId, TENANT), eq(dcbEntries.entryType, "adjustment")),
+        ),
+      ),
+    );
+    expect(legs).toHaveLength(2);
+    expect(legs.find((l) => l.demandId === FROM_DEMAND)!.adjustmentDirection).toBe("debit");
+    expect(legs.find((l) => l.demandId === TO_DEMAND)!.adjustmentDirection).toBe("credit");
+    // Non-adjustment rows leave it NULL.
+    const demands = await runWithTenant(TENANT, () =>
+      db.transaction((tx) =>
+        tx.select().from(dcbEntries).where(
+          and(eq(dcbEntries.tenantId, TENANT), eq(dcbEntries.entryType, "demand")),
+        ),
+      ),
+    );
+    expect(demands.every((d) => d.adjustmentDirection === null)).toBe(true);
+
     await q.stop();
   });
 
