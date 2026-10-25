@@ -120,6 +120,14 @@ export interface PresignedUrlOptions {
    */
   contentLength?: number | undefined;
   /**
+   * PUT only: sign the Content-Type header into the URL (V4-E-05). By default
+   * the SDK leaves it unsigned, so the uploader may send ANY Content-Type
+   * regardless of `contentType` above. When true the object store rejects a
+   * PUT whose Content-Type differs. Opt-in because callers' clients must then
+   * send exactly `contentType`.
+   */
+  signContentType?: boolean | undefined;
+  /**
    * PUT only: server-side encryption at rest (SSE-S3 "AES256" or SSE-KMS).
    * The header is SIGNED into the URL, so the uploader must send
    * `x-amz-server-side-encryption` with the PUT -- an upload that omits it
@@ -142,7 +150,10 @@ export async function presignedPutUrl(opts: PresignedUrlOptions): Promise<string
     ...(opts.serverSideEncryption ? { ServerSideEncryption: opts.serverSideEncryption } : {}),
   };
   const command = new PutObjectCommand(input);
-  return getSignedUrl(client, command, { expiresIn: opts.expiresIn ?? 300 });
+  return getSignedUrl(client, command, {
+    expiresIn: opts.expiresIn ?? 300,
+    ...(opts.signContentType ? { signableHeaders: new Set(["content-type"]) } : {}),
+  });
 }
 
 /**
