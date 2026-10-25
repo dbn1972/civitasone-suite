@@ -118,6 +118,19 @@ export async function findActiveDisbursementForInstallmentTx(tx: Writer, install
   return rows[0] ?? null;
 }
 
+/**
+ * V4-D-04: move an in-flight (`initiated`) disbursement to `failed` with a guarded UPDATE. Returns true only for the
+ * caller that actually performed the transition, so the compensation (budget release, installment revert) runs exactly
+ * once even when the failure event is delivered again.
+ */
+export async function failInitiatedDisbursementTx(tx: Writer, id: string, tenantId: string, patch: { failureReason: string; updatedBy: string }): Promise<boolean> {
+  const rows = await (tx as typeof db).update(grantDisbursements)
+    .set({ status: "failed", disbursedAt: null, failureReason: patch.failureReason, updatedBy: patch.updatedBy, updatedAt: new Date() })
+    .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId), eq(grantDisbursements.status, "initiated")))
+    .returning({ id: grantDisbursements.id });
+  return rows.length > 0;
+}
+
 export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: string): Promise<DisbursementRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx.select().from(grantDisbursements)
