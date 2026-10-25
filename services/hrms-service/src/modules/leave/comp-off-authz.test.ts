@@ -3,8 +3,9 @@
  * Previously any employee could mint comp-off for anyone, list every
  * comp-off in the tenant, and redeem another employee's entry.
  */
-import { describe, it, expect, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { withRawTenantGuc } from "@civitasone/db";
 
 const EMP_A = "bbbbbbbb-0000-4000-8000-00000000000a";
 const EMP_B = "bbbbbbbb-0000-4000-8000-00000000000b";
@@ -33,7 +34,10 @@ const tok = (sub: string, roles: string[]) => signToken({ sub, tid: TENANT, role
 const auth = (sub: string, roles: string[]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
 const grant = { employeeId: EMP_A, workedDate: "2026-01-26", holidayName: "Republic Day", hours: 8 };
 
-afterAll(async () => { await sqlClient.end(); });
+const wipe = (): Promise<void> =>
+  withRawTenantGuc(sqlClient, TENANT, async (tx) => { await tx`DELETE FROM leave.hrms_comp_off WHERE tenant_id = ${TENANT}`; });
+beforeAll(async () => { await wipe(); });
+afterAll(async () => { await wipe(); await sqlClient.end(); });
 
 describe("V4-B-01 -- comp-off authorization", () => {
   it("rejects an employee minting comp-off (403)", async () => {
