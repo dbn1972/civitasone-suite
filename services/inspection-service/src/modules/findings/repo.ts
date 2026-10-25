@@ -184,6 +184,39 @@ export async function updateFindingState(
 }
 
 /**
+ * Conditional state transition: only moves the finding if it is STILL in `expectedState`.
+ *
+ * Returns null (no throw) when the finding is no longer in that state, was deleted, or does not exist, so a
+ * background sweeper that read the row earlier cannot overwrite a state a user changed in between
+ * (CLOS3-S5-13). Under READ COMMITTED the UPDATE re-checks the predicate after any row-lock wait, so this is
+ * race-safe. `updateFindingState` keeps its unguarded behaviour for the consumers that rely on it.
+ */
+export async function transitionFindingStateIf(
+  tx: Tx,
+  id: string,
+  tenantId: string,
+  expectedState: string,
+  newState: string,
+  actorId: string,
+): Promise<FindingRow | null> {
+  const rows = await tx.update(findings)
+    .set({
+      state: newState,
+      updatedAt: new Date(),
+      updatedBy: actorId,
+      version: sql`${findings.version} + 1`,
+    })
+    .where(and(
+      eq(findings.id, id),
+      eq(findings.tenantId, tenantId),
+      eq(findings.state, expectedState),
+      isNull(findings.deletedAt),
+    ))
+    .returning();
+  return rows[0] ?? null;
+}
+
+/**
  * Soft-delete a finding by setting deletedAt timestamp.
  */
 export async function softDeleteFinding(
