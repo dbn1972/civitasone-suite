@@ -57,18 +57,13 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId,
         citizenId: p.citizenId, serviceId: p.serviceId, docType: p.docType,
         source: "digilocker", digilockerRef: p.digilockerRef,
-        providerStatus: p.providerStatus, status: p.status, verificationStatus: p.verificationStatus,
-        authenticity: p.authenticity,
-        ...(p.configured ? { verifiedBy: msg.actorId, verifiedAt: new Date() } : {}),
+        providerStatus: p.providerStatus,
+        // V4-G-03: defence in depth — whatever the (possibly older, in-flight)
+        // payload claims, a legacy fetch is never recorded verified, has no
+        // verifier, and emits no document.verified event.
+        status: "received", verificationStatus: "pending", authenticity: "unverified",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      if (p.configured) {
-        await enqueue(tx, {
-          topic: EVENTS.documentVerified, eventType: EVENTS.documentVerified,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { id: p.id, docType: p.docType, source: "digilocker", authenticity: p.authenticity },
-        });
-      }
       await audit(tx, msg, "digilocker_fetch", p.id, {
         digilockerConsent: { given: p.consent === true, recordedAt: new Date().toISOString() },
       });
@@ -178,7 +173,10 @@ export function registerDocumentsConsumers(rawQueue: Queue): void {
         citizenId: prior.citizenId, serviceId: prior.serviceId, docType: prior.docType,
         source: p.source, supersedesId: p.supersedesId,
         storageRef: p.storageRef, digilockerRef: p.digilockerRef, providerStatus: p.providerStatus,
-        status: p.status, verificationStatus: p.verificationStatus, authenticity: p.authenticity,
+        // V4-G-03: a digilocker-source resubmission is never self-verifying.
+        ...(p.source === "digilocker"
+          ? { status: "received", verificationStatus: "pending", authenticity: "unverified" }
+          : { status: p.status, verificationStatus: p.verificationStatus, authenticity: p.authenticity }),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateSubmission(tx, p.supersedesId, msg.tenantId, { status: "superseded", updatedBy: msg.actorId });
