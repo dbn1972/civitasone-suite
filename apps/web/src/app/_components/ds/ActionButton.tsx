@@ -43,10 +43,11 @@ export function useConfirmAction({ onConfirm, onSuccess }: UseConfirmActionOptio
     async (reason?: string) => {
       setBusy(true);
       setError(undefined);
+      let ok = false;
       try {
         await onConfirm(reason);
+        ok = true;
         setOpen(false);
-        onSuccess?.();
       } catch (e) {
         if (isNetworkFailure(e)) {
           // A bare-fetch onConfirm rejects with TypeError("Failed to fetch"): never show that raw string.
@@ -57,6 +58,16 @@ export function useConfirmAction({ onConfirm, onSuccess }: UseConfirmActionOptio
         }
       } finally {
         setBusy(false);
+      }
+      // CLOS3-S3-23: the action already completed -- a throwing onSuccess must not be shown as an action failure
+      // (that invites retrying a non-idempotent action).
+      if (ok) {
+        try {
+          onSuccess?.();
+        } catch (e) {
+          // eslint-disable-next-line no-console -- the action already succeeded; log, never surface, a throwing onSuccess
+          console.error("useConfirmAction: onSuccess threw after a successful confirm", e);
+        }
       }
     },
     [onConfirm, onSuccess],
