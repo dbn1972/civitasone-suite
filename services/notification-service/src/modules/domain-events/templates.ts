@@ -18,6 +18,28 @@ export type NotificationTemplate = {
 
 const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
   {
+    eventType: "workflow.delegation.created",
+    push: {
+      title: "Delegation created",
+      body: "{{headline}} the role(s) {{roles}} to {{delegateName}}, effective {{period}} (IST).",
+    },
+    email: {
+      title: "Delegation created: {{roles}} to {{delegateName}}",
+      body: "Dear colleague,\n\n{{headline}} the role(s) {{roles}} to {{delegateName}}, effective {{period}} (IST).\n\nRegards,\nWorkflow",
+    },
+  },
+  {
+    eventType: "workflow.delegation.revoked",
+    push: {
+      title: "Delegation revoked",
+      body: "{{headline}} the delegation of role(s) {{roles}} to {{delegateName}} (was {{period}}, IST). Revoked on {{occurredAt}} IST.",
+    },
+    email: {
+      title: "Delegation revoked: {{roles}} from {{delegateName}}",
+      body: "Dear colleague,\n\n{{headline}} the delegation of role(s) {{roles}} to {{delegateName}} (was {{period}}, IST). Revoked on {{occurredAt}} IST.\n\nRegards,\nWorkflow",
+    },
+  },
+  {
     eventType: "hrms.leave.approved",
     push: {
       title: "Leave Approved",
