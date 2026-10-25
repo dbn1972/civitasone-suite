@@ -272,9 +272,13 @@ export class Cache {
     const existing = _inflight.get(key);
     if (existing) return existing.shared as Promise<T | null>;
 
+    // CLOS3-S6-11: snapshot the invalidation epoch BEFORE the loader reads the source;
+    // if invalidate()/invalidateResource() ran meanwhile, the loaded value may predate
+    // the write that triggered it, so it is returned to this caller but never cached.
+    const epoch = currentEpoch(key);
     const shared: Promise<T | null> = (async () => {
       const fresh = await loader();
-      if (fresh !== null && fresh !== undefined) {
+      if (fresh !== null && fresh !== undefined && epoch === currentEpoch(key)) {
         await this.writeToStore(key, fresh, this.resolveTtl(ttlSeconds));
       }
       return fresh;
@@ -287,9 +291,11 @@ export class Cache {
     // hand to every caller — their `await` attaches a handler on `shared`
     // itself, which IS handled.
     const suppress = shared.catch(() => { /* suppressed — callers handle via shared */ });
-    suppress.finally(() => _inflight.delete(key));
+    const entry = { shared, suppress };
+    // Delete only our own entry: invalidate() may have replaced it with a newer load.
+    suppress.finally(() => { if (_inflight.get(key) === entry) _inflight.delete(key); });
 
-    _inflight.set(key, { shared, suppress });
+    _inflight.set(key, entry);
     return shared;
   }
 
@@ -334,8 +340,10 @@ export class Cache {
     const existing = _inflight.get(key);
     if (existing) return existing.shared as Promise<T | null>;
 
+    const epoch = currentEpoch(key); // CLOS3-S6-11 (see getOrLoad)
     const shared: Promise<T | null> = (async () => {
       const fresh = await loader();
+      if (epoch !== currentEpoch(key)) return fresh; // invalidated mid-load: do not cache
       if (fresh !== null && fresh !== undefined) {
         await this.writeToStore(key, fresh, this.resolveTtl(opts?.ttlSeconds));
       } else {
@@ -346,13 +354,17 @@ export class Cache {
     })();
 
     const suppress = shared.catch(() => { /* suppressed — callers handle via shared */ });
-    suppress.finally(() => _inflight.delete(key));
-    _inflight.set(key, { shared, suppress });
+    const entry = { shared, suppress };
+    suppress.finally(() => { if (_inflight.get(key) === entry) _inflight.delete(key); });
+    _inflight.set(key, entry);
     return shared;
   }
 
   /** Invalidate one key or a whole resource prefix (called by the consumer after a write). */
-  async invalidate(key: string): Promise<void> { await this.store.del(key); }
+  async invalidate(key: string): Promise<void> {
+    markInvalidated(key);
+    await this.store.del(key);
+  }
   /**
    * Delete every key under this resource. The scanned prefix MUST end with the
    * same ":" delimiter makeKey()/listKey() place immediately after the resource
@@ -366,7 +378,9 @@ export class Cache {
    * The trailing ":" anchors the match to a full key-segment boundary instead.
    */
   async invalidateResource(tenantId: string, resource: string): Promise<void> {
-    await this.store.delByPrefix(`${this.opts.service}:${tenantId}:${resource}:`);
+    const prefix = `${this.opts.service}:${tenantId}:${resource}:`;
+    markResourceInvalidated(prefix);
+    await this.store.delByPrefix(prefix);
   }
 
   /**
@@ -516,4 +530,52 @@ const _inflight = new Map<string, { shared: Promise<unknown>; suppress: Promise<
  */
 export function resetInflightMap(): void {
   _inflight.clear();
+  _keyEpochs.clear();
+  _resourceEpoch = 0;
+}
+
+/**
+ * CLOS3-S6-11 — invalidation epochs.
+ *
+ * A loader that started before an invalidate() read the source before the write
+ * that triggered the invalidate, so caching its result would pin the pre-update
+ * value for the whole TTL. Each load snapshots currentEpoch(key) up front and
+ * only writes the store if it is unchanged afterwards.
+ *
+ *  - `_keyEpochs[key]` gets a fresh, never-reused value (from `_epochSeq`) on every
+ *    invalidate(key) that finds a load in flight for the key. With no load in flight
+ *    no stale writer can exist, so nothing is recorded and the map only grows under
+ *    genuine races. Entries are never reused so a value captured earlier can never
+ *    collide; the map is bounded by clearing it and bumping `_resourceEpoch`, which
+ *    makes every outstanding load skip its write (conservative: never serves stale).
+ *  - `_resourceEpoch` is bumped by invalidateResource() whenever any load is in flight.
+ */
+let _epochSeq = 0;
+let _resourceEpoch = 0;
+const _keyEpochs = new Map<string, number>();
+const MAX_TRACKED_EPOCHS = 10_000;
+
+function currentEpoch(key: string): string {
+  return `${_resourceEpoch}:${_keyEpochs.get(key) ?? 0}`;
+}
+
+function bumpKey(key: string): void {
+  if (_keyEpochs.size >= MAX_TRACKED_EPOCHS) {
+    _keyEpochs.clear();
+    _resourceEpoch++;
+  }
+  _keyEpochs.set(key, ++_epochSeq);
+}
+
+function markInvalidated(key: string): void {
+  if (!_inflight.has(key)) return;
+  bumpKey(key);
+  // Later readers must start a fresh load rather than join the stale one.
+  _inflight.delete(key);
+}
+
+function markResourceInvalidated(prefix: string): void {
+  if (_inflight.size === 0) return;
+  _resourceEpoch++;
+  for (const k of [..._inflight.keys()]) if (k.startsWith(prefix)) _inflight.delete(k);
 }
