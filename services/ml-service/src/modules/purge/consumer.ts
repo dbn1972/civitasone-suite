@@ -37,25 +37,42 @@ const log = pino({ name: "ml-purge-consumer" });
 // ─── S3 Prefix Deletion ──────────────────────────────────────────
 
 /**
- * List all S3 object keys under a given prefix.
- * Handles pagination via ContinuationToken.
+ * V4-F-03: one S3Client reused for the process lifetime (a client per call
+ * leaked a keep-alive socket pool each time). Rebuilt only if the connection
+ * config changes.
  */
-async function listObjectKeysByPrefix(prefix: string): Promise<string[]> {
+let purgeClient: { sig: string; client: S3Client } | undefined;
+
+function getPurgeS3Client(): S3Client {
   const endpoint = process.env.AWS_ENDPOINT_URL || undefined;
   const region = process.env.AWS_DEFAULT_REGION || "ap-south-1";
-  const bucket = process.env.AWS_S3_BUCKET || "civitasone";
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID || "";
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || "";
 
   const isLocalStack = endpoint?.includes("localhost") || endpoint?.includes("127.0.0.1");
   const forcePathStyle = process.env.S3_FORCE_PATH_STYLE === "true" || isLocalStack === true;
 
+  const sig = JSON.stringify([endpoint, region, accessKeyId, secretAccessKey, forcePathStyle]);
+  if (purgeClient?.sig === sig) return purgeClient.client;
+  purgeClient?.client.destroy?.();
   const client = new S3Client({
     region,
     ...(endpoint ? { endpoint } : {}),
     forcePathStyle,
     credentials: { accessKeyId, secretAccessKey },
   });
+  purgeClient = { sig, client };
+  return client;
+}
+
+/**
+ * List all S3 object keys under a given prefix.
+ * Handles pagination via ContinuationToken.
+ */
+async function listObjectKeysByPrefix(prefix: string): Promise<string[]> {
+  const bucket = process.env.AWS_S3_BUCKET || "civitasone";
+
+  const client = getPurgeS3Client();
 
   const keys: string[] = [];
   let continuationToken: string | undefined;
