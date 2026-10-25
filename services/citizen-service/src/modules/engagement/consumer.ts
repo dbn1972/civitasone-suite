@@ -4,6 +4,7 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import type { SurveyQuestion, SurveyAnswerValue } from "./schema.js";
 
@@ -65,23 +66,25 @@ export function registerEngagementConsumers(rawQueue: Queue): void {
   // ── notices ────────────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.noticeCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; noticeNo: string; subject: string; body?: string;
+      id: string; tenantId: string; noticeNo?: string; subject: string; body?: string;
       department: string; type?: string; expiresAt?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Auto-number inside the transaction: a retry re-runs nextval(), so it can never collide.
+      const noticeNo = p.noticeNo ?? (await nextNumber(tx, "notice_no"));
       const inserted = await repo.insertNotice(tx, {
-        id: p.id, tenantId: msg.tenantId, noticeNo: p.noticeNo, subject: p.subject, body: p.body ?? "",
+        id: p.id, tenantId: msg.tenantId, noticeNo, subject: p.subject, body: p.body ?? "",
         department: p.department, noticeType: p.type ?? "general", status: "draft",
         expiresAt: p.expiresAt ? new Date(p.expiresAt) : null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       // A unique violation (concurrent same-noticeNo create) inserts nothing: never audit it as success.
       if (inserted) await audit(tx, msg, "create", "citizen_notice", p.id);
-      else log.warn({ messageId: msg.messageId, tenantId: msg.tenantId, noticeNo: p.noticeNo, id: p.id },
+      else log.warn({ messageId: msg.messageId, tenantId: msg.tenantId, noticeNo, id: p.id },
         "notice create dropped: noticeNo already exists; no row inserted, no audit");
     });
-  });
+  }, auditFailedCreate("create", "citizen_notice"));
 
   queue.subscribe(COMMANDS.noticePublish, async (msg) => {
     const p = msg.payload as { id: string };

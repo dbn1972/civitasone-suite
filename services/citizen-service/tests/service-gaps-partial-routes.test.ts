@@ -257,7 +257,7 @@ describe("SVC-082 draft/ack/tracking + assisted channel", () => {
   it("submit produces an ACKNOWLEDGEMENT with a unique tracking number", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/intake/drafts/${draftId}/submit`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])), payload: {} });
     expect(res.statusCode).toBe(202);
-    expect(res.json().trackingNo).toMatch(/^CIT-\d{4}-[0-9A-F]{8}$/);
+    expect(res.json().trackingNo).toMatch(/^CIT-\d{4}-\d{6}$/);
     expect(res.json().channel).toBe("portal");
     trackingNo = res.json().trackingNo;
     await waitFor(async () => {

@@ -187,7 +187,7 @@ describe("notices — GET/POST /v1/citizen/notices", () => {
     expect((await post(`/v1/citizen/notices/${noticeId}/publish`, admin())).statusCode).toBe(202);
     const row = await waitFor(async () => (await listRows("/v1/citizen/notices", citizen1())).find((n) => n.id === noticeId));
     expect(row).toEqual({
-      id: noticeId, noticeNo: expect.stringMatching(/^NTC-\d{4}-[0-9A-F]{8}$/), subject: "Public hearing on road widening",
+      id: noticeId, noticeNo: expect.stringMatching(/^NTC-\d{4}-\d{6}$/), subject: "Public hearing on road widening",
       department: "Public Works", published: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), expiry: "", type: "Public Hearing",
     });
   });

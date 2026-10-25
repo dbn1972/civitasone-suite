@@ -20,7 +20,10 @@ export const createAlertBody = z.object({
 export type CreateAlertBody = z.infer<typeof createAlertBody>;
 
 export const createNoticeBody = z.object({
-  noticeNo:   z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]{0,63}$/).optional(),
+  noticeNo:   z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]{0,63}$/)
+    // NTC-YYYY-NNNNNN is the sequence-allocated auto-number space; a supplied value there could collide with a future one.
+    .refine((v) => !/^NTC-\d{4}-\d{1,9}$/i.test(v), "NTC-YYYY-NNNNNN is reserved for auto-numbering")
+    .optional(),
   subject:    safeText({ max: 300 }),
   body:       safeText({ max: 8000, min: 0, multiline: true }).optional(),
   department: safeText({ max: 128 }),
