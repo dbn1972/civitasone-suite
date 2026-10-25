@@ -52,7 +52,7 @@ export function registerStageConsumers(rawQueue: Queue): void {
  * concurrent transition on the same step waits and then validates against the committed status.
  */
 export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<StageTransitionPayload>): Promise<void> {
-  const { id, verb } = msg.payload;
+  const { id, verb, remarks } = msg.payload;
   const t = tx as Parameters<typeof repo.findRowTx>[0];
   if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
   const row = await repo.findRowTx(t, id, msg.tenantId);
@@ -65,8 +65,9 @@ export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<Sta
     status: next,
     // run/retry (re)start the step and clear any previous failure; skip closes it.
     startedAt: next === "in_progress" ? now : row.startedAt,
-    completedAt: next === "skipped" ? now : null,
-    errorMessage: null,
+    completedAt: next === "skipped" || next === "completed" ? now : null,
+    // fail records the admin remarks as the step error; every other verb clears any previous failure.
+    errorMessage: next === "failed" ? (remarks ?? "marked failed") : null,
   });
   // Row count 0 means the optimistic version guard lost a race: do not audit a success that did not happen.
   if (updated === 0) return rejectTransition(tx, msg, "version_conflict");
@@ -76,7 +77,7 @@ export async function applyStageTransition(tx: unknown, msg: CommandEnvelope<Sta
     tenantId: msg.tenantId,
     actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "install", action: `step_${verb}`, resourceType: "stage", resourceId: id, outcome: "success" },
+    payload: { service: "install", action: `step_${verb}`, resourceType: "stage", resourceId: id, outcome: "success", ...(remarks ? { remarks } : {}) },
   });
 }
 

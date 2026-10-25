@@ -26,4 +26,7 @@ export const stageViewSchema = z.object({
 export const stagesListSchema = paginatedSchema(stageViewSchema);
 
 /** Step lifecycle verbs accepted by PATCH /v1/install/steps/:id/:verb. */
-export const stepVerbParam = idParam.extend({ verb: z.enum(["run", "skip", "retry"]) });
+export const stepVerbParam = idParam.extend({ verb: z.enum(["run", "skip", "retry", "complete", "fail"]) });
+
+/** Optional body of the step verb route; `remarks` is mandatory for `fail` (enforced in the route). */
+export const stepVerbBody = z.object({ remarks: z.string().trim().min(1).max(500).optional() }).strict();
