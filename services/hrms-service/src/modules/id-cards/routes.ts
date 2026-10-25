@@ -109,17 +109,25 @@ const verifySchema = z.object({
 // NODE_ENV=development (local/this host) are unaffected -- only a process
 // actually started with NODE_ENV=production and no secret injected refuses
 // to boot.
+//
+// V4-E-06: FAIL CLOSED BY ALLOW-LIST. Only NODE_ENV "development" or "test"
+// may use the fallback; unset/staging/uat/qa/anything else must inject a real
+// secret (same pattern as resolveCandSecret() in recruitment).
+const QR_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
 function resolveQrSecret(): string {
   const configured = process.env.ID_CARD_QR_SECRET;
-  if (process.env.NODE_ENV === "production" && (!configured || configured.length === 0)) {
+  if (configured && configured.length > 0) return configured;
+  const nodeEnv = process.env.NODE_ENV;
+  if (!QR_FALLBACK_ALLOWED_ENVS.has(nodeEnv ?? "")) {
     throw new Error(
-      "SEC: ID_CARD_QR_SECRET is required in production. Inject it from the secret " +
+      `SEC: ID_CARD_QR_SECRET is required outside a declared development/test ` +
+        `environment (NODE_ENV was ${JSON.stringify(nodeEnv ?? null)}). Inject it from the secret ` +
         "manager (do not hardcode). Refusing to start -- the hardcoded fallback is " +
         "source-visible and would let anyone who can read this repo forge a valid " +
         "ID-card QR code.",
     );
   }
-  return configured ?? "civitasone-id-card-hmac-secret-change-in-prod";
+  return "civitasone-id-card-hmac-secret-change-in-prod";
 }
 
 const QR_SECRET = resolveQrSecret();
