@@ -140,10 +140,14 @@ export async function digilockerFetchIntake(ctx: RequestContext, body: Digilocke
     consent: body.consent ?? false,
     digilockerRef: result.digilockerRef,
     providerStatus: result.providerStatus,
-    configured: result.configured,
-    verificationStatus: result.configured ? "verified" : "pending",
-    status: result.configured ? "verified" : "received",
-    authenticity: result.authenticity,
+    // V4-G-03: the docUri is citizen-supplied and never cryptographically checked
+    // on this legacy path, so it can NEVER be recorded verified/source_verified
+    // (and the citizen is never the verifier). Source verification happens only in
+    // the OAuth callback (PKCS#7 artefact) or by an officer decision.
+    configured: false,
+    verificationStatus: "pending",
+    status: "received",
+    authenticity: "unverified",
   });
 }
 
@@ -285,10 +289,11 @@ export async function resubmit(
     storageRef: isDigi ? null : (body.storageKey ?? null),
     digilockerRef: result?.digilockerRef ?? null,
     providerStatus: result?.providerStatus ?? null,
-    configured: result?.configured ?? false,
-    verificationStatus: result?.configured ? "verified" : "pending",
-    status: result?.configured ? "verified" : "received",
-    authenticity: result?.authenticity ?? (isDigi ? "unverified" : "self_attested"),
+    // V4-G-03: a citizen-supplied docUri is never self-verifying (see digilockerFetchIntake).
+    configured: false,
+    verificationStatus: "pending",
+    status: "received",
+    authenticity: isDigi ? "unverified" : "self_attested",
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "document", id));
   // `acceptedResponseSchema` (packages/schemas/common.ts) only declares
