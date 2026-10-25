@@ -25,3 +25,10 @@ export const updateAgentCapacity = (
   agentId: string,
   body: { maxLeads?: number | undefined; available?: boolean | undefined; onLeave?: boolean | undefined; reason?: string | undefined },
 ) => pub(ctx, COMMANDS.updateAgentCapacity, agentId, { agentId, ...body });
+
+/** Visibility team membership (crm.team_members): admin-managed. */
+export const addTeamMember = (ctx: RequestContext, teamId: string, userId: string) =>
+  pub(ctx, COMMANDS.addTeamMember, `${teamId}:${userId}`, { teamId, userId });
+
+export const removeTeamMember = (ctx: RequestContext, teamId: string, userId: string) =>
+  pub(ctx, COMMANDS.removeTeamMember, `${teamId}:${userId}`, { teamId, userId });
