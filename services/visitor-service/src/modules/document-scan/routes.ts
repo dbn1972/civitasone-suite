@@ -83,12 +83,9 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
       throw new HttpError(400, "MISSING_FILE", "multipart file upload required");
     }
 
-    // Consume file buffer
-    const chunks: Buffer[] = [];
-    for await (const chunk of file.file) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
+    // Consume file buffer. toBuffer() throws a 413 when the plugin fileSize
+    // limit is hit; a bare stream loop would silently truncate at the limit.
+    const buffer: Buffer = await file.toBuffer();
 
     // Validate image (MIME type and size)
     const validation = validateImage(file.mimetype, buffer.length);
