@@ -115,7 +115,7 @@ describe("revenue-gl consumer — citizen.receipt.issued", () => {
       lines: Array<{ debitMinor: bigint; creditMinor: bigint }>;
     };
     expect(call.sourceKey).toBe(`citizen_receipt:${paymentId}`);
-    expect(call.type).toBe("citizen_receipt");
+    expect(call.type).toBe("receipt");
     const dr = call.lines.reduce((s, l) => s + BigInt(l.debitMinor), 0n);
     const cr = call.lines.reduce((s, l) => s + BigInt(l.creditMinor), 0n);
     expect(dr).toBe(50000n);

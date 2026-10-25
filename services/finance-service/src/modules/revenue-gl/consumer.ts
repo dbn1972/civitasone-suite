@@ -66,7 +66,7 @@ export function registerRevenueGlConsumers(queue: Queue): void {
           actorId: msg.actorId,
           correlationId: msg.correlationId,
           sourceKey: journalSourceKey,
-          type: "citizen_receipt",
+          type: "receipt", // must satisfy finance_journals_type_check (see journal-type.test.ts)
           postingDate: today,
           lines,
         });
