@@ -14,7 +14,7 @@ function flat(d: Dict, pre = ""): Record<string, string> {
 }
 const args = (s: string): string[] => [...s.matchAll(/\{(\w+)/g)].map((m) => m[1]!).sort();
 
-for (const ns of ["locationsOps", "fieldSync"] as const) {
+for (const ns of ["locationsOps", "fieldSync", "fieldVisits"] as const) {
   describe(`${ns} i18n parity`, () => {
     const e = flat((en as unknown as Record<string, Dict>)[ns]!);
     const h = flat((hi as unknown as Record<string, Dict>)[ns]!);
