@@ -2,7 +2,7 @@
  * Query sweeper + scheduled export cron tests.
  * Verifies the tick/sweep logic dispatches commands for due items.
  */
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { sqlClient } from "../src/shared/db.js";
 import { startScheduledQuerySweeper } from "../src/modules/queries/sweeper.js";
 import { startScheduledExportCron, tick } from "../src/modules/exports/scheduled-cron.js";

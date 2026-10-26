@@ -7,7 +7,7 @@
  *  - Cron tick skips disabled entries
  *  - Cron tick skips entries not yet due
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { computeNextRunAt, isValidCadence } from "../src/modules/exports/scheduled-domain.js";

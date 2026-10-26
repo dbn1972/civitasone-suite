@@ -10,7 +10,7 @@
  * isolation is enforced by the session-derived tenantId (and DB RLS).
  */
 import type { FastifyInstance } from "fastify";
-import { z, ZodError } from "zod";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { registerErrorHandler } from "../../shared/errors.js";
 import * as repo from "./repo.js";

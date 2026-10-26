@@ -10,7 +10,6 @@
  */
 import { pino } from "pino";
 import { eq, and, lte } from "drizzle-orm";
-import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
