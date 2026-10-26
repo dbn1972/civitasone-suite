@@ -10,7 +10,7 @@ import { EligibilityBuilder } from "../../_components/EligibilityBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyEligibilityDesign, loadEligibilityDesign } from "../../_data/eligibilityBuilderApi";
-import { emptyFormDesign, loadFormDesign } from "../../_data/formBuilderApi";
+import { loadFormDesign } from "../../_data/formBuilderApi";
 
 export default function DesignerB3Page() {
   const params = useParams<{ id: string }>();

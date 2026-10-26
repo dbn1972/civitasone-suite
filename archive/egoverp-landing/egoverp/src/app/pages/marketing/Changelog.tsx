@@ -4,12 +4,7 @@ import {
   Bug,
   Zap,
   Shield,
-  Database,
-  Smartphone,
-  Globe,
-  BarChart3,
   FileText,
-  Users,
   Calendar,
   Download,
   Bell,
@@ -241,7 +236,7 @@ const CHANGELOG_STATS = [
 ];
 
 export function Changelog() {
-  const navigate = useNavigate();
+  useNavigate();
   const { scrollY } = useScroll();
   const heroOpacity = useTransform(scrollY, [0, 300], [1, 0]);
   const heroY = useTransform(scrollY, [0, 300], [0, -50]);

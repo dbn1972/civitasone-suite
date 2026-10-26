@@ -2,7 +2,6 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
 import { LwfConfigForm } from "./LwfConfigForm";
 import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";

@@ -1,7 +1,7 @@
 /**
  * steward module — Drizzle schema. Merge review queue for ambiguous matches.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 
 export const cdpSchema = pgSchema("cdp");
 

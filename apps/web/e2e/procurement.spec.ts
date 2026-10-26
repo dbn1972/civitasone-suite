@@ -20,20 +20,6 @@ function mintDevJwt() {
   return `${header}.${payload}.${sig}`;
 }
 
-async function authenticateLive(page: import('@playwright/test').Page) {
-  const base = process.env.WEB_URL ?? process.env.BASE_URL ?? 'http://127.0.0.1:3000';
-  const host = new URL(base).hostname;
-  await page.context().addCookies([{
-    name: 'civitasone_at',
-    value: mintDevJwt(),
-    domain: host === '127.0.0.1' ? '127.0.0.1' : host,
-    path: '/',
-    httpOnly: true,
-    secure: false,
-    sameSite: 'Lax',
-  }]);
-}
-
 
 test.describe('Procurement', () => {
   test.beforeEach(async ({ page }) => {

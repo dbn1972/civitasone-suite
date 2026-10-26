@@ -7,8 +7,6 @@ import {
   Filter,
   Download,
   Upload,
-  TrendingUp,
-  TrendingDown,
   AlertTriangle,
   MapPin,
   ArrowRight,
@@ -107,7 +105,7 @@ const SAMPLE_INVENTORY: InventoryItem[] = [
 ];
 
 export function InventoryManagement() {
-  const [inventory, setInventory] = useState<InventoryItem[]>(SAMPLE_INVENTORY);
+  const [inventory] = useState<InventoryItem[]>(SAMPLE_INVENTORY);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');

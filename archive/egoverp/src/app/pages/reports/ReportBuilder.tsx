@@ -4,18 +4,15 @@ import { Card, Button, Badge, Input, Select, SelectContent, SelectItem, SelectTr
 import {
   ArrowLeft,
   Save,
-  Play,
   BarChart3,
   Table as TableIcon,
   PieChart as PieChartIcon,
   TrendingUp,
-  Plus,
   X,
   GripVertical,
   RefreshCw,
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { motion } from 'motion/react';
 
 const REPORT_TYPES = [
   { id: 'tabular', label: 'Tabular', icon: TableIcon },

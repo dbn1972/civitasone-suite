@@ -11,7 +11,7 @@ const BASE = "https://same-origin.invalid";
 export function safeNextPath(next: string | null | undefined): string | null {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
   // eslint-disable-next-line no-control-regex -- rejecting control chars is the point
-  if (/[\\\\\u0000-\u001f\u007f]/.test(next)) return null;
+  if (/[\\\u0000-\u001f\u007f]/.test(next)) return null;
   try {
     const u = new URL(next, BASE);
     if (u.origin !== BASE) return null;

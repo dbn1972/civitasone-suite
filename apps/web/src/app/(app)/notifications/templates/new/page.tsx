@@ -72,8 +72,6 @@ export default function NewTemplatePage() {
     }
   }
 
-  const inputStyle = { width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 };
-
   return (
     <>
       <PageHeader

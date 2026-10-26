@@ -3,7 +3,7 @@ import { Card, Table, Badge, Button } from '../components/ui';
 import { Eye, Edit, Trash2, Download } from 'lucide-react';
 
 export function OrganismsShowcase() {
-  const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  useState<number[]>([]);
 
   const sampleData = [
     { id: 1, name: 'Alice Kumar', email: 'alice@gov.in', department: 'Finance', status: 'Active' },

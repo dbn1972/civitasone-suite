@@ -102,7 +102,7 @@ const SAMPLE_ACTIVITIES: Activity[] = [
 ];
 
 export function CRMActivities() {
-  const [activities, setActivities] = useState<Activity[]>(SAMPLE_ACTIVITIES);
+  const [activities] = useState<Activity[]>(SAMPLE_ACTIVITIES);
   const [selectedView, setSelectedView] = useState<'timeline' | 'calendar'>('timeline');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date());

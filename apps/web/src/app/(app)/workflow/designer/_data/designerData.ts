@@ -72,10 +72,6 @@ function authHeader(): Record<string, string> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
-}
-
 export async function getDesignerDefinitions(): Promise<DesignerResult<DesignerDefinitionSummary[]>> {
   const base = gatewayBaseUrl();
   if (!base) return { data: [], source: "error" };

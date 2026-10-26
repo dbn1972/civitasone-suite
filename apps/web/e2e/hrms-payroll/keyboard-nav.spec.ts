@@ -105,7 +105,7 @@ test.describe('Keyboard Navigation — WCAG 2.1.1 / 2.1.2 / 2.4.3', () => {
     await page.goto('/hr/payroll');
     await page.waitForLoadState('load');
     await page.locator('#page-heading:visible').waitFor({ state: 'visible', timeout: 15000 }).catch(() => null);
-    const before = await page.evaluate(() => document.activeElement?.tagName);
+    await page.evaluate(() => document.activeElement?.tagName);
     for (let i = 0; i < 25; i++) {
       await page.keyboard.press('Tab');
     }
@@ -127,7 +127,7 @@ test.describe('Keyboard Navigation — WCAG 2.1.1 / 2.1.2 / 2.4.3', () => {
       if (tag === 'A') { found = true; break; }
     }
     if (!found) return; // Skip if no links on this view
-    const [navEvent] = await Promise.all([
+    await Promise.all([
       page.waitForNavigation({ timeout: 5000 }).catch(() => null),
       page.keyboard.press('Enter'),
     ]);

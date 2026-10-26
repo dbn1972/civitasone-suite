@@ -5,15 +5,10 @@ import {
   Users,
   Shield,
   FileText,
-  TrendingUp,
-  Zap,
   BarChart3,
   Cloud,
-  Database,
   Lock,
   Award,
-  Globe,
-  Settings,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';

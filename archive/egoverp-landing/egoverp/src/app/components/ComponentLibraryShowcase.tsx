@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button, Input, Checkbox, Badge } from './ui';
-import { Mail, Download, Plus, Settings, Check, X } from 'lucide-react';
+import { Mail, Download, Plus, Settings, Check } from 'lucide-react';
 
 export function ComponentLibraryShowcase() {
   const [checked, setChecked] = useState(false);
