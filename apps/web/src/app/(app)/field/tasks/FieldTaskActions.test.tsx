@@ -81,8 +81,8 @@ describe("FieldTaskActions (GAP-FIELD-TASKS-05)", () => {
 
 describe("fieldTasks messages", () => {
   it("every key exists in en and hi, and hi is really translated", () => {
-    const en = (enMessages as Record<string, Record<string, string>>).fieldTasks!;
-    const hi = (hiMessages as Record<string, Record<string, string>>).fieldTasks!;
+    const en = (enMessages as unknown as Record<string, Record<string, string>>).fieldTasks!;
+    const hi = (hiMessages as unknown as Record<string, Record<string, string>>).fieldTasks!;
     expect(Object.keys(hi).sort()).toEqual(Object.keys(en).sort());
     for (const k of Object.keys(en)) expect(hi[k], k).not.toBe(en[k]);
   });

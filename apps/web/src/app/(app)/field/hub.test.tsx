@@ -38,8 +38,8 @@ describe("Field hub i18n", () => {
   ];
 
   it("has every hub key in both en and hi, and hi is really translated", () => {
-    const en = (enMessages as Record<string, Record<string, string>>).fieldHub;
-    const hi = (hiMessages as Record<string, Record<string, string>>).fieldHub;
+    const en = (enMessages as unknown as Record<string, Record<string, string>>).fieldHub;
+    const hi = (hiMessages as unknown as Record<string, Record<string, string>>).fieldHub;
     expect(en).toBeTruthy();
     expect(hi).toBeTruthy();
     for (const k of KEYS) {
@@ -52,7 +52,7 @@ describe("Field hub i18n", () => {
   it("renders the header and tile copy from the message catalogue", async () => {
     roles.current = ["field_admin"];
     render(await FieldHub());
-    const en = (enMessages as Record<string, Record<string, string>>).fieldHub!;
+    const en = (enMessages as unknown as Record<string, Record<string, string>>).fieldHub!;
     expect(screen.getByText(en.title!)).toBeInTheDocument();
     expect(screen.getByText(en.visitsDescription!)).toBeInTheDocument();
     expect(screen.getByText(en.agentsDescription!)).toBeInTheDocument();
