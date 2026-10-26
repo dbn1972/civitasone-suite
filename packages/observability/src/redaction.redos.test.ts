@@ -13,4 +13,20 @@ describe("DSN redaction pattern (CodeQL alert 938)", () => {
     redact({ msg: evil });
     expect(Date.now() - t0).toBeLessThan(500);
   });
+
+  it("redacts a DSN whose username contains '@' (no password leak)", () => {
+    const out = JSON.stringify(redact({ msg: "pg://us@er:pw123@h/db failed" }));
+    expect(out).not.toContain("pw123");
+    expect(out).toContain("[REDACTED_DSN]");
+  });
+
+  it("redacts a DSN whose password contains '@' and ':'", () => {
+    const out = JSON.stringify(redact({ msg: "redis://u:p@ss:w0rd@cache.internal:6379" }));
+    expect(out).not.toContain("w0rd");
+  });
+
+  it("leaves credential-free URLs untouched", () => {
+    const out = JSON.stringify(redact({ msg: "see https://host.example:8080/path?x=1" }));
+    expect(out).toContain("https://host.example:8080/path?x=1");
+  });
 });

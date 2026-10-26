@@ -67,10 +67,22 @@ const REDACTED_DSN = "[REDACTED_DSN]";
 const REDACTED_EMAIL = "[REDACTED_EMAIL]";
 const REDACTED_AADHAAR = "[REDACTED_AADHAAR]";
 
-/** Matches scheme://user:pass@host-shaped connection strings (postgres, redis, amqp, mongodb, etc). */
-// The user part excludes ":" and "@" so the first ":" after "://" is the only possible user/password split
-// (CodeQL js/polynomial-redos: two adjacent greedy classes that both accepted ":" backtracked quadratically).
-const DSN_VALUE_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>:@]*:[^\s"'<>]*@[^\s"'<>]+/gi;
+/**
+ * Matches a `scheme://<token>` URL-shaped run. Whether the token carries `user:pass@host` credentials is decided
+ * linearly in `redactDsn` (not in the regex): userinfo may itself contain "@" or ":", which any single-regex form either
+ * mis-splits (leaking the password) or backtracks quadratically on (CodeQL js/polynomial-redos). The lookbehind pins the
+ * scheme to the start of its character run so a long `a.a.a.…` string is scanned once, not once per start offset.
+ */
+const URL_TOKEN_PATTERN = /(?<![a-z0-9+.-])[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]+/gi;
+
+/** Redact a URL token iff it has the `:`...`@<host>` shape of embedded credentials (same predicate the old regex expressed). */
+function redactDsn(token: string): string {
+  const body = token.slice(token.indexOf("://") + 3);
+  const colon = body.indexOf(":");
+  if (colon === -1) return token;
+  const at = body.indexOf("@", colon + 1);
+  return at !== -1 && at < body.length - 1 ? REDACTED_DSN : token;
+}
 /** Matches `key: value` / `key=value` credential assignments embedded in free text (e.g. error messages). */
 const SECRET_KV_PATTERN = /\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*)\S+/gi;
 /** Matches `Bearer <token>` Authorization-header-shaped substrings. */
@@ -87,7 +99,7 @@ function normalizeKey(key: string): string {
 /** Scrub credential-shaped (and, in "log" mode, PII-shaped) patterns out of a string leaf value. */
 function redactString(value: string, mode: RedactionMode): string {
   let out = value
-    .replace(DSN_VALUE_PATTERN, REDACTED_DSN)
+    .replace(URL_TOKEN_PATTERN, redactDsn)
     .replace(SECRET_KV_PATTERN, `$1${REDACTED}`)
     .replace(BEARER_VALUE_PATTERN, `$1${REDACTED}`);
   if (mode === "log") {
