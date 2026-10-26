@@ -774,7 +774,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by this commit (UAT B2): backend 409 DUPLICATE_CASE_NO + accepted id already existed; CreateCaseForm now shows 409 as a Case number field error and opens /legal/cases/:id once readable (CreateCaseForm.test.tsx)
 - **First-pass claim:** After success the user is sent to the list, not the new case (CreateCaseForm.tsx:56); duplicate case number handling and audit on create are undeterminable (legal-service absent from snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases']`
 - **Question:** Does create reject a duplicate case number with 409 and a field-level error, return the new id, and write an audit row?

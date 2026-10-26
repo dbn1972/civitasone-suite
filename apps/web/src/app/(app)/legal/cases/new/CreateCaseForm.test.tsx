@@ -34,7 +34,8 @@ describe("CreateCaseForm — case-type master (GAP-LEGAL-CASES-NEW-01)", () => {
       if (url.includes("/v1/legal/case-types")) {
         return new Response(JSON.stringify({ items: CASE_TYPES }), { status: 200 });
       }
-      // POST /v1/legal/cases
+      // GET detail (readable once consumer ran) / POST /v1/legal/cases
+      if (url.includes("/v1/legal/cases/case-1")) return new Response("{}", { status: 200 });
       return new Response(JSON.stringify({ id: "case-1", status: "accepted" }), { status: 202 });
     });
 
@@ -51,7 +52,8 @@ describe("CreateCaseForm — case-type master (GAP-LEGAL-CASES-NEW-01)", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Register case" }));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/legal/list"));
+    // GAP-LEGAL-CASES-NEW-03: lands on the new case, not the list.
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/legal/cases/case-1"));
     const post = calls.find((c) => c.url.includes("/v1/legal/cases") && c.body);
     expect(post?.body).toMatchObject({ caseTypeId: "11111111-1111-4111-8111-111111111111", caseNo: "CR/99/2026" });
   });
@@ -92,4 +94,48 @@ describe("CreateCaseForm — case-type master (GAP-LEGAL-CASES-NEW-01)", () => {
     const post = calls.find((c) => c.url.includes("/v1/legal/cases") && c.body);
     expect(post?.body).not.toHaveProperty("caseTypeId");
   });
+});
+
+describe("CreateCaseForm — duplicate + redirect (GAP-LEGAL-CASES-NEW-03)", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    refreshMock.mockReset();
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function fill() {
+    fireEvent.change(screen.getByLabelText("Case number *"), { target: { value: "WP/1/2026" } });
+    fireEvent.change(screen.getByLabelText("Court / Forum *"), { target: { value: "High Court" } });
+    fireEvent.change(screen.getByLabelText("Case title *"), { target: { value: "A vs. B" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register case" }));
+  }
+
+  it("shows a 409 DUPLICATE_CASE_NO as a field error on Case number and does not navigate", async () => {
+    mockFetch(async (url) => {
+      if (url.includes("/v1/legal/case-types")) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      return new Response(
+        JSON.stringify({ code: "DUPLICATE_CASE_NO", message: "a case with this case number already exists" }),
+        { status: 409 },
+      );
+    });
+    render(<CreateCaseForm />);
+    fill();
+    const err = await screen.findByText(/A case with this case number already exists/);
+    expect(err).toHaveAttribute("id", "caseNo-error");
+    expect(screen.getByLabelText("Case number *")).toHaveAttribute("aria-invalid", "true");
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the list when the new case is not readable yet", async () => {
+    mockFetch(async (url) => {
+      if (url.includes("/v1/legal/case-types")) return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      if (url.includes("/v1/legal/cases/case-9")) return new Response("{}", { status: 404 });
+      return new Response(JSON.stringify({ id: "case-9", status: "accepted" }), { status: 202 });
+    });
+    render(<CreateCaseForm />);
+    fill();
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/legal/list"), { timeout: 5000 });
+  }, 10000);
 });
