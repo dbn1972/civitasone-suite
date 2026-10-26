@@ -559,6 +559,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 ### GAP-REPORTS-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  [partial: job payloads no longer expose the 24h presigned URL (web uses the owner-checked /v1/reports/jobs/:id/download) and every download is audited, closed by 2130c44dd + 77ccf4ef2 (UAT B2); remaining = DPDP control for PII exports, needs owner decision on export policy]
 - **First-pass claim:** downloadUrl is opened straight from the API payload (ReportJobsTable.tsx:124) — expiry, authorisation and DPDP handling of exported files are undeterminable without the report service.
 - **Service:** `report-service`  ·  **Endpoint(s):** `['GET /api/v1/reports/report-jobs']`
 - **Question:** Is downloadUrl a short-lived signed URL issued only to the job owner/authorised role, with download audited and PII exports DPDP-controlled?
