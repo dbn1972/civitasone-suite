@@ -141,6 +141,11 @@ async function publishApply(
         effectiveDate: o.effectiveDate,
         chargeType: "substantive",
         orderNumber: o.orderNumber,
+        // ST-M01-15 producer ACL: hrms refuses (audited, no write) any posting
+        // command that does not name an authorised producer. The frozen
+        // contract owner is smarttransfer-service, the real cross-service
+        // publisher this test stands in for.
+        producer: "smarttransfer-service",
       },
     } as never),
   );
