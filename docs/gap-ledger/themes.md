@@ -486,7 +486,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/branding/routes.ts:16 (ROLES on all 3 routes) + themes/layout.tsx; test routes-rbac-deep.test.ts 401/403/202. Follow-up for owner: web THEME_MODULE_ROLES omits tenant_admin though the branding server routes admit it, so tenant_admin is bounced by themes/layout.tsx)
+- [~] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/branding/routes.ts:16 (ROLES on all 3 routes) + themes/layout.tsx; test routes-rbac-deep.test.ts 401/403/202. Kept open (partial): server side verified, but the acceptance also needs the web gate to admit tenant_admin; fix first, then tick. Gap: web THEME_MODULE_ROLES omits tenant_admin though the branding server routes admit it, so tenant_admin is bounced by themes/layout.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: themes has no layout.tsx (no ModuleGate) and middleware.ts checks only the session (middleware.ts:48-59); theme-service role enforcement undeterminable (service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET /api/v1/themes/branding (themes/_data.ts:90)']`
 - **Question:** Does theme-service restrict branding endpoints to authorised admin roles?
