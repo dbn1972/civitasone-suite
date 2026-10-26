@@ -10,6 +10,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createHearingBody, adjournBody, recordOrderBody, caseHearingParams } from "./validators.js";
 import * as commands from "./commands.js";
+import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -36,6 +37,13 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = recordOrderBody.parse(req.body);
+    // Owner decision #11: a supplied department must be a real department of the org hierarchy.
+    if (body.deptRef) {
+      const departments = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });
+      if (!departments.some((d) => d.id === body.deptRef)) {
+        throw new HttpError(422, "UNKNOWN_DEPARTMENT", "deptRef does not reference a department in the organisation hierarchy");
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordOrder(ctx, id, body));
   });
 
@@ -71,6 +79,7 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    if (err instanceof OrgServiceError) return reply.code(503).send({ code: "ORG_SERVICE_UNAVAILABLE", message: "the department list is temporarily unavailable; please retry", correlationId, retryable: true });
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
