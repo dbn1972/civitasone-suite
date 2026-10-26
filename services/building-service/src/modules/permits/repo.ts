@@ -10,13 +10,16 @@ export async function findById(id: string, tenantId: string): Promise<BuildingPe
 }
 
 /**
- * Public QR verification lookup (GET /v1/building/permits/verify). Reads the NON-RLS
- * building_permit_directory (public facts only) -- an anonymous request has no tenant GUC, so the
+ * Public QR verification lookup (GET /v1/building/permits/verify). Reads the
+ * RLS-protected building_permit_directory (public facts only) through the token-scoped public_verify_read policy -- an anonymous request has no tenant GUC, so the
  * FORCE-RLS building_permits table would return zero rows for every code. See
  * migrations/0005_permit_public_directory.sql.
  */
 export async function findPublicByVerificationCode(code: string) {
   return scopedRead(async (tx) => {
+    // The directory is FORCE RLS; the public_verify_read policy admits exactly the row whose
+    // verification_code equals this transaction-local GUC (migrations/0006_permit_directory_rls.sql).
+    await tx.execute(sql`SELECT set_config('app.permit_verification_code', ${code}, true)`);
     const rows = (await tx.execute(
       sql`SELECT permit_number AS "permitNumber", status, issued_at AS "issuedAt", valid_until AS "validUntil"
           FROM building.building_permit_directory

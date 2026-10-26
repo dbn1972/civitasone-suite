@@ -12,13 +12,16 @@ export async function findById(id: string, tenantId: string): Promise<AdvPermitR
 }
 
 /**
- * Public QR verification lookup (GET /v1/advertisement/permits/verify). Reads the NON-RLS
- * adv_permit_directory (public facts only) -- an anonymous request has no tenant GUC, so the
+ * Public QR verification lookup (GET /v1/advertisement/permits/verify). Reads the
+ * RLS-protected adv_permit_directory (public facts only) through the token-scoped public_verify_read policy -- an anonymous request has no tenant GUC, so the
  * FORCE-RLS adv_permits table would return zero rows for every code. See
  * migrations/0006_permit_public_directory.sql.
  */
 export async function findPublicByVerificationCode(code: string) {
   return scopedRead(async (tx) => {
+    // The directory is FORCE RLS; the public_verify_read policy admits exactly the row whose
+    // verification_code equals this transaction-local GUC (migrations/0007_permit_directory_rls.sql).
+    await tx.execute(sql`SELECT set_config('app.permit_verification_code', ${code}, true)`);
     const rows = (await tx.execute(
       sql`SELECT permit_number AS "permitNumber", advertisement_type AS "advertisementType", status,
                  issued_at AS "issuedAt", valid_from AS "validFrom", valid_until AS "validUntil"
