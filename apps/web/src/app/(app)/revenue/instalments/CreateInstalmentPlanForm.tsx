@@ -51,7 +51,7 @@ export function CreateInstalmentPlanForm({
 
   // GAP-REVENUE-INSTALMENTS-01: never commit a schedule against an unseen
   // amount. Block when arrears could not be loaded, or there is nothing owing.
-  let outstanding = 0n;
+  let outstanding: bigint;
   try {
     outstanding = outstandingMinor ? BigInt(outstandingMinor) : 0n;
   } catch {

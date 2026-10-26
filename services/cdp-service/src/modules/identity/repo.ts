@@ -1,8 +1,8 @@
 /**
  * identity/repo.ts — Database operations for identity graph.
  */
-import { eq, and, sql, inArray } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { eq, and, inArray } from "drizzle-orm";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { identityGraph, type IdentityGraphRow, type IdentityGraphInsert } from "./schema.js";
 
 export function toView(r: IdentityGraphRow) {

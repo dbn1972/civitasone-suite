@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, KeyboardEvent, ClipboardEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { Building2, AlertCircle, Loader2, Shield, Key, Smartphone, FileText } from 'lucide-react';
+import { AlertCircle, Loader2, Shield, Key, Smartphone, FileText } from 'lucide-react';
 import { AuthShell } from './AuthShell';
 import { Input, Button } from './ui';
 

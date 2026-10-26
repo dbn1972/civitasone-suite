@@ -1,4 +1,4 @@
-import { Card, Button, Badge } from '../../components/ui';
+import { Card, Button } from '../../components/ui';
 import {
   Building2,
   CheckCircle,
@@ -10,8 +10,6 @@ import {
   Database,
   Cloud,
   Award,
-  TrendingUp,
-  Clock,
   Phone,
   Zap,
 } from 'lucide-react';
@@ -104,7 +102,7 @@ const IMPLEMENTATIONS = [
 ];
 
 export function Government() {
-  const navigate = useNavigate();
+  useNavigate();
 
   return (
     <div className="min-h-screen bg-surface-canvas">

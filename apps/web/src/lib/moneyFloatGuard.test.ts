@@ -34,7 +34,6 @@ const ALLOWED: Record<string, number> = {
   "app/(app)/tenant-admin/activation/ActivationView.tsx": 2,
   "app/_components/crm/DataQualityView.tsx": 1,
   "app/_components/ds/ConfidenceBar.tsx": 1,
-  "app/_components/ds/PredictionBadge.tsx": 1,
   "app/_components/ds/PredictionHistory.tsx": 3,
   "lib/bulkScan/viewer.ts": 1, // zoom factor
   // percent -> basis points (not rupees)

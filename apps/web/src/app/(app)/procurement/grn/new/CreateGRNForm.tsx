@@ -51,7 +51,7 @@ export function CreateGRNForm() {
   const [vendorName, setVendorName] = useState("");
   const [selectedPo, setSelectedPo] = useState<RemoteOption | null>(null);
   const poById = useRef(new Map<string, POOption>());
-  const [poId, setPoId] = useState("");
+  const [, setPoId] = useState("");
   const [poRef, setPoRef] = useState("");
   const [poItems, setPoItems] = useState<POItem[]>([]);
   const [receivedDate, setReceivedDate] = useState(todayIST());

@@ -1,16 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
-import type { ReactElement } from "react";
-import { NextIntlClientProvider } from "next-intl";
-import enMessages from "@/messages/en.json";
-
-function render(ui: ReactElement) {
-  return rtlRender(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
-      {ui}
-    </NextIntlClientProvider>,
-  );
-}
+import { screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { renderWithIntl } from "@/lib/testUtils/intl";
 import NewContactPage from "./page";
 import * as dq from "@/lib/crm/dataQuality";

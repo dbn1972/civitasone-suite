@@ -1,8 +1,8 @@
 /**
  * profiles/repo.ts — Database operations for golden profiles.
  */
-import { eq, and, ilike, sql, desc, type SQL, inArray } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { eq, and, sql, desc, type SQL, inArray } from "drizzle-orm";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { classifyValue } from "../../shared/pii.js";
 import { profiles, type ProfileRow, type ProfileInsert } from "./schema.js";
 

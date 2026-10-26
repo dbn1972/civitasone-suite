@@ -15,7 +15,6 @@
  */
 import { test, expect } from '@playwright/test';
 import { setupHrmsPage } from './helpers';
-import * as fixtures from './fixtures';
 
 test.describe('Visual Regression — HRMS Pages', () => {
   test.beforeEach(async ({ page }) => {

@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { Card, Table, Badge, Button, Input, FormField } from '../../components/ui';
+import { Card, Table, Badge, Button, Input } from '../../components/ui';
 import { Plus, Download, Search, Eye, Edit } from 'lucide-react';
 
 export function FinanceInvoices() {

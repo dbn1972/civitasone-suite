@@ -12,7 +12,6 @@
  */
 import { test, expect } from '@playwright/test';
 import { setupHrmsPage } from './helpers';
-import * as fixtures from './fixtures';
 
 test.describe('Payroll Configuration', () => {
   test.beforeEach(async ({ page }) => {

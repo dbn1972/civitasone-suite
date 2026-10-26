@@ -1,17 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderWithIntl } from "@/lib/testUtils/intl";
-import { render as rtlRender, screen, within, fireEvent, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
-import { NextIntlClientProvider } from "next-intl";
+import { screen, within, fireEvent, waitFor } from "@testing-library/react";
 import enMessages from "@/messages/en.json";
-
-function render(ui: ReactElement) {
-  return rtlRender(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
-      {ui}
-    </NextIntlClientProvider>,
-  );
-}
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();

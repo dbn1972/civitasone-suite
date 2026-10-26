@@ -1,4 +1,4 @@
-import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";

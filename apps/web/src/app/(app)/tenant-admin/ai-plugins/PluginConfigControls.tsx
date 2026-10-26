@@ -60,9 +60,9 @@ export function PluginConfigControls({
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
   const formError = useFormError("AI plugin");
 
-  const modeId = useId();
-  const thresholdId = useId();
-  const thresholdErrId = useId();
+  useId();
+  useId();
+  useId();
 
   // Enabling a plugin that still needs training data is blocked (the backend
   // models this as a soft warning; we keep the control disabled to match).

@@ -5,7 +5,6 @@ import {
   Activity,
   AlertCircle,
   HardDrive,
-  CheckCircle2,
   TrendingUp,
   TrendingDown,
   UserPlus,

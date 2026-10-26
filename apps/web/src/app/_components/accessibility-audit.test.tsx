@@ -12,7 +12,6 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ConfirmDialog } from "./ds/ConfirmDialog";
 import { Tabs } from "./ds/Tabs";
-import { Segmented } from "./ds/Segmented";
 import { DataTable } from "./ds/DataTable";
 import { ErrorState } from "./ds/ErrorState";
 import { HelpTip } from "./ds/HelpTip";

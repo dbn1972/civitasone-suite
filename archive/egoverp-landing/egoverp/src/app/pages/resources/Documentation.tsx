@@ -128,7 +128,7 @@ const VIDEO_TUTORIALS = [
 ];
 
 export function Documentation() {
-  const navigate = useNavigate();
+  useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
 
   return (
