@@ -68,4 +68,23 @@ describe("AssesseeCreateForm", () => {
     });
     expect(screen.queryByText(/VALIDATION_FAILED: identifierNo is required/)).not.toBeInTheDocument();
   });
+
+  it("shows a duplicate identifier as an inline field error on 409 (ASSESSEES-03)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "DUPLICATE_IDENTIFIER", message: "dup" }), { status: 409 }),
+    );
+
+    render(<AssesseeCreateForm />);
+    fillValidForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "Register Assessee" }));
+    await waitFor(() => expect(screen.getByText("Register this assessee?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Register assessee"));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/already registered/i);
+    });
+    expect(screen.queryByText("Register this assessee?")).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
 });

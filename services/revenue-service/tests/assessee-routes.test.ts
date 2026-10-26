@@ -36,6 +36,18 @@ vi.mock("../src/shared/db.js", () => ({
   dbForRead: vi.fn(),
 }));
 
+// GAP-REVENUE-ASSESSEES-03: the create route pre-checks the identifier via the repo.
+const mockFindByIdentifier = vi.fn().mockResolvedValue(null);
+const mockListAssessees = vi.fn().mockResolvedValue({ data: [], meta: { page: 1, pageSize: 50, total: 0 } });
+vi.mock("../src/modules/assessee/repo.js", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../src/modules/assessee/repo.js")>();
+  return {
+    ...original,
+    findAssesseeByIdentifier: (...a: unknown[]) => mockFindByIdentifier(...a),
+    listAssessees: (...a: unknown[]) => mockListAssessees(...a),
+  };
+});
+
 vi.mock("../src/shared/infra.js", () => ({
   cache: {
     put: vi.fn().mockResolvedValue(undefined),
@@ -102,6 +114,17 @@ describe("POST /v1/revenue/assessees", () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/assessees", headers: AUTH, payload: VALID_BODY });
     expect(res.statusCode).toBe(202);
     expect(res.json().data).toHaveProperty("messageId");
+  });
+
+  it("returns 409 problem code DUPLICATE_IDENTIFIER and publishes nothing when the identifier exists (GAP-REVENUE-ASSESSEES-03)", async () => {
+    const { queue } = await import("../src/shared/infra.js");
+    (queue.publish as any).mockClear();
+    mockFindByIdentifier.mockResolvedValueOnce({ id: "existing" });
+    const res = await app.inject({ method: "POST", url: "/v1/revenue/assessees", headers: AUTH, payload: VALID_BODY });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.stringify(res.json())).toContain("DUPLICATE_IDENTIFIER");
+    expect(queue.publish).not.toHaveBeenCalled();
+    expect(mockFindByIdentifier).toHaveBeenLastCalledWith(TENANT_ID, "PROP-0001");
   });
 
   it("returns 400 with invalid body (empty ownerName)", async () => {
@@ -202,6 +225,12 @@ describe("GET /v1/revenue/assessees/:id", () => {
 // ── GET /v1/revenue/assessees (paginated) ─────────────────────────────────────
 
 describe("GET /v1/revenue/assessees", () => {
+  it("passes ?q to the repo as a server-side search term (GAP-REVENUE-ASSESSEES-04)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/revenue/assessees?q=sharma&limit=20&offset=40", headers: AUTH });
+    expect(res.statusCode).toBe(200);
+    expect(mockListAssessees).toHaveBeenLastCalledWith(TENANT_ID, { limit: 20, offset: 40 }, "sharma");
+  });
+
   it("returns 200 with paginated response", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/revenue/assessees", headers: AUTH });
     expect(res.statusCode).toBe(200);
