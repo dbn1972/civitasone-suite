@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { ModuleGate } from "../ModuleGate";
 import { getRequestPathname } from "@/lib/auth/requestPath";
-import { adminAreaRoles } from "./_roles";
+import { adminAreaRoles } from "./_routeRoles";
 
 /**
  * GAP-TENANT-HOME-01 / GAP-TENANT-CONSENT-EXCHANGE-02: the /tenant area fans
