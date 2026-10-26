@@ -6,6 +6,8 @@ export const COMMANDS = {
   contractTerminate:      "contract.contract.terminate",
   contractAmend:          "contract.contract.amend",
   contractSubmitApproval: "contract.contract.submit_approval",
+  // Decision #42: emitted by the daily expiry sweeper, consumed in modules/expiry.
+  contractExpiryCheck:    "contract.expiry.check",
   milestoneComplete:      "contract.milestone.complete",
   milestoneMarkLate:      "contract.milestone.mark_late",
   bondRegister:           "contract.bond.register",
