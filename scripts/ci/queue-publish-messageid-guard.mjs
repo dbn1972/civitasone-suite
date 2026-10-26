@@ -68,7 +68,7 @@
 //   node scripts/ci/queue-publish-messageid-guard.mjs --report         # print full violation list (+ unknowns), does not affect exit code
 //   node scripts/ci/queue-publish-messageid-guard.mjs --write-baseline # regenerate the baseline from the current tree
 // ─────────────────────────────────────────────────────────────────────────────
-import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";

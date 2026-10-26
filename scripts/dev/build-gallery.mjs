@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /** Build docs/screenshots/index.html from results.json + prune orphan PNGs. */
-import { readFileSync, writeFileSync, readdirSync, statSync, unlinkSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 

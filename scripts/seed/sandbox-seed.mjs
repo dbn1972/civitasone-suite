@@ -12,7 +12,7 @@
  *   node scripts/seed/sandbox-seed.mjs --apply      — applies via psql (requires DATABASE_URL)
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, mkdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 

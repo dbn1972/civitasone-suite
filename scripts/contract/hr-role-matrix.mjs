@@ -545,7 +545,6 @@ function diff(a, b) {
 
 function main() {
   const hrRoles = layoutHrRoles();
-  const hrRolesSet = new Set(hrRoles);
 
   const hrms = extractServiceRoutes("services/hrms-service/src/modules", "hrms-service");
   const payroll = extractServiceRoutes("services/payroll-service/src/modules", "payroll-service");

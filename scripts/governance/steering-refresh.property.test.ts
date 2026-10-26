@@ -104,7 +104,7 @@ interface SyntheticDocument {
 /** Generates one synthetic document with 0-6 sections, covering a mix of
  * classifications (including "no Stale_Content at all" and "every section
  * is Stale_Content" as reachable cases via fc.oneof/fc.constantFrom). */
-const arbSyntheticDocument: fc.Arbitrary<SyntheticDocument> = fc
+fc
   .tuple(
     arbDocumentName,
     fc.array(

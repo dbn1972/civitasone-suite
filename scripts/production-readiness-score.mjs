@@ -58,7 +58,7 @@ const loaders = readFileSync(join(ROOT, "apps/web/src/app/_data/loaders.ts"), "u
 const mockFallback = loaders.includes("mockData");
 const k6 = existsSync(join(ROOT, "tests/load/k6-baseline.js"));
 const contract = existsSync(join(ROOT, "tests/contract/gateway.contract.test.ts"));
-const queueAudit = !readFileSync(join(ROOT, "scripts/audit-queue-writes.mjs"), "utf8").includes("TODO");
+!readFileSync(join(ROOT, "scripts/audit-queue-writes.mjs"), "utf8").includes("TODO");
 
 // ── REL-019: stub-route detector ────────────────────────────────────────────
 //
