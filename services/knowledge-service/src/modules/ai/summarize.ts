@@ -15,11 +15,11 @@
  */
 
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { documents } from "../documents/schema.js";
 import { documentVersions } from "../versions/schema.js";
 import { getObject } from "@civitasone/storage";
-import { sendPrompt, AiAdapterError, CircuitBreakerOpenError } from "./adapter.js";
+import { sendPrompt } from "./adapter.js";
 import { redactPii } from "./pii-redact.js";
 
 // ── Types ─────────────────────────────────────────────────────────

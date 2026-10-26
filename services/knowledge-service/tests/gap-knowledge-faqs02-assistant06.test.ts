@@ -25,11 +25,6 @@ let app: FastifyInstance;
 beforeAll(async () => { app = await buildApp(); });
 afterAll(async () => { await app.close(); await sqlClient.end(); });
 
-function idOf(res: { json: () => unknown }): string {
-  const b = res.json() as { id?: string; data?: { id?: string } };
-  return (b.data?.id ?? b.id)!;
-}
-
 describe("GAP-KNOWLEDGE-FAQS-02 — status visibility", () => {
   it("hides draft FAQs from a non-editor but shows them to an editor", async () => {
     const marker = `faqvis-${randomUUID().slice(0, 8)}`;

@@ -10,7 +10,7 @@
  * Validates: Requirements 20.3
  */
 
-import { sendPrompt, isEnabled, AiAdapterError, CircuitBreakerOpenError } from "./adapter.js";
+import { sendPrompt } from "./adapter.js";
 import { clearedSearch } from "../search/repo.js";
 import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
 

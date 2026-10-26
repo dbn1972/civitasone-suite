@@ -1,5 +1,4 @@
-import { eq, and, lte, desc } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { retentionPolicies, type RetentionPolicyRow, type RetentionPolicyInsert, type RetentionPolicyView } from "./schema.js";

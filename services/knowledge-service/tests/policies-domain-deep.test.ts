@@ -8,9 +8,15 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  canTransition, assertTransition, assertApproverDistinct,
-  isEffective, acknowledgementRollup, isReviewDue, computeReviewDueDate,
-  TRANSITIONS, LifecycleError, type PolicyStatus,
+  canTransition,
+  assertTransition,
+  assertApproverDistinct,
+  isEffective,
+  acknowledgementRollup,
+  isReviewDue,
+  computeReviewDueDate,
+  LifecycleError,
+  type PolicyStatus,
 } from "../src/modules/policies/domain.js";
 
 describe("canTransition — policy lifecycle state machine", () => {
