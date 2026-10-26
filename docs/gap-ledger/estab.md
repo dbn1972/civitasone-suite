@@ -1482,7 +1482,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 6e652983e (owner decision #29, 2026-10-26): renewal and return condition built (migration 0055); fines out of UAT scope, the screen says fine rules are not configured
 - **W2 note:** W2 estab re-check: the stats-gating step is already on main (loan stats depend on the issues loader only). Renewal, fine and condition-on-return still need a product decision. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Stats gated per loader fixed; no renewal/fine/condition-on-return capture
 - **First-pass claim:** Either loader failing blanks all three stats even if the other loaded (page.tsx:15-17,39-41); no renewal, fine or "condition on return" capture on Return (IssuesTable.tsx:34-46).
@@ -1742,7 +1742,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 0a1e91e7c (owner decision #30, 2026-10-26): MOM via meeting-service's minutes workflow (draft -> approve), linked from the estab meeting (migration 0056, governance-link route, Minutes (MOM) panel)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. 'Not yet held' / 'Pending' / 'Captured' and the minutes text already render; the misleading tooltip/comment is fixed (Generate MOM stays disabled and says minutes cannot be generated or edited on this screen). Capturing or generating MOM needs a product decision and a backend endpoint that do not exist.
 - **W0 note:** partly fixed by #1916 — MOM state improved (Not yet held); Generate MOM still disabled
 - **First-pass claim:** MOM reads "Draft" for any meeting without minutes, including future ones (page.tsx:124), and the only route to capture MOM is the disabled Generate MOM button whose comment points to a field that this page does not render.
@@ -2114,7 +2114,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-04  ·  MEDIUM  ·  partly  ·  theme PICKLIST (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 16b6cfa40 (owner decision #31, 2026-10-26): Category is a closed list (API validator + DB CHECK); legacy values mapped, unmapped -> Other (legacy) (migration 0057)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. Org Unit is now a pick-list of the real departments (QuarterCreateForm.tsx), so two quarters of one unit carry the identical value. Category stays a datalist (suggestions plus free text, so legacy DB values are not locked out): enum-or-free-text is the owner's call.
 - **W0 note:** partly fixed by #1916 — Category now datalist suggestions (not select); Org Unit still free-text input
 - **First-pass claim:** Condition and Org Unit are free-text/raw values with no pick-list, so the filter and statuses depend on operators typing consistently (QuarterCreateForm.tsx; QuartersTable.tsx:26).
