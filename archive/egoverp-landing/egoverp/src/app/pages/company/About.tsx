@@ -1,5 +1,5 @@
 import { Card, Button } from '../../components/ui';
-import { Target, Users, Globe, Award, TrendingUp, Heart, Shield, Zap } from 'lucide-react';
+import { Target, Users, Globe, Heart, Shield, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { PublicHeader } from '../../components/PublicHeader';

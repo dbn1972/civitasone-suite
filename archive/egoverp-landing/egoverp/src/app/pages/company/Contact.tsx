@@ -1,5 +1,5 @@
 import { Card, Button, Input, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
-import { Mail, Phone, MapPin, Send, MessageSquare, Headphones, Globe } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, MessageSquare, Headphones } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { PublicHeader } from '../../components/PublicHeader';
