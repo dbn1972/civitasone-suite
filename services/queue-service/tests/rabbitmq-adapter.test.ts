@@ -5,7 +5,7 @@
  * Uses QUEUE_DRIVER=memory for the bus.ts factory test and verifies the class
  * shape and error handling.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { createQueue, resolveQueueDriver } from "../src/bus.js";
 import type { QueueDriver } from "../src/bus.js";
 

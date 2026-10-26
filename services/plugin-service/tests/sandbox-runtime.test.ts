@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { executePlugin } from "../src/modules/sandbox/runtime.js";
 import type { PluginContext, PluginManifest } from "../src/modules/sandbox/types.js";
 

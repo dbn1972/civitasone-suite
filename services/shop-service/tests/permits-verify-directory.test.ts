@@ -38,7 +38,6 @@ import { applications } from "../src/modules/registrations/schema.js";
 import { permits, permitDirectory } from "../src/modules/permits/schema.js";
 import { renewals } from "../src/modules/lifecycle/schema.js";
 import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
-import { registerLifecycleConsumers } from "../src/modules/lifecycle/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
 import { drainOrFail } from "../../../vitest.drain";

@@ -15,7 +15,7 @@ import { registerApplicationConsumers } from "../src/modules/applications/consum
 import { registerNocConsumers } from "../src/modules/nocs/consumer.js";
 import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
 import { registerPostEventConsumers } from "../src/modules/post_event/consumer.js";
-import { hdr, drainQueue, waitFor, TENANT_A, ACTOR_A } from "./support.js";
+import { hdr, drainQueue, waitFor } from "./support.js";
 
 let app: FastifyInstance;
 

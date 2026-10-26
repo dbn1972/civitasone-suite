@@ -14,7 +14,6 @@ import { legalCases } from "../src/modules/cases/schema.js";
 import { legalNotices, legalNoticeResponses } from "../src/modules/notices/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerNoticeConsumers } from "../src/modules/notices/consumer.js";
-import { registerSettlementConsumers } from "../src/modules/settlements/consumer.js";
 import { registerReminderConsumers } from "../src/modules/reminders/consumer.js";
 import { registerCounselBriefConsumers } from "../src/modules/counsel/consumer.js";
 import * as counselQueries from "../src/modules/counsel/queries.js";

@@ -1270,7 +1270,7 @@ describe("GET /v1/recommendations/trigger-rules/:id", () => {
       }),
     );
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url, headers: readerAuth() });
+    await app.inject({ method: "GET", url, headers: readerAuth() });
     await app.close();
   });
 

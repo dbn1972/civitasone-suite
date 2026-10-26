@@ -6,7 +6,7 @@
  * db.transaction that the versionedUpdate helper can exercise. pii-crypto is
  * tested with the vitest.config.ts env vars (COURT_PII_KEY, COURT_PII_SALT).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 
 // ── outbox tests ─────────────────────────────────────────────────────────────
 describe("shared/outbox — versionedUpdate + VersionConflictError", () => {

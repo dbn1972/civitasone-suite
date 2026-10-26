@@ -2,7 +2,7 @@
  * tasks/repo.ts — Database operations for field tasks.
  */
 import { eq, and, sql, desc, type SQL, lte, gte, isNotNull } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { tasks, type TaskRow, type TaskInsert } from "./schema.js";
 
 export function toView(r: TaskRow) {

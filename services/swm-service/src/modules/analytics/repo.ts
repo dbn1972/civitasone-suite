@@ -1,5 +1,5 @@
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { swmHotspots, type HotspotRow, type HotspotInsert } from "./schema.js";
 
 export function toView(r: HotspotRow) {

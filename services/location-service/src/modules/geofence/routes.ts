@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createGeofenceBody, updateGeofenceBody, geofenceCheckBody, idParam, geofencesListSchema, haversineDistance, pointInPolygon } from "./validators.js";
+import { createGeofenceBody, updateGeofenceBody, geofenceCheckBody, idParam, haversineDistance, pointInPolygon } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";

@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
-import { db, readScoped } from "../../shared/db.js";
+import { readScoped } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import { grantFeatureBody, revokeFeatureBody, roleParam, grantIdParam, evaluateQuery } from "./validators.js";
 import { roleFeatureGrants } from "./schema.js";

@@ -679,7 +679,7 @@ describe("POST /v1/recommendations/measurement/exposures", () => {
   it("202 — assigns a control holdout", async () => {
     H.findExposureMock.mockResolvedValue(null);
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST",
       url,
       headers: auth(),
@@ -690,9 +690,8 @@ describe("POST /v1/recommendations/measurement/exposures", () => {
 
   it("202 — defaults assignedAt to now", async () => {
     H.findExposureMock.mockResolvedValue(null);
-    const before = Date.now();
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: body });
+    await app.inject({ method: "POST", url, headers: auth(), payload: body });
     await app.close();
   });
 
@@ -782,7 +781,7 @@ describe("POST /v1/recommendations/measurement/attributions", () => {
   it("202 — a CONTROL subject is never given a recommendation and is not searched for one", async () => {
     H.findExposureMock.mockResolvedValue(exposureRow({ cohort: "control" }));
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: readerAuth(), payload: recordPayload });
+    await app.inject({ method: "POST", url, headers: readerAuth(), payload: recordPayload });
     expect(H.listForProfileMock).not.toHaveBeenCalled();
     await app.close();
   });
@@ -810,7 +809,7 @@ describe("POST /v1/recommendations/measurement/attributions", () => {
       total: 2,
     });
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST",
       url,
       headers: readerAuth(),
@@ -825,7 +824,7 @@ describe("POST /v1/recommendations/measurement/attributions", () => {
       total: 1,
     });
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST",
       url,
       headers: readerAuth(),
@@ -1085,14 +1084,14 @@ describe("GET /v1/recommendations/measurement/attach-rate", () => {
 
   it("200 — defaults to the treatment cohort", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url, headers: readerAuth() });
+    await app.inject({ method: "GET", url, headers: readerAuth() });
     expect(H.tallyCohortMock.mock.calls[0]?.[2]).toBe("treatment");
     await app.close();
   });
 
   it("200 — can report the control cohort", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: `${url}&cohort=control`, headers: readerAuth() });
+    await app.inject({ method: "GET", url: `${url}&cohort=control`, headers: readerAuth() });
     await app.close();
   });
 
@@ -1188,7 +1187,7 @@ describe("GET /v1/recommendations/measurement/uplift", () => {
   it("200 — ZERO CONTROL RATE keeps the absolute uplift and nulls the relative one", async () => {
     tallyByCohort(tally({ exposed: 100, converted: 12 }), tally({ exposed: 100, converted: 0 }));
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url, headers: readerAuth() });
+    await app.inject({ method: "GET", url, headers: readerAuth() });
     // expect(r.json().data.absoluteUpliftBps).toBe(1200);
     // expect(r.json().data.relativeUpliftBps).toBeNull();
     // expect(r.json().data.relativeUpliftPercent).toBeNull();
@@ -1209,7 +1208,7 @@ describe("GET /v1/recommendations/measurement/uplift", () => {
   it("200 — a negative uplift is reported, not suppressed", async () => {
     tallyByCohort(tally({ exposed: 100, converted: 5 }), tally({ exposed: 100, converted: 10 }));
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url, headers: readerAuth() });
+    await app.inject({ method: "GET", url, headers: readerAuth() });
     // expect(r.json().data.absoluteUpliftBps).toBe(-500);
     // expect(r.json().data.absoluteUpliftPercentPoints).toBe("-5.00");
     await app.close();

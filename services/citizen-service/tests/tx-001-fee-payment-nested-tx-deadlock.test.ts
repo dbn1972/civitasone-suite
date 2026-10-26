@@ -26,7 +26,7 @@ import { MemoryQueue, type Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { feePayments, feeRefunds } from "../src/modules/fee-payment/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerFeePaymentConsumers } from "../src/modules/fee-payment/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 

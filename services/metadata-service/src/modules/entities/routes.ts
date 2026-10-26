@@ -3,7 +3,6 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { withTenant } from "../../shared/scope.js";
 import { queue } from "../../shared/infra.js";
 import { entityDefinitions } from "./schema.js";

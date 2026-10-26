@@ -120,7 +120,7 @@ vi.mock("../src/modules/bundles/repo.js", () => ({
 }));
 
 import { buildApp } from "../src/app.js";
-import { COMMANDS, EVENTS } from "../src/topics.js";
+import { COMMANDS } from "../src/topics.js";
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 function adminToken(roles: string[] = ["catalogue_admin", "super_admin"]) {

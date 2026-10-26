@@ -18,7 +18,7 @@ import { registerInspectionConsumers } from "../src/modules/inspections/consumer
 import { registerNocConsumers } from "../src/modules/nocs/consumer.js";
 import * as repo from "../src/modules/nocs/repo.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
-import { hdr, drainQueue, waitFor, OFFICER_ROLES, INSPECTOR_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
+import { hdr, waitFor, OFFICER_ROLES, INSPECTOR_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 

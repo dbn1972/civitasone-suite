@@ -13,7 +13,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerComplaintConsumers } from "../src/modules/complaints/consumer.js";
 import { registerRegistrationConsumers } from "../src/modules/registration/consumer.js";
 import { registerOperationConsumers } from "../src/modules/operations/consumer.js";
-import { hdr, drainQueue, waitFor, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
+import { hdr, waitFor, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 

@@ -43,7 +43,7 @@ import { siloProvisions } from "../src/modules/provisioning/schema.js";
 import { registerProvisioningConsumers } from "../src/modules/provisioning/consumer.js";
 import { runProvisioningPollCycle } from "../src/modules/provisioning/scheduler.js";
 import { SERVICES } from "../src/modules/provisioning/actuator.js";
-import { CONSUMED_EVENTS, TENANT_SET_ISOLATION } from "../src/topics.js";
+import { CONSUMED_EVENTS } from "../src/topics.js";
 
 const ACTOR = "00000000-dddd-4000-8000-000000000002";
 // Must point at civitas_install (where install.silo_provisions actually lives),

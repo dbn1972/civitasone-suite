@@ -22,8 +22,6 @@ function token(sub: string, roles: string[], tid = TENANT): string {
 }
 const citizenBearer = () => ({ authorization: `Bearer ${token(CITIZEN_ACTOR, ["citizen"])}` });
 const officerBearer = () => ({ authorization: `Bearer ${token(OFFICER_ACTOR, ["citizen_officer"])}` });
-const adminBearer = () => ({ authorization: `Bearer ${token(OFFICER_ACTOR, ["super_admin"])}` });
-const otherTenantBearer = () => ({ authorization: `Bearer ${token(CITIZEN_ACTOR, ["citizen"], OTHER_TENANT)}` });
 
 const validGrievance = {
   category: "Water Supply",

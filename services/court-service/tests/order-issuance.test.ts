@@ -78,7 +78,6 @@ vi.mock("../src/topics.js", () => ({
 }));
 
 import { registerOrderIssuanceConsumers } from "../src/modules/order-issuance/consumer.js";
-import * as repo from "../src/modules/order-issuance/repo.js";
 import { enqueue, versionedUpdate } from "../src/shared/outbox.js";
 
 function makeHarness() {
