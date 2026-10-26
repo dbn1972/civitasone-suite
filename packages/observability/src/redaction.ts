@@ -68,7 +68,9 @@ const REDACTED_EMAIL = "[REDACTED_EMAIL]";
 const REDACTED_AADHAAR = "[REDACTED_AADHAAR]";
 
 /** Matches scheme://user:pass@host-shaped connection strings (postgres, redis, amqp, mongodb, etc). */
-const DSN_VALUE_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>]*:[^\s"'<>]*@[^\s"'<>]+/gi;
+// The user part excludes ":" and "@" so the first ":" after "://" is the only possible user/password split
+// (CodeQL js/polynomial-redos: two adjacent greedy classes that both accepted ":" backtracked quadratically).
+const DSN_VALUE_PATTERN = /\b[a-z][a-z0-9+.-]*:\/\/[^\s"'<>:@]*:[^\s"'<>]*@[^\s"'<>]+/gi;
 /** Matches `key: value` / `key=value` credential assignments embedded in free text (e.g. error messages). */
 const SECRET_KV_PATTERN = /\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s*[:=]\s*)\S+/gi;
 /** Matches `Bearer <token>` Authorization-header-shaped substrings. */
