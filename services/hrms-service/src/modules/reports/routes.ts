@@ -3,9 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, sql, and } from "drizzle-orm";
 import { resolveContext, requireRole } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsLeaveAllocs } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
 
@@ -30,7 +29,7 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/reports/leave-balance", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REPORT_ROLES);
-    const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
+    z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const allocs = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
       .where(eq(hrmsLeaveAllocs.tenantId, ctx.tenantId)));
     const summary = allocs.map(a => ({

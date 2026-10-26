@@ -4,7 +4,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   canApprove, decideApproval, nextWaitlistPosition, pickPromotion, summariseAttendance,
 } from "./domain.js";
@@ -92,7 +91,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     // seat/waitlist slot synchronously needs its own design thought,
     // matching how interview-recording-routes.ts's version-conflict race is
     // disclosed rather than rushed.
-    await publishF3Write(ctx, "training_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "training_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: outcome, sessionId: body.sessionId, waitlistPosition });
   });
 
@@ -143,7 +142,7 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
       const waitlisted = await repo.listWaitlisted(ctx.tenantId, nom.sessionId);
       promoted = pickPromotion(waitlisted);
     }
-    await publishF3Write(ctx, "training_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "training_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "rejected", promoted });
   });
 

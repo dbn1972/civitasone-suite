@@ -3,7 +3,7 @@
  * Pack (related to recruitment). Source: modules/manpower-planning/domain.ts
  */
 import { describe, it, expect } from "vitest";
-import { computeVacancy, allocateRoster, canApprove, DEFAULT_ROSTER } from "../src/modules/manpower-planning/domain.js";
+import { computeVacancy, allocateRoster, canApprove } from "../src/modules/manpower-planning/domain.js";
 
 describe("computeVacancy", () => {
   it("basic vacancy = sanctioned - filled", () => {

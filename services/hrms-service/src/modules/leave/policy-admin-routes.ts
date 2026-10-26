@@ -15,7 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsLeavePolicyRules } from "./policy-schema.js";
 import { hrmsLeaveTypes } from "./schema.js";
 

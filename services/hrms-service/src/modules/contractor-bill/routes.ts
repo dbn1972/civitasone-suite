@@ -27,8 +27,6 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import { computeContractTax, type ContractorKind } from "./domain.js";
 import * as repo from "./repo.js";
 import type { ContractorRow, ContractorBillRow } from "./schema.js";
@@ -112,7 +110,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     if (body.contactEmail !== undefined) patch.contactEmail = body.contactEmail;
     if (body.contactPhone !== undefined) patch.contactPhone = body.contactPhone;
     if (body.status !== undefined) patch.status = body.status;
-    await publishF3Write(ctx, "contractor_bill_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "contractor_bill_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: body.status ?? c.status }) as any;
   });
 
@@ -259,7 +257,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
       singleThresholdMinor: TDS_194C_SINGLE_MINOR, annualThresholdMinor: TDS_194C_ANNUAL_MINOR,
       ytdGrossMinor: ytd,
     });
-    await publishF3Write(ctx, "contractor_bill_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "contractor_bill_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({
       id: billId, status: "approved",
       grossMinor: bill.grossMinor, gstMinor: tax.gstMinor,
@@ -272,7 +270,7 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { billId } = billParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const bill = await mustBill(ctx.tenantId, billId);
     if (bill.status !== "submitted" && bill.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `bill is '${bill.status}', cannot reject`);

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { bandForGrade, computeOverallGrade, type ScoreInput } from "../src/modules/apar/engine.js";
-import { isValidHierarchyLevel, isValidDeptType, CENTRAL_GOVT_TYPES, PSU_TYPES } from "../src/modules/employee/dept-domain.js";
+import { isValidHierarchyLevel, isValidDeptType } from "../src/modules/employee/dept-domain.js";
 import { sanitizeString, sanitizeInput } from "../src/shared/sanitize.js";
 
 // ═════════════════════════════════════════════════════════

@@ -111,7 +111,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { claimId } = claimParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustLtc(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     // Ceiling enforcement: approved fare cannot exceed the entitlement.
@@ -128,7 +128,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { claimId } = claimParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustLtc(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     await publishF3Write(ctx, "claims_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -203,7 +203,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { claimId } = claimParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCea(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     // Remaining cap = annual cap - committed by OTHER (submitted+approved) claims
@@ -212,7 +212,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId, c.employeeId, c.academicYear, c.childRef, c.claimKind, c.id);
     const remaining = c.annualCapMinor - otherCommitted;
     const approved = remaining <= 0n ? 0n : bmin(c.claimedAmountMinor, remaining);
-    await publishF3Write(ctx, "claims_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "claims_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({
       id: claimId, status: "approved", claimedAmountMinor: c.claimedAmountMinor,
       annualCapMinor: c.annualCapMinor, approvedAmountMinor: approved,
@@ -224,7 +224,7 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { claimId } = claimParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const c = await mustCea(ctx.tenantId, claimId);
     if (c.status !== "submitted") throw new HttpError(409, "WRONG_STATE", `claim is '${c.status}', not submitted`);
     await publishF3Write(ctx, "claims_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })

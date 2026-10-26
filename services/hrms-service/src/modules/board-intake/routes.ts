@@ -16,7 +16,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -47,7 +46,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
     const row = await repo.findById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "intake item not found");
     if (row.status !== "pending_review") {
@@ -63,7 +62,7 @@ export async function boardIntakeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ note: z.string().min(1).max(2000) }).parse(req.body ?? {});
+    z.object({ note: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const row = await repo.findById(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "intake item not found");
     if (row.status !== "pending_review") {

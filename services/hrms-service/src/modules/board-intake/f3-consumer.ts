@@ -1,8 +1,8 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsBoardDecisionIntake } from "./schema.js";
 import * as repo from "./repo.js";
@@ -36,7 +36,6 @@ export function registerF3_board_intake_Consumers(queue: Queue): void {
     if (!ops.has(op)) return;
     const body = p.body ?? {};
     const params = p.params ?? {};
-    const id = (p.id as string) || (params.id as string);
     // The intake item under review — always the `:id` path param, never the message id.
     const intakeId = String(params.id ?? "");
     async function loadIntakeRow(tx: any) {

@@ -9,16 +9,12 @@ import { assertValidTransition, canRenew, DomainError } from "./domain.js";
 import {
   getContractById,
   getContractByIdTx,
-  getActiveContractForEmployee,
   getActiveContractForEmployeeTx,
-  getPendingRenewalForContract,
   getPendingRenewalForContractTx,
   getNextContractNo,
   getRenewalById,
   getRenewalByIdTx,
-  getContractConfig,
   getContractConfigTx,
-  getContractHistory,
   getContractHistoryTx,
 } from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -93,10 +89,6 @@ function renewalCacheKey(tenantId: string, id: string): string {
 
 function dashboardCacheKey(tenantId: string): string {
   return `${SERVICE}:${tenantId}:contract:dashboard:expiring`;
-}
-
-function configCacheKey(tenantId: string): string {
-  return `${SERVICE}:${tenantId}:contract:config`;
 }
 
 // ─── Registration ────────────────────────────────────────────────────────────

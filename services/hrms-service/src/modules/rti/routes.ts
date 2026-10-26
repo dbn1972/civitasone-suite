@@ -176,7 +176,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = respondRtiBody.parse(req.body);
+    respondRtiBody.parse(req.body);
     const existing = await repo.getRti(ctx.tenantId, id);
     if (!existing || (existing.status !== "filed" && existing.status !== "assigned")) {
       throw new HttpError(409, "INVALID_STATE", "request must be open to respond");
@@ -194,7 +194,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = appealRtiBody.parse(req.body);
+    appealRtiBody.parse(req.body);
     const existing = await repo.getRti(ctx.tenantId, id);
     if (!existing || existing.status !== "responded") {
       throw new HttpError(409, "INVALID_STATE", "only a responded request can be appealed");
@@ -212,7 +212,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = closeRtiBody.parse(req.body);
+    closeRtiBody.parse(req.body);
     const existing = await repo.getRti(ctx.tenantId, id);
     if (!existing || (existing.status !== "responded" && existing.status !== "appealed")) {
       throw new HttpError(409, "INVALID_STATE", "request must be responded or appealed to close");

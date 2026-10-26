@@ -17,7 +17,7 @@ import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
@@ -97,7 +97,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     if (!emp[0]) throw new HttpError(404, "NOT_FOUND", "employee not found");
 
     const declId = randomUUID();
-    await publishF3Write(ctx, "disciplinary_coi_routes__0", declId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__0", declId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({
       data: { id: declId, employeeId: id, declarationType: body.declarationType, status: "active" },
@@ -138,7 +138,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { declId } = declIdParam.parse(req.params);
-    const body = z.object({
+    z.object({
       reason: z.string().min(1).max(2000),
     }).parse(req.body);
 
@@ -160,7 +160,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot revoke`);
     }
 
-    await publishF3Write(ctx, "disciplinary_coi_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ data: { id: declId, status: "revoked" } }) as any;
   });
@@ -190,7 +190,7 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot acknowledge`);
     }
 
-    await publishF3Write(ctx, "disciplinary_coi_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "disciplinary_coi_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({ data: { id: declId, acknowledged: true } }) as any;
   });

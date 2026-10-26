@@ -4,7 +4,6 @@
  * threshold and the on/off switch are per-tenant policy (wfh_eligibility).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";

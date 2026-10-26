@@ -15,7 +15,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   PROFICIENCY_LEVELS, LANGUAGE_PROFICIENCY, CREDENTIAL_KINDS,
   validateSkills, validateCertifications, validateLanguages, validateCredentials,

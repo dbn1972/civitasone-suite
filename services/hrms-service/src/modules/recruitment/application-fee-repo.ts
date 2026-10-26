@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsJobOpenings, hrmsApplicationFees, type ApplicationFeeRow, type ApplicationFeeInsert } from "./schema.js";
 

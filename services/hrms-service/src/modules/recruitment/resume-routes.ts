@@ -16,9 +16,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { validateResumeUpload, resumeKeyPrefix, RESUME_MIME_TYPES, nextResumeVersion } from "./resume-domain.js";
-import { emitAudit } from "./audit-emit.js";
 import * as candidateRepo from "./candidate-repo.js";
 import * as repo from "./resume-repo.js";
 
@@ -68,7 +66,7 @@ export async function candidateResumeRoutes(app: FastifyInstance): Promise<void>
     const existing = await repo.listResumes(ctx.tenantId, id);
     const versionNo = nextResumeVersion(existing.map((r) => r.versionNo));
     const isActive = Boolean(body.makeActive) || existing.length === 0;
-    await publishF3Write(ctx, "recruitment_resume_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_resume_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({ id: rid, candidateId: id, versionNo, isActive }) as any;
   });

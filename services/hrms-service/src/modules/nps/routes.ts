@@ -17,7 +17,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
 import type { NpsAccountRow } from "./schema.js";
@@ -86,8 +86,8 @@ export async function npsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const acctId = randomUUID();
-    const openEmp = BigInt(body.openingEmpMinor);
-    const openEr = BigInt(body.openingErMinor);
+    BigInt(body.openingEmpMinor);
+    BigInt(body.openingErMinor);
     await publishF3Write(ctx, "nps_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, pran: body.pran, tier: body.tier }));
   });

@@ -12,10 +12,7 @@ import {
   parseNonQualifyingDays,
   summariseNonQualifying,
   MAX_QUALIFYING_HALF_YEARS,
-  DCRG_ABSOLUTE_CAP_MINOR,
   dcrgAbsoluteCapMinor,
-  FAMILY_PENSION_NORMAL_PCT,
-  FAMILY_PENSION_ENHANCED_PCT,
   type PensionInput,
 } from "../src/modules/pension/engine.js";
 

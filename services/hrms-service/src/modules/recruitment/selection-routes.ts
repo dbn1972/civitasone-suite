@@ -17,7 +17,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { ENTRY_CATEGORIES, validateEntries, validateApproval, isWithinValidity, type Entry } from "./selection-domain.js";
 import * as repo from "./selection-repo.js";
 
@@ -70,7 +69,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     if (errors.length > 0) throw new HttpError(422, "INVALID_ENTRIES", errors.join("; "));
 
     try {
-      await publishF3Write(ctx, "recruitment_selection_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_selection_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {
       // A concurrent set-entries (double-submit / retry) can collide on the DB
       // unique index after its own DELETE affected 0 rows — surface it cleanly.
@@ -103,7 +102,7 @@ export async function selectionListRoutes(app: FastifyInstance): Promise<void> {
     if (errors.length > 0) throw new HttpError(422, "INVALID_ENTRIES", errors.join("; "));
 
     const validUntil = new Date(body.validUntil).toISOString().slice(0, 10);
-    await publishF3Write(ctx, "recruitment_selection_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_selection_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "approved", validityUntil: validUntil }) as any;
   });
 

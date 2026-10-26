@@ -16,9 +16,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { assessFee, gatewayEnabled, validateManualPayment } from "./application-fee.js";
-import { emitAudit } from "./audit-emit.js";
 import * as repo from "./application-fee-repo.js";
 import * as screeningRepo from "./screening-repo.js";
 
@@ -59,7 +57,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const assessment = assessFee(vacancyFee, { category: a.category, categoryVerified: body.categoryVerified });
     const fid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_application_fee_routes__0", fid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_application_fee_routes__0", fid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         const now = await repo.findFee(ctx.tenantId, id) as any;
@@ -104,7 +102,7 @@ export async function applicationFeeRoutes(app: FastifyInstance): Promise<void> 
     const paymentRef = body.paymentRef!.trim();
 
     try {
-      await publishF3Write(ctx, "recruitment_application_fee_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_application_fee_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the fee record changed; reload and retry");
       throw err;

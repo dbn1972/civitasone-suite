@@ -16,7 +16,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { computePension, elEncashment, summariseNonQualifying, type PensionResult, type ServiceBookEvent } from "./engine.js";
 import * as serviceBookRepo from "../service-book/repo.js";
@@ -96,7 +96,7 @@ export async function pensionRoutes(app: FastifyInstance): Promise<void> {
     let recordId: string | undefined;
     if (q.persist && result.definedBenefit) {
       recordId = randomUUID();
-      await publishF3Write(ctx, "pension_routes__0", recordId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "pension_routes__0", recordId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     }
 
     return reply.send(

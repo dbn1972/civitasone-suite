@@ -14,7 +14,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { validateExperience, type Employment, type ExperienceRequirement } from "./experience-domain.js";
 import { validateEducation, EDUCATION_LEVELS, type Qualification, type EducationRequirement } from "./education-domain.js";
 import * as repo from "./qualification-repo.js";
@@ -42,19 +41,9 @@ export async function qualificationRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "INVALID_REQUIREMENT", "minimum relevant years cannot exceed minimum total years");
     }
 
-    const patch = {
-      minTotalYears: body.minTotalYears != null ? String(body.minTotalYears) : null,
-      minRelevantYears: body.minRelevantYears != null ? String(body.minRelevantYears) : null,
-      maxGapMonths: body.maxGapMonths ?? null,
-      minEducationLevel: body.minEducationLevel ?? null,
-      requiredDisciplines: (body.requiredDisciplines ?? []) as never,
-      minPercentage: body.minPercentage != null ? String(body.minPercentage) : null,
-      recognisedInstitutionsOnly: body.recognisedInstitutionsOnly ?? false,
-      updatedBy: ctx.actorId,
-    };
-    const existing = await repo.findByJob(ctx.tenantId, jobOpeningId);
+    await repo.findByJob(ctx.tenantId, jobOpeningId);
     try {
-      await publishF3Write(ctx, "recruitment_qualification_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_qualification_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "REQUIREMENT_EXISTS", "a requirement for this job was created concurrently; reload and retry");
       throw e;

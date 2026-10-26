@@ -20,7 +20,7 @@
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
-import { runWithTenant, withTenantScope } from "@civitasone/db";
+import { withTenantScope } from "@civitasone/db";
 import { db } from "../src/shared/db.js";
 import { registerLeaveConsumers } from "../src/modules/leave/consumer.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs } from "../src/modules/leave/schema.js";
