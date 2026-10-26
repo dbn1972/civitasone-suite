@@ -413,11 +413,41 @@ export function mapCodeListRows(payload: unknown): ModuleRowSummary[] {
     if (!parsed.success) continue;
     const l = parsed.data;
     mapped.push({
-      id: l.id ?? l.code ?? `row-${index + 1}`,
+      // Keyed by code: the values drill-down route is /tenant/code-lists/[code].
+      id: l.code ?? l.id ?? `row-${index + 1}`,
       label: l.name ?? l.code ?? `Code list ${index + 1}`,
       ...(l.description ?? l.code ? { sublabel: l.description ?? l.code } : {}),
       ...(l.isSystem != null ? { status: l.isSystem ? "System" : "Custom" } : {}),
       ...(l.code ? { meta: l.code } : {}),
+    });
+  }
+  return mapped;
+}
+
+// GAP-TENANT-CODE-LISTS-01: /api/v1/tenant/code-lists/:code/values returns
+// { data: CodeValue[] } with effectiveFrom (required) and effectiveTo (null while
+// the value is current). A row without effectiveFrom is malformed and dropped.
+const codeValueSchema = z.object({
+  id: z.string().optional(),
+  code: z.string(),
+  label: z.string(),
+  effectiveFrom: z.string().min(1),
+  effectiveTo: z.string().nullish(),
+});
+
+export function mapCodeValueRows(payload: unknown): ModuleRowSummary[] {
+  const mapped: ModuleRowSummary[] = [];
+  for (const [index, raw] of extractRows(payload).entries()) {
+    const parsed = codeValueSchema.safeParse(raw);
+    if (!parsed.success) continue;
+    const v = parsed.data;
+    const from = `From ${formatIndianDate(v.effectiveFrom)}`;
+    mapped.push({
+      id: v.id ?? v.code ?? `row-${index + 1}`,
+      label: v.label,
+      sublabel: v.code,
+      status: v.effectiveTo ? "Superseded" : "Active",
+      meta: v.effectiveTo ? `${from} to ${formatIndianDate(v.effectiveTo)}` : from,
     });
   }
   return mapped;
@@ -539,3 +569,12 @@ export const getTenantDataMigration = tenantLoader(
   mapMigrationRows,
 );
 export const getTenantPlans = tenantLoader("/api/v1/tenant/plans", "tenant.plans", mapPlanRows);
+
+/** Effective-dated values of one code list (read-only drill-down). */
+export function getTenantCodeListValues(code: string): Promise<LoaderResult<ModuleRowSummary[]>> {
+  return tenantLoader(
+    `/api/v1/tenant/code-lists/${encodeURIComponent(code)}/values`,
+    "tenant.code-list-values",
+    mapCodeValueRows,
+  )();
+}

@@ -87,4 +87,18 @@ describe("IdpTable — PII/I18N (IDP-03) + export audit (IDP-04)", () => {
     fireEvent.click(screen.getByRole("button", { name: /CSV/ }));
     await waitFor(() => expect(screen.getByText(/ऑडिट ट्रेल में दर्ज नहीं/)).toBeInTheDocument());
   });
+
+  // GAP-TENANT-ADMIN-IDP-05: every status in the admin-service enum
+  // (identity-providers/validators.ts STATUSES) maps to a pill tone; an
+  // unknown value defaults to neutral, never to success.
+  it.each([
+    ["active", "good"],
+    ["inactive", "mut"],
+    ["error", "bad"],
+    ["mystery", "info"],
+  ])("status %s renders a %s pill", (status, tone) => {
+    render(withIntl(<IdpTable providers={[{ ...providers[0], status }]} source="api" />));
+    const pill = document.querySelector("span.pill");
+    expect(pill?.className).toBe(`pill ${tone}`);
+  });
 });

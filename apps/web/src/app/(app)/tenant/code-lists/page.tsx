@@ -18,6 +18,7 @@ export default async function Page() {
         description={t("codeListsSubtitle")}
         rows={data}
         showId={false}
+        detailHrefBase="/tenant/code-lists"
         // Pinned: the title is translated, so the offline cache key must not derive from it.
         cacheKey="module.office-code-lists"
         source={source}

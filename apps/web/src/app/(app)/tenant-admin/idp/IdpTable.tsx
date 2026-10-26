@@ -7,6 +7,11 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { endpointOrigin, formatDateTimeIST } from "@/lib/formatters";
 import type { IdpProviderSummary } from "@/app/_data/loaders";
 
+// GAP-TENANT-ADMIN-IDP-05: admin-service STATUSES = active | inactive | error.
+// "error" is not in the shared StatusPill map (it fell back to neutral info), so a
+// failing provider looked benign; pin it to "bad". Unknown values stay neutral.
+const IDP_STATUS_VARIANT: Record<string, "good" | "mut" | "bad"> = { active: "good", inactive: "mut", error: "bad" };
+
 export function IdpTable({ providers, source }: { providers: IdpProviderSummary[]; source: "api" | "error" }) {
   const { data, provenance, offline, cachedAt } = useSeededResource("admin.idp.providers", providers, source, (d) => d.length === 0);
 
@@ -38,7 +43,7 @@ export function IdpTable({ providers, source }: { providers: IdpProviderSummary[
       columns={[
         { key: "name", label: "Provider" },
         { key: "protocol", label: "Protocol" },
-        { key: "status", label: "Status", render: (row) => <StatusPill status={row.status as string} /> },
+        { key: "status", label: "Status", render: (row) => <StatusPill status={row.status as string} variant={IDP_STATUS_VARIANT[row.status as string]} /> },
         { key: "usersSynced", label: "Users Synced" },
         {
           key: "endpoint",
