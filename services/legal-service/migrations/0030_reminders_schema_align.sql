@@ -26,6 +26,12 @@ ALTER TABLE reminders.legal_reminders
   ADD COLUMN IF NOT EXISTS updated_by UUID,
   ADD COLUMN IF NOT EXISTS version    INTEGER NOT NULL DEFAULT 1;
 
+-- FORCE RLS applies to the table owner, and a migration has no tenant GUC, so
+-- the cross-tenant back-fill would match 0 rows and SET NOT NULL below would
+-- abort on any legacy row. Lift FORCE for the one-off back-fill, then restore
+-- it (as 0027/0029 do).
+ALTER TABLE reminders.legal_reminders NO FORCE ROW LEVEL SECURITY;
+
 -- Back-fill any legacy rows. Rows predating this migration have no recorded
 -- author, so they get the nil UUID as an explicit "unknown" marker.
 UPDATE reminders.legal_reminders
@@ -35,6 +41,8 @@ UPDATE reminders.legal_reminders
        created_by = COALESCE(created_by, '00000000-0000-0000-0000-000000000000'),
        updated_by = COALESCE(updated_by, '00000000-0000-0000-0000-000000000000')
  WHERE remind_at IS NULL OR message IS NULL OR created_by IS NULL OR updated_by IS NULL;
+
+ALTER TABLE reminders.legal_reminders FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE reminders.legal_reminders
   ALTER COLUMN remind_at  SET NOT NULL,
