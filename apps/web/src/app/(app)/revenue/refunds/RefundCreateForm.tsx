@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import type { ReceiptRow } from "./page";
 
 const REFUND_FLAG_LABEL: Record<string, string> = {
@@ -30,25 +31,32 @@ export function RefundCreateForm({
   const router = useRouter();
   const [receiptId, setReceiptId] = useState("");
   const [reason, setReason] = useState("");
+  // Owner decision #1: optional partial amount (rupees); blank = full receipt.
+  const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
-  const [fieldErrors, setFieldErrors] = useState<{ receipt?: string; reason?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ receipt?: string; reason?: string; amount?: string }>({});
 
   const receiptSelId = useId();
   const reasonId = useId();
+  const amountId = useId();
   const summaryId = useId();
 
   const receiptErrorId = `${receiptSelId}-error`;
   const reasonErrorId = `${reasonId}-error`;
+  const amountErrorId = `${amountId}-error`;
 
   const receiptSelRef = useRef<HTMLSelectElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   const selectedReceipt = receipts.find((r) => r.id === receiptId);
   const pendingSet = new Set(pendingRefundReceiptIds);
+  const partialMinor = amount.trim() ? rupeesToMinorString(amount) : null;
+  const refundMinor = partialMinor ?? selectedReceipt?.amountMinor;
 
   if (receipts.length === 0) {
     return (
@@ -65,9 +73,15 @@ export function RefundCreateForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    const errors: { receipt?: string; reason?: string } = {};
+    const errors: { receipt?: string; reason?: string; amount?: string } = {};
     if (!receiptId) errors.receipt = "Select a receipt to refund.";
     if (!reason.trim()) errors.reason = "Reason is required.";
+    if (amount.trim()) {
+      if (!partialMinor) errors.amount = "Enter a valid amount greater than zero, with at most 2 decimal places.";
+      else if (selectedReceipt && BigInt(partialMinor) > BigInt(selectedReceipt.amountMinor)) {
+        errors.amount = "Refund amount cannot exceed the receipt amount.";
+      }
+    }
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
@@ -77,6 +91,8 @@ export function RefundCreateForm({
         receiptSelRef.current?.focus();
       } else if (errors.reason) {
         reasonRef.current?.focus();
+      } else if (errors.amount) {
+        amountRef.current?.focus();
       }
       return;
     }
@@ -97,6 +113,7 @@ export function RefundCreateForm({
         body: JSON.stringify({
           receiptId: selectedReceipt.id,
           reason: reason.trim(),
+          ...(partialMinor ? { amountMinor: partialMinor } : {}),
         }),
       });
       setConfirmOpen(false);
@@ -106,6 +123,7 @@ export function RefundCreateForm({
       );
       setReceiptId("");
       setReason("");
+      setAmount("");
       setFieldErrors({});
       router.refresh();
     } catch (err) {
@@ -154,6 +172,31 @@ export function RefundCreateForm({
               {fieldErrors.receipt && (
                 <p id={receiptErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.receipt}
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
+                Refund amount (₹) — optional
+              </label>
+              <input
+                id={amountId}
+                ref={amountRef}
+                type="number"
+                min="0.01"
+                step="0.01"
+                inputMode="decimal"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={selectedReceipt ? `Leave blank to refund the full ${formatMoney(selectedReceipt.amountMinor)}` : "Leave blank for a full refund"}
+                aria-invalid={!!fieldErrors.amount || undefined}
+                aria-describedby={fieldErrors.amount ? amountErrorId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
+              {fieldErrors.amount && (
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
+                  {fieldErrors.amount}
                 </p>
               )}
             </div>
@@ -214,7 +257,7 @@ export function RefundCreateForm({
         description={
           selectedReceipt ? (
             <>
-              Raise a refund of <strong>{formatMoney(selectedReceipt.amountMinor)}</strong> against receipt{" "}
+              Raise a refund of <strong>{formatMoney(refundMinor ?? selectedReceipt.amountMinor)}</strong>{partialMinor ? " (partial)" : ""} against receipt{" "}
               <strong>{selectedReceipt.receiptNo}</strong>. This is money leaving the treasury and requires a
               distinct checker's approval before it takes effect.
             </>
