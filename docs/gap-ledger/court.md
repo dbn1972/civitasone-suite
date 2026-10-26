@@ -302,7 +302,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-04  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 576c0c638 (owner decision #32, 2026-10-26): identity (name / advocate / Bar ID) full for judge, registrar, court_admin, super_admin and masked for others; every reveal is audited and refused (503) if it cannot be; per-case staff assignment has no model in court-service, so 'assigned court staff' is read as the court_admin/super_admin roles (see PR notes)
 - **W0 note:** partly fixed by #1923 — advocateBarId rendered via ds Masked (last4) by default; remaining: no reveal control/audit event or role gate (no onReveal passed), party name still shown in the clear; policy decision pending
 - **First-pass claim:** Party names and advocate Bar IDs (DPDP personal data) are rendered in full to every court-module user; no masking or role check (CaseConsole.tsx:284-320, types.ts:CaseParty).
 - **Verified evidence:** PartiesPanel (CaseConsole.tsx:282-312) prints name, advocateName and advocateBarId in the clear; no Masked component or role check exists in web (grep). types.ts:45-46 notes PII is server-encrypted and the gateway returns decrypted values 'where permitted', so gating may be enforced server-side (not verifiable; court-service absent). The 'every court-module user' claim is unverified.
@@ -389,7 +389,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 995012336 (owner decision #33, 2026-10-26): slots and courtrooms come from per-court config namespaces seeded with defaults at court creation; unconfigured values are refused (422 route, NonRetryable consumer); console uses selects
 - **W0 note:** partly fixed by #1923 — item number validated (integer >=1, duplicates blocked), slot/courtroom trimmed+uppercased and slot shown verbatim; remaining: slot/courtroom are still free-text inputs (no configured slot/courtroom namespaces or selects)
 - **First-pass claim:** Slot and courtroom are free text with no validation against config (hearing_purpose etc. have namespaces but slot/courtroom do not), so 'am 1' vs 'AM-1' will diverge (CauseListConsole.tsx AddItemForm).
 - **Verified evidence:** AddItemForm (CauseListConsole.tsx:287-300) slot and courtroom are free-text inputs; only non-empty is checked (:236). policy.ts ENUM_NAMESPACES has no slot or courtroom namespace. Table display humanize(it.slot) (:200) would turn 'AM-1' into 'AM 1'. Duplicate itemNumber not checked (:241).
