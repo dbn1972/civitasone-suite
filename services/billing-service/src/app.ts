@@ -22,10 +22,15 @@ import { gstnRoutes } from "./modules/gstn/routes.js";
 import { gatewayRoutes } from "./modules/gateways/routes.js";
 import { churnRoutes } from "./modules/churn/routes.js";
 
+// Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
+// external caller cannot forge it. Same value as hrms-service INTERNAL_PROXY_TRUST. Deliberately not `true`.
+const INTERNAL_PROXY_TRUST = "loopback,linklocal,uniquelocal";
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
+    trustProxy: INTERNAL_PROXY_TRUST,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });

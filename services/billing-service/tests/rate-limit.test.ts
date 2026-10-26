@@ -55,6 +55,34 @@ describe("billing-service rate limiting", () => {
     expect((await hit(ACTOR_B)).statusCode).not.toBe(429);
   });
 
+  it("behind the gateway (internal peer) webhook buckets are per forwarded client, not one shared gateway bucket", async () => {
+    const hit = (xff: string) =>
+      app.inject({ method: "POST", url: "/v1/billing/webhooks/razorpay", remoteAddress: "10.0.0.5", headers: { "x-forwarded-for": xff }, payload: {} });
+    for (let i = 0; i < 300; i++) expect((await hit("198.51.100.1")).statusCode).not.toBe(429);
+    expect((await hit("198.51.100.1")).statusCode).toBe(429);
+    expect((await hit("198.51.100.2")).statusCode).not.toBe(429);
+  });
+
+  it("an external peer cannot forge x-forwarded-for to dodge or poison the limit", async () => {
+    const hit = (xff: string) =>
+      app.inject({ method: "POST", url: "/v1/billing/webhooks/ccavenue", remoteAddress: "203.0.113.99", headers: { "x-forwarded-for": xff }, payload: {} });
+    for (let i = 0; i < 300; i++) await hit(`192.0.2.${i % 250}`);
+    expect((await hit("192.0.2.250")).statusCode).toBe(429);
+  });
+
+  it.each(["/v1/billing/payments/verify", "/v1/billing/payments/initiate"])(
+    "%s: per-actor burst beyond 30/min gets 429 with Retry-After and RATE_LIMITED body",
+    async (url) => {
+      const actor = globalThis.crypto.randomUUID();
+      const hit = () => app.inject({ method: "POST", url, remoteAddress: EXTERNAL_IP, headers: bearer(actor), payload: {} });
+      for (let i = 0; i < 30; i++) expect((await hit()).statusCode).not.toBe(429);
+      const res = await hit();
+      expect(res.statusCode).toBe(429);
+      expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+      expect(res.json()).toMatchObject({ code: "RATE_LIMITED", retryable: true });
+    },
+  );
+
   it("ops endpoints are never rate limited", async () => {
     for (let i = 0; i < 5; i++) {
       const r = await app.inject({ method: "GET", url: "/health", remoteAddress: EXTERNAL_IP });
