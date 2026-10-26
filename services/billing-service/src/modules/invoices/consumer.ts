@@ -54,6 +54,7 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
   queue.subscribe<{
     id: string; tenantId: string; periodMonth: string; items: LineItemInput[];
     taxMinor: string; chargesMinor: string; totalMinor: string;
+    gst?: { supplierGstin: string; recipientGstin: string; placeOfSupply: string; cgstMinor: string; sgstMinor: string; igstMinor: string };
   }>(COMMANDS.invoiceCreate, async (msg) => {
     const p = msg.payload;
     await db.transaction(async (tx) => {
@@ -61,12 +62,16 @@ export function registerInvoicesConsumers(rawQueue: Queue): void {
       await repo.insertInvoice(tx, {
         id: p.id, tenantId: p.tenantId, periodMonth: p.periodMonth, status: "draft",
         totalMinor: BigInt(p.totalMinor), taxMinor: BigInt(p.taxMinor), chargesMinor: BigInt(p.chargesMinor),
+        ...(p.gst ? {
+          supplierGstin: p.gst.supplierGstin, recipientGstin: p.gst.recipientGstin, placeOfSupply: p.gst.placeOfSupply,
+          cgstMinor: BigInt(p.gst.cgstMinor), sgstMinor: BigInt(p.gst.sgstMinor), igstMinor: BigInt(p.gst.igstMinor),
+        } : {}),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       for (const it of p.items) {
         await repo.insertItem(tx, {
           tenantId: p.tenantId, invoiceId: p.id, description: it.description,
-          kind: it.kind ?? "line", quantity: BigInt(it.quantity ?? 1),
+          kind: it.kind ?? "line", hsnSac: it.hsnSac ?? null, quantity: BigInt(it.quantity ?? 1),
           amountMinor: BigInt(it.amountMinor), createdBy: msg.actorId, updatedBy: msg.actorId,
         });
       }

@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import { outstandingMinor } from "./domain.js";
+import { outstandingMinor, invoiceNumber } from "./domain.js";
 import type { BillingInvoiceRow } from "./schema.js";
 
 export async function listInvoices(tenantId: string, opts?: { status?: string }) {
@@ -17,6 +17,13 @@ export async function listInvoices(tenantId: string, opts?: { status?: string })
 function summarize(r: BillingInvoiceRow) {
   return {
     id: r.id,
+    invoiceNumber: invoiceNumber(r.periodMonth, r.id),
+    supplierGstin: r.supplierGstin,
+    recipientGstin: r.recipientGstin,
+    placeOfSupply: r.placeOfSupply,
+    cgstMinor: r.cgstMinor.toString(),
+    sgstMinor: r.sgstMinor.toString(),
+    igstMinor: r.igstMinor.toString(),
     periodMonth: r.periodMonth,
     status: r.status,
     totalMinor: r.totalMinor.toString(),
@@ -42,7 +49,7 @@ export async function getInvoiceDetail(id: string, tenantId: string) {
     issuedBy: inv.issuedBy,
     cancelledBy: inv.cancelledBy,
     items: items.map((it) => ({
-      id: it.id, description: it.description, kind: it.kind,
+      id: it.id, description: it.description, kind: it.kind, hsnSac: it.hsnSac,
       quantity: it.quantity.toString(), amountMinor: it.amountMinor.toString(),
     })),
     approvals: approvals.map((a) => ({

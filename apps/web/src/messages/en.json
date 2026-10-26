@@ -16908,6 +16908,28 @@
     "users": {
       "exportNotice": "Exports are recorded in the audit log."
     },
+    "billingInvoices": {
+      "tableLabel": "Invoices",
+      "number": "Invoice no.",
+      "date": "Date",
+      "supplierGstin": "Supplier GSTIN",
+      "recipientGstin": "Recipient GSTIN",
+      "placeOfSupply": "Place of supply",
+      "cgst": "CGST",
+      "sgst": "SGST",
+      "igst": "IGST",
+      "total": "Total",
+      "status": "Status",
+      "emptyTitle": "No invoices yet",
+      "emptyMessage": "Invoice history will appear here after your first billing cycle.",
+      "payHeading": "How to pay",
+      "payPoGem": "Purchase order / GeM",
+      "payPoGemHint": "Pay against a purchase order raised through GeM or your department.",
+      "payTreasury": "Treasury e-challan",
+      "payTreasuryHint": "Pay through the state treasury using an e-challan.",
+      "payOnline": "Online payment",
+      "payOnlineHint": "Pay online with a card, UPI or net banking."
+    },
     "subscription": {
       "status": {
         "active": "Active",
