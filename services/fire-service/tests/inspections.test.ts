@@ -15,7 +15,7 @@ import { queue } from "../src/shared/infra.js";
 import { registerApplicationConsumers } from "../src/modules/applications/consumer.js";
 import { registerInspectionConsumers } from "../src/modules/inspections/consumer.js";
 import * as repo from "../src/modules/inspections/repo.js";
-import { hdr, drainQueue, waitFor, OFFICER_ROLES, INSPECTOR_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
+import { hdr, waitFor, OFFICER_ROLES, INSPECTOR_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 
