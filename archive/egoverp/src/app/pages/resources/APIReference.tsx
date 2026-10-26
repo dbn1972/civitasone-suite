@@ -1,5 +1,5 @@
 import { Card, Button, Input, Badge } from '../../components/ui';
-import { Code, Search, Book, Zap, Lock, Database, Send, FileText, Key, Globe } from 'lucide-react';
+import { Code, Search, Zap, Lock, Database, Send, Key, Globe } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { PublicHeader } from '../../components/PublicHeader';
@@ -86,7 +86,7 @@ data = response.json()`,
 ];
 
 export function APIReference() {
-  const navigate = useNavigate();
+  useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedExample, setSelectedExample] = useState(0);
 

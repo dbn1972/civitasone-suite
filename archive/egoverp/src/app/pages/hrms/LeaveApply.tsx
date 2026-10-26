@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Input, Textarea, Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Label } from '../../components/ui';
+import { Card, Button, Input, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
 import { Calendar, Upload, ArrowLeft, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { motion } from 'motion/react';
@@ -32,7 +32,6 @@ const LEAVE_BALANCES: Record<string, LeaveBalance> = {
   lwp: { type: 'Leave Without Pay', entitlement: 999, used: 0, pending: 0, available: 999 },
 };
 
-const HOLIDAYS = ['2024-06-01', '2024-06-15', '2024-08-15'];
 const EXISTING_LEAVES = [
   { from: '2024-07-10', to: '2024-07-12' },
   { from: '2024-09-05', to: '2024-09-06' },
@@ -55,7 +54,7 @@ export function LeaveApply() {
   const [contactDuringLeave, setContactDuringLeave] = useState('');
   const [handoverTo, setHandoverTo] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
+  useState<string | null>(null);
 
   const balance = LEAVE_BALANCES[leaveType];
 

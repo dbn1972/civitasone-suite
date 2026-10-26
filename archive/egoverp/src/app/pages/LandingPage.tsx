@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button, Badge, Card, Input, Textarea, Label, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui';
 import {
-  ArrowRight,
   CheckCircle,
   Shield,
   Cloud,
@@ -243,7 +242,7 @@ export function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [currentTestimonial, setCurrentTestimonial] = useState(0);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(0);
-  const [email, setEmail] = useState('');
+  useState('');
   const [showStickyBar, setShowStickyBar] = useState(false);
   const [roiUsers, setRoiUsers] = useState(100);
   const [roiCurrentCost, setRoiCurrentCost] = useState(15000);
@@ -275,7 +274,7 @@ export function LandingPage() {
   const heroY = useTransform(scrollY, [0, 400], [0, -100]);
 
   const featuresRef = useRef(null);
-  const featuresInView = useInView(featuresRef, { once: true, amount: 0.3 });
+  useInView(featuresRef, { once: true, amount: 0.3 });
 
   useEffect(() => {
     const interval = setInterval(() => {
