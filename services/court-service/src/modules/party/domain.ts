@@ -62,6 +62,49 @@ export const PII_PRIVILEGED_ROLES = Object.freeze([
 // consuming routes.ts throws immediately at runtime instead of silently
 // widening PII access on BOTH endpoints that share this constant.
 
+/**
+ * Owner decision #32 (GAP-COURT-CASES-CASEID-04): roles that see party and advocate IDENTITY (name,
+ * advocate name, Bar ID) unmasked - judges, registrars and court staff (court_admin / super_admin).
+ * Everyone else with read access (court_clerk) sees it masked. Deliberately wider than
+ * PII_PRIVILEGED_ROLES: a registrar needs the names to run the case, but not the contact details.
+ * Every unmasked delivery is audited (see party/commands.ts recordIdentityReveal).
+ */
+export const IDENTITY_REVEAL_ROLES = Object.freeze([
+  "judge", "registrar", "court_admin", "super_admin",
+]) as string[];
+
+/** "Ramesh Kumar Sharma" -> "R*** K*** S***": first character of each word, nothing else. */
+export function maskPartyName(value: string | null): string | null {
+  if (value === null || value === undefined) return null;
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return value;
+  return words.map((w) => `${Array.from(w)[0]}***`).join(" ");
+}
+
+/** "UP/1234/2010" -> "********2010": only the last four characters survive. */
+export function maskBarId(value: string | null): string | null {
+  if (value === null || value === undefined) return null;
+  if (value.length <= 4) return "****";
+  return `${"*".repeat(value.length - 4)}${value.slice(-4)}`;
+}
+
+export type RevealedIdentity = { id: string; fields: Array<"name" | "advocateName" | "advocateBarId"> };
+
+/** Which parties would deliver unmasked identity - the audit trail records ids and field names, never values. */
+export function partiesRevealingIdentity(
+  rows: Array<Pick<PartyRowForPresentation, "id" | "nameEnc" | "advocateName" | "advocateBarId">>,
+): RevealedIdentity[] {
+  const out: RevealedIdentity[] = [];
+  for (const r of rows) {
+    const fields: RevealedIdentity["fields"] = [];
+    if (r.nameEnc) fields.push("name");
+    if (r.advocateName) fields.push("advocateName");
+    if (r.advocateBarId) fields.push("advocateBarId");
+    if (fields.length > 0) out.push({ id: r.id, fields });
+  }
+  return out;
+}
+
 /** The shape every case_parties row is presented as on the wire. */
 export interface PresentedParty {
   id: string;
@@ -102,19 +145,21 @@ export interface PartyRowForPresentation {
  * not belong in this pure domain module). `maskPhone`/`maskEmail` come from
  * shared/pii-crypto.ts — pure string helpers, safe to call from domain code.
  */
-export function presentParty(row: PartyRowForPresentation, revealPii: boolean): PresentedParty {
+export function presentParty(row: PartyRowForPresentation, revealPii: boolean, revealIdentity: boolean = revealPii): PresentedParty {
   const base = {
     id: row.id,
     caseId: row.caseId,
     partyRole: row.partyRole,
-    advocateName: row.advocateName,
-    advocateBarId: row.advocateBarId,
+    // Owner decision #32: identity (advocate name + Bar ID) is masked unless the caller's role may reveal it.
+    advocateName: revealIdentity ? row.advocateName : maskPartyName(row.advocateName),
+    advocateBarId: revealIdentity ? row.advocateBarId : maskBarId(row.advocateBarId),
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+  const name = revealIdentity ? row.nameEnc : maskPartyName(row.nameEnc);
   if (revealPii) {
-    return { ...base, name: row.nameEnc, address: row.addressEnc, phone: row.phoneEnc, email: row.emailEnc };
+    return { ...base, name, address: row.addressEnc, phone: row.phoneEnc, email: row.emailEnc };
   }
-  return { ...base, name: null, address: null, phone: maskPhoneImpl(row.phoneEnc), email: maskEmailImpl(row.emailEnc) };
+  return { ...base, name, address: null, phone: maskPhoneImpl(row.phoneEnc), email: maskEmailImpl(row.emailEnc) };
 }

@@ -47,9 +47,11 @@ describe("party domain — presentParty (DPDP PII masking)", () => {
     expect(out.partyRole).toBe("petitioner");
   });
 
-  it("redacts name/address and masks phone/email when revealPii is false (ordinary role)", () => {
+  it("masks name and advocate identity, redacts address and masks phone/email when revealPii is false (ordinary role)", () => {
     const out = presentParty(row, false);
-    expect(out.name).toBeNull();
+    // Owner decision #32: identity is masked (not nulled) for roles that may not reveal it.
+    expect(out.name).toBe("R*** K*** S***");
+    expect(out.advocateBarId).toBe("********2010");
     expect(out.address).toBeNull();
     expect(out.phone).not.toBe("9876543210");
     expect(out.phone).toMatch(/3210$/); // last 4 digits kept

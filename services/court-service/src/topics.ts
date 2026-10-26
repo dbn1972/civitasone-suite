@@ -61,6 +61,8 @@ export const COMMANDS = {
   /** §14/§15 parties + advocates (PII encrypted at rest) */
   addParty:                   "court.party.add",
   updateAdvocate:             "court.party.update_advocate",
+  /** payload: { caseId, surface, roles, parties: [{ id, fields }] } — audit of an unmasked party-identity reveal (owner decision #32). Carries ids/field names only, never PII. */
+  partyRevealAudit:           "court.party.reveal_audit",
   /** §22 evidence + exhibits (SHA-256 tamper-evidence) */
   submitEvidence:             "court.evidence.submit",
   ruleOnEvidence:             "court.evidence.rule",
