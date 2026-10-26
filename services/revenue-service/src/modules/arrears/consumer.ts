@@ -133,16 +133,6 @@ export function registerArrearsConsumers(queue: Queue): void {
         .returning({ id: instalmentPlans.id });
       if (claimed.length === 0) return; // lost a race to another decider
 
-      if (approve) {
-        await enqueue(tx, {
-          topic: EVENTS.instalmentPlanApproved,
-          eventType: EVENTS.instalmentPlanApproved,
-          tenantId: msg.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          payload: { planId, assesseeId: plan.assesseeId, instalmentCount: plan.instalmentCount, totalMinor: plan.totalMinor.toString() },
-        });
-      }
       await enqueue(tx, {
         topic: "audit.event.record",
         eventType: "audit.event.record",

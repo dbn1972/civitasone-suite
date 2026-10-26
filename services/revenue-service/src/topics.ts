@@ -103,7 +103,6 @@ export const EVENTS = {
   rebateRuleCreated: "revenue.rebate_rule.created",
 
   /** An approved rate-config proposal was applied (owner decision #2) */
-  rateConfigApplied: "revenue.rate_config.applied",
 
   // ── Assessment ───────────────────────────────────────────────────────────
   assesseeCreated: "revenue.assessee.created",
@@ -126,7 +125,6 @@ export const EVENTS = {
   // ── Arrears ──────────────────────────────────────────────────────────────
   instalmentPlanCreated: "revenue.instalment.created",
   /** A distinct checker approved the plan — it is now active (owner decision #3) */
-  instalmentPlanApproved: "revenue.instalment.approved",
   writeOffApplied: "revenue.write_off.applied",
   /** Recovery referred — triggers legal-service case creation */
   recoveryReferred: "revenue.recovery.referred",

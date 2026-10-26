@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS, SERVICE } from "../../topics.js";
+import { COMMANDS, SERVICE } from "../../topics.js";
 import { rateHeads, rateSlabs, penaltyRules, rebateRules, configProposals } from "../rate-engine/schema.js";
 import { DomainError, assertMakerChecker } from "../rate-engine/domain.js";
 import { istToday } from "../arrears/recovery-notice.js";
@@ -192,14 +192,6 @@ export function registerRateConfigConsumers(queue: Queue): void {
         await tx.update(configProposals).set({ appliedRef }).where(eq(configProposals.id, proposalId));
       }
 
-      await enqueue(tx, {
-        topic: EVENTS.rateConfigApplied,
-        eventType: EVENTS.rateConfigApplied,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: { proposalId, kind: row.kind, configAction: row.action, targetId: row.targetId ?? null, appliedRef, effectiveFrom: toProposal(row).effectiveFrom },
-      });
       await audit("approved", { appliedRef, effectiveFrom: toProposal(row).effectiveFrom });
     });
 

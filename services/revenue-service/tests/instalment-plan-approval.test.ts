@@ -20,7 +20,7 @@ import { instalmentPlans, instalments } from "../src/modules/arrears/schema.js";
 import { dcbEntries, demands } from "../src/modules/assessment/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerArrearsConsumers } from "../src/modules/arrears/consumer.js";
-import { COMMANDS, EVENTS } from "../src/topics.js";
+import { COMMANDS } from "../src/topics.js";
 
 const TENANT = "ad030000-0000-4000-8000-00000000ad30";
 const ASSESSEE = "ad030000-0000-4000-8000-0000000000ee";
@@ -101,7 +101,7 @@ describe("instalment plan maker-checker (owner decision #3, real DB)", () => {
     await q.stop();
   });
 
-  it("a DIFFERENT officer approves: plan becomes active, checker recorded, decision audited, approval event emitted", async () => {
+  it("a DIFFERENT officer approves: plan becomes active, checker recorded, decision audited", async () => {
     const q = await start();
     const plan = await createPlan(q);
     await q.publish(COMMANDS.instalmentPlanDecide, msg(COMMANDS.instalmentPlanDecide, CHECKER, { planId: plan.id, approve: true, reason: "hardship verified" }));
@@ -114,21 +114,15 @@ describe("instalment plan maker-checker (owner decision #3, real DB)", () => {
     expect(row.decisionReason).toBe("hardship verified");
     const decide = (await audits()).map((a) => a.payload as Record<string, unknown>).find((p) => p.action === "decide");
     expect(decide).toMatchObject({ resourceType: "instalment_plan", outcome: "approved", resourceId: plan.id });
-    const events = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, EVENTS.instalmentPlanApproved)))));
-    expect(events).toHaveLength(1);
     await q.stop();
   });
 
-  it("a reject leaves the plan rejected (never active) and emits no approval event", async () => {
+  it("a reject leaves the plan rejected (never active)", async () => {
     const q = await start();
     const plan = await createPlan(q);
     await q.publish(COMMANDS.instalmentPlanDecide, msg(COMMANDS.instalmentPlanDecide, CHECKER, { planId: plan.id, approve: false, reason: "no basis" }));
     await q.drain();
     expect((await planRow(plan.id)).status).toBe("rejected");
-    const events = await runWithTenant(TENANT, () => db.transaction((tx) =>
-      tx.select().from(outboxMessages).where(and(eq(outboxMessages.tenantId, TENANT), eq(outboxMessages.eventType, EVENTS.instalmentPlanApproved)))));
-    expect(events).toHaveLength(0);
     await q.stop();
   });
 
