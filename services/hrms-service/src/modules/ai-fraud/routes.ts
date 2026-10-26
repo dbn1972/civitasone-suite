@@ -11,8 +11,8 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and, desc, inArray, count } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsFraudAlerts, hrmsEmployeeRiskScores, hrmsRecommendations } from "./schema.js";
 import type { EmployeeRow } from "../employee/schema.js";
 import * as engine from "./detection-engine.js";
@@ -109,7 +109,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Store alerts
     for (const alert of alerts) {
-      await publishF3Write(ctx, "ai_fraud_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "ai_fraud_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     }
 
     const duration = Date.now() as any - startTime;

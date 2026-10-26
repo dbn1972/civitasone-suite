@@ -11,7 +11,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const T = "aaaaaaaa-1111-4000-8000-000000000077";
 const A = "cccccccc-3333-4000-8000-000000000077";
 const admin = signToken({ sub: A, tid: T, roles: ["payroll_admin", "super_admin"], sid: "s1" }, SECRET);
-const emp = signToken({ sub: A, tid: T, roles: ["employee"], sid: "s2" }, SECRET);
+signToken({ sub: A, tid: T, roles: ["employee"], sid: "s2" }, SECRET);
 afterAll(async () => { await sqlClient.end(); });
 
 async function hit(m: string, u: string, a?: string, p?: unknown) {

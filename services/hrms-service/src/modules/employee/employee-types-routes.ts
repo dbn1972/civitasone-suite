@@ -14,7 +14,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { pgSchema, uuid, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
@@ -94,7 +94,7 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/employee-types", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = createBody.parse(req.body);
+    createBody.parse(req.body);
     const id = randomUUID();
     await publishF3Write(ctx, "employee_employee_types_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id, status: "created" }) as any;
@@ -126,7 +126,7 @@ export async function employeeTypeRoutes(app: FastifyInstance): Promise<void> {
     if (body.eligibleForBonus !== undefined) patch.eligibleForBonus = body.eligibleForBonus;
     if (body.leaveEncashment !== undefined) patch.leaveEncashment = body.leaveEncashment;
     if (body.sortOrder !== undefined) patch.sortOrder = body.sortOrder;
-    await publishF3Write(ctx, "employee_employee_types_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "employee_employee_types_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: "updated" }) as any;
   });
 

@@ -18,7 +18,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { CORRIGENDUM_ACTIONS, publishBlockReason } from "./job-publication.js";
 import * as repo from "./publication-repo.js";
 
@@ -73,7 +72,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt", "minExperienceYears"] as const) {
       if ((body as Record<string, unknown>)[k] !== undefined) patch[k] = (body as Record<string, unknown>)[k];
     }
-    await publishF3Write(ctx, "recruitment_publication_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_publication_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, updated: true }) as any;
   });
 
@@ -103,7 +102,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ changes: z.string().min(1).max(4000) }).parse(req.body);
+    z.object({ changes: z.string().min(1).max(4000) }).parse(req.body);
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be amended");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
@@ -123,7 +122,7 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     if (oldDeadline && newDeadline <= oldDeadline) throw new HttpError(400, "NOT_AN_EXTENSION", "the new deadline must be later than the current one");
     if (newDeadline.getTime() <= Date.now()) throw new HttpError(400, "DEADLINE_IN_PAST", "the new deadline must be in the future");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
-    await publishF3Write(ctx, "recruitment_publication_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_publication_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, status: "open", applicationDeadline: newDeadline, corrigendumSeq: seq })) as any;
   });
 
@@ -131,10 +130,10 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body);
+    z.object({ reason: z.string().min(1).max(2000) }).parse(req.body);
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "vacancy is already cancelled");
-    const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
+    await repo.nextCorrigendumSeq(ctx.tenantId, id);
     await publishF3Write(ctx, "recruitment_publication_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "cancelled" }) as any;
   });

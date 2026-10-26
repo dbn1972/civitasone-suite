@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -263,7 +263,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
 
     // 4. Store geo-attendance record
     const id = randomUUID();
-    await publishF3Write(ctx, "geo_attendance_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "geo_attendance_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({
       id, status: withinGeofence ? "within_geofence" : "outside_geofence",
@@ -281,7 +281,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const body = geoCheckInBody.parse(req.body);
     await resolveSelfEmployeeOrThrow(ctx, req, body.employeeId);
-    const today = new Date().toISOString().slice(0, 10);
+    new Date().toISOString().slice(0, 10);
 
     let officeLoc: any = null;
     const rows = await scopedRead((tx) => tx.select().from(hrmsOfficeLocations)
@@ -296,7 +296,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "geo_attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "geo_attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({ id, status: "check_out_recorded", withinGeofence, distanceMeters: distance ? Math.round(distance) : null }) as any;
   });

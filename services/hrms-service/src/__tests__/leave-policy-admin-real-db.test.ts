@@ -27,7 +27,6 @@
  * on why the route forwards the *parsed* body, not raw req.body.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";

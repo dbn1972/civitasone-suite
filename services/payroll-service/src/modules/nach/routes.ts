@@ -16,7 +16,6 @@ import { resolveContext, requireRole } from "../../shared/context.js";
 import {
   submitMandate,
   checkMandateStatus,
-  submitBulkPayment,
   NachAdapterError,
   CircuitBreakerOpenError,
 } from "./adapter.js";

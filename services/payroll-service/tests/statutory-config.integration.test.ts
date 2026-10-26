@@ -20,7 +20,6 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { resolveRunStatutoryConfig } from "../src/modules/payroll/consumer.js";
 import { computeSlip, DEFAULT_STATUTORY_CONFIG } from "../src/modules/payroll/domain.js";
 
-const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
 const TENANT_A = "90000000-d008-4000-8000-000000000001"; // has its own override
 const TENANT_B = "90000000-d008-4000-8000-000000000002"; // no override -> platform default
 const ACTOR = "00000000-0000-0000-0000-000000000099";

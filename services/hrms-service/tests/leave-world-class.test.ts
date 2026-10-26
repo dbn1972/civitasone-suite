@@ -336,7 +336,7 @@ describe("5. Attendance Management", () => {
 // ═══════════════════════════════════════════════════════════════
 // SECTION 6: LEAVE RULES ENGINE (Domain Logic)
 // ═══════════════════════════════════════════════════════════════
-import { validateLeaveRequest, LEAVE_POLICIES, countWorkingDaysExcludingHolidays, countCalendarDays } from "../src/modules/leave/rules-engine.js";
+import { validateLeaveRequest, countWorkingDaysExcludingHolidays, countCalendarDays } from "../src/modules/leave/rules-engine.js";
 
 const T = "00000000-0000-0000-0000-000000000001";
 const base = { tenantId: T, serviceStartDate: "2020-01-01", isOnProbation: false, gender: "male" as const, childrenCount: 0, totalAccumulated: 0 };

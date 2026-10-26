@@ -8,7 +8,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool, sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const HR_ROLES   = ["hr_admin", "super_admin", "hr_officer"];

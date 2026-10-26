@@ -36,7 +36,6 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 
 const asT = <T,>(t: string, fn: (tx: typeof sqlClient) => Promise<T>) => withRawTenantGuc(sqlClient, t, fn);
 const nameOf = (i: number) => `Sf17a Person ${String(i).padStart(4, "0")}`;
-const empId = (i: number) => `beef0000-0000-4000-9000-${String(i).padStart(12, "0")}`;
 
 async function cleanup(): Promise<void> {
   for (const t of [TENANT, OTHER]) {

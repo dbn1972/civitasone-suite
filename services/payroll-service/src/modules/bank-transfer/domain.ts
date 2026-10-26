@@ -21,16 +21,6 @@ export interface ValidationResult {
 const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 /**
- * Parse a DDMMYYYY string into a Date (midnight UTC).
- */
-function parseDDMMYYYY(s: string): Date {
-  const dd = parseInt(s.slice(0, 2), 10);
-  const mm = parseInt(s.slice(2, 4), 10) - 1; // 0-indexed month
-  const yyyy = parseInt(s.slice(4, 8), 10);
-  return new Date(yyyy, mm, dd);
-}
-
-/**
  * Format a Date as DDMMYYYY string.
  */
 function formatDDMMYYYY(d: Date): string {

@@ -10,7 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead} from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { verifyFace, type FaceConfig } from "./engine.js";
 import { hrmsProfilePhotos, hrmsFaceVerificationLog, hrmsFaceConfig } from "./schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
@@ -182,7 +182,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const body = z.object({
+    z.object({
       photoKey: z.string().min(1).max(1024),
       photoBucket: z.string().default("civitasone-photos"),
     }).parse(req.body);
@@ -194,11 +194,11 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     const employeeId = resolveProfilePhotoWriteScope(ctx.roles, self?.id ?? null, id);
 
     // Upsert profile photo
-    const existing = await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
+    await scopedRead((tx) => tx.select().from(hrmsProfilePhotos)
       .where(and(eq(hrmsProfilePhotos.tenantId, ctx.tenantId), eq(hrmsProfilePhotos.employeeId, employeeId))).limit(1));
 
     const photoId = randomUUID();
-    await publishF3Write(ctx, "face_verification_routes__0", photoId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "face_verification_routes__0", photoId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(201).send({ id: photoId, status: "uploaded", message: "Profile photo uploaded. Will be used for attendance face verification." }) as any;
   });
@@ -276,7 +276,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
     );
 
     // Log verification attempt
-    await publishF3Write(ctx, "face_verification_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "face_verification_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.send({
       verified: result.isMatch,
@@ -300,7 +300,7 @@ export async function faceVerificationRoutes(app: FastifyInstance): Promise<void
   app.patch("/v1/hrms/admin/face-config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = z.object({
+    z.object({
       onnxEnabled: z.boolean().optional(),
       onnxThreshold: z.number().min(0.5).max(1.0).optional(),
       rekognitionEnabled: z.boolean().optional(),

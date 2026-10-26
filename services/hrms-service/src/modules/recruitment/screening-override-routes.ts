@@ -54,7 +54,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_screening_override_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_screening_override_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       // partial unique index (one pending per application) — concurrent request
       if (String((err as { code?: string }).code) === "23505") {
@@ -242,7 +242,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { reqId } = reqParam.parse(req.params);
-    const body = z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
 
     const r = await mustReq(ctx.tenantId, reqId);
     if (!isActionable(r.status)) throw new HttpError(409, "NOT_PENDING", `override request is '${r.status}', not pending`);
@@ -251,7 +251,7 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
       throw new HttpError(403, "NOT_REQUESTER", "only the officer who raised the override (or a super_admin) may cancel it");
     }
     try {
-      await publishF3Write(ctx, "recruitment_screening_override_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_screening_override_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;

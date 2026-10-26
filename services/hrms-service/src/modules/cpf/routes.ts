@@ -89,8 +89,8 @@ export async function cpfRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "CPF_NUMBER_TAKEN", "CPF number already allocated");
     }
     const acctId = randomUUID();
-    const openEmp = BigInt(body.openingEmpMinor);
-    const openEr = BigInt(body.openingErMinor);
+    BigInt(body.openingEmpMinor);
+    BigInt(body.openingErMinor);
     await publishF3Write(ctx, "cpf_routes__0", acctId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send(jsonSafe({ id: acctId, employeeId: id, cpfNumber: body.cpfNumber }));
   });

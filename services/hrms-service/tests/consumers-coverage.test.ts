@@ -80,7 +80,7 @@ describe("Social consumers — registration and processing", () => {
   it("registers correct topics", async () => {
     const q = new MemoryQueue();
     registerSocialConsumers(q);
-    const topics = (q as any)._subscriptions?.keys?.() ?? Object.keys((q as any)._handlers ?? {});
+    ;(q as any)._subscriptions?.keys?.() ?? Object.keys((q as any)._handlers ?? {});
     // Just verify registration doesn't throw and queue starts
     await q.start();
     await q.stop();

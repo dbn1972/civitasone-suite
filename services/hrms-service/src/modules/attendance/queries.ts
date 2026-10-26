@@ -2,7 +2,6 @@ import { cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
 import { batchEmployees, batchDepartments } from "../../shared/batch-resolve.js";
 import type { AttendanceRow } from "./schema.js";
 

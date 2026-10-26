@@ -128,7 +128,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     if (body.prerequisiteCourseId === id) throw new HttpError(409, "INVALID_PREREQ", "a course cannot be its own prerequisite");
     const prereq = await repo.getCourse(ctx.tenantId, body.prerequisiteCourseId);
     if (!prereq) throw new HttpError(404, "NOT_FOUND", "prerequisite course not found");
-    await publishF3Write(ctx, "learning_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "learning_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send({ courseId: id, prerequisiteCourseId: body.prerequisiteCourseId }) as any;
   });
 
@@ -256,7 +256,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const status = deriveEnrollmentStatus(progressPct);
     const resumeLessonId = nextResumeLesson(allLessons.map((l) => l.id), doneSet);
 
-    await publishF3Write(ctx, "learning_routes__6", id, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "learning_routes__6", id, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ enrollmentId: enrollment.id, progressPct, status, resumeLessonId });
   });
 
@@ -364,7 +364,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/learning/training-plans", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const body = z.object({
+    z.object({
       title:        z.string().min(1).max(256),
       planYear:     z.number().int().min(2020).max(2100),
       departmentId: z.string().uuid().optional(),
@@ -389,7 +389,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       courseId:   z.string().uuid().optional(),
       trainingId: z.string().uuid().optional(),
       targetDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),

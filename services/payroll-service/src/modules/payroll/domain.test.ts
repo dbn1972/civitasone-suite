@@ -17,7 +17,6 @@ import {
   computeGratuity,
   additionalPensionPct,
   hraSlabPct,
-  DomainError,
   roundRupee,
   DEFAULT_STATUTORY_CONFIG,
   resolveStatutoryConfig,

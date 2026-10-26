@@ -6,7 +6,6 @@ import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { randomUUID } from "node:crypto";
 
 // my-elections is keyed by the caller hrms employee id, resolved via hrms
 // (not running in this env): map this file ACTOR to an employee id.

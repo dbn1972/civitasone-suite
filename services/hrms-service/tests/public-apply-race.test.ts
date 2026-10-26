@@ -30,7 +30,7 @@
  * Promise.all with no await between them reproduces the original bug
  * deterministically.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";

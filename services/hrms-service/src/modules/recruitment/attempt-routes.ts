@@ -26,7 +26,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   randomizeQuestionOrder, attemptDeadline, scoreObjective, computeAttemptResult,
   type PaperEntry, type ObjectiveScore,
@@ -118,7 +117,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     }
 
     const id = randomUUID();
-    await publishF3Write(ctx, "recruitment_attempt_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_attempt_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send({ id, status: "scheduled", totalMarks, questions: paper.length }) as any;
   });
 
@@ -163,7 +162,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       candidateId: z.string().uuid(),
       applicationId: z.string().uuid().optional(),
       slotLabel: z.string().max(64).optional(),
@@ -174,9 +173,9 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
 
     const attemptId = randomUUID();
     const paperIds = (s.paper as PaperEntry[]).map((p) => p.questionId);
-    const order = randomizeQuestionOrder(paperIds, attemptId); // per-candidate deterministic order
+    randomizeQuestionOrder(paperIds, attemptId); // per-candidate deterministic order
     try {
-      await publishF3Write(ctx, "recruitment_attempt_routes__2", attemptId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_attempt_routes__2", attemptId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "DUPLICATE_ATTEMPT", "this candidate already has an attempt for this schedule") as any;
       throw e;
@@ -201,7 +200,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ method: z.string().min(1).max(32), meta: z.record(z.unknown()).optional() }).parse(req.body);
+    z.object({ method: z.string().min(1).max(32), meta: z.record(z.unknown()).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status !== "assigned" && a.status !== "in_progress") throw new HttpError(409, "INVALID_STATE", `cannot verify identity in status "${a.status}"`);
     await publishF3Write(ctx, "recruitment_attempt_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -225,7 +224,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const durationMinutes = blueprint?.durationMinutes ?? 60;
     const extraPct = Number((a.accommodation as { extraTimePct?: number })?.extraTimePct ?? 0);
     const deadline = new Date(attemptDeadline(now, durationMinutes, extraPct, s.windowEnd.getTime()));
-    await publishF3Write(ctx, "recruitment_attempt_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_attempt_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, status: "in_progress", deadlineAt: deadline })) as any;
   });
 
@@ -257,7 +256,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const allowed = new Set((a.questionOrder as string[]));
     for (const r of body.responses) if (!allowed.has(r.questionId)) throw new HttpError(422, "UNKNOWN_QUESTION", `question ${r.questionId} is not part of this attempt`);
 
-    await publishF3Write(ctx, "recruitment_attempt_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_attempt_routes__6", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, saved: body.responses.length, lastSavedAt: new Date().toISOString() }) as any;
   });
 
@@ -300,7 +299,7 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     }
     const result = computeAttemptResult(paper, scored, { ...(scoring.totalCutoffPct != null ? { totalCutoffPct: scoring.totalCutoffPct } : {}), sections: scoring.sections ?? [] });
 
-    await publishF3Write(ctx, "recruitment_attempt_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_attempt_routes__7", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({
       id, status: "evaluated", totalScore: result.totalScore, maxScore: result.maxScore,
       result: result.result, needsManualEval: result.needsManualEval,

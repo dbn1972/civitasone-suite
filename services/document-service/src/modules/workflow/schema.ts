@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, timestamp, text, boolean } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, timestamp, text } from "drizzle-orm/pg-core";
 
 const domainSchema = pgSchema("document");
 

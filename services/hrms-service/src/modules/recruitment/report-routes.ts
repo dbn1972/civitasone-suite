@@ -14,14 +14,12 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import { randomizeQuestionOrder, type PaperEntry } from "./attempt-domain.js";
 import {
   attendanceStats, cutoffStats, scoreDistribution, itemAnalysis,
   type AttemptStat, type QuestionResponse,
 } from "./report-domain.js";
 import * as attemptRepo from "./attempt-repo.js";
-import * as resultRepo from "./result-repo.js";
 import * as reportRepo from "./report-repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -58,7 +56,7 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, RESULT_ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ reason: z.string().trim().min(5).max(4000), evidence: z.record(z.unknown()).optional() }).parse(req.body);
+    z.object({ reason: z.string().trim().min(5).max(4000), evidence: z.record(z.unknown()).optional() }).parse(req.body);
     const a = await mustAttempt(ctx.tenantId, id);
     if (a.status === "void") throw new HttpError(409, "ALREADY_VOID", "the attempt is already voided");
     await publishF3Write(ctx, "recruitment_report_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -87,9 +85,9 @@ export async function assessmentReportRoutes(app: FastifyInstance): Promise<void
     if (paperIds.length === 0) throw new HttpError(409, "EMPTY_PAPER", "the target schedule has no assembled paper");
 
     const newId = randomUUID();
-    const order = randomizeQuestionOrder(paperIds, newId);
+    randomizeQuestionOrder(paperIds, newId);
     try {
-      await publishF3Write(ctx, "recruitment_report_routes__1", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_report_routes__1", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (e) {
       // Candidate already holds an active attempt on the target schedule.
       if ((e as { code?: string }).code === "23505") throw new HttpError(409, "ALREADY_SCHEDULED", "the candidate already has an active attempt on the target schedule") as any;

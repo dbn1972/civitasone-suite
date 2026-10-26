@@ -1,12 +1,13 @@
-import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import {
-  canApprove, decideApproval, nextWaitlistPosition, pickPromotion, summariseAttendance,
+  decideApproval,
+  nextWaitlistPosition,
+  pickPromotion,
 } from "./domain.js";
 import { hrmsNominations } from "../training/schema.js";
 import { trainingSessions } from "./schema.js";

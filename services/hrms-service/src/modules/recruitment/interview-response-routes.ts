@@ -58,7 +58,7 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
 
     const rid = randomUUID();
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__0", rid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") {
         throw new HttpError(409, "RESCHEDULE_PENDING", "a reschedule request is already pending for this interview") as any;
@@ -119,14 +119,14 @@ export async function interviewResponseRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { reqId } = reqParam.parse(req.params);
-    const body = z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
 
     const r = await mustReq(ctx.tenantId, reqId);
     if (r.responseType !== "reschedule_request") throw new HttpError(409, "NOT_RESCHEDULE", "this response is not a reschedule request");
     if (!isDecidable(r.status)) throw new HttpError(409, "NOT_PENDING", `request is '${r.status}', not pending`);
 
     try {
-      await publishF3Write(ctx, "recruitment_interview_response_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_response_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
       throw err;

@@ -16,7 +16,7 @@ const RECOVERY_CODES = new Set(["LOP", "LOAN_EMI", "ARREAR_RECOVERY"]);
 const GPF_PCT     = 10n;
 const NPS_EMP_PCT = 10n;
 const NPS_ER_PCT  = 14n;
-const GRATUITY_CAP = 200_000_000n; // 20 lakh INR
+ // 20 lakh INR
 
 /** Round a paise amount to the nearest whole rupee (round-half-up). */
 function roundRupee(x: bigint): bigint {

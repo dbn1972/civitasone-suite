@@ -143,7 +143,7 @@ afterAll(async () => { await app.close(); });
 
 describe("WFH requests — end-to-end (real DB)", () => {
   it("202 create: employee can file their own WFH request, row lands pending", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
@@ -165,7 +165,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("403: the requester cannot approve their own WFH request, even holding the manager role", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
@@ -307,7 +307,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("consumer-level guard: a reject published directly at an already-approved row does not flip its status (bypasses the route's own pre-check entirely)", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
     try {
       const reqId = randomUUID();
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
@@ -380,7 +380,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
 describe("Shift-change requests — end-to-end (real DB)", () => {
   it("202 create: employee can file their own shift-change request, row lands pending", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
@@ -405,7 +405,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("403: the requester cannot approve their own shift-change request, even holding the manager role", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
@@ -525,7 +525,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("consumer-level guard: an approve published directly at an already-rejected row does not flip its status (bypasses the route's own pre-check entirely)", async () => {
-    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
     try {
       const reqId = randomUUID();
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
