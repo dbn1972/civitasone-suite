@@ -622,7 +622,8 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HOME-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - Closed by PENDING-HASH (UAT B2): analytics+pendency routes gated by COURT_READ_ROLES; 401/403 tests added in services/court-service/tests/all-routes-coverage.test.ts; clearance 10/8=80 and null-on-zero already covered by analytics-clearance-domain.test.ts.
 - **First-pass claim:** court-service is absent from the snapshot; role rules and analytics semantics undeterminable.
 - **Service:** `court-service`  ·  **Endpoint(s):** `['GET /api/v1/court/cases/analytics', 'GET /api/v1/court/cases/pendency', 'GET /api/v1/court/cases']`
 - **Question:** Who may read analytics/pendency and how are instituted, disposed and clearanceRatePct computed (period, null when zero)?
