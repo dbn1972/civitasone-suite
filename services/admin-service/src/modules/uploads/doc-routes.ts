@@ -40,7 +40,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { type OutboxCtx } from "../../shared/audit.js";
+import type { OutboxCtx } from "../../shared/audit.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
 import * as repo from "./doc-repo.js";
 import {

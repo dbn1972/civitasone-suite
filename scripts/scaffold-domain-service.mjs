@@ -24,7 +24,6 @@ export function scaffold(cfg) {
     table,
     resource,
     resourcePlural,
-    roles,
     dbRole,
     dbName,
     dbPassword,
@@ -38,7 +37,6 @@ export function scaffold(cfg) {
     serviceKey,
   } = cfg;
 
-  roles.map((r) => `"${r}"`).join(", ");
   const moduleDir = `services/${serviceName}/src/modules/${resourcePlural}`;
 
   w(`services/${serviceName}/package.json`, JSON.stringify({
