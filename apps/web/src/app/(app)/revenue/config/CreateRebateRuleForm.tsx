@@ -3,9 +3,9 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { proposeConfig, proposedMessage } from "./proposeConfig";
+import { todayIST } from "@/lib/formatters";
 import { percentToBps as sharedPercentToBps } from "@/lib/money";
-import type { AcceptedResponse } from "./types";
 
 interface CreateRebateRuleFormProps {
   rateHeadId: string;
@@ -43,6 +43,8 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
   const [rebateType, setRebateType] = useState("early_payment");
   const [discount, setDiscount] = useState("");
   const [validUntilDaysBeforeDue, setValidUntilDaysBeforeDue] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(todayIST());
+  const effId = useId();
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -87,21 +89,19 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<AcceptedResponse>("v1/revenue/rebate-rules", {
-        method: "POST",
-        body: JSON.stringify({
+      const res = await proposeConfig({
+        kind: "rebate_rule",
+        action: "create",
+        effectiveFrom,
+        payload: {
           rateHeadId,
           rebateType,
           discountBps: percentToBps(discount),
           validUntilDaysBeforeDue: toRequiredInt(validUntilDaysBeforeDue),
-        }),
+        },
       });
       setConfirmOpen(false);
-      setSuccessMessage(
-        res.id
-          ? `Rebate rule submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
-          : "Rebate rule submitted.",
-      );
+      setSuccessMessage(proposedMessage("Rebate rule", res.id));
       setDiscount("");
       setValidUntilDaysBeforeDue("");
       router.refresh();
@@ -114,7 +114,7 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Rebate Rule" padding>
+      <Card title="Propose Rebate Rule" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
@@ -183,9 +183,27 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
             </div>
           </div>
 
+          <div style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+            <label htmlFor={effId} style={{ fontSize: 13, fontWeight: 600 }}>
+              Effective from <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+            </label>
+            <input
+              id={effId}
+              type="date"
+              value={effectiveFrom}
+              min={todayIST()}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+              aria-required="true"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              Changes are never made in place: the new rate applies from this date, after a second officer approves.
+            </span>
+          </div>
+
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Rebate Rule
+              Propose Rebate Rule
             </Button>
           </div>
 
@@ -199,13 +217,13 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this rebate rule?"
-        confirmLabel="Create rebate rule"
+        title="Propose this rebate rule?"
+        confirmLabel="Propose rebate rule"
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Create a <strong>{rebateType}</strong> rebate rule of <strong>{discount || "—"}%</strong>, valid until{" "}
+            Propose a <strong>{rebateType}</strong> rebate rule of <strong>{discount || "—"}%</strong>, valid until{" "}
             <strong>{validUntilDaysBeforeDue || "—"}</strong> day(s) before due, for <strong>{rateHeadLabel}</strong>.
           </>
         }
