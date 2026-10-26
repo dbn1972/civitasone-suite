@@ -464,7 +464,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/tokens/publish-routes.ts:20,37 (PUBLISH_ROLES theme_admin/super_admin) + apps/web/src/app/(app)/themes/layout.tsx; tests publish-routes.test.ts 403 theme_user/employee. Residual UX nit (not acceptance): tokens/page.tsx still shows Publish to theme_user who then gets a 403)
 - **First-pass claim:** Themes has no layout.tsx, so unlike tenant it has neither ModuleGate nor any role gate; middleware.ts:48-59 checks only the session. Any signed-in user reaches the publish control behind the Tokens tile (themes/tokens/page.tsx:31). Backend authorization undeterminable (theme-service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET /api/v1/themes/tokens', 'POST /api/proxy/v1/themes/publish (ThemeActions.tsx:19)']`
 - **Question:** Does theme-service require an admin role on publish (and all themes routes) independent of the web UI?
@@ -475,7 +475,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/tokens/brand-routes.ts:15,79,95 (writes admin-only) + themes/layout.tsx; tests all-routes.test.ts 403 theme_user, gap2-brand-authz.test.ts (JWT tid, forged header ignored). GET brand is intentionally readable by any authenticated user (needed to render the tenant theme))
 - **First-pass claim:** Route reachable by any signed-in user: themes has no layout.tsx (no ModuleGate) and middleware.ts checks only the session (middleware.ts:48-59); theme-service role enforcement undeterminable (service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET /api/v1/themes/brand (themes/_data.ts:91)']`
 - **Question:** Does theme-service restrict brand reads/writes to tenant_admin (or theme editor role) and reject others with 403?
@@ -486,7 +486,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/branding/routes.ts:16 (ROLES on all 3 routes) + themes/layout.tsx; test routes-rbac-deep.test.ts 401/403/202. Follow-up for owner: web THEME_MODULE_ROLES omits tenant_admin though the branding server routes admit it, so tenant_admin is bounced by themes/layout.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: themes has no layout.tsx (no ModuleGate) and middleware.ts checks only the session (middleware.ts:48-59); theme-service role enforcement undeterminable (service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET /api/v1/themes/branding (themes/_data.ts:90)']`
 - **Question:** Does theme-service restrict branding endpoints to authorised admin roles?
@@ -497,7 +497,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/theme-service/src/modules/templates/routes.ts:10 (ROLES on all routes) + themes/layout.tsx; test all-routes.test.ts 403 wrong-role per route)
 - **First-pass claim:** Route reachable by any signed-in user: themes has no layout.tsx (no ModuleGate) and middleware.ts checks only the session (middleware.ts:48-59); theme-service role enforcement undeterminable (service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET /api/v1/themes/templates (themes/_data.ts:89)']`
 - **Question:** Does theme-service gate template routes by role?
