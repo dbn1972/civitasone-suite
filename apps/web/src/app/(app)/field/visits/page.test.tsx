@@ -113,6 +113,16 @@ describe("FieldVisitsPage", () => {
     expect(screen.getByText("250")).toBeInTheDocument();
   });
 
+  it("GAP-FIELD-VISITS-04: from page 2 the Open KPI is labelled with the visit window it counts, not plain Open", async () => {
+    const rows = [visit({ id: "a" }), visit({ id: "b", checkOutAt: "2026-08-05T06:00:00.000Z", outcome: "completed", durationMinutes: 120 })];
+    getVisitsMock.mockResolvedValueOnce(page(rows, 250));
+    render(await FieldVisitsPage({ searchParams: Promise.resolve({ offset: "100" }) }));
+    expect(getVisitsMock).toHaveBeenCalledWith(expect.objectContaining({ offset: 100 }));
+    expect(screen.getByText("Open (in visits 101–102)")).toBeInTheDocument();
+    expect(screen.queryByText("Open")).not.toBeInTheDocument();
+    expect(screen.queryByText(/latest 100/)).not.toBeInTheDocument();
+  });
+
   // GAP-FIELD-VISITS-03: Agent / Task show resolved names, not raw UUIDs.
   it("GAP-FIELD-VISITS-03: Agent and Task columns show resolved names, falling back to a short id", async () => {
     const A1 = "aaaaaaaa-1111-4000-8000-000000000001";

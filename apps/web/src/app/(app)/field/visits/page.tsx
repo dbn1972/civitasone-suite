@@ -148,7 +148,7 @@ export default async function FieldVisitsPage(props: { searchParams?: Promise<Se
           label={capped ? `Visits (latest ${limit})` : filtered ? "Visits in range" : "Visits"}
           value={(total > visits.length ? total : visits.length).toLocaleString("en-IN")}
         />
-        <StatCard icon="🚶" tone="warn" label={capped ? `Open (in latest ${limit})` : "Open"} value={open.toLocaleString("en-IN")} />
+        <StatCard icon="🚶" tone="warn" label={capped ? `Open (in latest ${limit})` : offset > 0 ? `Open (in visits ${first}–${last})` : "Open"} value={open.toLocaleString("en-IN")} />
       </StatGrid>
       <div role="note" data-testid="field-visits-window" style={{ fontSize: 13, color: "var(--mut)", margin: "8px 0" }}>
         Showing visits {first}–{last} of {total.toLocaleString("en-IN")}, newest first.
