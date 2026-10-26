@@ -6,6 +6,8 @@ import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import {
   createInstalmentBody,
+  instalmentDecideBody,
+  listInstalmentsQuery,
   createWriteOffBody,
   writeOffDecideBody,
   createRecoveryReferralBody,
@@ -155,6 +157,42 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
       data: rows,
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
+  });
+
+  // ── GET /v1/revenue/instalments (checker queue, owner decision #3) ─────────
+  app.get("/v1/revenue/instalments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const q = listInstalmentsQuery.parse(req.query);
+    const { rows, total } = await repo.listInstalmentPlansByStatus(ctx.tenantId, {
+      ...(q.status ? { status: q.status } : {}),
+      limit: q.limit,
+      offset: q.offset,
+    });
+    return reply.send({
+      data: rows,
+      meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
+    });
+  });
+
+  // ── PATCH /v1/revenue/instalments/:id/decide (checker step, owner decision #3) ─
+  // An instalment plan defers a demand, so a DIFFERENT officer must approve it.
+  app.patch("/v1/revenue/instalments/:id/decide", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const body = instalmentDecideBody.parse(req.body);
+    // Synchronous pre-check (409) — the consumer re-enforces both in-transaction.
+    const plan = await repo.findInstalmentPlanById(ctx.tenantId, id);
+    if (!plan) throw new HttpError(404, "NOT_FOUND", "instalment plan not found");
+    if (plan.status !== "pending") {
+      throw new HttpError(409, "INSTALMENT_NOT_PENDING", `instalment plan is already ${plan.status}`);
+    }
+    if (plan.createdBy === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the maker of an instalment plan cannot decide it (separation of duties)");
+    }
+    const result = await commands.decideInstalmentPlan(ctx, id, body as unknown as Record<string, unknown>);
+    return reply.code(202).send({ data: result });
   });
 
   // ── GET /v1/revenue/instalments/:id ─────────────────────────────────────────

@@ -119,8 +119,8 @@ export function CreateInstalmentPlanForm({
       setTone("good");
       setMessage(
         res.id
-          ? `Instalment plan submitted (id ${res.id}). It is processed asynchronously and will appear below shortly.`
-          : "Instalment plan submitted.",
+          ? `Instalment plan submitted (id ${res.id}) and sent for a second officer's approval. It stays pending — nothing is deferred — until a different officer approves it.`
+          : "Instalment plan submitted and sent for a second officer's approval.",
       );
       setInstalmentCount("");
       setStartDate(todayIso());

@@ -2,6 +2,7 @@ import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } f
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import Link from "next/link";
 import { CreateInstalmentPlanForm } from "./CreateInstalmentPlanForm";
 
 export type AssesseeOption = {
@@ -76,6 +77,15 @@ async function getAssessees(): Promise<LoaderResult<AssesseeOption[]>> {
   });
 }
 
+// Owner decision #3: plans awaiting a second officer's approval, across assessees.
+async function getPendingPlans(): Promise<LoaderResult<InstalmentPlanRow[]>> {
+  return fetchJson<unknown, InstalmentPlanRow[]>(
+    "/api/v1/revenue/instalments?status=pending&limit=100",
+    [],
+    { telemetryKey: "revenue.instalments.pending", mapResponse: mapInstalmentPlans },
+  );
+}
+
 async function getInstalmentPlans(assesseeId: string): Promise<LoaderResult<InstalmentPlanRow[]>> {
   return fetchJson<unknown, InstalmentPlanRow[]>(
     `/api/v1/revenue/assessees/${encodeURIComponent(assesseeId)}/instalments`,
@@ -124,6 +134,8 @@ export default async function InstalmentsPage(
     : ({ data: "0", source: "api" as const });
 
   const plans = plansResult.data;
+  const pendingResult = await getPendingPlans();
+  const pendingPlans = pendingResult?.data ?? [];
 
   const overallSource = assesseesSource === "error" || plansResult.source === "error" ? "error" : "api";
 
@@ -208,6 +220,26 @@ export default async function InstalmentsPage(
           </Button>
         </form>
       </Card>
+
+      {pendingPlans.length > 0 && (
+        <Card title="Awaiting approval" padding>
+          <p style={{ margin: "0 0 10px", fontSize: 13.5, color: "var(--ink2)" }}>
+            An instalment plan defers a demand, so a second officer must approve it. Plans you raised are listed here
+            too, but only a different officer can decide them.
+          </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "grid", gap: 8 }}>
+            {pendingPlans.map((p) => (
+              <li key={p.id} style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap", fontSize: 13.5 }}>
+                <strong>{formatMoney(p.totalMinor)}</strong>
+                <span>{p.instalmentCount} instalments from {formatIndianDate(p.startDate)}</span>
+                <Link href={`/revenue/instalments/${p.id}`} className="link">
+                  Review {p.id.slice(0, 8)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {!assesseeId ? (
         <Card title="Instalment Plans">

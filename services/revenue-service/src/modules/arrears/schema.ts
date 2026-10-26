@@ -18,7 +18,12 @@ export const instalmentPlans = arrearsSchema.table("instalment_plans", {
   totalMinor:     bigint("total_minor", { mode: "bigint" }).notNull(),
   instalmentCount: integer("instalment_count").notNull(),
   startDate:      date("start_date").notNull(),
-  status:         varchar("status", { length: 16 }).notNull().default("active"), // active, completed, defaulted
+  // Owner decision #3: a plan defers a demand, so it is created `pending` and
+  // only becomes `active` when a DIFFERENT officer approves it (or `rejected`).
+  status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, active, rejected, completed, defaulted
+  checkerUserId:  uuid("checker_user_id"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),
   version:        integer("version").notNull().default(1),

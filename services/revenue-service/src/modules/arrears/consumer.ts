@@ -44,7 +44,8 @@ export function registerArrearsConsumers(queue: Queue): void {
         totalMinor: outstanding,
         instalmentCount,
         startDate,
-        status: "active",
+        // Owner decision #3: pending until a DIFFERENT officer approves it.
+        status: "pending",
         createdBy: msg.actorId,
       }).returning({ id: instalmentPlans.id });
       const planId = planRows[0]!.id;
@@ -80,6 +81,81 @@ export function registerArrearsConsumers(queue: Queue): void {
     });
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:instalments:${assesseeId}`);
+  });
+
+  // ── instalmentPlanDecide (checker step, owner decision #3) ──────────────────
+  // A DIFFERENT officer approves (-> active) or rejects (-> rejected) a pending
+  // plan. markProcessed + guarded write + audit + event are ONE transaction.
+  queue.subscribe(COMMANDS.instalmentPlanDecide, async (msg) => {
+    const { planId, approve, reason } = msg.payload as { planId: string; approve: boolean; reason?: string };
+    let assesseeId: string | undefined;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const rows = await tx
+        .select()
+        .from(instalmentPlans)
+        .where(and(eq(instalmentPlans.tenantId, msg.tenantId), eq(instalmentPlans.id, planId)))
+        .limit(1);
+      const plan = rows[0];
+      if (!plan) return;
+
+      // Only a PENDING plan can be decided; a replayed/second decide is a no-op.
+      if (plan.status !== "pending") {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "instalment_plan", outcome: "already_decided", resourceId: planId },
+        });
+        return;
+      }
+
+      // Segregation of duties, enforced in the consumer: the decider must differ from the maker.
+      assertMakerChecker(plan.createdBy, msg.actorId);
+      assesseeId = plan.assesseeId;
+
+      const newStatus = approve ? "active" : "rejected";
+      const claimed = await tx
+        .update(instalmentPlans)
+        .set({
+          status: newStatus,
+          checkerUserId: msg.actorId,
+          decidedAt: new Date(),
+          decisionReason: reason ?? null,
+        })
+        .where(and(eq(instalmentPlans.id, planId), eq(instalmentPlans.tenantId, msg.tenantId), eq(instalmentPlans.status, "pending")))
+        .returning({ id: instalmentPlans.id });
+      if (claimed.length === 0) return; // lost a race to another decider
+
+      if (approve) {
+        await enqueue(tx, {
+          topic: EVENTS.instalmentPlanApproved,
+          eventType: EVENTS.instalmentPlanApproved,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { planId, assesseeId: plan.assesseeId, instalmentCount: plan.instalmentCount, totalMinor: plan.totalMinor.toString() },
+        });
+      }
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: SERVICE, action: "decide", resourceType: "instalment_plan", resourceId: planId,
+          outcome: approve ? "approved" : "rejected", reason: reason ?? null,
+          assesseeId: plan.assesseeId, totalMinor: plan.totalMinor.toString(),
+        },
+      });
+    });
+
+    if (assesseeId) await cache.invalidate(`${SERVICE}:${msg.tenantId}:instalments:${assesseeId}`);
   });
 
   // ── writeOffCreate ──────────────────────────────────────────────────────────
