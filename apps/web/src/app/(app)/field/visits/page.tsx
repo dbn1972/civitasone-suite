@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { Card, DataTable, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, FIELD_VISIT_LOCATION_ROLES } from "@/lib/auth/roleGuard";
@@ -77,6 +78,7 @@ export default async function FieldVisitsPage(props: { searchParams?: Promise<Se
   // the endpoint at all; this governs what the UI reveals.
   const canSeeLocation = hasAnyRole(getSessionRoles(), FIELD_VISIT_LOCATION_ROLES);
 
+  const t = await getTranslations("fieldVisits");
   const ranked = rankVisits(visits);
   const open = visits.filter((v) => visitStatus(v) === "open").length;
   const capped = total > visits.length && offset === 0;
@@ -126,46 +128,45 @@ export default async function FieldVisitsPage(props: { searchParams?: Promise<Se
       />
       {/* GAP-FIELD-VISITS-03: short purpose note for location data. */}
       <p className="muted" style={{ fontSize: 13 }}>
-        Visit locations are personal data. They are shown rounded and {canSeeLocation ? "may be exported by supervisors for" : "are limited to"}{" "}
-        field-operations purposes only.
+        {canSeeLocation ? t("locationNoteSupervisor") : t("locationNoteLimited")}
       </p>
       <form method="get" action="/field/visits" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", margin: "12px 0" }}>
         <div className="field">
-          <label className="label" htmlFor="visits-from">From</label>
+          <label className="label" htmlFor="visits-from">{t("from")}</label>
           <input id="visits-from" className="inp" type="date" name="from" defaultValue={from ?? ""} />
         </div>
         <div className="field">
-          <label className="label" htmlFor="visits-to">To</label>
+          <label className="label" htmlFor="visits-to">{t("to")}</label>
           <input id="visits-to" className="inp" type="date" name="to" defaultValue={to ?? ""} />
         </div>
-        <button type="submit" className="btn">Filter</button>
-        {filtered && <Link href="/field/visits">Clear dates</Link>}
+        <button type="submit" className="btn">{t("filter")}</button>
+        {filtered && <Link href="/field/visits">{t("clearDates")}</Link>}
       </form>
       <StatGrid>
         <StatCard
           icon="📍"
           tone="info"
-          label={capped ? `Visits (latest ${limit})` : filtered ? "Visits in range" : "Visits"}
+          label={capped ? t("statVisitsCapped", { limit }) : filtered ? t("statVisitsInRange") : t("statVisits")}
           value={(total > visits.length ? total : visits.length).toLocaleString("en-IN")}
         />
-        <StatCard icon="🚶" tone="warn" label={capped ? `Open (in latest ${limit})` : offset > 0 ? `Open (in visits ${first}–${last})` : "Open"} value={open.toLocaleString("en-IN")} />
+        <StatCard icon="🚶" tone="warn" label={capped ? t("statOpenCapped", { limit }) : offset > 0 ? t("statOpenPaged", { first, last }) : t("statOpen")} value={open.toLocaleString("en-IN")} />
       </StatGrid>
       <div role="note" data-testid="field-visits-window" style={{ fontSize: 13, color: "var(--mut)", margin: "8px 0" }}>
-        Showing visits {first}–{last} of {total.toLocaleString("en-IN")}, newest first.
+        {t("windowNote", { first, last, total: total.toLocaleString("en-IN") })}
         {offset > 0 && (
           <>
             {" "}
-            <Link href={visitsHref(Math.max(0, offset - FIELD_VISITS_LIMIT), from, to)}>Show newer visits</Link>.
+            <Link href={visitsHref(Math.max(0, offset - FIELD_VISITS_LIMIT), from, to)}>{t("showNewer")}</Link>.
           </>
         )}
         {hasOlder && (
           <>
             {" "}
-            <Link href={visitsHref(offset + FIELD_VISITS_LIMIT, from, to)}>Show older visits</Link>.
+            <Link href={visitsHref(offset + FIELD_VISITS_LIMIT, from, to)}>{t("showOlder")}</Link>.
           </>
         )}
       </div>
-      <Card title="Recent visits">
+      <Card title={t("recentVisits")}>
         <DataTable<Row>
           columns={columns}
           rows={rows}
@@ -173,11 +174,11 @@ export default async function FieldVisitsPage(props: { searchParams?: Promise<Se
           exportable={canSeeLocation} exportAudit="field/visits"
           exportFilename="field-visits"
           emptyIcon="📍"
-          emptyTitle={filtered ? "No visits in this date range" : "No visits yet"}
+          emptyTitle={filtered ? t("emptyTitleRange") : t("emptyTitle")}
           emptyMessage={
             filtered
-              ? "Try a wider date range, or clear the dates to see all visits."
-              : "Check in on a field task to record GPS and outcomes here."
+              ? t("emptyMessageRange")
+              : t("emptyMessage")
           }
         />
       </Card>

@@ -17111,5 +17111,27 @@
     "legacyShown": "Showing {count} of {total}.",
     "legacyForbiddenTitle": "You do not have access to this report.",
     "legacyForbiddenNext": "Only workflow administrators can see legacy delegations."
+  },
+  "fieldVisits": {
+    "locationNoteSupervisor": "Visit locations are personal data. They are shown rounded and may be exported by supervisors for field-operations purposes only.",
+    "locationNoteLimited": "Visit locations are personal data. They are shown rounded and are limited to field-operations purposes only.",
+    "from": "From",
+    "to": "To",
+    "filter": "Filter",
+    "clearDates": "Clear dates",
+    "statVisitsCapped": "Visits (latest {limit})",
+    "statVisitsInRange": "Visits in range",
+    "statVisits": "Visits",
+    "statOpenCapped": "Open (in latest {limit})",
+    "statOpenPaged": "Open (in visits {first}–{last})",
+    "statOpen": "Open",
+    "windowNote": "Showing visits {first}–{last} of {total}, newest first.",
+    "showNewer": "Show newer visits",
+    "showOlder": "Show older visits",
+    "recentVisits": "Recent visits",
+    "emptyTitleRange": "No visits in this date range",
+    "emptyTitle": "No visits yet",
+    "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
+    "emptyMessage": "Check in on a field task to record GPS and outcomes here."
   }
 }
