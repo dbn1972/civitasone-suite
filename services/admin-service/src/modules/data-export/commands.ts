@@ -5,6 +5,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -44,7 +45,7 @@ export async function exportRequest(ctx: RequestContext, payload: ExportRequestP
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-const COMMAND_DOWNLOAD = "admin.data_export.download";
+const COMMAND_DOWNLOAD = COMMANDS.dataExportDownload;
 
 /** Owner decision #22: audit record for an issued signed download link. */
 export async function exportDownloadIssued(ctx: RequestContext, exportId: string, fileCount: number, linkTtlSeconds: number): Promise<Accepted> {

@@ -12,6 +12,7 @@ import { exportRequests, type ExportFile } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 import { putObject } from "@civitasone/storage";
 import { planExport, toCsv, type Row } from "./exporters.js";
+import { COMMANDS } from "../../topics.js";
 
 const log = pino({ name: "admin-data-export-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -167,7 +168,7 @@ export function registerDataExportConsumers(queue: Queue): void {
 
   // OWNER DECISION #22: every issue of a signed download link is audited. The
   // download route publishes this BEFORE it returns any link (fail closed).
-  queue.subscribe<{ exportId: string; tenantId: string; fileCount: number; linkTtlSeconds: number }>("admin.data_export.download", async (msg) => {
+  queue.subscribe<{ exportId: string; tenantId: string; fileCount: number; linkTtlSeconds: number }>(COMMANDS.dataExportDownload, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
