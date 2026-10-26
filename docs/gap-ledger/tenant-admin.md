@@ -397,7 +397,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [x] **Status** (Closed by 741f2ed59 (owner decision #20, 2026-10-26): audit list masks actor email and IP on the server; POST /v1/audit/events/:id/reveal for audit_officer only with a 10+ character reason, caller tenant only, writes audit.viewed before returning; list reads are not logged per row; tenant_admin stays excluded)
+- [x] **Status** (Closed by 741f2ed59 (owner decision #20, 2026-10-26): audit list masks actor email and IP on the server; POST /v1/audit/events/:id/reveal for audit_officer only with a 10+ character reason, caller tenant only, writes audit.viewed before returning; list reads are not logged per row; tenant_admin stays excluded. Round 1: audit_officer is admitted to /tenant-admin/audit only)
 - **W2 INTERIM (needs owner decision):** emails/IPs are masked by default and exports are now audited, but a click-to-reveal with an audited reveal and a server-side audit.viewed event are NOT built: they need a policy decision (may tenant admins reveal? an audit.viewed per list read doubles the log volume and appears in the log itself). Note also: audit-service /v1/audit/events allows audit_officer|audit_admin|super_admin|platform_admin — NOT tenant_admin — so confirm who this page is meant for.
 - **W0 note:** partly fixed by #1864 — Emails/IPs masked by default (maskEmail/maskIp); no reveal control or audit.viewed logging
 - **First-pass claim:** DPDP: actor identifiers (emails) and source IPs are shown in clear to every role in the layout with no masking or view-audit; reading the audit log is itself not evidenced as audited (AuditLogTable.tsx:51-56).
@@ -1449,7 +1449,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [x] **Status** (Closed by 8224590aa (owner decision #24, 2026-10-26): downgrade is a request with a required reason, blocked (409 with the exceeded limits) when usage is above the target plan, approved by platform billing (never the requester), re-checked at approval, audited)
+- [x] **Status** (Closed by 8224590aa (owner decision #24, 2026-10-26): downgrade is a request with a required reason, blocked (409 with the exceeded limits) when usage is above the target plan, approved by platform billing (never the requester), re-checked at approval, audited. Approval is API-ONLY for now: the platform-billing queue (GET /v1/tenant/subscription/downgrade-requests/pending) and decision endpoint (POST .../downgrade-requests/:requestId/decision) have no web screen; the tenant side only requests and sees status. A platform-billing approval screen is a follow-up)
 - **W2 reopened:** the provisional re-check failed its criteria — the downgrade flow shows only a 'contact your administrator' dialog: no required reason, no usage-vs-target-limit blocking, no pending state/audit row (acceptance unmet). Tenant-self-serve plan change needs an owner decision (tenant-service has /v1/tenant/subscription/downgrade; billing-service is super-admin-only) — INTERIM only.
 - **First-pass claim:** Downgrade 'Confirm Downgrade' only sets local state and closes — no API call, no audit reason, no check that current users/data exceed the target plan's limits beyond a warning line (PlansClient.tsx:212).
 - **Verified evidence:** PlansClient.tsx:212 (line 243 by file) 'Confirm Downgrade' runs setCurrentPlanId(targetPlanId!) and closes the modal; no request, no reason, no audit. The only guard is a static warning comparing plan maxUsers (197-201), not actual active users/storage, which the page does not load.
@@ -2074,7 +2074,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  interim  ·  theme PII
 
-- [x] **Status** (Closed by 6e1567f87 (owner decision #21, 2026-10-26): admin session views carry a masked IP and a browser-and-OS user agent; POST /identity/sessions/:id/reveal-ip for security_admin only with a reason, audited before the value is returned)
+- [x] **Status** (Closed by 6e1567f87 (owner decision #21, 2026-10-26): admin session views carry a masked IP and a browser-and-OS user agent; POST /identity/sessions/:id/reveal-ip for security_admin only with a reason, audited before the value is returned. Round 1: security_admin is admitted to /tenant-admin/sessions only, may read the masked list/detail but not create or revoke sessions, and the role is seeded in the Keycloak realm)
 - **W2 note (INTERIM, needs owner decision):** IP is already masked by default (no clear IP is rendered). An audited reveal and a server-side session-viewed event need a DPDP policy decision on admin IP visibility and a new identity-service endpoint; not invented here. Full user agent is still printed.
 - **W0-10 note:** review found the W0 tick partly — sessions/[id]/page.tsx:93 IP masked via maskIp (no clear IP shown), but no reveal and no audited reveal/view event (acceptance "reveal audited" unmet; deliberate per comment :14); full userAgent still printed :106.
 - **First-pass claim:** Full user agent and IP are printed for any viewer; personal-data handling (DPDP) and access audit are not addressed (page.tsx:73,84-86).
