@@ -297,3 +297,26 @@ describe("field module entitlement (decision #36)", () => {
     expect(reply._code).toBe(403);
   });
 });
+
+// Decision #36 follow-up: the admin composition catalogue now carries a `field`
+// module that projects to the gateway key `field`. Under composition enforcement
+// an entitled tenant must get through on /api/v1/field (the gate must not deny
+// everyone), and an un-entitled tenant must be 403'd (fail CLOSED).
+describe("field module entitlement under composition enforcement", () => {
+  it("an entitled tenant (projection carries `field`) gets through", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "finance" }, { name: "field" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(true);
+    expect(reply._code).toBe(200);
+  });
+
+  it("an un-entitled tenant (projection omits `field`) gets 403 MODULE_DISABLED", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: true, mode: "enforce", data: [{ name: "finance" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(false);
+    expect(reply._code).toBe(403);
+    expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+});

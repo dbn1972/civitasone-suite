@@ -98,6 +98,8 @@ export const COMPOSITION_TO_GATEWAY_KEYS: Record<string, string[]> = {
   meeting: ["meeting"],
   court: ["court"],
   visitor: ["visitor"],
+  // GAP-FIELD-HOME-04 / owner decision #36: /api/v1/field is entitlement-gated.
+  field: ["field"],
   billing: ["billing"],
   helpdesk: ["helpdesk"],
   knowledge: ["knowledge"],
