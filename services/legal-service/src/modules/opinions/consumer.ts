@@ -21,6 +21,7 @@ export function registerOpinionConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; opinionNo?: string; subject: string;
       question: string; caseId?: string; soughtBy?: string;
+      addressee?: { type: "department"; departmentId: string } | { type: "external"; name: string };
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -32,6 +33,9 @@ export function registerOpinionConsumers(queue: Queue): void {
       await repo.insertOpinion(tx, {
         id: p.id, tenantId: p.tenantId, opinionNo, subject: p.subject,
         question: p.question, caseId: p.caseId ?? null, soughtBy: p.soughtBy ?? null,
+        addresseeType: p.addressee?.type ?? null,
+        addresseeDepartmentId: p.addressee?.type === "department" ? p.addressee.departmentId : null,
+        addresseeName: p.addressee?.type === "external" ? p.addressee.name : null,
         status: "sought", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "seek", "legal_opinion", p.id);

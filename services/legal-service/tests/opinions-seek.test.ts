@@ -79,7 +79,7 @@ describe("POST /v1/legal/opinions — route guard", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/opinions",
       headers: authHeader(),
-      payload: { subject: "Tender dispute", question: "Can the tender be cancelled?" },
+      payload: { subject: "Tender dispute", question: "Can the tender be cancelled?", addressee: { type: "external", name: "Test Addressee" } },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");

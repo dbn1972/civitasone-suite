@@ -17138,5 +17138,18 @@
     "selectDepartment": "Select the owning department (optional)…",
     "departmentsError": "The department list could not be loaded. Reload the page to try again.",
     "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy."
+  },
+  "legalOpinionNew": {
+    "loading": "Loading…",
+    "addresseeLegend": "Addressed to *",
+    "internalDepartment": "Internal department",
+    "externalParty": "External party",
+    "departmentLabel": "Department *",
+    "selectDepartment": "Select the department…",
+    "departmentRequired": "Select the department this opinion is addressed to.",
+    "departmentsError": "The department list could not be loaded. Reload the page to try again.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy, or use an external party.",
+    "externalLabel": "External party name *",
+    "externalRequired": "Enter the name of the external party this opinion is addressed to."
   }
 }

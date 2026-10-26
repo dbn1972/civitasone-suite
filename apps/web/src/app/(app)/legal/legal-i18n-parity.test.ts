@@ -3,7 +3,7 @@ import en from "@/messages/en.json";
 import hi from "@/messages/hi.json";
 
 /** Every legal-workflow namespace added for the UAT owner decisions must have the same keys in en and hi, no empty strings. */
-const NAMESPACES = ["legalAffidavits", "legalCaseNew", "legalOrderNew"] as const;
+const NAMESPACES = ["legalAffidavits", "legalCaseNew", "legalOrderNew", "legalOpinionNew"] as const;
 
 const flat = (o: Record<string, unknown>, p = ""): Array<[string, unknown]> =>
   Object.entries(o).flatMap(([k, v]) => (typeof v === "object" && v ? flat(v as Record<string, unknown>, `${p}${k}.`) : [[`${p}${k}`, v] as [string, unknown]]));
