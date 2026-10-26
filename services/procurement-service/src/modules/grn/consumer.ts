@@ -14,7 +14,7 @@ import {
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
 import type { GrnItemInsert } from "./schema.js";
-import { findPoById, findPoItemsByPoId, findPoByIdTx, findPoItemsByPoIdTx } from "../po/repo.js";
+import { findPoItemsByPoId, findPoByIdTx, findPoItemsByPoIdTx } from "../po/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 

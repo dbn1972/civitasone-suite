@@ -198,7 +198,7 @@ describe("DOM-011 — rfq.respond consumer: a response is now actually persisted
   });
 
   it("respond is rejected at the command layer with 409 once the RFQ is no longer 'issued'", async () => {
-    const { rfqId, itemId } = await createIssuedRfq();
+    const { rfqId } = await createIssuedRfq();
     await publishAndDrain({ type: COMMANDS.rfqClose, payload: { id: rfqId, tenantId: TENANT, actorId: APPROVER } });
     expect((await getRfqRow(rfqId))!.status).toBe("closed");
 

@@ -7,7 +7,7 @@ import { assertTransitionAllowed as poTransition, assertBudgetSufficient, assert
 import { computeThreeWayMatch, assertQtyValid, DomainError as GrnError } from "../src/modules/grn/domain.js";
 import { assertNotBlacklisted, assertCanEmpanel } from "../src/modules/vendor/domain.js";
 import { assertTenderTransition, determineL1, assertDistinctMakerChecker as tenderSoD, assertTechEvaluatorDistinct } from "../src/modules/tender/domain.js";
-import { rankBids, computeEffectivePrice, MSE_PREF_NUM, MSE_PREF_DEN } from "../src/modules/auction/domain.js";
+import { rankBids, computeEffectivePrice } from "../src/modules/auction/domain.js";
 
 // ─── Pack #11: Indent ────────────────────────────────────────────────────────
 describe("indent state machine", () => {
