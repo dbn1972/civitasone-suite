@@ -16531,6 +16531,20 @@
       "unresolved": "Not available"
     }
   },
+  "fieldHub": {
+    "title": "Field Operations",
+    "subtitle": "Task management, visit tracking, and route optimization.",
+    "tasksTitle": "Tasks",
+    "tasksDescription": "Field task assignments and completion tracking.",
+    "visitsTitle": "Visits",
+    "visitsDescription": "Check-in/check-out logs with location verification.",
+    "routesTitle": "Routes",
+    "routesDescription": "Daily agent routes with optimised stop order.",
+    "agentsTitle": "Agents",
+    "agentsDescription": "Agents with assigned tasks and their task counts.",
+    "syncTitle": "Offline Sync",
+    "syncDescription": "Pending device sync changes pulled from the field."
+  },
   "fieldSync": {
     "title": "Offline Sync",
     "description": "Device sync changes pulled from the last {days} days.",

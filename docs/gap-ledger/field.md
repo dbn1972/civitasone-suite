@@ -448,7 +448,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-HOME-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** [partial: hub strings now next-intl en+hi (UAT B2, @@HASH_GAP-FIELD-HOME-04@@); remaining: server-side edition entitlement - gateway-service module-guard ROUTE_TO_MODULE has no field mapping so /api/v1/field is not entitlement-gated at the edge (outside this lane, needs gateway change + fail-open/closed decision)]
 - **First-pass claim:** Hard-coded English strings, no next-intl; field-service is not in the snapshot so tile availability per edition (Govt/PSU/Small Office) is undeterminable.
 - **Service:** `field-service`  ·  **Endpoint(s):** `['GET /api/v1/field/tasks', 'GET /api/v1/field/routes', 'GET /api/v1/field/visits']`
 - **Question:** Is the field module entitled per edition (Govt/PSU/Small Office) so tiles for unavailable features return 403/404 rather than empty?
