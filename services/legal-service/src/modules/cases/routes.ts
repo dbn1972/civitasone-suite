@@ -7,6 +7,8 @@ import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTyp
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { COURT_MASTER, OTHER_COURT_CODE, findCourt } from "../../config/courts.js";
+import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -41,6 +43,21 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.seedDefaultCaseTypes(ctx));
   });
 
+  // Owner decision #10: the seeded court / tribunal master (feeds the create-case court select).
+  app.get("/v1/legal/courts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send({ items: COURT_MASTER });
+  });
+
+  // Owner decisions #10/#11/#13: departments from the org hierarchy (id + name) for pickers.
+  app.get("/v1/legal/departments", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const rows = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });
+    return reply.send({ items: rows.map((d) => ({ id: d.id, name: d.name, code: d.code })) });
+  });
+
   app.post("/v1/legal/cases", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
@@ -62,7 +79,24 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(400, "UNKNOWN_CASE_TYPE", "caseTypeId does not reference a known case type");
       }
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, body));
+    // Owner decision #10: the court is picked from the master (canonical name stored, verified) or is
+    // "Other" free text (stored as typed, unverified).
+    let court: string;
+    let courtCode: string;
+    let courtVerified: boolean;
+    if (body.courtCode && body.courtCode !== OTHER_COURT_CODE) {
+      const master = findCourt(body.courtCode);
+      if (!master) throw new HttpError(400, "UNKNOWN_COURT", "courtCode does not reference a court in the master list");
+      court = master.name; courtCode = master.code; courtVerified = true;
+    } else {
+      court = body.court as string; courtCode = OTHER_COURT_CODE; courtVerified = false;
+    }
+    // The department must exist in the org hierarchy. Fails closed (503) when the org service is down.
+    const departments = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });
+    if (!departments.some((d) => d.id === body.departmentId)) {
+      throw new HttpError(422, "UNKNOWN_DEPARTMENT", "departmentId does not reference a department in the organisation hierarchy");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, { ...body, court, courtCode, courtVerified }));
   });
 
   app.patch("/v1/legal/cases/:id/dispose", async (req, reply) => {
@@ -77,7 +111,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const legalCase = await queries.getCaseDetail(id, ctx.tenantId);
+    const legalCase = await queries.getCaseDetail(id, ctx.tenantId, ctx.correlationId);
     if (!legalCase) throw new HttpError(404, "NOT_FOUND", "case not found");
     return reply.send(legalCase);
   });
@@ -100,6 +134,10 @@ function errorHandler(err: unknown, req: any, reply: any): void {
   }
   if (err instanceof HttpError) {
     void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    return;
+  }
+  if (err instanceof OrgServiceError) {
+    void reply.code(503).send({ code: "ORG_SERVICE_UNAVAILABLE", message: "the department list is temporarily unavailable; please retry", correlationId, retryable: true });
     return;
   }
   req.log.error({ err }, "unhandled error");

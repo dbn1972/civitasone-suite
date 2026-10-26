@@ -50,6 +50,7 @@ export function registerCaseConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; caseNo: string; title: string; court: string;
       subject?: string; caseTypeId?: string; petitioner?: string; counselRef?: string;
       assignedOfficerIds?: string[];
+      courtCode?: string; courtVerified?: boolean; filingDate?: string; departmentId?: string;
       parties?: Array<{ name: string; role?: string }>;
     };
     await db.transaction(async (tx) => {
@@ -59,6 +60,8 @@ export function registerCaseConsumers(rawQueue: Queue): void {
         subject: p.subject ?? null, caseTypeId: p.caseTypeId ?? null,
         petitioner: p.petitioner ?? null, counselRef: p.counselRef ?? null,
         assignedOfficerIds: p.assignedOfficerIds ?? [],
+        courtCode: p.courtCode ?? null, courtVerified: p.courtVerified ?? false,
+        filingDate: p.filingDate ?? null, departmentId: p.departmentId ?? null,
         status: "pending", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (p.parties?.length) {

@@ -23,6 +23,9 @@ import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
 import * as caseQueries from "../src/modules/cases/queries.js";
 import { cache } from "../src/shared/infra.js";
 import { COMMANDS } from "../src/topics.js";
+import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+// GAP-LEGAL-CASES-NEW-02: creating a case now requires filingDate + a department from the org hierarchy.
+useFakeOrg();
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "11111111-aaaa-4000-8000-00000000c001";
@@ -128,7 +131,7 @@ describe("case-type master routes (GAP-LEGAL-CASES-NEW-01)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/cases",
       headers: { authorization: `Bearer ${makeToken(["legal_officer"])}`, "x-tenant-id": TENANT },
-      payload: { caseNo: "WP/CT/9999", title: "Bad type", court: "HC", caseTypeId: "99999999-9999-4999-8999-999999999999" },
+      payload: { caseNo: "WP/CT/9999", title: "Bad type", court: "HC", filingDate: "2026-03-01", departmentId: TEST_DEPT_ID, caseTypeId: "99999999-9999-4999-8999-999999999999" },
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe("UNKNOWN_CASE_TYPE");
