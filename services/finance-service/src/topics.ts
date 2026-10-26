@@ -173,6 +173,8 @@ export const CONSUMED_EVENTS = {
   meetingDecisionFinancial: "meeting.decision.financial",
   /** FN-14: citizen-service fee-payment offline receipt → GL posting. */
   citizenReceiptIssued:     "citizen.receipt.issued",
+  /** V4-G-09: citizen-service approved refund → GL reversal (Dr revenue head / Cr bank). */
+  citizenRefundApproved:    "citizen.refund.approved",
 } as const;
 
 export const SERVICE  = "finance";

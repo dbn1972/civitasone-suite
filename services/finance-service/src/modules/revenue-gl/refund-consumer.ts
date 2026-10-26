@@ -10,19 +10,20 @@ import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { CONSUMED_EVENTS } from "../../topics.js";
 import * as budgetRepo from "../budget/repo.js";
 import { enqueueSpineJournal } from "../gl/spine.js";
 import type { JournalLine } from "../gl/schema.js";
 
 /** Owned by citizen-service (EVENTS.refundApproved). */
-export const CITIZEN_REFUND_APPROVED = "citizen.refund.approved";
+export const CITIZEN_REFUND_APPROVED = CONSUMED_EVENTS.citizenRefundApproved;
 
 const BANK_CODE = process.env.FINANCE_BANK_CODE ?? "1100";
 const DEFAULT_REVENUE_CODE = process.env.FINANCE_CITIZEN_REVENUE_CODE ?? "4200";
 const AUDIT_TOPIC = "audit.event.record";
 
 export function registerRefundGlConsumer(queue: Queue): void {
-  queue.subscribe(CITIZEN_REFUND_APPROVED, async (msg) => {
+  queue.subscribe(CONSUMED_EVENTS.citizenRefundApproved, async (msg) => {
     const p = msg.payload as {
       id: string; paymentId: string; receiptNo?: string | null;
       amountMinor: string | number; hoaCode?: string | null; serviceKey?: string | null;
