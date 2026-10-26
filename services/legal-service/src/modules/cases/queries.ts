@@ -53,6 +53,7 @@ export async function getCaseDetail(id: string, tenantId: string, correlationId 
     title: row.title,
     court: row.court,
     courtVerified: row.courtVerified === true,
+    privileged: row.privileged === true,
     department: row.departmentId ? deptNames.get(row.departmentId) : undefined,
     type: resolveKind(caseType?.code ?? null, row.caseNo),
     subject: row.subject ?? undefined,

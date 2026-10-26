@@ -27,6 +27,8 @@ export const createCaseBody = z.object({
   counselRef: z.string().max(128).optional(),
   // Owner decision #8: officers the case is assigned to (reminder recipients).
   assignedOfficerIds: z.array(z.string().uuid()).max(20).optional(),
+  // Owner decision #12: restrict the case to its assigned officers and the legal head.
+  privileged: z.boolean().optional(),
   parties:    z.array(partySchema).optional(),
 }).superRefine((v, ctx) => {
   if ((v.courtCode === undefined || v.courtCode === "other") && !(v.court && v.court.length > 0)) {

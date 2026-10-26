@@ -16,6 +16,7 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { getDocumentClient, DocumentServiceError } from "../../shared/document-client.js";
 import * as caseRepo from "../cases/repo.js";
+import { assertCaseAccess } from "../cases/access.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import { startAffidavitBody, caseParam, attachmentParam } from "./validators.js";
@@ -40,6 +41,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id: caseId } = caseParam.parse(req.params);
     const body = startAffidavitBody.parse(req.body);
+    await assertCaseAccess(ctx, caseId);
     const legalCase = await caseRepo.findCaseById(caseId, ctx.tenantId);
     if (!legalCase) throw new HttpError(404, "NOT_FOUND", "case not found");
 
@@ -62,6 +64,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id: caseId, aid } = attachmentParam.parse(req.params);
+    await assertCaseAccess(ctx, caseId);
     const row = await repo.findOne(ctx.tenantId, caseId, aid);
     if (!row) throw new HttpError(404, "NOT_FOUND", "affidavit not found");
     if (row.status === "awaiting_upload") {
@@ -74,6 +77,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id: caseId } = caseParam.parse(req.params);
+    await assertCaseAccess(ctx, caseId);
     const rows = await repo.listByCase(ctx.tenantId, caseId);
     const doc = getDocumentClient();
     const dctx = { tenantId: ctx.tenantId, correlationId: ctx.correlationId };
@@ -104,6 +108,7 @@ export async function attachmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id: caseId, aid } = attachmentParam.parse(req.params);
+    await assertCaseAccess(ctx, caseId);
     const row = await repo.findOne(ctx.tenantId, caseId, aid);
     if (!row) throw new HttpError(404, "NOT_FOUND", "affidavit not found");
     if (row.status !== "filed" || !row.documentId) {

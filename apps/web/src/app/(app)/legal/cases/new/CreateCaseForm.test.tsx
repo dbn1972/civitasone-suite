@@ -171,6 +171,22 @@ describe("CreateCaseForm — court master, filing date, department (GAP-LEGAL-CA
     expect(calls.some((c) => c.startsWith("POST"))).toBe(false);
   });
 
+  it("sends privileged: true when the confidential box is ticked, and omits it otherwise (decision #12)", async () => {
+    const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
+    mockFetch(async (url, init) => {
+      calls.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      return refData(url) ?? new Response(JSON.stringify({ id: "case-5", status: "accepted" }), { status: 202 });
+    });
+    render(<CreateCaseForm />);
+    await ready();
+    fillMaster("WP/PRIV/1");
+    expect(screen.getByLabelText(/Privileged \/ confidential case/)).not.toBeChecked();
+    fireEvent.click(screen.getByLabelText(/Privileged \/ confidential case/));
+    fireEvent.click(screen.getByRole("button", { name: "Register case" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body).toMatchObject({ privileged: true });
+  });
+
   it("says so (not an empty list) when the court / department lists cannot be loaded", async () => {
     mockFetch(async (url) => (url.includes("/v1/legal/courts") ? new Response("{}", { status: 503 }) : refData(url) ?? new Response("{}", { status: 200 })));
     render(<CreateCaseForm />);

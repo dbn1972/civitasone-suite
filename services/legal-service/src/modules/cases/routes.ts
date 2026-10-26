@@ -7,6 +7,7 @@ import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTyp
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { assertCaseAccess, hiddenCaseIds } from "./access.js";
 import { COURT_MASTER, OTHER_COURT_CODE, findCourt } from "../../config/courts.js";
 import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
@@ -96,7 +97,12 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     if (!departments.some((d) => d.id === body.departmentId)) {
       throw new HttpError(422, "UNKNOWN_DEPARTMENT", "departmentId does not reference a department in the organisation hierarchy");
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, { ...body, court, courtCode, courtVerified }));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, {
+      ...body, court, courtCode, courtVerified,
+      // Owner decision #12: a privileged case with no named officers is assigned to its creator, so it is never
+      // created in a state only the legal head can open.
+      ...(body.privileged && !(body.assignedOfficerIds && body.assignedOfficerIds.length > 0) ? { assignedOfficerIds: [ctx.actorId] } : {}),
+    }));
   });
 
   app.patch("/v1/legal/cases/:id/dispose", async (req, reply) => {
@@ -104,6 +110,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = idParam.parse(req.params);
     const body = disposeCaseBody.parse(req.body);
+    await assertCaseAccess(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.disposeCase(ctx, id, body));
   });
 
@@ -111,6 +118,7 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertCaseAccess(ctx, id);
     const legalCase = await queries.getCaseDetail(id, ctx.tenantId, ctx.correlationId);
     if (!legalCase) throw new HttpError(404, "NOT_FOUND", "case not found");
     return reply.send(legalCase);
@@ -120,7 +128,9 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listCasesQuery.parse(req.query);
-    return reply.send({ items: await queries.listCases(ctx.tenantId, q.status, q.type) });
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const items = await queries.listCases(ctx.tenantId, q.status, q.type);
+    return reply.send({ items: (items ?? []).filter((c) => !hidden.has(c.id)) });
   });
 
   app.setErrorHandler(errorHandler);

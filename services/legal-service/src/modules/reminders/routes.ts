@@ -6,6 +6,7 @@ import { legalHearings } from "../hearings/schema.js";
 import { legalReminders } from "./schema.js";
 import { and, eq, gte, lte } from "drizzle-orm";
 import * as caseRepo from "../cases/repo.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { randomUUID } from "node:crypto";
@@ -54,7 +55,8 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     const cases = await caseRepo.findCasesByIds(caseIds);
     const caseById = new Map(cases.map((c) => [c.id, c]));
 
-    const data = rows.map((h) => {
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const data = rows.filter((h) => !hidden.has(h.caseId)).map((h) => {
       const legalCase = caseById.get(h.caseId);
       return {
         id: h.id,
@@ -78,6 +80,7 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    await assertCaseAccess(ctx, id);
     const rows = await db.select().from(legalReminders).where(
       and(eq(legalReminders.tenantId, ctx.tenantId), eq(legalReminders.caseId, id))
     ).limit(100);
@@ -90,6 +93,7 @@ export async function reminderRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = reminderBody.parse(req.body);
+    await assertCaseAccess(ctx, id);
 
     const reminderId = randomUUID();
     await queue.publish(COMMANDS.reminderCreate, {

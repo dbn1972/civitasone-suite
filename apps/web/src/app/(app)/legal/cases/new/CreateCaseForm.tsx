@@ -46,6 +46,8 @@ export function CreateCaseForm() {
   const [courtOther, setCourtOther] = useState("");
   const [filingDate, setFilingDate] = useState(todayIso());
   const [departmentId, setDepartmentId] = useState("");
+  // GAP-LEGAL-CASES-DETAIL-06 (owner decision #12): privileged / confidential case.
+  const [privileged, setPrivileged] = useState(false);
   const [courts, setCourts] = useState<CourtOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [refData, setRefData] = useState<"loading" | "ready" | "error">("loading");
@@ -130,6 +132,7 @@ export function CreateCaseForm() {
       ...(courtCode === OTHER ? { court: courtOther.trim() } : {}),
       filingDate,
       departmentId,
+      ...(privileged ? { privileged: true } : {}),
       subject: subject.trim() || undefined,
       petitioner: petitioner.trim() || undefined,
       counselRef: counselRef.trim() || undefined,
@@ -270,6 +273,15 @@ export function CreateCaseForm() {
         <div className="field">
           <label className="label" htmlFor="counselRef">Counsel reference</label>
           <input id="counselRef" className="inp" value={counselRef} onChange={(e) => setCounselRef(e.target.value)} style={{ minHeight: 44 }} />
+        </div>
+        <div className="field" style={{ gridColumn: "1 / -1" }}>
+          <label className="label" htmlFor="privileged" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <input id="privileged" type="checkbox" checked={privileged} onChange={(e) => setPrivileged(e.target.checked)} style={{ marginTop: 3 }} />
+            <span>
+              {t("privilegedLabel")}
+              <span style={{ display: "block", fontSize: "0.75rem", color: "var(--ink2)", fontWeight: 400 }}>{t("privilegedHelp")}</span>
+            </span>
+          </label>
         </div>
         <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="subject">Subject</label>
