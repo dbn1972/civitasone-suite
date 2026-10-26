@@ -1260,7 +1260,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-HOME-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): apps/web/src/app/(app)/revenue/layout.tsx (fail-closed REVENUE_ROLES gate) + requireRole on every revenue-service route (e.g. services/revenue-service/src/modules/assessee/routes.ts:14); tests revenue/layout.test.tsx, assessee-routes.test.ts)
 - **First-pass claim:** Hub has no module/role gate — No role or module gate in the revenue segment: there is no revenue/layout.tsx (finance/layout.tsx:36 and hr/layout.tsx wrap children in ModuleGate) and the page calls no requireAnyRole. Sidebar hides the entry via moduleKey "revenue" (ds/Sidebar.tsx:57) but the route opens by URL for any signed-in user. Revenue-service is absent from the snapshot (only services/hrms-service exists), so server-side role checks are undeterminable. (revenue/ has no layout.tsx; compare finance/layout.tsx:36).
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['GET /api/v1/revenue/* (hub loaders)']`
 - **Question:** Do revenue-service endpoints enforce revenue roles/module entitlement themselves so a URL-typed hub cannot read data for users without them?
@@ -1282,7 +1282,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ANALYTICS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/revenue-service/src/modules/analytics/routes.ts:18,133 (FORECAST_ROLES excludes read-only roles) + analytics/commands.ts:55-59 audit.event.record in-txn; tests analytics-forecast-audit.test.ts, analytics-routes.test.ts 403)
 - **First-pass claim:** Forecast writes a persisted run when "Save this run" is ticked (POST v1/revenue/analytics/forecast, persist:true) from a page that any signed-in user can open; no role or audit indication in the UI (ForecastPanel.tsx:53-59). revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/analytics/forecast (persist:true)']`
 - **Question:** Is persisting a forecast run restricted to an analytics/finance role and audited?
@@ -1337,7 +1337,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECEIPTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/revenue-service/migrations/0012_receipt_idempotency.sql (unique tenant+reference) + collection/consumer.ts:31-45 dedup; test collection-receipt-idempotency.test.ts)
 - **First-pass claim:** Money-in mutation has no idempotency key: POST v1/revenue/receipts body carries no request id and the dialog re-enables after an error, so a retry after a network timeout can record the same UTR twice (RecordReceiptForm.tsx:91-102). Server de-duplication undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/receipts']`
 - **Question:** Is POST receipts idempotent (Idempotency-Key header or unique tenant+UTR constraint) so a retry cannot record the same UTR twice?
@@ -1359,7 +1359,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): apps/web/src/app/(app)/revenue/trade-licenses/page.tsx:321-326 (reads via /api/proxy BFF); test trade-licenses/page.test.tsx)
 - **First-pass claim:** Client fetches "/api/v1/revenue/trade-licenses" directly, not through /api/proxy like every other client call; the branding page documents that no Next route or rewrite serves /api/v1 to the browser (settings/branding/page.tsx:360-368), and next.config is absent from the snapshot, so the list may 404 and show only the failure sentence (page.tsx:252).
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['GET /api/v1/revenue/trade-licenses (direct browser fetch)']`
 - **Question:** Is /api/v1/* reachable from the browser via a gateway/Next rewrite, or must the page use /api/proxy/v1/*?
