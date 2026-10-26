@@ -17031,6 +17031,13 @@
     "duplicateTitle": "A document with this title already exists.",
     "openExisting": "Open the existing document"
   },
+  "reportsPiiExport": {
+    "maskedByDefault": "Personal data columns (phone, email, Aadhaar and similar) are masked by default in exports. Download links expire after 15 minutes.",
+    "unmaskLabel": "Export personal data unmasked",
+    "reasonLabel": "Reason for unmasked export *",
+    "reasonRequired": "Give a reason (at least 10 characters) to export personal data unmasked.",
+    "auditNote": "This request and its reason are recorded in the audit log."
+  },
   "knowledgeW2": {
     "accessColumn": "Access",
     "accessLevels": {
