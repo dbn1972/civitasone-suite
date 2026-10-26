@@ -331,7 +331,7 @@ await verify();
 console.log("\n────────────────────────────────────────────");
 console.log(`Demo seed complete. Errors: ${errors}`);
 console.log(`Tenants: T1=${T1} (Demo Municipal Corporation), T2=${T2} (Partner Revenue Dept)`);
-console.log(`Personas: ${PERSONAS.length}  ·  demo password: ${DEMO_PASSWORD}  (DEV-ONLY)`);
+console.log(`Personas: ${PERSONAS.length}  ·  demo password: see DEMO_PASSWORD / DEMO-ACCESS.md  (DEV-ONLY)`);
 console.log("Login card: scripts/demo/DEMO-ACCESS.md");
 console.log("────────────────────────────────────────────");
 if (errors > 0) process.exitCode = 1;
