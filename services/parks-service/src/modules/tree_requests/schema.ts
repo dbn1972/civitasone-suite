@@ -1,5 +1,4 @@
 import { pgSchema, uuid, varchar, integer, timestamp, jsonb, text } from "drizzle-orm/pg-core";
-import { boolean } from "drizzle-orm/pg-core";
 
 const parksSchema = pgSchema("civitas_parks");
 
