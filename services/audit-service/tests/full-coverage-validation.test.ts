@@ -2,7 +2,6 @@
  * Coverage validation: confirms all audit-service route groups respond correctly.
  */
 import { describe, it, expect, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";

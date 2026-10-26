@@ -19,7 +19,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
-import { vigilanceCases, vigilanceActions, vigilanceEvidence } from "../src/modules/vigilance/schema.js";
+import { vigilanceCases, vigilanceActions } from "../src/modules/vigilance/schema.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { registerVigilanceConsumers } from "../src/modules/vigilance/consumer.js";
 import { COMMANDS } from "../src/topics.js";
