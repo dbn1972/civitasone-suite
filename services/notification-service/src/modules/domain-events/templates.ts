@@ -270,11 +270,6 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
       body: "The following change has been released:\n\n{{title}}\n\n{{releaseNotes}}\n\nAffected services: {{affectedServices}}\n\nRegards,\nPlatform Administration",
     },
   },
-  {
-    eventType: "contract.expiry.alert",
-    push: { title: "Contract Expiry Alert", body: "A contract is approaching expiry. Please review and initiate renewal." },
-    email: { title: "Contract Expiry Notice", body: "Dear Team,\n\nA contract under your oversight is approaching its expiry date. Please review and initiate the renewal process if required.\n\nRegards,\nContract Management" },
-  },
   // Owner decision #24: plan downgrade requests are decided by platform billing.
   {
     eventType: "tenant.subscription.downgrade_requested",
@@ -300,10 +295,27 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
   },
 ];
 
-const templateMap = new Map<string, NotificationTemplate>();
-for (const t of TEMPLATES) {
-  templateMap.set(t.eventType, t);
+/**
+ * Build the eventType -> template map, refusing duplicate keys. A second entry for
+ * the same eventType used to overwrite the first silently (contract.expiry.alert
+ * was defined twice and the generic copy hid the {{contractNo}} one), so a
+ * duplicate is now a load-time error instead.
+ */
+export function buildTemplateMap(templates: ReadonlyArray<NotificationTemplate>): Map<string, NotificationTemplate> {
+  const map = new Map<string, NotificationTemplate>();
+  for (const t of templates) {
+    if (map.has(t.eventType)) throw new Error(`Duplicate notification template for event type ${t.eventType}`);
+    map.set(t.eventType, t);
+  }
+  return map;
 }
+
+/** The raw template definitions, in declaration order (for validation/testing). */
+export function getTemplateDefinitions(): ReadonlyArray<NotificationTemplate> {
+  return TEMPLATES;
+}
+
+const templateMap = buildTemplateMap(TEMPLATES);
 
 /**
  * Look up a notification template by event type.
