@@ -280,7 +280,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by 4ae78e52f (owner decision #38, 2026-10-26): the page and hub tile are relabelled honestly as document templates (email/letter/certificate, not theme presets) in en+hi; theme presets come after UAT.
 - **First-pass claim:** Hub says 'Design tokens, templates and branding for tenant editions' (themes/page.tsx:7) yet templates show no edition, token count or preview and cannot be applied from this route (themes/_data.ts:28-77).
 - **Verified evidence:** Hub text (themes/page.tsx:7) promises 'Design tokens, templates and branding for tenant editions'. templates/page.tsx only calls getThemeTemplates (_data.ts:89) whose mapRows (_data.ts:28-77) reduces every row to id/label/sublabel/status/meta; there is no edition, token-count or preview mapping, and the page has no apply/publish action (only ThemeActions on /themes/tokens publishes). Whether theme-service returns edition/tokenCount fields cannot be verified (service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/themes/templates/page.tsx`, `apps/web/src/app/(app)/themes/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -508,7 +508,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** [partial: web now sends expectedVersion (latest published revision, 409 STALE_REVISION surfaced) and shows the Publish control to theme_admin/super_admin only (tokens/page.test.tsx, ThemeActions.test.tsx); server role gate/reason/audit already live; remaining: maker-checker (approver != requester) needs the owner decision - is single-admin publish acceptable for UAT? c49fa7ba4]
+- [x] **Status** (UAT decision) Closed by 1171ade57 (owner decision #34, 2026-10-26): single-admin publish with audit accepted for UAT (server role gate, mandatory reason, expectedVersion 409 and the same-transaction audit event are pinned in services/theme-service/tests/publish-audit-single-admin.test.ts). RECORDED FOLLOW-UP: a second approver (approver != publisher, enforced in the consumer) is required before production.
 - **First-pass claim:** Publish is irreversible and tenant-wide ('promotes … to every tenant surface and cannot be undone', ThemeActions.tsx:8-10,62-64) yet the POST body carries only { name, reason } (ThemeActions.tsx:19-23): what is published is not in the request, and the control is shown to every viewer (no role gate: no themes/layout.tsx, middleware.ts:48-59). Server-side authorization and maker-checker are undeterminable (theme-service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/themes/publish body {name, reason} (ThemeActions.tsx:19-23)', 'GET /api/v1/themes/tokens']`
 - **Question:** What exactly does publish promote (draft token set id/version), is it role-restricted, maker-checker enforced (approver != requester) and audited with the reason?
