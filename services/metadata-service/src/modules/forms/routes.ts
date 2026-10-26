@@ -30,17 +30,15 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomBytes } from "node:crypto";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { withTenant, type Tx } from "../../shared/scope.js";
 import { registerStandardErrorHandler } from "../../shared/api-errors.js";
 import { ADMIN, DATA } from "../../shared/roles.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import { mutateForm } from "./commands.js";
 import { fieldDefinitions, layoutDefinitions } from "../entities/schema.js";
 import { maskEmail, maskPhone } from "../../shared/pii-crypto.js";
-import { formPublicEndpoints, formSubmissions, formVersions } from "./schema.js";
+import { formSubmissions, formVersions } from "./schema.js";
 import {
   resolveCascadeOptions,
   validateCascadeRules,
