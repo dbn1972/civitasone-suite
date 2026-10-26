@@ -56,8 +56,8 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rate-heads", async (req, reply) => {
     const ctx = resolveContext(req);
-    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
+    assertDirectWriteAllowed();
     const body = createRateHeadBody.parse(req.body);
     const result = await commands.createRateHead(ctx, body);
     return reply.code(202).send({ data: result });
@@ -65,8 +65,8 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rate-slabs", async (req, reply) => {
     const ctx = resolveContext(req);
-    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
+    assertDirectWriteAllowed();
     const body = createRateSlabBody.parse(req.body);
     const result = await commands.createRateSlab(ctx, body);
     return reply.code(202).send({ data: result });
@@ -79,8 +79,8 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
    */
   app.put("/v1/revenue/rate-heads/:rateHeadId/slabs", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
-    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
+    assertDirectWriteAllowed();
     const { rateHeadId } = rateHeadParam.parse(req.params);
     const body = replaceRateSlabsBody.parse(req.body);
     const result = await commands.replaceRateSlabs(ctx, rateHeadId, body);
@@ -89,8 +89,8 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/penalty-rules", async (req, reply) => {
     const ctx = resolveContext(req);
-    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
+    assertDirectWriteAllowed();
     const body = createPenaltyRuleBody.parse(req.body);
     const result = await commands.createPenaltyRule(ctx, body);
     return reply.code(202).send({ data: result });
@@ -98,8 +98,8 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rebate-rules", async (req, reply) => {
     const ctx = resolveContext(req);
-    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
+    assertDirectWriteAllowed();
     const body = createRebateRuleBody.parse(req.body);
     const result = await commands.createRebateRule(ctx, body);
     return reply.code(202).send({ data: result });
