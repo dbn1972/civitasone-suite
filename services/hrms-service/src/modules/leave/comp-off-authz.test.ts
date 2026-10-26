@@ -8,7 +8,6 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const EMP_A = "bbbbbbbb-0000-4000-8000-00000000000a";
-const EMP_B = "bbbbbbbb-0000-4000-8000-00000000000b";
 const ACTOR_A = "aaaaaaaa-0000-4000-8000-00000000000a";
 const ACTOR_B = "aaaaaaaa-0000-4000-8000-00000000000b";
 const ACTOR_HR = "aaaaaaaa-0000-4000-8000-0000000000f1";
@@ -29,7 +28,8 @@ import { registerLeaveConsumers } from "./consumer.js";
 registerLeaveConsumers(queue);
 const drain = (): Promise<void> => (queue as unknown as { drain: () => Promise<void> }).drain();
 
-const SECRET = "test_secret_for_civitasone_32chr";
+// vitest.config.ts injects JWT_SECRET; fall back to a per-run random value (no literal secret).
+const SECRET = process.env.JWT_SECRET ?? globalThis.crypto.randomUUID();
 const tok = (sub: string, roles: string[]) => signToken({ sub, tid: TENANT, roles, sid: "s1" }, SECRET);
 const auth = (sub: string, roles: string[]) => ({ authorization: `Bearer ${tok(sub, roles)}` });
 const grant = { employeeId: EMP_A, workedDate: "2026-01-26", holidayName: "Republic Day", hours: 8 };

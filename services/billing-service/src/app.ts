@@ -7,6 +7,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { plansRoutes } from "./modules/plans/routes.js";
 import { subscriptionsRoutes } from "./modules/subscriptions/routes.js";
@@ -21,10 +22,15 @@ import { gstnRoutes } from "./modules/gstn/routes.js";
 import { gatewayRoutes } from "./modules/gateways/routes.js";
 import { churnRoutes } from "./modules/churn/routes.js";
 
+// Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
+// external caller cannot forge it. Same value as hrms-service INTERNAL_PROXY_TRUST. Deliberately not `true`.
+const INTERNAL_PROXY_TRUST = "loopback,linklocal,uniquelocal";
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
+    trustProxy: INTERNAL_PROXY_TRUST,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
@@ -32,6 +38,16 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // Per-user rate limiting (300 req/min keyed by actorId, ops paths excluded), same
+  // shape as hrms/audit/admin-service. authPlugin is registered first so req.ctx is
+  // populated. Webhook and checkout routes override this via route-level config.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

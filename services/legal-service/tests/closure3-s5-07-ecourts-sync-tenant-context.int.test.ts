@@ -8,7 +8,7 @@
  *
  * Real Postgres. DATABASE_URL = non-superuser legal_svc (NOBYPASSRLS);
  * LEGAL_SCANNER_DATABASE_URL = the legal_scanner role from migration 0028.
- * Skipped (not failed) when LEGAL_SCANNER_DATABASE_URL is not provided; the
+ * Fails loudly (never skips) when LEGAL_SCANNER_DATABASE_URL is not provided; the
  * always-on unit/static tests (closure3-s5-07-*.test.ts) cover CI.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -30,12 +30,13 @@ vi.mock("../src/modules/ecourts/adapter.js", () => ({
 }));
 
 const HAVE_SCANNER = Boolean(process.env["LEGAL_SCANNER_DATABASE_URL"]);
+if (!HAVE_SCANNER) throw new Error("closure3-s5-07: LEGAL_SCANNER_DATABASE_URL is not set (CI sets it via vitest.config.ts; locally export the legal_scanner DSN of your disposable Postgres)");
 
 const TENANT_A = "c3a50700-dead-4000-8000-00000000000a";
 const TENANT_B = "c3a50700-dead-4000-8000-00000000000b";
 const ACTOR = "c3a50700-dead-4000-8000-0000000000ac";
 
-describe.skipIf(!HAVE_SCANNER)("CLOS3-S5-07 e-Courts sync runs per tenant under FORCE RLS", () => {
+describe("CLOS3-S5-07 e-Courts sync runs per tenant under FORCE RLS", () => {
   let db: typeof import("../src/shared/db.js").db;
   let sqlClient: typeof import("../src/shared/db.js").sqlClient;
   let scannerSqlClient: typeof import("../src/shared/scanner-db.js").scannerSqlClient | undefined;

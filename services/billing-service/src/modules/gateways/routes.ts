@@ -10,7 +10,7 @@
  */
 
 import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
@@ -53,7 +53,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
    * Creates a payment order on the configured gateway.
    * Supports three methods: gateway (Razorpay/PayU/CCAvenue), upi_autopay, emandate.
    */
-  app.post("/v1/billing/payments/initiate", async (req, reply) => {
+  app.post("/v1/billing/payments/initiate", { config: { rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => (r as { ctx?: { actorId?: string } }).ctx?.actorId ?? r.ip } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, BILLING_ROLES);
 
@@ -265,9 +265,12 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
    * POST /v1/billing/webhooks/payu
    * PUBLIC route (config.public); authenticated by PayU's reverse hash (verifyPayuWebhookHash).
    */
-  app.post("/v1/billing/webhooks/payu", { config: { public: true } }, async (req, reply) => {
+  app.post("/v1/billing/webhooks/payu", { config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => `webhook:${r.ip}` } } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
-    authenticate(() => typeof body === "object" && body !== null && verifyPayuWebhookHash(body));
+    // Reject a non-object body up front so the authentication predicate below is ONLY the
+    // reverse-hash check (no user-controlled shape short-circuit inside the security condition).
+    if (typeof body !== "object" || body === null) throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
+    authenticate(() => verifyPayuWebhookHash(body));
     const status = body?.["status"];
     const txnId = body?.["txnid"] ?? "";
     const mihpayid = body?.["mihpayid"] ?? "";
@@ -281,7 +284,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",
-      payload: { ...(typeof body === "object" ? body : {}), txnId, mihpayid, status },
+      payload: { ...body, txnId, mihpayid, status },
     });
 
     return reply.code(200).send({ status: "ok" });
@@ -291,7 +294,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
    * POST /v1/billing/webhooks/ccavenue
    * PUBLIC route (config.public); authenticated by decrypting encResp with the working key.
    */
-  app.post("/v1/billing/webhooks/ccavenue", { config: { public: true } }, async (req, reply) => {
+  app.post("/v1/billing/webhooks/ccavenue", { config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => `webhook:${r.ip}` } } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
     const encResp = body?.["encResp"] ?? "";
     let fields: Record<string, string> | null = null;
@@ -326,6 +329,11 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(err.status).send({
         error: { code: err.code, message: err.message, correlationId },
       });
+    }
+    // @fastify/rate-limit throws a plain object with statusCode 429; without this branch it would fall through to 500.
+    if ((err as { statusCode?: number }).statusCode === 429) {
+      const retryAfter = (err as { retryAfter?: number }).retryAfter ?? 60;
+      return reply.code(429).header("retry-after", String(retryAfter)).send({ code: "RATE_LIMITED", message: "rate limit exceeded", correlationId, retryable: true, retryAfter });
     }
     if (err instanceof GatewayError) {
       // PAYMENT_METHOD_UNAVAILABLE is a business rule rejection (422)

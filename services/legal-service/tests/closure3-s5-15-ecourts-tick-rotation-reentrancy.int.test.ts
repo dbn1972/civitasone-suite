@@ -5,7 +5,7 @@
  * overlapping syncs inserted the same hearing twice.
  *
  * Real Postgres (non-superuser legal_svc, FORCE RLS) + legal_scanner role.
- * Skipped when LEGAL_SCANNER_DATABASE_URL is absent; the always-on re-entrancy
+ * Fails loudly (never skips) when LEGAL_SCANNER_DATABASE_URL is absent; the always-on re-entrancy
  * unit test (closure3-s5-15-ecourts-tick-busy.test.ts) covers CI.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -34,11 +34,12 @@ const mk = (cnr: string) => ({
   });
 
 const HAVE_SCANNER = Boolean(process.env["LEGAL_SCANNER_DATABASE_URL"]);
+if (!HAVE_SCANNER) throw new Error("closure3-s5-15: LEGAL_SCANNER_DATABASE_URL is not set (CI sets it via vitest.config.ts; locally export the legal_scanner DSN of your disposable Postgres)");
 const TENANT = "c3a51500-dead-4000-8000-00000000000a";
 const ACTOR = "c3a51500-dead-4000-8000-0000000000ac";
 const CAP = 500; // tick()'s per-run cap
 
-describe.skipIf(!HAVE_SCANNER)("CLOS3-S5-15 e-Courts tick rotation and hearing idempotency", () => {
+describe("CLOS3-S5-15 e-Courts tick rotation and hearing idempotency", () => {
   let db: typeof import("../src/shared/db.js").db;
   let sqlClient: typeof import("../src/shared/db.js").sqlClient;
   let scannerSqlClient: typeof import("../src/shared/scanner-db.js").scannerSqlClient | undefined;

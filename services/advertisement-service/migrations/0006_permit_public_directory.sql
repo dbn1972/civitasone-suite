@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS adv_permits.adv_permit_directory (
 CREATE INDEX IF NOT EXISTS adv_permit_directory_permit_idx
   ON adv_permits.adv_permit_directory (permit_id);
 
--- Intentionally NO RLS on this table (see header): public facts only.
+-- RLS (V4-C3): ENABLE + FORCE is applied AFTER the backfill below, which is why it sits at the end of the file.
 
 DO $$
 BEGIN
@@ -58,3 +58,17 @@ BEGIN
   END IF;
 END
 $$;
+
+-- V4-C3: tenant-write isolation + a narrow token-scoped public SELECT (see 0007_permit_directory_rls.sql).
+ALTER TABLE adv_permits.adv_permit_directory ENABLE ROW LEVEL SECURITY;
+ALTER TABLE adv_permits.adv_permit_directory FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation ON adv_permits.adv_permit_directory;
+CREATE POLICY tenant_isolation ON adv_permits.adv_permit_directory
+  USING (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid);
+
+DROP POLICY IF EXISTS public_verify_read ON adv_permits.adv_permit_directory;
+CREATE POLICY public_verify_read ON adv_permits.adv_permit_directory
+  FOR SELECT
+  USING (verification_code = NULLIF(current_setting('app.permit_verification_code', true), ''));
