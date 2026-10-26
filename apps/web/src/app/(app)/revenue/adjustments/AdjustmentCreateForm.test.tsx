@@ -112,4 +112,27 @@ describe("AdjustmentCreateForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  // Owner decision #5 (2026-10-26): only principal is movable; cap = live DCB outstanding less penalty+interest.
+  it("caps at the server-issued movable principal and says penalty/interest stay with the demand (owner decision #5)", () => {
+    const withMovable: DemandOption[] = [
+      { ...demands[0]!, outstandingMinor: "400000", movableMinor: "380000" },
+      demands[1]!,
+    ];
+    render(<AdjustmentCreateForm assesseeId="a1" demands={withMovable} />);
+    fireEvent.change(screen.getByLabelText(/^From Demand/), { target: { value: "d1" } });
+    const breakdown = screen.getByLabelText("Source demand breakdown");
+    expect(breakdown).toHaveTextContent("Live outstanding");
+    expect(breakdown).toHaveTextContent("₹4,000.00");
+    expect(breakdown).toHaveTextContent("Movable principal");
+    expect(breakdown).toHaveTextContent("₹3,800.00");
+    fireEvent.change(screen.getByLabelText(/^To Demand/), { target: { value: "d2" } });
+    fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "3800.01" } }); // above movable, below net
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Raise Adjustment" }));
+    expect(
+      screen.getByText("Amount cannot exceed the movable principal of ₹3,800.00 (penalty and interest stay with their demand)."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Raise this adjustment?")).not.toBeInTheDocument();
+  });
 });

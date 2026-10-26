@@ -68,7 +68,13 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
       errors.amount = "Enter a valid amount greater than zero, with at most 2 decimal places.";
     } else if (fromDemand) {
       try {
-        if (BigInt(minorAmount) > BigInt(fromDemand.netMinor)) {
+        if (fromDemand.movableMinor !== undefined) {
+          // Owner decision #5: principal only; penalty and interest stay with
+          // the demand. The cap is the server-issued live figure.
+          if (BigInt(minorAmount) > BigInt(fromDemand.movableMinor)) {
+            errors.amount = `Amount cannot exceed the movable principal of ${formatMoney(fromDemand.movableMinor)} (penalty and interest stay with their demand).`;
+          }
+        } else if (BigInt(minorAmount) > BigInt(fromDemand.netMinor)) {
           // The UI only has the gross "net demand" figure; the server caps
           // against the live DCB outstanding balance (demand − receipts), which
           // can be lower. Name the figure we actually have, and let the server
@@ -186,6 +192,14 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                   <dd style={{ margin: 0, textAlign: "end" }}>{formatMoney(fromDemand.interestMinor)}</dd>
                   <dt style={{ fontWeight: 600 }}>Net demand</dt>
                   <dd style={{ margin: 0, textAlign: "end", fontWeight: 600 }}>{formatMoney(fromDemand.netMinor)}</dd>
+                  {fromDemand.movableMinor !== undefined && fromDemand.outstandingMinor !== undefined && (
+                    <>
+                      <dt>Live outstanding</dt>
+                      <dd style={{ margin: 0, textAlign: "end" }}>{formatMoney(fromDemand.outstandingMinor)}</dd>
+                      <dt style={{ fontWeight: 600 }}>Movable principal</dt>
+                      <dd style={{ margin: 0, textAlign: "end", fontWeight: 600 }}>{formatMoney(fromDemand.movableMinor)}</dd>
+                    </>
+                  )}
                 </dl>
               )}
             </div>
