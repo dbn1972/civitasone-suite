@@ -5,15 +5,18 @@
  */
 import { chromium } from '@playwright/test';
 import { createHmac } from 'crypto';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { join } from 'node:path';
+import { tmpdir } from 'os';
 
 const BASE = (() => {
   const idx = process.argv.indexOf('--base');
   return idx >= 0 ? process.argv[idx + 1] : (process.env.WEB_URL ?? 'http://127.0.0.1:3000');
 })();
 
-const OUT = '/tmp/procurement-e2e';
+const OUT = process.env.UAT_OUT ?? mkdtempSync(join(tmpdir(), "procurement-e2e-"));
 mkdirSync(OUT, { recursive: true });
+console.log(`UAT output dir: ${OUT}`);
 
 const SCREENS = [
   { path: '/procurement', name: 'Hub', type: 'hub' },

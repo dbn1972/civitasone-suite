@@ -7,7 +7,8 @@
  */
 import { chromium, devices } from "@playwright/test";
 import { createHmac } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const SECRET = process.env.JWT_SECRET ?? "civitasone-dev-secret";
@@ -18,8 +19,9 @@ const BASE = (() => {
   return idx >= 0 ? process.argv[idx + 1] : (process.env.WEB_URL ?? "http://127.0.0.1:3000");
 })();
 
-const OUT = process.env.UAT_OUT ?? "/tmp/civitasone-frontend-uat";
+const OUT = process.env.UAT_OUT ?? mkdtempSync(join(tmpdir(), "civitasone-frontend-uat-"));
 mkdirSync(OUT, { recursive: true });
+console.log(`UAT output dir: ${OUT}`);
 
 const DEV_USERS = {
   superadmin: {
