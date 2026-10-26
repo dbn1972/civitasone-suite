@@ -40,8 +40,11 @@ async function wipe(tenantId: string): Promise<void> {
   }));
 }
 
-async function publish(q: MemoryQueue, topic: string, tenantId: string, payload: Record<string, unknown>): Promise<void> {
-  await q.publish(topic, { messageId: randomUUID(), type: topic, tenantId, actorId: ACTOR, correlationId: `c-${randomUUID()}`, schemaVersion: "1.0", payload });
+// Owner decision #19: a decision on behalf of the principal is taken by a
+// consent officer other than the one who raised the request, with a reason.
+const DPO = "cccccccc-3333-4000-8000-0000000001d0";
+async function publish(q: MemoryQueue, topic: string, tenantId: string, payload: Record<string, unknown>, actorId: string = ACTOR): Promise<void> {
+  await q.publish(topic, { messageId: randomUUID(), type: topic, tenantId, actorId, correlationId: `c-${randomUUID()}`, schemaVersion: "1.0", payload });
   await q.drain();
 }
 
@@ -60,7 +63,7 @@ async function seed(mq: MemoryQueue, tenantId: string, opts: {
 }
 
 async function grant(mq: MemoryQueue, tenantId: string, id: string): Promise<void> {
-  await publish(mq, "tenant.consent.grant", tenantId, { id, tenantId });
+  await publish(mq, "tenant.consent.grant", tenantId, { id, tenantId, reason: "officer decision on behalf of the principal", onBehalf: true }, DPO);
 }
 
 async function holding(mq: MemoryQueue, tenantId: string, principalId: string, category: string, value: Record<string, unknown>): Promise<void> {
@@ -194,7 +197,7 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     const mq = q(); await mq.start();
     const principal = randomUUID();
     const id = await seed(mq, T1, { principalId: principal, categories: ["address"] });
-    await publish(mq, "tenant.consent.deny", T1, { id, tenantId: T1, reason: "principal declined" });
+    await publish(mq, "tenant.consent.deny", T1, { id, tenantId: T1, reason: "principal declined", onBehalf: true }, DPO);
     await mq.stop();
     expect((await repo.findArtefact(T1, id))?.status).toBe("denied");
     expect(await fetchReq(T1, id, "property-tax-assessment", ["address"])).toEqual({ allowed: false, reason: "DENIED" });
@@ -254,7 +257,7 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     // grant, then fetch over HTTP (needs a holding first)
     await inject("POST", "/v1/consent/holdings", T1, { principalId: principal, providingDept: "Registrar", category: "address", value: { line1: "http" } }, { dept_code: "Registrar" });
     await infraQueue.drain();
-    expect((await inject("POST", `/v1/consent/${id}/grant`, T1, {})).status).toBe(202);
+    expect((await inject("POST", `/v1/consent/${id}/grant`, T1, { reason: "officer approves on behalf" }, { sub: DPO, roles: ["consent_officer"] })).status).toBe(202);
     await infraQueue.drain();
     const ok = await inject("POST", `/v1/consent/${id}/fetch`, T1, { purposeKey: "assess", categories: ["address"] }, { dept_code: "Revenue" });
     expect(ok.status).toBe(200);
@@ -270,7 +273,7 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     expect(ledger.body.meta.total).toBeGreaterThanOrEqual(3);
     // 404 unknown, 409 grant-after-decision
     expect((await inject("GET", `/v1/consent/${randomUUID()}`, T1)).status).toBe(404);
-    expect((await inject("POST", `/v1/consent/${id}/grant`, T1, {})).status).toBe(409);
+    expect((await inject("POST", `/v1/consent/${id}/grant`, T1, { reason: "officer approves on behalf" }, { sub: DPO, roles: ["consent_officer"] })).status).toBe(409);
   });
 
   it("fetch by an officer whose department != requestingDept is refused (DEPT_MISMATCH, no access logged)", async () => {
@@ -351,7 +354,7 @@ describe("consent exchange hub — real persistence (SVC-150)", () => {
     }, { dept_code: "Revenue" });
     const id2 = created2.body.data.id as string;
     await infraQueue.drain();
-    const officerGrant = await inject("POST", `/v1/consent/${id2}/grant`, T1, {}, { sub: ACTOR, roles: ["consent_officer"] });
+    const officerGrant = await inject("POST", `/v1/consent/${id2}/grant`, T1, { reason: "grievance redressal: citizen consented in person" }, { sub: DPO, roles: ["consent_officer"] });
     expect(officerGrant.status).toBe(202);
   });
 
