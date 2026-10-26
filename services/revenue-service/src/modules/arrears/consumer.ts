@@ -8,6 +8,8 @@ import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./sc
 import { waivers } from "../trade-license/schema.js";
 import { dcbEntries, demands } from "../assessment/schema.js";
 import { getAssesseeOutstanding, getLatestDemandBalance } from "./outstanding.js";
+import { requireLapsedNoticeTx, istToday } from "./recovery-notice.js";
+import { demandNotices } from "./schema.js";
 import {
   generateInstalmentSchedule,
   validateWriteOff,
@@ -384,35 +386,166 @@ export function registerArrearsConsumers(queue: Queue): void {
       const outstanding = await getAssesseeOutstanding(tx, msg.tenantId, assesseeId);
       validateRecoveryReferral(BigInt(outstanding));
 
-      // Insert recovery referral
+      // Owner decision #4: a referral is allowed only after a demand notice has
+      // been served AND its notice period has lapsed. Fail closed otherwise.
+      const notice = await requireLapsedNoticeTx(tx, msg.tenantId, assesseeId);
+
+      // Insert recovery referral — PENDING. legal-service is NOT notified until a
+      // DIFFERENT officer approves it (recoveryReferDecide below).
       await tx.insert(recoveryReferrals).values({
         tenantId: msg.tenantId,
         assesseeId,
         reason,
-        status: "referred",
+        status: "pending",
+        noticeId: notice.id,
         createdBy: msg.actorId,
       });
 
-      // Enqueue events
-      await enqueue(tx, {
-        topic: EVENTS.recoveryReferred,
-        eventType: EVENTS.recoveryReferred,
-        tenantId: msg.tenantId,
-        actorId: msg.actorId,
-        correlationId: msg.correlationId,
-        payload: { assesseeId, reason },
-      });
       await enqueue(tx, {
         topic: "audit.event.record",
         eventType: "audit.event.record",
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "recovery_referral", outcome: "success" },
+        payload: {
+          service: SERVICE, action: "create", resourceType: "recovery_referral", outcome: "pending",
+          assesseeId, noticeNo: notice.noticeNo, outstandingMinor: BigInt(outstanding).toString(),
+        },
       });
     });
 
     await cache.invalidate(`${SERVICE}:${msg.tenantId}:instalments:${assesseeId}`);
+  });
+
+  // ── recoveryReferDecide (checker step, owner decision #4) ───────────────────
+  // A DIFFERENT officer approves (-> referred; legal-service is notified now) or
+  // rejects (-> rejected). Eligibility (arrears still owed, notice still lapsed)
+  // is re-checked at approval: if it no longer holds the referral stays pending
+  // and the refusal is audited (not thrown: that would roll back markProcessed).
+  queue.subscribe(COMMANDS.recoveryReferDecide, async (msg) => {
+    const { referralId, approve, reason } = msg.payload as { referralId: string; approve: boolean; reason?: string };
+    let assesseeId: string | undefined;
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      const rows = await tx
+        .select()
+        .from(recoveryReferrals)
+        .where(and(eq(recoveryReferrals.tenantId, msg.tenantId), eq(recoveryReferrals.id, referralId)))
+        .limit(1);
+      const referral = rows[0];
+      if (!referral) return;
+
+      if (referral.status !== "pending") {
+        await enqueue(tx, {
+          topic: "audit.event.record",
+          eventType: "audit.event.record",
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: SERVICE, action: "decide", resourceType: "recovery_referral", outcome: "already_decided", resourceId: referralId },
+        });
+        return;
+      }
+
+      assertMakerChecker(referral.createdBy, msg.actorId);
+      assesseeId = referral.assesseeId;
+
+      if (approve) {
+        const outstandingNow = await getAssesseeOutstanding(tx, msg.tenantId, referral.assesseeId);
+        let eligible = true;
+        try {
+          validateRecoveryReferral(BigInt(outstandingNow));
+          await requireLapsedNoticeTx(tx, msg.tenantId, referral.assesseeId);
+        } catch (err) {
+          if (!(err instanceof DomainError)) throw err;
+          eligible = false;
+        }
+        if (!eligible) {
+          await enqueue(tx, {
+            topic: "audit.event.record",
+            eventType: "audit.event.record",
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: SERVICE, action: "decide", resourceType: "recovery_referral", outcome: "no_longer_eligible", resourceId: referralId },
+          });
+          return;
+        }
+      }
+
+      const newStatus = approve ? "referred" : "rejected";
+      const claimed = await tx
+        .update(recoveryReferrals)
+        .set({ status: newStatus, checkerUserId: msg.actorId, decidedAt: new Date(), decisionReason: reason ?? null })
+        .where(and(eq(recoveryReferrals.id, referralId), eq(recoveryReferrals.tenantId, msg.tenantId), eq(recoveryReferrals.status, "pending")))
+        .returning({ id: recoveryReferrals.id });
+      if (claimed.length === 0) return;
+
+      if (approve) {
+        await enqueue(tx, {
+          topic: EVENTS.recoveryReferred,
+          eventType: EVENTS.recoveryReferred,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { referralId, assesseeId: referral.assesseeId, reason: referral.reason },
+        });
+      }
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: SERVICE, action: "decide", resourceType: "recovery_referral", resourceId: referralId,
+          outcome: approve ? "approved" : "rejected", reason: reason ?? null, assesseeId: referral.assesseeId,
+        },
+      });
+    });
+
+    if (assesseeId) await cache.invalidate(`${SERVICE}:${msg.tenantId}:instalments:${assesseeId}`);
+  });
+
+  // ── demandNoticeServe (owner decision #4) ───────────────────────────────────
+  queue.subscribe(COMMANDS.demandNoticeServe, async (msg) => {
+    const { assesseeId, demandId, noticeNo, servedOn, noticePeriodDays } = msg.payload as {
+      assesseeId: string;
+      demandId?: string;
+      noticeNo: string;
+      servedOn: string;
+      noticePeriodDays: number;
+    };
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // A notice cannot have been served in the future.
+      if (servedOn > istToday()) {
+        throw new DomainError("NOTICE_DATE_IN_FUTURE", "A demand notice cannot be recorded as served on a future date");
+      }
+
+      await tx.insert(demandNotices).values({
+        tenantId: msg.tenantId,
+        assesseeId,
+        demandId: demandId ?? null,
+        noticeNo,
+        servedOn,
+        noticePeriodDays,
+        servedBy: msg.actorId,
+      });
+
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: SERVICE, action: "serve", resourceType: "demand_notice", outcome: "success", assesseeId, noticeNo, servedOn, noticePeriodDays },
+      });
+    });
   });
 
   // ── waiverCreate ────────────────────────────────────────────────────────────

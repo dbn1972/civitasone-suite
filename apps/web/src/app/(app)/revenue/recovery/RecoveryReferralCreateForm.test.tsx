@@ -38,7 +38,8 @@ describe("RecoveryReferralCreateForm", () => {
     fireEvent.click(screen.getByText("Refer for recovery"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Recovery referral recorded/)).toBeInTheDocument();
+      // Owner decision #4: copy no longer claims the referral took effect — it is sent for approval.
+      expect(screen.getByText(/Recovery referral raised/)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
   });
@@ -57,5 +58,54 @@ describe("RecoveryReferralCreateForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
+  });
+
+  // Owner decision #4 (2026-10-26): amount, age and notices are shown before a coercive referral;
+  // it is allowed only after a served notice's period has lapsed, and needs a second officer.
+  const READY = {
+    outstandingMinor: "500000",
+    eligible: true,
+    notices: [{ id: "n1", noticeNo: "DN-2026-0007", servedOn: "2026-08-01", noticePeriodDays: 30, lapsesOn: "2026-08-31", lapsed: true }],
+  };
+
+  it("shows the outstanding amount and the served notices with their lapse status (owner decision #4)", () => {
+    render(<RecoveryReferralCreateForm assesseeId="a1" readiness={READY} />);
+    expect(screen.getByText("₹5,000.00")).toBeInTheDocument();
+    const notices = screen.getByLabelText("Demand notices served");
+    expect(notices).toHaveTextContent("DN-2026-0007");
+    expect(notices).toHaveTextContent(/period lapsed/i);
+    expect(screen.getByRole("button", { name: "Refer for Recovery" })).toBeEnabled();
+  });
+
+  it("blocks the referral and explains why when no notice has been served or its period has not lapsed", () => {
+    const { rerender } = render(<RecoveryReferralCreateForm assesseeId="a1" readiness={{ outstandingMinor: "500000", eligible: false, notices: [] }} />);
+    expect(screen.getByRole("button", { name: "Refer for Recovery" })).toBeDisabled();
+    expect(screen.getByText(/No demand notice has been served/)).toBeInTheDocument();
+    rerender(
+      <RecoveryReferralCreateForm
+        assesseeId="a1"
+        readiness={{ outstandingMinor: "500000", eligible: false, notices: [{ ...READY.notices[0]!, lapsed: false, lapsesOn: "2099-01-31" }] }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Refer for Recovery" })).toBeDisabled();
+    expect(screen.getByText(/notice period has not lapsed/i)).toBeInTheDocument();
+  });
+
+  it("fails closed when eligibility could not be loaded (readiness = null)", () => {
+    render(<RecoveryReferralCreateForm assesseeId="a1" readiness={null} />);
+    expect(screen.getByRole("button", { name: "Refer for Recovery" })).toBeDisabled();
+    expect(screen.getByText(/couldn't check/i)).toBeInTheDocument();
+  });
+
+  it("tells the officer the referral goes to a second officer and does not take effect until approved", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "ref-1" }), { status: 202 }));
+    render(<RecoveryReferralCreateForm assesseeId="a1" readiness={READY} />);
+    fillValidForm();
+    fireEvent.click(screen.getByRole("button", { name: "Refer for Recovery" }));
+    await waitFor(() => expect(screen.getByText("Refer this assessee for recovery?")).toBeInTheDocument());
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toMatch(/different officer must approve/i);
+    expect(document.querySelector("[role=alertdialog]")?.textContent).not.toMatch(/takes effect immediately/i);
+    fireEvent.click(screen.getByText("Refer for recovery"));
+    await waitFor(() => expect(screen.getByText(/sent for approval/i)).toBeInTheDocument());
   });
 });
