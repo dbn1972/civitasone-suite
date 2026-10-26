@@ -7,6 +7,8 @@ import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./sc
 // here alongside the other arrears maker-checker reads for consistency.
 import { waivers } from "../trade-license/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { demands } from "../assessment/schema.js";
+import { getLatestDemandBalance } from "./outstanding.js";
 
 export async function listInstalmentPlans(
   tenantId: string,
@@ -43,6 +45,25 @@ export async function findWriteOffById(tenantId: string, id: string) {
       .limit(1);
   });
   return rows[0] ?? null;
+}
+
+/**
+ * Owner decision #6: the demand a new write-off targets — its assessee, FY and
+ * live DCB balance (latest running balance). Null when the demand does not
+ * exist for the tenant. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function getWriteOffTarget(tenantId: string, demandId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const d = await t
+      .select({ assesseeId: demands.assesseeId, financialYear: demands.financialYear })
+      .from(demands)
+      .where(and(eq(demands.tenantId, tenantId), eq(demands.id, demandId)))
+      .limit(1);
+    if (!d[0]) return null;
+    const balance = await getLatestDemandBalance(t, tenantId, demandId);
+    return { assesseeId: d[0].assesseeId, financialYear: d[0].financialYear, balanceMinor: balance };
+  });
 }
 
 /**

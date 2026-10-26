@@ -63,6 +63,12 @@ vi.mock("../src/modules/arrears/repo.js", async (importOriginal) => {
     ...original,
     // List repos return { rows, total } (limit/offset are applied in SQL).
     listInstalmentPlans: vi.fn(async () => ({ rows: [], total: 0 })),
+    // Owner decision #6: a new write-off targets a demand; the sync check reads its assessee/FY/balance.
+    getWriteOffTarget: vi.fn(async (_t: string, demandId: string) =>
+      demandId === "d1111111-1111-1111-1111-111111111111"
+        ? { assesseeId: "a2222222-2222-2222-2222-222222222222", financialYear: "2024-2025", balanceMinor: 10_000_000n }
+        : null,
+    ),
     findWriteOffById: vi.fn(async (tenantId: string, id: string) => {
       const row = WRITEOFF_STORE[id];
       if (!row || row.tenantId !== tenantId) return null;
@@ -195,6 +201,8 @@ describe("POST /v1/revenue/instalments", () => {
 describe("POST /v1/revenue/write-offs", () => {
   const VALID_BODY = {
     assesseeId: ASSESSEE_ID,
+    // Owner decision #6: demandId is mandatory on a new write-off.
+    demandId: "d1111111-1111-1111-1111-111111111111",
     amountMinor: "100000",
     reason: "Unrecoverable after legal proceedings",
   };
@@ -205,7 +213,7 @@ describe("POST /v1/revenue/write-offs", () => {
     expect(res.json().data).toHaveProperty("messageId");
   });
 
-  it("accepts an optional demandId + financialYear (GAP-REVENUE-WRITE-OFFS-03)", async () => {
+  it("accepts demandId + a (now ignored) client financialYear (GAP-REVENUE-WRITE-OFFS-03)", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/revenue/write-offs",

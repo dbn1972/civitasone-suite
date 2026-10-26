@@ -191,7 +191,9 @@ describe("Arrears Consumer", () => {
   });
 
   describe("writeOffCreate (GAP-REVENUE-WRITE-OFFS-03)", () => {
-    it("stores the optional demandId + financialYear on the write-off row", async () => {
+    it("stores the demandId + the demand's financialYear on the write-off row", async () => {
+      // Owner decision #6: the consumer loads the demand (its assessee + authoritative FY).
+      mockSelectLimit.mockResolvedValueOnce([{ assesseeId: "assessee-1", financialYear: "2024-25" }]);
       const msg = buildMsg({
         payload: {
           assesseeId: "assessee-1",

@@ -18,6 +18,11 @@ import {
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
 
+/** Owner decision #6: pre-decision rows have no demand — surface "legacy, not linked" instead of hiding it. */
+function withLegacyFlag<T extends { demandId?: string | null }>(row: T): T & { legacyUnlinked: boolean } {
+  return { ...row, legacyUnlinked: row.demandId == null };
+}
+
 export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
@@ -51,6 +56,17 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createWriteOffBody.parse(req.body);
+    // Owner decision #6: the write-off is bound to ONE demand and capped at
+    // that demand's live balance. Refuse synchronously; the consumer
+    // re-enforces both in-transaction.
+    const target = await repo.getWriteOffTarget(ctx.tenantId, body.demandId);
+    if (!target) throw new HttpError(404, "DEMAND_NOT_FOUND", "demand not found");
+    if (target.assesseeId !== body.assesseeId) {
+      throw new HttpError(422, "DEMAND_ASSESSEE_MISMATCH", "the demand does not belong to this assessee");
+    }
+    if (BigInt(body.amountMinor) > target.balanceMinor) {
+      throw new HttpError(422, "WRITEOFF_EXCEEDS_DEMAND_BALANCE", "amount exceeds the balance of the selected demand");
+    }
     const result = await commands.createWriteOff(ctx, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });
@@ -70,7 +86,7 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
       offset: q.offset,
     });
     return reply.send({
-      data: rows,
+      data: rows.map(withLegacyFlag),
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },
     });
   });
@@ -88,7 +104,7 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     if (!writeOff) {
       throw new HttpError(404, "NOT_FOUND", "write-off not found");
     }
-    return reply.send({ data: writeOff });
+    return reply.send({ data: withLegacyFlag(writeOff) });
   });
 
   // ── PATCH /v1/revenue/write-offs/:id/decide ─────────────────────────────────
