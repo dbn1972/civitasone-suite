@@ -33,8 +33,7 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import {
   ConfigError,
@@ -59,10 +58,7 @@ import {
 import type { IntegrationSettingRow, IntegrationChangeRow } from "./schema.js";
 import { fetchUserNames } from "../../shared/identity-names.js";
 
-const AUDIT_TOPIC = "audit.event.record";
 const ROLES = [...TENANT_ADMIN_ROLES];
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const putBody = z.object({
   enabled: z.boolean().default(true),

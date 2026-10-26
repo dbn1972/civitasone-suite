@@ -19,9 +19,8 @@
  * Optimistic locking: every mutating decision takes `expectedVersion` and the
  * UPDATE carries `WHERE version = $expected`; a mismatch is 409 VERSION_CONFLICT.
  */
-import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { parseOrThrow } from "../../shared/envelope.js";
@@ -39,7 +38,6 @@ import {
   canonicalJson,
   type ConfigEntries,
 } from "./artefact-domain.js";
-import type { ConfigArtefactRow, ConfigPromotionRow, ConfigEnvStateRow } from "./artefact-schema.js";
 
 const RESOURCE = "config_artefact";
 
@@ -48,18 +46,12 @@ const MAX_ENTRIES_KEYS = 500;
 const MAX_ENTRIES_BYTES = 256_000;
 
 const setKeySchema = z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+$/, "invalid set key");
-const limitSchema = z.coerce.number().int().min(1).max(200);
-const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
 
 const snapshotBody = z.object({
   setKey: setKeySchema,
   entries: z.record(z.unknown()),
   note: z.string().max(1000).optional(),
 });
-
-
-
-
 
 const promoteBody = z.object({
   setKey: setKeySchema,
@@ -82,11 +74,6 @@ const rollbackBody = z.object({
 
 const idParam = z.object({ id: z.string().uuid() });
 const envParam = z.object({ env: z.enum(ENVIRONMENTS) });
-
-function iso(value: Date | string | null | undefined): string | null {
-  if (value === null || value === undefined) return null;
-  return value instanceof Date ? value.toISOString() : String(value);
-}
 
 function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };

@@ -17,8 +17,6 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
 import * as repo from "./repo.js";
 import {
   ConfigError,
@@ -30,10 +28,7 @@ import {
 } from "./domain.js";
 import type { ConfigEntryRow, ConfigChangeRow, ConfigVersionRow } from "./schema.js";
 
-const AUDIT_TOPIC = "audit.event.record";
 const CONFIG_ROLES = [...TENANT_ADMIN_ROLES];
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const proposeBody = z.object({
   key: z.string().min(1).max(160).regex(/^[a-zA-Z0-9._:-]+$/, "invalid config key"),
