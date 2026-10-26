@@ -27,7 +27,11 @@ export type InvoiceRow = {
 
 const dash = (v: string | null | undefined): string => (v ? v : "—");
 
-export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
+// A tax invoice PDF exists only once the bill is issued (billing-service answers 409 otherwise).
+const PDF_STATUSES = new Set(["issued", "partially_paid", "paid", "overdue"]);
+
+/** `pdfBasePath` (e.g. /api/proxy/v1/billing/invoices) adds a PDF column; omit it for no download links. */
+export function InvoiceList({ invoices, pdfBasePath }: { invoices: InvoiceRow[]; pdfBasePath?: string }) {
   const t = useTranslations("tenantAdminW2.billingInvoices");
   if (invoices.length === 0) {
     return <EmptyState icon="🧾" title={t("emptyTitle")} message={t("emptyMessage")} />;
@@ -47,6 +51,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
             <th scope="col">{t("igst")}</th>
             <th scope="col">{t("total")}</th>
             <th scope="col">{t("status")}</th>
+            {pdfBasePath ? <th scope="col">{t("pdf")}</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -62,6 +67,19 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
               <td>{inv.supplierGstin ? formatMoney(inv.igstMinor ?? "0") : "—"}</td>
               <td>{formatMoney(inv.totalMinor)}</td>
               <td><StatusPill status={inv.status} label={humanizeStatus(inv.status)} /></td>
+              {pdfBasePath ? (
+                <td>
+                  {PDF_STATUSES.has(inv.status) ? (
+                    <a
+                      href={`${pdfBasePath}/${encodeURIComponent(inv.id)}/pdf`}
+                      download
+                      aria-label={t("pdfAria", { number: inv.invoiceNumber ?? inv.periodMonth ?? inv.id })}
+                    >
+                      {t("pdf")}
+                    </a>
+                  ) : "—"}
+                </td>
+              ) : null}
             </tr>
           ))}
         </tbody>
