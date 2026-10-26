@@ -2,7 +2,7 @@
 /**
  * Patch all service shared/context.ts files to use @civitasone/auth/context resolveServiceContext.
  */
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(import.meta.dirname, "..");
@@ -41,7 +41,7 @@ let updated = 0;
 for (const name of readdirSync(SERVICES)) {
   const ctxPath = join(SERVICES, name, "src", "shared", "context.ts");
   try {
-    if (!statSync(ctxPath).isFile()) continue;
+    // No stat-then-read: a missing file or a directory throws and is skipped below.
     const existing = readFileSync(ctxPath, "utf8");
     if (existing.includes("resolveServiceContext")) continue;
     // Preserve service-specific extras (e.g. resolvePublicContext in citizen-service)

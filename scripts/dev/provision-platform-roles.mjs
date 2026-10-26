@@ -24,7 +24,7 @@
  *
  * Usage: node scripts/dev/provision-platform-roles.mjs
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const CONTAINER = process.env.PG_CONTAINER ?? "civitasone-postgres";
 const SUPERUSER = process.env.PG_SUPERUSER ?? "civitas_admin";
@@ -54,8 +54,9 @@ function quoteLiteral(value) {
 
 /** Run SQL on stdin against `db` as the superuser, aborting on the first error. */
 function psql(db, sql) {
-  return execSync(
-    `docker exec -i ${CONTAINER} psql -U ${SUPERUSER} -d ${db} -v ON_ERROR_STOP=1 -X -q -At`,
+  return execFileSync(
+    "docker",
+    ["exec", "-i", CONTAINER, "psql", "-U", SUPERUSER, "-d", db, "-v", "ON_ERROR_STOP=1", "-X", "-q", "-At"],
     { input: sql, stdio: ["pipe", "pipe", "pipe"] },
   ).toString().trim();
 }

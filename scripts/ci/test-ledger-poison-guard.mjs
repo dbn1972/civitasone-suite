@@ -124,7 +124,7 @@ function hasHardcodedMessageIdViaConst(src) {
   if (idents.size === 0) return false;
 
   const constInit = (name) => {
-    const m = new RegExp(`const\\s+${name.replace(/[$]/g, "\\$")}\\b[^=]*=\\s*([^;]{0,400})`).exec(src);
+    const m = new RegExp(`const\\s+${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b[^=]*=\\s*([^;]{0,400})`).exec(src);
     return m ? m[1] : null;
   };
 

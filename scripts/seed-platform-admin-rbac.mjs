@@ -44,7 +44,7 @@
  *   PG_CONTAINER  (default civitasone-postgres)  docker container running postgres
  *   TENANT_IDS    (default the two seed-demo.mjs demo tenants)  comma-separated tenant UUIDs
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 
 const PG_CONTAINER = process.env.PG_CONTAINER || "civitasone-postgres";
 const ACTOR = "00000000-0000-0000-0000-000000000099"; // seed actor, same convention as seed-demo.mjs / seed-rbac-policy-store.ts
@@ -96,7 +96,7 @@ function sqlLit(s) {
 
 let errors = 0;
 function psql(sql) {
-  return execSync(`docker exec -i ${PG_CONTAINER} psql -U civitas_admin -d civitas_identity -v ON_ERROR_STOP=1 -tA`, {
+  return execFileSync("docker", ["exec", "-i", PG_CONTAINER, "psql", "-U", "civitas_admin", "-d", "civitas_identity", "-v", "ON_ERROR_STOP=1", "-tA"], {
     input: sql,
     stdio: ["pipe", "pipe", "pipe"],
   });

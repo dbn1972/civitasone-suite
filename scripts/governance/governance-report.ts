@@ -105,8 +105,8 @@ export interface GovernanceReportInput {
  * otherwise be parsed as column separators, and raw newlines would break
  * the table row onto multiple lines.
  */
-function escapeCell(value: string): string {
-  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
+export function escapeCell(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\r?\n/g, "<br>");
 }
 
 /**

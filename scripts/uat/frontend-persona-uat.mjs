@@ -8,7 +8,8 @@
  *   (or: node scripts/frontend-quick-uat.cjs for faster matrix)
  */
 import { chromium, devices } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const BASE = (() => {
@@ -16,7 +17,8 @@ const BASE = (() => {
   return idx >= 0 ? process.argv[idx + 1] : (process.env.WEB_URL ?? "http://127.0.0.1:3000");
 })();
 
-const OUT = process.env.UAT_OUT ?? "/tmp/civitasone-frontend-uat";
+// Unpredictable, owner-only (0700) output dir unless the caller names one.
+const OUT = process.env.UAT_OUT ?? mkdtempSync(join(tmpdir(), "civitasone-frontend-uat-"));
 mkdirSync(OUT, { recursive: true });
 
 const DEMO_PASSWORD = process.env.UAT_DEMO_PASSWORD;

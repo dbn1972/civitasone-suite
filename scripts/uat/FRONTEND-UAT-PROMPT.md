@@ -94,7 +94,7 @@ JWT_SECRET=civitasone-dev-secret node scripts/procurement-e2e.mjs
 cd apps/mobile && flutter test
 ```
 
-**Evidence output:** `/tmp/civitasone-frontend-uat/report.json` + PNG screenshots per check.
+**Evidence output:** `$UAT_OUT/report.json` (set `UAT_OUT`; default is a fresh `civitasone-frontend-uat-XXXXXX` dir under the OS temp dir, printed at the end of the run) + PNG screenshots per check.
 
 ---
 

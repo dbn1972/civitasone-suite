@@ -2,10 +2,13 @@
 /** Expanded visual UAT — ~84 journeys (28 routes × 3 viewports) */
 const { chromium } = require("@playwright/test");
 const { createHmac } = require("crypto");
-const { mkdirSync, writeFileSync } = require("fs");
+const { mkdirSync, mkdtempSync, writeFileSync } = require("fs");
+const { tmpdir } = require("os");
+const { join } = require("path");
 
 const BASE = process.env.UAT_BASE ?? "http://127.0.0.1:3000";
-const OUT = process.env.UAT_OUT ?? "/tmp/civitasone-expanded-uat";
+// Unpredictable, owner-only (0700) output dir unless the caller names one.
+const OUT = process.env.UAT_OUT ?? mkdtempSync(join(tmpdir(), "civitasone-expanded-uat-"));
 mkdirSync(OUT, { recursive: true });
 
 const VPS = {
