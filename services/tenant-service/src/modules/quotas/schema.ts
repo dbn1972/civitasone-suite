@@ -2,7 +2,7 @@
  * quotas module — Drizzle schema. Lives in its OWN Postgres schema `quotas`.
  * L2 rule: this module's repo queries ONLY `quotas.*`.
  */
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const quotasSchema = pgSchema("quotas");
 

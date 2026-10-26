@@ -2,7 +2,7 @@
  * subscriptions module — Drizzle schema. Lives in its OWN Postgres schema `subscriptions`.
  * L2 rule: this module's repo queries ONLY `subscriptions.*`.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, timestamp, text } from "drizzle-orm/pg-core";
 
 export const subscriptionsSchema = pgSchema("subscriptions");
 
