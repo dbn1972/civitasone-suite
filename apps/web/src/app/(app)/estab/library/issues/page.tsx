@@ -2,6 +2,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getLibraryBooks, getLibraryIssues } from "@/app/_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { IssueBookForm } from "./IssueBookForm";
 import { IssuesTable } from "./IssuesTable";
 
@@ -11,6 +12,7 @@ export default async function LibraryIssuesPage(
   }
 ) {
   const searchParams = await props.searchParams;
+  const t = await getTranslations("estabLibraryLoans");
   const [{ data: issues, source: issuesSource }, { data: books, source: booksSource }] = await Promise.all([
     getLibraryIssues(),
     getLibraryBooks(),
@@ -54,6 +56,8 @@ export default async function LibraryIssuesPage(
       ) : (
         <IssueBookForm books={issuableBooks} defaultBookId={searchParams?.bookId} />
       )}
+      {/* Owner decision #29: fines are out of UAT scope - say so instead of implying overdue loans are charged. */}
+      <p className="sub" role="note" style={{ margin: "0 0 12px" }}>{t("finesNote")}</p>
       <Card title="Loans">
         {issuesErrored && issues.length === 0 ? (
           // GAP-ESTAB-LIBRARY-ISSUES-04: a failed loans fetch gets a retryable

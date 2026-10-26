@@ -1145,6 +1145,24 @@
     "statusUnknownTitle": "Activation status unavailable",
     "statusUnknownBody": "We couldn't check whether this Domain Pack was already activated. You can still activate it, but look in the Service Designer first so you do not create duplicate drafts."
   },
+  "estabLibraryLoans": {
+    "renew": "Renew",
+    "renewTitle": "Renew this loan?",
+    "renewBody": "Extend the loan of {title}, currently due {date}.",
+    "renewDateLabel": "New due date",
+    "renewConfirm": "Confirm renewal",
+    "renewNotAfter": "The new due date must be after the current due date ({date}).",
+    "renewedCount": "{count, plural, one {Renewed # time} other {Renewed # times}}",
+    "thisBook": "this book",
+    "networkError": "Network error. Please try again.",
+    "conditionLabel": "Condition on return",
+    "notesLabel": "Notes (optional)",
+    "condition_good": "Good",
+    "condition_fair": "Fair",
+    "condition_damaged": "Damaged",
+    "conditionShown": "Condition: {condition}",
+    "finesNote": "Overdue fines are not charged in this release: fine rules are not configured."
+  },
   "courtCaseSelector": {
     "label": "Case",
     "placeholder": "Search by title or CNR…",

@@ -1144,6 +1144,24 @@
     "statusUnknownTitle": "सक्रियण की स्थिति उपलब्ध नहीं है",
     "statusUnknownBody": "हम यह जाँच नहीं पाए कि यह डोमेन पैक पहले ही सक्रिय हो चुका है या नहीं। आप फिर भी इसे सक्रिय कर सकते हैं, पर दोहराए गए ड्राफ्ट से बचने के लिए पहले सर्विस डिज़ाइनर देख लें।"
   },
+  "estabLibraryLoans": {
+    "renew": "नवीनीकरण",
+    "renewTitle": "इस ऋण का नवीनीकरण करें?",
+    "renewBody": "{title} का ऋण बढ़ाएँ, जो वर्तमान में {date} को देय है।",
+    "renewDateLabel": "नई देय तिथि",
+    "renewConfirm": "नवीनीकरण की पुष्टि करें",
+    "renewNotAfter": "नई देय तिथि वर्तमान देय तिथि ({date}) के बाद की होनी चाहिए।",
+    "renewedCount": "{count, plural, one {# बार नवीनीकृत} other {# बार नवीनीकृत}}",
+    "thisBook": "यह पुस्तक",
+    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
+    "conditionLabel": "वापसी पर स्थिति",
+    "notesLabel": "टिप्पणी (वैकल्पिक)",
+    "condition_good": "अच्छी",
+    "condition_fair": "ठीक-ठाक",
+    "condition_damaged": "क्षतिग्रस्त",
+    "conditionShown": "स्थिति: {condition}",
+    "finesNote": "इस संस्करण में विलंब शुल्क नहीं लिया जाता: शुल्क नियम कॉन्फ़िगर नहीं हैं।"
+  },
   "courtCaseSelector": {
     "label": "मामला",
     "placeholder": "शीर्षक या CNR से खोजें…",

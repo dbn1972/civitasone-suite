@@ -72,6 +72,14 @@ export const libraryIssuesQuery = z.object({
 });
 export type LibraryIssuesQuery = z.infer<typeof libraryIssuesQuery>;
 
+/** Owner decision #29: the condition a book came back in. Fines are out of UAT scope. */
+export const RETURN_CONDITIONS = ["good", "fair", "damaged"] as const;
+export const returnIssueBody = z.object({
+  condition: z.enum(RETURN_CONDITIONS).optional(),
+  notes:     z.string().trim().max(500).optional(),
+}).strict();
+export type ReturnIssueBody = z.infer<typeof returnIssueBody>;
+
 export const renewIssueBody = z.object({
   dueAt: z.string().datetime(),
 });
