@@ -17,7 +17,16 @@ import { contrastPairs } from "./ThemeContrastPanel";
  * server remains the authority). It does NOT enforce maker != checker: the
  * confirmation dialog here is the only second step.
  */
-export function ThemeActions({ disabled = false, tokens = [] }: { disabled?: boolean; tokens?: ThemeTokenSummary[] }) {
+export function ThemeActions({
+  disabled = false,
+  tokens = [],
+  expectedVersion,
+}: {
+  disabled?: boolean;
+  tokens?: ThemeTokenSummary[];
+  /** Latest published revision the page was built on; the server 409s if it moved (GAP-THEMES-TOKENS-02). */
+  expectedVersion?: number;
+}) {
   const router = useRouter();
   const nameId = useId();
   // GAP-THEMES-TOKENS-07: a dated default ("Theme 29 Sep 2026") rather than the
@@ -34,7 +43,7 @@ export function ThemeActions({ disabled = false, tokens = [] }: { disabled?: boo
     const res = await fetch("/api/proxy/v1/themes/publish", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, reason }),
+      body: JSON.stringify({ name, reason, ...(expectedVersion !== undefined ? { expectedVersion } : {}) }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     const body = (await res.json().catch(() => null)) as { version?: number; publishedAt?: string } | null;

@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const tasksMock = vi.fn();
 const routesMock = vi.fn();
 const agentsMock = vi.fn();
+const resolveUsersMock = vi.fn();
+let mockRoles: string[] = ["field_admin"];
 
 vi.mock("./_data", async () => {
   const actual = await vi.importActual<typeof import("./_data")>("./_data");
@@ -14,6 +16,14 @@ vi.mock("./_data", async () => {
     getFieldAgentsDetailed: () => agentsMock(),
   };
 });
+vi.mock("@/lib/directory/resolveUsers", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/directory/resolveUsers")>("@/lib/directory/resolveUsers");
+  return { ...actual, resolveUsers: (...a: unknown[]) => resolveUsersMock(...a) };
+});
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => mockRoles };
+});
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
@@ -23,7 +33,39 @@ import RoutesPage from "./routes/page";
 import AgentsPage from "./agents/page";
 
 describe("Field Tasks page (GAP-FIELD-TASKS-03/05)", () => {
-  beforeEach(() => tasksMock.mockReset());
+  beforeEach(() => {
+    tasksMock.mockReset();
+    resolveUsersMock.mockReset();
+    resolveUsersMock.mockResolvedValue(new Map());
+    mockRoles = ["field_admin"];
+  });
+
+  it("GAP-FIELD-TASKS-05: shows the assignee NAME (not the UUID) and Start/Complete/Assign controls by status", async () => {
+    const A = "aaaaaaaa-1111-4000-8000-000000000001";
+    resolveUsersMock.mockResolvedValue(new Map([[A, "Asha Verma"]]));
+    tasksMock.mockResolvedValueOnce({
+      data: [
+        { id: "t1", title: "Inspect pole", taskType: "inspection", assignee: A, assigneeId: A, status: "in_progress", priority: 1, dueDate: null, version: 3 },
+        { id: "t2", title: "Survey ward", taskType: "survey", assignee: "Unassigned", assigneeId: null, status: "unassigned", priority: 2, dueDate: null, version: 1 },
+      ],
+      source: "api",
+    });
+    const { container } = render(await TasksPage());
+    expect(screen.getByText("Asha Verma")).toBeInTheDocument();
+    expect(container.textContent).not.toContain(A);
+    expect(screen.getByRole("button", { name: "Mark complete" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Assign" })).toBeInTheDocument();
+  });
+
+  it("GAP-FIELD-TASKS-05: a field agent is not offered Assign (supervisor-only server-side)", async () => {
+    mockRoles = ["field_agent"];
+    tasksMock.mockResolvedValueOnce({
+      data: [{ id: "t2", title: "Survey ward", taskType: "survey", assignee: "Unassigned", assigneeId: null, status: "unassigned", priority: 2, dueDate: null, version: 1 }],
+      source: "api",
+    });
+    render(await TasksPage());
+    expect(screen.queryByRole("button", { name: "Assign" })).not.toBeInTheDocument();
+  });
 
   it("renders an Assignee column and typed task columns", async () => {
     tasksMock.mockResolvedValueOnce({

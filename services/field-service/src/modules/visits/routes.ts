@@ -28,6 +28,34 @@ const historyQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+// GAP-FIELD-VISITS-04: optional inclusive calendar-day range on check-in, in IST
+// (the product timezone). YYYY-MM-DD only; a real calendar date, from <= to.
+const IST_OFFSET = "+05:30";
+const dayString = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "expected YYYY-MM-DD")
+  .refine((v) => {
+    const d = new Date(`${v}T00:00:00.000Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(v);
+  }, "not a real calendar date");
+
+const visitListQuery = historyQuery
+  .extend({ from: dayString.optional(), to: dayString.optional() })
+  .refine((q) => !q.from || !q.to || q.from <= q.to, { message: "from must be on or before to", path: ["from"] });
+
+/** [from 00:00 IST, day-after-to 00:00 IST) so the `to` day is included whole. */
+function istRange(from?: string, to?: string): { from?: Date; toExclusive?: Date } | undefined {
+  if (!from && !to) return undefined;
+  const range: { from?: Date; toExclusive?: Date } = {};
+  if (from) range.from = new Date(`${from}T00:00:00.000${IST_OFFSET}`);
+  if (to) {
+    const next = new Date(`${to}T00:00:00.000${IST_OFFSET}`);
+    next.setUTCDate(next.getUTCDate() + 1);
+    range.toExclusive = next;
+  }
+  return range;
+}
+
 const taskIdParam = z.object({ taskId: z.string().uuid() });
 const agentIdParam = z.object({ agentId: z.string().uuid() });
 
@@ -36,8 +64,10 @@ export async function visitRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/field/visits", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FIELD_ROLES);
-    const q = historyQuery.parse(req.query);
-    const { rows, total } = await repo.listRecent(ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId);
+    const q = visitListQuery.parse(req.query);
+    const { rows, total } = await repo.listRecent(
+      ctx.tenantId, q.limit, q.offset, isFieldSupervisor(ctx) ? undefined : ctx.actorId, istRange(q.from, q.to),
+    );
     const page = Math.floor(q.offset / q.limit) + 1;
     return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
