@@ -1,4 +1,4 @@
-import { eq, and, count, or } from "drizzle-orm";
+import { eq, and, count } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { taskDependencies } from "./schema.js";
 import type { TaskDep } from "./domain.js";

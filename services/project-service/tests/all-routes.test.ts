@@ -15,7 +15,6 @@ import { signToken } from "@civitasone/auth";
 const JWT_SECRET = "test_secret_for_civitasone_32chr";
 const TENANT_ID = "aaaaaaaa-1111-4000-8000-000000000099";
 const ACTOR_ID = "11111111-1111-1111-1111-111111111111";
-const OTHER_ACTOR = "22222222-2222-2222-2222-222222222222";
 const PROJECT_ID = "33333333-3333-3333-3333-333333333333";
 const TASK_ID = "44444444-4444-4444-4444-444444444444";
 const MILESTONE_ID = "55555555-5555-5555-5555-555555555555";
@@ -298,8 +297,6 @@ function makeToken(roles: string[] = ["super_admin"], actorId = ACTOR_ID): strin
   return signToken({ sub: actorId, tid: TENANT_ID, roles, sid: "sess-1" }, JWT_SECRET, 3600);
 }
 const ADMIN_TOKEN = () => makeToken(["super_admin"]);
-const PROJECT_MGR_TOKEN = () => makeToken(["project_manager"]);
-const FINANCE_TOKEN = () => makeToken(["finance_officer"]);
 const NO_ROLE_TOKEN = () => makeToken(["employee"]);
 
 // ─── Seed data templates ─────────────────────────────────────────

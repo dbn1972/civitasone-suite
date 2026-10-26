@@ -14,8 +14,6 @@ import {
   rollupWbs,
   analyzeDelays,
   validateWbsDepth,
-  computeDepths,
-  MAX_WBS_DEPTH,
 } from "../src/modules/scheduling/wbs.js";
 import type { WbsNode, DelayAnalysisInput } from "../src/modules/scheduling/wbs.js";
 

@@ -20,7 +20,6 @@ await queue.start();
 async function waitMs(ms: number) { await new Promise((r) => setTimeout(r, ms)); }
 import { sqlClient } from "../src/shared/db.js";
 import { computeEvm } from "../src/modules/scheduling/evm.js";
-import { MAX_BASELINES_PER_PROJECT } from "../src/modules/scheduling/baselines.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-4444-4000-8000-000000000044";
