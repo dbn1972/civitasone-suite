@@ -343,7 +343,10 @@ export function registerCollectionConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending" },
+        payload: {
+          service: SERVICE, action: "create", resourceType: "adjustment", outcome: "pending",
+          fromDemandId, toDemandId, amountMinor: amount.toString(),
+        },
       });
     });
 
@@ -473,6 +476,9 @@ export function registerCollectionConsumers(queue: Queue): void {
         payload: {
           service: SERVICE, action: "decide", resourceType: "adjustment", resourceId: adjustmentId,
           outcome: newStatus, reason: reason ?? null,
+          // Owner decision #41: the audit trail names the demands the balance moved between.
+          fromDemandId: adjustment.fromDemandId, toDemandId: adjustment.toDemandId,
+          amountMinor: adjustment.amountMinor.toString(),
         },
       });
     });
