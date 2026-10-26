@@ -17159,6 +17159,8 @@
     }
   },
   "legalCaseNew": {
+    "privilegedLabel": "Privileged / confidential case",
+    "privilegedHelp": "Only the officers assigned to this case and the legal head can see it. You are assigned automatically.",
     "loading": "Loading…",
     "selectCourt": "Select a court or tribunal…",
     "courtOtherOption": "Other (not in the list)",

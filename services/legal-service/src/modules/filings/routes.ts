@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { recordFilingBody, idParam, listFilingsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -15,6 +16,7 @@ export async function filingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const body = recordFilingBody.parse(req.body);
+    await assertCaseAccess(ctx, body.caseId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.recordFiling(ctx, body));
   });
 
@@ -24,6 +26,7 @@ export async function filingRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const filing = await queries.getFiling(id, ctx.tenantId);
     if (!filing) throw new HttpError(404, "NOT_FOUND", "filing not found");
+    await assertCaseAccess(ctx, filing.caseId);
     return reply.send(filing);
   });
 
@@ -31,7 +34,10 @@ export async function filingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listFilingsQuery.parse(req.query);
-    return reply.send({ items: await queries.listFilings(ctx.tenantId, q.caseId, q.filingType, q.status) });
+    if (q.caseId) await assertCaseAccess(ctx, q.caseId);
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const items = await queries.listFilings(ctx.tenantId, q.caseId, q.filingType, q.status);
+    return reply.send({ items: (items ?? []).filter((f) => !hidden.has(f.caseId)) });
   });
 
   app.setErrorHandler(errorHandler);

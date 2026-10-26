@@ -88,6 +88,14 @@ export async function findCasesByIds(ids: string[]): Promise<CaseRow[]> {
   return db.transaction((tx) => tx.select().from(legalCases).where(inArray(legalCases.id, ids)));
 }
 
+/** Privileged cases of a tenant with their assigned officers (feeds the access filter). */
+export async function listPrivilegedCases(tenantId: string): Promise<Array<{ id: string; privileged: boolean; assignedOfficerIds: string[] }>> {
+  return db.transaction((tx) =>
+    tx.select({ id: legalCases.id, privileged: legalCases.privileged, assignedOfficerIds: legalCases.assignedOfficerIds })
+      .from(legalCases)
+      .where(and(eq(legalCases.tenantId, tenantId), eq(legalCases.privileged, true))));
+}
+
 export async function findCaseByIdTx(tx: Writer, id: string): Promise<CaseRow | null> {
   const rows = await (tx as typeof db).select().from(legalCases).where(eq(legalCases.id, id)).limit(1);
   return rows[0] ?? null;

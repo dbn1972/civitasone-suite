@@ -10,6 +10,7 @@ import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createHearingBody, adjournBody, recordOrderBody, caseHearingParams } from "./validators.js";
 import * as commands from "./commands.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
 import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];
@@ -21,6 +22,7 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = createHearingBody.parse(req.body);
+    await assertCaseAccess(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createHearing(ctx, id, body));
   });
 
@@ -29,6 +31,7 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id, hId } = caseHearingParams.parse(req.params);
     const body = adjournBody.parse(req.body);
+    await assertCaseAccess(ctx, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.adjournHearing(ctx, id, hId, body));
   });
 
@@ -37,6 +40,7 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, LEGAL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = recordOrderBody.parse(req.body);
+    await assertCaseAccess(ctx, id);
     // Owner decision #11: a supplied department must be a real department of the org hierarchy.
     if (body.deptRef) {
       const departments = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });
@@ -51,7 +55,9 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, HearingSummaryListSchema, await queries.listHearingSummaries(ctx.tenantId, q.limit));
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const hearings = await queries.listHearingSummaries(ctx.tenantId, q.limit);
+    sendValidated(reply, HearingSummaryListSchema, hearings.filter((h) => !hidden.has(h.caseId)));
   });
 
   app.get("/v1/legal/court-orders", async (req, reply) => {
@@ -66,7 +72,7 @@ export async function hearingRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(
       reply,
       CourtOrderPageSchema,
-      await queries.listCourtOrderSummariesPaged(ctx.tenantId, q.limit, q.offset, today),
+      await queries.listCourtOrderSummariesPaged(ctx.tenantId, q.limit, q.offset, today, await hiddenCaseIds(ctx)),
     );
   });
 

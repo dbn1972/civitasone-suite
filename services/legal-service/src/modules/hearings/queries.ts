@@ -106,11 +106,12 @@ export async function listCourtOrderSummariesPaged(
   limit: number,
   offset: number,
   today: string,
+  excludeCaseIds: string[] = [],
 ) {
   const [rows, total, stats] = await Promise.all([
-    repo.listOrdersByTenantPaged(tenantId, limit, offset),
-    repo.countOrdersByTenant(tenantId),
-    repo.aggregateOrderStats(tenantId, today),
+    repo.listOrdersByTenantPaged(tenantId, limit, offset, excludeCaseIds),
+    repo.countOrdersByTenant(tenantId, excludeCaseIds),
+    repo.aggregateOrderStats(tenantId, today, excludeCaseIds),
   ]);
 
   const caseIds = [...new Set(rows.map((row) => row.caseId))];
