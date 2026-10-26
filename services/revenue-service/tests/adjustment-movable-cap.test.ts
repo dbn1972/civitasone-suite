@@ -125,6 +125,20 @@ describe("adjustment movable cap — principal only, live DCB (owner decision #5
     await q.stop();
   });
 
+  it("does not double count: the rate engine books interest AS the penalty (penalty === interest, net carries it once)", async () => {
+    // Engine-shaped demand: principal 800,000 + penalty 100,000 (= interest 100,000, one charge) => net 900,000.
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.update(demands).set({ penaltyMinor: 100_000n, interestMinor: 100_000n, netMinor: 900_000n }).where(eq(demands.id, FROM_DEMAND));
+      await tx.update(dcbEntries).set({ amountMinor: 900_000n, balanceMinor: 900_000n }).where(eq(dcbEntries.demandId, FROM_DEMAND));
+    }));
+    const q = await start();
+    await create(q, 800_001n); // above the 800,000 principal
+    expect(await rows()).toHaveLength(0);
+    await create(q, PRINCIPAL); // exactly the principal: must be allowed (a sum of penalty+interest would wrongly cap at 700,000)
+    expect(await rows()).toHaveLength(1);
+    await q.stop();
+  });
+
   it("re-checks the cap at approval: a payment that lands between request and approval blocks the transfer", async () => {
     const q = await start();
     await create(q, PRINCIPAL);
