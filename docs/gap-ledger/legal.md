@@ -809,7 +809,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason) [partial: no dispatcher sends due reminders to a recipient at remind_at; recipient rule (creator vs assigned officer/counsel) needs an owner decision]
+  Partially closed by this commit (UAT B2): migration 0030 aligns reminders.legal_reminders with the model (the consumer INSERT failed on a real DB, so reminders were never stored/audited); 403/401 + persistence + legal.reminder.created audit tested
 - **First-pass claim:** Countdown colours are hard-coded hex (#b42318, #b54708, #067647) (HearingsTable.tsx:60-79); reminder POST audit and recipient are undeterminable (legal-service absent from the snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases/:id/reminder', 'POST /api/v1/legal/hearings']`
 - **Question:** Does the reminder POST resolve recipients server-side (assigned counsel/officer), enqueue via notification queue, and write an audit row?
