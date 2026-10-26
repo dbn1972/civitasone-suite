@@ -1,4 +1,5 @@
 import { pgSchema, uuid, text, integer, varchar, timestamp, date } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const casesSchema = pgSchema("cases");
 
@@ -24,6 +25,9 @@ export const legalCases = casesSchema.table("legal_cases", {
   caseTypeId: uuid("case_type_id"),
   petitioner: text("petitioner"),
   counselRef: text("counsel_ref"),
+  // Owner decision #8 (GAP-LEGAL-HEARINGS-05): the officers a case is assigned to;
+  // reminder notifications go to them (creator cc'd).
+  assignedOfficerIds: uuid("assigned_officer_ids").array().notNull().default(sql`'{}'::uuid[]`),
   status:     varchar("status", { length: 24 }).notNull().default("pending"),
   nextDate:   date("next_date"),
   disposition: text("disposition"),

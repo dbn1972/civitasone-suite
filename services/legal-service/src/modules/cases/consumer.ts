@@ -49,6 +49,7 @@ export function registerCaseConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; caseNo: string; title: string; court: string;
       subject?: string; caseTypeId?: string; petitioner?: string; counselRef?: string;
+      assignedOfficerIds?: string[];
       parties?: Array<{ name: string; role?: string }>;
     };
     await db.transaction(async (tx) => {
@@ -57,6 +58,7 @@ export function registerCaseConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, caseNo: p.caseNo, title: p.title, court: p.court,
         subject: p.subject ?? null, caseTypeId: p.caseTypeId ?? null,
         petitioner: p.petitioner ?? null, counselRef: p.counselRef ?? null,
+        assignedOfficerIds: p.assignedOfficerIds ?? [],
         status: "pending", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       if (p.parties?.length) {

@@ -19,6 +19,7 @@ import { registerLimitationConsumers } from "./modules/limitations/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
 import { registerRtiConsumers } from "./modules/rti/consumer.js";
 import { startCauseListSync } from "./modules/ecourts/sync-consumer.js";
+import { startReminderDispatcher } from "./modules/reminders/dispatcher.js";
 import { runWithTenant } from "@civitasone/db";
 
 const log = pino({ name: "legal-worker" });
@@ -80,12 +81,15 @@ log.info("legal-service worker: consumers + outbox relay running");
 
 // Start cause-list sync polling consumer (env-gated via ECOURTS_ENABLED).
 const causeListSyncTimer = startCauseListSync();
+// Owner decision #8: 5-minute reminder dispatcher (notification-service via outbox).
+const stopReminderDispatcher = startReminderDispatcher();
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
   clearInterval(relay);
   if (causeListSyncTimer) clearInterval(causeListSyncTimer);
+  stopReminderDispatcher();
   await queue.stop();
   await scannerSqlClient.end();
   await sqlClient.end();
