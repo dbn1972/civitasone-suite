@@ -797,7 +797,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by this commit (UAT B2): tokens already gone; tests/gap-legal-dashboard-parity.test.ts proves activeCases/disposedCases/totalCases equal the list-endpoint totals (3 active + 2 disposed)
 - **First-pass claim:** Description text colour and card copy use hard-coded #667085 rather than tokens (page.tsx:43,58,68); backend legal-service not in snapshot so the counters' definitions are undeterminable.
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/dashboard (loader in legal/dashboard/page.tsx)']`
 - **Question:** How does the service define each dashboard counter (open, hearings this week, overdue) and is the count scoped by user role/department?
