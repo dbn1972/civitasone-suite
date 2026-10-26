@@ -2,6 +2,7 @@
 
 import { DataTable } from "@/app/_components/ds";
 import { formatEnumLabel } from "@/lib/formatters";
+import { useEstabT } from "@/lib/estab/useEstabT";
 
 export type QuarterRow = {
   id: string;
@@ -18,10 +19,12 @@ export type QuarterRow = {
 } & Record<string, unknown>;
 
 export function QuartersTable({ quarters }: { quarters: QuarterRow[] }) {
+  const t = useEstabT();
   const columns = [
     { key: "quarterNo" as const, label: "Quarter No." },
     { key: "quarterType" as const, label: "Type", render: (r: QuarterRow) => r.quarterType.replace(/_/g, " ").toUpperCase() },
-    { key: "category" as const, label: "Category" },
+    // GAP-ESTAB-QUARTERS-04: localised category label (incl. other_legacy), never the raw enum.
+    { key: "category" as const, label: "Category", render: (r: QuarterRow) => t(`quarterCategory_${r.category}`) },
     { key: "locality" as const, label: "Locality", render: (r: QuarterRow) => r.locality ?? "—" },
     { key: "status" as const, label: "Status", cellType: "status" as const },
     // GAP-ESTAB-QUARTERS-DETAIL-04: humanise the raw stored condition code.
