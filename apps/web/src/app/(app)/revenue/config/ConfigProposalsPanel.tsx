@@ -85,7 +85,7 @@ function PreviewBox({ proposalId }: { proposalId: string }) {
             </p>
           ) : (
             <>
-              <ul style={{ margin: 0, paddingLeft: 18 }}>
+              <ul style={{ margin: 0, paddingInlineStart: 18 }}>
                 {preview.changes.map((c, i) => (
                   <li key={i}>{changeLine(c)}</li>
                 ))}
@@ -105,7 +105,7 @@ function PreviewBox({ proposalId }: { proposalId: string }) {
                   <tbody>
                     {(["principal", "rebate", "penalty", "net"] as const).map((k) => (
                       <tr key={k}>
-                        <td style={{ textTransform: "capitalize", paddingRight: 12 }}>{k}</td>
+                        <td style={{ textTransform: "capitalize", paddingInlineEnd: 12 }}>{k}</td>
                         <td style={{ textAlign: "end" }}>{formatMoney(preview.sample!.before[k])}</td>
                         <td style={{ textAlign: "end", fontWeight: 600 }}>{formatMoney(preview.sample!.after[k])}</td>
                       </tr>

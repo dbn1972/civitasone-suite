@@ -248,7 +248,7 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
                         {linkError[exp.id] ? <div role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{linkError[exp.id]}</div> : null}
                         {links[exp.id] ? (
                           <div style={{ fontSize: 12 }}>
-                            <ul style={{ margin: "6px 0", paddingLeft: 16 }}>
+                            <ul style={{ margin: "6px 0", paddingInlineStart: 16 }}>
                               {links[exp.id]!.map((f) => (
                                 <li key={f.fileName}>
                                   <a href={f.url} rel="noopener noreferrer">{f.fileName}</a> ({t("rows", { count: f.rowCount })})

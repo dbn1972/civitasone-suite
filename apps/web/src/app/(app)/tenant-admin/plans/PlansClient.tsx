@@ -218,7 +218,7 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
           targetPlan && currentPlan ? (
             <div>
               <p style={{ margin: "0 0 10px" }}>{t("dialogIntro", { from: currentPlan.name, to: targetPlan.name })}</p>
-              <ul style={{ paddingLeft: 20, margin: "0 0 10px" }}>
+              <ul style={{ paddingInlineStart: 20, margin: "0 0 10px" }}>
                 <li>Users: {currentPlan.maxUsers.toLocaleString("en-IN")} → {targetPlan.maxUsers.toLocaleString("en-IN")}</li>
                 <li>Storage: {currentPlan.storageGb} GB → {targetPlan.storageGb} GB</li>
                 <li>Price: {formatMoney(currentPlan.pricePerMonth)} → {formatMoney(targetPlan.pricePerMonth)}/month</li>
@@ -226,7 +226,7 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
               {currentPlan.modules.filter((m) => !targetPlan.modules.includes(m)).length > 0 && (
                 <div style={{ background: "var(--warnbg)", border: "1px solid var(--warnbd)", borderRadius: 6, padding: 10, margin: "0 0 10px" }}>
                   <strong>These modules will be disabled:</strong>
-                  <ul style={{ paddingLeft: 20, margin: "4px 0 0" }}>
+                  <ul style={{ paddingInlineStart: 20, margin: "4px 0 0" }}>
                     {currentPlan.modules.filter((m) => !targetPlan.modules.includes(m)).map((m) => <li key={m}>{m}</li>)}
                   </ul>
                 </div>
@@ -234,7 +234,7 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
               {blocked ? (
                 <div role="alert" style={{ background: "var(--badbg)", border: "1px solid var(--badbd)", borderRadius: 6, padding: 10, margin: "0 0 10px" }}>
                   <strong>{t("blockedTitle")}</strong>
-                  <ul style={{ paddingLeft: 20, margin: "4px 0 0" }}>
+                  <ul style={{ paddingInlineStart: 20, margin: "4px 0 0" }}>
                     {blocked.map((b) => <li key={b.resource}>{t("blockedLine", { resource: t(`resource.${b.resource}`), used: b.used, limit: b.limit })}</li>)}
                   </ul>
                 </div>

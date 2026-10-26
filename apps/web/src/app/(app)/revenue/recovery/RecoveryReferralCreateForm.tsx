@@ -110,7 +110,7 @@ export function RecoveryReferralCreateForm({
               <p style={{ margin: 0 }}>
                 Outstanding arrears: <strong>{formatMoney(readiness.outstandingMinor)}</strong>
               </p>
-              <ul aria-label="Demand notices served" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 4 }}>
+              <ul aria-label="Demand notices served" style={{ margin: 0, paddingInlineStart: 18, display: "grid", gap: 4 }}>
                 {readiness.notices.length === 0 ? (
                   <li>No demand notice on record.</li>
                 ) : (
