@@ -32,7 +32,7 @@ import { finalizationRoutes } from "./modules/finalization/routes.js";
 import { historyRoutes } from "./modules/history/routes.js";
 
 // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
-// external caller cannot forge it. Same value as hrms/billing-service. Deliberately not .
+// external caller cannot forge it. Same value as hrms/billing-service. Deliberately not `true`.
 const INTERNAL_PROXY_TRUST = "loopback,linklocal,uniquelocal";
 
 export async function buildApp(): Promise<FastifyInstance> {
