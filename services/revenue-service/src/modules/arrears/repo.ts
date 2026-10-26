@@ -1,6 +1,6 @@
 import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./schema.js";
+import { instalmentPlans, instalments, writeOffs, recoveryReferrals, demandNotices } from "./schema.js";
 // GAP-REVENUE-WAIVERS-03: waivers live in the revenue schema (trade-license
 // module's schema.ts); the arrears consumer already reads/writes this table for
 // waiver create/decide, so the decide screen's single-record fetch is added
@@ -8,6 +8,7 @@ import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./sc
 import { waivers } from "../trade-license/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { demands } from "../assessment/schema.js";
+import { assessees } from "../assessee/schema.js";
 import { getLatestDemandBalance, getAssesseeOutstanding } from "./outstanding.js";
 import { listNoticesTx } from "./recovery-notice.js";
 
@@ -250,5 +251,41 @@ export async function findInstalmentPlanById(tenantId: string, id: string) {
       .where(and(eq(instalments.tenantId, tenantId), eq(instalments.planId, id)))
       .orderBy(instalments.sequenceNo);
     return { ...plan, schedule: scheduleRows };
+  });
+}
+
+/**
+ * Synchronous pre-check for POST /demand-notices (same pattern as
+ * GAP-REVENUE-ASSESSEES-03): the serve consumer runs after the 202, so an
+ * unknown assessee, a demand that is not the assessee's or a duplicate noticeNo
+ * would otherwise fail silently in the background. Uncached; tenant-scoped.
+ * The unique index uq_demand_notices_tenant_no stays the authoritative backstop.
+ */
+export async function precheckDemandNotice(
+  tenantId: string,
+  input: { assesseeId: string; demandId?: string | undefined; noticeNo: string },
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const a = await t
+      .select({ id: assessees.id })
+      .from(assessees)
+      .where(and(eq(assessees.tenantId, tenantId), eq(assessees.id, input.assesseeId)))
+      .limit(1);
+    const dup = await t
+      .select({ id: demandNotices.id })
+      .from(demandNotices)
+      .where(and(eq(demandNotices.tenantId, tenantId), eq(demandNotices.noticeNo, input.noticeNo)))
+      .limit(1);
+    let demandAssesseeId: string | null | undefined;
+    if (input.demandId) {
+      const d = await t
+        .select({ assesseeId: demands.assesseeId })
+        .from(demands)
+        .where(and(eq(demands.tenantId, tenantId), eq(demands.id, input.demandId)))
+        .limit(1);
+      demandAssesseeId = d[0]?.assesseeId ?? null;
+    }
+    return { assesseeExists: a.length > 0, noticeExists: dup.length > 0, demandAssesseeId };
   });
 }
