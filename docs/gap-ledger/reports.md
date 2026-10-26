@@ -580,7 +580,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-NEW-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/report-service/src/modules/jobs/routes.ts:43-48,75 (POST /v1/reports/jobs requireRole WRITE_ROLES; gateway prefix /api/v1/reports reaches it; list reads the same jobs table) + jobs/consumer.ts audit.event.record; tests consumers.test.ts, roles-pagination-jobs.test.ts)
 - **First-pass claim:** Mutation goes through /api/proxy/v1/reports/jobs (CreateReportForm.tsx:34) while every read uses /api/v1/reports/report-jobs (loaders.ts:4375); the proxy/gateway contract and whether the POST is audited are undeterminable (report service absent).
 - **Service:** `report-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/reports/jobs', 'GET /api/v1/reports/report-jobs']`
 - **Question:** Does the gateway map /reports/jobs to the same resource as /reports/report-jobs, and is the POST role-checked and audited?
