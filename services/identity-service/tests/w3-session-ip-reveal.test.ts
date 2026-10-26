@@ -118,4 +118,21 @@ describe("session IP reveal + user-agent shortening (owner decision #21)", () =>
     expect(r.statusCode).toBe(404);
     expect(r.body).not.toContain("172.16.9.9");
   });
+
+  it("security_admin can open the masked list and detail (to reach the reveal action) but not revoke", async () => {
+    const list = await app.inject({ method: "GET", url: "/identity/sessions", headers: hdr(["security_admin"]) });
+    expect(list.statusCode).toBe(200);
+    expect(list.body).not.toContain("10.1.2.3");
+    const detail = await app.inject({ method: "GET", url: `/identity/sessions/${sid}`, headers: hdr(["security_admin"]) });
+    expect(detail.statusCode).toBe(200);
+    expect((detail.json() as { ip: string }).ip).toBe("10.1.*.*");
+    expect(detail.body).not.toContain("10.1.2.3");
+    const revoke = await app.inject({ method: "DELETE", url: `/identity/sessions/${sid}`, headers: hdr(["security_admin"]) });
+    expect(revoke.statusCode).toBe(403);
+  });
+
+  it("an unrelated role still cannot read the session list or someone else's detail", async () => {
+    expect((await app.inject({ method: "GET", url: "/identity/sessions", headers: hdr(["employee"]) })).statusCode).toBe(403);
+    expect((await app.inject({ method: "GET", url: `/identity/sessions/${sid}`, headers: hdr(["employee"]) })).statusCode).toBe(403);
+  });
 });

@@ -12,6 +12,9 @@ import * as queries from "./queries.js";
 const SESSION_ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 // Owner decision #21: only the security admin may reveal a session's clear IP.
 const SESSION_IP_REVEAL = ["security_admin"];
+// The security admin must be able to OPEN a session to reach the reveal action, so it
+// may read the (masked) list and detail. It still cannot create or revoke sessions.
+const SESSION_READ = [...SESSION_ADMIN, ...SESSION_IP_REVEAL];
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/sessions", async (req, reply) => {
@@ -61,7 +64,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = sessionIdParam.parse(req.params);
     const view = await queries.getSession(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
-    if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_ADMIN);
+    if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_READ);
     // Owner decision #21: an admin looking at SOMEONE ELSE's session gets a masked
     // IP and a "browser on OS" user agent; the owner sees their own session as-is.
     if (view.userId === ctx.actorId) return reply.send(view);
@@ -87,7 +90,7 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/identity/sessions", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, SESSION_ADMIN);
+    requireRole(ctx, SESSION_READ);
     const q = listQuerySchema.parse(req.query);
     const rows = await queries.listSessions(ctx.tenantId, q.limit);
     sendValidated(reply, SessionSummaryListSchema, (rows ?? []).map((s) => ({

@@ -28,6 +28,13 @@ export const MIGRATION_RETRY_ROLES = ["migration_admin"];
 export const AUDIT_REVEAL_ROLES = ["audit_officer"];
 
 /**
+ * OWNER DECISION #21 (TENANT-ADMIN-SESSIONS-DETAIL-05): only the security admin may
+ * reveal a session's clear IP. identity-service re-enforces this (reveal-ip) and
+ * lets this role read the masked session list/detail so it can reach the action.
+ */
+export const SESSION_IP_REVEAL_ROLES = ["security_admin"];
+
+/**
  * Route-scoped officer roles. The owner decisions reserve four actions to officer
  * roles that are NOT tenant admins (#19 consent_officer, #20 audit_officer, #21
  * security_admin, #23 migration_admin). The /tenant and /tenant-admin layouts gate
@@ -41,6 +48,7 @@ export const OFFICER_ROUTE_ROLES: ReadonlyArray<{ prefix: string; roles: readonl
   { prefix: "/tenant/consent-exchange", roles: CONSENT_DECISION_ROLES },
   { prefix: "/tenant/data-migration", roles: MIGRATION_RETRY_ROLES },
   { prefix: "/tenant-admin/audit", roles: AUDIT_REVEAL_ROLES },
+  { prefix: "/tenant-admin/sessions", roles: SESSION_IP_REVEAL_ROLES },
 ];
 
 /** Roles the /tenant and /tenant-admin layouts admit for this request path. */
