@@ -12,6 +12,21 @@ interface CaseTypeOption {
   name: string;
 }
 
+/** Poll the new case detail until the async create consumer has written it. */
+async function waitForCase(id: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 400));
+    try {
+      const res = await fetch(`/api/proxy/v1/legal/cases/${encodeURIComponent(id)}`);
+      if (res.ok) return true;
+      if (res.status !== 404) return false;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
 export function CreateCaseForm() {
   const router = useRouter();
   const [caseNo, setCaseNo] = useState("");
@@ -24,6 +39,7 @@ export function CreateCaseForm() {
   const [caseTypeId, setCaseTypeId] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [caseNoError, setCaseNoError] = useState("");
   const formError = useFormError("case");
 
   // GAP-LEGAL-CASES-NEW-01: load the case-type master so the registrar can pick
@@ -65,6 +81,7 @@ export function CreateCaseForm() {
     }
     setStatus("submitting");
     setMessage("");
+    setCaseNoError("");
     const body = {
       caseNo: caseNo.trim(),
       title: title.trim(),
@@ -91,13 +108,28 @@ export function CreateCaseForm() {
       });
       if (!res.ok) {
         setStatus("error");
+        // GAP-LEGAL-CASES-NEW-03: a duplicate case number is a field-level
+        // problem (409 DUPLICATE_CASE_NO), shown against the Case number input.
+        const code = await res.clone().json().then((b: { code?: string }) => b?.code, () => undefined);
+        if (res.status === 409 && code === "DUPLICATE_CASE_NO") {
+          setCaseNoError("A case with this case number already exists. Check the number or open the existing case.");
+          setMessage("Case number is already registered.");
+          return;
+        }
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }
       // GAP-LEGAL-CASES-NEW-03: the create endpoint is accepted-async and
-      // returns { id, status:"accepted" } without a readable case row yet, so
-      // we return to the list (where the new case appears) rather than a
-      // detail route that would 404 until the consumer has written the row.
+      // returns { id, status:"accepted" }; the case row is written by the
+      // consumer a moment later. Wait (briefly) until the detail is readable
+      // and open the new case; fall back to the list if it is not there yet.
+      const accepted = (await res.json().catch(() => ({}))) as { id?: string };
+      const newId = typeof accepted.id === "string" ? accepted.id : null;
+      if (newId && (await waitForCase(newId))) {
+        router.push(`/legal/cases/${newId}`);
+        router.refresh();
+        return;
+      }
       router.push("/legal/list");
       router.refresh();
     } catch (caught) {
@@ -111,7 +143,10 @@ export function CreateCaseForm() {
       <div className="fields">
         <div className="field">
           <label className="label" htmlFor="caseNo">Case number *</label>
-          <input id="caseNo" className="inp" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. WP/1234/2024" />
+          <input id="caseNo" className="inp" value={caseNo} onChange={(e) => setCaseNo(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. WP/1234/2024" aria-invalid={caseNoError ? true : undefined} aria-describedby={caseNoError ? "caseNo-error" : undefined} />
+          {caseNoError ? (
+            <p id="caseNo-error" role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{caseNoError}</p>
+          ) : null}
         </div>
         <div className="field">
           <label className="label" htmlFor="court">Court / Forum *</label>
