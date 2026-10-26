@@ -66,15 +66,6 @@ export interface PluginManifest {
 
 // ── Permission Model ──────────────────────────────────────────────
 
-const AVAILABLE_PERMISSIONS = new Set([
-  "read:tenant",       // Read tenant data
-  "write:tenant",      // Write tenant data (via API calls)
-  "emit:event",        // Emit events to the queue
-  "http:outbound",     // Make outbound HTTP requests
-  "storage:read",      // Read from object storage
-  "storage:write",     // Write to object storage
-]);
-
 function checkPermissions(manifest: PluginManifest, required: string[]): string | null {
   const granted = new Set(manifest.permissions ?? []);
   for (const perm of required) {
