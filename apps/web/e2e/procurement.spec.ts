@@ -1,25 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createHmac } from 'crypto';
 import { authenticate } from './helpers/auth';
-
-const SECRET = process.env.JWT_SECRET ?? 'civitasone-dev-secret';
-const TENANT = '00000000-0000-0000-0000-000000000001';
-
-function mintDevJwt() {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    sub: '00000000-0000-0000-0000-000000000099',
-    iss: 'civitasone-dev',
-    tid: TENANT,
-    tenantId: TENANT,
-    roles: ['super_admin', 'admin', 'procurement_admin', 'procurement_officer'],
-    exp: Math.floor(Date.now() / 1000) + 3600,
-    iat: Math.floor(Date.now() / 1000),
-  })).toString('base64url');
-  const sig = createHmac('sha256', SECRET).update(`${header}.${payload}`).digest('base64url');
-  return `${header}.${payload}.${sig}`;
-}
-
 
 test.describe('Procurement', () => {
   test.beforeEach(async ({ page }) => {
