@@ -4,10 +4,19 @@ export const idParam = z.object({ id: z.string().uuid() });
 
 export const quarterType = z.enum(["type_i", "type_ii", "type_iii", "type_iv", "type_v", "type_vi"]);
 
+/**
+ * Owner decision #31 (GAP-ESTAB-QUARTERS-04): quarter Category is a CLOSED list. `other_legacy`
+ * ("Other (legacy)") is where migration 0057 parks old free-text values it could not map; it is never
+ * accepted from the API.
+ */
+export const QUARTER_CATEGORIES = ["general", "physically_handicapped", "medical", "defence", "other"] as const;
+export const QUARTER_CATEGORY_LEGACY = "other_legacy" as const;
+export const quarterCategory = z.enum(QUARTER_CATEGORIES);
+
 export const createQuarterBody = z.object({
   quarterNo:      z.string().min(1).max(64),
   quarterType:    quarterType.default("type_iv"),
-  category:       z.string().max(32).default("general"),
+  category:       quarterCategory.default("general"),
   address:        z.string().max(512).optional(),
   locality:       z.string().max(200).optional(),
   carpetAreaSqft: z.number().int().positive().optional(),
