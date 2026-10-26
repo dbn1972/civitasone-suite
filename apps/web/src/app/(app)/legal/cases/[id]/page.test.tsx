@@ -7,6 +7,7 @@ const notFound = vi.fn(() => { throw new Error("NEXT_NOT_FOUND"); });
 vi.mock("../../../../_data/loaders", () => ({ getLegalCaseById: (id: string) => getLegalCaseById(id) }));
 vi.mock("next/navigation", () => ({ notFound: () => notFound(), useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock("./CaseActions", () => ({ CaseActions: () => null }));
+vi.mock("./AffidavitFiles", () => ({ AffidavitFiles: () => null }));
 
 import { LegalCaseDetailSchema } from "@civitasone/schemas/web";
 import LegalCaseDetailPage from "./page";

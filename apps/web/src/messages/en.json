@@ -17080,5 +17080,35 @@
     "legacyShown": "Showing {count} of {total}.",
     "legacyForbiddenTitle": "You do not have access to this report.",
     "legacyForbiddenNext": "Only workflow administrators can see legacy delegations."
+  },
+  "legalAffidavits": {
+    "title": "Affidavit files",
+    "attach": "Attach affidavit file",
+    "chooseFile": "Choose a file (PDF, JPG, PNG or TIFF, up to 20 MB)",
+    "upload": "Upload",
+    "uploading": "Uploading…",
+    "empty": "No affidavit files are attached to this case.",
+    "loadError": "The affidavit files could not be loaded. Try again.",
+    "retry": "Try again",
+    "open": "Open",
+    "opening": "Opening…",
+    "legalOnly": "Only the legal team can open these files. Each file is virus-scanned before it can be opened.",
+    "colFile": "File",
+    "colStatus": "Status",
+    "colSize": "Size",
+    "colUploaded": "Uploaded",
+    "tooLarge": "This file is larger than 20 MB. Choose a smaller file.",
+    "badType": "This file type is not accepted. Use PDF, JPG, PNG or TIFF.",
+    "noFile": "Choose a file to upload.",
+    "uploadFailed": "The file could not be uploaded. Try again.",
+    "openFailed": "The file could not be opened. Try again.",
+    "status": {
+      "awaiting_upload": "Waiting for upload",
+      "processing": "Being checked",
+      "filed": "Ready",
+      "quarantined": "Blocked (failed virus scan)",
+      "rejected": "Rejected",
+      "failed": "Could not be processed"
+    }
   }
 }
