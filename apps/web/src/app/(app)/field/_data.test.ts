@@ -10,6 +10,8 @@ import {
   fieldSyncWindowNote,
   FIELD_SYNC_WINDOW_DAYS,
   FIELD_SYNC_LIMIT,
+  fieldVisitsPath,
+  parseVisitDay,
 } from "./_data";
 
 describe("mapTasks (GAP-FIELD-TASKS-03/05)", () => {
@@ -25,6 +27,12 @@ describe("mapTasks (GAP-FIELD-TASKS-03/05)", () => {
     expect(rows[0]).toMatchObject({ id: "t1", title: "Inspect pole", assignee: "agent-9", status: "assigned", dueDate: "2026-09-30T10:00:00.000Z" });
     // unassigned task falls back cleanly
     expect(rows[1]).toMatchObject({ id: "t2", title: "survey", assignee: "Unassigned", status: "unassigned", dueDate: null });
+  });
+
+  it("keeps the raw assigneeId and the row version for the start/complete/assign actions (GAP-FIELD-TASKS-05)", () => {
+    const rows = mapTasks({ data: [{ id: "t1", assigneeId: "agent-9", status: "assigned", version: 5 }, { id: "t2", status: "unassigned" }] });
+    expect(rows[0]).toMatchObject({ assigneeId: "agent-9", version: 5 });
+    expect(rows[1]).toMatchObject({ assigneeId: null, version: 1 });
   });
 });
 
@@ -108,5 +116,21 @@ describe("fieldSyncWindowNote (GAP2-FIELD-SYNC-WINDOW-01)", () => {
     );
     expect(note).toContain("3 दिखाए गए");
     expect(note).not.toMatch(/Showing/);
+  });
+});
+
+describe("fieldVisitsPath (GAP-FIELD-VISITS-04)", () => {
+  it("defaults to the first page with no filters", () => {
+    expect(fieldVisitsPath()).toBe("/api/v1/field/visits?limit=100");
+  });
+  it("adds offset and the inclusive IST day range", () => {
+    expect(fieldVisitsPath({ offset: 100, from: "2026-10-01", to: "2026-10-31" })).toBe(
+      "/api/v1/field/visits?limit=100&offset=100&from=2026-10-01&to=2026-10-31",
+    );
+  });
+  it("drops malformed days and non-positive offsets instead of sending them", () => {
+    expect(fieldVisitsPath({ offset: -5, from: "yesterday", to: "2026-13-40" })).toBe("/api/v1/field/visits?limit=100");
+    expect(parseVisitDay("2026-02-30")).toBeUndefined();
+    expect(parseVisitDay("2026-02-28")).toBe("2026-02-28");
   });
 });

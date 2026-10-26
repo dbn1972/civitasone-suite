@@ -16531,6 +16531,37 @@
       "unresolved": "Not available"
     }
   },
+  "fieldHub": {
+    "title": "Field Operations",
+    "subtitle": "Task management, visit tracking, and route optimization.",
+    "tasksTitle": "Tasks",
+    "tasksDescription": "Field task assignments and completion tracking.",
+    "visitsTitle": "Visits",
+    "visitsDescription": "Check-in/check-out logs with location verification.",
+    "routesTitle": "Routes",
+    "routesDescription": "Daily agent routes with optimised stop order.",
+    "agentsTitle": "Agents",
+    "agentsDescription": "Agents with assigned tasks and their task counts.",
+    "syncTitle": "Offline Sync",
+    "syncDescription": "Pending device sync changes pulled from the field."
+  },
+  "fieldTasks": {
+    "actionsColumn": "Actions",
+    "startLabel": "Start",
+    "startTitle": "Start this task?",
+    "startDescription": "Marks the task as in progress. It is recorded in the audit log.",
+    "startConfirm": "Start task",
+    "completeLabel": "Mark complete",
+    "completeTitle": "Mark this task complete?",
+    "completeDescription": "Closes the task as completed. It is recorded in the audit log and cannot be undone.",
+    "completeConfirm": "Complete task",
+    "assignLabel": "Assign",
+    "assignTitle": "Assign this task",
+    "assignDescription": "Choose the field agent who will carry out this task. It is recorded in the audit log.",
+    "assignConfirm": "Assign task",
+    "assignPicker": "Agent",
+    "assignPlaceholder": "Search agents by name"
+  },
   "fieldSync": {
     "title": "Offline Sync",
     "description": "Device sync changes pulled from the last {days} days.",
