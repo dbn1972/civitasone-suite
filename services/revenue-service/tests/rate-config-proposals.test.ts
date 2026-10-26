@@ -285,6 +285,10 @@ describe("rate-config routes (owner decision #2)", () => {
         const res = await app.inject({ method: method as "POST" | "PUT", url, headers: tok(R_ADMIN), payload });
         expect(res.statusCode, url).toBe(409);
         expect(res.json().error.code, url).toBe("RATE_CONFIG_REQUIRES_APPROVAL");
+        // Authorisation runs first: an unauthorised caller must get 403, never a
+        // 409 that discloses the policy.
+        const denied = await app.inject({ method: method as "POST" | "PUT", url, headers: tok(R_ADMIN, ["employee"]), payload });
+        expect(denied.statusCode, `${url} unauthorised`).toBe(403);
       }
       expect(publishSpy).not.toHaveBeenCalledWith(expect.stringMatching(/rate_head\.create|rate_slab\.create/), expect.anything());
     } finally {
