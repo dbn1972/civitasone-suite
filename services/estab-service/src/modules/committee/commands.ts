@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateCommitteeBody, CreateMeetingBody, CreateResolutionBody, MinutesBody, RecordAttendanceBody, MarkComplianceBody } from "./validators.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
+import type { CreateCommitteeBody, CreateMeetingBody, CreateResolutionBody, MinutesBody, RecordAttendanceBody, MarkComplianceBody, GovernanceLinkBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -42,6 +44,25 @@ export async function uploadMinutes(ctx: RequestContext, meetingId: string, body
     type: COMMANDS.meetingMinutes,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { meetingId, tenantId: ctx.tenantId, ...body },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "meeting", meetingId));
+  return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function linkGovernanceMeeting(ctx: RequestContext, meetingId: string, body: GovernanceLinkBody): Promise<Accepted> {
+  const meeting = await repo.findMeetingById(meetingId, ctx.tenantId);
+  if (!meeting) throw new HttpError(404, "NOT_FOUND", "meeting not found");
+  if (body.governanceMeetingId) {
+    const taken = await repo.findMeetingByGovernanceIdScoped(ctx.tenantId, body.governanceMeetingId);
+    if (taken && taken.id !== meetingId) {
+      throw new HttpError(409, "DUPLICATE_LINK", "that minutes workflow is already linked to another meeting");
+    }
+  }
+  await queue.publish(COMMANDS.meetingLinkGovernance, {
+    messageId: randomUUID(),
+    type: COMMANDS.meetingLinkGovernance,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { meetingId, tenantId: ctx.tenantId, governanceMeetingId: body.governanceMeetingId },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "meeting", meetingId));
   return { id: meetingId, status: "accepted", correlationId: ctx.correlationId };

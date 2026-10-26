@@ -41,3 +41,9 @@ export const markComplianceBody = z.object({
   remarks: z.string().trim().min(1).max(1000),
 });
 export type MarkComplianceBody = z.infer<typeof markComplianceBody>;
+
+/** Owner decision #30: link (uuid) or unlink (null) the meeting-service meeting that carries this meeting's MOM. */
+export const governanceLinkBody = z.object({
+  governanceMeetingId: z.string().uuid().nullable(),
+}).strict();
+export type GovernanceLinkBody = z.infer<typeof governanceLinkBody>;

@@ -85,6 +85,7 @@ export async function getMeetingDetail(id: string, tenantId: string) {
   }));
   return {
     ...mapMeetingRow(row, { attendeesCount: attendees.length, agendaItemsCount: resolutions.length }),
+    governanceMeetingId: row.governanceMeetingId ?? null,
     agenda: [],
     // NOTE: the named-attendee roster (name/role, not just a count) is still a separate,
     // unbuilt feature -- estab_attendees only stores a memberRef, not a display name, and

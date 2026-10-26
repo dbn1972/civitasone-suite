@@ -25,6 +25,8 @@ export const COMMANDS = {
   meetingCreate:        "estab.meeting.create",
   resolutionCreate:     "estab.resolution.create",
   meetingMinutes:       "estab.meeting.minutes",
+  /** payload: { meetingId, tenantId, governanceMeetingId|null } — link/unlink the meeting-service meeting that carries the MOM (owner decision #30). */
+  meetingLinkGovernance: "estab.meeting.link_governance",
   attendanceRecord:     "estab.attendance.record",
   complianceComply:     "estab.compliance.comply",
   vehicleCreate:        "estab.vehicle.create",

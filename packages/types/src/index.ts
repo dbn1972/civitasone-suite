@@ -1943,6 +1943,8 @@ export type MeetingSummary = {
 };
 
 export type MeetingDetail = MeetingSummary & {
+  /** Owner decision #30: the meeting-service meeting whose minutes workflow produces this meeting's MOM. */
+  governanceMeetingId?: string | null;
   agenda: Array<{
     id: string;
     itemNo: number;

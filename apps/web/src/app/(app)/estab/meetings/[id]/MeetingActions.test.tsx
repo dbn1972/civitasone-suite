@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 import { MeetingActions } from "./MeetingActions";
 
 describe("MeetingActions (fix 3)", () => {
-  it("disables Generate MOM instead of linking to the nonexistent /generate-mom route", () => {
+  // Owner decision #30: the dead, disabled "Generate MOM" is replaced by a real route to the MOM section.
+  it("owner decision #30: no dead Generate MOM button; a Minutes (MOM) link jumps to the MOM section", () => {
     render(<MeetingActions meetingId="m1" />);
-    const btn = screen.getByRole("button", { name: /Generate MOM/ });
-    expect(btn).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Generate MOM/ })).not.toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /Minutes \(MOM\)/ });
+    expect(link).toHaveAttribute("href", "#mom");
   });
 
   it("GAP-ESTAB-MEETINGS-DETAIL-05: no header Agenda link (it duplicated the Agenda tab)", () => {

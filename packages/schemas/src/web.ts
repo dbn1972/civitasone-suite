@@ -2049,6 +2049,8 @@ export const MeetingSummarySchema = z.object({
 export const MeetingSummaryListSchema = z.array(MeetingSummarySchema);
 
 export const MeetingDetailSchema = MeetingSummarySchema.extend({
+  // Owner decision #30: the meeting-service meeting whose minutes workflow produces this meeting's MOM.
+  governanceMeetingId: z.string().uuid().nullable().optional(),
   agenda: z.array(z.object({
     id: z.string(),
     itemNo: z.number(),

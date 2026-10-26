@@ -4,6 +4,7 @@ import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_componen
 import { formatIndianDate } from "@/lib/formatters";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 import { MeetingActions } from "./MeetingActions";
+import { MeetingMinutesPanel } from "./MeetingMinutesPanel";
 import { MeetingTimeline } from "./MeetingTimeline";
 import { getTranslations } from "next-intl/server";
 
@@ -119,12 +120,15 @@ export default async function MeetingDetailPage(
               <div className="fld"><div className="l">Agenda items</div><div className="v">{meeting.agenda.length}</div></div>
               <div className="fld"><div className="l">MOM</div><div className="v">{
                 meeting.minutes ? "Captured"
+                  : meeting.governanceMeetingId ? t("momLinked")
                   : meeting.status === "scheduled" ? "Not yet held"
                     : meeting.status === "cancelled" ? "—"
                       : "Pending"
               }</div></div>
             </div>
           </div>
+          {/* Owner decision #30: MOM via meeting-service's minutes workflow, linked from this meeting. */}
+          <MeetingMinutesPanel estabMeetingId={params.id} governanceMeetingId={meeting.governanceMeetingId ?? null} />
           {meeting.minutes ? (
             <div className="card">
               <div className="card-h"><h3>Minutes</h3></div>
