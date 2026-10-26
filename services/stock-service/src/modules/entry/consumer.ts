@@ -6,7 +6,7 @@ import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as receiptRepo from "../receipt/repo.js";
-import { weightedAvgRate, assertStockNotNegative, voucherTypeForEntry } from "./domain.js";
+import { weightedAvgRate, voucherTypeForEntry } from "./domain.js";
 import type { EntryItemInsert } from "./schema.js";
 import type { LedgerInsert } from "../ledger/schema.js";
 
