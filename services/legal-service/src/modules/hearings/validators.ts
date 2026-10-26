@@ -17,7 +17,8 @@ export type AdjournBody = z.infer<typeof adjournBody>;
 export const recordOrderBody = z.object({
   orderType: z.string().min(1).max(32),
   direction: z.string().max(512).optional(),
-  deptRef:   z.string().max(128).optional(),
+  // Owner decision #11: the department ID from the org hierarchy (not free text); the name is resolved for display.
+  deptRef:   z.string().uuid().optional(),
   summary:   z.string().min(1).max(2000),
   orderDate: z.string(),
   // GAP-LEGAL-COURT-ORDERS-NEW-01: let the registrar record whether the order

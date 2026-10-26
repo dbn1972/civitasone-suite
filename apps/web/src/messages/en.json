@@ -17130,5 +17130,11 @@
     "departmentRequired": "Select the department that owns this case.",
     "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy.",
     "refDataError": "The court and department lists could not be loaded. Reload the page to try again."
+  },
+  "legalOrderNew": {
+    "loading": "Loading…",
+    "selectDepartment": "Select the owning department (optional)…",
+    "departmentsError": "The department list could not be loaded. Reload the page to try again.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy."
   }
 }
