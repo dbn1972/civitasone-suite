@@ -16749,6 +16749,25 @@
       "dialogTitle": "Reveal this IP address?",
       "dialogBody": "The source IP is personal data. Revealing it is recorded in the audit log against your name, with the reason below.",
       "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
+    },
+    "export": {
+      "formatCsv": "CSV (one file per entity)",
+      "formatJson": "JSON (single full export)",
+      "rows": "{count, plural, one {# row} other {# rows}}",
+      "linksExpire": "These download links expire in 15 minutes. Click Download again for fresh links.",
+      "download": {
+        "expired": "This export has expired. Request a new one.",
+        "storage": "File storage is not available right now. Try again shortly.",
+        "generic": "The download could not be prepared. Try again.",
+        "noFile": "No file was stored for this export. Request a new one."
+      },
+      "failure": {
+        "NO_EXPORTER_FOR_MODULE": "Data from this module cannot be exported yet.",
+        "UNKNOWN_ENTITY": "That entity is not available for export.",
+        "UNSUPPORTED_FORMAT": "That format is not supported. Choose CSV or JSON.",
+        "STORAGE_FAILED": "The file could not be stored. Request the export again.",
+        "UNKNOWN": "The export did not complete. Request it again."
+      }
     }
   },
   "tenantAdminW2": {
