@@ -9,7 +9,7 @@
  * - Self-service enforcement (employee cannot access other employees)
  * - 503 when PDF renderer unavailable
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 

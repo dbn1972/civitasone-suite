@@ -64,7 +64,6 @@ const FIN = randomUUID();
 const MGR = randomUUID();
 const TENANT_ADMIN = randomUUID();
 const OFFICER_EMP = randomUUID(); // OFFICER_2 is also an employee with their own proofs
-const U_OFFICER_EMP = OFFICER_2;
 
 function auth(sub: string, roles: string[], tenant = TENANT) {
   return { authorization: `Bearer ${signToken({ sub, tid: tenant, roles, sid: "tax-proofs" }, SECRET)}` };

@@ -150,7 +150,7 @@ describe("hrms.leave.approved → LOP ledger upsert", () => {
     await settle();
 
     expect(upsertLopDaysMock).toHaveBeenCalledOnce();
-    const [tx, tenantId, employeeId, month, source, days] = upsertLopDaysMock.mock.calls[0]!;
+    const [, tenantId, employeeId, month, source, days] = upsertLopDaysMock.mock.calls[0]!;
     expect(tenantId).toBe(TENANT);
     expect(employeeId).toBe("emp-1");
     expect(month).toBe("2025-06");
@@ -215,7 +215,7 @@ describe("hrms.attendance.marked → LOP ledger upsert", () => {
     await settle();
 
     expect(upsertLopDaysMock).toHaveBeenCalledOnce();
-    const [tx, tenantId, employeeId, month, source, days] = upsertLopDaysMock.mock.calls[0]!;
+    const [, tenantId, employeeId, month, source, days] = upsertLopDaysMock.mock.calls[0]!;
     expect(tenantId).toBe(TENANT);
     expect(employeeId).toBe("emp-1");
     expect(month).toBe("2025-06");

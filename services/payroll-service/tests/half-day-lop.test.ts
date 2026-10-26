@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
-const { mockTx, dbTransactionFn, upsertLopDaysMock, fetchLeaveLopFractionBpsMock } = vi.hoisted(() => {
+const { dbTransactionFn, upsertLopDaysMock, fetchLeaveLopFractionBpsMock } = vi.hoisted(() => {
   const tx = { insert: vi.fn(), update: vi.fn(), select: vi.fn() };
   return {
     mockTx: tx,

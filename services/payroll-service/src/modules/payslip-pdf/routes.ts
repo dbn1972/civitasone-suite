@@ -1,5 +1,5 @@
 import { formatRupeesIN, minorFromDb } from "../../shared/money.js";
-import { escapeHtml, renderTemplate, safeFilenamePart } from "../../shared/html.js";
+import { escapeHtml, renderTemplate } from "../../shared/html.js";
 import { loadLetterhead } from "../letterhead/routes.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";

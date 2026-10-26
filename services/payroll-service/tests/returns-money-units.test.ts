@@ -22,7 +22,6 @@ const FILER = "00000000-0b10-4000-8000-00000000b260";
 const SECRET = process.env.JWT_SECRET as string;
 const tok = (roles: string[] = ["payroll_admin"]) => signToken({ sub: FILER, tid: TENANT, roles, sid: "sess-returns-06" }, SECRET);
 
-const TDS_RUPEES = 35_000;
 const TDS_PAISE = 3_500_000;
 
 const readQueue: unknown[] = [];
