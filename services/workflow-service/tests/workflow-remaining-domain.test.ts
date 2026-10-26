@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { isEffective, evaluateAuthority, type AuthorityLimit } from "../src/modules/authority/domain.js";
 import { canClose, canReopen, canArchive, initialStatus } from "../src/modules/closure/domain.js";
 import { assertEditable, isProtected, canReverse, assessImpact } from "../src/modules/finalization/domain.js";
-import { validateLink, wouldCreateCycle, planSplit, planMerge, containmentEdge } from "../src/modules/case-links/domain.js";
+import { validateLink, planSplit, planMerge } from "../src/modules/case-links/domain.js";
 import { assertValidMessageName, assertValidCorrelationKey, resolveCorrelationKey, computeTimeoutAt, isExpired, DomainError } from "../src/modules/messages/domain.js";
 import { mergeTimeline } from "../src/modules/timeline/domain.js";
 import { visibleTo, buildThreads, validateBody } from "../src/modules/comments/domain.js";

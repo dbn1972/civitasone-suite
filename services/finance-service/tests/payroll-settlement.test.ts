@@ -42,7 +42,6 @@ class TestMemoryQueue {
 }
 
 const {
-  mockTx,
   dbTransactionFn,
   enqueueMock,
   markProcessedMock,

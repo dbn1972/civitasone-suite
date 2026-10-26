@@ -3,7 +3,6 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";

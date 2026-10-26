@@ -2,7 +2,6 @@ import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
 import { enqueue, markProcessed, stableUuid } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -184,7 +183,7 @@ export function registerMessagesConsumers(q: Queue): void {
 
   // --- workflow.signal.broadcast ---
   subscribeWithDlq<SignalPayload>(q, "workflow.signal.broadcast", async (msg) => {
-    const { tenantId, signalName, payload } = msg.payload;
+    const { tenantId, signalName } = msg.payload;
 
     const subscriptions = await repo.findActiveSignalSubscriptions(tenantId, signalName);
     if (subscriptions.length === 0) {

@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, timestamp, text } from "drizzle-orm/pg-core";
 
 export const periodCloseSchema = pgSchema("gl");
 

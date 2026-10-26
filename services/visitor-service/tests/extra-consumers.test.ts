@@ -52,8 +52,8 @@ vi.mock("../src/modules/evacuation/roster.js", () => ({
 }));
 
 const { registerMaterialPassConsumers } = await import("../src/modules/material-pass/consumer.js");
-const { registerEvacuationConsumers } = await import("../src/modules/evacuation/consumer.js");
-const { registerConfigRegistryConsumers } = await import("../src/modules/config-registry/consumer.js");
+await import("../src/modules/evacuation/consumer.js");
+await import("../src/modules/config-registry/consumer.js");
 const { COMMANDS } = await import("../src/topics.js");
 
 const TENANT = "11111111-1111-1111-1111-111111111111";

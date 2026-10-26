@@ -392,7 +392,7 @@ describe("POST /v1/ai/guardrails/check-injection", () => {
 
   it("200 — medium severity is detected but not blocked", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/guardrails/check-injection", headers: auth(),
       payload: { input: "<|im_start|>" },
     });
@@ -458,7 +458,7 @@ describe("POST /v1/ai/guardrails/check — built-in injection wiring", () => {
 
   it("200 — a medium severity injection is reported but does not fail the check", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/guardrails/check", headers: auth(),
       payload: { input: "[INST]" },
     });
@@ -466,7 +466,7 @@ describe("POST /v1/ai/guardrails/check — built-in injection wiring", () => {
 
   it("200 — benign input still passes", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/guardrails/check", headers: auth(),
       payload: { input: "please summarise the tender document" },
     });

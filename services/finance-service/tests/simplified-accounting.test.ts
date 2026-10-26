@@ -30,7 +30,7 @@ import {
   generateSalaryJournal,
   resolveExpenseCode,
 } from "../src/modules/simplified/auto-journal.js";
-import { MSME_CHART_OF_ACCOUNTS, EXPENSE_CATEGORY_MAP } from "../src/modules/simplified/seed.js";
+import { MSME_CHART_OF_ACCOUNTS } from "../src/modules/simplified/seed.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "00000000-0000-0000-0000-000000000001";

@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { dirname } from "node:path";
-import { stat, access } from "node:fs/promises";
+import { access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 const seen = vi.hoisted(() => ({ local: "", remote: "", fileMode: 0, dirMode: 0, fail: false }));

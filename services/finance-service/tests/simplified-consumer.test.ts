@@ -58,7 +58,7 @@ class TestMemoryQueue {
 // ---------------------------------------------------------------------------
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
-  insertJournalMock, insertJournalLineMock, insertTransactionMock,
+  insertJournalMock, insertTransactionMock,
   markProcessedMock, findJournalByIdTxMock, findAccountByCodeTxMock,
   getPeriodStatusTxMock, nextVoucherNoMock, fyFromDateMock,
 } = vi.hoisted(() => {
@@ -118,7 +118,7 @@ vi.mock("../src/modules/simplified/repo.js", () => ({
 // unmocked — pure, dependency-free logic, exactly like dom-010-gl-guards.test.ts.
 
 import { registerSimplifiedConsumers } from "../src/modules/simplified/consumer.js";
-import { SIMPLIFIED_COMMANDS, SIMPLIFIED_EVENTS } from "../src/modules/simplified/topics.js";
+import { SIMPLIFIED_COMMANDS } from "../src/modules/simplified/topics.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";

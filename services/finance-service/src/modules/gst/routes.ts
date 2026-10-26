@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";

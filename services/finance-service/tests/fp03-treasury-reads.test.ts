@@ -31,9 +31,6 @@ const HEAD_OK = "cccccccc-4444-4000-8000-0000000003e2";
 const BILL = "bbbbbbbb-4444-4000-8000-0000000003e1";
 const JOURNAL = "aaaaaaaa-4444-4000-8000-0000000003e1";
 
-async function rows(tenant: string, q: ReturnType<typeof sql>): Promise<any[]> {
-  return scoped(tenant, async (tx) => { const r: any = await tx.execute(q); return Array.isArray(r) ? r : r.rows ?? []; });
-}
 async function cleanup() {
   for (const t of [TENANT, OTHER]) {
     for (const stmt of [

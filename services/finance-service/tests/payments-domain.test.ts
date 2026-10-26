@@ -11,7 +11,6 @@ import {
   assertBillPassed,
   assertBillRejectable,
   nextStage,
-  DEFAULT_THREE_WAY_TOLERANCE_PCT,
 } from "../src/modules/payments/domain.js";
 
 describe("payments/domain — assertThreeWayMatchPresent()", () => {

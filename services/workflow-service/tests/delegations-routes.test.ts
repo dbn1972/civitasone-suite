@@ -7,10 +7,10 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerDelegationConsumers } from "../src/modules/delegations/consumer.js";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 // Unique per run: a fixed tenant id is shared across files/runs on a reused DB, so a

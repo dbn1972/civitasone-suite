@@ -74,7 +74,7 @@ vi.mock("../src/shared/scanner-db.js", () => ({
   },
 }));
 
-const { COMMANDS } = await import("../src/topics.js");
+await import("../src/topics.js");
 
 beforeEach(() => {
   publishMock.mockReset().mockResolvedValue(undefined);

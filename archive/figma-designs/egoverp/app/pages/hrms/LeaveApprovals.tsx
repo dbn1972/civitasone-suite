@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Card, Button, Badge, Input, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Label } from '../../components/ui';
-import { Search, CheckCircle, XCircle, UserPlus, Calendar, Clock, User, FileText } from 'lucide-react';
+import { Card, Button, Badge, Input, Textarea, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
+import { Search, CheckCircle, XCircle, UserPlus, Calendar, Clock, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface LeaveApproval {

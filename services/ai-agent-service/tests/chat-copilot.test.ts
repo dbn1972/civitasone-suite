@@ -195,7 +195,7 @@ describe("POST /v1/ai/chat/sessions", () => {
 
   it("202 — defaults language to en and the profile to the caller", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/chat/sessions", headers: auth(), payload: { channelId: CHANNEL },
     });
         expect(H.publishMock).toHaveBeenCalled();
@@ -455,7 +455,7 @@ describe("POST /v1/ai/copilot/suggest", () => {
 
   it("202 — an empty context yields low confidence", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/copilot/suggest", headers: auth(),
       payload: { taskType: "explain", context: {} },
     });

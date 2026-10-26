@@ -27,7 +27,6 @@ import {
 } from "./schema.js";
 
 const RESOURCE_TEMPLATE = "badge_template";
-const RESOURCE_PRINT_JOB = "print_job";
 
 // ── Template TTL: 300s (templates change rarely) ──────────────────────────
 const TEMPLATE_TTL = 300;

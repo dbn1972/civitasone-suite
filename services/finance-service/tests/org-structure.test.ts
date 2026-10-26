@@ -6,12 +6,13 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { legalEntities, operatingUnits, costCenters, profitCenters, purchasingOrgs } from "../src/modules/org-structure/schema.js";
 import { scoped } from "./_tenant.js";
 import {
-  validateOrgAssignment, assertCostCenterBelongsToLE,
-  assertLegalEntityExists, OrgValidationError,
+  validateOrgAssignment,
+  assertCostCenterBelongsToLE,
+  assertLegalEntityExists,
 } from "../src/modules/org-structure/domain.js";
 
 const TENANT = "c1111111-aaaa-4000-8000-000000000001";

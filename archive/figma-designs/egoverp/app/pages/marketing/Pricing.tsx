@@ -2,7 +2,7 @@ import { Card, Button, Badge } from '../../components/ui';
 import { Check, X, HelpCircle, Building2, Users, Globe, Crown, Sparkles, TrendingUp, Shield, Zap, Star } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { useNavigate } from 'react-router';
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { PublicHeader } from '../../components/PublicHeader';
 import { PublicFooter } from '../../components/PublicFooter';
 

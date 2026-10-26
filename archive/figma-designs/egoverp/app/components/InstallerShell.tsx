@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { Check, X, Lock, AlertCircle } from 'lucide-react';
+import { Check, X, Lock } from 'lucide-react';
 
 export interface InstallerStep {
   id: number;

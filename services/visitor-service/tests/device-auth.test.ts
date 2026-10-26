@@ -21,7 +21,6 @@ import {
   invalidateDeviceCache,
   type DeviceRecord,
 } from "../src/modules/device-registry/device-auth.js";
-import { HttpError } from "../src/shared/context.js";
 
 // ---------------------------------------------------------------------------
 // Test fixtures

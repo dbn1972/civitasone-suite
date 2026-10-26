@@ -4,7 +4,6 @@ import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import * as periodRepo from "../period-close/repo.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 

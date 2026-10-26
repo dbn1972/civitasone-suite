@@ -11,29 +11,17 @@
  *   - Route-level tests: POST import, GET export
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
-import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import {
   parseBpmnXml,
-  autoLayout,
-  exportBpmnXml,
-  BpmnParseError,
 } from "../src/modules/designer/bpmn-io.js";
 import type { DesignerNode, DesignerEdge } from "../src/modules/designer/schema.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "eeeeeeee-1111-4000-8000-eee000000001";
 const ACTOR = "eeeeeeee-3333-4000-8000-eee000000001";
-
-function adminToken() {
-  return signToken({ sub: ACTOR, tid: TENANT, roles: ["workflow_admin"], sid: "sess-e01" }, SECRET);
-}
-function userToken() {
-  return signToken({ sub: "eeeeeeee-3333-4000-8000-eee000000002", tid: TENANT, roles: ["workflow_user"], sid: "sess-e02" }, SECRET);
-}
 
 afterEach(async () => {
   await db.execute(sql`DELETE FROM workflow.designer_definitions WHERE tenant_id = ${TENANT}`);
@@ -69,33 +57,6 @@ const VALID_BPMN_WITH_DI = `<?xml version="1.0" encoding="UTF-8"?>
       </bpmndi:BPMNShape>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
-</definitions>`;
-
-const VALID_BPMN_NO_DI = `<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  targetNamespace="https://example.com"
-  id="Definitions_1">
-  <process id="Process_1" name="No Layout Process" isExecutable="true">
-    <startEvent id="Start_1" name="Begin" />
-    <userTask id="Task_1" name="Approve" />
-    <exclusiveGateway id="GW_1" name="Decision" />
-    <userTask id="Task_2" name="Rework" />
-    <endEvent id="End_1" name="Done" />
-    <sequenceFlow id="Flow_1" sourceRef="Start_1" targetRef="Task_1" />
-    <sequenceFlow id="Flow_2" sourceRef="Task_1" targetRef="GW_1" />
-    <sequenceFlow id="Flow_3" sourceRef="GW_1" targetRef="End_1" name="Approved" />
-    <sequenceFlow id="Flow_4" sourceRef="GW_1" targetRef="Task_2" name="Rejected" />
-    <sequenceFlow id="Flow_5" sourceRef="Task_2" targetRef="Task_1" />
-  </process>
-</definitions>`;
-
-const MALFORMED_XML = `<not-bpmn><random>content</random></not-bpmn>`;
-
-const EMPTY_PROCESS_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-  targetNamespace="https://example.com" id="Definitions_1">
-  <process id="Process_1" name="Empty" isExecutable="true">
-  </process>
 </definitions>`;
 
 // ── Unit Tests: parseBpmnXml ──────────────────────────────────────

@@ -79,7 +79,6 @@ describe("voucher print immutability", () => {
   });
 
   it("period-closed voucher still prints (historical access)", () => {
-    const periodStatus = "hard_close";
     const canPrint = true; // read-only — printing doesn't mutate
     expect(canPrint).toBe(true);
   });

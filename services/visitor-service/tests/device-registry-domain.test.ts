@@ -12,7 +12,6 @@ import {
   LOW_SECURITY_TYPES,
   isHighSecurityDevice,
   DeviceStatus,
-  DEVICE_TRANSITIONS,
   canTransition,
   generateDeviceToken,
   getAuthType,

@@ -561,7 +561,7 @@ describe("Reappropriation eOffice decision consumers — coverage", () => {
   });
 
   it("finance.reappropriation.file_decided processes rejected decision", async () => {
-    const { findReappropriationByIdTx, parseDecisionCallback } = await Promise.all([
+    const { parseDecisionCallback } = await Promise.all([
       import("../src/modules/budget/repo.js"),
       import("@civitasone/eoffice-sdk"),
     ]).then(([repo, sdk]) => ({ findReappropriationByIdTx: repo.findReappropriationByIdTx, parseDecisionCallback: sdk.parseDecisionCallback }));

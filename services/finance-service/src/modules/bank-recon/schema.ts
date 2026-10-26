@@ -1,5 +1,13 @@
 import {
-  pgSchema, uuid, text, bigint, char, varchar, integer, timestamp, date, boolean,
+  pgSchema,
+  uuid,
+  text,
+  bigint,
+  varchar,
+  integer,
+  timestamp,
+  date,
+  boolean,
 } from "drizzle-orm/pg-core";
 
 export const bankReconSchema = pgSchema("treasury");

@@ -5,11 +5,11 @@
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { registerProvisioningConsumers } from "../src/modules/provisioning/consumer.js";
 import { CONSUMED_EVENTS } from "../src/topics.js";
 import { STANDARD_DEFINITIONS } from "../src/modules/provisioning/catalog.js";
-import { TestQueue, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, sqlAsTenant } from "./helpers/engine-harness.js";
 
 const tenants: string[] = [];
 function newTenant(): string { const t = randomUUID(); tenants.push(t); return t; }

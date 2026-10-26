@@ -301,7 +301,7 @@ describe("TRACES adapter", () => {
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      const { verifyPanStatus, TracesAdapterError } = await import(
+      const { verifyPanStatus } = await import(
         "../src/modules/traces/adapter.js"
       );
 

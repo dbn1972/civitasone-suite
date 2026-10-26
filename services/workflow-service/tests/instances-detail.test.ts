@@ -15,8 +15,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { instances } from "../src/modules/instances/schema.js";
 import { tasks } from "../src/modules/tasks/schema.js";
 import { definitions } from "../src/modules/definitions/schema.js";
-import { asTenant, sqlAsTenant, cleanup } from "./helpers/engine-harness.js";
-import { sql } from "drizzle-orm";
+import { asTenant, cleanup } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 

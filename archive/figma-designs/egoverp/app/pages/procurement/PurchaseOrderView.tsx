@@ -123,12 +123,12 @@ const SAMPLE_AUDIT: AuditEvent[] = [
 ];
 
 export function PurchaseOrderView() {
-  const { id } = useParams();
+  useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [showApproveDialog, setShowApproveDialog] = useState(false);
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [, setShowRejectDialog] = useState(false);
+  const [, setShowCancelDialog] = useState(false);
 
   const po = SAMPLE_PO;
   const lines = SAMPLE_LINES;

@@ -588,7 +588,7 @@ async function spawnCallActivity(
   const childDepth = (instance.callDepth ?? 0) + 1;
   let cycle = false;
   if (childDepth <= MAX_CALL_DEPTH) {
-    let ancestorId: string | null = instance.parentInstanceId ?? null;
+    let ancestorId: string | null;
     // include the immediate parent itself in the walk (instance is about to host
     // the child, so instance is the nearest ancestor of childDef).
     let cursor: InstanceRow | null = instance;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Table, Badge, Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
+import { Card, Badge, Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
 import { Plus, Download, Search, Eye, CheckCircle, XCircle } from 'lucide-react';
 
 interface PurchaseOrder {

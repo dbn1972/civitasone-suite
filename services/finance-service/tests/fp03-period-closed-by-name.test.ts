@@ -2,7 +2,7 @@
  * GAP-FINANCE-PERIOD-CLOSE-06 -- GET /v1/finance/periods resolves closed_by (an identity user id) to a
  * display name, so the cockpit never shows a raw id. Best-effort: unreachable identity => null.
  */
-import { describe, it, expect, afterAll, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, afterEach } from "vitest";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";

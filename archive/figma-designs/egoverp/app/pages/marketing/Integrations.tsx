@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Card, Button, Badge, Input } from '../../components/ui';
 import {
   Zap,
@@ -14,20 +14,18 @@ import {
   Lock,
   BarChart3,
   Package,
-  Truck,
   Building2,
   CreditCard,
   MessageSquare,
   Phone,
   Webhook,
   Code,
-  Globe,
   Sparkles,
   Search,
   ArrowRight,
   Play,
 } from 'lucide-react';
-import { motion, useScroll, useTransform, useInView } from 'motion/react';
+import { motion, useScroll, useTransform } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { PublicHeader } from '../../components/PublicHeader';
 import { PublicFooter } from '../../components/PublicFooter';

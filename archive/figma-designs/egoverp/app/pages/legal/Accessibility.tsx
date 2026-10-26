@@ -1,5 +1,5 @@
 import { Card, Button } from '../../components/ui';
-import { Eye, Download, Calendar, CheckCircle } from 'lucide-react';
+import { Eye, Calendar, CheckCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router';
 import { PublicHeader } from '../../components/PublicHeader';

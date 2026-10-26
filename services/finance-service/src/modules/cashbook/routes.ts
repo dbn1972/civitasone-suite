@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];

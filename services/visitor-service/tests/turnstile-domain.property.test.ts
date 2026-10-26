@@ -24,7 +24,7 @@ const arbDirection = fc.constantFrom<"in" | "out">("in", "out");
 const arbPassId = fc.uuid();
 
 /** Arbitrary passage count (>= 1). */
-const arbPassageCount = fc.integer({ min: 1, max: 100 });
+fc.integer({ min: 1, max: 100 });
 
 /** Arbitrary passage count that indicates tailgating (> 1). */
 const arbTailgatingCount = fc.integer({ min: 2, max: 100 });

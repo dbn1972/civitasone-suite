@@ -4,7 +4,7 @@
  * Defines `visitor.daily_metrics` matching migration
  * 0006_incidents_dpdp_analytics.sql exactly.
  */
-import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const visitorSchema = pgSchema("visitor");
 

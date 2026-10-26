@@ -28,7 +28,6 @@ import {
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
 const TENANT_A = "aaaaaaaa-0001-4000-8000-000000000001";
-const TENANT_B = "bbbbbbbb-0001-4000-8000-000000000002";
 
 function makeTransaction(overrides: Partial<TransactionData> = {}): TransactionData {
   return {

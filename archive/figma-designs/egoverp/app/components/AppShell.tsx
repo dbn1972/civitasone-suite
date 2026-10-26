@@ -13,7 +13,6 @@ import {
   HelpCircle,
   FileText,
   Palette,
-  Component,
   Menu,
   X,
   ChevronDown,

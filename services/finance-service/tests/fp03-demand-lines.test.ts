@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { registerBudgetConsumers } from "../src/modules/budget/consumer.js";
 import { COMMANDS } from "../src/topics.js";

@@ -8,7 +8,6 @@ import {
   Download,
   Calendar,
   Users,
-  TrendingUp,
   AlertTriangle,
   CheckCircle,
   Clock,
@@ -137,7 +136,7 @@ const SAMPLE_PROJECTS: Project[] = [
 ];
 
 export function ProjectManagement() {
-  const [projects, setProjects] = useState<Project[]>(SAMPLE_PROJECTS);
+  const [projects] = useState<Project[]>(SAMPLE_PROJECTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedHealth, setSelectedHealth] = useState('all');

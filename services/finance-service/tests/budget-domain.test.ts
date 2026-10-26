@@ -16,7 +16,7 @@ import {
   assertValidPfmsHoA,
   assertValidDdoCode,
 } from "../src/modules/budget/domain.js";
-import { parseHoA, validateHoA, majorHeadOf, HoaError, HOA_TOTAL_WIDTH } from "../src/shared/hoa.js";
+import { parseHoA, validateHoA, majorHeadOf, HoaError } from "../src/shared/hoa.js";
 import { assertValidAgencyCode, assertValidSchemeCode, PfmsValidationError } from "../src/shared/pfms.js";
 
 describe("budget/domain — availableBalance()", () => {

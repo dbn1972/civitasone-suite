@@ -9,7 +9,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import {
   submitTdsReturn,
   verifyPanStatus,

@@ -26,7 +26,7 @@
  * in `visit-request-approval-idor.integration.test.ts`) against the real
  * Postgres-backed fixture, and confirms the row is left untouched.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";

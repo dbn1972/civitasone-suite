@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Card, Button, Input, FormField, Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Label } from '../../components/ui';
+import { useState } from 'react';
+import { Card, Button, Input, FormField, Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '../../components/ui';
 import { ChevronRight, Plus, Trash2, GripVertical, Save, Send, X, Printer, Download, RotateCcw } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -26,7 +26,7 @@ const ACCOUNTS = [
 
 export function JournalEntry({ mode = 'create' }: { mode?: 'create' | 'view' }) {
   const [postingDate, setPostingDate] = useState(new Date().toISOString().split('T')[0]);
-  const [refNumber, setRefNumber] = useState(mode === 'create' ? 'Auto-generated on save' : 'JE-2024-045');
+  const [refNumber] = useState(mode === 'create' ? 'Auto-generated on save' : 'JE-2024-045');
   const [refType, setRefType] = useState('manual');
   const [costCenter, setCostCenter] = useState('');
   const [project, setProject] = useState('');

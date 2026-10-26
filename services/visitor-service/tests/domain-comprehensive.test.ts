@@ -29,7 +29,6 @@ import {
   DomainError as VRDomainError,
   MIN_SCHEDULE_LEAD_MS,
   MAX_SCHEDULE_LEAD_MS,
-  ALLOWED_TRANSITIONS,
 } from "../src/modules/visit-request/domain.js";
 
 describe("visit-request/domain", () => {
@@ -857,8 +856,6 @@ import {
   validateGroupSize,
   screenGroupMembers,
   confirmBulkCheckIn,
-  MIN_GROUP_SIZE,
-  MAX_GROUP_SIZE,
   DomainError as GVDomainError,
 } from "../src/modules/group-visit/domain.js";
 

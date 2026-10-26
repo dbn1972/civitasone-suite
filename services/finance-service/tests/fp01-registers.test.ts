@@ -635,7 +635,7 @@ describe("office directory names fund releases (GAP-FINANCE-BUDGET-FUND-RELEASES
     capture();
     const a = await inject("POST", "/v1/finance/offices", as(MAKER), { code: "dept-fin", name: "Department of Finance" });
     expect(a.statusCode).toBe(202);
-    const b = await inject("POST", "/v1/finance/offices", as(MAKER), { code: "dist-roads", name: "District Roads Office" });
+    await inject("POST", "/v1/finance/offices", as(MAKER), { code: "dist-roads", name: "District Roads Office" });
     await deliver();
     const denied = await inject("POST", "/v1/finance/offices", as(MAKER, ["finance_officer"]), { code: "X1", name: "Nope" });
     expect(denied.statusCode).toBe(403);

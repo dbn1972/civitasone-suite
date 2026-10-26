@@ -27,18 +27,6 @@ function makeSelectChain(rows: Record<string, unknown>[]) {
   };
 }
 
-function makeSelectAllChain(rows: Record<string, unknown>[]) {
-  const whereResult = Object.assign(
-    Promise.resolve(rows),
-    { limit: async () => rows },
-  );
-  return {
-    from: () => ({
-      where: () => whereResult,
-    }),
-  };
-}
-
 const fakeTx = {
   select: vi.fn(() => makeSelectChain(passageRows)),
   insert: vi.fn(() => ({ values: vi.fn(async () => undefined) })),

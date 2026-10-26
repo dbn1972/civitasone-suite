@@ -16,7 +16,6 @@ import {
   Brain,
   CloudCog,
   CheckCircle2,
-  Clock,
   Users,
 } from 'lucide-react';
 import { motion, useScroll, useTransform } from 'motion/react';
@@ -168,7 +167,7 @@ const ROADMAP_STATS = [
 ];
 
 export function Roadmap() {
-  const navigate = useNavigate();
+  useNavigate();
   const { scrollY } = useScroll();
   const heroOpacity = useTransform(scrollY, [0, 300], [1, 0]);
   const heroY = useTransform(scrollY, [0, 300], [0, -50]);

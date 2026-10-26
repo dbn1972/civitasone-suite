@@ -21,7 +21,6 @@ import {
   scoreTransactionZScore,
   scoreCostCenterPattern,
   scoreUserBehavior,
-  classifySeverity,
   type RollingStats,
   type DetectedAnomaly,
   type AnomalyFactor,

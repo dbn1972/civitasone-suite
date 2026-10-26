@@ -1,7 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";

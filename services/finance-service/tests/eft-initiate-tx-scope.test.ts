@@ -57,7 +57,6 @@ class TestMemoryQueue {
 // Module mocks
 // ---------------------------------------------------------------------------
 const {
-  mockTx,
   dbTransactionFn,
   enqueueMock,
   markProcessedMock,
