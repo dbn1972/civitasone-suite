@@ -27,4 +27,10 @@ describe("ReportJobsTable", () => {
     render(<ReportJobsTable rows={[row({ statusPill: "failed" })]} />);
     expect(screen.getByText("Reason not recorded")).toBeInTheDocument();
   });
+
+  // GAP-REPORTS-LIST-04: the Download link targets the authorising endpoint via the proxy
+  it("renders the Download link from the row href", () => {
+    render(<ReportJobsTable rows={[row({ downloadUrl: "/api/proxy/v1/reports/jobs/j1/download" })]} />);
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/proxy/v1/reports/jobs/j1/download");
+  });
 });

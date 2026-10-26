@@ -3,6 +3,7 @@ import { getReportJobs } from "../../../_data/loaders";
 import { EmptyState, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { ReportJobsTable, type JobRow } from "./ReportJobsTable";
+import { reportDownloadHref } from "../downloadHref";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,8 +39,9 @@ export default async function ReportsListPage() {
     requestedBy: displayRequestedBy(j.requestedBy),
     format: j.format,
     statusPill: j.status,
-    download: j.status === "completed" && j.downloadUrl ? "Download" : "—",
-    downloadUrl: j.downloadUrl ?? null,
+    // GAP-REPORTS-LIST-04: link to the authorising (owner-checked, audited) download endpoint, never a raw bearer URL.
+    download: j.status === "completed" && reportDownloadHref(j.downloadUrl) ? "Download" : "—",
+    downloadUrl: reportDownloadHref(j.downloadUrl),
   }));
 
   return (

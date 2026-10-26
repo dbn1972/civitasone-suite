@@ -70,13 +70,25 @@ describe("ReportDetailPage", () => {
   it("notes truncation + download link when totalCount exceeds shown rows", async () => {
     const rows = Array.from({ length: 100 }, (_, i) => ({ col_a: String(i) }));
     fetchJsonMock.mockResolvedValue({
-      data: baseJob({ columns: ["col_a"], rows, totalCount: 500, downloadUrl: "https://s3/x" }),
+      data: baseJob({ columns: ["col_a"], rows, totalCount: 500, downloadUrl: "/v1/reports/jobs/job-1/download" }),
       source: "api",
       status: 200,
     });
     render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
     expect(screen.getByText(/Showing the first/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /download the full report/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /download the full report/i })).toHaveAttribute("href", "/api/proxy/v1/reports/jobs/job-1/download");
+  });
+
+  // GAP-REPORTS-LIST-04: a raw presigned bearer URL is never rendered as a link
+  it("does not render a download link for an absolute (bearer) URL", async () => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({ col_a: String(i) }));
+    fetchJsonMock.mockResolvedValue({
+      data: baseJob({ columns: ["col_a"], rows, totalCount: 500, downloadUrl: "https://s3/x?X-Amz-Signature=abc" }),
+      source: "api",
+      status: 200,
+    });
+    render(await ReportDetailPage({ params: Promise.resolve({ id: "job-1" }) }));
+    expect(screen.queryByRole("link", { name: /download/i })).not.toBeInTheDocument();
   });
 
   // GAP-REPORTS-DETAIL-02
