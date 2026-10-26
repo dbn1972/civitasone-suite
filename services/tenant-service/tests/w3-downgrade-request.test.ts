@@ -44,6 +44,7 @@ const decide = (id: string, decision: string, extra: Record<string, unknown> = {
 const rows = () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(downgradeRequests).where(eq(downgradeRequests.tenantId, T))));
 const sub = async () => (await runWithTenant(T, () => db.transaction((tx) => tx.select().from(subscriptions).where(eq(subscriptions.id, SUB)))))[0]!;
 const setUsers = (used: number) => runWithTenant(T, () => db.transaction((tx) => tx.update(quotas).set({ used }).where(and(eq(quotas.tenantId, T), eq(quotas.resource, "users")))));
+const events = async () => (await runWithTenant(T, () => db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T))))).map((m) => ({ topic: m.topic, payload: m.payload as Record<string, unknown> }));
 const audits = async () => (await runWithTenant(T, () => db.transaction((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, T))))).map((m) => m.payload as Record<string, unknown>);
 
 async function wipe() {
@@ -124,6 +125,8 @@ describe("downgrade request lifecycle (owner decision #24)", () => {
     expect(row!.usageSnapshot.checks).toEqual([{ resource: "users", used: 20, limit: 50 }, { resource: "storage_gb", used: 10, limit: 50 }]);
     expect((await sub()).planId).toBe(BIG);
     expect((await audits()).some((a) => a.action === "downgrade_request" && a.reason === REASON)).toBe(true);
+    // the domain event platform billing is notified from names the request and the requester
+    expect((await events()).find((e) => e.topic === "tenant.subscription.downgrade_requested")?.payload).toMatchObject({ requestId: row!.id, fromPlanId: BIG, targetPlanId: SMALL, requestedBy: REQUESTER });
     // a second request while one is open is refused
     expect((await request(good)).json().code).toBe("REQUEST_ALREADY_PENDING");
   });
@@ -166,6 +169,8 @@ describe("downgrade request lifecycle (owner decision #24)", () => {
     expect((await rows())[0]).toMatchObject({ status: "rejected", decidedBy: BILLING, decisionReason: "Contract runs to March" });
     expect((await sub()).planId).toBe(BIG);
     expect((await audits()).some((a) => a.action === "downgrade_reject")).toBe(true);
+    // the requester (not the deciding billing officer) is the one notified, with the reason
+    expect((await events()).find((e) => e.topic === "tenant.subscription.downgrade_rejected")?.payload).toMatchObject({ requestId: row!.id, requestedBy: REQUESTER, targetPlanId: SMALL, reason: "Contract runs to March" });
     expect((await request(good)).status).toBe(202);
   });
 

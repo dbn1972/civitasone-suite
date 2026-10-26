@@ -336,6 +336,9 @@ export const CONSUMED_EVENTS = {
   citizenRequestCreated:    "citizen.request.created",
   auditParaIssued:          "audit.para.issued",
   contractExpiryAlert:      "contract.expiry.alert",
+  /** Owner decision #24: a plan downgrade is a request platform billing decides. */
+  tenantDowngradeRequested: "tenant.subscription.downgrade_requested",
+  tenantDowngradeRejected:  "tenant.subscription.downgrade_rejected",
   /** workflow-service: a delegation was created / revoked — notify the delegator and their manager. */
   workflowDelegationCreated: "workflow.delegation.created",
   workflowDelegationRevoked: "workflow.delegation.revoked",

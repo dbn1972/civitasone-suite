@@ -275,6 +275,29 @@ const TEMPLATES: ReadonlyArray<NotificationTemplate> = [
     push: { title: "Contract Expiry Alert", body: "A contract is approaching expiry. Please review and initiate renewal." },
     email: { title: "Contract Expiry Notice", body: "Dear Team,\n\nA contract under your oversight is approaching its expiry date. Please review and initiate the renewal process if required.\n\nRegards,\nContract Management" },
   },
+  // Owner decision #24: plan downgrade requests are decided by platform billing.
+  {
+    eventType: "tenant.subscription.downgrade_requested",
+    push: {
+      title: "Plan Downgrade Request",
+      body: "A tenant has requested a plan downgrade (request {{requestId}}). Review it in the downgrade queue.",
+    },
+    email: {
+      title: "Plan Downgrade Request — {{requestId}}",
+      body: "Dear Billing Team,\n\nA tenant has requested a downgrade from plan {{fromPlanId}} to plan {{targetPlanId}} (request {{requestId}}).\n\nPlease review the request and its usage check in the pending downgrade queue, then approve or reject it.\n\nRegards,\nCivitasOne Platform Billing",
+    },
+  },
+  {
+    eventType: "tenant.subscription.downgrade_rejected",
+    push: {
+      title: "Plan Downgrade Not Approved",
+      body: "Your plan downgrade request {{requestId}} was not approved: {{reason}}.",
+    },
+    email: {
+      title: "Plan Downgrade Request {{requestId}} Not Approved",
+      body: "Dear Administrator,\n\nYour request to downgrade to plan {{targetPlanId}} (request {{requestId}}) was not approved by platform billing.\n\nReason: {{reason}}\n\nYour current plan is unchanged. You may submit a new request once the reason has been addressed.\n\nRegards,\nCivitasOne Platform Billing",
+    },
+  },
 ];
 
 const templateMap = new Map<string, NotificationTemplate>();

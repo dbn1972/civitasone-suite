@@ -212,7 +212,7 @@ export function registerSubscriptionConsumers(queue: Queue): void {
           reason: p.reason, usageSnapshot: p.usage, status: "pending", requestedBy: msg.actorId,
         });
         await emit(tx, msg, EVENTS.subscriptionDowngradeRequested, {
-          requestId: p.id, subscriptionId: p.subscriptionId, fromPlanId: p.fromPlanId, targetPlanId: p.targetPlanId,
+          requestId: p.id, subscriptionId: p.subscriptionId, fromPlanId: p.fromPlanId, targetPlanId: p.targetPlanId, requestedBy: msg.actorId,
         }, "downgrade_request", p.id, { reason: p.reason });
       });
     },
@@ -262,7 +262,8 @@ export function registerSubscriptionConsumers(queue: Queue): void {
         if (outcome === "approved") {
           await emit(tx, msg, EVENTS.subscriptionDowngraded, { subscriptionId: req.subscriptionId, oldPlanId: req.fromPlanId, newPlanId: req.targetPlanId, requestId: p.id }, "downgrade_approve", p.id, { reason: decisionReason ?? null });
         } else {
-          await emit(tx, msg, EVENTS.subscriptionDowngradeRejected, { subscriptionId: req.subscriptionId, requestId: p.id }, "downgrade_reject", p.id, { reason: decisionReason ?? null });
+          // notification-service tells the requester (requestedBy) the outcome and why.
+          await emit(tx, msg, EVENTS.subscriptionDowngradeRejected, { subscriptionId: req.subscriptionId, requestId: p.id, requestedBy: req.requestedBy, targetPlanId: req.targetPlanId, reason: decisionReason ?? null }, "downgrade_reject", p.id, { reason: decisionReason ?? null });
         }
       });
       const sub = await repo.findByTenantIdScoped(msg.tenantId);
