@@ -19,11 +19,9 @@ import { publishAdminCommand } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
-import { enqueue } from "../../shared/outbox.js";
+import { type OutboxCtx } from "../../shared/audit.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
   SOURCE_ENVIRONMENTS,
@@ -40,8 +38,6 @@ import {
 import type { SandboxEnvironmentRow, MaskingRuleRow, RefreshJobRow, RefreshMaskedFieldRow } from "./schema.js";
 
 const SANDBOX_ROLES = [...TENANT_ADMIN_ROLES];
-const RESOURCE_SANDBOX = "sandbox_environment";
-const RESOURCE_JOB = "sandbox_refresh";
 
 const limitSchema = z.coerce.number().int().min(1).max(200);
 const pageSchema = z.coerce.number().int().min(1).max(10_000).default(1);
@@ -186,10 +182,6 @@ function toDomainRules(rows: readonly MaskingRuleRow[]): MaskingRule[] {
   }));
 }
 
-function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
-  return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
-}
-
 export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
   // ── register a sandbox environment ────────────────────────────────────────
   app.post("/v1/admin/sandboxes", async (req, reply) => {
@@ -211,7 +203,6 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -254,7 +245,6 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const saved = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -292,7 +282,6 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -338,7 +327,6 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -365,7 +353,6 @@ export async function sandboxRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 

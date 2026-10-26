@@ -26,7 +26,7 @@
  * _Requirements: 14.1, 14.2, 14.3_
  */
 import { and, eq, inArray, lt, gt, ne } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { rooms, roomBookings, type RoomRow, type RoomBookingRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";
@@ -46,8 +46,6 @@ const RESOURCE_ROOM = "room";
 /** Rooms change rarely — cache single lookups + the registry list for 5 minutes. */
 const ROOM_TTL = 300;
 const BOOKING_CONFIRMED = "confirmed";
-/** Meeting statuses that no longer occupy a participant's calendar (freed for scheduling). */
-const INACTIVE_MEETING_STATUSES = ["cancelled", "closed", "archived"] as const;
 
 // ─── Rooms (Req 14.2) ────────────────────────────────────────────────────────
 

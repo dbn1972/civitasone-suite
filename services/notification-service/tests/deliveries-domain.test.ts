@@ -13,7 +13,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { decideGate, channelConsented, isMarketingSend, findPref, type GateInput, type ConsentPref } from "../src/modules/deliveries/consent-gate.js";
-import { retryDelaySeconds, computeNextRetryAt, shouldRetry, MAX_DELIVERY_RETRIES, RETRY_DELAY_SECONDS } from "../src/modules/deliveries/retry.js";
+import { retryDelaySeconds, computeNextRetryAt, shouldRetry, MAX_DELIVERY_RETRIES } from "../src/modules/deliveries/retry.js";
 
 // ─── 1. decideGate — consent gate evaluation ─────────────────────────────────
 

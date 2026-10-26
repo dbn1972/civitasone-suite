@@ -19,7 +19,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
-import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue, cache } from "../src/shared/infra.js";
@@ -42,8 +41,6 @@ import {
 // dead-letters and the 202 leaves no row — which looks like a broken feature rather than
 // missing configuration.
 process.env.CRM_PII_KEY ??= "test_pii_key_for_crm_domain_tests_aaaa";
-
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 const TENANT = randomUUID();
 const OTHER_TENANT = randomUUID();

@@ -13,7 +13,7 @@
  * _Requirements: 17.1, 17.4_
  */
 import { and, desc, eq, ne } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache, storage } from "../../shared/infra.js";
 import { meetingDocuments, AI_DOC_TYPE_TRANSCRIPT } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";

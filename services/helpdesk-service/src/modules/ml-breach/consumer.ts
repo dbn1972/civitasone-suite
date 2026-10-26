@@ -25,8 +25,6 @@ import { predictBreachRisk } from "./adapter.js";
 import {
   extractFeatures,
   buildFallbackResponse,
-  classifyBreachRisk,
-  selectReassignmentCandidates,
   BREACH_HIGH_THRESHOLD,
 } from "./domain.js";
 

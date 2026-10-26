@@ -12,7 +12,6 @@ import { sqlClient } from "../src/shared/db.js";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000077";
 const ACTOR = "cccccccc-3333-4000-8000-000000000077";
-const OTHER_ACTOR = "dddddddd-4444-4000-8000-000000000077";
 
 function token(roles: string[] = ["notification_admin", "super_admin"], tenantId = TENANT) {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-mc" }, SECRET);

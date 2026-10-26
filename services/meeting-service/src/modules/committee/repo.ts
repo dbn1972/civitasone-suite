@@ -23,7 +23,7 @@
  *     requirement, and the embedded compliance summary.
  */
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import {

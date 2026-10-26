@@ -9,9 +9,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { withRawTenantGuc } from "@civitasone/db";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
 import {
   extractLeadFeatures,
   scoreLeadWithMl,

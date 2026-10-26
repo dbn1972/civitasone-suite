@@ -27,7 +27,7 @@
  * _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7_
  */
 import { and, asc, eq } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { participants } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";

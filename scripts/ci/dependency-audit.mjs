@@ -25,7 +25,6 @@ const REPO_ROOT = join(__dirname, "..", "..");
 const RED = "\x1b[31m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
-const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 
@@ -143,17 +142,6 @@ function checkPackageJson(filePath) {
   }
 
   return issues;
-}
-
-function countDependencies() {
-  const rootPkg = join(REPO_ROOT, "package.json");
-  if (!existsSync(rootPkg)) return 0;
-  try {
-    const content = JSON.parse(readFileSync(rootPkg, "utf8"));
-    const deps = content.dependencies ? Object.keys(content.dependencies).length : 0;
-    const devDeps = content.devDependencies ? Object.keys(content.devDependencies).length : 0;
-    return deps + devDeps;
-  } catch { return 0; }
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────

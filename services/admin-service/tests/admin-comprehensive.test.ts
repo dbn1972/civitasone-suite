@@ -9,9 +9,17 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  canTransition, assertTransition, assertApproverDistinct as assertChangeApprover,
-  assertRollbackPlan, assertValidWindow, windowsOverlap, findFreezeConflict,
-  assertNoFreezeConflict, statusForPir, TRANSITIONS, ChangeError, type ChangeStatus,
+  canTransition,
+  assertTransition,
+  assertApproverDistinct as assertChangeApprover,
+  assertRollbackPlan,
+  assertValidWindow,
+  windowsOverlap,
+  findFreezeConflict,
+  assertNoFreezeConflict,
+  statusForPir,
+  ChangeError,
+  type ChangeStatus,
 } from "../src/modules/change/domain.js";
 import {
   resolveStrategy, isMasking, buildMaskingPlan, assertPreserveJustified,
@@ -19,7 +27,7 @@ import {
   assertVersionMatch, assertSandboxRefreshable, DEFAULT_STRATEGY,
   SOURCE_ENVIRONMENTS, MASKING_STRATEGIES, type MaskingRule, type FieldRef,
 } from "../src/modules/sandbox/domain.js";
-import { evaluateFlag, bucketOf, type FlagState, type EvalSubject } from "../src/modules/feature-flags/domain.js";
+import { evaluateFlag, type FlagState, type EvalSubject } from "../src/modules/feature-flags/domain.js";
 
 // ═══ CHANGE MANAGEMENT ═══
 

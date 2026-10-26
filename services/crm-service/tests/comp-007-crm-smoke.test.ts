@@ -14,10 +14,6 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000399";
 const ACTOR = randomUUID(); // actorId is a real uuid column in crm-service; a non-uuid sub 500s (see grievances/service-requests insert)
 
-function makeToken(roles: string[] = ["crm_user"]) {
-  return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "sess-comp007-crm" }, SECRET);
-}
-
 afterAll(async () => {
   await sqlClient.end();
 });

@@ -80,7 +80,7 @@ describe("QP-002 price-book patch / delete / item delete", () => {
     const bookId = create.json().id;
     await drainQueue();
 
-    const prod = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBX-1", name: "P", priceMinor: "100" } });
+    await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBX-1", name: "P", priceMinor: "100" } });
     await drainQueue();
     const prow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = 'PBX-1' AND tenant_id = ${TENANT}`);
     const productId = prow[0]!.id;
@@ -131,8 +131,8 @@ describe("QP-002 price-book patch / delete / item delete", () => {
   describe("QP-002 price-book entries (create/update round trip, not silently discarded)", () => {
     it("POST /v1/crm/price-books with entries persists them and reload (GET by id) shows them", async () => {
       const app = await buildApp();
-      const p1 = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-1", name: "Widget", priceMinor: "100" } });
-      const p2 = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-2", name: "Gadget", priceMinor: "200" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-1", name: "Widget", priceMinor: "100" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-2", name: "Gadget", priceMinor: "200" } });
       await drainQueue();
       const rows = await scoped((tx) => tx<Array<{ id: string; code: string }>>`SELECT id, code FROM crm.products WHERE code IN ('PBE-1','PBE-2') AND tenant_id = ${TENANT}`);
       const id1 = rows.find((r) => r.code === "PBE-1")!.id;
@@ -180,9 +180,9 @@ describe("QP-002 price-book patch / delete / item delete", () => {
 
     it("PATCH /v1/crm/price-books/:id with entries REPLACES the existing set (removed rows disappear, new rows appear)", async () => {
       const app = await buildApp();
-      const p1 = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-3", name: "Kept", priceMinor: "100" } });
-      const p2 = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-4", name: "Removed", priceMinor: "100" } });
-      const p3 = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-5", name: "Added", priceMinor: "100" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-3", name: "Kept", priceMinor: "100" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-4", name: "Removed", priceMinor: "100" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-5", name: "Added", priceMinor: "100" } });
       await drainQueue();
       const rows = await scoped((tx) => tx<Array<{ id: string; code: string }>>`SELECT id, code FROM crm.products WHERE code IN ('PBE-3','PBE-4','PBE-5') AND tenant_id = ${TENANT}`);
       const kept = rows.find((r) => r.code === "PBE-3")!.id;
@@ -218,7 +218,7 @@ describe("QP-002 price-book patch / delete / item delete", () => {
 
     it("PATCH /v1/crm/price-books/:id WITHOUT entries leaves existing prices untouched", async () => {
       const app = await buildApp();
-      const prod = await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-6", name: "Untouched", priceMinor: "100" } });
+      await app.inject({ method: "POST", url: "/v1/crm/products", headers: headers(), payload: { code: "PBE-6", name: "Untouched", priceMinor: "100" } });
       await drainQueue();
       const prow = await scoped((tx) => tx<Array<{ id: string }>>`SELECT id FROM crm.products WHERE code = 'PBE-6' AND tenant_id = ${TENANT}`);
       const productId = prow[0]!.id;

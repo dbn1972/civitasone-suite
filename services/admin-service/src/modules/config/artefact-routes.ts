@@ -36,16 +36,13 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, requireSuperAdmin, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
-import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
+import { type OutboxCtx } from "../../shared/audit.js";
 import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./artefact-repo.js";
 import {
   ENVIRONMENTS,
   checksumOf,
   diffConfig,
-  nextArtefactVersion,
   assertApproverDistinct,
   assertPendingPromotion,
   assertVersionMatch,
@@ -57,7 +54,6 @@ import {
 import type { ConfigArtefactRow, ConfigPromotionRow, ConfigEnvStateRow } from "./artefact-schema.js";
 
 const ARTEFACT_ROLES = [...TENANT_ADMIN_ROLES];
-const RESOURCE = "config_artefact";
 
 /** Guards against a client shipping a multi-megabyte config blob. */
 const MAX_ENTRIES_KEYS = 500;
@@ -166,10 +162,6 @@ function serializeEnvState(row: ConfigEnvStateRow): Record<string, unknown> {
   };
 }
 
-function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
-  return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
-}
-
 export async function configArtefactRoutes(app: FastifyInstance): Promise<void> {
   // ── snapshot a config set as an immutable artefact version ────────────────
   app.post("/v1/admin/config-artefacts", async (req, reply) => {
@@ -206,7 +198,6 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -267,7 +258,6 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const created = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -298,7 +288,6 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -325,7 +314,6 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -379,7 +367,6 @@ export async function configArtefactRoutes(app: FastifyInstance): Promise<void> 
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 

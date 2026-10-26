@@ -3,7 +3,7 @@
  * Pack #10. Source: modules/dashboard/roi-domain.ts
  */
 import { describe, it, expect } from "vitest";
-import { computeRoi, computeNetMinor, costPerResponse, formatBasisPoints, ROI_UNDEFINED, BPS_SCALE } from "../src/modules/dashboard/roi-domain.js";
+import { computeRoi, computeNetMinor, costPerResponse, formatBasisPoints, ROI_UNDEFINED } from "../src/modules/dashboard/roi-domain.js";
 
 describe("computeRoi — basis points, bigint", () => {
   it("100% ROI = 10000 bps", () => {

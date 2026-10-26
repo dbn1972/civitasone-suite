@@ -8,13 +8,6 @@
  */
 
 /**
- * Escapes regex special characters in a literal string.
- */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-/**
  * Validates that a message body conforms to a DLT-registered template pattern.
  *
  * The approach: split the pattern on {#var#} placeholders. Each variable must

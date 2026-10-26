@@ -40,7 +40,7 @@
  * _Requirements: 9.1, 9.2, 9.7, 9.8, 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
  */
 import { and, asc, desc, eq, inArray, notInArray, lt, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees } from "../committee/schema.js";

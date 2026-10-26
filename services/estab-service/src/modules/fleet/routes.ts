@@ -4,7 +4,7 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import {
   idParam, createFuelLogBody, createTripLogBody, completeTripBody,
   createVehicleDocBody, createDriverRosterBody, fleetQueryParams,

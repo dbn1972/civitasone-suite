@@ -24,7 +24,6 @@ import {
   ConfigError,
   assertApproverDistinct,
   assertPending,
-  nextVersion,
   sealForStorage,
   displayValue,
   configKey,
@@ -100,14 +99,6 @@ function serializeVersion(row: ConfigVersionRow): Record<string, unknown> {
   };
 }
 
-async function audit(tx: Tx, ctx: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
-  await enqueue(tx, {
-    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-    payload: { service: "admin", action, resourceType: "central_config", resourceId, outcome: "success" },
-  });
-}
-
 export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
   // List live config entries (sensitive values masked).
   app.get("/v1/admin/central-config", async (req, reply) => {
@@ -142,7 +133,7 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_ROLES);
     const body = proposeBody.parse(req.body);
-    const { stored, encrypted } = sealForStorage(body.value, body.sensitive, configKey());
+    sealForStorage(body.value, body.sensitive, configKey());
 
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
@@ -152,7 +143,6 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const change = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -181,7 +171,6 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -190,7 +179,7 @@ export async function centralConfigRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = rejectBody.parse(req.body);
+    rejectBody.parse(req.body);
 
     // Same lifted check as approve above (equivalent to f3-apply.ts's
     // apply_central_config_2): a change must exist and still be pending to

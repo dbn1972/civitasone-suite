@@ -14,7 +14,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient, db } from "../src/shared/db.js";
 import { notifications } from "../src/modules/stream/schema.js";
 import { publishToMemorySubscribers, clearMemorySubscribers } from "../src/modules/stream/subscriber.js";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT_A = "aaaaaaaa-1111-4000-8000-000000000067";
@@ -94,7 +94,7 @@ function connectSSE(port: number, authToken: string, durationMs = 300): Promise<
 describe("GET /notifications/stream — SSE endpoint", () => {
   it("returns 200 with SSE content-type for authenticated user", async () => {
     const app = await buildApp();
-    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+    await app.listen({ port: 0, host: "127.0.0.1" });
     const port = (app.server.address() as { port: number }).port;
 
     try {

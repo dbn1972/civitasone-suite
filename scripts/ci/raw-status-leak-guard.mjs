@@ -112,7 +112,7 @@
 //                                                                # entries/count/generatedAt)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { readdirSync, statSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";

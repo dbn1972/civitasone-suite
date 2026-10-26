@@ -4,7 +4,6 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { ChangeRequestRow } from "./schema.js";
 import {
@@ -29,10 +28,6 @@ import {
   completeBody,
   createFreezeBody,
 } from "./validators.js";
-
-const AUDIT_TOPIC = "audit.event.record";
-// Cross-service release-notes / user-communication broadcast (→ notification-service).
-const BROADCAST_TOPIC = "notification.broadcast.send";
 
 // Change/release management is a platform + tenant admin governed process.
 const CHANGE_ROLES = [...TENANT_ADMIN_ROLES];
@@ -78,8 +73,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/admin/change/requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
-    const body = createChangeBody.parse(req.body);
-    const id = randomUUID();
+    createChangeBody.parse(req.body);
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_0",
@@ -115,7 +109,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = rollbackPlanBody.parse(req.body);
+    rollbackPlanBody.parse(req.body);
     // Synchronous pre-accept existence check — mirrors apply_change_1's guard,
     // matching PR #920's fix pattern for F3-converted routes.
     const cur = await repo.findRequestById(id, ctx.tenantId);
@@ -156,7 +150,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = approveBody.parse(req.body ?? {});
+    approveBody.parse(req.body ?? {});
     // Synchronous pre-accept checks — mirrors apply_change_3's guards exactly
     // (existence, state machine, CAB maker-checker, rollback-plan mandate),
     // same order as the consumer so the first violation reported matches.
@@ -180,7 +174,7 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CHANGE_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = rejectBody.parse(req.body);
+    rejectBody.parse(req.body);
     // Synchronous pre-accept checks — mirrors apply_change_4's guards
     // (existence, state machine, CAB maker-checker — a requester cannot
     // reject their own change either, same segregation-of-duties rule as
@@ -297,7 +291,6 @@ export async function changeRoutes(app: FastifyInstance): Promise<void> {
     const start = new Date(body.startsAt);
     const end = new Date(body.endsAt);
     assertValidWindow(start, end);
-    const id = randomUUID();
     const __f3Id = randomUUID();
     await publishAdminCommand(ctx, COMMANDS.f3RouteWrite, __f3Id, {
       op: "change_op_8",

@@ -16,7 +16,7 @@ import { processed } from "../src/shared/outbox.js";
 import { registerEsignConsumers } from "../src/modules/esign/consumer.js";
 import { registerDfaConsumers } from "../src/modules/dfa/consumer.js";
 import { COMMANDS as ESIGN } from "../src/modules/esign/commands.js";
-import { assertSigningAllowed, computeDocHash, DomainError } from "../src/modules/esign/domain.js";
+import { assertSigningAllowed, computeDocHash } from "../src/modules/esign/domain.js";
 import {
   mockAadhaarProvider, mockDscProvider,
   buildEsignRequestXml, resolveAadhaarProvider, cdacAadhaarProvider, emudhraAadhaarProvider,
@@ -31,7 +31,6 @@ function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
 
 const TENANT = "11111111-aaaa-4000-8000-0000000000e7";
 const ACTOR  = "00000000-aaaa-4000-8000-0000000000e7";
-const ACTOR2 = "00000000-aaaa-4000-8000-0000000000e8";
 
 async function clean() {
   await runWithTenant(TENANT, () =>

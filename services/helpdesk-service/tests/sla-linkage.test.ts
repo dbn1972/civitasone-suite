@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tickets } from "../src/modules/tickets/schema.js";
@@ -34,7 +34,7 @@ function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
   return q;
 }
 
-const { outboxMessages, processed } = outboxSchema;
+const { outboxMessages } = outboxSchema;
 
 const TENANT_A = "aaaaaaaa-0000-4000-8000-0000000000a1";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-0000000000b1";

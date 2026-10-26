@@ -107,7 +107,6 @@ const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
 
 // ── Recognized authorization helpers (see header comment for provenance) ───
 export const AUTHZ_HELPER_NAMES = [
@@ -125,8 +124,6 @@ export const AUTHZ_HELPER_NAMES = [
   "isOfficer",
 ];
 const AUTHZ_HELPER_RE = new RegExp(`\\b(?:${AUTHZ_HELPER_NAMES.join("|")})\\s*\\(`);
-
-const MUTATING_METHODS = ["post", "put", "patch", "delete"];
 
 // ── Comment stripping (best-effort, mirrors arch-guard.mjs exactly: strings
 //    are not specially respected, which keeps this conservative -- the risk

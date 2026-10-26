@@ -13,21 +13,17 @@
  * after the queue has drained.
  */
 import { describe, it, expect, beforeAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
-import { COMMANDS } from "../src/topics.js";
 import { drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 const TENANT_A = "aaaaaaaa-1111-4000-8000-0000000000e7";
-const TENANT_B = "bbbbbbbb-2222-4000-8000-0000000000e7";
 const ACTOR_A = "cccccccc-3333-4000-8000-0000000000e7";
-const ACTOR_B = "dddddddd-4444-4000-8000-0000000000e7";
 
 interface SentimentRow {
   id: string;

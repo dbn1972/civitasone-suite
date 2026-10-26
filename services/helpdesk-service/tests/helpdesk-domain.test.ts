@@ -2,7 +2,7 @@
  * Helpdesk Service — SLA engine domain. ~7 packs.
  */
 import { describe, it, expect } from "vitest";
-import { computeDeadlines, isAtRisk, isBreached, evaluateSlaStatus, resolvePolicy, isValidCsatRating, isCsatDetractor, isCsatWindowOpen, DEFAULT_SLA_POLICIES, type SlaPolicy } from "../src/modules/sla/domain.js";
+import { computeDeadlines, evaluateSlaStatus, resolvePolicy, isValidCsatRating, isCsatDetractor, isCsatWindowOpen, DEFAULT_SLA_POLICIES, type SlaPolicy } from "../src/modules/sla/domain.js";
 
 const POLICY: SlaPolicy = { id: "p1", tenantId: "t1", priority: "high", category: null, responseMinutes: 60, resolutionMinutes: 480 };
 

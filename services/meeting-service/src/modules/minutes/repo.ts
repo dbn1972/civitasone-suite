@@ -26,7 +26,7 @@
  * _Requirements: 7.1, 7.3, 7.5, 7.8, 8.1, 8.4_
  */
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { minutes, minutesVersions, type MinutesRow, type MinutesVersionRow } from "./schema.js";
 import { meetings } from "../meeting-core/schema.js";

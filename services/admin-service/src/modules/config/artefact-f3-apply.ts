@@ -21,16 +21,15 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, requireSuperAdmin, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
-import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
+import { parseOrThrow } from "../../shared/envelope.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./artefact-repo.js";
 import {
   ENVIRONMENTS,
   checksumOf,
-  diffConfig,
   nextArtefactVersion,
   assertApproverDistinct,
   assertPendingPromotion,
@@ -42,7 +41,6 @@ import {
 } from "./artefact-domain.js";
 import type { ConfigArtefactRow, ConfigPromotionRow, ConfigEnvStateRow } from "./artefact-schema.js";
 
-const ARTEFACT_ROLES = [...TENANT_ADMIN_ROLES];
 const RESOURCE = "config_artefact";
 
 /** Guards against a client shipping a multi-megabyte config blob. */
@@ -59,25 +57,9 @@ const snapshotBody = z.object({
   note: z.string().max(1000).optional(),
 });
 
-const listQuery = z.object({
-  limit: limitSchema,
-  page: pageSchema,
-  setKey: setKeySchema.optional(),
-});
 
-const promotionListQuery = z.object({
-  limit: limitSchema,
-  page: pageSchema,
-  status: z.enum(["pending", "promoted", "rejected"]).optional(),
-});
 
-const envListQuery = z.object({ limit: limitSchema, page: pageSchema });
 
-const diffQuery = z.object({
-  setKey: setKeySchema,
-  fromVersion: z.coerce.number().int().min(1),
-  toVersion: z.coerce.number().int().min(1),
-});
 
 const promoteBody = z.object({
   setKey: setKeySchema,
@@ -106,52 +88,6 @@ function iso(value: Date | string | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
-function serializeArtefact(row: ConfigArtefactRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    setKey: row.setKey,
-    artefactVersion: row.artefactVersion,
-    entries: row.entries,
-    checksum: row.checksum,
-    note: row.note,
-    createdAt: iso(row.createdAt),
-    createdBy: row.createdBy,
-    version: row.version,
-  };
-}
-
-function serializePromotion(row: ConfigPromotionRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    setKey: row.setKey,
-    artefactId: row.artefactId,
-    artefactVersion: row.artefactVersion,
-    targetEnv: row.targetEnv,
-    kind: row.kind,
-    status: row.status,
-    requestedBy: row.requestedBy,
-    approvedBy: row.approvedBy,
-    approvedAt: iso(row.approvedAt),
-    rejectedReason: row.rejectedReason,
-    note: row.note,
-    createdAt: iso(row.createdAt),
-    version: row.version,
-  };
-}
-
-function serializeEnvState(row: ConfigEnvStateRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    setKey: row.setKey,
-    environment: row.environment,
-    artefactId: row.artefactId,
-    artefactVersion: row.artefactVersion,
-    promotedBy: row.promotedBy,
-    promotedAt: iso(row.promotedAt),
-    version: row.version,
-  };
-}
-
 function outboxCtx(ctx: { tenantId: string; actorId: string; correlationId: string }): OutboxCtx {
   return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
 }
@@ -170,7 +106,7 @@ export async function apply_config_0(ctx: any, req: { body: unknown; params: unk
     }
     const checksum = checksumOf(entries);
 
-    const created = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const currentMax = await repo.maxArtefactVersionTx(w, ctx.tenantId, body.setKey);
       if (currentMax !== null) {
@@ -209,7 +145,7 @@ export async function apply_config_1(ctx: any, req: { body: unknown; params: unk
   // post:"/v1/admin/config-artefacts/promotions"
     const body = parseOrThrow(promoteBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const artefact = await repo.findArtefactByVersionTx(w, ctx.tenantId, body.setKey, body.artefactVersion);
       if (!artefact) throw new HttpError(404, "NOT_FOUND", "config artefact version not found");
@@ -243,7 +179,7 @@ export async function apply_config_2(ctx: any, req: { body: unknown; params: unk
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const promotion = await repo.findPromotionByIdTx(w, ctx.tenantId, id);
       if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
@@ -321,7 +257,7 @@ export async function apply_config_3(ctx: any, req: { body: unknown; params: unk
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const promotion = await repo.findPromotionByIdTx(w, ctx.tenantId, id);
       if (!promotion) throw new HttpError(404, "NOT_FOUND", "promotion not found");
@@ -351,7 +287,7 @@ export async function apply_config_4(ctx: any, req: { body: unknown; params: unk
     const { env } = parseOrThrow(envParam, req.params);
     const body = parseOrThrow(rollbackBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const state = await repo.findEnvStateTx(w, ctx.tenantId, body.setKey, env);
       if (!state) throw new HttpError(404, "NOT_FOUND", "no config artefact is live in this environment for that set");

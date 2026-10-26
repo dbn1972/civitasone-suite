@@ -16,7 +16,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
-import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { withTenantConsumer } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 
 import { buildApp } from "../src/app.js";

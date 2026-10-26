@@ -4,14 +4,10 @@
  * Tests HMAC-SHA256 signing, URL validation (HTTPS enforcement / SSRF protection),
  * route RBAC, validation boundaries, and 404 handling.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { describe, it, expect } from "vitest";
 import { signToken } from "@civitasone/auth";
-import { runWithTenant } from "@civitasone/db";
 import { signPayload, validateEndpointUrl } from "../src/modules/webhook/domain.js";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
 
 const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "ffff0001-1111-4000-8000-000000ab0001";
