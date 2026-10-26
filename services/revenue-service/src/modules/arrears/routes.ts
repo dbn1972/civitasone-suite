@@ -4,6 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { istToday } from "./recovery-notice.js";
 import {
   createInstalmentBody,
   instalmentDecideBody,
@@ -148,6 +149,20 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = serveDemandNoticeBody.parse(req.body);
+    // Synchronous pre-checks: the serve consumer runs after the 202, so these
+    // failures would otherwise be silent (the notice would never appear).
+    if (body.servedOn > istToday()) {
+      throw new HttpError(422, "NOTICE_DATE_IN_FUTURE", "a demand notice cannot be recorded as served on a future date");
+    }
+    const pre = await repo.precheckDemandNotice(ctx.tenantId, body);
+    if (!pre.assesseeExists) throw new HttpError(404, "NOT_FOUND", "assessee not found");
+    if (body.demandId) {
+      if (pre.demandAssesseeId == null) throw new HttpError(404, "NOT_FOUND", "demand not found");
+      if (pre.demandAssesseeId !== body.assesseeId) {
+        throw new HttpError(422, "DEMAND_ASSESSEE_MISMATCH", "the demand does not belong to this assessee");
+      }
+    }
+    if (pre.noticeExists) throw new HttpError(409, "DUPLICATE_NOTICE_NO", "a demand notice with this number already exists");
     const result = await commands.serveDemandNotice(ctx, body as unknown as Record<string, unknown>);
     return reply.code(202).send({ data: result });
   });

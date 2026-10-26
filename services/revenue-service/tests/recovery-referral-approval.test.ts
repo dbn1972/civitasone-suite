@@ -231,6 +231,12 @@ vi.mock("../src/modules/arrears/repo.js", async (importOriginal) => {
       const r = Object.values(rows).filter((x) => x.tenantId === t && (!status || x.status === status));
       return { rows: r, total: r.length };
     }),
+    precheckDemandNotice: vi.fn(async (_t: string, i: { assesseeId: string; demandId?: string; noticeNo: string }) => ({
+      assesseeExists: i.assesseeId === "f6666666-6666-4666-8666-666666666664",
+      noticeExists: i.noticeNo === "DN-DUP",
+      demandAssesseeId: i.demandId === "f7777777-7777-4777-8777-777777777777" ? "f6666666-6666-4666-8666-666666666664"
+        : i.demandId === "f8888888-8888-4888-8888-888888888888" ? "f9999999-9999-4999-8999-999999999990" : i.demandId ? null : undefined,
+    })),
     getRecoveryReadiness: vi.fn(async () => ({
       outstandingMinor: 500_000n,
       notices: [{ id: "n1", noticeNo: "DN-1", servedOn: "2026-08-01", noticePeriodDays: 30, lapsesOn: "2026-08-31", lapsed: true }],
@@ -290,5 +296,21 @@ describe("recovery referral + demand notice routes (owner decision #4)", () => {
     expect((await app.inject({ method: "POST", url: "/v1/revenue/demand-notices", headers: tok(R_OTHER), payload: body })).statusCode).toBe(202);
     expect((await app.inject({ method: "POST", url: "/v1/revenue/demand-notices", headers: tok(R_OTHER), payload: { ...body, noticePeriodDays: 0 } })).statusCode).toBe(400);
     expect((await app.inject({ method: "POST", url: "/v1/revenue/demand-notices", headers: tok(R_OTHER, ["employee"]), payload: body })).statusCode).toBe(403);
+  });
+  it("POST /demand-notices pre-checks synchronously: 409 duplicate, 404 unknown assessee/demand, 422 mismatch/future date; nothing published", async () => {
+    const body = { assesseeId: R_ASSESSEE, noticeNo: "DN-10", servedOn: "2026-08-01", noticePeriodDays: 30 };
+    const post = (payload: Record<string, unknown>) => app.inject({ method: "POST", url: "/v1/revenue/demand-notices", headers: tok(R_OTHER), payload });
+    publishSpy.mockClear();
+    const dup = await post({ ...body, noticeNo: "DN-DUP" });
+    expect(dup.statusCode).toBe(409);
+    expect(dup.json().error.code).toBe("DUPLICATE_NOTICE_NO");
+    expect((await post({ ...body, assesseeId: "f6666666-6666-4666-8666-666666666660" })).statusCode).toBe(404);
+    expect((await post({ ...body, demandId: "f1010101-1010-4010-8010-101010101010" })).statusCode).toBe(404);
+    const mismatch = await post({ ...body, demandId: "f8888888-8888-4888-8888-888888888888" });
+    expect(mismatch.statusCode).toBe(422);
+    expect(mismatch.json().error.code).toBe("DEMAND_ASSESSEE_MISMATCH");
+    expect((await post({ ...body, servedOn: "2999-01-01" })).statusCode).toBe(422);
+    expect(publishSpy).not.toHaveBeenCalled();
+    expect((await post({ ...body, demandId: "f7777777-7777-4777-8777-777777777777" })).statusCode).toBe(202);
   });
 });
