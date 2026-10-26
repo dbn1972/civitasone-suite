@@ -119,6 +119,44 @@ export async function subscriptionUpgradeInitiate(ctx: RequestContext, body: { t
   return { id, status: "accepted", correlationId: ctx.correlationId, razorpayOrderId };
 }
 
+/** Owner decision #24: record a downgrade REQUEST (usage was checked by the route; the consumer re-checks nothing it cannot own). */
+export async function subscriptionDowngradeRequest(
+  ctx: RequestContext,
+  body: { subscriptionId: string; fromPlanId: string; targetPlanId: string; reason: string; usage: { checks: Array<{ resource: string; used: number; limit: number }> } },
+): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.subscriptionDowngradeRequest, {
+    messageId: randomUUID(),
+    type: COMMANDS.subscriptionDowngradeRequest,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, ...body },
+  });
+  return { id, status: "pending", correlationId: ctx.correlationId };
+}
+
+/**
+ * Owner decision #24: platform billing decides. The envelope carries the
+ * REQUESTING tenant (the consumer's RLS scope); the actor is the approver.
+ */
+export async function subscriptionDowngradeDecision(
+  ctx: RequestContext,
+  body: { requestId: string; tenantId: string; decision: "approve" | "reject"; reason?: string | undefined },
+): Promise<Accepted> {
+  await queue.publish(COMMANDS.subscriptionDowngradeDecision, {
+    messageId: randomUUID(),
+    type: COMMANDS.subscriptionDowngradeDecision,
+    tenantId: body.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { id: body.requestId, decision: body.decision, reason: body.reason ?? null },
+  });
+  return { id: body.requestId, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function subscriptionDowngrade(ctx: RequestContext, body: { targetPlanId: string }): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.subscriptionDowngrade, {

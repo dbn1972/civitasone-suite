@@ -6538,6 +6538,30 @@ export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.ob
   trialDaysLeft: z.number().nullable(),
 });
 
+/**
+ * OWNER DECISION #24 (TENANT-ADMIN-PLANS-02): a downgrade is a request that
+ * platform billing approves. tenant-service lists this tenant's requests so the
+ * plans page can show the pending state.
+ */
+export type DowngradeRequestSummary = {
+  id: string;
+  targetPlanId: string;
+  fromPlanId: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+};
+
+export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequestSummary[]>> {
+  return fetchJson<unknown, DowngradeRequestSummary[]>("/api/v1/tenant/subscription/downgrade-requests", [] as DowngradeRequestSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.downgrade-requests",
+    mapResponse: (p) => (getArrayPayload(p) as DowngradeRequestSummary[] | null) ?? [],
+  });
+}
+
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {
   return fetchJson<unknown, PlansData>(
     "/api/v1/billing/plans",

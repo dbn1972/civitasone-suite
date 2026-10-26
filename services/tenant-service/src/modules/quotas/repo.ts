@@ -2,6 +2,7 @@
  * quotas repo — Drizzle queries against `quotas.*` ONLY (L2).
  */
 import { eq, and, sql } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { quotas, type QuotaRow, type QuotaInsert } from "./schema.js";
 
@@ -63,6 +64,12 @@ export async function findByTenantAndResource(tenantId: string, resource: QuotaR
     .where(and(eq(quotas.tenantId, tenantId), eq(quotas.resource, resource)))
     .limit(1);
   return rows[0] ? toView(rows[0]) : null;
+}
+
+/** Tenant-scoped (GUC-carrying) read of every quota counter; see plans/repo.ts findByIdScoped. */
+export async function findAllByTenantScoped(tenantId: string): Promise<QuotaView[]> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(quotas).where(eq(quotas.tenantId, tenantId))));
+  return rows.map(toView);
 }
 
 export async function findAllByTenant(tenantId: string): Promise<QuotaView[]> {

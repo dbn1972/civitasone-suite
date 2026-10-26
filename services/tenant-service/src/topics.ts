@@ -18,6 +18,9 @@ export const COMMANDS = {
   // ── self-service subscription ──────────────────────────────────────────
   subscriptionUpgradeInitiate: "tenant.subscription.upgrade_initiate",
   subscriptionDowngrade: "tenant.subscription.downgrade",
+  /** Owner decision #24: the tenant ASKS for a downgrade; platform billing decides. */
+  subscriptionDowngradeRequest: "tenant.subscription.downgrade_request",
+  subscriptionDowngradeDecision: "tenant.subscription.downgrade_decision",
   subscriptionCancelSelf: "tenant.subscription.cancel_self",
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set",
@@ -49,6 +52,8 @@ export const EVENTS = {
   // ── self-service subscription ──────────────────────────────────────────
   subscriptionUpgradeInitiated: "tenant.subscription.upgrade_initiated",
   subscriptionDowngraded: "tenant.subscription.downgraded",
+  subscriptionDowngradeRequested: "tenant.subscription.downgrade_requested",
+  subscriptionDowngradeRejected: "tenant.subscription.downgrade_rejected",
   subscriptionCancelledSelf: "tenant.subscription.cancelled_self",
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set_done",
