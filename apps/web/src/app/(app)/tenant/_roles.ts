@@ -22,6 +22,12 @@ export const CONSENT_DECISION_ROLES = ["consent_officer"];
 export const MIGRATION_RETRY_ROLES = ["migration_admin"];
 
 /**
+ * OWNER DECISION #20 (TENANT-ADMIN-AUDIT): only the audit officer may reveal the
+ * unmasked actor email/IP in the audit log. audit-service re-enforces this.
+ */
+export const AUDIT_REVEAL_ROLES = ["audit_officer"];
+
+/**
  * Route-scoped officer roles. The owner decisions reserve four actions to officer
  * roles that are NOT tenant admins (#19 consent_officer, #20 audit_officer, #21
  * security_admin, #23 migration_admin). The /tenant and /tenant-admin layouts gate
@@ -34,6 +40,7 @@ export const MIGRATION_RETRY_ROLES = ["migration_admin"];
 export const OFFICER_ROUTE_ROLES: ReadonlyArray<{ prefix: string; roles: readonly string[] }> = [
   { prefix: "/tenant/consent-exchange", roles: CONSENT_DECISION_ROLES },
   { prefix: "/tenant/data-migration", roles: MIGRATION_RETRY_ROLES },
+  { prefix: "/tenant-admin/audit", roles: AUDIT_REVEAL_ROLES },
 ];
 
 /** Roles the /tenant and /tenant-admin layouts admit for this request path. */
