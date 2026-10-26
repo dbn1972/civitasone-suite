@@ -30,3 +30,6 @@ DROP POLICY IF EXISTS public_verify_read ON adv_permits.adv_permit_directory;
 CREATE POLICY public_verify_read ON adv_permits.adv_permit_directory
   FOR SELECT
   USING (verification_code = NULLIF(current_setting('app.permit_verification_code', true), ''));
+
+-- tenant-index-guard: leading tenant_id index for the RLS tenant predicate.
+CREATE INDEX IF NOT EXISTS adv_permit_directory_tenant_idx ON adv_permits.adv_permit_directory (tenant_id);
