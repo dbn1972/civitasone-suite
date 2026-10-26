@@ -184,6 +184,8 @@ function resolveManifest(edition: string, settings: Record<string, unknown> | nu
 
 // ── Route registration ───────────────────────────────────────────────────────
 
+const TENANT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function registerScreenManifestRoute(app: FastifyInstance): void {
   /**
    * GET /api/v1/config/screens
@@ -195,6 +197,11 @@ export function registerScreenManifestRoute(app: FastifyInstance): void {
     if (!tenantId) {
       return reply.code(401).send({ code: "UNAUTHENTICATED", message: "no tenant context" });
     }
+    // The tenant id is interpolated into the tenant-service URL path: only a canonical UUID may reach it
+    // (CodeQL js/request-forgery).
+    if (!TENANT_UUID_RE.test(tenantId)) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid tenant id" });
+    }
 
     // Fetch tenant info (edition + settings) from admin/tenant service
     const tenantUrl = process.env.GATEWAY_TENANT_URL ?? "http://127.0.0.1:3002";
@@ -202,7 +209,7 @@ export function registerScreenManifestRoute(app: FastifyInstance): void {
     let settings: Record<string, unknown> | null = null;
 
     try {
-      const res = await fetch(`${tenantUrl}/v1/tenants/${tenantId}`, {
+      const res = await fetch(`${tenantUrl}/v1/tenants/${encodeURIComponent(tenantId)}`, {
         headers: {
           "x-internal": "1",
           "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",

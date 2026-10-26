@@ -268,3 +268,24 @@ describe("cache TTL is the staleness bound for a mode / module flip", () => {
     expect(_test.lastKnownMode.get(TID)).toBe("off");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// CodeQL js/request-forgery (#928): the tenant id is a URL path segment toward admin-service
+// ─────────────────────────────────────────────────────────────────────────
+describe("tenant id is validated before it reaches the admin-service URL", () => {
+  it.each(["../../internal/secrets", "abc/../../x", "11111111-2222-4000-8000-000000000001/../../x", "t1", "x?y=1"])(
+    "non-UUID x-tenant-id %j never produces an admin-service request",
+    async (bad) => {
+      const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [{ name: "finance" }] }) }));
+      vi.stubGlobal("fetch", fetchSpy);
+      await checkModuleEnabled(fakeReq(bad), fakeReply(), "finance");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
+  it("a canonical UUID still reaches admin-service", async () => {
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [{ name: "finance" }] }) }));
+    vi.stubGlobal("fetch", fetchSpy);
+    await checkModuleEnabled(fakeReq(TID), fakeReply(), "finance");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+});
