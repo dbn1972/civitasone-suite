@@ -46,3 +46,22 @@ describe("InvoiceList - GAP-TENANT-ADMIN-PLANS-04 / owner decision #26 GST colum
     expect(screen.getByText(/no invoices yet/i)).toBeInTheDocument();
   });
 });
+
+describe("InvoiceList - owner decision #27 PDF download", () => {
+  it("each downloadable invoice links to its PDF through the authenticated proxy, labelled with the invoice number", () => {
+    render(<InvoiceList invoices={[ROW]} pdfBasePath="/api/proxy/v1/billing/invoices" />);
+    const link = screen.getByRole("link", { name: "Download invoice INV-202609-11111111 as PDF" });
+    expect(link).toHaveAttribute("href", `/api/proxy/v1/billing/invoices/${ROW.id}/pdf`);
+    expect(link).toHaveAttribute("download");
+  });
+
+  it("a draft or cancelled invoice has no PDF yet, so no dead link is shown", () => {
+    render(<InvoiceList invoices={[{ ...ROW, status: "draft" }, { ...ROW, id: "22222222-2222-4222-8222-222222222222", status: "cancelled" }]} pdfBasePath="/api/proxy/v1/billing/invoices" />);
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  it("without a pdfBasePath no PDF column is rendered", () => {
+    render(<InvoiceList invoices={[ROW]} />);
+    expect(screen.queryByRole("columnheader", { name: "PDF" })).toBeNull();
+  });
+});

@@ -16920,6 +16920,8 @@
       "igst": "IGST",
       "total": "Total",
       "status": "Status",
+      "pdf": "PDF",
+      "pdfAria": "Download invoice {number} as PDF",
       "emptyTitle": "No invoices yet",
       "emptyMessage": "Invoice history will appear here after your first billing cycle.",
       "payHeading": "How to pay",

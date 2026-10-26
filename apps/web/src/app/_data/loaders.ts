@@ -6052,6 +6052,47 @@ export async function getSubscription(): Promise<LoaderResult<SubscriptionSummar
   });
 }
 
+// Owner decision #27 (GAP-TENANT-ADMIN-SUBSCRIPTION-04): the tenant's invoice list from
+// billing-service GET /v1/billing/invoices. Money arrives as minor-unit STRINGS (bigint-safe).
+export type TenantInvoice = {
+  id: string;
+  invoiceNumber?: string | null;
+  periodMonth?: string | null;
+  issuedAt?: string | null;
+  status: string;
+  totalMinor: string;
+  supplierGstin?: string | null;
+  recipientGstin?: string | null;
+  placeOfSupply?: string | null;
+  cgstMinor?: string | null;
+  sgstMinor?: string | null;
+  igstMinor?: string | null;
+};
+
+const TenantInvoiceListSchema: z.ZodType<TenantInvoice[], z.ZodTypeDef, unknown> = z.array(z.object({
+  id: z.string(),
+  invoiceNumber: z.string().nullable().optional(),
+  periodMonth: z.string().nullable().optional(),
+  issuedAt: z.string().nullable().optional(),
+  status: z.string(),
+  totalMinor: z.string(),
+  supplierGstin: z.string().nullable().optional(),
+  recipientGstin: z.string().nullable().optional(),
+  placeOfSupply: z.string().nullable().optional(),
+  cgstMinor: z.string().nullable().optional(),
+  sgstMinor: z.string().nullable().optional(),
+  igstMinor: z.string().nullable().optional(),
+}));
+
+export async function getTenantInvoices(): Promise<LoaderResult<TenantInvoice[]>> {
+  return fetchJson<unknown, TenantInvoice[]>("/api/v1/billing/invoices?limit=100", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.invoices",
+    responseSchema: TenantInvoiceListSchema,
+    mapResponse: (p) => getArrayPayload(p) as TenantInvoice[] | null,
+  });
+}
+
 export async function getAPIKeys(): Promise<LoaderResult<APIKeySummary[]>> {
   return fetchJson<unknown, APIKeySummary[]>("/api/v1/admin/api-keys", [], {
     revalidateSeconds: 60,
