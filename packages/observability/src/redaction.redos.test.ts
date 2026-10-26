@@ -29,4 +29,11 @@ describe("DSN redaction pattern (CodeQL alert 938)", () => {
     const out = JSON.stringify(redact({ msg: "see https://host.example:8080/path?x=1" }));
     expect(out).toContain("https://host.example:8080/path?x=1");
   });
+
+  it("is linear on a long dotted scheme-like run with no '://'", () => {
+    const evil = "a.".repeat(20_000);
+    const t0 = Date.now();
+    redact({ msg: evil });
+    expect(Date.now() - t0).toBeLessThan(500);
+  });
 });

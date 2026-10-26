@@ -88,7 +88,9 @@ const SECRET_KV_PATTERN = /\b((?:password|passwd|pwd|secret|token|api[_-]?key)\s
 /** Matches `Bearer <token>` Authorization-header-shaped substrings. */
 const BEARER_VALUE_PATTERN = /\b(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 /** Standard email address shape. Only applied in "log" mode. */
-const EMAIL_VALUE_PATTERN = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
+// Lookbehind pins the local part to the start of its character run: `\b` allowed a start at every "."/"-" boundary, so a long
+// `a.a.a.…` string with no "@" rescanned to its end from each boundary (quadratic).
+const EMAIL_VALUE_PATTERN = /(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 /** Aadhaar: 12 digits, optionally grouped 4-4-4. Only applied in "log" mode. */
 const AADHAAR_VALUE_PATTERN = /\b\d{4}\s?\d{4}\s?\d{4}\b/g;
 
