@@ -91,4 +91,24 @@ describe("RefundCreateForm", () => {
     expect(option).toBeDisabled();
     expect(option.textContent).toMatch(/refund pending/i);
   });
+
+  it("flags approved and processed refunds too, not just pending (GAP-REVENUE-REFUNDS-02)", () => {
+    render(
+      <RefundCreateForm
+        assesseeId="a1"
+        receipts={receipts}
+        refundStatusByReceiptId={{ r1: "approved" }}
+      />,
+    );
+    const option = screen.getByRole("option", { name: /RCPT-001/ }) as HTMLOptionElement;
+    expect(option).toBeDisabled();
+    expect(option.textContent).toMatch(/refund approved/i);
+  });
+
+  it("labels a processed refund as already refunded (GAP-REVENUE-REFUNDS-02)", () => {
+    render(<RefundCreateForm assesseeId="a1" receipts={receipts} refundStatusByReceiptId={{ r1: "processed" }} />);
+    const option = screen.getByRole("option", { name: /RCPT-001/ }) as HTMLOptionElement;
+    expect(option).toBeDisabled();
+    expect(option.textContent).toMatch(/already refunded/i);
+  });
 });

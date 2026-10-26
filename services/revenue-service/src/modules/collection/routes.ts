@@ -73,7 +73,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const q = refundListQuery.parse(req.query);
-    const { rows, total } = await repo.listRefunds(ctx.tenantId, { limit: q.limit, offset: q.offset }, q.status);
+    const { rows, total } = await repo.listRefunds(ctx.tenantId, { limit: q.limit, offset: q.offset }, q.status, q.assesseeId);
     return reply.send({
       data: rows,
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },

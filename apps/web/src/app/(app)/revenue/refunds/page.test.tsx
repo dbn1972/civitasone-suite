@@ -130,4 +130,24 @@ describe("RefundsPage", () => {
     expect(screen.queryByText(/in this PR/)).not.toBeInTheDocument();
     expect(screen.queryByText(/does not yet expose a list endpoint/)).not.toBeInTheDocument();
   });
+
+  it("fetches the assessee's live refunds and disables a receipt with a processed one (GAP-REVENUE-REFUNDS-02)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/refunds?status=live")) {
+        expect(path).toContain(`assesseeId=${ASSESSEE.id}`);
+        return Promise.resolve({
+          data: [{ id: "rf1", receiptId: RECEIPT.id, assesseeId: ASSESSEE.id, amountMinor: "1", reason: "x", status: "processed", createdAt: "" }],
+          source: "api",
+        });
+      }
+      if (path.includes("/refunds?status=pending")) return Promise.resolve({ data: [], source: "api" });
+      if (path.includes("/receipts")) return Promise.resolve({ data: [RECEIPT], source: "api" });
+      return Promise.resolve({ data: [ASSESSEE], source: "api" });
+    });
+    const ui = await RefundsPage({ searchParams: Promise.resolve({ assesseeId: ASSESSEE.id }) });
+    render(ui);
+    const option = screen.getByRole("option", { name: new RegExp(RECEIPT.receiptNo) }) as HTMLOptionElement;
+    expect(option).toBeDisabled();
+    expect(option.textContent).toMatch(/already refunded/i);
+  });
 });

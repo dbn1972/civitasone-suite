@@ -2,7 +2,7 @@ import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, ne, and, desc, sql } from "drizzle-orm";
 
 /** Minimal read handle a caller-supplied transaction must satisfy for the
  * `Tx` siblings below (TX-001) — reused across collection repo functions
@@ -138,12 +138,15 @@ export async function listRefunds(
   tenantId: string,
   pagination: { limit: number; offset: number },
   status?: string,
+  assesseeId?: string,
 ) {
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;
-    const where = status
-      ? and(eq(refunds.tenantId, tenantId), eq(refunds.status, status))
-      : eq(refunds.tenantId, tenantId);
+    const where = and(
+      eq(refunds.tenantId, tenantId),
+      status === "live" ? ne(refunds.status, "rejected") : status ? eq(refunds.status, status) : undefined,
+      assesseeId ? eq(refunds.assesseeId, assesseeId) : undefined,
+    );
     const rows = await t
       .select()
       .from(refunds)
