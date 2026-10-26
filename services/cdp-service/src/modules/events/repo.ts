@@ -2,7 +2,7 @@
  * events/repo.ts — Database operations for the event store.
  */
 import { eq, and, desc, sql, type SQL } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { eventStore, type EventStoreRow, type EventStoreInsert } from "./schema.js";
 
 export function toView(r: EventStoreRow) {

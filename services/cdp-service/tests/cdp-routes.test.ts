@@ -2,7 +2,7 @@
  * CDP service route-level tests — profiles, identity, events, segments, steward.
  * Happy paths + 400/401/403/404/409/422.
  */
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";

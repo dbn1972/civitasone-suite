@@ -105,7 +105,6 @@ vi.mock("../src/modules/segments/membership-repo.js", () => ({
 vi.mock("../src/modules/activations/repo.js", () => ({
   findById: (...a: unknown[]) => H.activationFindByIdMock(...a),
   listByTenant: vi.fn(),
-  insert: vi.fn(),
   updateStatus: (...a: unknown[]) => H.activationUpdateStatusMock(...a),
   insert: (...a: unknown[]) => H.activationInsertMock(...a),
   refreshPendingAudience: (...a: unknown[]) => H.activationRefreshMock(...a),
@@ -115,7 +114,6 @@ vi.mock("../src/modules/activations/repo.js", () => ({
 vi.mock("../src/modules/dsar/repo.js", () => ({
   findById: (...a: unknown[]) => H.dsarFindByIdMock(...a),
   listByTenant: vi.fn(),
-  insert: vi.fn(),
   complete: vi.fn(),
   startProcessing: (...a: unknown[]) => H.dsarStartMock(...a),
   insert: (...a: unknown[]) => H.dsarInsertMock(...a),

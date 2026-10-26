@@ -2,7 +2,7 @@
  * segments/repo.ts — Database operations for segments.
  */
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { segments, type SegmentRow, type SegmentInsert } from "./schema.js";
 import { profiles } from "../profiles/schema.js";
 import { buildWhereClause, type SegmentCriteria } from "./domain.js";

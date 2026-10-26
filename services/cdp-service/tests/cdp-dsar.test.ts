@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { isCompletable, requiresDownstreamPurge } from "../src/modules/dsar/domain.js";
-import { EVENTS } from "../src/topics.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
