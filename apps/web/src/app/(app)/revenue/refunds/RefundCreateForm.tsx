@@ -7,16 +7,25 @@ import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import type { ReceiptRow } from "./page";
 
+const REFUND_FLAG_LABEL: Record<string, string> = {
+  pending: "refund pending",
+  approved: "refund approved",
+  processed: "already refunded",
+};
+
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
 export function RefundCreateForm({
   assesseeId,
   receipts,
   pendingRefundReceiptIds = [],
+  refundStatusByReceiptId = {},
 }: {
   assesseeId: string;
   receipts: ReceiptRow[];
   pendingRefundReceiptIds?: string[];
+  /** receiptId -> status of its live (non-rejected) refund; advisory, the server 409/no-op is the real guard. */
+  refundStatusByReceiptId?: Record<string, string>;
 }) {
   const router = useRouter();
   const [receiptId, setReceiptId] = useState("");
@@ -130,11 +139,14 @@ export function RefundCreateForm({
               >
                 <option value="">Select a receipt…</option>
                 {receipts.map((r) => {
-                  const hasPending = pendingSet.has(r.id);
+                  // GAP-REVENUE-REFUNDS-02: any live (pending/approved/processed) refund
+                  // occupies the receipt; flag and disable it, with the right wording.
+                  const refundStatus = refundStatusByReceiptId[r.id] ?? (pendingSet.has(r.id) ? "pending" : undefined);
+                  const flagged = refundStatus !== undefined;
                   return (
-                    <option key={r.id} value={r.id} disabled={hasPending}>
+                    <option key={r.id} value={r.id} disabled={flagged}>
                       {r.receiptNo} — {formatMoney(r.amountMinor)} ({r.channel}, {r.status})
-                      {hasPending ? " (refund pending)" : ""}
+                      {flagged ? ` (${REFUND_FLAG_LABEL[refundStatus] ?? "refund exists"})` : ""}
                     </option>
                   );
                 })}

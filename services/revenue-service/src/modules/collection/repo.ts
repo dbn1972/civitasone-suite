@@ -2,7 +2,7 @@ import { tenantTransaction } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { receipts, refunds, adjustments } from "./schema.js";
 import { dcbEntries } from "../assessment/schema.js";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, ne, and, desc, sql } from "drizzle-orm";
 
 /** Minimal read handle a caller-supplied transaction must satisfy for the
  * `Tx` siblings below (TX-001) — reused across collection repo functions
@@ -128,6 +128,23 @@ export async function findRefundById(tenantId: string, id: string) {
 }
 
 /**
+ * GAP-REVENUE-REFUNDS-02: the live (non-rejected) refund for a receipt, if any.
+ * The create route uses it to answer 409 synchronously instead of 202 + a
+ * silent consumer no-op. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function findLiveRefundByReceipt(tenantId: string, receiptId: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select({ id: refunds.id, status: refunds.status })
+      .from(refunds)
+      .where(and(eq(refunds.tenantId, tenantId), eq(refunds.receiptId, receiptId), ne(refunds.status, "rejected")))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
  * GAP-REVENUE-REFUNDS-01: list refunds for the tenant, newest first,
  * optionally filtered by status (e.g. ?status=pending so a checker can find
  * refunds awaiting approval without being handed a UUID). Tenant-scoped via
@@ -138,12 +155,15 @@ export async function listRefunds(
   tenantId: string,
   pagination: { limit: number; offset: number },
   status?: string,
+  assesseeId?: string,
 ) {
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;
-    const where = status
-      ? and(eq(refunds.tenantId, tenantId), eq(refunds.status, status))
-      : eq(refunds.tenantId, tenantId);
+    const where = and(
+      eq(refunds.tenantId, tenantId),
+      status === "live" ? ne(refunds.status, "rejected") : status ? eq(refunds.status, status) : undefined,
+      assesseeId ? eq(refunds.assesseeId, assesseeId) : undefined,
+    );
     const rows = await t
       .select()
       .from(refunds)

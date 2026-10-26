@@ -60,6 +60,13 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createRefundBody.parse(req.body);
+    // GAP-REVENUE-REFUNDS-02: a receipt may have at most one live refund.
+    // Reject a duplicate synchronously (409) rather than 202 + consumer no-op;
+    // the consumer re-checks inside its transaction (defence in depth).
+    const live = await repo.findLiveRefundByReceipt(ctx.tenantId, body.receiptId);
+    if (live) {
+      throw new HttpError(409, "REFUND_ALREADY_EXISTS", `a ${live.status} refund already exists for this receipt`);
+    }
     const result = await commands.createRefund(ctx, body);
     return reply.code(202).send({ data: result });
   });
@@ -73,7 +80,7 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const q = refundListQuery.parse(req.query);
-    const { rows, total } = await repo.listRefunds(ctx.tenantId, { limit: q.limit, offset: q.offset }, q.status);
+    const { rows, total } = await repo.listRefunds(ctx.tenantId, { limit: q.limit, offset: q.offset }, q.status, q.assesseeId);
     return reply.send({
       data: rows,
       meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, total },

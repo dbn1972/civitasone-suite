@@ -576,12 +576,14 @@ describe("Opinions routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/legal/opinions/:id/submit-approval → 202", async () => {
+  // GAP-LEGAL-OPINIONS-DETAIL-03: an unknown opinion is 404, not a silent 202
+  // (the 202 path for a real opinion is covered in gap-legal-opinion-submit-approval.test.ts).
+  it("POST /v1/legal/opinions/:id/submit-approval → 404 unknown opinion", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/legal/opinions/${CASE_UUID}/submit-approval`,
       headers: authHeader(),
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/legal/opinions/:id/submit-approval → 400 bad uuid", async () => {

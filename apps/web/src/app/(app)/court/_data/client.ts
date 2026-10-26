@@ -73,6 +73,19 @@ export async function fetchCases(status?: CaseStatus): Promise<CourtCase[]> {
 }
 
 /**
+ * Server-side case search (GAP-COURT-HEARINGS-02): the service filters by
+ * title / CNR / filing number via `?q=`, so a case beyond the first page of
+ * the registry is still reachable from the case picker. Throws a plain
+ * message on failure so the picker can show a search error distinct from
+ * "no matches".
+ */
+export async function searchCases(q: string, limit = 20): Promise<CourtCase[]> {
+  const params = new URLSearchParams({ q: q.trim(), limit: String(Math.min(Math.max(limit, 1), 100)) });
+  const out = await get<{ items?: CourtCase[] }>(`v1/court/cases?${params.toString()}`);
+  return out.items ?? [];
+}
+
+/**
  * Resolve one case by id. Resolves `null` when the case does not exist (404)
  * or when a 2xx body carries no case id. THROWS on any other non-OK status
  * and on an invalid JSON body, so callers can tell "not found" (permanent)

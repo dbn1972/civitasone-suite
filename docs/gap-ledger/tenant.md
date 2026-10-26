@@ -70,7 +70,8 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [~] **Status** (INTERIM — needs tenant-service effective-dated code-value endpoint and /tenant/code-lists/[code] detail page; web+backend feature build, not invented here)
+- [x] **Status** (UAT B2)
+- Closed by uat/b2-tenant-admin (UAT B2): tenant/code-lists/[code] drill-down lists effective-dated values (getTenantCodeListValues zod loader drops rows missing effectiveFrom; rows link via ModuleListTable detailHrefBase; tenant-service /v1/tenant/code-lists/:code/values alias) — _data.test.ts, [code]/page.test.tsx, tests/code-list-values-alias.test.ts
 - **W0 note:** partly fixed by #1916 — mapCodeListRows maps header fields (code, system/custom); no [code] detail route or effective dates
 - **First-pass claim:** Subtitle promises 'effective-dated values' but only list headers are shown; values, effectiveFrom/effectiveTo are not mapped (tenant/_data.ts:32-75) and there is no drill-down link, so the reference data cannot be inspected.
 - **Verified evidence:** mapTenantRows (tenant/_data.ts:32-75) flattens rows to id/label/sublabel/status/meta; it reads row.value but not a values array, effectiveFrom or effectiveTo. ModuleListTable has no link column and no [id] route exists under tenant/code-lists (only page.tsx). Payload shape from tenant-service is cannot-verify.
@@ -327,7 +328,8 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [~] **Status** (W2 tenant INTERIM — redirect landed and tested (tenant/org-hierarchy/page.test.tsx asserts redirect to /tenant-admin/org-hierarchy; tenant/ and tenant-admin/ layouts now share TENANT_ADMIN_ROLES, pinned by tenant-admin/layout.roles.test.tsx; destination tree rendering covered by tenant-admin/org-hierarchy/page.test.tsx). NOT PROVEN: that the destination data (getOrgHierarchy -> /api/v1/admin/org-hierarchy) is equivalent to the unconfirmed /api/v1/tenant/org/hierarchy payload — tenant-service shape cannot be verified here; the orphaned tenant-side loader/mapper were removed. Keep open until the owner confirms the admin endpoint is the intended source)
+- [x] **Status** (UAT B2)
+- Closed by uat/b2-tenant-admin (UAT B2): verified admin /v1/admin/org-hierarchy relays tenant-service /v1/org/hierarchy (same handler as /v1/tenant/org/hierarchy; gap-routes.test.ts real round trip); found payload is FLAT (parentId) so units never nested — getOrgHierarchy now builds the tree (_data/orgTree.ts, orgTree.test.ts)
 - **W0 note:** partly fixed by #1916 — mapOrgHierarchyRows computes depth/indent from parentId; still flat table, no tree component
 - **First-pass claim:** Hub note promises 'Organisation units and subtree views' (tenant/page.tsx:13) but the route is a flat table: parentId / children are not mapped (tenant/_data.ts:32-75), so the hierarchy — the point of the page — cannot be seen.
 - **Verified evidence:** tenant/page.tsx:13 note is 'Organisation units and subtree views'. Page renders ModuleListPage (flat table). mapTenantRows (_data.ts:32-75) reads only id/label/sublabel/status/meta - parentId, children, level are never read, so hierarchy is not shown. Payload shape of /api/v1/tenant/org/hierarchy (_data.ts:90) cannot be verified: tenant-service is absent. Note a working hierarchy screen already exists at tenant-admin/org-hierarchy/page.tsx using getOrgHierarchy (loaders.ts:4665, OrgHierarchyNode).

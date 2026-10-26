@@ -200,6 +200,12 @@ export interface CauseListRef {
   listDate?: string;
 }
 
+/** A bench of a court (GAP-COURT-HEARINGS-05) — id + display name only. */
+export interface Bench {
+  id: string;
+  name: string;
+}
+
 /** A court/forum in the registry (GAP-COURT-CAUSE-LIST-01). */
 export interface Court {
   id: string;

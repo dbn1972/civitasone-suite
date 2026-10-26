@@ -189,14 +189,17 @@ describe("ExportConsumer", () => {
       await insertQueryRun(queryRunId, "completed", { rows: largeData });
 
       await publishExport(exportId, queryRunId, "json");
-      const job = await waitForExportJob(exportId);
+      // Serialising ~60MB is synchronous and takes ~14s, so the default 5s poll
+      // window gave up before the consumer could record the failure. The 50MB
+      // limit and every assertion below are unchanged.
+      const job = await waitForExportJob(exportId, 30000);
 
       expect(job).not.toBeNull();
       expect(job!.status).toBe("failed");
       expect(job!.error).toContain("exceeds maximum allowed size");
       expect(job!.fileKey).toBeNull();
       expect(job!.downloadUrl).toBeNull();
-    });
+    }, 45000);
   });
 
   describe("idempotency — duplicate message skipped", () => {

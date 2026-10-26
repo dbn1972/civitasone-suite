@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { Card, EmptyState, DataTable } from "./ds";
 import { StatusPill, QuotaStatusPill } from "./ds/StatusPill";
 import { DataSourceBadge } from "./DataSourceBadge";
@@ -82,6 +83,7 @@ export function ModuleListTable({
   emptyAction,
   showId = true,
   statusStyle,
+  detailHrefBase,
 }: {
   cacheKey: string;
   rows: ModuleRowSummary[];
@@ -106,11 +108,20 @@ export function ModuleListTable({
    * so the same CTA shows when a filter returns zero matches.
    */
   emptyAction?: ReactNode;
+  /** When set, each row's name links to `${detailHrefBase}/${row.id}`. */
+  detailHrefBase?: string;
 }) {
   const columns = (showId ? MODULE_COLUMNS : MODULE_COLUMNS.filter((c) => c.key !== "id")).map((c) =>
     c.key === "status" && statusStyle === "quota"
       ? { ...c, render: (row: ModuleRowSummary) => (row.status ? <QuotaStatusPill status={row.status} /> : "—") }
-      : c,
+      : c.key === "label" && detailHrefBase
+        ? {
+            ...c,
+            render: (row: ModuleRowSummary) => (
+              <Link href={`${detailHrefBase}/${encodeURIComponent(row.id)}`}>{row.label}</Link>
+            ),
+          }
+        : c,
   );
   const { data, provenance, offline, cachedAt } = useSeededResource<ModuleRowSummary[]>(
     cacheKey,

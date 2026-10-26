@@ -29,7 +29,11 @@ export const refundDecideBody = z.object({
 export const refundListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
-  status: z.enum(["pending", "approved", "rejected", "processed"]).optional(),
+  // "live" = every refund that still occupies its receipt (status <> 'rejected'),
+  // matching the uq_refunds_tenant_receipt_live partial unique index.
+  status: z.enum(["pending", "approved", "rejected", "processed", "live"]).optional(),
+  // Narrow to one assessee so the raise-refund form can flag already-refunded receipts.
+  assesseeId: z.string().uuid().optional(),
 });
 
 export const createBatchReceiptBody = z.object({

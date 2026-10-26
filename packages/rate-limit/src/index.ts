@@ -24,10 +24,14 @@ export function defaultKey(req: FastifyRequest): string {
 }
 
 export async function registerRateLimit(app: FastifyInstance, config: RateLimitConfig = {}): Promise<void> {
+  const allowed = new Set(config.allowList ?? ["127.0.0.1", "::1"]);
   await app.register(rateLimit, {
     max: config.max ?? 100,
     timeWindow: config.timeWindow ?? "1 minute",
-    allowList: config.allowList ?? ["127.0.0.1", "::1"],
+    // @fastify/rate-limit compares a static allowList with the *generated key*
+    // (tenant:ip), never the bare IP, so a string[] could not match. Use a
+    // function over req.ip, which already honours the app's trustProxy setting.
+    allowList: (req: FastifyRequest) => allowed.has(req.ip),
     keyGenerator: config.keyGenerator ?? defaultKey,
     ...(config.skip ? { skip: config.skip } : {}),
     errorResponseBuilder: (_req, context) => ({

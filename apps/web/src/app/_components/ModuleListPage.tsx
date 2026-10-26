@@ -47,13 +47,15 @@ interface ModuleListPageProps {
    * errorArea. Also forwarded to DataTable for filter-zero empty state.
    */
   emptyAction?: ReactNode;
+  /** When set, each row's name links to `${detailHrefBase}/${row.id}`. */
+  detailHrefBase?: string;
 }
 
 function slugify(s: string): string {
   return `module.${s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
 }
 
-export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle, emptyAction }: ModuleListPageProps) {
+export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle, emptyAction, detailHrefBase }: ModuleListPageProps) {
   return (
     <>
       <PageHeader
@@ -76,6 +78,7 @@ export function ModuleListPage({ title, description, rows, source, children, bac
         {...(statusStyle ? { statusStyle } : {})}
         {...(back ? { backHref: back } : {})}
         {...(emptyAction ? { emptyAction } : {})}
+        {...(detailHrefBase ? { detailHrefBase } : {})}
       />
     </>
   );

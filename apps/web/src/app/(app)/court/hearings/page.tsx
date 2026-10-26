@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Card, EmptyState, PageHeader, StatusPill } from "@/app/_components/ds";
-import { getCase, getCaseHearings, getCases, getHearings } from "../_data/loaders";
+import { getCase, getCaseHearings, getCases, getCourtBenches, getHearings } from "../_data/loaders";
 import { CaseSelector } from "../_components/CaseSelector";
 import { HearingsConsole } from "./HearingsConsole";
 import { fmtDateTime, hearingPillStatus, hearingStatusLabel, humanize } from "../_data/format";
@@ -34,6 +34,13 @@ export default async function HearingsListPage(
   const [detailResult, hearingsResult] = caseId
     ? await Promise.all([getCase(caseId), getCaseHearings(caseId)])
     : [null, null];
+
+  // GAP-COURT-HEARINGS-05: resolve bench ids to names via the case's court (no UUIDs on screen).
+  const courtId = detailResult?.data?.courtId ?? null;
+  const benchesResult = courtId ? await getCourtBenches(courtId) : null;
+  const benchNames: Record<string, string> = Object.fromEntries(
+    (benchesResult?.data ?? []).map((b) => [b.id, b.name]),
+  );
 
   // GAP-COURT-HEARINGS-03: with no case selected, show today's hearings across
   // cases (flat read model) instead of a dead "pick a case" page.
@@ -127,6 +134,7 @@ export default async function HearingsListPage(
           caseSummary={{ title: detailResult.data.title, cnrNumber: detailResult.data.cnrNumber }}
           initialHearings={hearingsResult ? hearingsResult.data : []}
           hearingsSource={hearingsResult ? hearingsResult.source : "error"}
+          benchNames={benchNames}
         />
       )}
     </>

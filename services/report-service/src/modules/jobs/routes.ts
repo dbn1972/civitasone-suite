@@ -1,6 +1,7 @@
 /**
  * jobs HTTP routes.
  */
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -17,6 +18,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as kpiQueries from "../kpis/queries.js";
 import * as misQueries from "../mis/queries.js";
+import { queue } from "../../shared/infra.js";
 // GAP2-REPORTS-ROLES-01: single canonical report role vocabulary shared with
 // the dashboard and scheduled modules. READ_ROLES gates the GET surfaces,
 // WRITE_ROLES the POST surfaces (create/share a job). Previously this file
@@ -39,6 +41,18 @@ function assertJobAccess<T extends JobView>(ctx: RequestContext, job: T | null):
   return job;
 }
 
+/**
+ * GAP-REPORTS-LIST-04: job payloads must not carry the 24h presigned S3 bearer
+ * URL. They expose the authorising download endpoint instead, so every fetch
+ * is owner-checked and audited. Returns a copy (the cached row is shared).
+ */
+function downloadPath(id: string): string {
+  return "/v1/reports/jobs/" + id + "/download";
+}
+function hideBearerUrl<T extends { id: string; downloadUrl: string | null }>(job: T): T {
+  return { ...job, downloadUrl: job.downloadUrl ? downloadPath(job.id) : null };
+}
+
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/reports/jobs", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -56,7 +70,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       queries.countJobs(ctx.tenantId, ownerScope(ctx)),
     ]);
     return reply.send({
-      data: result.data,
+      data: result.data.map(hideBearerUrl),
       // GAP2-REPORTS-PAGINATION-01: meta.total is the TRUE tenant-scoped row
       // count (count(*)), not result.data.length (the capped page size), so a
       // tenant with more than `limit` jobs gets a correct total and the UI can
@@ -69,7 +83,8 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, jobsListSchema, await queries.listJobs(ctx.tenantId, q.limit, q.offset, ownerScope(ctx)));
+    const jobs = await queries.listJobs(ctx.tenantId, q.limit, q.offset, ownerScope(ctx));
+    sendValidated(reply, jobsListSchema, { ...jobs, data: jobs.data.map(hideBearerUrl) });
   });
 
   app.get("/v1/reports/report-jobs", async (req, reply) => {
@@ -89,7 +104,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
-      downloadUrl: job.downloadUrl ?? undefined,
+      downloadUrl: job.downloadUrl ? downloadPath(job.id) : undefined,
       rowCount: job.rowCount ?? undefined,
     })));
   });
@@ -111,7 +126,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
       completedAt: job.completedAt ? new Date(job.completedAt as unknown as string).toISOString() : undefined,
       format: (["pdf", "xlsx", "csv", "html"].includes(job.format) ? job.format : "pdf") as "pdf" | "xlsx" | "csv" | "html",
       status: (["queued", "running", "completed", "failed"].includes(job.status) ? job.status : "queued") as "queued" | "running" | "completed" | "failed",
-      downloadUrl: job.downloadUrl ?? undefined,
+      downloadUrl: job.downloadUrl ? downloadPath(job.id) : undefined,
       rowCount: job.rowCount ?? undefined,
       parameters: job.parameters,
       columns: job.resultColumns,
@@ -126,7 +141,7 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READ_ROLES);
     const { id } = idParam.parse(req.params);
     const job = assertJobAccess(ctx, await queries.getJob(ctx.tenantId, id));
-    return reply.send({ data: job });
+    return reply.send({ data: hideBearerUrl(job) });
   });
 
   app.post("/v1/reports/jobs/:id/share", async (req, reply) => {
@@ -159,6 +174,21 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const url = watermarkText
       ? `${job.downloadUrl}${job.downloadUrl.includes("?") ? "&" : "?"}wm=${encodeURIComponent(watermarkText)}`
       : job.downloadUrl;
+    // GAP-REPORTS-LIST-04: audit every download fetch; fail closed so a file is
+    // never handed out without a trail. Denied (404) and not-ready (409) fetches
+    // threw above, so only a real hand-out is recorded. No URL/watermark in payload.
+    await queue.publish("audit.event.record", {
+      messageId: randomUUID(),
+      type: "audit.event.record",
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "report", action: "download", resourceType: "report_job", resourceId: job.id,
+        outcome: "success", format: job.format, ownerId: job.requestedBy, watermarked: Boolean(watermarkText),
+      },
+    });
     return reply.redirect(302, url);
   });
 

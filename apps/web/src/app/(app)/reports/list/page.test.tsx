@@ -13,7 +13,7 @@ function job(over: Record<string, unknown> = {}) {
     id: "job-1", reportName: "R1", module: "finance",
     requestedBy: "11111111-1111-4111-8111-111111111111",
     requestedAt: "2026-04-01T00:00:00Z", format: "pdf", status: "completed",
-    downloadUrl: "https://s3/x", ...over,
+    downloadUrl: "/v1/reports/jobs/job-1/download", ...over,
   };
 }
 
@@ -41,5 +41,18 @@ describe("ReportsListPage", () => {
     render(await ReportsListPage());
     expect(screen.getByText("Unknown user")).toBeInTheDocument();
     expect(screen.queryByText("11111111-1111-4111-8111-111111111111")).not.toBeInTheDocument();
+  });
+
+  // GAP-REPORTS-LIST-04
+  it("links Download to the authorising proxy endpoint, never a raw bearer URL", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [job()], source: "api", status: 200 });
+    render(await ReportsListPage());
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/api/proxy/v1/reports/jobs/job-1/download");
+  });
+
+  it("shows no Download link when the payload carries an absolute presigned URL", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [job({ downloadUrl: "https://s3/x?X-Amz-Signature=abc" })], source: "api", status: 200 });
+    render(await ReportsListPage());
+    expect(screen.queryByRole("link", { name: "Download" })).not.toBeInTheDocument();
   });
 });
