@@ -2,7 +2,7 @@
  * sync/repo.ts — Database operations for sync queue.
  */
 import { eq, and, sql, desc, gt } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { syncQueue, type SyncQueueRow, type SyncQueueInsert } from "./schema.js";
 
 export function toView(r: SyncQueueRow) {

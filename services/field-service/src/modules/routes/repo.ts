@@ -2,7 +2,7 @@
  * routes/repo.ts — Database operations for route plans.
  */
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { routePlans, type RoutePlanRow, type RoutePlanInsert } from "./schema.js";
 
 export function toView(r: RoutePlanRow) {
