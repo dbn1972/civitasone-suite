@@ -3132,8 +3132,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SSO-06  ·  LOW  ·  interim  ·  theme BACKEND
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
-- **W2 INTERIM (needs owner decision):** today the endpoint is a 501 with no body data, so no secret can leak; the real check (response omits clientSecret/signing keys, hasSecret flag) must be written WITH the provider store — kept open for that.
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/admin-service/src/modules/identity-providers/routes.ts:36-49 (hasClientSecret only, never the secret); test identity-providers.test.ts (sso list with clientSecret returns no secret/ciphertext, sealed at rest))
+- **W2 INTERIM (resolved):** the real provider store now exists; the list response omits clientSecret/signing keys and returns only hasClientSecret (see Status line).
 - **First-pass claim:** Identity backend not in this snapshot; provider secrets handling and status values are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/sso/providers (loaders.ts:4532)']`
 - **Question:** Does the response omit provider secrets (clientSecret, signing keys) and what status values exist?

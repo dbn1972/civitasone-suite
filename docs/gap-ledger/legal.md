@@ -752,7 +752,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HOME-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/legal-service/src/modules/*/routes.ts (every route requireRole; LEGAL_ROLES/READER_ROLES exclude finance_admin) + apps/web/src/app/(app)/legal/layout.tsx:10; test gap-legal-authz-dashboard.test.ts)
 - **First-pass claim:** legal/layout.tsx:6 lets finance_admin into the whole Legal module (cases, opinions, privileged advice text) with no per-page or per-action narrowing; every page below renders its write buttons for all five roles. legal-service is not in the snapshot (only services/hrms-service), so server-side enforcement is undeterminable.
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['all /api/v1/legal/* routes']`
 - **Question:** Do legal-service routes enforce a per-route role allow-list that excludes finance_admin from cases, opinions and privileged advice, independent of the web layout?
@@ -786,7 +786,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-NEW-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx (sends complianceRequired/complianceDeadline) + services/legal-service/migrations/0027_order_compliance_fields.sql; test gap-legal-order-compliance.test.ts)
 - **First-pass claim:** The form has no compliance deadline or 'compliance required' control (body has only orderType, summary, orderDate, direction, deptRef; RecordOrderForm.tsx:30-36) yet the Court Orders page counts Compliance Due and Contempt Risk from complianceRequired/complianceDeadline (court-orders/page.tsx:15-19): orders recorded through the UI cannot become due or at-risk. Whether the backend defaults these is undeterminable (legal-service absent).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases/:id/orders', 'GET /api/v1/legal/court-orders']`
 - **Question:** When POST orders omits complianceRequired/complianceDeadline, does the service derive them (default false/null or by orderType) so Compliance Due and Contempt Risk counts are meaningful?
