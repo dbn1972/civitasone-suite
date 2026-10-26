@@ -16924,6 +16924,10 @@
     "riskConfirmDescription": "{title} · {category} · स्कोर {score} ({band})। स्कोर सर्वर पर पुनर्गणित और संग्रहीत किया जाता है। यह ऑडिट ट्रेल में दर्ज किया जाएगा।",
     "riskConfirmLabel": "पुष्टि करें और जोड़ें"
   },
+  "knowledgeDocumentsNew": {
+    "duplicateTitle": "इस शीर्षक वाला दस्तावेज़ पहले से मौजूद है।",
+    "openExisting": "मौजूदा दस्तावेज़ खोलें"
+  },
   "knowledgeW2": {
     "accessColumn": "पहुँच स्तर",
     "accessLevels": {

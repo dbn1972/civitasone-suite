@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Field, Input, Select } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { KNOWLEDGE_CATEGORIES } from "../../_data/categories";
@@ -17,6 +18,27 @@ import { KNOWLEDGE_CATEGORIES } from "../../_data/categories";
  * GAP-KNOWLEDGE-DOCUMENTS-NEW-06: removed inline background:'var(--panel)' that broke
  *   dark mode. The .field class already sets background: var(--panel).
  */
+/**
+ * UAT owner decision #15 (GAP-KNOWLEDGE-DOCUMENTS-NEW-05): the create endpoint
+ * answers 409 DUPLICATE_TITLE with a link to the existing document. Only an
+ * internal knowledge-document path is ever rendered as a link.
+ */
+const EXISTING_DOC_HREF = /^\/knowledge\/documents\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function readDuplicateTitle(res: Response): Promise<{ href: string | null } | null> {
+  if (res.status !== 409) return null;
+  try {
+    const body = (await res.clone().json()) as { code?: unknown; existingDocumentHref?: unknown };
+    if (body.code !== "DUPLICATE_TITLE") return null;
+    const href = typeof body.existingDocumentHref === "string" && EXISTING_DOC_HREF.test(body.existingDocumentHref)
+      ? body.existingDocumentHref
+      : null;
+    return { href };
+  } catch {
+    return null;
+  }
+}
+
 export function CreateDocumentForm({
   defaultCategory = "",
   backHref = "/knowledge/repository",
@@ -32,6 +54,9 @@ export function CreateDocumentForm({
   canSetRestricted?: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("knowledgeDocumentsNew");
+  const [existingHref, setExistingHref] = useState<string | null>(null);
+  const [duplicate, setDuplicate] = useState(false);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState(defaultCategory);
   // GAP-KNOWLEDGE-DOCUMENTS-NEW-01: accessLevel select, defaults to least-privilege "internal"
@@ -49,6 +74,8 @@ export function CreateDocumentForm({
     }
     setStatus("submitting");
     setMessage("");
+    setDuplicate(false);
+    setExistingHref(null);
     const body = {
       title: title.trim(),
       category: category.trim() || undefined,
@@ -61,6 +88,14 @@ export function CreateDocumentForm({
         body: JSON.stringify(body),
       });
       if (!res.ok) {
+        const dup = await readDuplicateTitle(res);
+        if (dup) {
+          setStatus("error");
+          setDuplicate(true);
+          setExistingHref(dup.href);
+          setMessage(t("duplicateTitle"));
+          return;
+        }
         setStatus("error");
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
@@ -84,7 +119,7 @@ export function CreateDocumentForm({
           <Field
             label="Title"
             required
-            error={status === "error" && !message.startsWith("Document") ? message : undefined}
+            error={status === "error" && !duplicate && !message.startsWith("Document") ? message : undefined}
           >
             <Input
               value={title}
@@ -137,6 +172,11 @@ export function CreateDocumentForm({
         {message ? (
           <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: "0.875rem" }}>
             {message}
+          </p>
+        ) : null}
+        {duplicate && existingHref ? (
+          <p style={{ marginTop: 4, fontSize: "0.875rem" }}>
+            <Link href={existingHref}>{t("openExisting")}</Link>
           </p>
         ) : null}
       </div>

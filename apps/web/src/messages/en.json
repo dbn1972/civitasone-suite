@@ -17027,6 +17027,10 @@
     "riskConfirmDescription": "{title} · {category} · Score {score} ({band}). The score is recomputed and stored server-side. This will be recorded in the audit trail.",
     "riskConfirmLabel": "Confirm & add"
   },
+  "knowledgeDocumentsNew": {
+    "duplicateTitle": "A document with this title already exists.",
+    "openExisting": "Open the existing document"
+  },
   "knowledgeW2": {
     "accessColumn": "Access",
     "accessLevels": {
