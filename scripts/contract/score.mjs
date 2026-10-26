@@ -368,7 +368,7 @@ function buildScorecardMd(overall, moduleScores) {
       lines.push(`| ${m.module} | — | N/A | ${m.blockers[0] ?? '—'} |`);
       continue;
     }
-    const blocker = (m.topBlocker ?? '—').replace(/\|/g, '\\|');
+    const blocker = (m.topBlocker ?? '—').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
     lines.push(`| ${m.module} | ${m.wiredStr} | ${m.scoreNum}/10 | ${blocker} |`);
   }
 

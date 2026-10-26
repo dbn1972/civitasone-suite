@@ -96,9 +96,8 @@ const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 /** Read the worker error log from a byte offset onward (only this run's lines). */
 function logSince(offset) {
   try {
-    const size = statSync(WORKER_LOG).size;
-    if (size <= offset) return "";
     const buf = readFileSync(WORKER_LOG);
+    if (buf.length <= offset) return "";
     return buf.subarray(offset).toString("utf8");
   } catch {
     return "";

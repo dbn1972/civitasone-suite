@@ -15,7 +15,7 @@
  * gap did (0014 shipped for months before this pass caught it).
  */
 import { describe, it, expect } from "vitest";
-import { execSync } from "child_process";
+import { runPsql } from "./psql-exec";
 
 const PGHOST = process.env.PGHOST ?? "localhost";
 const PGPORT = process.env.PGPORT ?? "5435";
@@ -25,19 +25,10 @@ const PW = "audit_dev_pw";
 
 const TENANT = "00000000-0000-0000-0000-000000000001";
 
+const CONN = { host: PGHOST, port: PGPORT, user: ROLE, db: DB, password: PW };
+
 function psqlResult(query: string): { ok: boolean; output: string } {
-  try {
-    const out = execSync(
-      `PGPASSWORD='${PW}' psql -h ${PGHOST} -p ${PGPORT} -U ${ROLE} -d ${DB} -t -A -c "${query.replace(/"/g, '\\"')}"`,
-      { encoding: "utf-8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-    return { ok: true, output: out.trim() };
-  } catch (err: unknown) {
-    const e = err as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
-    const stderr = e.stderr ? String(e.stderr) : "";
-    const stdout = e.stdout ? String(e.stdout) : "";
-    return { ok: false, output: stderr || stdout || e.message || "unknown error" };
-  }
+  return runPsql(CONN, [query]);
 }
 
 /** An audit row inserted inside the probe transaction, so row-level triggers have a target. */
@@ -78,21 +69,8 @@ function psqlScopedMutation(
     SEED_EVENT,
     statement,
     "ROLLBACK",
-  ]
-    .map((s) => `-c "${s.replace(/\s+/g, " ").trim().replace(/"/g, '\\"')}"`)
-    .join(" ");
-  try {
-    const out = execSync(
-      `PGPASSWORD='${PW}' psql -h ${PGHOST} -p ${PGPORT} -U ${ROLE} -d ${DB} -t -A -v ON_ERROR_STOP=1 ${sql}`,
-      { encoding: "utf-8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-    return { ok: true, output: out.trim() };
-  } catch (err: unknown) {
-    const e = err as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
-    const stderr = e.stderr ? String(e.stderr) : "";
-    const stdout = e.stdout ? String(e.stdout) : "";
-    return { ok: false, output: stderr || stdout || e.message || "unknown error" };
-  }
+  ];
+  return runPsql(CONN, sql, { onErrorStop: true });
 }
 
 /**
@@ -104,21 +82,9 @@ function psqlScopedMutation(
  * the guard under test has regressed and the statement "succeeds".
  */
 function psqlScopedStatement(statement: string): { ok: boolean; output: string } {
-  const sql = ["BEGIN", `SET LOCAL app.tenant_id = '${TENANT}'`, statement, "ROLLBACK"]
-    .map((s) => `-c "${s.replace(/\s+/g, " ").trim().replace(/"/g, '\\"')}"`)
-    .join(" ");
-  try {
-    const out = execSync(
-      `PGPASSWORD='${PW}' psql -h ${PGHOST} -p ${PGPORT} -U ${ROLE} -d ${DB} -t -A -v ON_ERROR_STOP=1 ${sql}`,
-      { encoding: "utf-8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] },
-    );
-    return { ok: true, output: out.trim() };
-  } catch (err: unknown) {
-    const e = err as { stderr?: Buffer | string; stdout?: Buffer | string; message?: string };
-    const stderr = e.stderr ? String(e.stderr) : "";
-    const stdout = e.stdout ? String(e.stdout) : "";
-    return { ok: false, output: stderr || stdout || e.message || "unknown error" };
-  }
+  return runPsql(CONN, ["BEGIN", `SET LOCAL app.tenant_id = '${TENANT}'`, statement, "ROLLBACK"], {
+    onErrorStop: true,
+  });
 }
 
 /** Guard: the probe transaction itself must work, or every assertion below is vacuous. */

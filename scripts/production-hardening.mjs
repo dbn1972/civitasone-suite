@@ -5,6 +5,17 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
+
+/** Read a file, returning undefined if it does not exist (no check-then-use race). */
+function readIfExists(p) {
+  try {
+    return readFileSync(p, "utf8");
+  } catch (err) {
+    if (err && err.code === "ENOENT") return undefined;
+    throw err;
+  }
+}
+
 const ROOT = new URL("..", import.meta.url).pathname;
 const SERVICES = join(ROOT, "services");
 
@@ -19,8 +30,8 @@ const PORT_FIXES = {
 
 for (const [rel, [re, repl]] of Object.entries(PORT_FIXES)) {
   const p = join(ROOT, rel);
-  if (!existsSync(p)) continue;
-  let s = readFileSync(p, "utf8");
+  let s = readIfExists(p);
+  if (s === undefined) continue;
   if (re.test(s)) {
     s = s.replace(re, repl);
     writeFileSync(p, s);
@@ -127,8 +138,8 @@ const LIST_CACHE = [
 
 for (const patch of LIST_CACHE) {
   const p = join(SERVICES, patch.file);
-  if (!existsSync(p)) continue;
-  let s = readFileSync(p, "utf8");
+  let s = readIfExists(p);
+  if (s === undefined) continue;
   if (patch.old && s.includes(patch.old.split("\n")[0]) && !s.includes("cache.listOrLoad")) {
     s = s.replace(patch.old, patch.new);
     if (patch.file.includes("helpdesk") && !s.includes("});")) {

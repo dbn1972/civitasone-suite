@@ -604,7 +604,12 @@ function applySteeringRefresh(steering: SteeringPipelineResult): void {
   if (allStale.length === 0) return;
 
   const targetPath = join(WORKSPACE_ROOT, POINT_IN_TIME_METRICS_DOC_PATH);
-  const existingTargetText = existsSync(targetPath) ? readFileSync(targetPath, "utf8") : undefined;
+  let existingTargetText: string | undefined;
+  try {
+    existingTargetText = readFileSync(targetPath, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+  }
 
   const moveResult = moveSectionsToConditionalDoc(allStale, POINT_IN_TIME_METRICS_DOC_PATH, POINT_IN_TIME_METRICS_FRONT_MATTER, {
     sourceDocumentTexts: steering.sourceDocumentTexts,
