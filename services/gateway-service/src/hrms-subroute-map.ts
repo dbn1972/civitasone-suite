@@ -214,7 +214,7 @@ export function resolveHrmsModuleKey(pathname: string): string {
   // residual `%` may be a literal that is not a valid escape (`%zz`). A second
   // decode must never throw (unhandled 500): fall back to the raw segment, which
   // matches no map key and so resolves like any unknown segment.
-  let decoded = captured;
+  let decoded: string;
   try {
     decoded = decodeURIComponent(captured);
   } catch {

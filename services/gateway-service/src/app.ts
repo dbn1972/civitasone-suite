@@ -4,7 +4,7 @@ import Fastify, {
   type FastifyReply,
 } from "fastify";
 import { Readable } from "node:stream";
-import { registerOpsRoutes, dbPing, redactedReqSerializer } from "@civitasone/observability";
+import { registerOpsRoutes, redactedReqSerializer } from "@civitasone/observability";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
