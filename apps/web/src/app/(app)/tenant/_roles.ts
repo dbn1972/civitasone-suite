@@ -14,3 +14,9 @@ export const TENANT_ADMIN_ROLES = ["tenant_admin", "platform_admin", "super_admi
  * tenant_admin is view-only. tenant-service re-enforces this server-side.
  */
 export const CONSENT_DECISION_ROLES = ["consent_officer"];
+
+/**
+ * OWNER DECISION #23 (TENANT-DATA-MIGRATION-01): only the migration admin may
+ * retry the failed records of an import. tenant-service re-enforces this.
+ */
+export const MIGRATION_RETRY_ROLES = ["migration_admin"];

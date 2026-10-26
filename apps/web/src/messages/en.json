@@ -16768,6 +16768,24 @@
         "STORAGE_FAILED": "The file could not be stored. Request the export again.",
         "UNKNOWN": "The export did not complete. Request it again."
       }
+    },
+    "migration": {
+      "title": "Bulk imports",
+      "hint": "Each import keeps a record of the rows that did not load. Download the error report (row, field, error), fix the cause, then the migration admin can retry only the failed records.",
+      "none": "No bulk imports yet.",
+      "loadFailed": "Bulk imports could not be loaded. Refresh to try again.",
+      "entity": {
+        "org_unit": "Organisation units"
+      },
+      "counts": "{inserted} of {total} loaded · {failed} failed",
+      "retries": "{count, plural, one {retried once} other {retried # times}}",
+      "download": "Download error report",
+      "downloadFor": "Download error report for {failed} failed rows",
+      "retry": "Retry failed records",
+      "retryFor": "Retry {failed} failed records",
+      "confirmTitle": "Retry the failed records?",
+      "confirmBody": "Only the {count, plural, one {# record} other {# records}} that did not load will be tried again. Records that already loaded are left alone. The retry is recorded in the audit log.",
+      "retryQueued": "Retry queued for {count, plural, one {# record} other {# records}}. Refresh in a moment to see the result."
     }
   },
   "tenantAdminW2": {

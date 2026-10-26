@@ -31,7 +31,7 @@ const MAX_NAME_LEN = 200;
 const MAX_CODE_LEN = 32;
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-interface ImportError { index: number; error: string }
+interface ImportError { index: number; row: number; field: string; error: string }
 
 export function registerDataMigrationConsumers(q: Queue): void {
   q.subscribe("tenant.migration.start", async (msg) => {
@@ -71,6 +71,8 @@ export function registerDataMigrationConsumers(q: Queue): void {
   // header always COMMITS and the client can always poll status + error report
   // (never a permanent 404). CAP-020 guarantee: rejected-with-report, never
   // silently dropped.
+  // OWNER DECISION #23: the records that did not load are remembered on the
+  // batch (failed_records) so a migration admin can retry ONLY those.
   q.subscribe("tenant.master_data.import", async (msg) => {
     const p = msg.payload as { batchId: string; tenantId?: string; entityType: string; records: Record<string, unknown>[] };
     await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
@@ -81,62 +83,49 @@ export function registerDataMigrationConsumers(q: Queue): void {
         status: "processing", total: records.length, createdBy: msg.actorId,
       });
 
-      const errors: ImportError[] = [];
-      let inserted = 0;
-
-      if (ORG_ENTITIES.has(p.entityType)) {
-        const existingCodes = await loadActiveCodes(tx, msg.tenantId);
-        const seenCodes = new Set<string>();
-        for (let i = 0; i < records.length; i++) {
-          const r = records[i];
-          if (!r) continue;
-          const name = typeof r.name === "string" ? r.name.trim() : "";
-          const type = typeof r.type === "string" ? r.type : "";
-          const code = typeof r.code === "string" && r.code.length > 0 ? r.code : undefined;
-          if (!name) { errors.push({ index: i, error: "name is required" }); continue; }
-          if (name.length > MAX_NAME_LEN) {
-            errors.push({ index: i, error: `name exceeds ${MAX_NAME_LEN} characters (got ${name.length})` }); continue;
-          }
-          if (!UNIT_TYPES.has(type)) { errors.push({ index: i, error: `invalid type: ${type || "(empty)"}` }); continue; }
-          if (code && code.length > MAX_CODE_LEN) {
-            errors.push({ index: i, error: `code exceeds ${MAX_CODE_LEN} characters (got ${code.length})` }); continue;
-          }
-          if (code && (existingCodes.has(code) || seenCodes.has(code))) {
-            errors.push({ index: i, error: `duplicate code: ${code}` }); continue;
-          }
-          let level = 1;
-          const parentId = typeof r.parentId === "string" ? r.parentId : undefined;
-          if (parentId) {
-            const parent = await tx.select().from(orgUnits)
-              .where(and(eq(orgUnits.id, parentId), eq(orgUnits.tenantId, msg.tenantId))).limit(1);
-            if (!parent[0]) { errors.push({ index: i, error: `parent not found: ${parentId}` }); continue; }
-            level = parent[0].level + 1;
-          }
-          // SAVEPOINT per row: an unexpected DB-level failure rolls back only
-          // this row, never the batch header or the rows already inserted.
-          try {
-            await tx.transaction(async (sp) => {
-              await sp.insert(orgUnits).values({
-                id: randomUUID(), tenantId: msg.tenantId, name, type,
-                parentId: parentId ?? null, code: code ?? null, level, createdBy: msg.actorId, version: 1,
-              });
-            });
-            if (code) seenCodes.add(code);
-            inserted++;
-          } catch (err) {
-            errors.push({ index: i, error: `row insert failed: ${err instanceof Error ? err.message : String(err)}` });
-          }
-        }
-      } else {
-        for (let i = 0; i < records.length; i++) errors.push({ index: i, error: `unsupported entity_type: ${p.entityType}` });
-      }
+      const { inserted, errors, failedRecords } = await loadRecords(tx, msg.tenantId, msg.actorId, p.entityType,
+        records.map((record, index) => ({ index, record })));
 
       await tx.update(importBatches).set({
         status: errors.length > 0 && inserted === 0 ? "failed" : "completed",
-        inserted, failed: errors.length, errors, completedAt: new Date(),
+        inserted, failed: errors.length, errors, failedRecords, completedAt: new Date(),
       }).where(and(eq(importBatches.id, p.batchId), eq(importBatches.tenantId, msg.tenantId)));
       await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant-service", action: "process", resourceType: "data_migration", resourceId: p.batchId, outcome: "success" } });
       log.info({ batchId: p.batchId, entityType: p.entityType, inserted, failed: errors.length }, "master data import completed");
+    }));
+  });
+
+  // OWNER DECISION #23 (TENANT-DATA-MIGRATION-01): retry the FAILED records of a
+  // batch only. One transaction: markProcessed + row lock + guarded write + audit.
+  // Records that already loaded are never re-inserted; the batch counters and the
+  // error report are rewritten from what is still failing.
+  q.subscribe("tenant.master_data.import.retry", async (msg) => {
+    const p = msg.payload as { batchId: string };
+    await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const found = await tx.select().from(importBatches)
+        .where(and(eq(importBatches.id, p.batchId), eq(importBatches.tenantId, msg.tenantId))).limit(1).for("update");
+      const batch = found[0];
+      if (!batch || batch.status === "processing" || (batch.failedRecords ?? []).length === 0) {
+        log.warn({ batchId: p.batchId }, "import retry: nothing to retry");
+        return;
+      }
+      const before = batch.failedRecords.length;
+      const { inserted, errors, failedRecords } = await loadRecords(tx, msg.tenantId, msg.actorId, batch.entityType, batch.failedRecords);
+      const totalInserted = batch.inserted + inserted;
+      await tx.update(importBatches).set({
+        status: errors.length > 0 && totalInserted === 0 ? "failed" : "completed",
+        inserted: totalInserted, failed: errors.length, errors, failedRecords,
+        retryCount: batch.retryCount + 1, lastRetryAt: new Date(), lastRetryBy: msg.actorId, completedAt: new Date(),
+      }).where(and(eq(importBatches.id, p.batchId), eq(importBatches.tenantId, msg.tenantId)));
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "tenant-service", action: "retry_failed_records", resourceType: "import_batch", resourceId: p.batchId, outcome: "success",
+          retried: before, recovered: inserted, stillFailing: errors.length, attempt: batch.retryCount + 1,
+        },
+      });
+      log.info({ batchId: p.batchId, retried: before, recovered: inserted, stillFailing: errors.length }, "master data import retry completed");
     }));
   });
 
@@ -164,6 +153,67 @@ export function registerDataMigrationConsumers(q: Queue): void {
       log.info({ exportId: p.exportId, entityType: p.entityType, format: p.format, count: rows.length }, "master data export completed");
     }));
   });
+}
+
+/**
+ * Validate + persist records of one entity type. Each record keeps its ORIGINAL
+ * position (`index`, 0-based) across retries so the error report always points at
+ * the row of the uploaded file. Failures carry the offending `field`; a DB-level
+ * failure is reported generically (the cause is logged, never shown to the user).
+ */
+async function loadRecords(
+  tx: Tx, tenantId: string, actorId: string, entityType: string,
+  items: { index: number; record: Record<string, unknown> }[],
+): Promise<{ inserted: number; errors: ImportError[]; failedRecords: { index: number; record: Record<string, unknown> }[] }> {
+  const errors: ImportError[] = [];
+  const failed = new Map<number, Record<string, unknown>>();
+  let inserted = 0;
+  const reject = (it: { index: number; record: Record<string, unknown> }, field: string, error: string) => {
+    errors.push({ index: it.index, row: it.index + 1, field, error });
+    failed.set(it.index, it.record);
+  };
+
+  if (!ORG_ENTITIES.has(entityType)) {
+    for (const it of items) reject(it, "entityType", `unsupported entity_type: ${entityType}`);
+  } else {
+    const existingCodes = await loadActiveCodes(tx, tenantId);
+    const seenCodes = new Set<string>();
+    for (const it of items) {
+      const r = it.record;
+      const name = typeof r.name === "string" ? r.name.trim() : "";
+      const type = typeof r.type === "string" ? r.type : "";
+      const code = typeof r.code === "string" && r.code.length > 0 ? r.code : undefined;
+      if (!name) { reject(it, "name", "name is required"); continue; }
+      if (name.length > MAX_NAME_LEN) { reject(it, "name", `name exceeds ${MAX_NAME_LEN} characters (got ${name.length})`); continue; }
+      if (!UNIT_TYPES.has(type)) { reject(it, "type", `invalid type: ${type || "(empty)"}`); continue; }
+      if (code && code.length > MAX_CODE_LEN) { reject(it, "code", `code exceeds ${MAX_CODE_LEN} characters (got ${code.length})`); continue; }
+      if (code && (existingCodes.has(code) || seenCodes.has(code))) { reject(it, "code", `duplicate code: ${code}`); continue; }
+      let level = 1;
+      const parentId = typeof r.parentId === "string" ? r.parentId : undefined;
+      if (parentId) {
+        const parent = await tx.select().from(orgUnits)
+          .where(and(eq(orgUnits.id, parentId), eq(orgUnits.tenantId, tenantId))).limit(1);
+        if (!parent[0]) { reject(it, "parentId", `parent not found: ${parentId}`); continue; }
+        level = parent[0].level + 1;
+      }
+      // SAVEPOINT per row: an unexpected DB-level failure rolls back only
+      // this row, never the batch header or the rows already inserted.
+      try {
+        await tx.transaction(async (sp) => {
+          await sp.insert(orgUnits).values({
+            id: randomUUID(), tenantId, name, type,
+            parentId: parentId ?? null, code: code ?? null, level, createdBy: actorId, version: 1,
+          });
+        });
+        if (code) seenCodes.add(code);
+        inserted++;
+      } catch (err) {
+        log.warn({ err, index: it.index }, "import row insert failed");
+        reject(it, "(row)", "the record could not be saved");
+      }
+    }
+  }
+  return { inserted, errors, failedRecords: [...failed.entries()].map(([index, record]) => ({ index, record })) };
 }
 
 async function loadActiveCodes(tx: Tx, tenantId: string): Promise<Set<string>> {
