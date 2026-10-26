@@ -8,9 +8,14 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  TICKET_TYPES, INCIDENT_STATUSES, PROBLEM_STATUSES, CHANGE_STATUSES,
-  getStatusesForType, getInitialStatus, isValidTransition, getValidNextStatuses,
-  isValidStatusForType, validateTypeFields, getRequiredFieldNames,
+  TICKET_TYPES,
+  getStatusesForType,
+  getInitialStatus,
+  isValidTransition,
+  getValidNextStatuses,
+  isValidStatusForType,
+  validateTypeFields,
+  getRequiredFieldNames,
 } from "../src/modules/tickets/itil-domain.js";
 
 describe("TICKET_TYPES constant", () => {

@@ -27,8 +27,6 @@ import {
   buildFallbackResponse,
   buildMlResponse,
   selectReassignmentCandidates,
-  classifyBreachRisk,
-  BREACH_HIGH_THRESHOLD,
 } from "./domain.js";
 
 const HELPDESK_ROLES = ["helpdesk_user", "helpdesk_agent", "helpdesk_admin", "super_admin", "admin"];
