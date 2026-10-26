@@ -5,21 +5,27 @@
  * movement or cycle count by guessing its UUID. Follows the same convention
  * as tests/security/idor.test.ts.
  *
- * GAP NOTE: the task names `GET /v1/inventory/movements/:id`, but no such
- * route exists. Reading services/inventory-service/src/modules/movements/
- * routes.ts, stock movements expose only aggregate/list reads —
- * `GET /v1/inventory/balances`, `GET /v1/inventory/ledger`, and
- * `GET /v1/inventory/low-stock` — with no single-movement GET-by-id
- * endpoint at all (writes are POST-only: receipts/issues/transfers/
- * adjustments, each 202-accepted into the queue). This test instead
- * verifies IDOR safety on the ledger list, the closest real read surface,
- * using the same leak-free assertion pattern as idor.test.ts's list checks.
+ * HISTORY: this file once documented that no single-movement GET-by-id route
+ * existed and tested the ledger list as the closest surface. The route
+ * `GET /v1/inventory/movements/:id` has since been added (services/
+ * inventory-service/src/modules/movements/routes.ts, tenant-scoped
+ * queries.getMovement), so it is now tested directly. The ledger-list leak
+ * check is kept.
  *
  * GET /v1/inventory/cycle-counts/:id DOES exist (routes.ts confirms it) and
  * is tested directly below.
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "../../packages/auth/src/index.js";
+import { serviceDsn } from "../cross-service-live/harness.js";
+
+// The root vitest config points DATABASE_URL at the FINANCE database, so the
+// inventory app booted here queried tables that do not exist there and every
+// route answered 500 (including the movement-by-id lookup, which must be a
+// tenant-scoped 404). Point it at the inventory DB as the non-superuser inventory_svc
+// role, exactly as the live cross-service harness does. Set before the app (and
+// its db client) are dynamically imported below.
+process.env.DATABASE_URL = serviceDsn("inventory-service");
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -42,7 +48,7 @@ describe("IDOR: inventory-service — movements (Req 7.4)", () => {
     await sqlClient.end();
   });
 
-  it("GET /v1/inventory/movements/:id (task-named route) does not exist — sanity check", async () => {
+  it("Tenant B token cannot read Tenant A movement by ID → 404", async () => {
     const { buildApp } = await import("../../services/inventory-service/src/app.js");
     const app = await buildApp();
 
@@ -54,12 +60,13 @@ describe("IDOR: inventory-service — movements (Req 7.4)", () => {
       headers: { authorization: `Bearer ${tokenB}` },
     });
 
-    // Fastify's own 404 (no route matches) — proves this exact path is not
-    // registered, confirming the gap documented at the top of this file.
+    // 404 from the tenant-scoped getMovement lookup (the row does not exist
+    // for Tenant B) — never the movement, never a 500.
     expect(res.statusCode).toBe(404);
+    expect(res.json()?.error?.code ?? res.json()?.code).toBe("NOT_FOUND");
 
     await app.close();
-  });
+  }, 30000); // cold buildApp() can exceed the 5s default under load
 
   it("Tenant B token reading the stock ledger never sees a Tenant A row", async () => {
     const { buildApp } = await import("../../services/inventory-service/src/app.js");

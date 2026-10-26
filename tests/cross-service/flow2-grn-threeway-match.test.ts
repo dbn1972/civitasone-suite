@@ -6,13 +6,14 @@
  * three-way match lives in FINANCE and is triggered by procurement's GRN event:
  *   Emitter  : procurement EVENTS.grnAccepted          = "procurement.grn.accepted"
  *   Consumer : finance     CONSUMED_EVENTS.grnAccepted = "procurement.grn.accepted"
- *   finance then validates PO↔GRN↔invoice and emits
- *     "procurement.three_way_match.passed" / ".failed".
+ *   The finance INTEGRATIONS consumer (modules/integrations/consumer.ts; the
+ *   payments consumer no longer subscribes to it) drafts the vendor bill and
+ *   emits procurement EVENTS.threeWayMatchPassed / threeWayMatchFailed.
  *
- * (A) EMIT/MATCH — drive the REAL finance payments consumer with a
+ * (A) EMIT/MATCH — drive the REAL finance integrations consumer with a
  *     procurement.grn.accepted event and assert the 3-way-match RESULT event is
  *     written to the outbox.
- * (B) CONSUME — the REAL finance payments registration subscribes to the exact
+ * (B) CONSUME — the REAL finance integrations registration subscribes to the exact
  *     "procurement.grn.accepted" topic procurement emits.
  *
  * VERDICT: WIRED (topic strings match exactly; match logic executes finance-side).
@@ -45,8 +46,8 @@ vi.mock("../../services/finance-service/src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, invalidateResource: async () => {}, makeKey: (...p: string[]) => p.join(":") },
 }));
 
-const { registerPaymentsConsumers } = await import(
-  "../../services/finance-service/src/modules/payments/consumer.js"
+const { registerIntegrationConsumers } = await import(
+  "../../services/finance-service/src/modules/integrations/consumer.js"
 );
 
 const CONSUME_TOPIC = "procurement.grn.accepted";
@@ -56,7 +57,7 @@ let harness: ChainHarness;
 beforeEach(async () => {
   harness = new ChainHarness();
   setCurrentHarness(harness);
-  registerPaymentsConsumers(harness.queue);
+  registerIntegrationConsumers(harness.queue);
   await harness.queue.start();
 });
 afterEach(async () => {
@@ -70,15 +71,15 @@ describe("FLOW 2 — Payment → 3-way-match (WIRED)", () => {
     const poId = randomUUID();
     const grnId = randomUUID();
 
-    // poAmountMinor == totalMinor ⇒ 0% variance ⇒ match passes (read-free path).
+    // grnAmountMinor == poAmountMinor ⇒ 0% variance ⇒ match passes.
     await harness.queue.publish(
       CONSUME_TOPIC,
       envelope(randomUUID(), CONSUME_TOPIC, {
-        poId,
+        poRef: poId,
         grnId,
         vendorId: "dddddddd-0000-4000-8000-000000000001",
-        totalMinor: "500000",
         poAmountMinor: "500000",
+        grnAmountMinor: "500000",
         tenantId: TENANT,
       }),
     );
@@ -86,20 +87,25 @@ describe("FLOW 2 — Payment → 3-way-match (WIRED)", () => {
 
     expect(emitted.length).toBeGreaterThanOrEqual(1);
     expect(emitted[0]!.type).toBe(RESULT_TOPIC);
-    const p = emitted[0]!.payload as { poId: string; grnId: string; variancePct: number };
-    expect(p.poId).toBe(poId);
+    const p = emitted[0]!.payload as {
+      grnId: string; poAmountMinor: string; grnAmountMinor: string; variancePct: number;
+    };
     expect(p.grnId).toBe(grnId);
+    expect(p.poAmountMinor).toBe("500000");
+    expect(p.grnAmountMinor).toBe("500000");
     expect(p.variancePct).toBe(0);
   });
 
   it("(B) CONSUME: finance registers a subscriber for procurement.grn.accepted", () => {
     const rq = new RecordingQueue();
-    registerPaymentsConsumers(rq.asQueue());
+    registerIntegrationConsumers(rq.asQueue());
     expect(rq.subscribedTopics.has(CONSUME_TOPIC)).toBe(true);
   });
 
   it("emitter and consumer agree on the exact topic string", () => {
     expect(PROC_EVENTS.grnAccepted).toBe(CONSUME_TOPIC);
     expect(FIN_CONSUMED.grnAccepted).toBe(PROC_EVENTS.grnAccepted);
+    // The outcome event finance emits is the one procurement declares.
+    expect(PROC_EVENTS.threeWayMatchPassed).toBe(RESULT_TOPIC);
   });
 });
