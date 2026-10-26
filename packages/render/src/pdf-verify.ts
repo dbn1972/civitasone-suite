@@ -203,6 +203,16 @@ function parseSignerInfoFromAsn1(pkcs7Asn1: forge.asn1.Asn1): ParsedSignerInfo |
   return { authenticatedAttrsAsn1, signatureBytes, messageDigest, signingTime };
 }
 
+/**
+ * Strip trailing "0" characters in linear time. (CodeQL js/polynomial-redos: `/0+$/` backtracks
+ * quadratically on a long run of zeros that is NOT at the end, and the signature hex is attacker-supplied.)
+ */
+export function trimTrailingZeros(hex: string): string {
+  let end = hex.length;
+  while (end > 0 && hex.charCodeAt(end - 1) === 48) end--;
+  return hex.slice(0, end);
+}
+
 // ─── Public Function ─────────────────────────────────────────────────────────
 
 /**
@@ -223,7 +233,7 @@ export function verifyPdfSignature(pdfBuffer: Buffer): VerifyResult {
   const { byteRange, signatureHex } = sigData;
 
   // Step 2: Decode hex → DER
-  const trimmedHex = signatureHex.replace(/0+$/, "");
+  const trimmedHex = trimTrailingZeros(signatureHex);
   if (trimmedHex.length === 0) {
     return { valid: false, issues: ["empty_signature"] };
   }
