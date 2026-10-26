@@ -404,7 +404,7 @@ describe("POST /v1/ai/tools/seed-defaults", () => {
   it("202 — re-seeding is idempotent: already-present tools are skipped", async () => {
     H.insertManyMock.mockResolvedValue(0);
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: "/v1/ai/tools/seed-defaults", headers: auth(), payload: { agentDomain: "helpdesk" },
     });
             await app.close();});

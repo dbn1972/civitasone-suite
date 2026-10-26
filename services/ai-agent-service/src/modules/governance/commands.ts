@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { publishCommand, type Accepted } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";

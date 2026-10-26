@@ -609,7 +609,7 @@ describe("POST /v1/ai/authoring/agents/:id/validate", () => {
   it("200 — reports issues for an incomplete stored draft", async () => {
     H.findByIdMock.mockResolvedValue(makeDefinition({ systemPrompt: "", tools: [] }));
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST", url: `/v1/ai/authoring/agents/${DEF_ID}/validate`, headers: auth(),
     });
     await app.close();
