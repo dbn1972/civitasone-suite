@@ -340,7 +340,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 ### GAP-FIELD-TASKS-05  ·  LOW  ·  confirmed  ·  theme WIRING
 
 - [x] **Status** (UAT B2 closed)
-- Closed by @@HASH_GAP-FIELD-TASKS-05@@ (UAT B2): tasks page shows resolved assignee names (not ids) and Start / Mark complete / Assign controls (supervisor-only Assign) through confirm dialogs to the existing role-gated, audit-emitting field-service endpoints with the row version pinned (tasks/FieldTaskActions.test.tsx, field-pages.test.tsx, _data.test.ts); hub copy is now true
+- Closed by 16dbcd232 (UAT B2): tasks page shows resolved assignee names (not ids) and Start / Mark complete / Assign controls (supervisor-only Assign) through confirm dialogs to the existing role-gated, audit-emitting field-service endpoints with the row version pinned (tasks/FieldTaskActions.test.tsx, field-pages.test.tsx, _data.test.ts); hub copy is now true
 - **W0 note:** partly fixed by #1923 — Assignee column added (raw assigneeId, not name); no Assign/Mark complete actions and hub copy still says completion tracking
 - **First-pass claim:** No create/assign/complete control exists on this page although the module description promises "Field task assignments and completion tracking" (field/page.tsx:6); tasks can only be listed here. Task assignee is not a column, so the list cannot be read by agent.
 - **Verified evidence:** No create/assign/complete controls in tasks/page.tsx (only ModuleListPage). The mapper (_data.ts:51-59) only surfaces agentId as a last-resort sublabel after description/status, so assignee is effectively never displayed. field-service mutation endpoints cannot be verified (service absent), so which actions exist is unknown.
@@ -395,7 +395,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-VISITS-03  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** [partial: Agent/Task now resolved names (shared directory + task titles, short-id fallback), rounding/role-gated GPS+export already live; remaining: audited full-precision reveal and API-level coordinate redaction need the DPO decision (is rounded-only display sufficient for UAT?) @@HASH_GAP-FIELD-VISITS-03@@]
+- [ ] **Status** [partial: Agent/Task now resolved names (shared directory + task titles, short-id fallback), rounding/role-gated GPS+export already live; remaining: audited full-precision reveal and API-level coordinate redaction need the DPO decision (is rounded-only display sufficient for UAT?) 93eea8220]
 - **W0 note:** partly fixed by ##1923 — Done: role gate (FIELD_VISIT_LOCATION_ROLES) on GPS column + CSV export, coords rounded to 3dp, agent/task cols (raw ids), purpose note. Remains: no audited full-precision reveal; agent/task shown as ids not resolved names
 - **First-pass claim:** Precise GPS positions of field staff are shown and CSV-exported (exportable, visits/page.tsx:59-60; formatCoord visits.ts:21-24) with no role gate, no masking/rounding and no purpose note — location of an identifiable employee is personal data (DPDP). The row has no agent or task column, so a coordinate cannot be traced to a person or job from the screen (agentId/taskId fetched, never shown).
 - **Verified evidence:** Confirmed: precise lat/lon (check-in only) rendered in the GPS column (visits/page.tsx:28, formatCoord visits.ts:21-24 = full-precision decimal strings) and the DataTable has exportable (59-60) with the CSV path exporting row values; the page has no role/permission check (field/layout.tsx only applies ModuleGate for tenant module enablement) and no purpose note. agentId/taskId are in FieldVisitRow (_data.ts:97-98) but not in Row/columns, so a coordinate cannot be traced to a person from the screen. Whether the gateway/backend enforces roles for /api/v1/field/visits cannot be verified (service absent). The DPDP framing is a policy judgement, not a code fact.
@@ -414,7 +414,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 ### GAP-FIELD-VISITS-04  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
 
 - [x] **Status** (UAT B2 closed)
-- Closed by @@HASH_GAP-FIELD-VISITS-04@@ (UAT B2): field-service GET /v1/field/visits takes from/to (IST days, 400 on bad/inverted range; tests/visits-date-range.test.ts); web visits page pages by offset with newer/older links and a from/to filter, KPIs show server total and showing X-Y of N (visits/page.test.tsx, _data.test.ts); check-in already date+time IST
+- Closed by 93eea8220 (UAT B2): field-service GET /v1/field/visits takes from/to (IST days, 400 on bad/inverted range; tests/visits-date-range.test.ts); web visits page pages by offset with newer/older links and a from/to filter, KPIs show server total and showing X-Y of N (visits/page.test.tsx, _data.test.ts); check-in already date+time IST
 - **W0 note:** partly fixed by ##1923 — Done: KPI labels 'latest N' when total>shown, date+time via formatIndianDateTime. Remains: still hard-coded limit=100 (FIELD_VISITS_LIMIT), no date-range filter/pagination
 - **First-pass claim:** limit=100 hard-coded with no pagination or date filter (_data.ts:112), so the "Visits" KPI silently caps at 100 and Open counts only within that window; check-in shows date only (formatIndianDate) — no time, though duration is shown.
 - **Verified evidence:** _data.ts:112 (and :90) hard-code ?limit=100; the page has no pagination or date filter, and StatCard 'Visits' = data.length (visits/page.tsx:44), 'Open' counted within the same 100 (22), so both cap silently. Check-in uses formatIndianDate (27), which is date-only (formatters.ts:2-7), while duration is shown.
@@ -450,7 +450,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-HOME-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** [partial: hub strings now next-intl en+hi (UAT B2, @@HASH_GAP-FIELD-HOME-04@@); remaining: server-side edition entitlement - gateway-service module-guard ROUTE_TO_MODULE has no field mapping so /api/v1/field is not entitlement-gated at the edge (outside this lane, needs gateway change + fail-open/closed decision)]
+- [ ] **Status** [partial: hub strings now next-intl en+hi (UAT B2, ba501507e); remaining: server-side edition entitlement - gateway-service module-guard ROUTE_TO_MODULE has no field mapping so /api/v1/field is not entitlement-gated at the edge (outside this lane, needs gateway change + fail-open/closed decision)]
 - **First-pass claim:** Hard-coded English strings, no next-intl; field-service is not in the snapshot so tile availability per edition (Govt/PSU/Small Office) is undeterminable.
 - **Service:** `field-service`  ·  **Endpoint(s):** `['GET /api/v1/field/tasks', 'GET /api/v1/field/routes', 'GET /api/v1/field/visits']`
 - **Question:** Is the field module entitled per edition (Govt/PSU/Small Office) so tiles for unavailable features return 403/404 rather than empty?
