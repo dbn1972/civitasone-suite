@@ -80,12 +80,18 @@ export function registerConsentExchangeConsumers(q: Queue): void {
 }
 
 async function decide(msg: Msg, status: "active" | "denied", event: "grant" | "deny", topic: string, auditAction: string): Promise<void> {
-  const p = msg.payload as { id: string; tenantId: string; reason?: string };
+  const p = msg.payload as { id: string; tenantId: string; reason?: string; onBehalf?: boolean };
   await runWithTenant(msg.tenantId, () => db.transaction(async (tx) => {
     if (!(await markProcessed(tx, msg.messageId))) return;
     const a = await repo.findArtefactTx(tx, p.tenantId, p.id);
     if (!a) { log.warn({ id: p.id }, `${event}: artefact missing`); return; }
     if (a.status !== "requested") { log.warn({ id: p.id, status: a.status }, `${event}: not in requested state`); return; }
+    // Segregation of duties (owner decision #19): a decision taken on behalf of
+    // the principal needs a reason and must not be made by the officer who raised
+    // the request. Re-checked here because the consumer is the only writer.
+    const onBehalf = p.onBehalf === true || msg.actorId !== a.principalId;
+    if (onBehalf && (!p.reason || p.reason.trim().length < 3)) { log.warn({ id: p.id }, `${event}: on-behalf decision without reason rejected`); return; }
+    if (onBehalf && a.createdBy === msg.actorId) { log.warn({ id: p.id }, `${event}: self-approval rejected`); return; }
     await repo.decideArtefact(tx, p.id, status, msg.actorId, p.reason ?? null);
     await repo.appendLedger(tx, {
       tenantId: p.tenantId, artefactId: p.id, principalId: a.principalId, eventType: event,
@@ -93,7 +99,7 @@ async function decide(msg: Msg, status: "active" | "denied", event: "grant" | "d
       categories: a.dataCategories, reason: p.reason ?? null, actorId: msg.actorId, correlationId: msg.correlationId,
     });
     await emit(tx, msg, topic, { artefactId: p.id, principalId: a.principalId, requestingDept: a.requestingDept, providingDept: a.providingDept });
-    await audit(tx, msg, auditAction, p.id);
+    await audit(tx, msg, auditAction, p.id, onBehalf ? { onBehalf: true, reason: p.reason ?? null } : undefined);
   }));
 }
 
@@ -101,6 +107,6 @@ async function emit(tx: Tx, msg: Msg, topic: string, payload: Record<string, unk
   await enqueue(tx, { topic, eventType: topic, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload });
 }
 
-async function audit(tx: Tx, msg: Msg, action: string, resourceId: string): Promise<void> {
-  await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action, resourceType: "consent_artefact", resourceId, outcome: "success" } });
+async function audit(tx: Tx, msg: Msg, action: string, resourceId: string, extra?: Record<string, unknown>): Promise<void> {
+  await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action, resourceType: "consent_artefact", resourceId, outcome: "success", ...(extra ?? {}) } });
 }

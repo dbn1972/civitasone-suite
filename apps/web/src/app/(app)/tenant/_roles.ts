@@ -7,3 +7,10 @@
  * renders / which route the user may reach.
  */
 export const TENANT_ADMIN_ROLES = ["tenant_admin", "platform_admin", "super_admin"];
+
+/**
+ * OWNER DECISION #19 (TENANT-CONSENT-EXCHANGE-01): only the consent officer (DPO)
+ * may approve or reject a consent request on behalf of the data principal.
+ * tenant_admin is view-only. tenant-service re-enforces this server-side.
+ */
+export const CONSENT_DECISION_ROLES = ["consent_officer"];

@@ -16669,6 +16669,24 @@
   "employeeFallback": {
     "unknownEmployee": "Unknown employee"
   },
+  "tenantW3": {
+    "consent": {
+      "pendingTitle": "Decisions awaiting the consent officer",
+      "pendingHint": "Approve or reject on behalf of the data principal. A reason is required and is recorded in the audit log.",
+      "viewOnly": "You can view consent requests. Approving or rejecting is reserved to the consent officer.",
+      "none": "No consent requests are awaiting a decision.",
+      "approve": "Approve",
+      "reject": "Reject",
+      "approveTitle": "Approve this consent request?",
+      "rejectTitle": "Reject this consent request?",
+      "approveBody": "You are approving on behalf of the data principal. This is recorded against your name.",
+      "rejectBody": "You are rejecting on behalf of the data principal. This is recorded against your name.",
+      "reasonLabel": "Reason (recorded in the audit log)",
+      "approved": "Decision recorded: approved.",
+      "rejected": "Decision recorded: rejected.",
+      "actionsFor": "Decide on {label}"
+    }
+  },
   "tenantAdminW2": {
     "compliance": {
       "provenanceMethod": "Scores are derived from your recorded compliance controls (pass or fail over testable controls).",
