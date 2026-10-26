@@ -196,10 +196,6 @@ export function transitionKey(from: MeetingState, to: MeetingState): string {
   return `${from}->${to}`;
 }
 
-function isEdgeMatch(a: StateEdge, from: MeetingState, to: MeetingState): boolean {
-  return a.from === from && a.to === to;
-}
-
 /**
  * Compute the effective set of allowed target states from `from`, applying the tenant overlay
  * (Req 1.8) on top of the base adjacency map. Additional edges that would leave a terminal

@@ -32,7 +32,7 @@
  * _Requirements: 11.1, 11.4, 11.5, 11.6, 11.8, 12.1, 12.3, 12.7_
  */
 import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { committees, committeeMembers } from "../committee/schema.js";

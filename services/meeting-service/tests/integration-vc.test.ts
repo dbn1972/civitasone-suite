@@ -15,7 +15,7 @@
  */
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
+import { CircuitBreaker } from "@civitasone/circuit-breaker";
 import {
   assembleFallbackChain,
   wrapWithBreaker,

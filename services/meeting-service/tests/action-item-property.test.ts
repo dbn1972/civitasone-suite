@@ -24,7 +24,6 @@ import {
   resolveEscalationState,
   assertEscalationMonotonic,
   computeEscalationLevel,
-  DEFAULT_ESCALATION_CHAIN,
   isOverdue,
   isSettledStatus,
   hasEvidence,

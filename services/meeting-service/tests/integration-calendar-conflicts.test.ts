@@ -289,7 +289,7 @@ describe("calendar booking route: room conflict is checked, participant conflict
 
   it("the underlying conflict machinery CAN detect this — the route now wires participantIds through to it", async () => {
     const start = new Date(Date.now() + 30 * 86_400_000);
-    const end = new Date(start.getTime() + 60 * 60_000);
+    new Date(start.getTime() + 60 * 60_000);
     const overlapStart = new Date(start.getTime() + 15 * 60_000);
     const overlapEnd = new Date(overlapStart.getTime() + 60 * 60_000);
 
