@@ -3131,7 +3131,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SSO-06  ·  LOW  ·  interim  ·  theme BACKEND
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/admin-service/src/modules/identity-providers/routes.ts:36-49 (hasClientSecret only, never the secret); test identity-providers.test.ts (sso list with clientSecret returns no secret/ciphertext, sealed at rest))
 - **W2 INTERIM (needs owner decision):** today the endpoint is a 501 with no body data, so no secret can leak; the real check (response omits clientSecret/signing keys, hasSecret flag) must be written WITH the provider store — kept open for that.
 - **First-pass claim:** Identity backend not in this snapshot; provider secrets handling and status values are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/sso/providers (loaders.ts:4532)']`
