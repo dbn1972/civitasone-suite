@@ -39,7 +39,6 @@ export const EVENTS = {
   userDeactivated: "identity.user.deactivated",
   sessionCreated:  "identity.session.created",
   sessionRevoked:  "identity.session.revoked",
-  sessionIpRevealed: "identity.session.ip_revealed",
   sessionRevokedAll: "identity.session.revoked_all",
   passwordResetRequested: "identity.user.password_reset_requested",
   mfaEnabled:      "identity.mfa.enabled",

@@ -47,7 +47,10 @@ export function registerSessionConsumers(q: Queue): void {
   q.subscribe<{ id: string; reason: string }>(COMMANDS.revealSessionIp, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await emitAudit(tx, msg, EVENTS.sessionIpRevealed, { sessionId: msg.payload.id, reason: msg.payload.reason }, "reveal_ip", msg.payload.id, { reason: msg.payload.reason, fields: ["ip"] });
+      // The reveal is a DPDP access record, not a domain fact other services act on:
+      // it goes through the standard audit path (audit.event.record) only, so no
+      // domain event is produced into the void.
+      await recordAudit(tx, msg, "reveal_ip", msg.payload.id, { reason: msg.payload.reason, fields: ["ip"] });
     });
   });
 
@@ -78,6 +81,11 @@ export function registerSessionConsumers(q: Queue): void {
 async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string, auditExtra: Record<string, unknown> = {}): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, { topic: eventType, eventType, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload });
+  await recordAudit(tx, msg, action, resourceId, auditExtra);
+}
+
+async function recordAudit(tx: unknown, msg: CommandEnvelope, action: string, resourceId: string, auditExtra: Record<string, unknown> = {}): Promise<void> {
+  const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,

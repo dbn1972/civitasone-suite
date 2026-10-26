@@ -92,6 +92,8 @@ describe("session IP reveal + user-agent shortening (owner decision #21)", () =>
     const after = await revealAudits(TENANT);
     expect(after.length).toBe(before + 1);
     expect(after.at(-1)!.payload).toMatchObject({ service: "identity", resourceType: "session", resourceId: sid, reason: REASON });
+    // Audit-only: the reveal is recorded via audit.event.record, never as a consumer-less domain event.
+    expect((await audits(TENANT)).some((m) => m.topic === "identity.session.ip_revealed")).toBe(false);
   });
 
   it("tenant_admin / platform_admin / super_admin cannot reveal (403) and nothing is audited", async () => {
