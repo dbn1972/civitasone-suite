@@ -17,7 +17,6 @@ import { describe, it, expect, afterAll } from "vitest";
 import type { CommandEnvelope, Handler, Queue, QueueDriver } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 import { db, sqlClient } from "../src/shared/db.js";
 import { tenants } from "../src/modules/tenant/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";

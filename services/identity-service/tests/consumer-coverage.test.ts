@@ -8,12 +8,11 @@
  *   - API Keys domain (scope model, lifecycle guards, secret gen)
  *   - Users consumer (createUser, updateUser, deactivateUser paths)
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
+import { describe, it, expect, afterAll } from "vitest";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { eq } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { db } from "../src/shared/db.js";
 import { users } from "../src/modules/users/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 

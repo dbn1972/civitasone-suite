@@ -3,7 +3,7 @@
  * Source: modules/entry/domain.ts
  */
 import { describe, it, expect } from "vitest";
-import { weightedAvgRate, assertStockNotNegative, voucherTypeForEntry, DomainError, type ValuationState } from "../src/modules/entry/domain.js";
+import { weightedAvgRate, assertStockNotNegative, voucherTypeForEntry, type ValuationState } from "../src/modules/entry/domain.js";
 
 describe("weightedAvgRate — bigint WAVG", () => {
   it("first receipt sets rate", () => expect(weightedAvgRate({ qty: 0, rateMinor: 0n }, 100, 5000n)).toBe(5000n));

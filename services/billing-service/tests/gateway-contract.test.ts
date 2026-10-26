@@ -54,23 +54,7 @@ const RAZORPAY_PAYMENTS_FIXTURE = {
 
 // ── Recorded PayU fixtures ────────────────────────────────────────
 
-const PAYU_CREATE_ORDER_FIXTURE = {
-  orderId: "payu-order-abc123",
-  status: "created",
-  amount: 100000,
-  currency: "INR",
-  createdAt: "2026-07-10T10:00:00Z",
-};
-
 // ── Recorded CCAvenue fixtures ────────────────────────────────────
-
-const CCAVENUE_CREATE_ORDER_FIXTURE = {
-  orderId: "cc-order-xyz789",
-  status: "initiated",
-  amount: 100000,
-  currency: "INR",
-  createdAt: "2026-07-10T10:00:00Z",
-};
 
 describe("payment gateway adapter — contract tests (recorded fixtures)", () => {
   beforeEach(() => {
@@ -198,7 +182,7 @@ describe("payment gateway adapter — contract tests (recorded fixtures)", () =>
       const fetchMock = vi.fn();
       vi.stubGlobal("fetch", fetchMock);
 
-      const { createOrder, GatewayError } = await import("../src/modules/gateways/index.js");
+      const { createOrder } = await import("../src/modules/gateways/index.js");
 
       await expect(
         createOrder(BigInt(50000), "INR", { tenantId: "tenant-1" }),
@@ -268,7 +252,7 @@ describe("payment gateway adapter — contract tests (recorded fixtures)", () =>
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      const { createOrder, GatewayError } = await import("../src/modules/gateways/index.js");
+      const { createOrder } = await import("../src/modules/gateways/index.js");
 
       await expect(
         createOrder(BigInt(50000), "INR", { tenantId: "tenant-1" }),
@@ -291,7 +275,7 @@ describe("payment gateway adapter — contract tests (recorded fixtures)", () =>
       });
       vi.stubGlobal("fetch", fetchMock);
 
-      const { createOrder, GatewayError } = await import("../src/modules/gateways/index.js");
+      const { createOrder } = await import("../src/modules/gateways/index.js");
 
       await expect(
         createOrder(BigInt(50000), "INR", { tenantId: "tenant-1" }),

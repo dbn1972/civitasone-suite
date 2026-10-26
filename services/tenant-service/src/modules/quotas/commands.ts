@@ -5,7 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
-import { queue, cache } from "../../shared/infra.js";
+import { queue } from "../../shared/infra.js";
 import { readScoped } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import type { QuotaSetBody, QuotaIncrementBody, QuotaCheckBody } from "./validators.js";
@@ -21,8 +21,6 @@ export interface QuotaCheckResult {
   usagePercent: number;
   overLimit: boolean;
 }
-
-const RESOURCE = "quota";
 
 export async function quotaSet(ctx: RequestContext, body: QuotaSetBody): Promise<Accepted> {
   const id = randomUUID();

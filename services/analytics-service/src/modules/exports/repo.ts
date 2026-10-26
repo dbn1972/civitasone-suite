@@ -3,7 +3,7 @@
  * Uses the enhanced export_jobs schema from the exports module.
  */
 import { and, eq } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { exportJobs, type ExportJobRow } from "./schema.js";
 
 export interface ExportJobReadView {

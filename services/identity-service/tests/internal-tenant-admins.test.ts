@@ -1,6 +1,6 @@
 /** GAP-ADMIN-INVOICES-06: GET /identity/internal/tenant-admins (recipients for invoice reminders). */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";

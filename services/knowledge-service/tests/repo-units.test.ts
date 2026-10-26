@@ -51,7 +51,7 @@ import { toView as catToView, buildTree, listByTenant as catListByTenant, getByI
 import { toView as shareToView, listByTenant as shareListByTenant, listByDocument, getById as shareGetById } from "../src/modules/sharing/repo.js";
 import { toView as retToView, listByTenant as retListByTenant, getById as retGetById, listExpiring } from "../src/modules/retention/repo.js";
 import { toView as verToView, listByDocument as verListByDocument, getById as verGetById, getLatestVersionNo } from "../src/modules/versions/repo.js";
-import { toView as searchToView, listAllForTenant, fallbackDbSearch } from "../src/modules/search/repo.js";
+import { toView as searchToView, listAllForTenant } from "../src/modules/search/repo.js";
 
 // ─── Documents repo ──────────────────────────────────────────────────────────
 

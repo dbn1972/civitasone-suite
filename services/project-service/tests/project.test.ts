@@ -14,7 +14,6 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { projectSchemes, projectSchemeComponents, projectFundReleases } from "../src/modules/scheme/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerSchemeConsumers } from "../src/modules/scheme/consumer.js";
-import { registerUcConsumers }     from "../src/modules/utilisation/consumer.js";
 import { computeWeightedPhysicalProgress } from "../src/modules/scheme/domain.js";
 import { assertUcExpenditureWithinReleased } from "../src/modules/utilisation/domain.js";
 import { assertFundReleaseWithinAllocation } from "../src/modules/scheme/domain.js";

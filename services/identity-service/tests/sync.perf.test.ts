@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 import { assertP95, assertIndexUsed } from "@civitasone/db/perf";
 import { createSqlClient } from "@civitasone/db";
 

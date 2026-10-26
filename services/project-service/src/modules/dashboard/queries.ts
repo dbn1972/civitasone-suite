@@ -1,4 +1,4 @@
-import { eq, and, ne, sql } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { projectProjects } from "../project/schema.js";
 

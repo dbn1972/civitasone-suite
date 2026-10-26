@@ -54,7 +54,6 @@ import {
 } from "../src/modules/training/data-extractor.js";
 
 const TENANT_ID = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-const OTHER_TENANT = "ffffffff-1111-2222-3333-444444444444";
 
 // ─── computeWindowStart Tests ────────────────────────────────────────────────
 

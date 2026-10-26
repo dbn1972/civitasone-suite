@@ -11,7 +11,6 @@ import {
   validateBbpsPayment,
   isBbpsEnabled,
   isBbpsManualPayBillEnabled,
-  DomainError,
   type DcbOutstanding,
 } from "../src/modules/bbps/domain.js";
 

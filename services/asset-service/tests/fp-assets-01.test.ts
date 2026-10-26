@@ -31,7 +31,6 @@ import { registerInsuranceConsumers } from "../src/modules/insurance/consumer.js
 import { assetPolicies, assetClaims } from "../src/modules/insurance/schema.js";
 import { COMMANDS } from "../src/topics.js";
 import { resetFinanceCache } from "../src/shared/finance-client.js";
-import { queue as infraQueue } from "../src/shared/infra.js";
 
 // Storage is mocked: claim attachments are verified to exist (HEAD) before a claim accepts them.
 const { storageExists } = vi.hoisted(() => ({ storageExists: vi.fn(async (_key: string) => true) }));

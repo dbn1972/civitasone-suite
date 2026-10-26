@@ -15,10 +15,8 @@ import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS, COMMANDS } from "../../topics.js";
-import { mlPredictions } from "../predictions/schema.js";
-import { mlModels } from "../models/schema.js";
 import type { ModelDomain } from "../models/schema.js";
-import { sql, eq, and, gte, lte } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 const log = pino({ name: "ml-drift-detection" });
 

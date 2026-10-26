@@ -16,7 +16,6 @@
 import {
   pgSchema,
   uuid,
-  text,
   integer,
   varchar,
   timestamp,

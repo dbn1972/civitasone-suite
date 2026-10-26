@@ -8,10 +8,9 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { mlModels } from "../models/schema.js";
-import { HttpError } from "../../shared/context.js";
 
 const ALL_DOMAINS = ["leads", "tickets", "inventory", "subscriptions", "tasks", "transactions"] as const;
 

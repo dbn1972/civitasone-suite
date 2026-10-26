@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, numeric, timestamp, varchar } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, numeric, timestamp } from "drizzle-orm/pg-core";
 
 export const geoSchema = pgSchema("geo");
 

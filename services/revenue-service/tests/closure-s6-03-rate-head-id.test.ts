@@ -14,7 +14,6 @@ function makeToken(roles: string[]) {
 }
 
 const AUTH = { authorization: `Bearer ${makeToken(["revenue_admin"])}` };
-const BAD_ROLE = { authorization: `Bearer ${makeToken(["employee"])}` };
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 

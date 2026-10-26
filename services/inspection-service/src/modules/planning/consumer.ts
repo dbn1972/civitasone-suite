@@ -25,7 +25,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { cache, invalidateSafely } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
-import { insertPlan, updatePlan, findPlanById, findPlanByIdTx } from "./repo.js";
+import { insertPlan, updatePlan, findPlanByIdTx } from "./repo.js";
 import { submitPlanForWorkflowApproval } from "./commands.js";
 import type {
   PlanCreatePayload,

@@ -16,7 +16,7 @@ import {
   DomainError,
   type LicenceState,
 } from "./domain.js";
-import { insertLicence, updateLicence, findLicenceById, findLicenceByIdTx } from "./repo.js";
+import { insertLicence, updateLicence, findLicenceByIdTx } from "./repo.js";
 import type {
   LicenceCreatePayload,
   LicenceUpdatePayload,

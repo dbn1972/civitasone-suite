@@ -12,7 +12,6 @@ const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "ee880001-8888-4000-8000-000000st001";
 const ACTOR = "ee88aaaa-8888-4000-8000-000000st00a";
 function token(roles: string[]) { return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s" }, SECRET, 3600); }
-const storeAdmin = () => ({ authorization: `Bearer ${token(["store_admin"])}` });
 const unrelated = () => ({ authorization: `Bearer ${token(["employee"])}` });
 
 afterAll(async () => { await sqlClient.end(); });

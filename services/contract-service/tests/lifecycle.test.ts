@@ -19,7 +19,9 @@ import { contractContracts, contractAmendments } from "../src/modules/contracts/
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
 import {
-  assertTransitionAllowed, assertDistinctMakerChecker, assertCanAmend, DomainError,
+  assertTransitionAllowed,
+  assertDistinctMakerChecker,
+  assertCanAmend,
 } from "../src/modules/contracts/domain.js";
 import { createContractBody } from "../src/modules/contracts/validators.js";
 import { listContracts } from "../src/modules/contracts/queries.js";

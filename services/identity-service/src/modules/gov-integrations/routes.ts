@@ -13,7 +13,7 @@ export async function govIntegrationRoutes(app: FastifyInstance): Promise<void> 
   // Aadhaar eKYC (UIDAI OTP-based verification)
   app.post("/identity/gov/aadhaar/otp-init", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
-    const body = z.object({ aadhaarNumber: z.string().regex(/^\d{12}$/) }).parse(req.body);
+    z.object({ aadhaarNumber: z.string().regex(/^\d{12}$/) }).parse(req.body);
     const txnId = randomUUID();
     // In production: call UIDAI Auth API. Fail-closed when not configured.
     if (!process.env.UIDAI_API_KEY) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "Aadhaar eKYC not configured (UIDAI_API_KEY missing)", txnId });
@@ -74,7 +74,7 @@ export async function govIntegrationRoutes(app: FastifyInstance): Promise<void> 
   });
   app.post("/identity/gov/bbps/pay-bill", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
-    const body = z.object({ billerId: z.string(), amountMinor: z.number().int().positive(), paymentMode: z.enum(["upi", "netbanking", "card", "wallet"]) }).parse(req.body);
+    z.object({ billerId: z.string(), amountMinor: z.number().int().positive(), paymentMode: z.enum(["upi", "netbanking", "card", "wallet"]) }).parse(req.body);
     if (!process.env.BBPS_API_KEY) return reply.code(503).send({ code: "NOT_CONFIGURED", message: "BBPS not configured" });
     return reply.code(202).send({ data: { txnId: randomUUID(), status: "processing" } });
   });
@@ -99,4 +99,3 @@ export async function govIntegrationRoutes(app: FastifyInstance): Promise<void> 
 }
 
 // Bharat BillPay integration
-import { randomUUID as uuid2 } from "node:crypto";

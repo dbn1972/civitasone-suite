@@ -3,7 +3,7 @@
  * Validates CQRS consumers for categories, retention, search, versions, and sharing modules.
  * Uses MemoryQueue + MemoryCache (no Postgres/Redis required).
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import { Cache, MemoryCache } from "@civitasone/cache";
 import { COMMANDS, EVENTS } from "../src/topics.js";

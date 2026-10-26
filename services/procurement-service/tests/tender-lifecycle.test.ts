@@ -30,7 +30,7 @@ import {
 import { procurementVendors } from "../src/modules/vendor/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
-import { outboxMessages, processed, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
+import { outboxMessages, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
 import { registerTenderConsumers } from "../src/modules/tender/consumer.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";

@@ -37,7 +37,6 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
    * Requires: ml_admin or tenant_admin
    */
   app.get("/v1/ml/models", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, MODEL_ADMIN_ROLES);
 
@@ -93,7 +92,6 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
    * Requires: ml_admin or tenant_admin
    */
   app.get("/v1/ml/models/:id", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, MODEL_ADMIN_ROLES);
 
@@ -140,7 +138,6 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
    * Emits: ml.model.promoted audit event
    */
   app.post("/v1/ml/models/:id/promote", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, MODEL_ADMIN_ROLES);
 
@@ -181,7 +178,6 @@ export async function modelRoutes(app: FastifyInstance): Promise<void> {
    * Requires: ml_admin or analytics_admin
    */
   app.get("/v1/ml/models/:id/card", async (req, reply) => {
-    const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     const ctx = resolveContext(req);
     requireRole(ctx, MODEL_CARD_ROLES);
 

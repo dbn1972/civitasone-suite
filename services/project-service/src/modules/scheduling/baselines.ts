@@ -11,10 +11,8 @@ import { pgSchema, uuid, varchar, jsonb, integer, timestamp } from "drizzle-orm/
 import { eq, and, count, desc } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
-import { tenantTransaction } from "@civitasone/db";
 import * as commands from "./commands.js";
 
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -29,7 +29,6 @@ import * as repo from "../src/modules/three-way-match/repo.js";
 import { rupeesStringToMinor, invoiceTotalMinor } from "../src/modules/three-way-match/money.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { procurementGrns, procurementGrnItems } from "../src/modules/grn/schema.js";
-import { COMMANDS } from "../src/topics.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "d0010101-aaaa-4000-8000-000000000001";

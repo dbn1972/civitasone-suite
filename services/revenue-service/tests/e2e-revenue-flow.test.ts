@@ -18,19 +18,17 @@ import {
 } from "../src/modules/rate-engine/domain.js";
 import {
   computeDcbSummary,
-  computeNewBalance,
   ageIntoBuckets,
   type DcbEntry,
 } from "../src/modules/assessment/domain.js";
 import { generateBillFromDemand, type DemandForBill } from "../src/modules/billing/domain.js";
-import { validateReceipt, validateRefund, generateReceiptNo } from "../src/modules/collection/domain.js";
+import { validateReceipt, validateRefund } from "../src/modules/collection/domain.js";
 import { generateInstalmentSchedule } from "../src/modules/arrears/domain.js";
 import { buildFetchBillResponse, validateBbpsPayment } from "../src/modules/bbps/domain.js";
 import { autoMatch, type StatementLine, type BookEntry } from "../../finance-service/src/modules/bank-recon/domain.js";
 
 const RATE_HEAD_ID = "rh-property-tax";
 const ASSESSEE_ID = "assessee-prop-001";
-const TENANT_ID = "tenant-mmc-001";
 
 describe("E2E Revenue Flow — Pilot A Full Loop", () => {
   // Step 1: Configure rates
@@ -155,7 +153,6 @@ describe("E2E Revenue Flow — Pilot A Full Loop", () => {
     const refundAmount = 50000n;
     validateRefund(refundAmount, paymentAmount); // refund against the original receipt
     dcbEntries.push({ entryType: "refund", amountMinor: refundAmount });
-    dcb = computeDcbSummary(dcbEntries);
     // After refund: demand stays at 400000, collection = 240000 + 50000 = 290000? No.
     // Refund reduces totalCollection: refund is a reduction of collection
     // Actually refund should ADD back to balance (increase outstanding)

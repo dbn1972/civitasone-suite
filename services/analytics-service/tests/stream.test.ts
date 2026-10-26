@@ -33,7 +33,7 @@ afterAll(async () => {
 describe("GET /v1/analytics/stream", () => {
   it("returns correct SSE headers (Content-Type: text/event-stream)", async () => {
     const app = await buildApp();
-    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+    await app.listen({ port: 0, host: "127.0.0.1" });
     const port = (app.server.address() as { port: number }).port;
 
     const responseHeaders = await new Promise<http.IncomingHttpHeaders>((resolve, reject) => {
@@ -59,7 +59,7 @@ describe("GET /v1/analytics/stream", () => {
 
   it("emits connected event with tenant data on connection", async () => {
     const app = await buildApp();
-    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+    await app.listen({ port: 0, host: "127.0.0.1" });
     const port = (app.server.address() as { port: number }).port;
 
     const body = await new Promise<string>((resolve, reject) => {
@@ -91,7 +91,7 @@ describe("GET /v1/analytics/stream", () => {
 
   it("returns 401 without a token", async () => {
     const app = await buildApp();
-    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+    await app.listen({ port: 0, host: "127.0.0.1" });
     const port = (app.server.address() as { port: number }).port;
 
     const statusCode = await new Promise<number>((resolve, reject) => {
@@ -113,7 +113,7 @@ describe("GET /v1/analytics/stream", () => {
 
   it("returns 403 for unauthorized role", async () => {
     const app = await buildApp();
-    const address = await app.listen({ port: 0, host: "127.0.0.1" });
+    await app.listen({ port: 0, host: "127.0.0.1" });
     const port = (app.server.address() as { port: number }).port;
 
     const statusCode = await new Promise<number>((resolve, reject) => {

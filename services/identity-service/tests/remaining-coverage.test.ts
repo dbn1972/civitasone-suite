@@ -14,7 +14,7 @@ import { signToken } from "@civitasone/auth";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { eq, and } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { db } from "../src/shared/db.js";
 import { mfaConfigs } from "../src/modules/mfa/schema.js";
 import { users } from "../src/modules/users/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";

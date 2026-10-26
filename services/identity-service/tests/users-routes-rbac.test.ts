@@ -20,7 +20,6 @@ function token(roles: string[], tid = TENANT): string {
   return signToken({ sub: ACTOR, tid, roles, sid: "sess-id" }, SECRET, 3600);
 }
 const adminBearer = () => ({ authorization: `Bearer ${token(["super_admin"])}` });
-const tenantAdminBearer = () => ({ authorization: `Bearer ${token(["tenant_admin"])}` });
 const employeeBearer = () => ({ authorization: `Bearer ${token(["employee"])}` });
 
 afterAll(async () => { await sqlClient.end(); });
