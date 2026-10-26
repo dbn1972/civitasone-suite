@@ -65,8 +65,6 @@ const EVENT_TYPES: readonly EventType[] = [
 
 const ACTION_TYPES: readonly ActionType[] = ["askAgent", "runCommand"];
 
-const REQUIRED_TOP_LEVEL_KEYS = ["enabled", "name", "description", "version", "when", "then"] as const;
-
 /**
  * Per-hook validation result, matching design.md's `HookValidationResult`
  * shape. Not produced directly by any function in this file (each of

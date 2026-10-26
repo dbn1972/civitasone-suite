@@ -1,14 +1,12 @@
 /** Auto-generated F3 apply (change). */
 import { randomUUID } from "node:crypto";
-import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { ChangeRequestRow } from "./schema.js";
 import {
-  ChangeError,
   assertTransition,
   assertApproverDistinct,
   assertRollbackPlan,
@@ -20,7 +18,6 @@ import {
 } from "./domain.js";
 import {
   idParam,
-  listQuery,
   createChangeBody,
   rollbackPlanBody,
   approveBody,
@@ -34,9 +31,6 @@ import {
 const AUDIT_TOPIC = "audit.event.record";
 // Cross-service release-notes / user-communication broadcast (→ notification-service).
 const BROADCAST_TOPIC = "notification.broadcast.send";
-
-// Change/release management is a platform + tenant admin governed process.
-const CHANGE_ROLES = [...TENANT_ADMIN_ROLES];
 
 // The scoped transaction handed to db.transaction(async (tx) => …); it satisfies
 // both repo.Writer and the outbox enqueue() DrizzleTx contract.
@@ -76,32 +70,6 @@ async function recordTransition(
       outcome: "success",
     },
   });
-}
-
-function serialize(row: ChangeRequestRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    title: row.title,
-    type: row.type,
-    risk: row.risk,
-    affectedServices: row.affectedServices,
-    description: row.description,
-    rollbackPlan: row.rollbackPlan,
-    status: row.status,
-    requestedBy: row.requestedBy,
-    approvedBy: row.approvedBy,
-    approvedAt: row.approvedAt?.toISOString() ?? null,
-    rejectedReason: row.rejectedReason,
-    windowStart: row.windowStart?.toISOString() ?? null,
-    windowEnd: row.windowEnd?.toISOString() ?? null,
-    releaseNotes: row.releaseNotes,
-    pirOutcome: row.pirOutcome,
-    pirNotes: row.pirNotes,
-    pirAt: row.pirAt?.toISOString() ?? null,
-    createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
-    updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt),
-    version: row.version,
-  };
 }
 
 export async function apply_change_0(ctx: any, req: { body: unknown; params: unknown; query: unknown }): Promise<void> {

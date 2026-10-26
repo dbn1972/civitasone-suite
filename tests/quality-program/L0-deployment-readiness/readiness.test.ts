@@ -30,7 +30,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { execSync } from "node:child_process";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 const REPO_ROOT = resolve(__dirname, "../../..");

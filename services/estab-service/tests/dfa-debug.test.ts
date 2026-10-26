@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";

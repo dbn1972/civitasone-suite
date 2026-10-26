@@ -8,7 +8,7 @@
  * alongside outbox enqueues.
  */
 import { and, desc, eq, inArray, isNull, lte, notInArray, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import {
   catalogueOfferings,

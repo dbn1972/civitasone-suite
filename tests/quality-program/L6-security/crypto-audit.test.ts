@@ -22,7 +22,6 @@ type CryptoModule = {
 };
 
 let crypto: CryptoModule;
-const ORIGINAL_KEY = process.env.PII_ENC_KEY;
 
 beforeAll(async () => {
   process.env.PII_ENC_KEY = "test_pii_encryption_key_32_chars_min";

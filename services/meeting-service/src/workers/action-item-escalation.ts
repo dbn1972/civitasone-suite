@@ -50,7 +50,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { pino, type Logger } from "pino";
-import { and, eq, inArray, isNotNull, lt, notInArray } from "drizzle-orm";
+import { and, inArray, isNotNull, lt, notInArray } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db as defaultDb } from "../shared/db.js";

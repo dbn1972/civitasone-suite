@@ -83,7 +83,7 @@
  *     tests -- it needs its own pass checking the effect on every other
  *     service's routes, not just this one module.
  */
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.argv.slice(2).find((a) => !a.startsWith("--")) || process.cwd();
@@ -218,11 +218,9 @@ function scanService(svcPath, svcName) {
     const modTestFilesColocated = modFiles.filter((f) => f.endsWith(".test.ts") || f.endsWith(".test.tsx"));
 
     let hasTest = false;
-    let reason = null;
 
     if (modTestFilesColocated.length > 0) {
       hasTest = true;
-      reason = `colocated:${modTestFilesColocated.map((f) => relative(svcPath, f)).join(",")}`;
     }
 
     if (!hasTest) {
@@ -232,7 +230,7 @@ function scanService(svcPath, svcName) {
       const hit = testFileContents.find((t) =>
         t.content.split("\n").some((l) => l.includes(modPathFrag) && /\b(import|require)\b/.test(l)),
       );
-      if (hit) { hasTest = true; reason = `imports-module:${relative(svcPath, hit.path)}`; }
+      if (hit) { hasTest = true; }
     }
 
     let sampleRoutes = [];
@@ -246,7 +244,7 @@ function scanService(svcPath, svcName) {
       }
       sampleRoutes = [...literals].slice(0, 6);
       for (const lit of literals) {
-        if (combinedTestText.includes(lit)) { hasTest = true; reason = `path-literal:${lit}`; break; }
+        if (combinedTestText.includes(lit)) { hasTest = true; break; }
       }
     }
 

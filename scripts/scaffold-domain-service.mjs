@@ -24,8 +24,6 @@ export function scaffold(cfg) {
     table,
     resource,
     resourcePlural,
-    routeBase,
-    roles,
     dbRole,
     dbName,
     dbPassword,
@@ -34,13 +32,11 @@ export function scaffold(cfg) {
     viewExtraTs,
     viewExtraDrizzle,
     viewExtraSql,
-    createDefault,
     commandTopic,
     eventTopic,
     serviceKey,
   } = cfg;
 
-  const rolesArr = roles.map((r) => `"${r}"`).join(", ");
   const moduleDir = `services/${serviceName}/src/modules/${resourcePlural}`;
 
   w(`services/${serviceName}/package.json`, JSON.stringify({
@@ -450,7 +446,7 @@ export { and, eq, isNull };
 }
 
 function readRepo(cfg) {
-  const { table, resource, resourcePlural, viewExtraTs, viewExtraAssign } = cfg;
+  const { table, resource, resourcePlural, viewExtraAssign } = cfg;
   const Cap = cap(resource);
   return `/**
  * ${resourcePlural} repo — Drizzle queries against domain schema ONLY.
@@ -496,7 +492,7 @@ export { toView };
 }
 
 function readCommands(cfg) {
-  const { resource, commandTopic, createDefault, viewExtraProjected } = cfg;
+  const { resource, viewExtraProjected } = cfg;
   const Cap = cap(resource);
   return `/**
  * Command handlers (WRITE PATH) — publish command, prime cache, return accepted.
@@ -570,7 +566,7 @@ export async function list${cap(resourcePlural)}(
 }
 
 function readConsumer(cfg) {
-  const { resource, resourcePlural, eventTopic, serviceKey, viewExtraInsert } = cfg;
+  const { resource, serviceKey, viewExtraInsert } = cfg;
   const Cap = cap(resource);
   return `/**
  * Consumer — the ONLY code that writes Postgres.

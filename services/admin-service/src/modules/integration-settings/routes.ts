@@ -33,8 +33,7 @@ import { COMMANDS } from "../../topics.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
+import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import {
   ConfigError,
@@ -59,10 +58,7 @@ import {
 import type { IntegrationSettingRow, IntegrationChangeRow } from "./schema.js";
 import { fetchUserNames } from "../../shared/identity-names.js";
 
-const AUDIT_TOPIC = "audit.event.record";
 const ROLES = [...TENANT_ADMIN_ROLES];
-
-type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const putBody = z.object({
   enabled: z.boolean().default(true),
@@ -72,7 +68,6 @@ const putBody = z.object({
   expectedVersion: z.coerce.number().int().min(1).optional(),
 });
 const rejectBody = z.object({ reason: z.string().min(3).max(1000) });
-const listChangesQuery = z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) });
 
 function parseTarget(params: unknown): { provider: Provider; env: EnvScope } {
   const p = params as { provider?: string; env?: string };
@@ -129,14 +124,6 @@ function serializeChange(row: IntegrationChangeRow): Record<string, unknown> {
   };
 }
 
-async function audit(tx: Tx, ctx: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceId: string): Promise<void> {
-  await enqueue(tx, {
-    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
-    payload: { service: "admin", action, resourceType: "integration_settings", resourceId, outcome: "success" },
-  });
-}
-
 export async function integrationSettingsRoutes(app: FastifyInstance): Promise<void> {
   // ── catalog + list (masked) ────────────────────────────────────────────────
   app.get("/v1/admin/integrations", async (req, reply) => {
@@ -185,10 +172,9 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const body = putBody.parse(req.body ?? {});
 
     // Validate + split provider config; seal secrets (fail-closed w/o key).
-    const { config, secrets } = validateAndSplit(provider, body.config);
-    const hasSecretInput = Object.keys(secrets).length > 0;
-    const { ciphertext } = sealSecrets(secrets);
-    const last4 = primaryLast4(provider, secrets);
+    const { secrets } = validateAndSplit(provider, body.config);
+    sealSecrets(secrets);
+    primaryLast4(provider, secrets);
 
     // Same optimistic-lock guard apply_integration_settings_0 runs: a
     // proposal against a stale expectedVersion is rejected up front instead
@@ -204,7 +190,6 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const change = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: 'accepted', correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -236,7 +221,6 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
       query: req.query as Record<string, unknown>,
       preId: ((req.params as any)?.id as string) || __f3Id,
     });
-    const result = { id: __f3Id, status: 'accepted', correlationId: ctx.correlationId } as never;
     return reply.code(202).send({ id: __f3Id, status: "accepted", correlationId: ctx.correlationId, data: { id: __f3Id } });
   });
 
@@ -245,7 +229,7 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { provider, env } = parseTarget(req.params);
-    const body = rejectBody.parse(req.body ?? {});
+    rejectBody.parse(req.body ?? {});
 
     // Same guards apply_integration_settings_2 runs, lifted synchronously.
     const change = await scopedRead((tx) => repo.findLatestPendingTx(tx, ctx.tenantId, provider, env));

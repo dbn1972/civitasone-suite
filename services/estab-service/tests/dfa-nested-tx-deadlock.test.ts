@@ -19,7 +19,7 @@
  * Fixed by routing onto repo.findDfaByIdTx(tx, ...), reading through the
  * caller's already-open tx.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";

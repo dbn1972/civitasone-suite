@@ -5,7 +5,6 @@
  * because Resend needs it. DB-backed, seeds + cleans its own tenant rows.
  */
 import { describe, it, expect, afterAll, beforeEach, afterEach } from "vitest";
-import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";

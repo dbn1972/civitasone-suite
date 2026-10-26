@@ -11,7 +11,17 @@
  * All money as bigint paise. Optimistic locking via `version`.
  */
 import {
-  pgSchema, uuid, text, varchar, integer, bigint, char, boolean, date, timestamp, jsonb, numeric,
+  pgSchema,
+  uuid,
+  text,
+  varchar,
+  integer,
+  bigint,
+  char,
+  date,
+  timestamp,
+  jsonb,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 export const citizenLeaseSchema = pgSchema("citizen_lease");

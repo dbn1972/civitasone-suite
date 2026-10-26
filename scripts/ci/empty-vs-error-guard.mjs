@@ -82,7 +82,7 @@
 //   node scripts/ci/empty-vs-error-guard.mjs --write-baseline # regenerate the baseline from
 //                                                              # the current tree
 // ─────────────────────────────────────────────────────────────────────────────
-import { readdirSync, statSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, relative, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";

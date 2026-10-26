@@ -14,7 +14,6 @@ import { estabVehicles } from "../assets/schema.js";
 
 const log = pino({ name: "fleet-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
-const NOTIFICATION_TOPIC = "notification.send";
 
 export function registerFleetConsumers(queue: Queue): void {
   // ── Fuel Log ───────────────────────────────────────────────────────────

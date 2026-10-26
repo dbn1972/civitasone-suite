@@ -161,7 +161,7 @@ describe("L4 — Path traversal resistance", () => {
 
 describe("L4 — XSS in stored fields", () => {
   it("script tag in vendor name is stored escaped, not executed", async () => {
-    const { status, body } = await apiPost("/api/v1/finance/bills", {
+    const { status } = await apiPost("/api/v1/finance/bills", {
       billNo: "XSS-TEST-001",
       vendorId: "aaaaaaaa-0000-4000-8000-000000000001",
       headId: "bbbbbbbb-0000-4000-8000-000000000001",

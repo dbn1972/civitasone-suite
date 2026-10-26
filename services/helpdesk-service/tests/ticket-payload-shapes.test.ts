@@ -10,7 +10,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
-import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import type { Handler } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";

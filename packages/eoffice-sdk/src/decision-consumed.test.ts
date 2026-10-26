@@ -13,9 +13,7 @@ describe("decision-consumed ref types (R21)", () => {
   });
 
   it("flags the remaining orphaned types as not-consumed", () => {
-    for (const t of ["finance_reappropriation"]) {
-      // finance_reappropriation is consumed but let's verify non-existent ones:
-    }
+    // finance_reappropriation is consumed but let's verify non-existent ones:
     expect(isDecisionConsumed("totally_made_up")).toBe(false);
   });
 

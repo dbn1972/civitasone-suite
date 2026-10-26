@@ -5,7 +5,7 @@
  * - Grievance officer: citizen hub → grievances → RTI → applications
  * - Citizen: can access citizen-facing pages but NOT internal admin
  */
-import { test, expect } from "@playwright/test";
+import { test } from "@playwright/test";
 import { loginAs } from "./helpers/auth.js";
 import { assertPageLoaded, assertHasData } from "./helpers/assertions.js";
 

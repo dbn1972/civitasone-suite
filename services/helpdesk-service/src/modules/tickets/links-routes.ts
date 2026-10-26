@@ -69,7 +69,7 @@ export async function linksRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/helpdesk/tickets/:id/links/:linkId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HELPDESK_ROLES);
-    const { id, linkId } = linkIdParams.parse(req.params);
+    linkIdParams.parse(req.params);
 
     await cache.invalidateResource(ctx.tenantId, "ticket_links");
     // In full CQRS this would publish a command; for now we accept.

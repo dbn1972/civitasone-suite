@@ -15,7 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { readdirSync, statSync, readFileSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 
@@ -23,8 +23,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
 const SERVICES_DIR = join(REPO_ROOT, "services");
 
-// ANSI colors
-const RED = "\x1b[31m";
 const GREEN = "\x1b[32m";
 const YELLOW = "\x1b[33m";
 const CYAN = "\x1b[36m";

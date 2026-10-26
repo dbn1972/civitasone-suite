@@ -347,7 +347,7 @@ describe("CS-001: System field protection trigger", () => {
     await expect(
       runWithTenant(TENANT_A, () =>
         db.transaction(async (tx) => {
-          const res = await (tx as typeof db).update(tickets)
+          await (tx as typeof db).update(tickets)
             .set({ ticketNo: "CASE/9999-99/999999" })
             .where(and(eq(tickets.id, ticketId), eq(tickets.tenantId, TENANT_A)));
         }),

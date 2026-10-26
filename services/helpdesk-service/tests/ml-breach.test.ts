@@ -8,7 +8,7 @@
  * - Reassignment suggestion: top 3 lowest-workload agents returned on high risk
  * - Route: 404 for unknown ticket, 403 for wrong role, 200 with correct shape
  */
-import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
+import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import {
   extractFeatures,
   priorityToNumeric,
@@ -18,8 +18,6 @@ import {
   buildFallbackResponse,
   buildMlResponse,
   selectReassignmentCandidates,
-  BREACH_HIGH_THRESHOLD,
-  FALLBACK_ELAPSED_THRESHOLD,
 } from "../src/modules/ml-breach/domain.js";
 import type { TicketRow } from "../src/modules/tickets/schema.js";
 import type { SlaPolicy } from "../src/modules/sla/domain.js";

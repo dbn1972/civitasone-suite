@@ -2,7 +2,7 @@
  * custom_domains module — Drizzle schema. Lives in its OWN Postgres schema `custom_domains`.
  * L2 rule: this module's repo queries ONLY `custom_domains.*`.
  */
-import { pgSchema, uuid, varchar, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const customDomainsSchema = pgSchema("custom_domains");
 

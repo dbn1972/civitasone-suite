@@ -40,7 +40,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
-const WEB_DIR = join(REPO_ROOT, "apps", "web");
 const BASELINE_PATH = join(__dirname, "jsx-a11y-baseline.json");
 
 const RED = "\x1b[31m";

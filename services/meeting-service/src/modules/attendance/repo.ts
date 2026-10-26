@@ -27,7 +27,7 @@
  */
 import { and, asc, eq } from "drizzle-orm";
 import { renderPdf } from "@civitasone/render";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { attendanceRecords, type AttendanceRecordRow } from "./schema.js";
 import { participants } from "../participant/schema.js";

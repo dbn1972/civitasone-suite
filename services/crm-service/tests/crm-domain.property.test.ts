@@ -340,32 +340,6 @@ describe("Property 13: Lead Scoring Range and Weighting", () => {
    * **Validates: Requirements 8.5**
    */
 
-  /** Generate a scoring rule set where weights sum to 100 */
-  const scoringRulesArb = (numRules: number): fc.Arbitrary<ScoringRule[]> => {
-    if (numRules === 0) return fc.constant([]);
-    // Generate weights that sum to 100
-    return fc.array(fc.integer({ min: 1, max: 100 }), {
-      minLength: numRules,
-      maxLength: numRules,
-    }).map((rawWeights) => {
-      const sum = rawWeights.reduce((a, b) => a + b, 0);
-      // Normalize to sum=100
-      const normalized = rawWeights.map((w) => Math.floor((w / sum) * 100));
-      // Add remainder to last element
-      const currentSum = normalized.reduce((a, b) => a + b, 0);
-      normalized[normalized.length - 1] += 100 - currentSum;
-
-      return normalized.map((weight, i) => ({
-        attribute: `attr_${i}`,
-        weight,
-        scoreFn: (_value: unknown) => {
-          // Return a fixed score between 0–100 based on attribute presence
-          return _value != null ? 80 : 0;
-        },
-      }));
-    });
-  };
-
   it("score is always in [0, 100] range for any valid rules", () => {
     fc.assert(
       fc.property(

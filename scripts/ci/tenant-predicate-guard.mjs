@@ -51,7 +51,6 @@ const TENANT_FILTER_RE = /tenantId|tenant_id/;
 
 function checkFile(filePath) {
   const source = readFileSync(filePath, "utf8");
-  const lines = source.split("\n");
   const violations = [];
 
   // Simple heuristic: if a function body contains a DB operation but no tenantId

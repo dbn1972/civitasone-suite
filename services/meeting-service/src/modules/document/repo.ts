@@ -20,8 +20,8 @@
  *
  * _Requirements: 4.1, 15.1, 15.2, 15.4, 15.5, 19.3, 19.7_
  */
-import { and, desc, eq, isNull, lte } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import { scopedRead } from "../../shared/db.js";
 import { cache, storage } from "../../shared/infra.js";
 import { meetings } from "../meeting-core/schema.js";
 import { meetingDocuments, type MeetingDocumentRow } from "./schema.js";
