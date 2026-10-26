@@ -7,6 +7,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { checkoutBody, verifyPaymentBody } from "./checkout-validators.js";
 import * as razorpay from "./razorpay.js";
+import { captureRawBody, providerEventMessageId, razorpayEventParts, razorpayEventTenant, type RawBodyRequest } from "../gateways/webhook-verify.js";
 
 export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -126,29 +127,33 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * POST /v1/billing/webhooks/razorpay
-   * PUBLIC route — no auth. Razorpay sends events here.
-   * Verifies the webhook signature, then publishes to the queue for async processing.
+   * PUBLIC route (config.public -- a gateway callback carries no bearer token); the HMAC over the
+   * RAW request bytes is the authentication. Publishes to the queue for async processing.
    */
-  app.post("/v1/billing/webhooks/razorpay", async (req, reply) => {
+  app.post("/v1/billing/webhooks/razorpay", { config: { public: true }, preParsing: captureRawBody }, async (req, reply) => {
     const signature = req.headers["x-razorpay-signature"] as string | undefined;
     if (!signature) {
       throw new HttpError(400, "MISSING_SIGNATURE", "x-razorpay-signature header is required");
     }
 
-    const rawBody = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+    const rawBody = (req as RawBodyRequest).rawBody;
+    if (typeof rawBody !== "string" || rawBody === "") {
+      throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
+    }
     const valid = razorpay.verifyWebhookSignature(rawBody, signature);
 
     if (!valid) {
-      throw new HttpError(400, "INVALID_WEBHOOK_SIGNATURE", "webhook signature verification failed");
+      throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
     }
 
     const webhookPayload = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
 
-    const messageId = randomUUID();
+    // Dedupe by provider event id (signed body fields), so a retried delivery is a consumer no-op.
+    const messageId = providerEventMessageId("razorpay", ...razorpayEventParts(webhookPayload));
     await queue.publish(COMMANDS.webhookRazorpay, {
       messageId,
       type: COMMANDS.webhookRazorpay,
-      tenantId: "system", // webhook does not carry tenant context
+      tenantId: razorpayEventTenant(webhookPayload), // from the signed order notes; "system" if absent
       actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",

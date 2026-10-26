@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { formatMoney } from "@/lib/formatters";
-import { rupeesToMinorString, nonNegativeRupeesToMinorString } from "@/lib/money";
+import { rupeesToMinorString, nonNegativeRupeesToMinorString, minorToSafeNumber } from "@/lib/money";
 import { todayIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "@/app/_components/ds";
@@ -55,7 +55,8 @@ export function CreateTenderForm() {
 
   const today = todayIST();
   const estimatedMinor = rupeesToMinorString(estimated, { allowZero: true });
-  const estimatedMinorNum = estimatedMinor != null ? Number(estimatedMinor) : 0;
+  // V4-A-07: null when the paise value exceeds Number.MAX_SAFE_INTEGER (never silently rounded).
+  const estimatedMinorNum = estimatedMinor != null ? (minorToSafeNumber(estimatedMinor) ?? 0) : 0;
 
   // GAP-PROCUREMENT-TENDERS-NEW-01: approved indents to link against.
   useEffect(() => {
@@ -100,7 +101,11 @@ export function CreateTenderForm() {
     // GAP-PROCUREMENT-TENDERS-NEW-01/03: client validation mirroring the server.
     if (title.trim().length < 1) { setStatus("error"); setMessage("Tender title is required."); return; }
     if (!indentId) { setStatus("error"); setMessage("Choose the source indent this tender is raised against."); return; }
-    if (estimatedMinor == null || Number(estimatedMinor) <= 0) {
+    const estimatedSafe = minorToSafeNumber(estimatedMinor);
+    if (estimatedMinor != null && estimatedSafe == null) {
+      setStatus("error"); setMessage("Estimated value is too large to submit."); return;
+    }
+    if (estimatedSafe == null || estimatedSafe <= 0) {
       setStatus("error"); setMessage("Enter an estimated value greater than ₹0."); return;
     }
     if (!bidClosingDate) { setStatus("error"); setMessage("Bid closing date is required."); return; }
@@ -121,6 +126,11 @@ export function CreateTenderForm() {
       if (!approvingAuthority.trim()) { setStatus("error"); setMessage("Name the approving authority for single-source procurement."); return; }
     }
 
+    const emdSafe = minorToSafeNumber(emdMinor ?? "0");
+    if (emdSafe == null) {
+      setStatus("error"); setMessage("EMD amount is too large to submit."); return;
+    }
+
     setStatus("submitting");
     setMessage("");
     const body = {
@@ -128,8 +138,8 @@ export function CreateTenderForm() {
       type,
       scope: scope.trim() || undefined,
       eligibility: eligibility.trim() || undefined,
-      estimatedMinor: Number(estimatedMinor),
-      emdAmountMinor: Number(emdMinor ?? "0"),
+      estimatedMinor: estimatedSafe,
+      emdAmountMinor: emdSafe,
       bidClosingDate,
       openingDate: openingDate || undefined,
       indentRef: `procurement_indent:${indentId}`,

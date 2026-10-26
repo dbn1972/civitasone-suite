@@ -19,11 +19,18 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { condemnationCommand } from "./commandApi";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToSafeNumber, rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
 import { EntityPicker } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { checkAuctionCompletion, isRealCalendarDate } from "./condemnationRules";
+
+/** V4-A-07: paise JSON number, or throw when the amount exceeds Number.MAX_SAFE_INTEGER (caught by each submit handler). */
+function minorBodyNumber(input: string, opts?: { allowZero?: boolean }): number {
+  const n = minorToSafeNumber(rupeesToMinorString(input, opts));
+  if (n === null) throw new Error("The amount is too large or invalid.");
+  return n;
+}
 
 // GAP-ASSETS-CONDEMNATION-07: "today" is the IST calendar day, not UTC (which is
 // still yesterday until 05:30 IST), and a date must be a real calendar day.
@@ -269,7 +276,7 @@ function SurveyPanel({ data, onDone }: { data: CondemnationData; onDone: () => v
       const body: Record<string, unknown> = { assetId, surveyDate: surveyDate.trim(), condition, currency: "INR" };
       if (conditionNotes.trim()) body.conditionNotes = conditionNotes.trim();
       if (yearsInUse.trim()) body.yearsInUse = Number(yearsInUse);
-      if (repairCost.trim()) body.estimatedRepairCostMinor = Number(rupeesToMinorString(repairCost, { allowZero: true }));
+      if (repairCost.trim()) body.estimatedRepairCostMinor = minorBodyNumber(repairCost, { allowZero: true });
       await condemnationCommand<Accepted>("v1/asset/condemnation-surveys", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
       setMessage(`Survey for ${assetLabel(assetId)} submitted. It appears under "Submit survey" once processed.`);
@@ -553,8 +560,8 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
         reason: reason.trim(),
         currency: "INR",
       };
-      if (reserveValue.trim()) body.reserveValueMinor = Number(rupeesToMinorString(reserveValue, { allowZero: true }));
-      if (floorValue.trim()) body.floorValueMinor = Number(rupeesToMinorString(floorValue, { allowZero: true }));
+      if (reserveValue.trim()) body.reserveValueMinor = minorBodyNumber(reserveValue, { allowZero: true });
+      if (floorValue.trim()) body.floorValueMinor = minorBodyNumber(floorValue, { allowZero: true });
       await condemnationCommand<Accepted>("v1/asset/condemnation-recommendations", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
       setMessage(`Recommendation for ${assetLabel(selectedSurvey.assetId)} submitted. It appears under "Approve recommendation" once processed.`);
@@ -867,7 +874,7 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
       const body: Record<string, unknown> = {
         assetId: selectedRec.assetId,
         recommendationId: selectedRec.id,
-        reserveValueMinor: Number(rupeesToMinorString(reserveValue)),
+        reserveValueMinor: minorBodyNumber(reserveValue),
         currency: "INR",
       };
       if (auctionDate.trim()) body.auctionDate = auctionDate.trim();
@@ -914,9 +921,9 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
     try {
       const body: Record<string, unknown> = {
         version: selectedAuction.version,
-        highestBidMinor: Number(rupeesToMinorString(highestBid)),
+        highestBidMinor: minorBodyNumber(highestBid),
         winnerName: winnerName.trim(),
-        saleProceedsMinor: Number(rupeesToMinorString(saleProceeds)),
+        saleProceedsMinor: minorBodyNumber(saleProceeds),
       };
       if (winnerRef.trim()) body.winnerRef = winnerRef.trim();
       await condemnationCommand<Accepted>(`v1/asset/auctions/${selectedAuction.id}/complete`, { method: "PATCH", body: JSON.stringify(body) });

@@ -194,6 +194,9 @@ export const COMMANDS = {
   // F3 leftover — generic route-write command bus for residual sync lifts
   f3RouteWrite: "hrms.f3.route_write",
   leaveCancel: "hrms.leave.cancel",
+  // V4-B-01: comp-off earn (HR grant) / redeem — persisted via modules/leave/comp-off-consumer.ts
+  compOffEarn: "hrms.comp_off.earn",
+  compOffRedeem: "hrms.comp_off.redeem",
   // GAP-HR-LEAVE-APPLY-05: per-tenant half-day / short-leave switch
   leaveTenantConfigSet: "hrms.leave.tenant_config.set",
   // fin-hr-02: per-tenant HR policy settings (modules/policy-settings)

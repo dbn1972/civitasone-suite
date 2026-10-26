@@ -188,6 +188,17 @@ describe("SVC-085 fee schedule, payment, receipt, refund maker-checker", () => {
   let scheduleId: string;
   let paymentId: string;
 
+  // V4-G-02: a payment intent is bound to a real application owned by the caller, so seed one.
+  beforeAll(async () => {
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config(${"app.tenant_id"}, ${TENANT_A}, true)`;
+      await sql`INSERT INTO application.citizen_applications
+        (id, tenant_id, citizen_id, service_id, ref_no, created_by, updated_by)
+        VALUES (${APP_ID}, ${TENANT_A}, ${MAKER}, ${SERVICE_ID}, ${"REF-SVC085"}, ${MAKER}, ${MAKER})
+        ON CONFLICT (id) DO NOTHING`;
+    });
+  });
+
   it("creates a fee schedule with an exemption", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/fees/schedules", headers: hdr(tok(TENANT_A, MAKER)),

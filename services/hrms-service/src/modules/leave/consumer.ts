@@ -13,6 +13,7 @@ import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
+import { registerCompOffConsumers } from "./comp-off-consumer.js";
 
 const log = pino({ name: "hrms-leave-consumer" });
 
@@ -30,6 +31,7 @@ const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 
 export function registerLeaveConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+  registerCompOffConsumers(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string; maxDays: number;

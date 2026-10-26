@@ -81,10 +81,10 @@ function mapRequestStatus(status: string): CitizenRequestSummary["status"] {
   return "submitted";
 }
 
-export async function listRequests(tenantId: string, limit: number, offset: number): Promise<CitizenRequestSummary[]> {
+export async function listRequests(tenantId: string, limit: number, offset: number, citizenId?: string): Promise<CitizenRequestSummary[]> {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "requests", `list:${limit}:${offset}`),
-    () => repo.listGrievancesByTenant(tenantId, limit, offset),
+    cache.makeKey(tenantId, "requests", `list:${citizenId ?? "*"}:${limit}:${offset}`),
+    () => repo.listGrievancesByTenant(tenantId, limit, offset, citizenId),
   );
   const profileMap = new Map<string, { name: string; phone: string | null }>();
   for (const row of rows ?? []) {

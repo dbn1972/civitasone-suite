@@ -8,7 +8,9 @@
  */
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import type { NotificationSendPayload } from "@civitasone/events";
+import { and, eq } from "drizzle-orm";
 import { enqueue } from "../../shared/outbox.js";
+import { citizenProfiles } from "../portal/schema.js";
 import * as catalogueRepo from "./repo.js";
 
 export const PACK_NOTIFICATION_EVENTS = [
@@ -97,6 +99,42 @@ export function formatAmountMajor(amountPaise: number, currency = "INR"): string
 
 export type EnqueueWriter = Parameters<typeof enqueue>[0];
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type ProfileReader = {
+  select: (fields: Record<string, unknown>) => {
+    from: (t: unknown) => { where: (w: unknown) => { limit: (n: number) => Promise<Array<{ email: string | null; mobile: string | null }>> } };
+  };
+};
+
+/**
+ * V4-G-06: notification-service passes `recipient` verbatim to the SMTP/SMS/
+ * WhatsApp adapters as the destination address, so a citizen profile UUID in
+ * that slot can never be delivered. Resolve the real address from the citizen
+ * profile (decrypted on read) for the channel:
+ *   email -> profile.email; sms / whatsapp -> profile.mobile; in_app -> the id.
+ * Returns null when the citizen has no address for the channel (caller skips
+ * the send rather than addressing a UUID). An id that is not a UUID cannot be a
+ * profile id and is returned unchanged (legacy / non-citizen recipients).
+ */
+export async function resolveCitizenAddress(
+  tx: EnqueueWriter,
+  tenantId: string,
+  citizenId: string,
+  channel: PackNotificationChannel,
+): Promise<string | null> {
+  if (channel === "in_app") return citizenId;
+  if (!UUID_RE.test(citizenId)) return citizenId;
+  const rows = await (tx as unknown as ProfileReader)
+    .select({ email: citizenProfiles.email, mobile: citizenProfiles.mobile })
+    .from(citizenProfiles)
+    .where(and(eq(citizenProfiles.id, citizenId), eq(citizenProfiles.tenantId, tenantId)))
+    .limit(1);
+  const profile = rows[0];
+  const address = channel === "email" ? profile?.email : profile?.mobile;
+  return typeof address === "string" && address.trim().length > 0 ? address.trim() : null;
+}
+
 export interface EnqueuePackNotificationsArgs {
   tenantId: string;
   actorId: string;
@@ -132,9 +170,14 @@ export async function enqueuePackNotifications(
 
   let count = 0;
   for (const b of bindings) {
+    // V4-G-06: send to the citizen's real address, not their profile UUID.
+    const recipient = await resolveCitizenAddress(
+      tx, args.tenantId, args.recipientId ?? args.recipient, b.channel,
+    );
+    if (recipient === null) continue; // no address on file for this channel
     const payload: NotificationSendPayload = buildNotificationPayload({
       eventType,
-      recipient: args.recipient,
+      recipient,
       // exactOptionalPropertyTypes: omit optional keys instead of passing undefined.
       ...(args.recipientId !== undefined ? { recipientId: args.recipientId } : {}),
       channel: b.channel,

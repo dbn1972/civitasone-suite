@@ -45,7 +45,13 @@ export function hashPayload(payload: unknown): string {
 }
 
 function issuanceSecret(env: NodeJS.ProcessEnv = process.env): string {
-  return env.CITIZEN_ISSUANCE_SECRET ?? env.CITIZEN_PII_KEY ?? "civitasone-issuance-dev-secret";
+  // V4-E-07: fail CLOSED. A hardcoded fallback would let anyone who reads this
+  // source forge a valid certificate seal. A non-empty secret is mandatory
+  // outside NODE_ENV=test (the unit-test literal is never reachable in prod).
+  const configured = [env.CITIZEN_ISSUANCE_SECRET, env.CITIZEN_PII_KEY].find((v) => typeof v === "string" && v.trim().length > 0);
+  if (configured) return configured;
+  if (env.NODE_ENV === "test") return "test-only-issuance-seal-secret";
+  throw new Error("ISSUANCE_SEAL_KEY_UNSET: set CITIZEN_ISSUANCE_SECRET (or CITIZEN_PII_KEY) to seal certificates");
 }
 
 /**
@@ -93,4 +99,40 @@ export function publicValidity(status: string, validTo: string | Date | null | u
   if (status === "requested") return "invalid";
   if (isExpired(validTo, now)) return "expired";
   return "valid";
+}
+
+/**
+ * V4-G-11: why a certificate linked to an application may NOT be issued yet, or
+ * null when issuance may proceed. The application must exist and be `approved`;
+ * a fee-bearing service additionally needs a collected (or fully exempt) payment.
+ */
+export function issuanceBlockReason(input: {
+  applicationStatus: string | null;
+  feeBearing: boolean;
+  paymentSatisfied: boolean;
+}): string | null {
+  if (input.applicationStatus === null) return "linked application not found";
+  if (input.applicationStatus !== "approved") return `application is ${input.applicationStatus}, not approved`;
+  if (input.feeBearing && !input.paymentSatisfied) return "fee-bearing service has no collected payment";
+  return null;
+}
+
+/**
+ * Real client address for the anonymous per-IP limiter. The app runs without `trustProxy`, so
+ * `req.ip` is the gateway; the gateway SETS `x-forwarded-for` to the single address it observed.
+ * TRUSTED_PROXY_HOPS (default 0 = ignore the header) says how many trailing entries were appended
+ * by trusted proxies; the entry at `length - hops` is read because the leading entries are client
+ * controlled. A header shorter than the chain means the trusted chain did not write it, so fall
+ * back to the socket peer (fail closed). Mirrors crm-service public-capture-rate-limit.ts.
+ */
+export function resolveClientIp(req: { ip: string; headers: Record<string, string | string[] | undefined> }): string {
+  const raw = Number(process.env.TRUSTED_PROXY_HOPS);
+  const hops = Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 0;
+  if (hops === 0) return req.ip;
+  const header = req.headers["x-forwarded-for"];
+  const joined = Array.isArray(header) ? header.join(",") : header;
+  if (typeof joined !== "string") return req.ip;
+  const list = joined.split(",").map((v) => v.trim()).filter((v) => v !== "");
+  if (list.length === 0 || list.length < hops) return req.ip;
+  return list[list.length - hops] ?? req.ip;
 }

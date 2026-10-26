@@ -37,10 +37,40 @@ export async function findCertById(id: string, tenantId: string): Promise<Certif
   return db.transaction((tx) => findCertByIdTx(tx, id, tenantId));
 }
 
-/** Public verify: look up by opaque token WITHOUT a tenant filter (token is the secret). */
-export async function findCertByToken(token: string): Promise<CertificateRow | null> {
-  const rows = await db.transaction((tx) => tx.select().from(certificates)
-    .where(eq(certificates.verifyToken, token)).limit(1));
+/**
+ * The non-PII attestation projection the PUBLIC verify route is allowed to read.
+ * Deliberately excludes subject, payload, applicationId, tenantId and every actor column.
+ */
+export type CertVerificationRow = Pick<CertificateRow,
+  "certNo" | "certType" | "status" | "validFrom" | "validTo" | "payloadHash" | "signature" | "issuedAt">;
+
+/** Opaque token shape produced by generateVerifyToken() (24 random bytes, base64url). */
+const VERIFY_TOKEN_RE = /^[A-Za-z0-9_-]{8,128}$/;
+
+/**
+ * Public verify: look up by opaque token WITHOUT a tenant filter (the token is the secret).
+ *
+ * issuance.certificates is FORCE RLS and an anonymous caller has no tenant, so the read sets the
+ * transaction-local GUC app.cert_verify_token to the PRESENTED token; the SELECT-only policy
+ * public_verify_read (migration 0044) then exposes exactly the row with that token. Nothing else
+ * becomes visible and FORCE RLS is untouched for every other access.
+ */
+export async function findCertByToken(token: string): Promise<CertVerificationRow | null> {
+  if (!VERIFY_TOKEN_RE.test(token)) return null;
+  const rows = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.cert_verify_token', ${token}, true)`);
+    return tx.select({
+      certNo: certificates.certNo,
+      certType: certificates.certType,
+      status: certificates.status,
+      validFrom: certificates.validFrom,
+      validTo: certificates.validTo,
+      payloadHash: certificates.payloadHash,
+      signature: certificates.signature,
+      issuedAt: certificates.issuedAt,
+    }).from(certificates)
+      .where(eq(certificates.verifyToken, token)).limit(1);
+  });
   return rows[0] ?? null;
 }
 

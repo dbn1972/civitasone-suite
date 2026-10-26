@@ -89,3 +89,15 @@ export async function updateStatus(
     .returning();
   return result[0] ?? null;
 }
+
+/**
+ * V4-C-04: next lifecycle request number from market.lifecycle_request_number_seq
+ * (migrations/0004), shared by transfer/cancellation/eviction. Replaces
+ * crypto.randomInt(1, 999999). Call inside the transaction that inserts the row.
+ */
+export async function nextRequestSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"market"."lifecycle_request_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}

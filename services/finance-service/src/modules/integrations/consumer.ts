@@ -38,7 +38,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const resourceId = p.payrollRunId ?? p.disbursementId ?? p.pfmsTxnId;
 
     // TX-007: every DB write (idempotency mark, tenant-config read, the batch
-    // row, the downstream paymentMade event, the audit record) commits in ONE
+    // row, the audit record) commits in ONE
     // transaction, same as every other handler in this file -- the batch is
     // always inserted with submissionStatus "pending" here. The NACH file
     // write + SFTP egress below run AFTER this transaction commits, never
@@ -75,18 +75,9 @@ export function registerIntegrationConsumers(queue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await enqueue(tx, {
-        topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          disbursementId: p.disbursementId,
-          payrollRunId: p.payrollRunId,
-          pfmsTxnId: p.pfmsTxnId,
-          amountMinor: p.amountMinor,
-          mode: p.mode,
-          outcome: "success",
-        },
-      });
+      // V4-D-01: finance.payment.made is NOT enqueued here. Grant disbursements and payroll slips treat it as "the
+      // money moved", but at this point the batch is only "pending" -- the file has not been sent. It is emitted below,
+      // atomically with the file_sent update, once the bank file has actually been handed to the PFMS gateway.
       await audit(tx, msg, "eft_disbursement", "payment", resourceId);
       return { agencyCode };
     });
@@ -147,6 +138,21 @@ export function registerIntegrationConsumers(queue: Queue): void {
     if (uploaded) {
       await db.transaction(async (tx2) => {
         await pfmsRepo.updatePfmsBatch(tx2, pfmsBatchId, { submissionStatus: "file_sent" });
+        // V4-D-01: the success event follows actual egress, in the same transaction as the file_sent write. A batch that
+        // was blocked (unsigned in production) or whose upload failed stays "pending" and emits nothing, so downstream
+        // services never mark beneficiaries paid for a file that was never sent.
+        await enqueue(tx2, {
+          topic: EVENTS.paymentMade, eventType: EVENTS.paymentMade,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            disbursementId: p.disbursementId,
+            payrollRunId: p.payrollRunId,
+            pfmsTxnId: p.pfmsTxnId,
+            amountMinor: p.amountMinor,
+            mode: p.mode,
+            outcome: "success",
+          },
+        });
       });
     }
   }, { visibilityTimeout: 300 });

@@ -41,7 +41,7 @@ export const CONTRACT_TRANSITIONS: Record<ContractStatus, ContractStatus[]> = {
   draft: ["active"],
   active: ["expiring", "terminated"],
   expiring: ["expired", "renewed"],
-  escalated: ["expiring"],
+  escalated: ["expiring", "expired"],
   expired: [],
   renewed: [],
   terminated: [],

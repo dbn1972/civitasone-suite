@@ -13,7 +13,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToSafeNumber, rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 
 type Props = {
@@ -102,10 +102,12 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
     try {
       const amountMinor = rupeesToMinorString(impAmount);
       if (!amountMinor) throw new Error("Enter an impairment loss greater than zero.");
+      const amountMinorNum = minorToSafeNumber(amountMinor);
+      if (amountMinorNum === null) throw new Error("The impairment amount is too large.");
       await browserJson(`v1/asset/assets/${assetId}/impairment`, {
         method: "POST",
         body: JSON.stringify({
-          amountMinor: Number(amountMinor),
+          amountMinor: amountMinorNum,
           reason: reason?.trim() || undefined,
           eventDate: impDate.trim() || undefined,
         }),
@@ -149,10 +151,12 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
     try {
       const newBookValueMinor = rupeesToMinorString(revValue);
       if (!newBookValueMinor) throw new Error("Enter the new book value, greater than zero.");
+      const newBookValueNum = minorToSafeNumber(newBookValueMinor);
+      if (newBookValueNum === null) throw new Error("The new book value is too large.");
       await browserJson(`v1/asset/assets/${assetId}/revaluation`, {
         method: "POST",
         body: JSON.stringify({
-          newBookValueMinor: Number(newBookValueMinor),
+          newBookValueMinor: newBookValueNum,
           reason: reason?.trim() || undefined,
         }),
       });

@@ -5,6 +5,7 @@ import {
   type FeeScheduleRow, type FeeScheduleInsert,
   type PaymentRow, type PaymentInsert, type RefundRow, type RefundInsert,
 } from "./schema.js";
+import { applicationDrafts } from "../application/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -112,4 +113,17 @@ export async function listRefundsByPaymentTx(tx: Writer, tenantId: string, payme
 
 export async function listRefundsByPayment(tenantId: string, paymentId: string): Promise<RefundRow[]> {
   return db.transaction((tx) => listRefundsByPaymentTx(tx, tenantId, paymentId));
+}
+
+/**
+ * V4-G-02 -- the data the applicant captured on the application's intake draft: the only
+ * server-held basis for exemption predicates. Frozen once the draft is submitted.
+ */
+export async function findDraftFormDataByApplicationTx(
+  tx: Writer, tenantId: string, applicationId: string,
+): Promise<Record<string, unknown>> {
+  const rows = await (tx as typeof db).select({ formData: applicationDrafts.formData }).from(applicationDrafts)
+    .where(and(eq(applicationDrafts.tenantId, tenantId), eq(applicationDrafts.applicationId, applicationId)))
+    .orderBy(desc(applicationDrafts.createdAt)).limit(1);
+  return rows[0]?.formData ?? {};
 }

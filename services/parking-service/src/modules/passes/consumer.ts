@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -32,8 +31,7 @@ export function registerPassConsumers(rawQueue: Queue): void {
       validFrom: string;
       paymentRef?: string;
     };
-    // Mitigation, not a full fix — see bookings/consumer.ts for the same pattern.
-    const passNumber = generatePassNumber("ULB", randomInt(1, 999999));
+    let passNumber = "";
     const validFrom = new Date(p.validFrom);
     const validUntil = new Date(validFrom);
     if (p.passType === "annual") {
@@ -61,6 +59,8 @@ export function registerPassConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      passNumber = generatePassNumber("ULB", await repo.nextPassSeq(tx));
       await repo.insertPass(tx, {
         id: p.id,
         tenantId: msg.tenantId,

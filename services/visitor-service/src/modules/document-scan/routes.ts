@@ -23,6 +23,7 @@ import { uploadScanParams, getResultParams, listScansQuery } from "./validators.
 import { validateImage } from "./domain.js";
 import { publishScanProcess } from "./commands.js";
 import { getScanSession, getOcrResult, listScans } from "./repo.js";
+import { getS3Client } from "../../shared/s3-client.js";
 
 // Roles permitted for admin scan management endpoints.
 const ADMIN_ROLES = ["facility_admin", "security_admin", "tenant_admin", "super_admin"];
@@ -34,16 +35,8 @@ async function uploadToStorage(key: string, buffer: Buffer, mimeType: string): P
     throw new Error("S3_BUCKET must be configured for image upload");
   }
 
-  const endpoint = process.env.S3_ENDPOINT ?? "https://s3.amazonaws.com";
-  const region = process.env.S3_REGION ?? "ap-south-1";
-
-  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
-  const client = new S3Client({
-    region,
-    ...(endpoint.includes("localhost") || endpoint.includes("localstack")
-      ? { endpoint, forcePathStyle: true }
-      : {}),
-  });
+  const { PutObjectCommand } = await import("@aws-sdk/client-s3");
+  const client = await getS3Client();
 
   await client.send(new PutObjectCommand({
     Bucket: bucket,
@@ -83,12 +76,9 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
       throw new HttpError(400, "MISSING_FILE", "multipart file upload required");
     }
 
-    // Consume file buffer
-    const chunks: Buffer[] = [];
-    for await (const chunk of file.file) {
-      chunks.push(chunk);
-    }
-    const buffer = Buffer.concat(chunks);
+    // Consume file buffer. toBuffer() throws a 413 when the plugin fileSize
+    // limit is hit; a bare stream loop would silently truncate at the limit.
+    const buffer: Buffer = await file.toBuffer();
 
     // Validate image (MIME type and size)
     const validation = validateImage(file.mimetype, buffer.length);

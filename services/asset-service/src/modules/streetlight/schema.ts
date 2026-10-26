@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, varchar, date, timestamp, jsonb,
+  pgSchema, uuid, text, integer, varchar, date, timestamp, jsonb, uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const streetlightSchema = pgSchema("streetlight");
@@ -7,7 +7,7 @@ export const streetlightSchema = pgSchema("streetlight");
 export const assetStreetlights = streetlightSchema.table("asset_streetlights", {
   id:                  uuid("id").primaryKey().defaultRandom(),
   tenantId:            uuid("tenant_id").notNull(),
-  poleId:              text("pole_id").notNull().unique(),
+  poleId:              text("pole_id").notNull(),
   location:            jsonb("location"),
   lampType:            varchar("lamp_type", { length: 16 }).notNull(),
   wattage:             integer("wattage").notNull(),
@@ -20,7 +20,10 @@ export const assetStreetlights = streetlightSchema.table("asset_streetlights", {
   createdBy:           uuid("created_by").notNull(),
   updatedBy:           uuid("updated_by").notNull(),
   version:             integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // V4-C-03: unique per tenant, not fleet-wide (migrations/0030).
+  tenantPoleUidx: uniqueIndex("asset_streetlights_tenant_pole_uidx").on(t.tenantId, t.poleId),
+}));
 
 export const assetStreetlightFaults = streetlightSchema.table("asset_streetlight_faults", {
   id:             uuid("id").primaryKey().defaultRandom(),

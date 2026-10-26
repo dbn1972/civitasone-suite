@@ -496,6 +496,7 @@ describe("party commands", () => {
 
   it("addParty validates + publishes", async () => {
     const { addParty } = await import("../src/modules/party/commands.js");
+    precheckRows = [{ status: "registered", version: 1 }];
     const result = await addParty(ctx(), CASE_ID, { partyRole: "petitioner", name: "A. Rao" });
     expect(result.accepted).toBe(true);
     expect(result.partyId).toBeDefined();

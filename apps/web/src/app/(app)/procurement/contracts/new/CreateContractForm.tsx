@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useTranslations } from "next-intl";
 import { formatMoney, todayIST } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToSafeNumber, rupeesToMinorString } from "@/lib/money";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
 import { RemoteSearchSelect, type RemoteOption, type RemoteSearchState } from "../../_components/RemoteSearchSelect";
@@ -53,7 +53,7 @@ export function CreateContractForm() {
     const minor = rupeesToMinorString(value);
     if (!vendorId) nextFieldErrors.vendor = "Select a vendor.";
     if (!contractNo.trim()) nextFieldErrors.contractNo = "Contract number is required.";
-    if (minor === null) nextFieldErrors.value = "Enter a positive contract value (up to 2 decimal places).";
+    if (minor === null || minorToSafeNumber(minor) === null) nextFieldErrors.value = "Enter a positive contract value (up to 2 decimal places, within the supported maximum).";
     if (!expiry) nextFieldErrors.expiry = "Expiry date is required.";
     // GAP-PROCUREMENT-CONTRACTS-NEW-03: expiry must be after the start date.
     if (expiry && startDate && expiry <= startDate) {
@@ -77,7 +77,7 @@ export function CreateContractForm() {
       vendorId,
       title: title.trim(),
       // Send paise as a number; the contract DTO accepts an integer minor value.
-      valueMinor: Number(minor),
+      valueMinor: minorToSafeNumber(minor),
       currency: "INR",
       startDate,
       expiry,

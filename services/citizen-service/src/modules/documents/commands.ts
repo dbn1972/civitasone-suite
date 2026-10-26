@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { HttpError } from "../../shared/context.js";
+import { HttpError, assertOwnership } from "../../shared/context.js";
+import { assertApplicationAccess } from "./ownership.js";
 import * as repo from "./repo.js";
 import {
   digiLockerFetch, isDigiLockerConfigured,
@@ -86,6 +87,8 @@ async function publish(
 
 /** Upload-intake: record a self-attested document submission (pending verification). */
 export async function upload(ctx: RequestContext, body: UploadBody): Promise<Accepted> {
+  // V4-G-04: a citizen may only attach a document to an application they own.
+  await assertApplicationAccess(ctx, body.applicationId);
   // GAP-CITIZEN-DOCUMENTS-01: the storageKey MUST be a key this caller presigned
   // (tenant+actor namespaced). Reject a forged/foreign key so a document can only
   // reference an object the uploader actually PUT. The bytes are never in the DB.
@@ -109,6 +112,7 @@ export async function upload(ctx: RequestContext, body: UploadBody): Promise<Acc
 
 /** DigiLocker-style fetch intake. */
 export async function digilockerFetchIntake(ctx: RequestContext, body: DigilockerFetchBody): Promise<Accepted> {
+  await assertApplicationAccess(ctx, body.applicationId);
   const id = randomUUID();
   // GAP-CITIZEN-DOCUMENTS-02 (DPDP): a real provider fetch pulls the citizen's
   // document, so it MUST be backed by a LIVE, persisted consent record — not
@@ -136,10 +140,14 @@ export async function digilockerFetchIntake(ctx: RequestContext, body: Digilocke
     consent: body.consent ?? false,
     digilockerRef: result.digilockerRef,
     providerStatus: result.providerStatus,
-    configured: result.configured,
-    verificationStatus: result.configured ? "verified" : "pending",
-    status: result.configured ? "verified" : "received",
-    authenticity: result.authenticity,
+    // V4-G-03: the docUri is citizen-supplied and never cryptographically checked
+    // on this legacy path, so it can NEVER be recorded verified/source_verified
+    // (and the citizen is never the verifier). Source verification happens only in
+    // the OAuth callback (PKCS#7 artefact) or by an officer decision.
+    configured: false,
+    verificationStatus: "pending",
+    status: "received",
+    authenticity: "unverified",
   });
 }
 
@@ -157,6 +165,7 @@ export async function beginDigiLockerAuthorize(
   if (!provider.isConfigured()) {
     throw new HttpError(409, "PROVIDER_UNCONFIGURED", "DigiLocker provider is not configured");
   }
+  await assertApplicationAccess(ctx, body.applicationId);
   const { state, codeVerifier, codeChallenge } = newPkceMaterial();
   const url = provider.authorizeUrl({ docType: body.docType, redirectUri: body.redirectUri, state, codeChallenge });
   if (!url) throw new HttpError(409, "PROVIDER_UNCONFIGURED", "DigiLocker provider is not configured");
@@ -251,6 +260,8 @@ export async function resubmit(
 ): Promise<Accepted & { supersedes: string; data: { id: string; supersedes: string } }> {
   const prior = await repo.findSubmissionById(id, ctx.tenantId);
   if (!prior) throw new HttpError(404, "NOT_FOUND", "document submission not found");
+  // V4-B-02/E-01: only the submission's owner (or an officer) may supersede it.
+  assertOwnership(ctx, prior.citizenId);
   if (prior.status !== "deficient" && prior.status !== "rejected") {
     throw new HttpError(409, "NOT_DEFICIENT", "only a deficient/rejected submission can be resubmitted");
   }
@@ -278,10 +289,11 @@ export async function resubmit(
     storageRef: isDigi ? null : (body.storageKey ?? null),
     digilockerRef: result?.digilockerRef ?? null,
     providerStatus: result?.providerStatus ?? null,
-    configured: result?.configured ?? false,
-    verificationStatus: result?.configured ? "verified" : "pending",
-    status: result?.configured ? "verified" : "received",
-    authenticity: result?.authenticity ?? (isDigi ? "unverified" : "self_attested"),
+    // V4-G-03: a citizen-supplied docUri is never self-verifying (see digilockerFetchIntake).
+    configured: false,
+    verificationStatus: "pending",
+    status: "received",
+    authenticity: isDigi ? "unverified" : "self_attested",
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "document", id));
   // `acceptedResponseSchema` (packages/schemas/common.ts) only declares

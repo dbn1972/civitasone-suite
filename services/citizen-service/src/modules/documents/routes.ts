@@ -10,6 +10,7 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { isDigiLockerConfigured } from "./domain.js";
+import { assertApplicationAccess } from "./ownership.js";
 
 const CITIZEN_ROLES = ["citizen", "citizen_officer", "citizen_admin", "super_admin"];
 const OFFICER_ROLES = ["citizen_officer", "citizen_admin", "super_admin"];
@@ -74,6 +75,8 @@ export async function documentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CITIZEN_ROLES);
     const { serviceId, applicationId, laneKey } = checklistQuery.parse(req.query);
+    // V4-G-04: a citizen may only read the checklist of an application they own.
+    await assertApplicationAccess(ctx, applicationId);
     return reply.send(await queries.checklist(ctx.tenantId, serviceId, applicationId, laneKey));
   });
 

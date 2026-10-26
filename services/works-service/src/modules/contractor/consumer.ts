@@ -48,8 +48,9 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "contractorCreate processing failed");
-      // A rejected duplicate must be dead-lettered (observable), not silently swallowed like a transient failure.
-      if (err instanceof NonRetryableError) throw err;
+      // V4-D-07: rethrow EVERY error. The transaction (markProcessed included) already rolled back, so swallowing a
+      // transient failure acked the message and lost the accepted command; NonRetryable dead-letters, others redeliver.
+      throw err;
     }
   });
 
@@ -138,8 +139,8 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "contractorRate processing failed");
-      // A refused (cooldown) rating is dead-lettered, observable, not swallowed like a transient failure.
-      if (err instanceof NonRetryableError) throw err;
+      // V4-D-07: rethrow EVERY error (see contractorCreate): transient failures must redeliver, not be acked and lost.
+      throw err;
     }
   });
 }

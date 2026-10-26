@@ -21,8 +21,10 @@ import { tileImgSource } from "@/lib/mapTiles";
 // "/pricing" and "/docs" are matched on a path-segment boundary so an unrelated
 // route that merely starts with the same letters stays private.
 const PUBLIC_EXACT = ["/"];
+// /offline: the service-worker fallback page; user-agnostic (locale only) and must be
+// fetchable anonymously so the SW can (re)precache it after logout (V4-A-01, V4-A-09).
 const PUBLIC_SEGMENT = ["/pricing", "/docs"];
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known", "/logout", "/offline"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).
@@ -45,6 +47,27 @@ const KEYCLOAK_ORIGIN = (() => {
   try {
     const u = process.env.NEXT_PUBLIC_KEYCLOAK_ISSUER_URL ?? '';
     return u ? new URL(u).origin : '';
+  } catch {
+    return '';
+  }
+})();
+
+// V4-A-02: pages PUT files straight to object storage via a presigned URL (CRM
+// documents, onboarding, reimbursements, tax proofs, citizen documents). That is
+// a cross-origin fetch, so connect-src must name the storage origin. Resolved
+// once at module load, origin only (no path/query), http(s) only, from
+// NEXT_PUBLIC_STORAGE_ORIGIN (browser-facing; preferred), else AWS_ENDPOINT_URL
+// (LocalStack / S3-compatible), else the virtual-hosted AWS S3 origin derived from
+// AWS_S3_BUCKET + AWS_DEFAULT_REGION. Never a wildcard.
+const STORAGE_ORIGIN = (() => {
+  try {
+    let raw = process.env.NEXT_PUBLIC_STORAGE_ORIGIN || process.env.AWS_ENDPOINT_URL || '';
+    if (!raw && process.env.AWS_S3_BUCKET) {
+      raw = `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_DEFAULT_REGION || 'ap-south-1'}.amazonaws.com`;
+    }
+    if (!raw) return '';
+    const u = new URL(raw);
+    return u.protocol === 'https:' || u.protocol === 'http:' ? u.origin : '';
   } catch {
     return '';
   }
@@ -96,7 +119,7 @@ function buildNextResponse(req: NextRequest): NextResponse {
     // Map base-map tiles (MAP_TILE_URL, default OpenStreetMap) -- the map iframe is a
     // srcdoc document and inherits this policy.
     `img-src 'self' data: blob: ${tileImgSource()}`,
-    `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,
+    `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}${STORAGE_ORIGIN ? ` ${STORAGE_ORIGIN}` : ''}`,
     "font-src 'self'",
     "frame-ancestors 'none'",
     "object-src 'none'",
@@ -116,7 +139,9 @@ function isPublicPath(pathname: string): boolean {
   return (
     PUBLIC_EXACT.includes(pathname) ||
     PUBLIC_SEGMENT.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
-    PUBLIC.some((p) => pathname.startsWith(p))
+    // V4-A-04: boundary match (p or p + "/"), never a bare prefix, so /contacts,
+    // /authz or /verifyx stay private. Entries ending in "/" are directory prefixes.
+    PUBLIC.some((p) => (p.endsWith("/") ? pathname.startsWith(p) : pathname === p || pathname.startsWith(`${p}/`)))
   );
 }
 
