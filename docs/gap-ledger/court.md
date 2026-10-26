@@ -252,7 +252,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CASES-CASEID-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
 - [x] **Status** (W2 2026-10-17: partly closed by #2117 — Submit for approval now uses ConfirmDialog (was single-click), so every CaseConsole order/hearing action uses ds ConfirmDialog. REMAINING: Fix step 1 not done — the dialogs are still re-implemented in CaseConsole, OrdersConsole and HearingsConsole rather than one shared court/_components; extraction is a follow-up refactor.)
-  - Closed by PENDING-HASH (UAT B2): approve/send-back/recall and adjourn/outcome moved to shared court/_components/{OrderActionDialogs,HearingActionDialogs}.tsx used by case page, /court/orders and /court/hearings (case page now gets server-verified DSC, required remarks/reason); CaseConsole.test.tsx covers each flow.
+  - Closed by bc25922bf (UAT B2): approve/send-back/recall and adjourn/outcome moved to shared court/_components/{OrderActionDialogs,HearingActionDialogs}.tsx used by case page, /court/orders and /court/hearings (case page now gets server-verified DSC, required remarks/reason); CaseConsole.test.tsx covers each flow.
 - **W0 note:** partly fixed by #1923 — Adjourn/Outcome and Approve&issue/Send back/Recall in CaseConsole now use ds ConfirmDialog (recall/adjourn require reason); remaining: dialogs are re-implemented inside CaseConsole rather than one shared court/_components used by OrdersConsole/HearingsConsole, and 'Submit for approval' on the case page is still single-click
 - **First-pass claim:** Irreversible acts have no confirmation here: Approve & issue (DSC), Recall, Adjourn and Record outcome use inline forms in CaseConsole.tsx while the standalone /court/orders and /court/hearings consoles gate the same actions with ConfirmDialog (danger) — two UX contracts for one action (CaseConsole.tsx:486-854 vs OrdersConsole.tsx:586).
 - **Verified evidence:** Not 'no confirmation': CaseConsole uses a two-step inline pattern. Approve & issue opens a DSC panel with 'Confirm approve & issue' (CaseConsole.tsx:736,~756-790), Recall requires reason and 'Confirm recall' (:805-826, button disabled without reason), Adjourn requires reason and 'Confirm adjourn' (:500-525). Outcome (Held/Cancelled) has a Save button with no reason (:527-552). What is true is inconsistency with ConfirmDialog in OrdersConsole.tsx:584,743 and HearingsConsole.tsx:465,558. Lifecycle transition (:233-275) and Submit for approval (:715-728) are single click. Maker!=checker is enforced server-side (error text at ~:771).
@@ -464,7 +464,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HEARINGS-02  ·  MEDIUM  ·  confirmed  ·  theme SCALE (was I18N)
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  - Closed by PENDING-HASH (UAT B2): CaseSelector now server-searches via ?q= (searchCases, client.ts), arrow/enter/escape keyboard nav with aria-activedescendant, courtCaseSelector en/hi i18n; CaseSelector.test.tsx covers beyond-100 reach, search error vs no-match, keyboard, hi locale.
+  - Closed by 207beb73d (UAT B2): CaseSelector now server-searches via ?q= (searchCases, client.ts), arrow/enter/escape keyboard nav with aria-activedescendant, courtCaseSelector en/hi i18n; CaseSelector.test.tsx covers beyond-100 reach, search error vs no-match, keyboard, hi locale.
 - **W0 note:** partly fixed by #1923 — CaseSelector is now a searchable title/CNR/filing combobox with a 'first 100 cases' notice; remaining: still limited to the first 100 cases (no server-side search, case beyond the 100th unreachable from here) and options are mouse-only buttons (no arrow-key listbox navigation)
 - **First-pass claim:** Case selector option labels combine title, CNR and status in a single native select for the entire registry — no search on a long list (CaseSelector.tsx:62-78).
 - **Verified evidence:** CaseSelector.tsx:60-83 is a plain native <select> listing every case (title · CNR — humanised status). Loader getCases caps at limit=100 (loaders.ts:191), so beyond 100 cases some cannot be picked at all. No search/filter. Strings are hard-coded English (no next-intl). Status is text so not colour-only.
@@ -518,7 +518,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HEARINGS-05  ·  LOW  ·  partly  ·  theme COPY (was CAP)
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  - Closed by PENDING-HASH (UAT B2): court-registry GET /v1/court/courts/:id/benches exists; hearings page resolves benchId to name via getCourtBenches (loaders.ts) and HearingsConsole shows a Bench column (name or em dash, never a UUID); tests in HearingsConsole.test.tsx and hearings/page.test.tsx.
+  - Closed by 821dd7c32 (UAT B2): court-registry GET /v1/court/courts/:id/benches exists; hearings page resolves benchId to name via getCourtBenches (loaders.ts) and HearingsConsole shows a Bench column (name or em dash, never a UUID); tests in HearingsConsole.test.tsx and hearings/page.test.tsx.
 - **W0 note:** partly fixed by #1923 — status uses a fixed label dictionary (hearingStatusLabel); remaining: benchId/bench label is still not shown on the hearing row
 - **First-pass claim:** Status vocabulary (scheduled/held/adjourned/cancelled) is humanised client-side; bench id is never shown.
 - **Verified evidence:** Status is humanised via humanize() (HearingsConsole.tsx:291, format.ts:27) - true. benchId exists on Hearing (types.ts:160) but is not rendered in HearingRow (:250-295) - true. The 'capped fetch / client filtering' fix text does not apply: no client filtering in this page; the cap is on getCases (limit=100).
@@ -626,7 +626,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HOME-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  - Closed by PENDING-HASH (UAT B2): analytics+pendency routes gated by COURT_READ_ROLES; 401/403 tests added in services/court-service/tests/all-routes-coverage.test.ts; clearance 10/8=80 and null-on-zero already covered by analytics-clearance-domain.test.ts.
+  - Closed by 063540527 (UAT B2): analytics+pendency routes gated by COURT_READ_ROLES; 401/403 tests added in services/court-service/tests/all-routes-coverage.test.ts; clearance 10/8=80 and null-on-zero already covered by analytics-clearance-domain.test.ts.
 - **First-pass claim:** court-service is absent from the snapshot; role rules and analytics semantics undeterminable.
 - **Service:** `court-service`  ·  **Endpoint(s):** `['GET /api/v1/court/cases/analytics', 'GET /api/v1/court/cases/pendency', 'GET /api/v1/court/cases']`
 - **Question:** Who may read analytics/pendency and how are instituted, disposed and clearanceRatePct computed (period, null when zero)?
