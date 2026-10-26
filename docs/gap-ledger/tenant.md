@@ -153,7 +153,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-01  ·  HIGH  ·  interim  ·  theme DEADROUTE
 
-- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: page is read-only and its subtitle already says '(read-only)'; approve/reject needs a DPDP decision endpoint with audit + reviewer role that does not exist — not invented here)
+- [x] **Status** (Closed by 157330bd4 (owner decision #19, 2026-10-26): only consent_officer approves/rejects on behalf of the principal, reason required and audited, no officer decides a request they raised; tenant_admin is view-only (POST /v1/tenant/consent/:id/grant|deny, ConsentDecisionPanel). Note: the /tenant layout still gates the whole area to tenant-admin roles, so a consent_officer-only account needs that route admitted separately (access-model question, not part of this decision))
 - **W0 note:** partly fixed by #1916 — mapConsentRows shows purpose/categories/expiry; page still read-only, no decision actions
 - **First-pass claim:** No way to act on a consent request from the route: read-only table despite 'awaiting decision' (consent-exchange/page.tsx:16). Requests carry no purpose or data-category text for the reviewer.
 - **Verified evidence:** consent-exchange/page.tsx is a ModuleListPage only: no action controls; subtitle 'awaiting decision' (:16). mapTenantRows carries no purpose or data-category fields. Whether a decision endpoint exists is cannot-verify (tenant-service not in snapshot).
@@ -250,7 +250,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-01  ·  HIGH  ·  interim  ·  theme WIRING (was DEADROUTE)
 
-- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: no start/retry/error-report endpoints exist; row counts/dry-run are shown read-only. Actions are a data-integrity feature build, not invented here)
+- [x] **Status** (Closed by ffa5d19da (owner decision #23, 2026-10-26): bulk-import batches remember failed records; CSV error report (row, field, error); POST .../imports/:id/retry re-runs only the failed records, migration_admin only, audited; Data Migration page lists batches with the report and retry actions)
 - **W0 note:** partly fixed by #1916 — mapMigrationRows shows entities, records migrated, error count, dry-run; no start/retry/download control
 - **First-pass claim:** 'Reconciliation jobs' (data-migration/page.tsx:16) show only name and status: no progress, record counts or mismatch totals (tenant/_data.ts:32-75), and no way to start, retry or download an error report. Read-only view of a data-integrity operation.
 - **Verified evidence:** True: data-migration page is a read-only ModuleListPage of /api/v1/tenant/org/migrations mapped to id/label/status only (_data.ts). No start/retry/download control. Whether backend exposes start/retry/error-report endpoints is cannot-verify; it is a missing feature rather than a dead route.
