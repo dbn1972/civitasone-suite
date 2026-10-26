@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as queries from "./queries.js";
 
 const ROLES = ["workflow_user", "workflow_admin", "super_admin", "tenant_admin"];
@@ -68,6 +69,8 @@ export async function analyticsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });

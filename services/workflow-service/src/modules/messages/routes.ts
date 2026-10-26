@@ -8,6 +8,7 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { deliverMessageBody, broadcastSignalBody, instanceIdParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -57,6 +58,8 @@ export async function messageRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError || (typeof err === "object" && err !== null && (err as { name?: string }).name === "ZodError")) {
       const zodErr = err as unknown as ZodError;

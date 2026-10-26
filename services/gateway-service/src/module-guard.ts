@@ -341,14 +341,19 @@ function loadSingleFlight(tenantId: string): Promise<CacheEntry> {
   return p;
 }
 
+const TENANT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
   const current = (): boolean => (moduleGen.get(tenantId) ?? 0) === gen;
   try {
+    // The tenant id is interpolated into the admin-service URL path: only a canonical UUID may reach it, so a
+    // crafted x-tenant-id cannot steer the request to another admin-service route (CodeQL js/request-forgery).
+    if (!TENANT_UUID_RE.test(tenantId)) throw new Error("invalid tenant id");
     const adminUrl = process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022";
     const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
     const url = useComposition
-      ? `${adminUrl}/v1/admin/composition/internal/${tenantId}/modules`
-      : `${adminUrl}/v1/admin/tenants/${tenantId}/modules-list`;
+      ? `${adminUrl}/v1/admin/composition/internal/${encodeURIComponent(tenantId)}/modules`
+      : `${adminUrl}/v1/admin/tenants/${encodeURIComponent(tenantId)}/modules-list`;
     const secret = process.env.INTERNAL_SERVICE_SECRET ?? "";
     // Service-to-service contract: x-internal:1 + secret. The composition
     // endpoint sits behind admin's global auth hook (x-service-secret +

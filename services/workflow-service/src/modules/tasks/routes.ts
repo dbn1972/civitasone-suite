@@ -4,6 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkCompleteBody, openTaskRefsBody } from "./validators.js";
 import { paginatedSchema } from "@civitasone/schemas/common";
 import * as commands from "./commands.js";
@@ -124,6 +125,8 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
