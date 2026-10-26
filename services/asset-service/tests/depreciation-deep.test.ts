@@ -12,7 +12,6 @@ import {
   wdvMonthlyAmount,
   computeMonthlyDep,
   generatePeriods,
-  DomainError,
   applyDepreciationPosting,
 } from "../src/modules/depreciation/domain.js";
 import {

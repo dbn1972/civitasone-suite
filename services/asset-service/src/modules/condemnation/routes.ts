@@ -12,7 +12,7 @@ import {
   approveRecommendationBody, createAuctionBody, completeAuctionBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
 import { and, eq } from "drizzle-orm";
 import { preflightSubmitSurvey, preflightApproveRecommendation, preflightCompleteAuction } from "./preflight.js";

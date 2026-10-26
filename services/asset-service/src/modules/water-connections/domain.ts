@@ -1,8 +1,6 @@
 const APPLICATION_STATUSES = ["draft", "submitted", "under_review", "feasibility_check", "approved", "rejected", "installed", "activated", "withdrawn"] as const;
 type ApplicationStatus = typeof APPLICATION_STATUSES[number];
 
-const CONNECTION_STATUSES = ["active", "suspended", "disconnected", "transferred"] as const;
-
 export const VALID_TRANSITIONS: Record<string, string[]> = {
   draft:             ["submitted", "withdrawn"],
   submitted:         ["under_review", "withdrawn"],
