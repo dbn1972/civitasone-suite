@@ -3,6 +3,7 @@ import * as repo from "./repo.js";
 import * as hearingRepo from "../hearings/repo.js";
 import type { CaseRow } from "./schema.js";
 import { departmentNames } from "../../shared/org-client.js";
+import { findAdvocateById } from "../advocates/repo.js";
 
 export async function getCase(id: string, tenantId: string): Promise<CaseRow | null> {
   const row = await cache.getOrLoad<CaseRow>(
@@ -39,13 +40,15 @@ const dateOnly = (d: { toString(): string } | null | undefined): string | undefi
 export async function getCaseDetail(id: string, tenantId: string, correlationId = "case-detail") {
   const row = await getCase(id, tenantId);
   if (!row) return null;
-  const [caseType, respondents, hearings, orders, deptNames] = await Promise.all([
+  const [caseType, respondents, hearings, orders, deptNames, advocate] = await Promise.all([
     row.caseTypeId ? repo.findCaseTypeById(tenantId, row.caseTypeId) : Promise.resolve(null),
     repo.listRespondentNames(tenantId, row.id),
     hearingRepo.listHearingsByCase(tenantId, row.id),
     hearingRepo.listOrdersByCase(tenantId, row.id),
     // Owner decision #10/#11: the stored department ID is resolved to a name for display (fail-open).
     row.departmentId ? departmentNames({ tenantId, correlationId }) : Promise.resolve(new Map<string, string>()),
+    // Owner decision #14: the advocate's name comes from the empanelled-advocate master when linked.
+    row.advocateId ? findAdvocateById(tenantId, row.advocateId) : Promise.resolve(null),
   ]);
   return {
     id: row.id,
@@ -61,7 +64,8 @@ export async function getCaseDetail(id: string, tenantId: string, correlationId 
     filedDate: row.filingDate ? String(row.filingDate).slice(0, 10) : new Date(row.createdAt).toISOString().slice(0, 10),
     petitioner: row.petitioner ?? undefined,
     respondent: respondents.length > 0 ? respondents.join(", ") : undefined,
-    advocateName: row.counselRef ?? undefined,
+    advocateId: row.advocateId ?? undefined,
+    advocateName: advocate?.name ?? row.counselRef ?? undefined,
     nextHearingDate: dateOnly(row.nextDate),
     status: row.status,
     // The page labels this "Description": the free-text dispute description.

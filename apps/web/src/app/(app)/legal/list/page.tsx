@@ -29,6 +29,7 @@ export default async function LegalCasesListPage() {
         actions={
           <>
             <Link href="/legal/hearings" className="btn ghost">Cause list</Link>
+            <Link href="/legal/advocates" className="btn ghost">Advocates</Link>
             <Link href="/legal/cases/new" className="btn primary">+ New Case</Link>
           </>
         }

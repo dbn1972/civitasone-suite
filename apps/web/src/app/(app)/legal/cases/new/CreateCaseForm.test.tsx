@@ -23,6 +23,8 @@ const DEPTS = [
   { id: "99999999-aaaa-4000-8000-000000000002", name: "Public Works Department" },
 ];
 
+const ADVOCATES = [{ id: "88888888-aaaa-4000-8000-000000000001", name: "Adv. Kavita Rao", barEnrolmentNo: "D/1234/2011" }];
+
 function mockFetch(impl: (url: string, init?: RequestInit) => Promise<Response>) {
   globalThis.fetch = vi.fn(impl as unknown as typeof fetch) as unknown as typeof fetch;
 }
@@ -32,6 +34,7 @@ function refData(url: string, caseTypes: unknown[] = CASE_TYPES): Response | nul
   if (url.includes("/v1/legal/case-types")) return new Response(JSON.stringify({ items: caseTypes }), { status: 200 });
   if (url.includes("/v1/legal/courts")) return new Response(JSON.stringify({ items: COURTS }), { status: 200 });
   if (url.includes("/v1/legal/departments")) return new Response(JSON.stringify({ items: DEPTS }), { status: 200 });
+  if (url.includes("/v1/legal/advocates")) return new Response(JSON.stringify({ items: ADVOCATES }), { status: 200 });
   return null;
 }
 
@@ -185,6 +188,22 @@ describe("CreateCaseForm — court master, filing date, department (GAP-LEGAL-CA
     fireEvent.click(screen.getByRole("button", { name: "Register case" }));
     await waitFor(() => expect(pushMock).toHaveBeenCalled());
     expect(calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body).toMatchObject({ privileged: true });
+  });
+
+  it("links an empanelled advocate (advocateId) chosen from the master (GAP-LEGAL-LIST-04, decision #14)", async () => {
+    const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
+    mockFetch(async (url, init) => {
+      calls.push({ url, body: init?.body ? JSON.parse(init.body as string) : undefined });
+      return refData(url) ?? new Response(JSON.stringify({ id: "case-6", status: "accepted" }), { status: 202 });
+    });
+    render(<CreateCaseForm />);
+    await ready();
+    await waitFor(() => expect(screen.getByRole("option", { name: "Adv. Kavita Rao (D/1234/2011)" })).toBeInTheDocument());
+    fillMaster("WP/ADV/1");
+    fireEvent.change(screen.getByLabelText("Empanelled advocate"), { target: { value: ADVOCATES[0]!.id } });
+    fireEvent.click(screen.getByRole("button", { name: "Register case" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    expect(calls.find((c) => c.url.endsWith("/v1/legal/cases") && c.body)!.body).toMatchObject({ advocateId: ADVOCATES[0]!.id });
   });
 
   it("says so (not an empty list) when the court / department lists cannot be loaded", async () => {

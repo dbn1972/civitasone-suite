@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalCases, legalParties, legalCaseTypes, type CaseRow, type CaseInsert } from "./schema.js";
+import { empanelledAdvocates } from "../advocates/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -140,7 +141,7 @@ export async function listCases(tenantId: string, status?: string, caseTypeId?: 
  */
 export async function listCasesWithType(
   tenantId: string, status?: string, caseTypeId?: string, limit = 100,
-): Promise<Array<CaseRow & { type: string | null }>> {
+): Promise<Array<CaseRow & { type: string | null; advocateName: string | null }>> {
   const conditions = [eq(legalCases.tenantId, tenantId)];
   if (status) conditions.push(eq(legalCases.status, status));
   if (caseTypeId) conditions.push(eq(legalCases.caseTypeId, caseTypeId));
@@ -148,15 +149,27 @@ export async function listCasesWithType(
     tx.select({
       row: legalCases,
       typeCode: legalCaseTypes.code,
+      advocateName: empanelledAdvocates.name,
     })
       .from(legalCases)
       .leftJoin(
         legalCaseTypes,
         and(eq(legalCaseTypes.id, legalCases.caseTypeId), eq(legalCaseTypes.tenantId, legalCases.tenantId)),
       )
+      .leftJoin(
+        empanelledAdvocates,
+        and(eq(empanelledAdvocates.id, legalCases.advocateId), eq(empanelledAdvocates.tenantId, legalCases.tenantId)),
+      )
       .where(and(...conditions))
       .limit(limit)
-      .then((rows) => rows.map((r) => ({ ...r.row, type: r.typeCode ?? null }))));
+      .then((rows) => rows.map((r) => ({
+        ...r.row,
+        type: r.typeCode ?? null,
+        advocateName: r.advocateName ?? r.row.counselRef ?? null,
+        // Owner decision #14: when a case is linked to the master, the list shows the advocate's name from the
+        // master (counselRef carries it for existing consumers); legacy free text is kept for unlinked cases.
+        counselRef: r.advocateName ?? r.row.counselRef,
+      }))));
 }
 
 export async function insertParty(tx: Writer, row: typeof legalParties.$inferInsert): Promise<void> {

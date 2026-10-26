@@ -25,6 +25,7 @@ export const createCaseBody = z.object({
   caseTypeId: z.string().uuid().optional(),
   petitioner: z.string().max(256).optional(),
   counselRef: z.string().max(128).optional(),
+  advocateId: z.string().uuid().optional(),
   // Owner decision #8: officers the case is assigned to (reminder recipients).
   assignedOfficerIds: z.array(z.string().uuid()).max(20).optional(),
   // Owner decision #12: restrict the case to its assigned officers and the legal head.

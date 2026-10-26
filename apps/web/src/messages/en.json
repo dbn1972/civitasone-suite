@@ -17159,6 +17159,9 @@
     }
   },
   "legalCaseNew": {
+    "advocateLabel": "Empanelled advocate",
+    "advocateNone": "No advocate (use the counsel reference below)",
+    "advocatesError": "The advocate list could not be loaded; you can still use the counsel reference.",
     "privilegedLabel": "Privileged / confidential case",
     "privilegedHelp": "Only the officers assigned to this case and the legal head can see it. You are assigned automatically.",
     "loading": "Loading…",
@@ -17198,5 +17201,28 @@
     "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy, or use an external party.",
     "externalLabel": "External party name *",
     "externalRequired": "Enter the name of the external party this opinion is addressed to."
+  },
+  "legalAdvocates": {
+    "title": "Empanelled advocates",
+    "subtitle": "The advocates empanelled with the department. Cases link to an advocate here, so lists show a consistent name.",
+    "loading": "Loading advocates…",
+    "empty": "No advocates are empanelled yet.",
+    "loadError": "The advocate list could not be loaded. Try again.",
+    "retry": "Try again",
+    "colName": "Name",
+    "colBar": "Bar enrolment no.",
+    "colContact": "Contact",
+    "addTitle": "Empanel an advocate",
+    "name": "Name *",
+    "bar": "Bar enrolment number *",
+    "barHelp": "For example D/1234/2011.",
+    "contact": "Phone or email *",
+    "add": "Empanel advocate",
+    "adding": "Saving…",
+    "added": "Advocate empanelled.",
+    "duplicate": "An advocate with this Bar enrolment number is already empanelled.",
+    "invalid": "Check the name, the Bar enrolment number and the phone or email.",
+    "saveFailed": "The advocate could not be saved. Try again.",
+    "adminOnly": "Only the head of legal can add advocates."
   }
 }

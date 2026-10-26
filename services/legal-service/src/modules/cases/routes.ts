@@ -7,6 +7,7 @@ import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTyp
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { findAdvocateById } from "../advocates/repo.js";
 import { assertCaseAccess, hiddenCaseIds } from "./access.js";
 import { COURT_MASTER, OTHER_COURT_CODE, findCourt } from "../../config/courts.js";
 import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
@@ -91,6 +92,10 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
       court = master.name; courtCode = master.code; courtVerified = true;
     } else {
       court = body.court as string; courtCode = OTHER_COURT_CODE; courtVerified = false;
+    }
+    // Owner decision #14: a linked advocate must be in the tenant's empanelled-advocate master.
+    if (body.advocateId && !(await findAdvocateById(ctx.tenantId, body.advocateId))) {
+      throw new HttpError(400, "UNKNOWN_ADVOCATE", "advocateId does not reference an empanelled advocate");
     }
     // The department must exist in the org hierarchy. Fails closed (503) when the org service is down.
     const departments = await getOrgClient().listDepartments({ tenantId: ctx.tenantId, correlationId: ctx.correlationId });

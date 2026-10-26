@@ -55,6 +55,10 @@ export function CreateCaseForm() {
   const [respondent, setRespondent] = useState("");
   const [subject, setSubject] = useState("");
   const [counselRef, setCounselRef] = useState("");
+  // GAP-LEGAL-LIST-04 (owner decision #14): link the case to an empanelled advocate (counselRef stays as a free-text fallback).
+  const [advocateId, setAdvocateId] = useState("");
+  const [advocates, setAdvocates] = useState<Array<{ id: string; name: string; barEnrolmentNo: string }>>([]);
+  const [advocatesFailed, setAdvocatesFailed] = useState(false);
   const [caseTypeId, setCaseTypeId] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -82,6 +86,14 @@ export function CreateCaseForm() {
         if (active) { setCourts(cj.items ?? []); setDepartments(dj.items ?? []); setRefData("ready"); }
       } catch {
         if (active) setRefData("error");
+      }
+      try {
+        const a = await fetch("/api/proxy/v1/legal/advocates");
+        if (!a.ok) throw new Error("advocates unavailable");
+        const aj = (await a.json()) as { items?: Array<{ id: string; name: string; barEnrolmentNo: string }> };
+        if (active) setAdvocates(aj.items ?? []);
+      } catch {
+        if (active) setAdvocatesFailed(true);
       }
       try {
         const res = await fetch("/api/proxy/v1/legal/case-types");
@@ -136,6 +148,7 @@ export function CreateCaseForm() {
       subject: subject.trim() || undefined,
       petitioner: petitioner.trim() || undefined,
       counselRef: counselRef.trim() || undefined,
+      advocateId: advocateId || undefined,
       // GAP-LEGAL-CASES-NEW-01: send the explicit case type (caseTypeId) when the
       // registrar picked one from the master. Optional — omitted falls back to
       // the caseNo-prefix heuristic in the list classifier.
@@ -269,6 +282,14 @@ export function CreateCaseForm() {
         <div className="field">
           <label className="label" htmlFor="respondent">Respondent</label>
           <input id="respondent" className="inp" value={respondent} onChange={(e) => setRespondent(e.target.value)} style={{ minHeight: 44 }} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="advocateId">{t("advocateLabel")}</label>
+          <select id="advocateId" className="inp" value={advocateId} onChange={(e) => setAdvocateId(e.target.value)} style={{ minHeight: 44 }}>
+            <option value="">{t("advocateNone")}</option>
+            {advocates.map((a) => <option key={a.id} value={a.id}>{`${a.name} (${a.barEnrolmentNo})`}</option>)}
+          </select>
+          {advocatesFailed ? <p role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{t("advocatesError")}</p> : null}
         </div>
         <div className="field">
           <label className="label" htmlFor="counselRef">Counsel reference</label>

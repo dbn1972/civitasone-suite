@@ -16,6 +16,7 @@ import { settlementRoutes } from "./modules/settlements/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { reminderRoutes } from "./modules/reminders/routes.js";
 import { attachmentRoutes } from "./modules/attachments/routes.js";
+import { advocateRoutes } from "./modules/advocates/routes.js";
 import { opinionRoutes } from "./modules/opinions/routes.js";
 import { counselBriefRoutes } from "./modules/counsel/routes.js";
 import { filingRoutes } from "./modules/filings/routes.js";
@@ -53,6 +54,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(dashboardRoutes);
   await app.register(reminderRoutes);
   await app.register(attachmentRoutes);
+  await app.register(advocateRoutes);
   await app.register(opinionRoutes);
   await app.register(counselBriefRoutes);
   await app.register(filingRoutes);
