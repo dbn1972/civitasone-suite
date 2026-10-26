@@ -140,6 +140,10 @@ export async function ask(ctx: RequestContext, body: AskBody): Promise<AskResult
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: { interactionId, answered: result.answered, citationCount: result.citations.length },
     });
+    // GAP-KNOWLEDGE-ASSISTANT-06: one audit event per interaction, same txn. Carries
+    // only the interaction id (never the free-text question) so no personal data
+    // reaches the audit trail.
+    await audit(tx as unknown as DrizzleTx, ctx, "ask", "assistant_interaction", interactionId);
   });
   return {
     interactionId,
