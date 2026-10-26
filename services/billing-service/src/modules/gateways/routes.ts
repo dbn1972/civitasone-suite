@@ -267,7 +267,10 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post("/v1/billing/webhooks/payu", { config: { public: true } }, async (req, reply) => {
     const body = req.body as Record<string, string>;
-    authenticate(() => typeof body === "object" && body !== null && verifyPayuWebhookHash(body));
+    // Reject a non-object body up front so the authentication predicate below is ONLY the
+    // reverse-hash check (no user-controlled shape short-circuit inside the security condition).
+    if (typeof body !== "object" || body === null) throw new HttpError(401, "UNAUTHORIZED", "unauthorized");
+    authenticate(() => verifyPayuWebhookHash(body));
     const status = body?.["status"];
     const txnId = body?.["txnid"] ?? "";
     const mihpayid = body?.["mihpayid"] ?? "";
@@ -281,7 +284,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       actorId: SYSTEM_ACTOR_ID,
       correlationId: messageId,
       schemaVersion: "1.0",
-      payload: { ...(typeof body === "object" ? body : {}), txnId, mihpayid, status },
+      payload: { ...body, txnId, mihpayid, status },
     });
 
     return reply.code(200).send({ status: "ok" });

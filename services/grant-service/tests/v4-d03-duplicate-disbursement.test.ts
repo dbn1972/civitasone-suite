@@ -87,8 +87,6 @@ async function send(q: Queue, topic: string, payload: Record<string, unknown>): 
 }
 const disbRows = (instId: string) => scopedQuery((tx) =>
   tx.select().from(grantDisbursements).where(eq(grantDisbursements.installmentId, instId)));
-const instStatus = async (id: string) =>
-  (await scopedQuery((tx) => tx.select().from(grantInstallments).where(eq(grantInstallments.id, id))))[0]!.status;
 const schemeDisbursed = async () =>
   (await scopedQuery((tx) => tx.select().from(grantSchemes).where(eq(grantSchemes.id, SCHEME))))[0]!.disbursedMinor;
 const eventCount = async (t: string) =>

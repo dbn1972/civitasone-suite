@@ -31,6 +31,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "bulk_import",
   "candidate_resume",
   "claim",
+  "comp_off", // comp-off-consumer audit (#2280)
   "contract",
   "contract_renewal",
   "contract_renewal_bulk",
