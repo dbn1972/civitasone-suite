@@ -71,3 +71,10 @@ export async function findChannelById(id: string, tenantId: string): Promise<Cha
     .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1));
   return rows[0] ? toView(rows[0]) : null;
 }
+
+/** Tenant-guarded read through the caller's open transaction (consumer use). */
+export async function findChannelByIdTx(tx: Writer, id: string, tenantId: string): Promise<ChannelView | null> {
+  const rows = await tx.select().from(notificationChannels)
+    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1);
+  return rows[0] ? toView(rows[0]) : null;
+}

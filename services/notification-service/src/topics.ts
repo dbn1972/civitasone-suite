@@ -6,6 +6,7 @@ export const COMMANDS = {
   sendNotification: "notification.send",
   createChannel:    "notification.channel.create",
   setChannelEnabled: "notification.channel.set_enabled",
+  testSendChannel:  "notification.channel.test_send",
   createAlertRule:  "notification.alert_rule.create",
   enableAlertRule:  "notification.alert_rule.enable",
   disableAlertRule: "notification.alert_rule.disable",

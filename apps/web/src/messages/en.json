@@ -16935,7 +16935,10 @@
       "disableConfirm": "Disable channel",
       "reasonLabel": "Reason for disabling (recorded in the audit log)",
       "enabledOk": "Channel \"{name}\" enabled.",
-      "disabledOk": "Channel \"{name}\" disabled."
+      "disabledOk": "Channel \"{name}\" disabled.",
+      "testSend": "Send test to me",
+      "testSendOk": "Test message for \"{name}\" queued to your own address. Check your inbox shortly.",
+      "testSendHint": "Test messages go only to your own address."
     },
     "breakglass": {
       "platformAdminOnly": "Platform administrators only"
