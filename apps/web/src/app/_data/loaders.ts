@@ -6618,6 +6618,10 @@ export type DataExportRequest = {
   createdAt: string;
   expiresAt: string | null;
   downloadUrl: string | null;
+  /** Owner decision #22: machine reason when status is "failed". */
+  failureReason?: string | null;
+  /** Owner decision #22: per-file summary (storage keys never reach the browser). */
+  files?: { entity: string; rowCount: number; sizeBytes: number }[];
 };
 
 export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]>> {

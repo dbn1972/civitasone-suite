@@ -9,6 +9,7 @@ import * as commands from "./commands.js";
 import { exportRequests } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { eq, and, desc } from "drizzle-orm";
+import { presignedGetUrl, StorageNotConfiguredError } from "@civitasone/storage";
 
 const createBody = z.object({
   type: z.enum(["full", "module", "entity"]),
@@ -25,6 +26,19 @@ const createBody = z.object({
 const PERSONAL_DATA_MODULES = new Set(["payroll", "hrms"]);
 
 const idParam = z.object({ id: z.string().uuid() });
+
+/** OWNER DECISION #22: signed download links live for 15 minutes. */
+export const DOWNLOAD_LINK_TTL_SECONDS = 15 * 60;
+
+/**
+ * What a list row may expose to the browser: storage keys never leave the
+ * server, only a per-file summary the UI can show.
+ */
+export function toExportView<T extends { files?: unknown }>(row: T): Omit<T, "files"> & { files: { entity: string; rowCount: number; sizeBytes: number }[] } {
+  const { files, ...rest } = row;
+  const list = Array.isArray(files) ? (files as Array<{ entity: string; rowCount: number; sizeBytes: number }>) : [];
+  return { ...rest, files: list.map((f) => ({ entity: f.entity, rowCount: f.rowCount, sizeBytes: f.sizeBytes })) };
+}
 
 /** A ready export whose expiry has passed is "expired" (and offers no download URL). */
 export function effectiveExportStatus<T extends { status: string; expiresAt: Date | string | null; downloadUrl: string | null }>(row: T, now = Date.now()): T {
@@ -89,7 +103,7 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     // "expired" in the table, so after 48h the list kept offering a Download link
     // that the download route answers with 410. Report the EFFECTIVE status.
     const now = Date.now();
-    return reply.send({ data: rows.map((r) => effectiveExportStatus(r, now)) });
+    return reply.send({ data: rows.map((r) => toExportView(effectiveExportStatus(r, now))) });
   });
 
   // DOWNLOAD export (returns signed URL or triggers download)
@@ -111,6 +125,35 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     if (row.expiresAt && new Date(row.expiresAt) < new Date()) {
       throw new HttpError(410, "EXPIRED", "export has expired, please request a new one");
     }
-    return reply.send({ downloadUrl: row.downloadUrl, expiresAt: row.expiresAt });
+    // OWNER DECISION #22: files live in object storage; each link is signed for
+    // 15 minutes at the moment of THIS request and is never persisted. The issue
+    // is audited BEFORE any link is returned (fail closed), and the raw storage
+    // key is never sent to the browser.
+    const stored = Array.isArray(row.files) ? row.files : [];
+    if (stored.length === 0) {
+      // Legacy rows created before files were stored: nothing to sign.
+      return reply.send({ downloadUrl: row.downloadUrl, expiresAt: row.expiresAt, files: [] });
+    }
+    await commands.exportDownloadIssued(ctx, id, stored.length, DOWNLOAD_LINK_TTL_SECONDS);
+    let files: { entity: string; fileName: string; rowCount: number; sizeBytes: number; url: string }[];
+    try {
+      files = await Promise.all(stored.map(async (f) => ({
+        entity: f.entity,
+        fileName: f.key.slice(f.key.lastIndexOf("/") + 1),
+        rowCount: f.rowCount,
+        sizeBytes: f.sizeBytes,
+        url: await presignedGetUrl({ key: f.key, expiresIn: DOWNLOAD_LINK_TTL_SECONDS }),
+      })));
+    } catch (err) {
+      if (err instanceof StorageNotConfiguredError) throw new HttpError(503, "STORAGE_UNAVAILABLE", "file storage is not available right now");
+      throw new HttpError(502, "STORAGE_FAILED", "the export file could not be prepared for download");
+    }
+    void reply.header("cache-control", "no-store");
+    return reply.send({
+      downloadUrl: files[0]?.url ?? null,
+      expiresAt: row.expiresAt,
+      linkExpiresAt: new Date(Date.now() + DOWNLOAD_LINK_TTL_SECONDS * 1000).toISOString(),
+      files,
+    });
   });
 }

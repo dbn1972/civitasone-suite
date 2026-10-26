@@ -11,6 +11,7 @@ import {
 // COMP-001 fix: these routes used to fabricate their responses instead of
 // reading the store their own sibling modules already write to.
 import { exportRequests } from "../data-export/schema.js";
+import { toExportView } from "../data-export/routes.js";
 import { customDomains } from "../custom-domains/schema.js";
 import { featureFlags } from "../feature-flags/schema.js";
 import * as featureFlagCommands from "../feature-flags/commands.js";
@@ -203,7 +204,8 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const rows = await scopedRead((tx) =>
       tx.select().from(exportRequests).where(eq(exportRequests.tenantId, ctx.tenantId)).orderBy(desc(exportRequests.createdAt)).limit(50),
     );
-    return reply.send({ data: rows, meta: pageMeta(50, 0, rows.length) });
+    // Owner decision #22: storage keys stay server-side; only a per-file summary is returned.
+    return reply.send({ data: rows.map((r) => toExportView(r)), meta: pageMeta(50, 0, rows.length) });
   });
 
   // ─── Custom domains — real, same store as /v1/admin/custom-domains ───

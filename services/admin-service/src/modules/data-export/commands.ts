@@ -44,6 +44,23 @@ export async function exportRequest(ctx: RequestContext, payload: ExportRequestP
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+const COMMAND_DOWNLOAD = "admin.data_export.download";
+
+/** Owner decision #22: audit record for an issued signed download link. */
+export async function exportDownloadIssued(ctx: RequestContext, exportId: string, fileCount: number, linkTtlSeconds: number): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMAND_DOWNLOAD, {
+    messageId: id,
+    type: COMMAND_DOWNLOAD,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { exportId, tenantId: ctx.tenantId, fileCount, linkTtlSeconds },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export async function exportProcess(ctx: RequestContext, exportId: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMAND_PROCESS, {
