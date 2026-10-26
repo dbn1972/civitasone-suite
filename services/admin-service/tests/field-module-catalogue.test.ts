@@ -9,7 +9,7 @@
  *   - the catalogue contains `field` and maps it to the gateway key `field`;
  *   - an entitled tenant's internal projection (what the gateway reads) carries
  *     `field`, an un-entitled tenant's does NOT (gateway then fails closed);
- *   - the REAL migration 0055 grandfathers every tenant that reaches field
+ *   - the REAL migration 0056 grandfathers every tenant that reaches field
  *     today (composition entitlement + legacy modules-list), idempotently.
  */
 import { readFileSync } from "node:fs";
@@ -27,7 +27,7 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const ADMIN = "d9100000-eeee-4000-8000-000000000001";
 const ENTITLED = "d9100000-0000-4000-8000-0000000000a1"; // govt_dept profile
 const UNENTITLED = "d9100000-0000-4000-8000-0000000000a2"; // small_office profile (no field)
-const COMPOSED_OLD = "d9100000-0000-4000-8000-0000000000a3"; // pre-0055 entitlement, no field
+const COMPOSED_OLD = "d9100000-0000-4000-8000-0000000000a3"; // pre-0056 entitlement, no field
 const LEGACY = "d9100000-0000-4000-8000-0000000000a4"; // modules-list tenant, no field
 const TENANTS = [ENTITLED, UNENTITLED, COMPOSED_OLD, LEGACY];
 
@@ -56,12 +56,12 @@ const projection = async (app: FastifyInstance, t: string) =>
     data: { name: string }[];
   };
 const keysOf = (p: { data: { name: string }[] }) => p.data.map((m) => m.name);
-// Runs the REAL migration 0055 text, but per test tenant inside a tenant-scoped
+// Runs the REAL migration 0056 text, but per test tenant inside a tenant-scoped
 // tx: the migration drops/restores FORCE RLS around its cross-tenant DML, and
 // toggling that on the shared DB while parallel test files run would race them.
 // Under the tenant GUC the (unchanged) DML is confined to that tenant's own rows
 // by RLS, so the production statements are exercised without cross-test effects.
-const MIGRATION_TEXT = readFileSync(new URL("../migrations/0055_field_module_catalogue.sql", import.meta.url), "utf8");
+const MIGRATION_TEXT = readFileSync(new URL("../migrations/0056_field_module_catalogue.sql", import.meta.url), "utf8");
 const FORCE_LINES = /^ALTER TABLE .*FORCE ROW LEVEL SECURITY;$/gm;
 const runMigration = async () => {
   expect(MIGRATION_TEXT.match(FORCE_LINES)).toHaveLength(4);
@@ -126,7 +126,7 @@ describe("gateway projection (what module-guard reads)", () => {
   });
 });
 
-describe("migration 0055 grandfather", () => {
+describe("migration 0056 grandfather", () => {
   it("a tenant composed before field existed is denied until the migration, then keeps access", async () => {
     expect(keysOf(await projection(app, COMPOSED_OLD))).not.toContain("field");
     await runMigration();

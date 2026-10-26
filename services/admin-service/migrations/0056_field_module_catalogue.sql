@@ -1,4 +1,4 @@
--- admin-service migration 0055 — `field` (Field Operations) composition module.
+-- admin-service migration 0056 — `field` (Field Operations) composition module.
 --
 -- Decision: owner decision #36 (2026-10-26), GAP-FIELD-HOME-04. The gateway
 -- module-guard now gates /api/v1/field behind entitlement (ROUTE_TO_MODULE
