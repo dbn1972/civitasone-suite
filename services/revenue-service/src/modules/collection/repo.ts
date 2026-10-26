@@ -208,13 +208,23 @@ export async function getDemandBalance(tenantId: string, demandId: string): Prom
 export async function getMovableForDemandTx(tx: Writer, tenantId: string, demandId: string) {
   const outstanding = await getDemandBalanceTx(tx, tenantId, demandId);
   const rows = await tx
-    .select({ penaltyMinor: demands.penaltyMinor, interestMinor: demands.interestMinor })
+    .select({
+      penaltyMinor: demands.penaltyMinor,
+      interestMinor: demands.interestMinor,
+      principalMinor: demands.principalMinor,
+      rebateMinor: demands.rebateMinor,
+      netMinor: demands.netMinor,
+    })
     .from(demands)
     .where(and(eq(demands.tenantId, tenantId), eq(demands.id, demandId)))
     .limit(1);
-  const penalty = rows[0]?.penaltyMinor ?? 0n;
-  const interest = rows[0]?.interestMinor ?? 0n;
-  return { outstanding, penalty, interest, movable: movablePrincipal(outstanding, penalty, interest) };
+  const d = rows[0];
+  const penalty = d?.penaltyMinor ?? 0n;
+  const interest = d?.interestMinor ?? 0n;
+  // Charges that stay with the demand = what net carries beyond (principal - rebate).
+  const charges = d ? d.netMinor - d.principalMinor + d.rebateMinor : 0n;
+  const retained = charges > 0n ? charges : 0n;
+  return { outstanding, penalty, interest, retained, movable: movablePrincipal(outstanding, retained) };
 }
 
 export async function getDemandBalanceTx(tx: Writer, tenantId: string, demandId: string): Promise<bigint> {

@@ -72,11 +72,17 @@ export function validateRefund(refundAmount: bigint, receiptAmount: bigint): voi
 /**
  * Owner decision #5 (GAP-REVENUE-ADJUSTMENTS-03): only PRINCIPAL is movable
  * between demands; the penalty and interest charged on a demand stay with it.
- * The cap is the LIVE DCB outstanding of the source demand less the
- * penalty+interest that must stay behind (floored at zero).
+ * The cap is the LIVE DCB outstanding of the source demand less the charges
+ * that must stay behind (floored at zero).
+ *
+ * `retained` is the penalty/interest part of the demand, derived from the
+ * demand's own arithmetic (net = principal - rebate + charges, so charges =
+ * net - principal + rebate). Summing the penalty and interest columns would
+ * double count: the rate engine books the overdue interest AS the penalty
+ * (penalty === interest), and net includes it once.
  */
-export function movablePrincipal(outstanding: bigint, penalty: bigint, interest: bigint): bigint {
-  const movable = outstanding - penalty - interest;
+export function movablePrincipal(outstanding: bigint, retained: bigint): bigint {
+  const movable = outstanding - retained;
   return movable > 0n ? movable : 0n;
 }
 

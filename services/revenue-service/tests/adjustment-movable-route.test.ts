@@ -21,7 +21,7 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
   const original = await importOriginal<typeof import("../src/modules/collection/repo.js")>();
   return {
     ...original,
-    getMovableForDemand: vi.fn(async () => ({ outstanding: 1_000_000n, penalty: 150_000n, interest: 50_000n, movable: 800_000n })),
+    getMovableForDemand: vi.fn(async () => ({ outstanding: 1_000_000n, penalty: 150_000n, interest: 50_000n, retained: 200_000n, movable: 800_000n })),
     listMovableForAssessee: vi.fn(async () => [{ demandId: FROM, outstandingMinor: "1000000", movableMinor: "800000" }]),
   };
 });
