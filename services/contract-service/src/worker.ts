@@ -15,6 +15,8 @@ import { registerObligationConsumers } from "./modules/obligations/consumer.js";
 import { registerRenewalConsumers } from "./modules/renewals/consumer.js";
 import { registerEsignConsumers } from "./modules/esign/consumer.js";
 import { registerVersionConsumers } from "./modules/versions/consumer.js";
+import { registerExpiryConsumers } from "./modules/expiry/consumer.js";
+import { startExpirySweep } from "./modules/expiry/sweeper.js";
 
 const log = pino({ name: "contract-worker" });
 
@@ -57,6 +59,7 @@ registerObligationConsumers(queue);
 registerRenewalConsumers(queue);
 registerEsignConsumers(queue);
 registerVersionConsumers(queue);
+registerExpiryConsumers(queue);
 
 await queue.start();
 // Cross-tenant outbox scan must use BYPASSRLS scannerDb — FORCE RLS on
@@ -69,11 +72,14 @@ const purge = startOutboxPurge(scannerDb as unknown as Parameters<typeof startOu
   batchSize: 1000,
   logger: log,
 });
+// Decision #42: daily contract-expiry sweep -> contract.expiry.check -> contract.expiry.alert.
+const expirySweep = startExpirySweep(queue, log);
 log.info("contract-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
+  if (expirySweep) clearInterval(expirySweep);
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();
