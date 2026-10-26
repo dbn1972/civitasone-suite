@@ -402,7 +402,7 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
   it("202 — a value a float cannot hold survives unchanged", async () => {
     const exact = "99999999.9999";
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),
@@ -414,7 +414,7 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
 
   it("202 — 0.1 does not drift", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),
@@ -425,7 +425,7 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
 
   it("202 — pads a short fraction to the column scale", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),
@@ -437,7 +437,7 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
 
   it("202 — confidence is also returned as a string", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),
@@ -449,7 +449,7 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
 
   it("202 — accepts a JSON number score for legacy callers", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),
@@ -460,13 +460,13 @@ describe("PUT /v1/recommendations/predictive/:subjectType/:subjectId/:modelType"
 
   it("202 — confidence defaults to null", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "PUT", url: putUrl, headers: mlAuth(), payload: { score: "1" } });
+    await app.inject({ method: "PUT", url: putUrl, headers: mlAuth(), payload: { score: "1" } });
     await app.close();
   });
 
   it("202 — honours an explicit computedAt", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "PUT",
       url: putUrl,
       headers: mlAuth(),

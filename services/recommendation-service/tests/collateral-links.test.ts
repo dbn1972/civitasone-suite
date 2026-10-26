@@ -371,14 +371,14 @@ describe("POST /v1/recommendations/:id/collateral", () => {
   it("202 — assigns the next free ordinal", async () => {
     H.listAllForRecommendationMock.mockResolvedValue([{ ordinal: 0 }, { ordinal: 3 }]);
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url, headers: auth(), payload: validPayload });
+    await app.inject({ method: "POST", url, headers: auth(), payload: validPayload });
     expect((H.queuePublishMock.mock.calls[0]?.[1] as any).payload.ordinal).toBe(4);
     await app.close();
   });
 
   it("202 — honours an explicit ordinal", async () => {
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "POST",
       url,
       headers: auth(),
