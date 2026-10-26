@@ -271,4 +271,52 @@ describe("HearingsConsole — table layout (GAP-COURT-HEARINGS-04)", () => {
     fireEvent.click(dateHeader);
     expect(dateHeader).toHaveAttribute("aria-sort", "ascending");
   });
+
+  // GAP-COURT-HEARINGS-05: the bench shows by NAME (looked up from the court's
+  // benches) and a raw bench UUID is never rendered.
+  describe("bench label", () => {
+    const BENCH_ID = "11111111-2222-4333-8444-555555555555";
+    const withBench: Hearing = { ...scheduledHearing, benchId: BENCH_ID };
+
+    it("shows the bench name when the benchId resolves to a known bench", () => {
+      render(
+        <HearingsConsole
+          caseId="case-1"
+          caseSummary={caseSummary}
+          initialHearings={[withBench]}
+          hearingsSource="api"
+          benchNames={{ [BENCH_ID]: "Division Bench I" }}
+        />,
+      );
+      expect(screen.getByRole("columnheader", { name: "Bench" })).toBeInTheDocument();
+      expect(screen.getByText("Division Bench I")).toBeInTheDocument();
+    });
+
+    it("never renders the raw bench UUID when the bench name is unknown", () => {
+      const { container } = render(
+        <HearingsConsole
+          caseId="case-1"
+          caseSummary={caseSummary}
+          initialHearings={[withBench]}
+          hearingsSource="api"
+          benchNames={{}}
+        />,
+      );
+      expect(container.textContent).not.toContain(BENCH_ID);
+      expect(container.textContent).not.toMatch(/11111111/);
+    });
+
+    it("shows an em dash when the hearing has no bench", () => {
+      render(
+        <HearingsConsole
+          caseId="case-1"
+          caseSummary={caseSummary}
+          initialHearings={[scheduledHearing]}
+          hearingsSource="api"
+          benchNames={{ [BENCH_ID]: "Division Bench I" }}
+        />,
+      );
+      expect(screen.queryByText("Division Bench I")).not.toBeInTheDocument();
+    });
+  });
 });

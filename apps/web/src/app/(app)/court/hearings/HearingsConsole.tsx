@@ -34,11 +34,14 @@ export function HearingsConsole({
   caseSummary,
   initialHearings,
   hearingsSource,
+  benchNames = {},
 }: {
   caseId: string;
   caseSummary: { title: string | null; cnrNumber: string | null };
   initialHearings: Hearing[];
   hearingsSource: "api" | "error";
+  /** benchId -> bench display name (GAP-COURT-HEARINGS-05). A bench missing from the map is omitted, never shown as a UUID. */
+  benchNames?: Record<string, string>;
 }) {
   const [hearings, setHearings] = useState<Hearing[]>(initialHearings);
   const [source, setSource] = useState<"api" | "error">(hearingsSource);
@@ -113,6 +116,7 @@ export function HearingsConsole({
                     Date {sortDir === "desc" ? "▼" : "▲"}
                   </th>
                   <th scope="col">Purpose</th>
+                  <th scope="col">Bench</th>
                   <th scope="col">Status</th>
                   <th scope="col">Next date</th>
                   <th scope="col">Actions</th>
@@ -131,6 +135,7 @@ export function HearingsConsole({
                       hearing={h}
                       caseId={caseId}
                       caseLabel={caseLabel(caseSummary)}
+                      benchName={h.benchId ? benchNames[h.benchId] : undefined}
                       onDone={async (msg) => {
                         flash(msg);
                         await reload();
@@ -271,11 +276,13 @@ function HearingRow({
   hearing,
   caseId,
   caseLabel,
+  benchName,
   onDone,
 }: {
   hearing: Hearing;
   caseId: string;
   caseLabel: string;
+  benchName?: string;
   onDone: (msg: string) => Promise<void> | void;
 }) {
   const [showAdjourn, setShowAdjourn] = useState(false);
@@ -295,6 +302,7 @@ function HearingRow({
       <tr>
         <td style={mono}>{fmtDateTime(hearing.scheduledDate)}</td>
         <td>{hearing.purpose ? humanize(hearing.purpose) : <span style={{ color: "var(--ink2)" }}>—</span>}</td>
+        <td>{benchName ? benchName : <span style={{ color: "var(--ink2)" }}>—</span>}</td>
         <td>
           <StatusPill status={hearingPillStatus(hearing.status)} label={hearingStatusLabel(hearing.status)} />
         </td>
@@ -326,7 +334,7 @@ function HearingRow({
       </tr>
       {(showAdjourn || showOutcome) && (
         <tr>
-          <td colSpan={5} style={{ padding: "0 0 8px", background: "var(--surface2, var(--bg2))" }}>
+          <td colSpan={6} style={{ padding: "0 0 8px", background: "var(--surface2, var(--bg2))" }}>
             {showAdjourn && (
               <AdjournDialog
                 hearing={hearing}
