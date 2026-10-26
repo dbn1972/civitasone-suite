@@ -113,7 +113,7 @@ function recipientError(recipient: string, effectiveChannel: string): string | u
 }
 
 export default function ComposeNotificationPage() {
-  const templateFieldId = useId();
+  useId();
 
   // GAP-NOTIFICATIONS-TEMPLATES-DETAIL-01: a "Send with this template" link from
   // a template detail page carries ?templateId=…; preselect it once the list
