@@ -1,5 +1,12 @@
 import {
-  pgSchema, uuid, text, varchar, char, bigint, integer, timestamp, boolean,
+  pgSchema,
+  uuid,
+  text,
+  varchar,
+  char,
+  bigint,
+  integer,
+  timestamp,
 } from "drizzle-orm/pg-core";
 // NOTE: boolean imported but not yet used below — retained for future schema additions
 

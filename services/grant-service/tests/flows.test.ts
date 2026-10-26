@@ -13,10 +13,10 @@
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { grantBeneficiaries, grantAadhaarLinks } from "../src/modules/beneficiary/schema.js";

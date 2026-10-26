@@ -12,7 +12,7 @@ import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { grantSchemes } from "../src/modules/scheme/schema.js";
 import { grantApplications } from "../src/modules/application/schema.js";
 import { grantInstallments, grantDisbursements } from "../src/modules/disbursement/schema.js";
