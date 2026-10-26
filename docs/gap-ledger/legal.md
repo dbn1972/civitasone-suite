@@ -831,7 +831,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by this commit (UAT B2): list and detail return one DTO (soughtBy/counselName): tests/gap-legal-opinion-dto-parity.test.ts + apiMappers.legalOpinionContract.test.ts
 - **First-pass claim:** List reads advisorName / requestedBy (OpinionsTable.tsx:11-12) while the detail page reads counselName / soughtBy (opinions/[id]/page.tsx:41-42): field names disagree, so one of the two shows blanks; whether the API returns both is undeterminable (legal-service not in snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/opinions', 'GET /api/v1/legal/opinions/:id']`
 - **Question:** Do list and detail return the same field names (advisorName/counselName, requestedBy/soughtBy)?
