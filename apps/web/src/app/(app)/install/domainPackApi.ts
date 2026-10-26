@@ -24,6 +24,8 @@ export type DomainPackActivateResult = {
   domainPackKey: string;
   stageNumber: number;
   packKeys: string[];
+  /** Id of the install stage row tracking this activation ("" when an older service omits it). */
+  stageId: string;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -164,8 +166,36 @@ export async function activateDomainPackStage3(
     correlationId: str(body.correlationId),
     domainPackKey: str(body.domainPackKey) || domainPackKey,
     stageNumber: typeof body.stageNumber === "number" ? body.stageNumber : 3,
+    stageId: str(body.stageId),
     packKeys: Array.isArray(body.packKeys)
       ? body.packKeys.filter((k): k is string => typeof k === "string")
       : [],
   };
+}
+
+export type ActivationJobState = "queued" | "completed" | "failed" | "unknown";
+
+/**
+ * GAP-INSTALL-DOMAIN-PACKS-01: read the install stage row that tracks an
+ * activation. The row is written asynchronously (queue consumer), so a 404 right
+ * after the 202 means "not recorded yet" (queued), not an error. A failed
+ * status call is reported as "unknown" so the UI never claims progress it could
+ * not observe. Raw server error text is never returned.
+ */
+export async function fetchActivationStageStatus(stageId: string): Promise<{ state: ActivationJobState }> {
+  try {
+    const res = await fetch(`/api/proxy/v1/install/stages/${encodeURIComponent(stageId)}`, {
+      cache: "no-store",
+      headers: { accept: "application/json" },
+    });
+    if (res.status === 404) return { state: "queued" };
+    if (!res.ok) return { state: "unknown" };
+    const body = (await res.json()) as { status?: unknown };
+    const status = str(body.status);
+    if (status === "completed") return { state: "completed" };
+    if (status === "failed") return { state: "failed" };
+    return { state: "queued" };
+  } catch {
+    return { state: "unknown" };
+  }
 }

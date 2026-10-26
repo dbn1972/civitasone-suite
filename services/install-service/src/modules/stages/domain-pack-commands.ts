@@ -14,6 +14,8 @@ export type DomainPackActivateAccepted = {
   domainPackKey: string;
   stageNumber: number;
   packKeys: string[];
+  /** Id of the install stage row that tracks this activation (poll GET /v1/install/stages/:id). */
+  stageId: string;
 };
 
 /**
@@ -88,5 +90,6 @@ export async function activateDomainPackStage3(
     domainPackKey,
     stageNumber: 3,
     packKeys,
+    stageId,
   };
 }
