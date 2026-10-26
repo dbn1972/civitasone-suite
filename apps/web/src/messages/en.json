@@ -1195,6 +1195,14 @@
   "courtPartyIdentity": {
     "maskedNote": "Party names and advocate Bar IDs are masked for your role. Judges, registrars and court staff see them in full."
   },
+  "courtCauseListSlots": {
+    "slotPlaceholder": "Select a slot…",
+    "roomPlaceholder": "Select a courtroom…",
+    "loading": "Loading slots and courtrooms…",
+    "loadError": "We couldn't load the slots and courtrooms for this court. Try again shortly.",
+    "retry": "Retry",
+    "chooseBoth": "Choose a slot and a courtroom."
+  },
   "courtCaseSelector": {
     "label": "Case",
     "placeholder": "Search by title or CNR…",

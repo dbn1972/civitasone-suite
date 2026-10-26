@@ -114,9 +114,15 @@ vi.mock("../src/modules/cause-list/repo.js", () => ({
   // Truthy by default so the plain happy-path test below doesn't trip the
   // CAUSELIST_NOT_FOUND check; tests that specifically need it undefined
   // override with mockResolvedValueOnce.
-  getCauseList: vi.fn(async () => ({ id: "stub-causelist", listDate: "2026-01-01", courtId: "stub-court" })),
+  getCauseList: vi.fn(async () => ({ id: "stub-causelist", listDate: "2026-01-01", courtId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" })),
   getItemById: vi.fn(async () => undefined),
   findSlotConflict: vi.fn(async () => undefined),
+}));
+
+// Owner decision #33: listing a case checks the court's slot/courtroom config (none configured -> defaults).
+vi.mock("../src/modules/config-registry/repo.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/modules/config-registry/repo.js")>()),
+  listByNamespace: vi.fn(async () => []),
 }));
 
 vi.mock("../src/modules/case-registry/repo.js", () => ({
@@ -273,7 +279,7 @@ describe("cause-list commands", () => {
   it("listCaseOnCauseList validates + publishes", async () => {
     const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
     const causeListId = randomUUID();
-    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "10:30", courtroom: "Court 1" });
+    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 1, slot: "AM-1", courtroom: "COURT-1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
@@ -296,7 +302,7 @@ describe("cause-list commands", () => {
     vi.mocked(causeListRepo.getCauseList).mockResolvedValueOnce({ id: causeListId, listDate: "2026-08-01", courtId: COURT_ID });
     vi.mocked(causeListRepo.findSlotConflict).mockResolvedValueOnce({ id: randomUUID(), caseId: randomUUID() });
     await expect(
-      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "AM-1", courtroom: "COURT-1" }),
     ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_SLOT_CONFLICT" });
     expect(publishSpy).not.toHaveBeenCalled();
   });
@@ -307,7 +313,7 @@ describe("cause-list commands", () => {
     vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "09:00", courtroom: "Court 9", itemNumber: 1 });
     const causeListId = randomUUID();
     await expect(
-      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" }),
+      listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "AM-1", courtroom: "COURT-1" }),
     ).rejects.toMatchObject({ status: 409, code: "CAUSELIST_ITEM_ALREADY_LISTED" });
     expect(publishSpy).not.toHaveBeenCalled();
   });
@@ -315,9 +321,9 @@ describe("cause-list commands", () => {
   it("listCaseOnCauseList allows an identical resubmission through as an idempotent no-op", async () => {
     const { listCaseOnCauseList } = await import("../src/modules/cause-list/commands.js");
     const causeListRepo = await import("../src/modules/cause-list/repo.js");
-    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "10:30", courtroom: "Court 1", itemNumber: 2 });
+    vi.mocked(causeListRepo.getItemById).mockResolvedValueOnce({ id: randomUUID(), slot: "AM-1", courtroom: "COURT-1", itemNumber: 2 });
     const causeListId = randomUUID();
-    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "10:30", courtroom: "Court 1" });
+    const result = await listCaseOnCauseList(ctx(), causeListId, { caseId: CASE_ID, itemNumber: 2, slot: "AM-1", courtroom: "COURT-1" });
     expect(result.accepted).toBe(true);
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });

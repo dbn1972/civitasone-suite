@@ -44,6 +44,12 @@ vi.mock("../src/modules/cause-list/repo.js", () => ({
   },
 }));
 
+// Owner decision #33: the consumer re-validates slot/courtroom against per-court config; with no tenant config
+// the defaults (AM-1.., COURT-1) apply, so the fixtures below use those.
+vi.mock("../src/modules/config-registry/repo.js", () => ({
+  listActiveKeys: vi.fn(async () => [] as string[]),
+}));
+
 vi.mock("../src/topics.js", () => ({
   COMMANDS: {
     generateCauseList: "court.causelist.generate",
@@ -78,7 +84,7 @@ function listCaseMsg(causeListId: string, messageId = randomUUID()) {
     tenantId: randomUUID(), actorId: randomUUID(), correlationId: "c", schemaVersion: "1.0",
     payload: {
       id: randomUUID(), causeListId, tenantId: randomUUID(), caseId: randomUUID(),
-      itemNumber: 1, slot: "10:30", courtroom: "CR-1",
+      itemNumber: 1, slot: "AM-1", courtroom: "COURT-1",
     },
   };
 }
