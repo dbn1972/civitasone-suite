@@ -69,7 +69,18 @@ export function validateRefund(refundAmount: bigint, receiptAmount: bigint): voi
 /**
  * Validate adjustment: amount must be positive, from and to demands must differ.
  */
-export function validateAdjustment(input: AdjustmentInput, fromBalance: bigint): void {
+/**
+ * Owner decision #5 (GAP-REVENUE-ADJUSTMENTS-03): only PRINCIPAL is movable
+ * between demands; the penalty and interest charged on a demand stay with it.
+ * The cap is the LIVE DCB outstanding of the source demand less the
+ * penalty+interest that must stay behind (floored at zero).
+ */
+export function movablePrincipal(outstanding: bigint, penalty: bigint, interest: bigint): bigint {
+  const movable = outstanding - penalty - interest;
+  return movable > 0n ? movable : 0n;
+}
+
+export function validateAdjustment(input: AdjustmentInput, fromBalance: bigint, movableMinor?: bigint): void {
   if (input.amountMinor <= 0n) {
     throw new DomainError("INVALID_AMOUNT", "Adjustment amount must be positive");
   }
@@ -80,6 +91,12 @@ export function validateAdjustment(input: AdjustmentInput, fromBalance: bigint):
     throw new DomainError(
       "ADJUSTMENT_EXCEEDS_BALANCE",
       `Adjustment ${input.amountMinor.toString()} exceeds from-demand balance ${fromBalance.toString()}`,
+    );
+  }
+  if (movableMinor !== undefined && input.amountMinor > movableMinor) {
+    throw new DomainError(
+      "ADJUSTMENT_EXCEEDS_MOVABLE",
+      `Adjustment ${input.amountMinor.toString()} exceeds the movable principal ${movableMinor.toString()} (penalty and interest stay with their demand)`,
     );
   }
 }

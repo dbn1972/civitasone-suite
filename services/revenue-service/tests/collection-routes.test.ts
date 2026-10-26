@@ -71,6 +71,9 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
     // List repos return { rows, total } (limit/offset are applied in SQL).
     listReceipts: vi.fn(async () => ({ rows: [], total: 0 })),
     listAdjustments: vi.fn(async () => ({ rows: [], total: 0 })),
+    // Owner decision #5: the POST /adjustments sync cap check reads the live movable principal.
+    getMovableForDemand: vi.fn(async () => ({ outstanding: 10_000_000n, penalty: 0n, interest: 0n, movable: 10_000_000n })),
+    listMovableForAssessee: vi.fn(async () => []),
     listAdjustmentsByStatus: vi.fn(async () => ({ rows: [], total: 0 })),
     // GAP-REVENUE-REFUNDS-02: only DUP_RECEIPT_ID already has a live refund.
     findLiveRefundByReceipt: vi.fn(async (_tenantId: string, receiptId: string) =>
