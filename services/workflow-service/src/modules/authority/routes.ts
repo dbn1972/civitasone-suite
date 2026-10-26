@@ -4,6 +4,7 @@ import { zMoneyMinorString } from "@civitasone/schemas";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { replyIfRateLimited } from "../../shared/rate-limit-error.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import type { AuthorityLimitRow } from "./schema.js";
@@ -84,14 +85,11 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    const rateLimited = replyIfRateLimited(err, req, reply);
+    if (rateLimited) return rateLimited;
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
-    // @fastify/rate-limit throws a plain object with statusCode 429; without this branch it would fall through to 500.
-    if ((err as { statusCode?: number }).statusCode === 429) {
-      const retryAfter = (err as { retryAfter?: number }).retryAfter ?? 60;
-      return reply.code(429).header("retry-after", String(retryAfter)).send({ code: "RATE_LIMITED", message: "rate limit exceeded", correlationId, retryable: true, retryAfter });
-    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
