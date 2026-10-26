@@ -268,3 +268,32 @@ describe("cache TTL is the staleness bound for a mode / module flip", () => {
     expect(_test.lastKnownMode.get(TID)).toBe("off");
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// GAP-FIELD-HOME-04 / owner decision #36 (2026-10-26): /api/v1/field is
+// entitlement-gated at the edge; an un-entitled tenant fails CLOSED.
+// ─────────────────────────────────────────────────────────────────────────
+describe("field module entitlement (decision #36)", () => {
+  it("403s a configured tenant whose allow-list omits `field` (legacy/off mode)", async () => {
+    mockFetch({ data: [{ name: "finance" }] });
+    const reply = fakeReply();
+    const ok = await checkModuleEnabled(fakeReq(TID), reply, "field");
+    expect(ok).toBe(false);
+    expect(reply._code).toBe(403);
+    expect(reply._body.code).toBe("MODULE_DISABLED");
+  });
+
+  it("allows a tenant entitled to `field`", async () => {
+    mockFetch({ data: [{ name: "field" }] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(true);
+  });
+
+  it("enforce mode fails closed on configured:false for field", async () => {
+    vi.stubEnv("COMPOSITION_ENFORCEMENT", "on");
+    mockFetch({ configured: false, mode: "enforce", data: [] });
+    const reply = fakeReply();
+    expect(await checkModuleEnabled(fakeReq(TID), reply, "field")).toBe(false);
+    expect(reply._code).toBe(403);
+  });
+});
