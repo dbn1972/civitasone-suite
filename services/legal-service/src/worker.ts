@@ -14,6 +14,7 @@ import { registerOpinionEOfficeDecisionConsumers } from "./modules/opinions/eoff
 import { registerCounselBriefConsumers } from "./modules/counsel/consumer.js";
 import { registerFilingConsumers } from "./modules/filings/consumer.js";
 import { registerReminderConsumers } from "./modules/reminders/consumer.js";
+import { registerAttachmentConsumers } from "./modules/attachments/consumer.js";
 import { registerDocumentConsumers } from "./modules/documents/consumer.js";
 import { registerLimitationConsumers } from "./modules/limitations/consumer.js";
 import { registerBoardIntakeConsumers } from "./modules/board-intake/consumer.js";
@@ -63,6 +64,7 @@ registerOpinionEOfficeDecisionConsumers(queue);
 registerCounselBriefConsumers(queue);
 registerFilingConsumers(queue);
 registerReminderConsumers(queue);
+registerAttachmentConsumers(queue);
 registerDocumentConsumers(queue);
 registerLimitationConsumers(queue);
 // Cross-service choreography: board decision → legal intake (for-review).

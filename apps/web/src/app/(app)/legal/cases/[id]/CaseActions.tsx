@@ -19,7 +19,8 @@ type Panel = "brief" | "affidavit" | null;
  *    briefed, their fee, or brief status (assigned/accepted/completed/withdrawn) was ever tracked.
  *    Fixed to call the real endpoint. The endpoint has no due-date field, so an optional "brief by"
  *    date is folded into the summary text rather than silently dropped.
- *  - "Upload Affidavit"→ POST /api/v1/legal/cases/:id/orders (records the affidavit as a case filing)
+ *  - "Record affidavit filing" → POST /api/v1/legal/cases/:id/orders (records the filing details; the file itself
+ *    is attached through AffidavitFiles → document-service, owner decision #9)
  *    legal-service does have a real document-management module (modules/documents), but it is keyed
  *    by matterId, a concept the cases module has no relationship to (cases carry no matterId
  *    anywhere in the schema) — wiring this to real document storage is a data-model change, not a
@@ -197,7 +198,7 @@ export function CaseActions({ caseId }: { caseId: string }) {
         ) : (
           <form className="pad" onSubmit={submitAffidavit} noValidate>
             <p style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 12px" }}>
-              Recorded as a case filing (no file-upload endpoint in legal-service).
+              Records the filing details. Attach the affidavit file itself under "Affidavit files" on this page.
             </p>
             <label className="label" htmlFor="affidavitSummary">Affidavit description *</label>
             <textarea
