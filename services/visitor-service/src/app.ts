@@ -8,6 +8,7 @@ import { HttpError } from "./shared/context.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { registerMultipart } from "./shared/multipart.js";
 
@@ -53,6 +54,15 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // CodeQL js/missing-rate-limiting: per-user rate limiting (300 req/min keyed by actorId, ops paths
+  // excluded), same shape as hrms/audit/billing. Registered AFTER authPlugin so req.ctx is populated.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   // V4-F-02: document-scan upload calls req.file(); needs the multipart plugin.
   await registerMultipart(app);
