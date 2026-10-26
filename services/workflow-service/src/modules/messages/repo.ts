@@ -73,10 +73,14 @@ export async function markMessageMatched(
   tx: Writer,
   id: string,
   payload: Record<string, unknown>,
-): Promise<void> {
-  await tx.update(messageSubscriptions)
+): Promise<boolean> {
+  // Compare-and-set (V4-F-01): only an ACTIVE subscription can be matched, so a
+  // concurrent timeout sweep that already expired it is never overwritten.
+  const rows = await tx.update(messageSubscriptions)
     .set({ status: "matched", matchedAt: new Date(), matchedPayload: payload })
-    .where(eq(messageSubscriptions.id, id));
+    .where(and(eq(messageSubscriptions.id, id), eq(messageSubscriptions.status, "active")))
+    .returning({ id: messageSubscriptions.id });
+  return rows.length > 0;
 }
 
 export async function markSignalMatched(tx: Writer, id: string): Promise<void> {
@@ -85,10 +89,18 @@ export async function markSignalMatched(tx: Writer, id: string): Promise<void> {
     .where(eq(signalSubscriptions.id, id));
 }
 
-export async function expireSubscription(tx: Writer, id: string): Promise<void> {
-  await tx.update(messageSubscriptions)
+/**
+ * Compare-and-set expiry (V4-F-01). Returns true only if THIS call moved the
+ * subscription active -> expired; false if it was already matched/expired
+ * (concurrent message match or overlapping sweep), in which case the caller
+ * must not emit any follow-up commands/events.
+ */
+export async function expireSubscription(tx: Writer, id: string): Promise<boolean> {
+  const rows = await tx.update(messageSubscriptions)
     .set({ status: "expired" })
-    .where(eq(messageSubscriptions.id, id));
+    .where(and(eq(messageSubscriptions.id, id), eq(messageSubscriptions.status, "active")))
+    .returning({ id: messageSubscriptions.id });
+  return rows.length > 0;
 }
 
 export async function findExpiredSubscriptions(now: Date, batch: number): Promise<MessageSubscriptionRow[]> {

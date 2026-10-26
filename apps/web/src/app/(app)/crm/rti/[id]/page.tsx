@@ -117,36 +117,40 @@ export default async function RtiDetailPage(
   const canAct = roles.some((role) => CRM_RTI_ROLES.includes(role));
   const canDecide = roles.some((role) => RTI_APPELLATE_ROLES.includes(role));
   const canRevealPii = hasAnyRole(roles, CRM_PII_READ_ROLES);
-  const result = await fetchJson<unknown, RtiDetail | null>(
-    `/api/v1/crm/rti/${params.id}?maskPii=true`,
-    null,
-    { revalidateSeconds: 0, telemetryKey: "crm.rti.detail",
-      mapResponse: (p) => {
-        if (p && typeof p === "object" && "data" in (p as object)) {
-          return (p as { data: RtiDetail }).data;
-        }
-        return null;
+  // CLOS3-S1-13: the detail and history requests are independent, so issue both before awaiting either.
+  // Detail stays first in the array (callers and tests rely on that order).
+  // F6-01: status timeline — separate GET, so the detail contract is unchanged.
+  const [result, historyResult] = await Promise.all([
+    fetchJson<unknown, RtiDetail | null>(
+      `/api/v1/crm/rti/${params.id}?maskPii=true`,
+      null,
+      { revalidateSeconds: 0, telemetryKey: "crm.rti.detail",
+        mapResponse: (p) => {
+          if (p && typeof p === "object" && "data" in (p as object)) {
+            return (p as { data: RtiDetail }).data;
+          }
+          return null;
+        },
       },
-    },
-  );
+    ),
+    fetchJson<unknown, CaseHistoryEntry[]>(
+      `/api/v1/crm/rti/${params.id}/history`,
+      [],
+      {
+        revalidateSeconds: 0,
+        telemetryKey: "crm.rti.history",
+        mapResponse: (p) => {
+          if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
+            return (p as { data: CaseHistoryEntry[] }).data;
+          }
+          return [];
+        },
+      },
+    ),
+  ]);
+  const history = historyResult.data;
   const r = result.data;
   const source = result.source;
-
-  // F6-01: status timeline — separate GET, so the detail contract is unchanged.
-  const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
-    `/api/v1/crm/rti/${params.id}/history`,
-    [],
-    {
-      revalidateSeconds: 0,
-      telemetryKey: "crm.rti.history",
-      mapResponse: (p) => {
-        if (p && typeof p === "object" && Array.isArray((p as { data?: unknown }).data)) {
-          return (p as { data: CaseHistoryEntry[] }).data;
-        }
-        return [];
-      },
-    },
-  );
 
   // GAP-CRM-GRIEVANCES-DETAIL-07 (also RTI): an outage must not be titled as a
   // missing record. Only a real 404 (or a successful empty body) is "not

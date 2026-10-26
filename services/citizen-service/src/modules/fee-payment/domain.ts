@@ -11,6 +11,27 @@
 
 import { evaluateRule, type EligibilityOp } from "../eligibility/domain.js";
 
+/** Canonical JSON (sorted keys) so jsonb key order never makes an unchanged fee look edited. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).sort().filter((k) => o[k] !== undefined).map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v ?? null);
+}
+
+/** CLOS3-S1-11: true when a PATCH would not change the stored schedule (no-op, no new row). */
+export function scheduleContentEquals(
+  row: { name: string; baseAmount: number; currency: string; exemptions: unknown },
+  body: { name: string; baseAmount: number; currency: string; exemptions: unknown },
+): boolean {
+  return row.name === body.name
+    && Number(row.baseAmount) === body.baseAmount
+    && row.currency === body.currency
+    && canonical(row.exemptions ?? []) === canonical(body.exemptions ?? []);
+}
+
 export const EXEMPTION_KINDS = ["waive", "percent", "flat"] as const;
 export type ExemptionKind = typeof EXEMPTION_KINDS[number];
 
@@ -113,4 +134,13 @@ export function assertPaymentConfirmable(input: {
 /** A payment is refundable only once it has actually been collected. */
 export function isRefundable(status: string): boolean {
   return status === "paid" || status === "offline_recorded";
+}
+
+/**
+ * V4-G-09 -- what can still be refunded: the payment amount less refunds already APPROVED.
+ * (A requested refund holds nothing; at most one request is pending at a time.)
+ */
+export function refundableBalance(paymentAmount: number, refunds: ReadonlyArray<{ status: string; amount: number }>): number {
+  const approved = refunds.filter((r) => r.status === "approved").reduce((sum, r) => sum + r.amount, 0);
+  return Math.max(0, paymentAmount - approved);
 }

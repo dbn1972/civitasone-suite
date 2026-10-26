@@ -9,6 +9,7 @@ import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
+import { registerMultipart } from "./shared/multipart.js";
 
 // NOTE: module routes below are added incrementally as each module is
 // scaffolded (tasks 3.4, 4.7, 6.10, 7.5, 9.9, 11.5, 12.6, 13.5, 15.7, 16.4,
@@ -43,6 +44,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   assertPiiKeyConfigured();
 
   const app = Fastify({
+    // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
+    bodyLimit: 1_048_576,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
@@ -50,6 +53,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+
+  // V4-F-02: document-scan upload calls req.file(); needs the multipart plugin.
+  await registerMultipart(app);
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

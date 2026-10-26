@@ -32,6 +32,8 @@ export const COMMANDS = {
   // SVC-085 fee & payment
   paymentRequested:        "citizen.payment.requested",
   feeScheduleCreate:       "citizen.fee_schedule.create",
+  /** CLOS3-S1-11: edit = retire the active schedule + insert its successor. */
+  feeScheduleSupersede:    "citizen.fee_schedule.supersede",
   paymentIntentCreate:     "citizen.payment.intent_create",
   /** FN-14: gateway callback or labelled sandbox capture → receipt + GL. */
   paymentConfirm:          "citizen.payment.confirm",
@@ -87,6 +89,17 @@ export const COMMANDS = {
   // COMP-002 -- generic citizen service-request portal
   serviceRequestSubmit:    "citizen.service_request.submit",
   serviceRequestUpdate:    "citizen.service_request.update",
+  // Citizen engagement -- alerts / notices / surveys (migration 0041)
+  alertCreate:             "citizen.alert.create",
+  alertPublish:            "citizen.alert.publish",
+  alertWithdraw:           "citizen.alert.withdraw",
+  noticeCreate:            "citizen.notice.create",
+  noticePublish:           "citizen.notice.publish",
+  noticeWithdraw:          "citizen.notice.withdraw",
+  surveyCreate:            "citizen.survey.create",
+  surveyPublish:           "citizen.survey.publish",
+  surveyClose:             "citizen.survey.close",
+  surveyRespond:           "citizen.survey.respond",
 } as const;
 
 export const EVENTS = {
@@ -104,6 +117,8 @@ export const EVENTS = {
   eligibilityRuleSetPublished: "citizen.eligibility.ruleset_published",
   // SVC-085 fee & payment
   receiptIssued:          "citizen.receipt.issued",
+  /** V4-G-09: an approved (possibly partial) refund -> finance GL reversal. */
+  refundApproved:         "citizen.refund.approved",
   // SVC-086 issuance
   certificateIssued:      "citizen.certificate.issued",
   certificateRevoked:     "citizen.certificate.revoked",
@@ -123,6 +138,8 @@ export const EVENTS = {
 
 export const CONSUMED_EVENTS = {
   estabRtiResponded: "estab.rti.responded",
+  /** V4-G-08: finance could not post a collected citizen fee (payload carries paymentId). */
+  financeGlRejected: "finance.gl.rejected",
 } as const;
 
 export const SERVICE = "citizen";

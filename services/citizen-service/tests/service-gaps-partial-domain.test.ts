@@ -2,6 +2,7 @@
  * SVC-081/082/084/089 — pure domain unit tests (no I/O).
  */
 import { describe, it, expect } from "vitest";
+import { formatNumber } from "../src/shared/numbers.js";
 import { assertDefinitionPublishable, mandatoryDocTypes } from "../src/modules/catalogue/domain.js";
 import {
   isDigiLockerConfigured, digiLockerFetch, computeChecklist, computeLaneChecklist, verificationTransition,
@@ -11,7 +12,6 @@ import {
 } from "../src/modules/appeal/domain.js";
 import {
   assertChannelAllowed,
-  buildTrackingNumber,
   channelNotAllowedMessage,
   isAssistedChannel,
   isChannelAllowed,
@@ -133,11 +133,9 @@ describe("SVC-089 appeal domain — filing window + order outcome", () => {
 });
 
 describe("SVC-082 intake domain — tracking + assisted", () => {
-  it("tracking numbers are unique + formatted", () => {
-    const a = buildTrackingNumber(new Date("2026-07-24T00:00:00Z"));
-    const b = buildTrackingNumber(new Date("2026-07-24T00:00:00Z"));
-    expect(a).toMatch(/^CIT-2026-[0-9A-F]{8}$/);
-    expect(a).not.toBe(b);
+  it("tracking numbers are formatted PREFIX-YYYY-NNNNNN from the sequence value", () => {
+    expect(formatNumber("tracking_no", 2026, 123)).toBe("CIT-2026-000123");
+    expect(formatNumber("tracking_no", 2026, 124)).not.toBe(formatNumber("tracking_no", 2026, 123));
   });
   it("assisted/counter require an operator; self-service must not carry one", () => {
     expect(isAssistedChannel("assisted")).toBe(true);

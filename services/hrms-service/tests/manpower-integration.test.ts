@@ -206,8 +206,8 @@ describe("fill-loop: position_filled event updates the plan", () => {
       tenantId: TENANT, actorId: CHECKER, correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { jobOpeningId, employeeId: randomUUID(), tenantId: TENANT },
     });
-    // allow the async handler to settle
-    await new Promise<void>((r) => setTimeout(r, 300));
+    // wait for the handler deterministically (a fixed sleep is a race under CI load)
+    await q.drain();
     await q.stop();
 
     tenantStorage.enterWith({ tenantId: TENANT });
@@ -234,7 +234,7 @@ describe("fill-loop: position_filled event updates the plan", () => {
     };
     await q.publish(EVENTS.positionFilled, evt);
     await q.publish(EVENTS.positionFilled, evt); // same messageId → deduped by inbox
-    await new Promise<void>((r) => setTimeout(r, 300));
+    await q.drain();
     await q.stop();
 
     tenantStorage.enterWith({ tenantId: TENANT });

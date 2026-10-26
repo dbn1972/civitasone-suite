@@ -346,27 +346,46 @@ async function sweepTimerTasksForTenant(now: Date, batch: number): Promise<numbe
 
     // publish completeTask(approve) as the system actor. The payload mirrors the
     // TaskView the HTTP path sends; sodOverride lets the system bypass SoD.
-    await queue.publish(COMMANDS.completeTask, {
-      messageId: randomUUID(),
-      type: COMMANDS.completeTask,
-      tenantId: t.tenantId,
-      actorId: SYSTEM_ACTOR_ID,
-      correlationId: randomUUID(),
-      schemaVersion: "1.0",
-      payload: {
-        id: t.id,
+    try {
+      await queue.publish(COMMANDS.completeTask, {
+        messageId: randomUUID(),
+        type: COMMANDS.completeTask,
         tenantId: t.tenantId,
-        instanceId: t.instanceId,
-        name: t.name,
-        status: "pending",
-        roleRef: t.roleRef,
-        nodeKey: t.nodeKey,
-        refType: t.refType,
-        refId: t.refId,
-        decision: "approve",
-        sodOverride: true,
-      },
-    });
+        actorId: SYSTEM_ACTOR_ID,
+        correlationId: randomUUID(),
+        schemaVersion: "1.0",
+        payload: {
+          id: t.id,
+          tenantId: t.tenantId,
+          instanceId: t.instanceId,
+          name: t.name,
+          status: "pending",
+          roleRef: t.roleRef,
+          nodeKey: t.nodeKey,
+          refType: t.refType,
+          refId: t.refId,
+          decision: "approve",
+          sodOverride: true,
+        },
+      });
+    } catch (err) {
+      // CLOS3-S6-03: the claim above already committed (fire_at = NULL), so a failed publish
+      // would leave the task pending forever (it no longer matches dueTimers) and the error
+      // would abort the rest of the batch. Put fire_at back - only if the task is still pending
+      // and still unclaimed - so the next sweep retries, and carry on with the other timers.
+      // Known limitation: a process crash between the claim commit and the publish still loses
+      // the timer (closing that needs the outbox, a delivery-semantics change; follow-up).
+      // A retried timer writes a second timer_fire history row (accepted).
+      timerLog.error({ err, taskId: t.id, tenantId: t.tenantId }, "timer sweeper publish failed; restoring fire_at for retry");
+      try {
+        await db.transaction((tx) => tx.update(tasks)
+          .set({ fireAt: t.fireAt, updatedAt: new Date() })
+          .where(and(eq(tasks.id, t.id), eq(tasks.status, "pending"), isNull(tasks.fireAt))));
+      } catch (restoreErr) {
+        timerLog.error({ err: restoreErr, taskId: t.id, tenantId: t.tenantId }, "timer sweeper could not restore fire_at");
+      }
+      continue;
+    }
     fired++;
   }
   if (fired > 0) timerLog.info({ fired }, "timer sweeper auto-advanced timer tasks");

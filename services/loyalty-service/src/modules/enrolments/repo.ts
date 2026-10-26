@@ -170,3 +170,48 @@ export async function adjustBalance(
     .returning({ id: enrolments.id });
   return result.length > 0;
 }
+
+/**
+ * CLOS3-S5-03: additive credit that does not depend on the enqueue-time
+ * version. A delta applied with `balance = balance + delta` is commutative, so
+ * the optimistic lock adds nothing for accrual and only made concurrent or
+ * stale-version accruals commit a ledger row with no balance effect. Still
+ * bumps `version` so readers holding an older version are invalidated.
+ * Returns false only when the enrolment row does not exist for the tenant.
+ */
+export async function creditPoints(
+  tx: ScopedTx,
+  id: string,
+  tenantId: string,
+  pointsDelta: bigint,
+  lifetimeDelta: bigint,
+): Promise<boolean> {
+  const result = await tx
+    .update(enrolments)
+    .set({
+      pointsBalance: sql`${enrolments.pointsBalance} + ${pointsDelta.toString()}::bigint`,
+      lifetimePoints: sql`${enrolments.lifetimePoints} + ${lifetimeDelta.toString()}::bigint`,
+      updatedAt: new Date(),
+      version: sql`${enrolments.version} + 1`,
+    })
+    .where(and(eq(enrolments.id, id), eq(enrolments.tenantId, tenantId)))
+    .returning({ id: enrolments.id });
+  return result.length > 0;
+}
+
+/**
+ * CLOS3-S5-02/03: adjustBalance() is optimistic-lock guarded and returns false
+ * when it matched 0 rows. Consumers must call this inside their db.transaction
+ * so the thrown error rolls back the ledger row, outbox event and audit row
+ * instead of committing a ledger entry with no balance effect.
+ */
+export class BalanceConflictError extends Error {
+  constructor(enrolmentId: string, action: string) {
+    super(`${action}: enrolment ${enrolmentId} balance not adjusted (version conflict or missing row)`);
+    this.name = "BalanceConflictError";
+  }
+}
+
+export function assertBalanceAdjusted(ok: boolean, enrolmentId: string, action: string): void {
+  if (!ok) throw new BalanceConflictError(enrolmentId, action);
+}

@@ -42,7 +42,7 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
       });
-      await enrolmentRepo.adjustBalance(
+      const deducted = await enrolmentRepo.adjustBalance(
         tx,
         p.enrolmentId,
         msg.tenantId,
@@ -50,6 +50,8 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
         BigInt(0),
         p.enrolmentVersion,
       );
+      // CLOS3-S5-02: a lost optimistic lock must roll back the whole tx.
+      enrolmentRepo.assertBalanceAdjusted(deducted, p.enrolmentId, "redeemPoints");
       await enqueue(tx, {
         topic: EVENTS.pointsRedeemed,
         eventType: EVENTS.pointsRedeemed,
@@ -91,7 +93,7 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
         // deadlocks the pool silently. Route through the outer tx instead.
         const enrolment = await enrolmentRepo.findByIdTx(tx, p.enrolmentId, msg.tenantId);
         if (enrolment) {
-          await enrolmentRepo.adjustBalance(
+          const restored = await enrolmentRepo.adjustBalance(
             tx,
             p.enrolmentId,
             msg.tenantId,
@@ -99,6 +101,8 @@ export function registerRedemptionConsumers(rawQueue: Queue): void {
             BigInt(0),
             enrolment.version,
           );
+          // CLOS3-S5-02: do not commit the void without the balance restore.
+          enrolmentRepo.assertBalanceAdjusted(restored, p.enrolmentId, "voidRedemption");
         }
       }
       await enqueue(tx, {

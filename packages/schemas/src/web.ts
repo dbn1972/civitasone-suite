@@ -1597,6 +1597,34 @@ export const CRMActivityEntrySchema = z.object({
 });
 export const CRMActivityEntryListSchema = z.array(CRMActivityEntrySchema);
 
+/**
+ * Wire shape of one row of GET /v1/crm/activities (scoped feed: no subjectType/subjectId),
+ * shared by crm-service (response validation) and the web loader/contract tests. "overdue" is
+ * derived server-side (open + past due in IST); `owner` is the resolved display name.
+ */
+export const crmActivityFeedItemSchema = z.object({
+  id: z.string().uuid(),
+  tenantId: z.string().uuid(),
+  actorName: z.string(),
+  text: z.string(),
+  contactId: z.string().uuid().nullable().optional(),
+  dealId: z.string().uuid().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
+  type: z.string(),
+  subject: z.string().nullable().optional(),
+  status: z.enum(["open", "overdue", "completed", "cancelled"]),
+  dueDate: z.string().nullable().optional(),
+  remindAt: z.string().nullable().optional(),
+  location: z.string().nullable().optional(),
+  completedAt: z.string().nullable().optional(),
+  createdAt: z.string(),
+  ownerId: z.string().uuid().nullable(),
+  owner: z.string(),
+  relatedType: z.enum(["contact", "deal", "other"]).nullable(),
+  relatedTo: z.string().nullable(),
+});
+export const crmActivityFeedListSchema = paginatedSchema(crmActivityFeedItemSchema);
+
 export const TicketDetailSchema = z.object({
   id: z.string(),
   ticketNo: z.string(),
@@ -3438,3 +3466,113 @@ export const catalogueProductListSchema = z.object({
 });
 
 export type CatalogueProductRow = z.infer<typeof catalogueProductRowSchema>;
+
+/**
+ * GET /v1/tenants (tenant-service, super_admin/platform_admin only): the
+ * platform-admin tenant directory behind the /admin/tenants screen. `users` is
+ * null because user counts live in identity-service, not tenant.*.
+ */
+export const adminTenantDirectoryRowSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  domain: z.string(),
+  edition: z.string(),
+  status: z.string(),
+  region: z.string(),
+  residency: z.string(),
+  isolationTier: z.string(),
+  createdDate: z.string().datetime(),
+  users: z.number().int().nonnegative().nullable(),
+});
+export const adminTenantDirectoryResponseSchema = z.object({
+  data: z.array(adminTenantDirectoryRowSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+
+// Citizen engagement screens (/citizen/alerts, /citizen/notices, /citizen/surveys).
+// Row shapes are the exact objects the screens read (loaders.ts CitizenAlert /
+// CitizenNotice, lib/citizenSurveys.ts CitizenSurvey). citizen-service answers
+// `{ data: [...] }`; a bare array is accepted too, matching getArrayPayload().
+export const CitizenAlertSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: z.string(),
+  publishedDate: z.string(),
+  targetAudience: z.string(),
+  status: z.string(),
+});
+export const CitizenNoticeSchema = z.object({
+  id: z.string(),
+  noticeNo: z.string(),
+  subject: z.string(),
+  department: z.string(),
+  published: z.string(),
+  expiry: z.string(),
+  type: z.string(),
+});
+export const CitizenSurveySchema = z.object({
+  id: z.string(),
+  surveyName: z.string(),
+  responses: z.number(),
+  completion: z.string(),
+  period: z.string(),
+  status: z.string(),
+});
+const listEnvelope = <T extends z.ZodTypeAny>(row: T) =>
+  z.union([z.array(row), z.object({ data: z.array(row) }).passthrough()]);
+export const CitizenAlertListSchema = listEnvelope(CitizenAlertSchema);
+export const CitizenNoticeListSchema = listEnvelope(CitizenNoticeSchema);
+export const CitizenSurveyListSchema = listEnvelope(CitizenSurveySchema);
+
+// ── Tenant admin: IdP / SSO provider registry + security overview ─────────────
+// One contract shared by admin-service (sendValidated) and the web loaders
+// (apps/web/src/app/_data/loaders.ts: getIdpProviders / getSsoProviders /
+// getSecurityOverview). Client secrets are write-only and never appear here.
+
+export const AdminIdpProviderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  protocol: z.string(),
+  status: z.string(),
+  usersSynced: z.number().int().nonnegative(),
+  lastSync: z.string().nullable(),
+  endpoint: z.string(),
+  hasClientSecret: z.boolean(),
+});
+export const AdminIdpProviderListSchema = z.object({
+  data: z.array(AdminIdpProviderSchema),
+  meta: z.object({ page: z.number(), pageSize: z.number(), total: z.number() }),
+});
+
+export const AdminSsoProviderSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  protocol: z.string(),
+  entityId: z.string(),
+  status: z.string(),
+  lastSync: z.string().nullable(),
+  hasClientSecret: z.boolean(),
+});
+export const AdminSsoProviderListSchema = z.object({
+  data: z.array(AdminSsoProviderSchema),
+  meta: z.object({ page: z.number(), pageSize: z.number(), total: z.number() }),
+});
+
+export const AdminSecurityEventSchema = z.object({
+  id: z.string(),
+  timestamp: z.string(),
+  type: z.string(),
+  actor: z.string(),
+  ipAddress: z.string(),
+  outcome: z.string(),
+});
+export const AdminSecurityOverviewSchema = z.object({
+  activeSessions: z.number().int().nonnegative(),
+  failedLogins24h: z.number().int().nonnegative(),
+  /** Whole-number percentage 0-100 of active users with MFA enabled. */
+  mfaAdoptionRate: z.number().min(0).max(100),
+  trustedDevices: z.number().int().nonnegative(),
+  events: z.array(AdminSecurityEventSchema),
+});

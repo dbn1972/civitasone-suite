@@ -105,20 +105,53 @@ function mapConfig(payload: unknown): ConfigEntry[] {
   }));
 }
 
-/** Approved / pending / etc. visit requests. Omit status to list all. */
-export function getVisitRequests(
+/** Server list cap per page (visitor-service MAX_LIST_LIMIT); we follow meta.hasMore past it. */
+const VISIT_REQUEST_PAGE_SIZE = 500;
+/** Safety bound on page-following so a misbehaving server cannot loop us forever. */
+const VISIT_REQUEST_MAX_PAGES = 40;
+
+function hasMoreFlag(payload: unknown): boolean {
+  if (payload && typeof payload === "object" && "meta" in payload) {
+    const meta = (payload as { meta?: { hasMore?: unknown } }).meta;
+    return meta?.hasMore === true;
+  }
+  return false;
+}
+
+/**
+ * Approved / pending / etc. visit requests. Omit status to list all.
+ * The API caps each page (CLOS3-S6-15), so this follows `meta.hasMore` until the
+ * whole set is read; a tenant with more than one page never sees a silently
+ * truncated list. A failure on any page reports source:"error".
+ */
+export async function getVisitRequests(
   status?: VisitRequestStatus,
 ): Promise<LoaderResult<VisitRequest[]>> {
-  const qs = status ? `?status=${status}` : "";
-  return fetchJson<unknown, VisitRequest[]>(
-    `/api/v1/visitor/visit-requests${qs}`,
-    [],
-    {
-      revalidateSeconds: 15,
-      telemetryKey: `visitor.visit-requests.${status ?? "all"}`,
-      mapResponse: mapVisitRequests,
-    },
-  );
+  const all: VisitRequest[] = [];
+  for (let page = 0; page < VISIT_REQUEST_MAX_PAGES; page++) {
+    const params = new URLSearchParams();
+    if (status) params.set("status", status);
+    params.set("limit", String(VISIT_REQUEST_PAGE_SIZE));
+    params.set("offset", String(page * VISIT_REQUEST_PAGE_SIZE));
+    let more = false;
+    const res = await fetchJson<unknown, VisitRequest[]>(
+      `/api/v1/visitor/visit-requests?${params.toString()}`,
+      [],
+      {
+        revalidateSeconds: 15,
+        telemetryKey: `visitor.visit-requests.${status ?? "all"}`,
+        mapResponse: (payload) => {
+          more = hasMoreFlag(payload);
+          return mapVisitRequests(payload);
+        },
+      },
+    );
+    if (res.source === "error") return { ...res, data: all };
+    all.push(...res.data);
+    if (!more) return { ...res, data: all };
+  }
+  // Page bound hit with more remaining: surface as an error rather than a silent truncation.
+  return { data: all, source: "error" };
 }
 
 export function getVisitorLocations(): Promise<LoaderResult<VisitorLocation[]>> {

@@ -97,7 +97,7 @@ describe("role-feature grant/revoke persistence", () => {
   });
 
   it("the consumer audits a revoke of an unknown / already-revoked grant as a failure and emits no revoked event", async () => {
-    const id = await grant("hr_clerk", "hrms.settings", "x");
+    const id = await grant("hr_clerk", "hrms.settings", "grant for test");
     const send = async (grantId: string) => {
       const messageId = randomUUID();
       await queue.publish(COMMANDS.roleFeatureRevoke, {

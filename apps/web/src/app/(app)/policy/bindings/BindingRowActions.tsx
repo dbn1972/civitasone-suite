@@ -35,7 +35,7 @@ export function BindingRowActions({
       const res = await fetch(`/api/proxy/v1/policy/bindings/${bindingId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "save")).message);
@@ -63,7 +63,9 @@ export function BindingRowActions({
         confirmLabel="Revoke"
         danger
         requireReason
-        reasonLabel="Reason for revocation"
+        minReasonLength={5}
+        maxReasonLength={2000}
+        reasonLabel="Reason for revocation (min 5 characters)"
         busy={busy}
         errorMessage={error || undefined}
         onConfirm={(reason) => void revoke(reason)}

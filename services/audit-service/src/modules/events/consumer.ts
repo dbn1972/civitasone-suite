@@ -8,7 +8,7 @@ import { cache } from "../../shared/infra.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeHash, type IngestPayload } from "./domain.js";
+import { computeHash, nextOccurredAt, type IngestPayload } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 export function registerAuditConsumers(rawQueue: Queue): void {
@@ -29,7 +29,9 @@ export function registerAuditConsumers(rawQueue: Queue): void {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${msg.tenantId}))`);
       const latest = await repo.findLatestForTenantTx(tx, msg.tenantId);
       const id = randomUUID();
-      const now = new Date().toISOString();
+      // V4-G-05: this exact instant is hashed AND persisted as occurred_at.
+      const occurredAt = nextOccurredAt(latest?.occurredAt);
+      const now = occurredAt.toISOString();
       // CERT-In §4: capture actor IP, user agent, and field-level old/new values when provided.
       // retainUntil and CERT-In columns are added by migration 0004_cert_in_audit_fields.sql.
       const retainUntil = new Date(Date.now() + 180 * 86400 * 1000);
@@ -58,6 +60,7 @@ export function registerAuditConsumers(rawQueue: Queue): void {
         severity: (msg.payload.severity as string) ?? "info",
         prevHash: latest?.eventHash ?? null,
         eventHash,
+        occurredAt,
         correlationId: msg.correlationId,
         createdBy: msg.actorId,
         ipAddress: (msg.payload.ipAddress as string) ?? null,

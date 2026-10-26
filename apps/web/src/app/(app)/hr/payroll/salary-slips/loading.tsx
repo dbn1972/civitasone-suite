@@ -13,7 +13,7 @@ export default async function HRSalarySlipsLoading() {
     <div className="page-main wrap">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("title")}</h1>
+          <div data-skeleton-heading="">{t("title")}</div>
           <div className="sub">{t("subtitle")}</div>
         </div>
       </div>

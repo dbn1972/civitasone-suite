@@ -50,3 +50,15 @@ export function assertStatusTransition(from: string, to: ApplicationStatus): voi
     throw new Error(`INVALID_TRANSITION: cannot move from '${from}' to '${to}'`);
   }
 }
+
+/**
+ * V4-G-10: the ONLY sanctioned exit from the terminal `rejected` state is an
+ * issued appellate order (overturned -> approved, remanded -> under_review).
+ * Kept separate from assertStatusTransition so the generic status route cannot
+ * be used to re-open a rejected application.
+ */
+export function assertAppealOutcomeTransition(from: string, to: ApplicationStatus): void {
+  if (from !== "rejected" || (to !== "approved" && to !== "under_review")) {
+    throw new Error(`INVALID_TRANSITION: cannot move from '${from}' to '${to}' via an appeal outcome`);
+  }
+}

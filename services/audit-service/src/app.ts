@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { registerOpsRoutes, dbPing } from "@civitasone/observability";
+import { registerOpsRoutes, dbPing, redactedReqSerializer } from "@civitasone/observability";
 import { createTenantTxHook, tenantStorage } from "@civitasone/db";
 import { cache, queue } from "./shared/infra.js";
 import { db, sqlClient } from "./shared/db.js";
@@ -25,7 +25,10 @@ import { investigationRoutes } from "./modules/investigation/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: { level: process.env.LOG_LEVEL ?? "info" },
+    // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
+    bodyLimit: 1_048_576,
+    // Q34: the export download token travels in the query string; keep it out of access logs.
+    logger: { level: process.env.LOG_LEVEL ?? "info", serializers: { req: redactedReqSerializer } },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 

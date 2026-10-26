@@ -3,19 +3,23 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
-import { HttpError } from "../../shared/context.js";
+import { HttpError, assertOwnership } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled } from "./domain.js";
+import * as applicationRepo from "../application/repo.js";
+import { scheduleContentEquals, assertPaymentConfirmable, isGatewayConfigured, isRefundable, isSandboxPaymentEnabled, refundableBalance } from "./domain.js";
 import type {
-  CreateScheduleBody, CreateIntentBody, RecordOfflineBody,
+  CreateScheduleBody, UpdateScheduleBody, CreateIntentBody, RecordOfflineBody,
   ConfirmPaymentBody, RefundRequestBody, RefundDecisionBody,
 } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
-async function publish(ctx: RequestContext, type: string, id: string, payload: Record<string, unknown>): Promise<Accepted> {
+async function publish(
+  ctx: RequestContext, type: string, id: string, payload: Record<string, unknown>,
+  messageId: string = id,
+): Promise<Accepted> {
   await queue.publish(type, {
-    messageId: id,
+    messageId,
     type,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,
@@ -31,9 +35,45 @@ export async function createSchedule(ctx: RequestContext, body: CreateScheduleBo
   return publish(ctx, COMMANDS.feeScheduleCreate, id, { id, ...body });
 }
 
+/**
+ * CLOS3-S1-11: edit a saved schedule. Idempotent: an unchanged body publishes nothing
+ * and returns the same id. A changed body retires the active row and inserts a
+ * successor (new id, returned now so the caller can keep editing the chain).
+ */
+export async function updateSchedule(ctx: RequestContext, id: string, body: UpdateScheduleBody): Promise<Accepted & { supersedes: string }> {
+  const current = await repo.findScheduleById(ctx.tenantId, id);
+  if (!current) throw new HttpError(404, "NOT_FOUND", "fee schedule not found");
+  if (!current.active) throw new HttpError(409, "SCHEDULE_SUPERSEDED", "fee schedule was already replaced; reload and edit the current one");
+  if (scheduleContentEquals(current, body)) {
+    return { id, status: "unchanged", correlationId: ctx.correlationId, supersedes: id };
+  }
+  const newId = randomUUID();
+  // Per-command messageId (house rule): never the entity id, so a replayed/duplicate command is the
+  // only thing the inbox dedupes on.
+  const accepted = await publish(ctx, COMMANDS.feeScheduleSupersede, newId, { id: newId, supersedes: id, ...body }, randomUUID());
+  return { ...accepted, supersedes: id };
+}
+
 export async function createPaymentIntent(ctx: RequestContext, body: CreateIntentBody): Promise<Accepted> {
+  // V4-G-02: the intent is bound to a real application the caller may act on, and the fee is
+  // computed from that application server-side. Caller-supplied subject/citizenId are not trusted.
+  const app = await applicationRepo.findApplicationById(body.applicationId);
+  if (!app || app.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "application not found");
+  assertOwnership(ctx, app.citizenId);
+  if (body.serviceId && body.serviceId !== app.serviceId) {
+    throw new HttpError(422, "SERVICE_MISMATCH", "service does not match the application");
+  }
+  if (body.scheduleId) {
+    const sched = await db.transaction((tx) => repo.findScheduleByIdTx(tx, body.scheduleId as string, ctx.tenantId));
+    if (!sched || sched.serviceId !== app.serviceId) {
+      throw new HttpError(422, "SCHEDULE_MISMATCH", "fee schedule does not belong to the application's service");
+    }
+  }
   const id = randomUUID();
-  const accepted = await publish(ctx, COMMANDS.paymentIntentCreate, id, { id, ...body });
+  const accepted = await publish(ctx, COMMANDS.paymentIntentCreate, id, {
+    id, applicationId: app.id, serviceId: app.serviceId, citizenId: app.citizenId,
+    ...(body.scheduleId ? { scheduleId: body.scheduleId } : {}), subject: {},
+  });
   await cache.put(cache.makeKey(ctx.tenantId, "payment", id), { id, status: "pending" });
   return accepted;
 }
@@ -90,8 +130,11 @@ export async function requestRefund(ctx: RequestContext, paymentId: string, body
   if (!isRefundable(pay.status)) throw new HttpError(409, "NOT_REFUNDABLE", "payment is not in a refundable state");
   // pay.amount is a bigint({mode:"number"}) column (a JS number, validator-capped at
   // ₹100 Cr in paise, far below 2^53), so it is compared directly with no coercion.
-  if (body.amount > pay.amount) throw new HttpError(422, "AMOUNT_TOO_HIGH", "refund exceeds payment amount");
   const existing = await repo.listRefundsByPayment(ctx.tenantId, paymentId);
+  // V4-G-09: bounded by what is still refundable after earlier APPROVED (partial) refunds.
+  if (body.amount > refundableBalance(pay.amount, existing)) {
+    throw new HttpError(422, "AMOUNT_TOO_HIGH", "refund exceeds the refundable balance of the payment");
+  }
   if (existing.some((r) => r.status === "requested")) {
     throw new HttpError(409, "REFUND_PENDING", "a refund request is already pending for this payment");
   }

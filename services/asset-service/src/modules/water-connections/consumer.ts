@@ -28,9 +28,10 @@ import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { generateApplicationNumber, generateConnectionNumber, calculateFeeMinor } from "./domain.js";
+import { calculateFeeMinor } from "./domain.js";
 
 const log = pino({ name: "water-connections-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -52,8 +53,10 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const applicationNumber = await nextNumber(tx, "waterApplication");
         await repo.insertApplication(tx, {
-          id: p.id, tenantId: p.tenantId, applicationNumber: generateApplicationNumber(),
+          id: p.id, tenantId: p.tenantId, applicationNumber,
           applicantName: p.applicantName, applicantPhone: p.applicantPhone,
           propertyId: p.propertyId ?? null, connectionType: p.connectionType,
           pipeSize: p.pipeSize ?? null, address: p.address ?? null, documents: p.documents ?? null,
@@ -67,8 +70,8 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "create", "water_application", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterApplicationCreate failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterApplicationCreate failed"); throw err; }
+  }, auditFailedCreate("create", "water_application"));
 
   queue.subscribe(COMMANDS.waterApplicationSubmit, async (msg) => {
     try {
@@ -131,8 +134,10 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
           log.error({ messageId: msg.messageId, applicationId: p.applicationId }, "waterConnectionInstall: application not found for tenant");
           return;
         }
+        // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+        const connectionNumber = await nextNumber(tx, "waterConnection");
         await repo.insertConnection(tx, {
-          id: p.id, tenantId: p.tenantId, connectionNumber: generateConnectionNumber(),
+          id: p.id, tenantId: p.tenantId, connectionNumber,
           applicationId: p.applicationId, meterId: p.meterId ?? null,
           connectionType: application.connectionType, pipeSize: p.pipeSize ?? application.pipeSize ?? null,
           installationDate: new Date().toISOString().slice(0, 10),
@@ -146,8 +151,8 @@ export function registerWaterConnectionConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "install", "water_connection", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterConnectionInstall failed"); }
-  });
+    } catch (err) { log.error({ err, messageId: msg.messageId }, "waterConnectionInstall failed"); throw err; }
+  }, auditFailedCreate("install", "water_connection"));
 
   queue.subscribe(COMMANDS.waterConnectionActivate, async (msg) => {
     try {

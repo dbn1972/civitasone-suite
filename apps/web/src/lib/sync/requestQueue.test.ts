@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushRequestQueue, pendingRequestCount } from "./requestQueue";
+import { resolveNamespace } from "./identity";
 
 /**
  * GAP-OFFLINE-HOME-02: verify that flushRequestQueue sends exactly ONE fetch
@@ -181,5 +182,150 @@ describe("requestQueue — GAP-OFFLINE-HOME-02", () => {
 
     expect(result.flushed).toBe(1);
     expect(result.remaining).toBe(0);
+  });
+});
+
+function seed(idb: { records: Map<string, Row> }, key = IDEMPOTENCY_KEY, retryCount = 0): void {
+  idb.records.set(key, {
+    id: key,
+    method: "POST",
+    path: APPROVAL_PATH,
+    body: {},
+    idempotencyKey: key,
+    createdAt: new Date().toISOString(),
+    retryCount,
+  });
+}
+
+describe("requestQueue — CLOS3-S3-03 flush re-entrancy", () => {
+  const fetchMock = vi.fn();
+  let idb: ReturnType<typeof createFakeIDB>;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    idb = createFakeIDB();
+    vi.stubGlobal("indexedDB", idb.fakeIndexedDB);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("concurrent flushes send each queued write once and share one result", async () => {
+    seed(idb);
+    fetchMock.mockImplementation(
+      () => new Promise((r) => setTimeout(() => r({ ok: true, status: 200, json: () => ({}) }), 5)),
+    );
+    const [a, b] = await Promise.all([flushRequestQueue(), flushRequestQueue()]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(a).toEqual(b);
+    expect(a.flushed).toBe(1);
+  });
+
+  it("releases the lock after completion so a later flush runs again", async () => {
+    seed(idb);
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => ({}) });
+    await flushRequestQueue();
+    seed(idb, "second-key");
+    const r = await flushRequestQueue();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(r.flushed).toBe(1);
+  });
+
+  it("releases the lock after a rejection", async () => {
+    vi.mocked(resolveNamespace).mockRejectedValueOnce(new Error("no identity"));
+    await expect(flushRequestQueue()).rejects.toThrow("no identity");
+    seed(idb);
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r.flushed).toBe(1);
+  });
+});
+
+describe("requestQueue — CLOS3-S3-04 transient 4xx", () => {
+  const fetchMock = vi.fn();
+  let idb: ReturnType<typeof createFakeIDB>;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    idb = createFakeIDB();
+    vi.stubGlobal("indexedDB", idb.fakeIndexedDB);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([408, 425, 429])("keeps the item queued with retryCount+1 on transient %i", async (status) => {
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: false, status, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 0, remaining: 1 });
+    expect(idb.records.get(IDEMPOTENCY_KEY)?.retryCount).toBe(1);
+  });
+
+  it.each([400, 409])("still deletes and counts permanent %i rejections", async (status) => {
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: false, status, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 1, remaining: 0 });
+  });
+
+  it("dead-letters a transient-4xx item at the retry cap without counting it as flushed", async () => {
+    seed(idb, IDEMPOTENCY_KEY, 7);
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 429, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 0, remaining: 0 });
+  });
+});
+
+
+describe("requestQueue — CLOS3-S3-05 replay timeout", () => {
+  const fetchMock = vi.fn();
+  let idb: ReturnType<typeof createFakeIDB>;
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    idb = createFakeIDB();
+    vi.stubGlobal("indexedDB", idb.fakeIndexedDB);
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("a hung replay aborts after 30 s: flush settles, the item stays queued and retryCount is untouched", async () => {
+    vi.useFakeTimers();
+    seed(idb);
+    seed(idb, "second-key");
+    // Honours the abort signal, otherwise never resolves (a hung connection).
+    fetchMock.mockImplementation((_url: string, init: { signal?: AbortSignal }) =>
+      new Promise((_res, rej) => {
+        init.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+      }));
+
+    let settled = false;
+    const p = flushRequestQueue().then((r) => { settled = true; return r; });
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    const r = await p;
+
+    expect(r).toEqual({ flushed: 0, remaining: 2 });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // loop stops, later writes retry on the next flush
+    expect(idb.records.get(IDEMPOTENCY_KEY)?.retryCount).toBe(0);
+  });
+
+  it("a prompt reply is unaffected and clears its timer", async () => {
+    vi.useFakeTimers();
+    seed(idb);
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: () => ({}) });
+    const r = await flushRequestQueue();
+    expect(r).toEqual({ flushed: 1, remaining: 0 });
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

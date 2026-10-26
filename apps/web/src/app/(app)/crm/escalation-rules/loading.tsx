@@ -15,7 +15,7 @@ export default function LeadEscalationRulesLoading() {
     <div className="page-main">
       <div className="ph">
         <div>
-          <h1 id="page-heading">{t("escalationRulesTitle")}</h1>
+          <div data-skeleton-heading="">{t("escalationRulesTitle")}</div>
         </div>
       </div>
       <div className="card" aria-busy="true" aria-label={t("escalationRules")} style={{ padding: 16 }}>

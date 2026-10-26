@@ -179,3 +179,39 @@ describe("NewTenderPage — back link and bid validity bound (NEW-04 / NEW-05)",
     expect(spy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 });
+
+describe("NewTenderPage — CLOS3-S3-17 duplicate-submit latch", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+  const posts = (spy: ReturnType<typeof mockFetch>) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  it("a second submit while the redirect is pending does not create a duplicate pre-tender", async () => {
+    const spy = mockFetch(201);
+    render(<NewTenderPage />);
+    await pickWork();
+    const btn = screen.getByRole("button", { name: "Create Pre-Tender" });
+    const form = btn.closest("form") as HTMLFormElement;
+    fireEvent.click(btn);
+    await screen.findByText("Created.");
+    expect(screen.getByRole("button", { name: /Saving|Create Pre-Tender/ })).toBeDisabled();
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+    expect(posts(spy)).toHaveLength(1);
+    await waitFor(() => expect(pushMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("a failed save does not latch: the button re-enables and a resubmit POSTs again", async () => {
+    const spy = mockFetch(500, {});
+    render(<NewTenderPage />);
+    await pickWork();
+    fireEvent.click(screen.getByRole("button", { name: "Create Pre-Tender" }));
+    await screen.findByRole("alert");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Create Pre-Tender" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Create Pre-Tender" }));
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});

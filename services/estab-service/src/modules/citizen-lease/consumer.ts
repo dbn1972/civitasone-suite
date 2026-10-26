@@ -7,13 +7,14 @@
  * idempotent (markProcessed), and audits every mutation in the same tx.
  */
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import { nextLeaseNumber, nextLeaseRequestNumber, auditFailedCreate } from "../../shared/numbers.js";
 import {
-  assertRequestTransition, generateLeaseNumber, generateRequestNumber, DomainError,
+  assertRequestTransition, DomainError,
 } from "./domain.js";
 import { estabLeaseProperties, estabLeases, estabLeasePayments, estabLeaseRequests } from "./schema.js";
 
@@ -54,7 +55,7 @@ export function registerCitizenLeaseConsumers(queue: Queue): void {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await tx.insert(estabLeases).values({
-          id: p.id, tenantId: p.tenantId, leaseNumber: generateLeaseNumber(),
+          id: p.id, tenantId: p.tenantId, leaseNumber: await nextLeaseNumber(tx),
           propertyId: p.propertyId, tenantName: String(p.tenantName),
           tenantPhone: String(p.tenantPhone ?? ""),
           tenantAadhaar: (p.tenantAadhaar as string | undefined) ?? null,
@@ -69,8 +70,13 @@ export function registerCitizenLeaseConsumers(queue: Queue): void {
           .where(and(eq(estabLeaseProperties.id, p.propertyId), eq(estabLeaseProperties.tenantId, p.tenantId)));
         await audit(tx, msg, "lease_created", "lease", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "leaseCreate failed"); }
-  });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "leaseCreate failed");
+      // Rethrow so the queue retries (the tx rolled back, so a retry re-allocates the number); a deterministic
+      // domain rejection is not retried. Terminal failure is audited by auditFailedCreate.
+      throw err instanceof DomainError ? new NonRetryableError(err.message, err) : err;
+    }
+  }, auditFailedCreate("lease.create", "lease"));
 
   // ── Record a lease payment ─────────────────────────────────────────────
   queue.subscribe(COMMANDS.leasePaymentRecord, async (msg: Msg) => {
@@ -100,7 +106,7 @@ export function registerCitizenLeaseConsumers(queue: Queue): void {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await tx.insert(estabLeaseRequests).values({
           id: p.id, tenantId: p.tenantId, leaseId: p.leaseId,
-          requestType: String(p.requestType), requestNumber: generateRequestNumber(),
+          requestType: String(p.requestType), requestNumber: await nextLeaseRequestNumber(tx),
           requestedBy: msg.actorId, status: "submitted",
           transfereeName: (p.transfereeName as string | undefined) ?? null,
           transfereePhone: (p.transfereePhone as string | undefined) ?? null,
@@ -110,8 +116,13 @@ export function registerCitizenLeaseConsumers(queue: Queue): void {
         });
         await audit(tx, msg, "lease_request_submitted", "lease_request", p.id);
       });
-    } catch (err) { log.error({ err, messageId: msg.messageId }, "leaseRequestSubmit failed"); }
-  });
+    } catch (err) {
+      log.error({ err, messageId: msg.messageId }, "leaseRequestSubmit failed");
+      // Rethrow so the queue retries (the tx rolled back, so a retry re-allocates the number); a deterministic
+      // domain rejection is not retried. Terminal failure is audited by auditFailedCreate.
+      throw err instanceof DomainError ? new NonRetryableError(err.message, err) : err;
+    }
+  }, auditFailedCreate("lease_request.submit", "lease_request"));
 
   // ── Review a lease request (approve / reject) ──────────────────────────
   queue.subscribe(COMMANDS.leaseRequestReview, async (msg: Msg) => {

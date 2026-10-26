@@ -145,3 +145,70 @@ describe("middleware map assets", () => {
   });
 });
 
+
+// V4-A-04: PUBLIC entries must match on a path-segment boundary, otherwise any
+// future route that merely shares leading letters (/contacts, /authz, /verifyx)
+// would silently skip the session check.
+describe("middleware public allow-list segment boundary (V4-A-04)", () => {
+  it.each(["/contacts", "/api/contacts", "/authz", "/api/authz", "/verifyx", "/careers-admin", "/api/careersX", "/sandboxes", "/api/metricsx"])(
+    "keeps %s private (redirects an anonymous visitor)",
+    (path) => {
+      const res = middleware(anonReq(path));
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/auth/login");
+    },
+  );
+
+  it.each([
+    "/auth",
+    "/auth/login",
+    "/api/auth/callback",
+    "/careers",
+    "/careers/jobs/1",
+    "/api/careers/apply",
+    "/verify",
+    "/verify/abc",
+    "/sandbox",
+    "/api/sandbox/enter",
+    "/contact",
+    "/api/contact",
+    "/api/metrics",
+    "/_next/static/chunks/a.js",
+    "/favicon.ico",
+    "/sw.js",
+    "/.well-known/security.txt",
+  ])("still lets %s through anonymously", (path) => {
+    const res = middleware(anonReq(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+});
+
+// V4-A-09: logout must work without a valid access cookie, and the offline
+// fallback page (precached by sw.js) must render without auth.
+describe("middleware /logout and /offline are public (V4-A-09)", () => {
+  it.each(["/logout", "/offline"])("lets an anonymous request to %s through", (path) => {
+    const res = middleware(anonReq(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it.each(["/logoutx", "/offline-admin"])("does not make %s public", (path) => {
+    expect(middleware(anonReq(path)).status).toBe(307);
+  });
+});
+
+// V4-A-01: the SW purge/precache fetches /offline with credentials omitted; it must
+// not redirect to login or the offline fallback can never be cached.
+describe("middleware public offline fallback", () => {
+  it("lets an anonymous request to /offline through", () => {
+    const res = middleware(anonReq("/offline"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("keeps a path that merely shares the /offline prefix private", () => {
+    const res = middleware(anonReq("/offline-reports"));
+    expect(res.status).toBe(307);
+  });
+});

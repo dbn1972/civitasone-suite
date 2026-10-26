@@ -44,6 +44,7 @@
  * expiry-hash entry at all and so never expires, exactly as before.
  */
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 
 const BLACKLIST_HASHES_KEY = (tenantId: string): string => `visitor:${tenantId}:blacklist:hashes`;
 const WATCHLIST_HASHES_KEY = (tenantId: string): string => `visitor:${tenantId}:watchlist:hashes`;
@@ -166,7 +167,7 @@ function getStore(): ScreeningStore {
   _store =
     !url || process.env.CACHE_DRIVER === "memory"
       ? new MemoryScreeningStore()
-      : new RedisScreeningStore(new Redis(url));
+      : new RedisScreeningStore(new Redis(url, redisClientOptions()));
   return _store;
 }
 

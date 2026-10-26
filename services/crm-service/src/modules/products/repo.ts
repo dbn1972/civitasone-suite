@@ -108,6 +108,11 @@ export async function list(
   });
 }
 
+/** QP-001/QP-003 selectability: enabled and CURRENT_DATE inside [active_from, active_to]. */
+const SELECTABLE_PREDICATE = sql`enabled = true
+      AND (active_from IS NULL OR active_from <= CURRENT_DATE)
+      AND (active_to IS NULL OR active_to >= CURRENT_DATE)`;
+
 /**
  * QP-001/QP-003: is this product selectable on a quotation line today? True only when it
  * exists, is enabled, and CURRENT_DATE falls inside its [active_from, active_to] window.
@@ -115,11 +120,28 @@ export async function list(
 export async function isSelectable(tenantId: string, id: string): Promise<boolean> {
   const rows = await scopedRead(async (tx) => tx.execute(sql`
     SELECT 1 AS ok FROM crm.products
-    WHERE id = ${id} AND tenant_id = ${tenantId} AND enabled = true
-      AND (active_from IS NULL OR active_from <= CURRENT_DATE)
-      AND (active_to IS NULL OR active_to >= CURRENT_DATE)
+    WHERE id = ${id} AND tenant_id = ${tenantId} AND ${SELECTABLE_PREDICATE}
   `)) as unknown as Array<{ ok: number }>;
   return rows.length > 0;
+}
+
+/**
+ * Batched isSelectable: the subset of `ids` that are selectable today, in ONE query.
+ * Shares SELECTABLE_PREDICATE with isSelectable so the two cannot drift.
+ */
+export async function selectableByIds(
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  const unique = Array.from(new Set(ids.filter((id) => id)));
+  if (unique.length === 0) return new Set();
+  const rows = await scopedRead(async (tx) => tx.execute(sql`
+    SELECT id FROM crm.products
+    WHERE tenant_id = ${tenantId}
+      AND id = ANY(${sql`ARRAY[${sql.join(unique.map((id) => sql`${id}::uuid`), sql`, `)}]`})
+      AND ${SELECTABLE_PREDICATE}
+  `)) as unknown as Array<{ id: string }>;
+  return new Set(rows.map((r) => r.id));
 }
 
 /**

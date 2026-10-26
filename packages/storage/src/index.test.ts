@@ -119,3 +119,14 @@ describe("presignedPutUrl serverSideEncryption (GAP-PAYROLL-TAX-DECLARATION-02)"
     expect(decodeURIComponent(url)).not.toMatch(/x-amz-server-side-encryption/i);
   });
 });
+
+describe("presignedPutUrl signContentType (V4-E-05)", () => {
+  it("does not sign content-type unless asked (existing callers unchanged)", async () => {
+    const url = await presignedPutUrl({ key: "r/a.pdf", contentType: "application/pdf" });
+    expect(decodeURIComponent(url)).not.toMatch(/X-Amz-SignedHeaders=[^&]*content-type/i);
+  });
+  it("signs content-type into the URL when asked, so the store refuses any other Content-Type", async () => {
+    const url = await presignedPutUrl({ key: "r/a.pdf", contentType: "application/pdf", signContentType: true });
+    expect(decodeURIComponent(url)).toMatch(/X-Amz-SignedHeaders=[^&]*content-type/i);
+  });
+});

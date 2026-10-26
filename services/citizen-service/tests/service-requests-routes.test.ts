@@ -6,8 +6,8 @@
  *
  * Covers: genuine persistence + retrieval (the gap report's definition of
  * done), real audit event emission, ownership/authz (citizen vs officer-tier),
- * RLS cross-tenant isolation, status-history trail, and the honest 501 for
- * alerts/notices/surveys (no backing store).
+ * RLS cross-tenant isolation, status-history trail, and that alerts/notices/
+ * surveys are no longer 501 stubs (see engagement-routes.test.ts).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -238,13 +238,15 @@ describe("COMP-002 GET/PATCH /v1/citizen/profiles/:id — wired to the real port
   });
 });
 
-// ═══════════════════ COMP-002 honest 501s (no fabricated empty lists) ═══════════════════
-describe("COMP-002 alerts/notices/surveys — honest 501, not a fabricated empty success", () => {
+// ═══════════════════ alerts/notices/surveys are now real (migration 0041) ═══════════════════
+// These three used to answer an honest 501 (no backing store). They are backed by
+// engagement.* now; full coverage lives in engagement-routes.test.ts.
+describe("alerts/notices/surveys — no longer 501 stubs", () => {
   for (const path of ["/v1/citizen/alerts", "/v1/citizen/notices", "/v1/citizen/surveys"]) {
-    it(`GET ${path} returns 501 NOT_IMPLEMENTED (no backing store) rather than a fake []`, async () => {
+    it(`GET ${path} answers 200 with a real (queried) list`, async () => {
       const res = await app.inject({ method: "GET", url: path, headers: hdr(tok(TENANT_A, CITIZEN)) });
-      expect(res.statusCode).toBe(501);
-      expect(res.json().code).toBe("NOT_IMPLEMENTED");
+      expect(res.statusCode).toBe(200);
+      expect(Array.isArray(res.json().data)).toBe(true);
     });
   }
 });

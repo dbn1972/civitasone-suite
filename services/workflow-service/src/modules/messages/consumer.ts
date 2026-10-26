@@ -99,7 +99,11 @@ export function registerMessagesConsumers(q: Queue): void {
       const messagePayload = payload ?? {};
 
       // Mark the subscription as matched
-      await repo.markMessageMatched(tx, subscription.id, messagePayload);
+      // (compare-and-set: skip if the timeout sweeper expired it since our lookup)
+      if (!(await repo.markMessageMatched(tx, subscription.id, messagePayload))) {
+        log.warn({ subscriptionId: subscription.id }, "message subscription no longer active; skipping correlation");
+        return;
+      }
 
       // Merge payload into instance context
       if (Object.keys(messagePayload).length > 0) {

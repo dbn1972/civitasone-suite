@@ -100,7 +100,14 @@ export async function pushRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, SELF_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeSubscription(ctx, id));
+    // Ownership: only the owner (or an admin) may revoke. A foreign or unknown
+    // id is the same 404 so subscription ids cannot be probed (V4-B-04).
+    const owner = await repo.findSubscriptionOwner(ctx.tenantId, id);
+    const isAdmin = ctx.roles.some((r) => ADMIN_ROLES.includes(r));
+    if (owner === null || (owner !== ctx.actorId && !isAdmin)) {
+      throw new HttpError(404, "NOT_FOUND", "push subscription not found");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.revokeSubscription(ctx, id, owner));
   });
 
   app.post("/v1/notification/push/send", async (req, reply) => {

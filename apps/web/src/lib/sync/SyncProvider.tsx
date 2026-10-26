@@ -58,6 +58,29 @@ export function SyncProvider() {
     void registerServiceWorker();
   }, []);
 
+  // CLOS3-S3-01: replay of queued domain writes (leave requests, procurement approvals) goes to
+  // ordinary domain endpoints, not /devices/register or /sync/*, so it must NOT be parked with
+  // the mailbox sync. Without this, fetchOrQueue told users "will submit on reconnect" while
+  // nothing ever replayed the IndexedDB outbox. Replay is at-least-once (server-side dedup on
+  // x-idempotency-key is tracked in 04-T4); concurrent triggers share one in-flight flush.
+  useEffect(() => {
+    const flush = () => {
+      void flushRequestQueue().catch(() => {
+        /* still offline -- the next online / SW sync event retries */
+      });
+    };
+    const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === "CIVITASONE_SYNC") flush();
+    };
+    flush();
+    window.addEventListener("online", flush);
+    navigator.serviceWorker?.addEventListener?.("message", onMessage);
+    return () => {
+      window.removeEventListener("online", flush);
+      navigator.serviceWorker?.removeEventListener?.("message", onMessage);
+    };
+  }, []);
+
   useEffect(() => {
     if (!SYNC_ENABLED) return;
 

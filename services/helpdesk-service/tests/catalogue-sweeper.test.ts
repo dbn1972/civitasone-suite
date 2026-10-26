@@ -16,8 +16,9 @@ import { outboxSchema } from "../src/shared/outbox.js";
 import { sweepRequestBreaches, startRequestBreachSweeper } from "../src/modules/catalogue/sweeper.js";
 
 const { outboxMessages } = outboxSchema;
-const TENANT_A = "aaaaaaaa-0000-4000-8000-00000000cf01";
-const TENANT_B = "bbbbbbbb-0000-4000-8000-00000000cf02";
+// Unique per run so concurrent/other files never share tenant rows on a reused DB.
+const TENANT_A = globalThis.crypto.randomUUID();
+const TENANT_B = globalThis.crypto.randomUUID();
 const ACTOR = "aaaaaaaa-0000-4000-8000-0000000ac701";
 const TENANTS = [TENANT_A, TENANT_B];
 

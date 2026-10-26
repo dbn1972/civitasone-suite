@@ -109,6 +109,13 @@ export async function exportRoutes(app: FastifyInstance): Promise<void> {
     const file = path.join(EXPORT_DIR, ctx.tenantId, `${id}.${row.format}`);
     const buf = await readFile(file).catch(() => null);
     if (!buf) throw new HttpError(404, "NOT_FOUND", "artifact missing");
+    // Q34: single-use. Redeemed only once every other check has passed and the
+    // artifact is in hand, so a refused or failed attempt does not burn the token;
+    // the first successful download does, and any replay (a token lifted from a
+    // log, history or Referer header) is refused.
+    const redeemed = await db.transaction((tx) =>
+      repo.redeemDownloadToken(tx, { tenantId: ctx.tenantId, exportId: id, redeemedBy: ctx.actorId, token }));
+    if (!redeemed) throw new HttpError(410, "TOKEN_USED", "download link already used; request a new one");
     void reply.header("cache-control", "no-store");
     void reply.header("referrer-policy", "no-referrer");
     void reply.header("content-type", row.format === "csv" ? "text/csv" : "application/json");

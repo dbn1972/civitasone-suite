@@ -10,6 +10,6 @@ describe("Documents loading skeleton (GAP-CRM-DOCUMENTS-04)", () => {
     // At least one card skeleton + the subtitle placeholder (matches PageHeader).
     expect(container.querySelectorAll(".card").length).toBeGreaterThanOrEqual(1);
     expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
-    expect(container.querySelector("#page-heading")?.textContent).toBe("Documents");
+    expect(container.querySelector("[data-skeleton-heading]")?.textContent).toBe("Documents");
   });
 });

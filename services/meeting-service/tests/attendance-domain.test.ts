@@ -219,3 +219,22 @@ describe("meeting QR token (Req 6.1, 6.2)", () => {
     expect(verifyMeetingQrToken(".", { secret, now: START })).toEqual({ valid: false, reason: "malformed" });
   });
 });
+
+import { participantDisplayName, UNKNOWN_PARTICIPANT } from "../src/modules/attendance/domain.js";
+
+describe("participantDisplayName (Q13 contract: employeeId is assumed to be an identity user id)", () => {
+  const names = new Map([["u-1", "Asha Verma"]]);
+  it("returns the resolved identity name", () => {
+    expect(participantDisplayName(names, "u-1")).toBe("Asha Verma");
+  });
+  it("returns null for an id identity does not know (UI shows the raw id)", () => {
+    expect(participantDisplayName(names, "EMP-0042")).toBeNull();
+    expect(participantDisplayName(null, "u-1")).toBeNull();
+    expect(participantDisplayName(undefined, "u-1")).toBeNull();
+  });
+  it("returns 'Unknown participant' for a missing / blank / non-string id, never throwing", () => {
+    for (const bad of [undefined, null, "", "   ", 42, {}]) {
+      expect(participantDisplayName(names, bad)).toBe(UNKNOWN_PARTICIPANT);
+    }
+  });
+});

@@ -20,16 +20,22 @@ export async function POST(req: Request) {
   const body = await req.text();
   const target = `${GATEWAY}/api/notification/stream/mark-read`;
 
-  const upstream = await fetch(target, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body,
-  });
-
-  const text = await upstream.text();
+  let upstream: Response;
+  let text: string;
+  try {
+    upstream = await fetch(target, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      signal: AbortSignal.timeout(30_000),
+    });
+    text = await upstream.text();
+  } catch {
+    return NextResponse.json({ code: "UPSTREAM_UNAVAILABLE", message: "upstream service unavailable" }, { status: 502 });
+  }
   return new NextResponse(text, {
     status: upstream.status,
     headers: { "Content-Type": upstream.headers.get("Content-Type") ?? "application/json" },

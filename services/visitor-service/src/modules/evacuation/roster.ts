@@ -48,6 +48,7 @@
  *       passes at the location, rather than returning a 500.
  */
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 import { pino } from "pino";
 
 const log = pino({ name: "evacuation-roster" });
@@ -162,7 +163,7 @@ function getStore(): RosterStore {
   if (_store) return _store;
   const url = process.env.REDIS_URL;
   _store =
-    !url || process.env.CACHE_DRIVER === "memory" ? new MemoryRosterStore() : new RedisRosterStore(new Redis(url));
+    !url || process.env.CACHE_DRIVER === "memory" ? new MemoryRosterStore() : new RedisRosterStore(new Redis(url, redisClientOptions()));
   return _store;
 }
 

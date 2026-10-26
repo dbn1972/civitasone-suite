@@ -13,6 +13,7 @@ import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { pino } from "pino";
+import { registerCompOffConsumers } from "./comp-off-consumer.js";
 
 const log = pino({ name: "hrms-leave-consumer" });
 
@@ -30,6 +31,7 @@ const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 
 export function registerLeaveConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+  registerCompOffConsumers(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; name: string; maxDays: number;
@@ -244,6 +246,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     // makeKey() shape no longer matches any of these entries.
     // invalidateResource clears every cached page for this resource+tenant.
     await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
+    // CLOS3-S5-18: the HR/manager leave-requests list + status tiles read this resource.
+    await cache.invalidateResource(msg.tenantId, "leave_request_detail");
   });
 
   // See WORKFLOW_INSTANCE_REJECTED's own comment above. Guarded to
@@ -305,6 +309,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       // See the leaveApply handler's own comment above on why this is
       // invalidateResource, not invalidate(makeKey(...)).
       await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
+      await cache.invalidateResource(msg.tenantId, "leave_request_detail");
     }
   });
 
@@ -371,6 +376,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     }
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
+    // Resource-wide: page keys include limit/offset/scope.
+    await cache.invalidateResource(msg.tenantId, "leave_request_detail");
   });
 
   queue.subscribe(COMMANDS.leaveReject, async (msg) => {
@@ -407,6 +414,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
     if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
+    await cache.invalidateResource(msg.tenantId, "leave_request_detail");
   });
 
   queue.subscribe(COMMANDS.leaveCancel, async (msg) => {
@@ -490,6 +498,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     if (cancelledEmployeeId) {
       await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
       await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
+      await cache.invalidateResource(msg.tenantId, "leave_request_detail");
     }
   });
 }

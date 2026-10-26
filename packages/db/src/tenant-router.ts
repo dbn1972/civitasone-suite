@@ -48,6 +48,8 @@ export interface TenantRouterOptions {
   maxSiloClients?: number;
   /** Injectable for tests; defaults to createSqlClient. */
   clientFactory?: ClientFactory;
+  /** Ms an evicted silo client stays open before end(); 0 = immediate (default 30000, env TENANT_SILO_EVICT_GRACE_MS). */
+  evictGraceMs?: number;
 }
 
 /**
@@ -127,6 +129,10 @@ export class TenantRouter {
   private readonly clientOptions: SqlClientOptions | undefined;
   private readonly maxSiloClients: number;
   private readonly factory: ClientFactory;
+  /** Grace before an LRU-evicted client is closed, so callers already holding it can finish. */
+  private readonly evictGraceMs: number;
+  /** Evicted clients waiting out their grace window (closed early by end()). */
+  private readonly retiring = new Map<SqlClient, ReturnType<typeof setTimeout>>();
 
   private poolClient: SqlClient | undefined;
   /** dsn -> client, LRU-ordered by insertion/touch. */
@@ -138,6 +144,7 @@ export class TenantRouter {
     this.clientOptions = opts.clientOptions;
     this.maxSiloClients = opts.maxSiloClients ?? Number(process.env.TENANT_SILO_CLIENT_CACHE ?? 25);
     this.factory = opts.clientFactory ?? createSqlClient;
+    this.evictGraceMs = opts.evictGraceMs ?? Number(process.env.TENANT_SILO_EVICT_GRACE_MS ?? 30_000);
   }
 
   /** The shared pool-tier client (lazy). */
@@ -165,9 +172,23 @@ export class TenantRouter {
       if (oldestKey === undefined) break;
       const evicted = this.silo.get(oldestKey);
       this.silo.delete(oldestKey);
-      void evicted?.end({ timeout: 5 }).catch(() => undefined);
+      if (evicted) this.retire(evicted);
     }
     return client;
+  }
+
+  /** Deferred close: callers may still hold an evicted client, so end() it after a grace window. */
+  private retire(client: SqlClient): void {
+    if (this.evictGraceMs <= 0) { // 0 = legacy immediate close
+      void client.end({ timeout: 5 }).catch(() => undefined);
+      return;
+    }
+    const timer = setTimeout(() => {
+      this.retiring.delete(client);
+      void client.end({ timeout: 5 }).catch(() => undefined);
+    }, this.evictGraceMs);
+    timer.unref?.();
+    this.retiring.set(client, timer);
   }
 
   /** Resolve the postgres-js client for a tenant's tier. */
@@ -192,7 +213,10 @@ export class TenantRouter {
 
   /** Close all pooled clients (shutdown). */
   async end(): Promise<void> {
-    const all = [this.poolClient, ...this.silo.values()].filter(Boolean) as SqlClient[];
+    const pending = [...this.retiring.keys()];
+    for (const t of this.retiring.values()) clearTimeout(t);
+    this.retiring.clear();
+    const all = [this.poolClient, ...this.silo.values(), ...pending].filter(Boolean) as SqlClient[];
     this.poolClient = undefined;
     this.silo.clear();
     await Promise.all(all.map((c) => c.end({ timeout: 5 }).catch(() => undefined)));

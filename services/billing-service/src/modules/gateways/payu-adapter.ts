@@ -10,7 +10,7 @@
  *   PAYU_BASE_URL      — API base URL (defaults to PayU sandbox)
  */
 
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import type {
   PaymentGateway,
   GatewayOrder,
@@ -272,3 +272,27 @@ export const payuAdapter: PaymentGateway = {
     };
   },
 };
+
+/**
+ * Verify the REVERSE hash PayU attaches to a server-to-server callback:
+ *   sha512(SALT|status|udf10|...|udf1|email|firstname|productinfo|amount|txnid|key)
+ * (prefixed with `additionalCharges|` when PayU sends that field). The key and salt are OUR
+ * configured values, never the ones in the body. Returns false for any missing / mismatching hash.
+ * Throws GatewayError(GATEWAY_NOT_CONFIGURED) when the merchant key / salt are not set.
+ */
+export function verifyPayuWebhookHash(body: Record<string, unknown>): boolean {
+  const key = getMerchantKey();
+  const salt = getSalt();
+  const f = (name: string): string => (typeof body[name] === "string" ? (body[name] as string) : "");
+  const received = f("hash").toLowerCase();
+  if (!/^[0-9a-f]{128}$/.test(received)) return false;
+  const parts = [
+    salt, f("status"),
+    f("udf10"), f("udf9"), f("udf8"), f("udf7"), f("udf6"),
+    f("udf5"), f("udf4"), f("udf3"), f("udf2"), f("udf1"),
+    f("email"), f("firstname"), f("productinfo"), f("amount"), f("txnid"), key,
+  ];
+  if (f("additionalCharges")) parts.unshift(f("additionalCharges"));
+  const expected = computeHash(parts.join("|"));
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+}

@@ -103,3 +103,16 @@ export async function updateStatus(
     .returning();
   return result[0] ?? null;
 }
+
+/**
+ * V4-C-04: next bookingNumber sequence value from parking.booking_number_seq
+ * (migrations/0003). Replaces crypto.randomInt(1, 999999), which collided
+ * (birthday paradox) against the global UNIQUE column. Call inside the
+ * transaction that inserts the row.
+ */
+export async function nextBookingSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"parking"."booking_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}

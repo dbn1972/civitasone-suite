@@ -2,7 +2,7 @@
  * Reads + optimistic-locked writes for the PC-001..PC-004 / PC-008 tables.
  * All reads go through scopedRead() so PostgreSQL RLS is enforced.
  */
-import { eq, and, sql, isNotNull, lte, desc, asc, type SQL } from "drizzle-orm";
+import { eq, and, sql, isNotNull, lte, desc, asc, inArray, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import {
   productVersions,
@@ -57,6 +57,41 @@ export async function listVersionNumbers(productId: string, tenantId: string): P
   return rows.map((r) => r.n);
 }
 
+/** First draft / pending_approval version of a product, regardless of how many versions exist. */
+export async function findOpenVersion(productId: string, tenantId: string): Promise<ProductVersionRow | undefined> {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(productVersions)
+      .where(and(
+        eq(productVersions.tenantId, tenantId),
+        eq(productVersions.productId, productId),
+        inArray(productVersions.status, ["draft", "pending_approval"]),
+      ))
+      .orderBy(desc(productVersions.versionNumber))
+      .limit(1),
+  );
+  return rows[0];
+}
+
+/**
+ * Write-side guard for openProductVersion (CLOS3-S4-05): serialise per product for the rest of the
+ * transaction, then report the open version (if any) and the next version number from the
+ * transaction's own view. Take the lock BEFORE reading.
+ */
+export async function lockAndReadVersionState(
+  tx: ScopedTx,
+  tenantId: string,
+  productId: string,
+): Promise<{ open: ProductVersionRow | undefined; nextVersionNumber: number }> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"product-versions:" + tenantId + ":" + productId}))`);
+  const where = and(eq(productVersions.tenantId, tenantId), eq(productVersions.productId, productId))!;
+  const [open] = await tx.select().from(productVersions)
+    .where(and(where, inArray(productVersions.status, ["draft", "pending_approval"])))
+    .orderBy(desc(productVersions.versionNumber)).limit(1);
+  const [agg] = await tx.select({ max: sql<number>`coalesce(max(${productVersions.versionNumber}), 0)::int` })
+    .from(productVersions).where(where);
+  return { open, nextVersionNumber: (agg?.max ?? 0) + 1 };
+}
+
 export async function insertVersion(tx: ScopedTx, row: ProductVersionInsert): Promise<void> {
   await tx.insert(productVersions).values(row);
 }
@@ -97,6 +132,30 @@ export async function findLatestApprovedVersion(productId: string, tenantId: str
       .limit(1),
   );
   return rows[0] ?? null;
+}
+
+/**
+ * Latest approved version for each of many products in ONE query (DISTINCT ON product_id,
+ * highest version_number). Products with no approved version are absent from the map.
+ * Always tenant-predicated, on top of RLS.
+ */
+export async function findLatestApprovedVersionsByProductIds(
+  productIds: string[],
+  tenantId: string,
+): Promise<Map<string, ProductVersionRow>> {
+  const out = new Map<string, ProductVersionRow>();
+  if (productIds.length === 0) return out;
+  const rows = await scopedRead((tx) =>
+    tx.selectDistinctOn([productVersions.productId]).from(productVersions)
+      .where(and(
+        eq(productVersions.tenantId, tenantId),
+        eq(productVersions.status, "approved"),
+        inArray(productVersions.productId, productIds),
+      ))
+      .orderBy(productVersions.productId, desc(productVersions.versionNumber)),
+  );
+  for (const row of rows) out.set(row.productId, row);
+  return out;
 }
 
 /** Product ids that currently have at least one approved version. */

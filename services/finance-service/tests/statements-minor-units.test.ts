@@ -7,6 +7,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
+import { sql } from "drizzle-orm";
+import { purgeLedgerRows } from "./_purge-ledger.js";
 import { scoped } from "./_tenant.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financeLedger } from "../src/modules/gl/schema.js";
@@ -45,7 +47,14 @@ beforeAll(async () => {
   ]));
   await scoped(OTHER, (tx) => tx.insert(financeLedger).values([line(OTHER, FOREIGN.id, "V-9", 5n, 0n)]));
 });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+afterAll(async () => {
+  await app.close();
+  // This file posts an above-2^53 ledger line; the ledger is append-only, so remove it
+  // explicitly (both tenants are unique to this run) instead of leaving it on a reused DB.
+  await purgeLedgerRows(T, sql`true`);
+  await purgeLedgerRows(OTHER, sql`true`);
+  await sqlClient.end();
+});
 
 describe("GET /v1/finance/statements minor-unit contract", () => {
   it("returns exact paise strings per head, with no float loss above 2^53", async () => {

@@ -16,6 +16,7 @@
  */
 import { and, eq, count, desc } from "drizzle-orm";
 import { Redis } from "ioredis";
+import { redisClientOptions } from "@civitasone/cache";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import {
@@ -262,7 +263,7 @@ function getQueueStore(): PrintQueueStore {
   _queueStore =
     !url || process.env.CACHE_DRIVER === "memory"
       ? new MemoryPrintQueueStore()
-      : new RedisPrintQueueStore(new Redis(url));
+      : new RedisPrintQueueStore(new Redis(url, redisClientOptions()));
   return _queueStore;
 }
 

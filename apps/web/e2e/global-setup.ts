@@ -1,5 +1,6 @@
 import http from 'node:http';
 import type { FullConfig } from '@playwright/test';
+import { SCENARIO_SUB_PREFIX } from './helpers/auth';
 
 const PORT = 4001;
 
@@ -1332,7 +1333,306 @@ const FIXTURES: Record<string, unknown> = {
     recommendations: 'Implement role-based access controls',
     replies: [],
   },
+  // ── Contract 10/10 wave: admin / platform-admin / policy / ai / learning / developer-portal ──
+  // Every shape below is the one the owning service's route actually sends (the route is named in
+  // each comment). Anything per-request (paging, filters, per-viewer scenarios) is in DYNAMIC /
+  // SCENARIOS further down, not here.
+
+  // admin-service GET /v1/admin/roles and /permissions: identity-service RBAC rows in { data, meta }.
+  '/api/v1/admin/roles': {
+    data: [
+      { id: '10000000-0000-4000-8000-000000000001', key: 'super_admin', name: 'Super Admin', description: 'Full platform access', isSystem: true },
+      { id: '10000000-0000-4000-8000-000000000002', key: 'tenant_admin', name: 'Tenant Admin', description: 'Manages office configuration and users', isSystem: true },
+      { id: '10000000-0000-4000-8000-000000000003', key: 'hr_officer', name: 'HR Officer', description: 'Handles leave and service records', isSystem: false },
+      { id: '10000000-0000-4000-8000-000000000004', key: 'records_clerk', name: 'Records Clerk', description: null, isSystem: false },
+    ],
+    meta: { page: 1, pageSize: 200, total: 4 },
+  },
+  '/api/v1/admin/permissions': {
+    data: [
+      { id: '20000000-0000-4000-8000-000000000001', key: 'finance.journal.create', name: 'Create journal', description: 'Post a journal voucher' },
+      { id: '20000000-0000-4000-8000-000000000002', key: 'finance.bill.approve', name: 'Approve bill', description: 'Approve a vendor bill' },
+      { id: '20000000-0000-4000-8000-000000000003', key: 'hrms.leave.approve', name: 'Approve leave', description: 'Approve a leave application' },
+      { id: '20000000-0000-4000-8000-000000000004', key: 'hrms.employee.read', name: 'Read employee', description: null },
+    ],
+    meta: { page: 1, pageSize: 200, total: 4 },
+  },
+
+  // tenant-service GET /v1/tenants
+  '/api/v1/tenants': {
+    data: [
+      { id: '30000000-0000-4000-8000-000000000001', tenantId: '30000000-0000-4000-8000-000000000001', name: 'Ministry of Rural Development', domain: 'mord.gov.in', edition: 'enterprise', status: 'active', region: 'ap-south-1', residency: 'IN', isolationTier: 'pool', policyVersion: null, policyReason: null, settings: {}, version: 1 },
+      { id: '30000000-0000-4000-8000-000000000002', tenantId: '30000000-0000-4000-8000-000000000002', name: 'District Collectorate Pune', domain: 'pune.nic.in', edition: 'standard', status: 'trial', region: 'ap-south-1', residency: 'IN', isolationTier: 'pool', policyVersion: null, policyReason: null, settings: {}, version: 1 },
+      { id: '30000000-0000-4000-8000-000000000003', tenantId: '30000000-0000-4000-8000-000000000003', name: 'State Archives Bhopal', domain: 'archives.mp.gov.in', edition: 'standard', status: 'suspended', region: 'ap-south-1', residency: 'IN', isolationTier: 'pool', policyVersion: null, policyReason: null, settings: {}, version: 2 },
+    ],
+  },
+
+  // admin-service GET /v1/admin/editions (platform-catalogue: toEditionView + total + generatedAt)
+  '/api/v1/admin/editions': {
+    data: [
+      { code: 'standard', name: 'Standard', subtitle: 'Core office workflows', modulesIncluded: 8, modules: ['hrms', 'finance', 'workflow', 'dms', 'helpdesk', 'notifications', 'reports', 'audit'], pricing: null, tenants: 2, status: 'active' },
+      { code: 'enterprise', name: 'Enterprise', subtitle: 'Full suite with analytics', modulesIncluded: 14, modules: ['hrms', 'finance', 'workflow', 'dms', 'helpdesk', 'notifications', 'reports', 'audit', 'analytics', 'ai-agent', 'procurement', 'projects', 'assets', 'legal'], pricing: null, tenants: 1, status: 'active' },
+    ],
+    total: 2,
+    generatedAt: '2026-10-24T05:30:00.000Z',
+  },
+
+  // admin-service GET /v1/admin/org-hierarchy-levels and /tenant-config
+  '/api/v1/admin/org-hierarchy-levels': {
+    data: [
+      { id: '40000000-0000-4000-8000-000000000001', order: 1, label: 'Ministry', description: 'Apex policy body', examples: 'Ministry of Finance', color: '#1d4ed8' },
+      { id: '40000000-0000-4000-8000-000000000002', order: 2, label: 'Department', description: 'Executes ministry policy', examples: 'Department of Revenue', color: '#0f766e' },
+      { id: '40000000-0000-4000-8000-000000000003', order: 3, label: 'Section', description: 'Day-to-day desk work', examples: 'Establishment Section', color: '#b45309' },
+    ],
+  },
+  '/api/v1/admin/tenant-config': {
+    data: {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      tenantName: 'Directorate of Digital Services',
+      domain: 'dds.gov.in',
+      edition: 'enterprise',
+      status: 'active',
+      region: 'ap-south-1',
+      residency: 'IN',
+      dbSchema: 'tenant_dds',
+      keycloakRealm: 'civitasone-dds',
+      licenseType: 'Government Enterprise',
+      licensedUntil: '2031-03-31',
+      licensedSeats: 500,
+      activeSeats: 312,
+      storageQuotaGb: 2000,
+      storageUsedGb: 640,
+      features: ['workflow', 'hrms', 'finance'],
+    },
+  },
+
+  // audit-service GET /v1/audit/events (TenantAuditEventListSchema: a bare array)
+  '/api/v1/audit/events': [
+    { id: 'a1000000-0000-4000-8000-000000000001', actor: 'asha.verma@example.gov.in', action: 'role.permissions.updated', resource: 'role:hr_officer', outcome: 'success', timestamp: '2026-10-20T09:15:00.000Z', ipAddress: '10.20.30.40' },
+    { id: 'a1000000-0000-4000-8000-000000000002', actor: 'rohit.menon@example.gov.in', action: 'user.suspend', resource: 'user:EMP-1042', outcome: 'failure', timestamp: '2026-10-21T11:40:00.000Z', ipAddress: '10.20.30.41' },
+    { id: 'a1000000-0000-4000-8000-000000000003', actor: 'system', action: 'tenant.config.read', outcome: 'success', timestamp: '2026-10-22T06:05:00.000Z' },
+  ],
+
+  // policy-service: GET /v1/policy/bindings ({ data, limit, offset, count, total }), /abac/rules and /role-features ({ data })
+  '/api/v1/policy/bindings': {
+    data: [
+      { id: 'b1000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', userId: 'u0000000-0000-0000-0000-000000000001', roleId: 'r0000000-0000-0000-0000-000000000001', status: 'active', createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', version: 1 },
+      { id: 'b1000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', userId: 'f2345678-0000-4000-8000-0000000000aa', roleId: 'e5678901-0000-4000-8000-0000000000bb', status: 'revoked', createdAt: '2026-09-02T00:00:00.000Z', updatedAt: '2026-09-10T00:00:00.000Z', version: 2 },
+    ],
+    limit: 500,
+    offset: 0,
+    count: 2,
+    total: 2,
+  },
+  '/api/v1/policy/abac/rules': {
+    data: [
+      { id: 'c1000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', roleId: 'r0000000-0000-0000-0000-000000000001', expression: { effect: 'deny', action: 'read', resourceType: 'finance.ledger', predicates: [{ op: 'equals', path: 'subject.department', value: 'IT' }] }, enabled: true, version: 1 },
+      { id: 'c1000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', roleId: 'r0000000-0000-0000-0000-000000000001', expression: { effect: 'allow', action: 'approve', resourceType: 'hrms.leave', predicates: [] }, enabled: false, version: 1 },
+    ],
+  },
+  '/api/v1/policy/role-features': {
+    data: [
+      { id: 'd1000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', roleName: 'hr_officer', featureKey: 'hr.payroll.view', granted: true, grantedBy: 'u0000000-0000-0000-0000-000000000001', reason: null, revokedAt: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z' },
+      { id: 'd1000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', roleName: 'records_clerk', featureKey: 'dms.export', granted: false, grantedBy: 'u0000000-0000-0000-0000-000000000001', reason: 'Export not needed', revokedAt: null, createdAt: '2026-09-03T00:00:00.000Z', updatedAt: '2026-09-03T00:00:00.000Z' },
+    ],
+  },
+
+  // ai-agent-service: agents / guardrails / governance / copilot (chat is DYNAMIC: it filters on ?status=)
+  '/api/v1/ai/agents': {
+    data: [
+      { id: 'e1000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', name: 'Grievance Triage Agent', skills: ['classify', 'route'], tools: ['helpdesk.search'], status: 'active', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-10-01T08:00:00.000Z', version: 3 },
+      { id: 'e1000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', name: 'Leave Policy Assistant', skills: ['answer'], tools: [], status: 'paused', createdAt: '2026-09-05T08:00:00.000Z', updatedAt: '2026-10-05T08:00:00.000Z', version: 2 },
+    ],
+  },
+  '/api/v1/ai/guardrails/rules': {
+    data: [
+      { id: 'f1000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', name: 'Aadhaar number redaction', ruleType: 'pii', pattern: '\\d{4}\\s?\\d{4}\\s?\\d{4}', config: {}, severity: 'high', status: 'active', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z', version: 1 },
+      { id: 'f1000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', name: 'Prompt injection block', ruleType: 'prompt_injection', pattern: null, config: {}, severity: 'critical', status: 'active', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z', version: 1 },
+    ],
+  },
+  '/api/v1/ai/governance/dashboard': { data: { totalInvocations: 1240, blockedCount: 62, blockRatePct: 5, activeAgents: 1 } },
+  '/api/v1/ai/copilot/turns': {
+    data: [
+      { id: '51000000-0000-4000-8000-000000000001', userId: 'u0000000-0000-0000-0000-000000000001', prompt: 'Summarise the pending leave rules for casual leave', response: 'Casual leave is capped at 8 days a year.', sourceCitations: [{ id: 'cit-1', title: 'Leave Rules 2024', score: 0.91 }], model: 'govllm-1', tokens: 212, latencyMs: 820, createdAt: '2026-10-22T09:00:00.000Z', version: 1 },
+      { id: '51000000-0000-4000-8000-000000000002', userId: 'u0000000-0000-0000-0000-000000000001', prompt: 'Draft a note on file movement delays', response: null, sourceCitations: null, model: null, tokens: null, latencyMs: null, createdAt: '2026-10-22T09:05:00.000Z', version: 1 },
+    ],
+    meta: { page: 1, pageSize: 50, total: 2 },
+  },
+
+  // hrms-service learning: me/profile, dashboard, my-learning, training-plans, assessments (courses is DYNAMIC: ?q=)
+  '/api/v1/hrms/me/profile': { id: 'e0000000-0000-4000-8000-000000000001', fullName: 'Asha Verma', employeeNo: 'EMP-1042', status: 'active', departmentId: null, designationId: null },
+  '/api/v1/hrms/learning/dashboard': { enrolled: 2, in_progress: 1, completed: 1, overdue: 0, total: 4 },
+  '/api/v1/hrms/learning/my-learning': [
+    { id: '61000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', courseId: '71000000-0000-4000-8000-000000000001', employeeId: 'e0000000-0000-4000-8000-000000000001', status: 'in_progress', progressPct: 40, resumeLessonId: '81000000-0000-4000-8000-000000000002', completedAt: null, updatedAt: daysFromToday(-2) + 'T08:00:00.000Z', courseTitle: 'e-Office Fundamentals', courseCode: 'EOF-101' },
+    { id: '61000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', courseId: '71000000-0000-4000-8000-000000000002', employeeId: 'e0000000-0000-4000-8000-000000000001', status: 'completed', progressPct: 100, resumeLessonId: null, completedAt: '2026-09-15T08:00:00.000Z', updatedAt: '2026-09-15T08:00:00.000Z', courseTitle: 'Cyber Hygiene for Officers', courseCode: 'CYB-201' },
+  ],
+  '/api/v1/hrms/learning/training-plans': {
+    data: [
+      { id: '91000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', title: 'Annual Training Plan 2026-27', planYear: 2026, departmentId: null, roleCode: null, status: 'approved', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z', createdBy: 'u0000000-0000-0000-0000-000000000001' },
+      { id: '91000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', title: 'Finance Cadre Upskilling', planYear: 2026, departmentId: null, roleCode: 'finance_officer', status: 'draft', createdAt: '2026-05-01T00:00:00.000Z', updatedAt: '2026-05-01T00:00:00.000Z', createdBy: 'u0000000-0000-0000-0000-000000000001' },
+    ],
+    total: 2,
+  },
+  '/api/v1/hrms/assessments': [
+    { id: 'a2000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', title: 'GFR Basics Assessment', courseRef: 'FIN-110', bankId: 'a3000000-0000-4000-8000-000000000001', passingScore: '60', durationMins: 45, maxAttempts: 2, validityMonths: 24, status: 'published' },
+    { id: 'a2000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', title: 'Data Protection Awareness', courseRef: null, bankId: 'a3000000-0000-4000-8000-000000000002', passingScore: '40', durationMins: 30, maxAttempts: 3, validityMonths: null, status: 'published' },
+  ],
 };
+
+// ── Per-request fixtures and per-viewer scenarios (contract 10/10 wave) ───────────────────────────
+
+/** workflow-service GET /v1/workflow/tasks: 17 pending tasks, served 15 at a time (limit/offset). */
+const WORKFLOW_TASKS: Array<Record<string, unknown>> = [
+  { id: 'b2000000-0000-4000-8000-000000000001', name: 'Leave approval - Ravi Kumar', refType: 'leave_app', refId: 'b3000000-0000-4000-8000-000000000001', dueAt: '2020-01-15T00:00:00.000Z' },
+  { id: 'b2000000-0000-4000-8000-000000000002', name: 'Purchase order PO-2026-0042', refType: 'procurement_po', refId: 'b3000000-0000-4000-8000-000000000002', dueAt: `${daysFromToday(3)}T00:00:00.000Z` },
+  { id: 'b2000000-0000-4000-8000-000000000003', name: 'Bill approval - Stationery supply', refType: 'finance_bill', refId: 'b3000000-0000-4000-8000-000000000003', dueAt: `${daysFromToday(5)}T00:00:00.000Z` },
+  ...Array.from({ length: 14 }, (_, i) => ({
+    id: `b2000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`,
+    name: `Estab file movement ${i + 1}`,
+    refType: 'estab_file',
+    refId: `b3000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`,
+    dueAt: null,
+  })),
+].map((t, i) => ({
+  tenantId: '00000000-0000-0000-0000-000000000001',
+  instanceId: `b4000000-0000-4000-8000-${String(i + 1).padStart(12, '0')}`,
+  status: 'pending',
+  roleRef: 'dept_head',
+  nodeKey: 'approve',
+  decision: null,
+  assigneeId: null,
+  createdAt: new Date().toISOString(),
+  instanceName: t.name,
+  requesterId: null,
+  version: 1,
+  ...t,
+}));
+
+/** ai-agent-service GET /v1/ai/chat: { data, meta: { total } }, filtered by ?status= and capped by ?limit=. */
+const CHAT_CONVERSATIONS: Array<Record<string, unknown>> = [
+  { id: 'c5000000-0000-4000-8000-000000000001', channelId: 'portal', profileId: null, status: 'active', language: 'en', startedAt: '2026-10-22T09:00:00.000Z', endedAt: null, handedOffAt: null, handoffReason: null, handoffNote: null, handoffQueue: null, handoffContext: null, version: 1 },
+  { id: 'c5000000-0000-4000-8000-000000000002', channelId: 'whatsapp', profileId: null, status: 'handed_off', language: 'hi', startedAt: '2026-10-22T08:00:00.000Z', endedAt: null, handedOffAt: '2026-10-22T08:10:00.000Z', handoffReason: 'requested', handoffNote: null, handoffQueue: 'grievance-desk', handoffContext: null, version: 2 },
+  { id: 'c5000000-0000-4000-8000-000000000003', channelId: 'portal', profileId: null, status: 'ended', language: 'en', startedAt: '2026-10-21T10:00:00.000Z', endedAt: '2026-10-21T10:12:00.000Z', handedOffAt: null, handoffReason: null, handoffNote: null, handoffQueue: null, handoffContext: null, version: 3 },
+];
+
+/** hrms-service GET /v1/hrms/learning/courses (numeric columns arrive as strings), filtered by ?q=. */
+const LEARNING_COURSES: Array<Record<string, unknown>> = [
+  { id: '71000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', code: 'EOF-101', title: 'e-Office Fundamentals', description: 'File movement and noting on e-Office', category: 'Digital Skills', creditHours: '6', status: 'published' },
+  { id: '71000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', code: 'CYB-201', title: 'Cyber Hygiene for Officers', description: null, category: 'Security', creditHours: '4', status: 'published' },
+  { id: '71000000-0000-4000-8000-000000000003', tenantId: 't0000000-0000-0000-0000-000000000001', code: 'FIN-110', title: 'GFR and Procurement Basics', description: null, category: 'Finance', creditHours: '8', status: 'published' },
+];
+
+/** admin-service GET /v1/admin/users: identity-service search rows in { data, meta: { total, counts } }. */
+const ADMIN_USER_ROWS: Array<Record<string, unknown>> = [
+  { id: 'd2000000-0000-4000-8000-000000000001', email: 'asha.verma@example.gov.in', name: 'Asha Verma', empCode: 'EMP-1042', status: 'active', mfaEnabled: true },
+  { id: 'd2000000-0000-4000-8000-000000000002', email: 'rohit.menon@example.gov.in', name: 'Rohit Menon', empCode: null, status: 'suspended', mfaEnabled: false },
+  { id: 'd2000000-0000-4000-8000-000000000003', email: 'meera.iyer@example.gov.in', name: 'Meera Iyer', empCode: 'EMP-2210', status: 'active', mfaEnabled: true },
+];
+
+/** ai-agent-service GET /v1/ai/governance/audit: ?blocked=true narrows to refused actions. */
+const AI_AUDIT_ENTRIES: Array<Record<string, unknown>> = [
+  { id: 'a4000000-0000-4000-8000-000000000001', tenantId: 't0000000-0000-0000-0000-000000000001', agentId: 'e1000000-0000-4000-8000-000000000001', action: 'answer.generate', input: {}, output: {}, blocked: false, reason: null, createdAt: '2026-10-22T09:00:00.000Z', version: 1 },
+  { id: 'a4000000-0000-4000-8000-000000000002', tenantId: 't0000000-0000-0000-0000-000000000001', agentId: 'e1000000-0000-4000-8000-000000000001', action: 'answer.generate', input: {}, output: {}, blocked: true, reason: 'Prompt injection detected', createdAt: '2026-10-22T09:10:00.000Z', version: 1 },
+];
+
+const intParam = (url: URL, name: string, fallback: number): number => {
+  const n = Number(url.searchParams.get(name));
+  return Number.isInteger(n) && n >= 0 && url.searchParams.has(name) ? n : fallback;
+};
+
+/** Fixtures that depend on the query string. Keyed by path like FIXTURES; consulted first. */
+const DYNAMIC: Record<string, (url: URL) => unknown> = {
+  '/api/v1/workflow/tasks': (url) => {
+    const limit = intParam(url, 'limit', 15);
+    const offset = intParam(url, 'offset', 0);
+    const data = WORKFLOW_TASKS.slice(offset, offset + limit);
+    return { data, pagination: { total: WORKFLOW_TASKS.length, hasMore: offset + data.length < WORKFLOW_TASKS.length } };
+  },
+  '/api/v1/ai/chat': (url) => {
+    const status = url.searchParams.get('status');
+    const matching = status ? CHAT_CONVERSATIONS.filter((c) => c.status === status) : CHAT_CONVERSATIONS;
+    const limit = intParam(url, 'limit', 100);
+    return { data: matching.slice(0, limit), meta: { page: 1, pageSize: limit, total: matching.length } };
+  },
+  '/api/v1/ai/governance/audit': (url) => {
+    const blocked = url.searchParams.get('blocked');
+    const data = blocked === null ? AI_AUDIT_ENTRIES : AI_AUDIT_ENTRIES.filter((e) => String(e.blocked) === blocked);
+    return { data, meta: { total: data.length } };
+  },
+  '/api/v1/hrms/learning/courses': (url) => {
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    return q ? LEARNING_COURSES.filter((c) => `${c.code} ${c.title} ${c.category}`.toLowerCase().includes(q)) : LEARNING_COURSES;
+  },
+  '/api/v1/admin/users': (url) => {
+    const q = (url.searchParams.get('q') ?? '').toLowerCase();
+    const status = url.searchParams.get('status');
+    const rows = ADMIN_USER_ROWS.filter((u) =>
+      (!q || `${u.name} ${u.email} ${u.empCode ?? ''}`.toLowerCase().includes(q)) && (!status || u.status === status));
+    return { data: rows, meta: { page: 1, pageSize: 25, total: rows.length, counts: { active: 2, suspended: 1, locked: 0, deactivated: 0 } } };
+  },
+};
+
+type Override = { status: number; body?: unknown };
+
+/**
+ * Per-viewer scenarios. The server components fetch with the access-token cookie as the Bearer
+ * token, so a spec that signs in with `authenticate(page, '<scenario>')` (helpers/auth.ts puts the
+ * scenario in the token's `sub`) gets that scenario's answers, while the shared fixtures stay
+ * untouched for every other spec. Fetch results are cached per Authorization header, so scenarios
+ * cannot leak into each other either.
+ *   down  - every upstream answers 500 (except the tenant module list the shell needs)
+ *   empty - the list endpoints this wave added answer an empty collection
+ *   keys  - admin-service /v1/admin/api-keys holds issued keys
+ */
+const EMPTY_LIST: Override = { status: 200, body: { data: [] } };
+const SCENARIOS: Record<string, Record<string, Override>> = {
+  down: { '*': { status: 500, body: { code: 'INTERNAL', message: 'upstream unavailable' } } },
+  empty: {
+    '/api/v1/workflow/tasks': { status: 200, body: { data: [], pagination: { total: 0, hasMore: false } } },
+    '/api/v1/admin/roles': EMPTY_LIST,
+    '/api/v1/admin/permissions': EMPTY_LIST,
+    '/api/v1/admin/users': { status: 200, body: { data: [], meta: { page: 1, pageSize: 25, total: 0, counts: { active: 0, suspended: 0, locked: 0, deactivated: 0 } } } },
+    '/api/v1/tenants': EMPTY_LIST,
+    '/api/v1/admin/editions': { status: 200, body: { data: [], total: 0, generatedAt: '2026-10-24T05:30:00.000Z' } },
+    '/api/v1/admin/org-hierarchy-levels': EMPTY_LIST,
+    '/api/v1/audit/events': { status: 200, body: [] },
+    '/api/v1/policy/bindings': { status: 200, body: { data: [], limit: 500, offset: 0, count: 0, total: 0 } },
+    '/api/v1/policy/abac/rules': EMPTY_LIST,
+    '/api/v1/policy/role-features': EMPTY_LIST,
+    '/api/v1/ai/agents': EMPTY_LIST,
+    '/api/v1/ai/guardrails/rules': EMPTY_LIST,
+    '/api/v1/ai/chat': { status: 200, body: { data: [], meta: { page: 1, pageSize: 100, total: 0 } } },
+    '/api/v1/ai/copilot/turns': { status: 200, body: { data: [], meta: { page: 1, pageSize: 50, total: 0 } } },
+    '/api/v1/ai/governance/audit': EMPTY_LIST,
+    '/api/v1/hrms/learning/courses': { status: 200, body: [] },
+    '/api/v1/hrms/learning/my-learning': { status: 200, body: [] },
+    '/api/v1/hrms/learning/training-plans': { status: 200, body: { data: [], total: 0 } },
+    '/api/v1/hrms/assessments': { status: 200, body: [] },
+  },
+  keys: {
+    // admin-service APIKeySummaryListSchema: a bare array
+    '/api/v1/admin/api-keys': {
+      status: 200,
+      body: [
+        { id: 'k1000000-0000-4000-8000-000000000001', keyName: 'Payroll integration', keyPrefix: 'cvo_live_a1b2', createdBy: 'u0000000-0000-0000-0000-000000000001', createdAt: '2026-09-01T08:00:00.000Z', scopes: ['hrms.read'], status: 'active' },
+        { id: 'k1000000-0000-4000-8000-000000000002', keyName: 'Legacy reporting feed', keyPrefix: 'cvo_live_c3d4', createdBy: 'u0000000-0000-0000-0000-000000000001', createdAt: '2026-03-01T08:00:00.000Z', expiresAt: '2026-06-01T08:00:00.000Z', scopes: [], status: 'expired' },
+      ],
+    },
+  },
+};
+/** Paths a `down` viewer still gets, because the app shell needs them to render at all. */
+const DOWN_EXEMPT = new Set(['/api/v1/admin/tenant/modules']);
+
+function scenarioOf(authorization: string | undefined): string | null {
+  const payload = authorization?.slice('Bearer '.length).split('.')[1];
+  if (!payload) return null;
+  try {
+    const sub = (JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { sub?: unknown }).sub;
+    return typeof sub === 'string' && sub.startsWith(SCENARIO_SUB_PREFIX) ? sub.slice(SCENARIO_SUB_PREFIX.length) : null;
+  } catch {
+    return null;
+  }
+}
 
 const NOT_FOUND_PATHS = new Set(['/api/v1/hrms/employees/nonexistent']);
 // Paths that must answer 500, to exercise the SSR error + retry states.
@@ -1365,7 +1665,17 @@ function handler(req: http.IncomingMessage, res: http.ServerResponse) {
     return;
   }
 
-  let body: unknown = path in FIXTURES ? FIXTURES[path] : { data: [] };
+  // Per-viewer scenario (see SCENARIOS): answers before any shared fixture does.
+  const overrides = SCENARIOS[scenarioOf(req.headers['authorization']) ?? ''];
+  const override = overrides?.[path] ?? (DOWN_EXEMPT.has(path) ? undefined : overrides?.['*']);
+  if (override) {
+    res.writeHead(override.status, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+    res.end(JSON.stringify(override.body ?? {}));
+    return;
+  }
+
+  const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+  let body: unknown = path in DYNAMIC ? DYNAMIC[path]!(url) : path in FIXTURES ? FIXTURES[path] : { data: [] };
   // GAP-HR-LEAVE-03: the real GET /v1/hrms/leave-requests answers the opt-in
   // ?withMeta=1 with a { data, meta } envelope (LeaveRequestPageSchema, built by
   // services/hrms-service/src/modules/leave/routes.ts); only the bare-array

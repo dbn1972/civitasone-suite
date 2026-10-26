@@ -43,8 +43,10 @@ async function sweepExpiredMessagesForTenant(now: Date, batch: number): Promise<
   for (const sub of expired) {
     try {
       await db.transaction(async (tx) => {
-        // Mark subscription as expired
-        await repo.expireSubscription(tx, sub.id);
+        // Mark subscription as expired (compare-and-set on status=active).
+        // If a message matched it, or another sweep expired it, since our
+        // SELECT, skip: no reject, history or audit for the losing side.
+        if (!(await repo.expireSubscription(tx, sub.id))) return;
 
         const correlationId = randomUUID();
 

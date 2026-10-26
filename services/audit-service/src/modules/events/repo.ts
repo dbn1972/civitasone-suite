@@ -4,7 +4,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { auditEvents, type AuditEventRow, type AuditEventInsert } from "./schema.js";
 import type { AuditEventView } from "./domain.js";
-import { computeHash } from "./domain.js";
+import { computeHash, nextOccurredAt, verifyChain, type ChainVerification } from "./domain.js";
 
 function toView(r: AuditEventRow): AuditEventView {
   return {
@@ -92,6 +92,8 @@ export interface ListEventsFilters {
   resourceType?: string;
   /** Exact actorId, or a case-insensitive substring of the actor's email/name. */
   actor?: string;
+  /** payload->>'outcome' IN (...) -- e.g. ["failure"] for failed-authentication counts. */
+  outcomes?: string[];
 }
 
 /** Escapes LIKE wildcards so user input is matched literally. */
@@ -112,6 +114,9 @@ function eventConditions(tenantId: string, from: Date, to: Date, type: string | 
   }
   if (filters.resourceType) {
     conditions.push(sql`${auditEvents.payload}->>'resourceType' = ${filters.resourceType}`);
+  }
+  if (filters.outcomes && filters.outcomes.length > 0) {
+    conditions.push(inArray(sql<string>`${auditEvents.payload}->>'outcome'`, filters.outcomes));
   }
   if (filters.actor) {
     const like = `%${escapeLike(filters.actor)}%`;
@@ -246,7 +251,9 @@ export async function writeEvent(
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${tenantId}))`);
     const latest = await findLatestForTenantTx(tx, tenantId);
     const id = randomUUID();
-    const now = new Date().toISOString();
+    // V4-G-05: this exact instant is hashed AND persisted as occurred_at.
+    const occurredAt = nextOccurredAt(latest?.occurredAt);
+    const now = occurredAt.toISOString();
     const retainUntil = new Date(Date.now() + 180 * 86400 * 1000);
     const actor: Record<string, unknown> = { actorId, ...((payload.actor as Record<string, unknown>) ?? {}) };
     const target = resourceId;
@@ -273,6 +280,7 @@ export async function writeEvent(
       severity,
       prevHash: latest?.eventHash ?? null,
       eventHash,
+      occurredAt,
       correlationId,
       createdBy: actorId,
       ipAddress: ipAddress ?? null,
@@ -289,4 +297,19 @@ export type Writer = Pick<typeof db, "insert" | "select">;
 
 export async function insert(tx: Writer, row: AuditEventInsert): Promise<void> {
   await tx.insert(auditEvents).values(row);
+}
+
+/**
+ * V4-G-05: re-verify a tenant's audit hash chain from stored rows (oldest first,
+ * read-only). Rows written before the fix cannot reproduce their hash.
+ */
+export async function verifyTenantChain(tenantId: string): Promise<ChainVerification> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents)
+    .where(eq(auditEvents.tenantId, tenantId))
+    .orderBy(auditEvents.occurredAt)));
+  return verifyChain(rows.map((r) => ({
+    id: r.id, tenantId: r.tenantId, type: r.type, actor: r.actor, target: r.target ?? null,
+    payload: r.payload, prevHash: r.prevHash ?? null, eventHash: r.eventHash ?? null,
+    occurredAt: r.occurredAt.toISOString(),
+  })));
 }

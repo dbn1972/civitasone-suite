@@ -464,8 +464,41 @@ describe("registerScheduledConsumers", () => {
     });
 
     expect(mockState.enqueueCalls.some((e) => e.topic === "reports.scheduled.generated")).toBe(true);
-    expect(publishCalls.length).toBe(1);
-    expect(publishCalls[0]!.topic).toBe("reports.job.render");
+    // CLOS3-S6-05: the render command goes through the transactional outbox, not a post-commit publish.
+    const render = mockState.enqueueCalls.find((e) => e.topic === "reports.job.render");
+    expect(render).toBeDefined();
+    expect((render!.payload as Record<string, unknown>).jobId).toBe(JOB_ID);
+    expect((render!.payload as Record<string, unknown>).scheduledReportId).toBe(SCHEDULED_ID);
+    expect(publishCalls.length).toBe(0);
+  });
+
+  it("CLOS3-S6-05: runScheduled survives a failing broker publish and never loses the render command", async () => {
+    const { registerScheduledConsumers } = await import("../src/modules/scheduled/consumer.js");
+    const handlers = new Map<string, (msg: unknown) => Promise<void>>();
+    const publish = vi.fn(async () => { throw new Error("broker down"); });
+    const mockQueue = {
+      subscribe: (topic: string, handler: (msg: unknown) => Promise<void>) => { handlers.set(topic, handler); },
+      publish,
+    };
+    registerScheduledConsumers(mockQueue as any, mockQueue as any);
+    const msg = {
+      messageId: "run-msg-2",
+      type: "reports.scheduled.run",
+      tenantId: TENANT_ID,
+      actorId: ACTOR_ID,
+      correlationId: "corr-run",
+      schemaVersion: "1.0",
+      payload: { scheduledReportId: SCHEDULED_ID, jobId: JOB_ID, templateId: TEMPLATE_ID, format: "pdf" },
+    };
+    await expect(handlers.get("reports.scheduled.run")!(msg)).resolves.toBeUndefined();
+    expect(publish).not.toHaveBeenCalled();
+    expect(mockState.enqueueCalls.filter((e) => e.topic === "reports.job.render")).toHaveLength(1);
+
+    // Redelivery after the first commit: markProcessed now returns false -> handler returns early,
+    // but the render command was already committed to the outbox by the first delivery.
+    mockState.markProcessedResult = false;
+    await handlers.get("reports.scheduled.run")!(msg);
+    expect(mockState.enqueueCalls.filter((e) => e.topic === "reports.job.render")).toHaveLength(1);
   });
 });
 

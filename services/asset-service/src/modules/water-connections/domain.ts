@@ -19,20 +19,6 @@ export function assertTransition(from: string, to: string): void {
   }
 }
 
-let appSeq = 0;
-export function generateApplicationNumber(): string {
-  appSeq += 1;
-  const ts = Date.now().toString(36).toUpperCase();
-  return `WA-${ts}-${String(appSeq).padStart(4, "0")}`;
-}
-
-let connSeq = 0;
-export function generateConnectionNumber(): string {
-  connSeq += 1;
-  const ts = Date.now().toString(36).toUpperCase();
-  return `WC-${ts}-${String(connSeq).padStart(4, "0")}`;
-}
-
 const FEE_TABLE: Record<string, Record<string, bigint>> = {
   domestic:       { "15mm": 2500_00n, "20mm": 3500_00n, "25mm": 5000_00n },
   commercial:     { "15mm": 5000_00n, "20mm": 7500_00n, "25mm": 10000_00n },

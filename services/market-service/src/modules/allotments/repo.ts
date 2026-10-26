@@ -72,3 +72,16 @@ export async function updateStatus(
     .returning();
   return result[0] ?? null;
 }
+
+/**
+ * V4-C-04: next allotment number from market.allotment_number_seq
+ * (migrations/0004). Replaces crypto.randomInt(1, 999999), which collided
+ * (birthday paradox) against the global UNIQUE allotment_number. Call inside
+ * the transaction that inserts the row.
+ */
+export async function nextAllotmentSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"market"."allotment_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}

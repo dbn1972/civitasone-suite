@@ -1,11 +1,11 @@
-import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const marketSchema = pgSchema("market");
 
 export const marketProperties = marketSchema.table("market_properties", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull(),
-  propertyCode: text("property_code").notNull().unique(),
+  propertyCode: text("property_code").notNull(),
   marketName: text("market_name").notNull(),
   propertyType: varchar("property_type", { length: 32 }).notNull(),
   location: jsonb("location").$type<{ address?: string; ward?: string; zone?: string; lat?: number; lng?: number }>(),
@@ -26,7 +26,10 @@ export const marketProperties = marketSchema.table("market_properties", {
   createdBy: uuid("created_by").notNull(),
   updatedBy: uuid("updated_by").notNull(),
   version: integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // V4-C-01: unique per tenant, not fleet-wide (migrations/0003).
+  tenantCodeUidx: uniqueIndex("market_properties_tenant_code_uidx").on(t.tenantId, t.propertyCode),
+}));
 
 export type PropertyRow = typeof marketProperties.$inferSelect;
 export type PropertyInsert = typeof marketProperties.$inferInsert;

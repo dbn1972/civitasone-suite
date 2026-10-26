@@ -61,12 +61,15 @@ export async function update(tx: Writer, id: string, patch: Partial<Subscription
   await tx.update(subscriptions).set({ ...patch, updatedAt: new Date() }).where(eq(subscriptions.id, id));
 }
 
+// CLOS3-S6-07: the *Tx readers are used only inside the consumers write transactions, where the row is
+// read, checked with assertTransition and then updated. FOR UPDATE row-locks it so concurrent commands
+// (separate topics, independent poll loops) serialise and the second re-reads the committed status.
 export async function findByIdTx(tx: Writer, id: string): Promise<SubscriptionView | null> {
-  const rows = await tx.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1);
+  const rows = await tx.select().from(subscriptions).where(eq(subscriptions.id, id)).limit(1).for("update");
   return rows[0] ? toView(rows[0]) : null;
 }
 
 export async function findByTenantIdTx(tx: Writer, tenantId: string): Promise<SubscriptionView | null> {
-  const rows = await tx.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1);
+  const rows = await tx.select().from(subscriptions).where(eq(subscriptions.tenantId, tenantId)).limit(1).for("update");
   return rows[0] ? toView(rows[0]) : null;
 }

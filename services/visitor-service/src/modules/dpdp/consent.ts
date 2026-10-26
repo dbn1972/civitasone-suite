@@ -13,7 +13,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { DrizzleTx } from "../../shared/outbox.js";
-import { enqueue } from "../../shared/outbox.js";
+import { enqueue, enqueueMany } from "../../shared/outbox.js";
 import { consentLog, piiAccessLog } from "./schema.js";
 
 /**
@@ -94,4 +94,53 @@ export async function logPiiAccess(
       accessedAt: now.toISOString(),
     },
   });
+}
+
+/** Rows per multi-row pii_access_log INSERT (7 columns; far below PG's parameter cap). */
+const PII_BATCH_CHUNK = 1000;
+
+/**
+ * Batched {@link logPiiAccess} for list reads (CLOS3-S6-15/16): identical audit
+ * semantics - one pii_access_log row and one `pii.access.logged` outbox event PER
+ * resource id, each with its own accessId - but written with multi-row INSERTs, so a
+ * list of N rows costs a constant number of statements instead of 2N round trips.
+ */
+export async function logPiiAccessBatch(
+  tx: DrizzleTx,
+  tenantId: string,
+  actorId: string,
+  resourceType: string,
+  resourceIds: readonly string[],
+  purpose: string,
+  correlationId?: string,
+): Promise<void> {
+  if (resourceIds.length === 0) return;
+  const now = new Date();
+  const entries = resourceIds.map((resourceId) => ({ accessId: randomUUID(), resourceId }));
+
+  for (let i = 0; i < entries.length; i += PII_BATCH_CHUNK) {
+    await tx.insert(piiAccessLog).values(
+      entries.slice(i, i + PII_BATCH_CHUNK).map(({ accessId, resourceId }) => ({
+        id: accessId,
+        tenantId,
+        accessorId: actorId,
+        resourceType,
+        resourceId,
+        purpose,
+        accessedAt: now,
+      })),
+    );
+  }
+
+  await enqueueMany(
+    tx,
+    entries.map(({ accessId, resourceId }) => ({
+      topic: "audit.event.record",
+      eventType: "pii.access.logged",
+      tenantId,
+      actorId,
+      correlationId: correlationId ?? randomUUID(),
+      payload: { accessId, resourceType, resourceId, purpose, accessedAt: now.toISOString() },
+    })),
+  );
 }

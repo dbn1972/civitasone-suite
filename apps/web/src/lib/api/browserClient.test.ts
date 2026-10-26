@@ -235,3 +235,41 @@ describe("browserFetch with blocked storage", () => {
     expect(headers["x-device-trust-token"]).toBeUndefined();
   });
 });
+
+
+describe("browserFetch timeout (CLOS3-S3-24)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+  const hangingFetch = () =>
+    vi.fn((_url: string, init: { signal?: AbortSignal }) =>
+      new Promise<Response>((_res, rej) => {
+        init.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+      }));
+
+  it("a hung request rejects with the standard network copy after the timeout", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", hangingFetch());
+    const p = browserFetch("/v1/x", { timeoutMs: 5_000 });
+    const assertion = expect(p).rejects.toBeInstanceOf(UserFacingError);
+    await vi.advanceTimersByTimeAsync(5_001);
+    await assertion;
+  });
+
+  it("a caller-initiated abort is still surfaced as AbortError, not rewritten", async () => {
+    vi.stubGlobal("fetch", hangingFetch());
+    const ctl = new AbortController();
+    const p = browserFetch("/v1/x", { signal: ctl.signal });
+    ctl.abort();
+    await expect(p).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it("a prompt reply is unaffected and leaves no timer behind", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockRes(200, {})));
+    const res = await browserFetch("/v1/x");
+    expect(res.status).toBe(200);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});

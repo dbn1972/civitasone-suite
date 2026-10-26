@@ -242,3 +242,47 @@ describe("useSSEConnection", () => {
     expect(instance.readyState).toBe(2); // closed
   });
 });
+
+describe("useSSEConnection disabling (CLOS3-S3-22)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockEventSource.reset();
+    (globalThis as unknown as { EventSource: typeof MockEventSource }).EventSource = MockEventSource;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reports disconnected and closes the stream when enabled flips to false", () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useSSEConnection({ url: "/test/stream", enabled }),
+      { initialProps: { enabled: true } },
+    );
+    const instance = MockEventSource.instances[0];
+    act(() => { instance.simulateOpen(); });
+    expect(result.current.state).toBe("connected");
+
+    rerender({ enabled: false });
+    expect(result.current.state).toBe("disconnected");
+    expect(instance.readyState).toBe(2);
+  });
+
+  it("stays disconnected without creating a stream when mounted disabled", () => {
+    const { result } = renderHook(() => useSSEConnection({ url: "/test/stream", enabled: false }));
+    expect(result.current.state).toBe("disconnected");
+    expect(MockEventSource.instances).toHaveLength(0);
+  });
+
+  it("reconnects when re-enabled", () => {
+    const { result, rerender } = renderHook(
+      ({ enabled }) => useSSEConnection({ url: "/test/stream", enabled }),
+      { initialProps: { enabled: true } },
+    );
+    act(() => { MockEventSource.instances[0].simulateOpen(); });
+    rerender({ enabled: false });
+    rerender({ enabled: true });
+    expect(MockEventSource.instances).toHaveLength(2);
+    act(() => { MockEventSource.instances[1].simulateOpen(); });
+    expect(result.current.state).toBe("connected");
+  });
+});

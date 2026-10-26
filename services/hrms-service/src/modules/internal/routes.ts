@@ -310,6 +310,35 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ employeeId: emp ? emp.id : null });
   });
 
+  /**
+   * Reporting line of an identity actor, for cross-service notices (e.g. the
+   * workflow-service delegation notifications to the delegator's manager).
+   * Resolves hrms_employees.user_ref = :actorId, then its managerId employee.
+   * Returns 200 with `manager: null` when the actor has no linked employee or no
+   * (active) manager, so callers fail soft. Names/ids only: no PII beyond what
+   * employee-summaries already exposes. Same internal service-account gate.
+   */
+  app.get("/v1/hrms/internal/employees/actor/:actorId/reporting-line", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { actorId } = z.object({ actorId: z.string().uuid() }).parse(req.params);
+    const { scopedRead } = await import("../../shared/db.js");
+    const { hrmsEmployees } = await import("../employee/schema.js");
+    const { eq, and } = await import("drizzle-orm");
+    const cols = { id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, userRef: hrmsEmployees.userRef, managerId: hrmsEmployees.managerId, status: hrmsEmployees.status };
+    const emp = (await scopedRead((tx) => tx.select(cols).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.userRef, actorId))).limit(1)))[0];
+    if (!emp) return reply.send({ actorId, fullName: null, manager: null });
+    let manager: { actorId: string; fullName: string } | null = null;
+    if (emp.managerId) {
+      const m = (await scopedRead((tx) => tx.select(cols).from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, emp.managerId!))).limit(1)))[0];
+      // A manager with no login link (no userRef) or who has left service cannot receive an in-app notice.
+      if (m && m.userRef && !(["separated", "terminated", "retired", "no_show"] as string[]).includes(m.status)) manager = { actorId: m.userRef, fullName: m.fullName };
+    }
+    return reply.send({ actorId, fullName: emp.fullName, manager });
+  });
+
   app.setErrorHandler((err, req, reply) => {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) {
@@ -469,6 +498,21 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const emp = await employeeRepo.findById(id, ctx.tenantId);
     return reply.send({ exists: emp !== null });
+  });
+
+  // CLOS3-S5-08: approved leave periods for ONE employee, for inspection-service's
+  // tour-plan generation (it used to call a non-existent GET /v1/hrms/leave with no
+  // credentials, so plans were always generated without leave data). Internal-only
+  // (x-internal + x-service-secret via resolveContext), tenant-scoped by x-tenant-id,
+  // approved leave only, and returns dates only -- no reason/leave-type (PII).
+  app.get("/v1/hrms/internal/leave-periods", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+    const q = z.object({ employeeId: z.string().uuid(), startDate: iso, endDate: iso }).parse(req.query);
+    if (q.endDate < q.startDate) throw new HttpError(400, "VALIDATION_ERROR", "endDate must be on or after startDate");
+    const periods = await leaveRepo.findApprovedLeavePeriods(ctx.tenantId, q.employeeId, q.startDate, q.endDate);
+    return reply.send(periods);
   });
 
   // BUG-2 fix: single-employee DIC engagement LOP-applicability check.

@@ -23,7 +23,7 @@ test.describe('Leave Management', () => {
   test.describe('Leave List', () => {
     test('page loads with stat cards', async ({ page }) => {
       await page.goto('/hr/leave');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows leave request stats (total, pending, approved, rejected)', async ({ page }) => {
@@ -77,7 +77,7 @@ test.describe('Leave Management', () => {
   test.describe('Apply for Leave', () => {
     test('form page loads with required fields', async ({ page }) => {
       await page.goto('/hr/leave/apply');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows employee selector', async ({ page }) => {
@@ -101,7 +101,7 @@ test.describe('Leave Management', () => {
 
     test('shows submit button', async ({ page }) => {
       await page.goto('/hr/leave/apply');
-      await expect(page.getByRole('button', { name: /submit|apply/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /submit leave request/i })).toBeVisible();
     });
 
     test('validates required fields on empty submit', async ({ page }) => {
@@ -110,7 +110,7 @@ test.describe('Leave Management', () => {
       // Settle the form first: Submit is disabled until the employee list has loaded, so
       // reading isDisabled() straight after goto() raced it (and click() then waited forever).
       await page.waitForLoadState('networkidle');
-      const submitBtn = page.getByRole('button', { name: /submit|apply/i });
+      const submitBtn = page.getByRole('button', { name: /submit leave request/i });
       // Form uses disabled-button pattern: button disabled until fields filled
       if (await submitBtn.isDisabled()) {
         await expect(submitBtn).toBeDisabled();
@@ -135,7 +135,7 @@ test.describe('Leave Management', () => {
   test.describe('Leave Approvals', () => {
     test('approvals page loads', async ({ page }) => {
       await page.goto('/hr/leave/approvals');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -144,7 +144,7 @@ test.describe('Leave Management', () => {
   test.describe('Leave Policies', () => {
     test('leave policies page loads', async ({ page }) => {
       await page.goto('/hr/leave-policies');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -160,7 +160,7 @@ test.describe('Leave Management', () => {
       );
       await page.goto('/hr/leave');
       // Page should still render with empty/error state rather than crash
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 });

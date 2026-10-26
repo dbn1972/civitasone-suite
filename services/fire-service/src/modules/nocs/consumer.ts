@@ -1,4 +1,5 @@
 import { pino } from "pino";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -55,6 +56,15 @@ export function registerNocConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CLOS3-S4-03: the pre-check above runs outside this transaction, so two concurrent
+      // commands can both pass it. Serialise per (tenant, application) with a transaction-scoped
+      // advisory lock and re-check under it; the loser sees the winner's committed NOC.
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"fire.noc.issue:" + msg.tenantId + ":" + p.applicationId}))`);
+      const activeUnderLock = await repo.findActiveByApplicationIdTx(tx, msg.tenantId, p.applicationId);
+      if (activeUnderLock) {
+        log.error({ id: p.id, applicationId: p.applicationId, existingNocId: activeUnderLock.id }, "refusing to issue NOC: an active NOC already exists for this application (concurrent issue)");
+        return;
+      }
       // Fleet-wide fix (see migrations/0002_number_sequences.sql): a real
       // Postgres SEQUENCE, replacing the previous randomInt(1, 999999) draw
       // -- a collision risk against noc_number's UNIQUE constraint at

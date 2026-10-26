@@ -24,6 +24,8 @@ import { createHash } from "node:crypto";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import type { TLSSocket } from "node:tls";
 import { Redis } from "ioredis";
+import { pino } from "pino";
+import { redisClientOptions } from "@civitasone/cache";
 import { HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import { isInRotationGracePeriod, BEARER_ROTATION_GRACE_MS } from "./domain.js";
@@ -98,6 +100,8 @@ const RATE_LIMITS: Record<DeviceType, number> = {
   barrier: 120,
 };
 
+const log = pino({ name: "device-auth" });
+
 /** Rate limit window in seconds. */
 const RATE_LIMIT_WINDOW_SECONDS = 60;
 
@@ -107,11 +111,22 @@ const RATE_LIMIT_WINDOW_SECONDS = 60;
 
 let _redis: Redis | null = null;
 
+/** Atomic INCR + (re)arm EXPIRE when the key is new or has lost its TTL. */
+export const RATE_LIMIT_INCR_SCRIPT =
+  "local c=redis.call('INCR',KEYS[1]) " +
+  "if c==1 or redis.call('TTL',KEYS[1])==-1 then redis.call('EXPIRE',KEYS[1],ARGV[1]) end " +
+  "return c";
+
+/** Test seam: inject a Redis client (or null to force the in-memory path). */
+export function setRateLimitRedisForTests(client: Pick<Redis, "eval"> | null): void {
+  _redis = client as Redis | null;
+}
+
 function getRedis(): Redis | null {
   if (_redis) return _redis;
   const url = process.env.REDIS_URL;
   if (!url || process.env.CACHE_DRIVER === "memory") return null;
-  _redis = new Redis(url);
+  _redis = new Redis(url, redisClientOptions());
   return _redis;
 }
 
@@ -123,22 +138,33 @@ const _memoryRateStore = new Map<string, { count: number; expiresAt: number }>()
 
 /**
  * Increment request count for a device and check against the limit.
- * Uses Redis INCR + EXPIRE for atomic sliding window.
+ * Uses one atomic Redis EVAL (INCR + EXPIRE) for the fixed window (CLOS3-S6-09).
  * Falls back to in-memory map when Redis is unavailable.
  *
  * @returns true if the request is allowed, false if rate limit exceeded
  */
-async function checkRateLimit(deviceId: string, tenantId: string, deviceType: DeviceType): Promise<boolean> {
+export async function checkRateLimit(deviceId: string, tenantId: string, deviceType: DeviceType): Promise<boolean> {
   const limit = RATE_LIMITS[deviceType];
   const key = `visitor:${tenantId}:device:${deviceId}:rate`;
   const redis = getRedis();
 
   if (redis) {
-    const count = await redis.incr(key);
-    if (count === 1) {
-      await redis.expire(key, RATE_LIMIT_WINDOW_SECONDS);
+    // CLOS3-S6-09: INCR and EXPIRE must be ONE atomic server-side step. As two
+    // round trips, a failed/crashed EXPIRE after the first INCR left the key
+    // with no TTL, so the count only ever grew and the device was 429-blocked
+    // permanently. The script also re-arms the TTL when it finds none (-1), so
+    // a key orphaned by the old code self-heals on its next request.
+    try {
+      const count = Number(await redis.eval(RATE_LIMIT_INCR_SCRIPT, 1, key, RATE_LIMIT_WINDOW_SECONDS));
+      return count <= limit;
+    } catch (err) {
+      // CLOS3-S6-18: the client now fails fast (~1-2s) on an outage instead of stalling
+      // through ioredis' default retries. Rate limiting is a protective throttle, not an
+      // authorization decision (identity was already verified in steps 1-3), so on a Redis
+      // error degrade to the per-process in-memory window rather than failing device
+      // traffic closed; the limit still applies, just per instance.
+      log.warn({ err: err instanceof Error ? err.message : String(err), deviceId }, "device rate-limit redis error; using in-memory fallback");
     }
-    return count <= limit;
   }
 
   // In-memory fallback for dev/test

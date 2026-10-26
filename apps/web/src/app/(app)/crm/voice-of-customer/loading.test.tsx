@@ -9,7 +9,7 @@ import Loading from "./loading";
 describe("Voice of Citizen loading (GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-06)", () => {
   it("heads the skeleton 'Voice of Citizen', not 'Voice Of Customer'", () => {
     renderWithIntl(<Loading />);
-    expect(screen.getByRole("heading", { name: "Voice of Citizen" })).toBeInTheDocument();
+    expect(screen.getByText("Voice of Citizen")).toHaveAttribute("data-skeleton-heading");
     expect(screen.queryByText(/voice of customer/i)).not.toBeInTheDocument();
   });
 });

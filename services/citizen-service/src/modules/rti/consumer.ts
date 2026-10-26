@@ -5,6 +5,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
+import { nextNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 import { computeRtiDeadline, toDateString } from "./domain.js";
 
@@ -14,16 +15,18 @@ export function registerRtiConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.rtiFile, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; rtiNo: string; subject: string;
+      id: string; tenantId: string; subject: string;
       description: string; cpioRef: string; citizenId?: string;
     };
     const now = new Date();
     const deadline = toDateString(computeRtiDeadline(now));
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated here, inside the transaction: a retry re-runs nextval(), so it can never collide.
+      const rtiNo = await nextNumber(tx, "rti_no");
       await repo.insertRti(tx, {
         id: p.id, tenantId: p.tenantId, citizenId: p.citizenId ?? null,
-        rtiNo: p.rtiNo, subject: p.subject, description: p.description,
+        rtiNo, subject: p.subject, description: p.description,
         cpioRef: p.cpioRef, deadline, status: "filed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -31,7 +34,7 @@ export function registerRtiConsumers(rawQueue: Queue): void {
         topic: EVENTS.rtiFiled, eventType: EVENTS.rtiFiled,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
-          rtiId: p.id, rtiNo: p.rtiNo, subject: p.subject,
+          rtiId: p.id, rtiNo, subject: p.subject,
           cpioRef: p.cpioRef, deadline, citizenId: p.citizenId,
         },
       });
@@ -42,13 +45,13 @@ export function registerRtiConsumers(rawQueue: Queue): void {
           eventType: EVENTS.rtiFiled,
           recipient: p.cpioRef,
           recipientId: p.cpioRef,
-          variables: { rtiId: p.id, rtiNo: p.rtiNo, deadline },
+          variables: { rtiId: p.id, rtiNo, deadline },
         }),
       });
       await audit(tx, msg, "file", "citizen_rti", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "rti", p.id));
-  });
+  }, auditFailedCreate("file", "citizen_rti"));
 
   queue.subscribe(COMMANDS.rtiResponseReceive, async (msg) => {
     const p = msg.payload as { id: string; rtiId: string; tenantId: string; responseUrl: string };

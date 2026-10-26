@@ -5,6 +5,9 @@ export default defineConfig({
   test: {
     ...sharedTestTimeouts,
     env: {
+      // V4-B-10: ops routes now verify the bearer; tests sign HS256 tokens.
+      JWT_ALGORITHM: "HS256",
+      JWT_SECRET: "test_secret_for_civitasone_32chr",
       // Default to in-memory so unit tests do not require LocalStack. The
       // LocalStack suite (sqs.localstack.test.ts) is gated on AWS_ENDPOINT_URL
       // and must only run when an operator explicitly points at a live broker —

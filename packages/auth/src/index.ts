@@ -107,18 +107,23 @@ function getSigningKey(header: jwt.JwtHeader): Promise<string> {
  * current call site (resolveAlgorithm's HS256 forbid, verifyJwt's audience
  * requirement) AND every future one -- no caller needs to change.
  *
- * NOTE (residual, not fixed here -- same bug class, different call sites,
- * kept out of scope to keep this change reviewable): context.ts's own
- * `process.env.NODE_ENV === "production"` check (tenant-header fallback),
- * this file's toRequestContext `NODE_ENV === "production" ? undefined :
- * headerTenantId` check, and plugin.ts's two `NODE_ENV !== "production"`
- * checks do NOT call isProduction() and are NOT touched by this fix -- they
- * carry the identical deny-list gap and should be migrated to this same
- * allow-list in a follow-up.
+ * V4-E-03: the remaining call sites (context.ts HS256 fallback, toRequestContext
+ * tenant-header fallback, plugin.ts HS256 fallback + boot assertion) now use
+ * isDevOrTestEnv() below, the same allow-list.
  */
 const PROD_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
 function isProduction(): boolean {
-  return !PROD_FALLBACK_ALLOWED_ENVS.has(process.env.NODE_ENV ?? "");
+  return !isDevOrTestEnv();
+}
+
+/**
+ * V4-E-03: single allow-list predicate for every dev/test-only fallback
+ * (x-tenant-id header tenant, HS256 shared-secret tokens, skipped boot
+ * assertions). True ONLY for an explicit NODE_ENV of "development" or "test";
+ * unset, "staging", "uat", a typo, and "production" all fail closed.
+ */
+export function isDevOrTestEnv(): boolean {
+  return PROD_FALLBACK_ALLOWED_ENVS.has(process.env.NODE_ENV ?? "");
 }
 
 function resolveAlgorithm(): "RS256" | "HS256" {
@@ -211,7 +216,7 @@ export function toRequestContext(
   // The x-tenant-id header is attacker-controllable; only honour it as a fallback
   // outside production (dev/test tokens that omit tid).
   const trustedHeaderTenant =
-    process.env.NODE_ENV === "production" ? undefined : headerTenantId;
+    isDevOrTestEnv() ? headerTenantId : undefined;
   const tenantId = payload.tid ?? payload.tenantId ?? trustedHeaderTenant ?? "";
   return {
     tenantId,

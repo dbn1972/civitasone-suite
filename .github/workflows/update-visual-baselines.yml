@@ -1,0 +1,46 @@
+name: Update Visual Baselines
+
+# Manual-only. Regenerates the Playwright toHaveScreenshot baselines on the
+# same runner image CI uses (ubuntu-latest, x86_64) and uploads them as an
+# artifact. It never commits or pushes: download the artifact, copy the PNGs
+# over the *-snapshots directories, and open a normal PR.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  update-baselines:
+    name: Regenerate visual baselines (chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: "pnpm" }
+      - run: pnpm install --frozen-lockfile
+      - name: Build packages for web server
+        run: pnpm turbo build --filter="./packages/*"
+      - name: Build web (production build, as in the CI e2e job)
+        run: pnpm --filter @civitasone/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          CIVITASONE_API_BASE_URL: http://127.0.0.1:4001
+          NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:4001
+      - name: Install Playwright browsers
+        run: pnpm --filter @civitasone/web exec playwright install --with-deps chromium
+      - name: Regenerate visual-regression snapshots
+        run: pnpm --filter @civitasone/web exec playwright test visual-regression --project=chromium --update-snapshots
+        env:
+          CI: true
+      - name: Upload regenerated snapshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: apps/web/e2e/**/*-snapshots/*.png
+          if-no-files-found: error
+          retention-days: 7

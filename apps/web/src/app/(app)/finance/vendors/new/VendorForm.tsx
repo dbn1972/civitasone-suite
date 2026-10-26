@@ -9,7 +9,7 @@
  * Vendor onboarding is a payment-diversion control point, so the officer
  * confirms the name, PAN and the last four digits of the account first.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Alert, Button, ConfirmDialog } from "@/app/_components/ds";
@@ -39,6 +39,9 @@ const EMPTY: VendorFormInput = {
 export function VendorForm() {
   const t = useTranslations("financeVendorForm");
   const router = useRouter();
+  // Held in a ref so leaving the page inside the 700 ms window cancels the redirect (CLOS3-S2-06).
+  const redirectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (redirectTimeout.current) clearTimeout(redirectTimeout.current); }, []);
   const formError = useFormError("vendor");
   const [form, setForm] = useState<VendorFormInput>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof VendorFormInput, string>>>({});
@@ -78,7 +81,7 @@ export function VendorForm() {
       setDone(created?.status === "pending" ? "pending" : "active");
       setConfirmOpen(false);
       router.refresh();
-      setTimeout(() => router.push("/finance/vendors"), 700);
+      redirectTimeout.current = setTimeout(() => router.push("/finance/vendors"), 700);
     } catch (caught) {
       setDialogError(formError.fromException("save", caught).message);
     } finally {

@@ -30,7 +30,7 @@ export function TenantsTable({ tenants, source = "api" }: { tenants: Row[]; sour
         columns={[
           { key: "name", label: "Tenant Name" },
           { key: "edition", label: "Edition" },
-          { key: "users", label: "Users", align: "right" },
+          { key: "users", label: "Users", align: "right", render: (r) => (typeof r.users === "number" ? String(r.users) : "—") },
           { key: "createdDate", label: "Created", render: (r) => (r.createdDate ? formatIndianDate(String(r.createdDate)) : "—") },
           { key: "status", label: "Status", render: (r) => (r.status == null || r.status === "" ? "—" : <StatusPill status={String(r.status)} variant={tenantStatusTone(r.status)} />) },
         ]}

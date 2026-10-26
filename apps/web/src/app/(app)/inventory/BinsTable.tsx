@@ -10,6 +10,7 @@ import type { InventoryBinRow } from "./_data";
 import { INVENTORY_LIST_LIMIT, capNote } from "./_limits";
 import { nameOrDash } from "./_labels";
 import { BinStatusAction } from "./BinStatusAction";
+import { purgeInventoryCache } from "./_revalidate";
 
 type Col = {
   key: keyof InventoryBinRow & string;
@@ -69,7 +70,7 @@ export function BinsTable({
               isActive={r.isActive}
               onChanged={(id, isActive, confirmed) => {
                 if (confirmed) setOverrides((p) => ({ ...p, [id]: isActive }));
-                router.refresh();
+                void purgeInventoryCache().then(() => router.refresh());
               }}
             />
           ),

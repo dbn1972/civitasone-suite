@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, varchar, bigint, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, varchar, bigint, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const approvalsSchema = pgSchema("approvals");
 
@@ -14,7 +14,10 @@ export const approvalLevels = approvalsSchema.table("contract_approval_levels", 
   createdBy:     uuid("created_by").notNull(),
   updatedBy:     uuid("updated_by").notNull(),
   version:       integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // CLOS3-S4-04 (migration 0022): one ordinal per tenant.
+  tenantOrdinalUq: uniqueIndex("uq_contract_approval_levels_tenant_ordinal").on(t.tenantId, t.ordinal),
+}));
 
 export type ApprovalLevelRow = typeof approvalLevels.$inferSelect;
 export type ApprovalLevelInsert = typeof approvalLevels.$inferInsert;

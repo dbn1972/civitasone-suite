@@ -30,7 +30,11 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
   const formError = useFormError("onboarding checklist");
 
   async function handleComplete(id: string) {
-    const previous = steps;
+    const prevStatus = steps.find((step) => step.id === id)?.status;
+    // Revert only this step (not a whole-list snapshot) so a failure here
+    // cannot undo a concurrent, successful completion of another step.
+    const rollback = () =>
+      setSteps((current) => current.map((step) => (step.id === id && prevStatus ? { ...step, status: prevStatus } : step)));
     setError(null);
     // Optimistic: OnboardingChecklist only shows "Mark done" while a step is
     // not yet "completed", so flipping it locally immediately hides the
@@ -43,7 +47,7 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
         headers: { "content-type": "application/json" },
       });
       if (!res.ok) {
-        setSteps(previous);
+        rollback();
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
@@ -54,7 +58,7 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
       // rather than only ever showing the optimistic local view.
       void accepted.accept();
     } catch (caught) {
-      setSteps(previous);
+      rollback();
       setError(formError.fromException("save", caught).message);
     }
   }

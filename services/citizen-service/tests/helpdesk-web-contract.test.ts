@@ -155,7 +155,7 @@ describe("POST /v1/citizen/tickets — ack shape + requester name", () => {
     const ack = res.json();
     expect(ack.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(ack.data.id).toBe(ack.id);
-    expect(ack.data.ticketNo).toMatch(/^HD-[0-9A-F]{8}$/);
+    expect(ack.data.ticketNo).toMatch(/^HD-\d{4}-\d{6}$/);
 
     let detail: { statusCode: number; json: () => Record<string, unknown> } | undefined;
     for (let i = 0; i < 40; i++) {

@@ -54,4 +54,12 @@ describe("TenantsTable (GAP-ADMIN-TENANTS-02/-03/-05)", () => {
     expect(screen.getByText("12 Sep 2026")).toBeInTheDocument();
     expect(screen.queryByText("2026-09-12T00:00:00.000Z")).not.toBeInTheDocument();
   });
+
+  it("shows a dash, not a blank or 0, for a tenant whose user count the directory does not carry", () => {
+    const real = [{ id: "u1", name: "Delta", edition: "govt", users: null, createdDate: "2026-09-12T00:00:00.000Z", status: "active" }];
+    seeded.mockReturnValue({ data: real, provenance: "live", offline: false, cachedAt: null });
+    render(<TenantsTable tenants={real} />);
+    const row = screen.getByText("Delta").closest("tr") as HTMLElement;
+    expect(row).toHaveTextContent("—");
+  });
 });

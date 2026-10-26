@@ -5,6 +5,7 @@ import {
   type FeeScheduleRow, type FeeScheduleInsert,
   type PaymentRow, type PaymentInsert, type RefundRow, type RefundInsert,
 } from "./schema.js";
+import { applicationDrafts } from "../application/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -16,6 +17,16 @@ export async function findScheduleByIdTx(tx: Writer, id: string, tenantId: strin
   const rows = await (tx as typeof db).select().from(feeSchedules)
     .where(and(eq(feeSchedules.id, id), eq(feeSchedules.tenantId, tenantId))).limit(1);
   return rows[0] ?? null;
+}
+
+export async function findScheduleById(tenantId: string, id: string): Promise<FeeScheduleRow | null> {
+  return db.transaction((tx) => findScheduleByIdTx(tx, id, tenantId));
+}
+
+export async function retireSchedule(tx: Writer, id: string, tenantId: string, supersededBy: string, actorId: string): Promise<void> {
+  await tx.update(feeSchedules)
+    .set({ active: false, supersededBy, updatedBy: actorId, updatedAt: new Date(), rowVersion: sql`${feeSchedules.rowVersion} + 1` })
+    .where(and(eq(feeSchedules.id, id), eq(feeSchedules.tenantId, tenantId)));
 }
 
 export async function findActiveScheduleForService(tx: Writer, tenantId: string, serviceId: string): Promise<FeeScheduleRow | null> {
@@ -102,4 +113,17 @@ export async function listRefundsByPaymentTx(tx: Writer, tenantId: string, payme
 
 export async function listRefundsByPayment(tenantId: string, paymentId: string): Promise<RefundRow[]> {
   return db.transaction((tx) => listRefundsByPaymentTx(tx, tenantId, paymentId));
+}
+
+/**
+ * V4-G-02 -- the data the applicant captured on the application's intake draft: the only
+ * server-held basis for exemption predicates. Frozen once the draft is submitted.
+ */
+export async function findDraftFormDataByApplicationTx(
+  tx: Writer, tenantId: string, applicationId: string,
+): Promise<Record<string, unknown>> {
+  const rows = await (tx as typeof db).select({ formData: applicationDrafts.formData }).from(applicationDrafts)
+    .where(and(eq(applicationDrafts.tenantId, tenantId), eq(applicationDrafts.applicationId, applicationId)))
+    .orderBy(desc(applicationDrafts.createdAt)).limit(1);
+  return rows[0]?.formData ?? {};
 }

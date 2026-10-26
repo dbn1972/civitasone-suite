@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  idParam, createScheduleBody, computeFeeBody, createIntentBody,
+  idParam, createScheduleBody, updateScheduleBody, computeFeeBody, createIntentBody,
   recordOfflineBody, confirmPaymentBody, refundRequestBody, refundDecisionBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
@@ -18,6 +18,16 @@ export async function feePaymentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const body = createScheduleBody.parse(req.body);
     return reply.code(202).send(await commands.createSchedule(ctx, body));
+  });
+
+  /** CLOS3-S1-11: edit = supersede. Unchanged body -> 200 {status:"unchanged"}; changed -> 202 + successor id. */
+  app.patch("/v1/citizen/fees/schedules/:id", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = updateScheduleBody.parse(req.body);
+    const result = await commands.updateSchedule(ctx, id, body);
+    return reply.code(result.status === "unchanged" ? 200 : 202).send(result);
   });
 
   app.get("/v1/citizen/fees/schedules", async (req, reply) => {

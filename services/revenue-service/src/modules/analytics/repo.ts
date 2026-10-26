@@ -50,7 +50,7 @@ interface RawDcbRow {
   createdAt: string | Date;
   entryType: string;
   amountMinor: bigint;
-  narration?: string | null;
+  adjustmentDirection?: "credit" | "debit" | null;
 }
 
 /** Map raw DCB ledger rows into period-keyed entries for aggregation. */
@@ -61,13 +61,13 @@ export function toPeriodEntries(rows: RawDcbRow[], granularity: Granularity): Pe
     amountMinor: r.amountMinor,
     // Only carried when present: it exists to tell an adjustment's credit leg
     // from its debit leg and is irrelevant to every other entry type.
-    ...(r.narration != null ? { narration: r.narration } : {}),
+    ...(r.adjustmentDirection != null ? { adjustmentDirection: r.adjustmentDirection } : {}),
   }));
 }
 
 /** Current outstanding balance per demand from its DCB ledger movements. */
 export function computeDemandBalances(
-  rows: Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>,
+  rows: Array<{ demandId: string; entryType: string; amountMinor: bigint; adjustmentDirection?: "credit" | "debit" | null }>,
 ): Map<string, bigint> {
   const balances = new Map<string, bigint>();
   for (const r of rows) {
@@ -100,7 +100,7 @@ async function loadDcbRows(tenantId: string): Promise<RawDcbRow[]> {
         createdAt: dcbEntries.createdAt,
         entryType: dcbEntries.entryType,
         amountMinor: dcbEntries.amountMinor,
-        narration: dcbEntries.narration,
+        adjustmentDirection: dcbEntries.adjustmentDirection,
       })
       .from(dcbEntries)
       .where(eq(dcbEntries.tenantId, tenantId));
@@ -110,12 +110,15 @@ async function loadDcbRows(tenantId: string): Promise<RawDcbRow[]> {
 
 /** Per-period demand-vs-collection trend series (ascending by period). */
 export async function getTrends(tenantId: string, granularity: Granularity): Promise<PeriodTrend[]> {
-  const cached = await cache.getOrLoad(`${SERVICE}:${tenantId}:analytics:trends:${granularity}`, async () => {
+  const cached = await cache.getOrLoad(`${SERVICE}:${tenantId}:analytics:trends:v2:${granularity}`, async () => {
     const rows = await loadDcbRows(tenantId);
     return aggregatePeriodSeries(toPeriodEntries(rows, granularity)).map((t) => ({
       period: t.period,
       demandMinor: t.demandMinor.toString(),
       collectionMinor: t.collectionMinor.toString(),
+      cashCollectionMinor: t.cashCollectionMinor.toString(),
+      waivedMinor: t.waivedMinor.toString(),
+      writtenOffMinor: t.writtenOffMinor.toString(),
       efficiencyBps: t.efficiencyBps,
     }));
   });
@@ -123,6 +126,9 @@ export async function getTrends(tenantId: string, granularity: Granularity): Pro
     period: t.period,
     demandMinor: BigInt(t.demandMinor),
     collectionMinor: BigInt(t.collectionMinor),
+    cashCollectionMinor: BigInt(t.cashCollectionMinor),
+    waivedMinor: BigInt(t.waivedMinor),
+    writtenOffMinor: BigInt(t.writtenOffMinor),
     efficiencyBps: t.efficiencyBps,
   }));
 }
@@ -136,6 +142,10 @@ export async function getCollectionSeries(tenantId: string, granularity: Granula
 export interface EfficiencyKpi {
   totalDemandMinor: bigint;
   totalCollectionMinor: bigint;
+  totalCashCollectionMinor: bigint;
+  totalWaivedMinor: bigint;
+  totalWrittenOffMinor: bigint;
+  /** cash collected / demand (bps); waivers and write-offs excluded (Q18). */
   efficiencyBps: number;
   perPeriod: PeriodTrend[];
 }
@@ -145,14 +155,23 @@ export async function getEfficiency(tenantId: string, granularity: Granularity):
   const perPeriod = await getTrends(tenantId, granularity);
   let totalDemand = 0n;
   let totalCollection = 0n;
+  let totalCash = 0n;
+  let totalWaived = 0n;
+  let totalWrittenOff = 0n;
   for (const p of perPeriod) {
     totalDemand += p.demandMinor;
     totalCollection += p.collectionMinor;
+    totalCash += p.cashCollectionMinor;
+    totalWaived += p.waivedMinor;
+    totalWrittenOff += p.writtenOffMinor;
   }
   return {
     totalDemandMinor: totalDemand,
     totalCollectionMinor: totalCollection,
-    efficiencyBps: collectionEfficiencyBps(totalDemand, totalCollection),
+    totalCashCollectionMinor: totalCash,
+    totalWaivedMinor: totalWaived,
+    totalWrittenOffMinor: totalWrittenOff,
+    efficiencyBps: collectionEfficiencyBps(totalDemand, totalCash),
     perPeriod,
   };
 }
@@ -167,13 +186,13 @@ export async function getArrearsAging(tenantId: string, asOfDate: string) {
         .from(demands)
         .where(eq(demands.tenantId, tenantId));
       const dcbRows = await t
-        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, narration: dcbEntries.narration })
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, adjustmentDirection: dcbEntries.adjustmentDirection })
         .from(dcbEntries)
         .where(eq(dcbEntries.tenantId, tenantId));
       return { demandRows, dcbRows };
     });
 
-    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>);
+    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; adjustmentDirection?: "credit" | "debit" | null }>);
     const aged = ageIntoBuckets(
       (demandRows as Array<{ id: string; dueDate: string }>).map((d) => ({
         dueDate: d.dueDate,
@@ -201,13 +220,13 @@ export async function getDefaulters(tenantId: string, limit: number): Promise<Ra
         .from(demands)
         .where(eq(demands.tenantId, tenantId));
       const dcbRows = await t
-        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, narration: dcbEntries.narration })
+        .select({ demandId: dcbEntries.demandId, entryType: dcbEntries.entryType, amountMinor: dcbEntries.amountMinor, adjustmentDirection: dcbEntries.adjustmentDirection })
         .from(dcbEntries)
         .where(eq(dcbEntries.tenantId, tenantId));
       return { demandRows, dcbRows };
     });
 
-    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; narration?: string | null }>);
+    const balances = computeDemandBalances(dcbRows as Array<{ demandId: string; entryType: string; amountMinor: bigint; adjustmentDirection?: "credit" | "debit" | null }>);
     const outstanding = outstandingByAssessee(
       demandRows as Array<{ id: string; assesseeId: string }>,
       balances,

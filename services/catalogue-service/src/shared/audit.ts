@@ -19,6 +19,8 @@ export interface AuditPayload {
   resourceType: string;
   resourceId: string;
   details?: Record<string, unknown>;
+  /** Defaults to "success"; use "failed" for a command rejected by a write-side guard. */
+  outcome?: "success" | "failed";
 }
 
 export async function writeAudit(tx: ScopedTx, ctx: AuditCtx, payload: AuditPayload): Promise<void> {

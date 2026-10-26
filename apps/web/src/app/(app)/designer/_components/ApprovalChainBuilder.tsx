@@ -53,6 +53,8 @@ export function ApprovalChainBuilder({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef(design);
   latest.current = design;
+  // CLOS3-S1-02: last design the server returned; skip autosave when nothing changed since.
+  const lastPersisted = useRef<WorkflowDesignState | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -86,10 +88,12 @@ export function ApprovalChainBuilder({
     // Custom mode: guided autosave must not overwrite the custom-workflow projection.
     if (advanced || latest.current.mode === "custom") return;
     if (timer.current) clearTimeout(timer.current);
+    if (lastPersisted.current && JSON.stringify(lastPersisted.current) === JSON.stringify(latest.current)) return;
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
         const saved = await persistWorkflowDesign(latest.current);
+        lastPersisted.current = saved;
         setDesign(saved);
         onDesignPersisted?.(saved);
         onSaveState?.("saved");

@@ -15,7 +15,7 @@ import { brandingRoutes } from "./modules/branding/routes.js";
 import { templatesRoutes } from "./modules/templates/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
+  const app = Fastify({ bodyLimit: 1_048_576, /* SEC: explicit 1 MiB body cap (see fastify-bodylimit-guard) */ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies

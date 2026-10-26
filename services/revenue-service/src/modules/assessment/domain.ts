@@ -12,15 +12,17 @@ export { DomainError, assertMakerChecker };
 
 export type DcbEntryType = "demand" | "collection" | "refund" | "adjustment" | "write_off" | "waiver";
 
+export type AdjustmentDirection = "credit" | "debit";
+
 export interface DcbEntry {
   entryType: DcbEntryType;
   amountMinor: bigint;
   /**
-   * Needed only to tell the two legs of an `adjustment` apart (the credit leg
-   * is written with a narration starting "Adjustment credit"). Optional so
-   * every other entry type classifies from `entryType` alone.
+   * Needed only to tell the two legs of an `adjustment` apart (the persisted
+   * `adjustment_direction` column). Optional so every other entry type
+   * classifies from `entryType` alone.
    */
-  narration?: string | null;
+  adjustmentDirection?: AdjustmentDirection | null;
 }
 
 /**
@@ -34,14 +36,15 @@ export interface DcbEntry {
  *   - waiver        reduces it
  *   - adjustment    TWO legs of equal amount: the credit leg (target demand)
  *                   raises, the debit leg (source demand) reduces. The leg is
- *                   identified by the narration the writer stamps on it;
- *                   anything not marked as a credit is the debit leg.
+ *                   identified by the explicit `adjustmentDirection` column
+ *                   (never by parsing narration text); anything not marked
+ *                   as a credit is the debit leg.
  * Unknown types fall back to the historical behaviour (reduce).
  */
 export function dcbBalanceEffect(entry: {
   entryType: string;
   amountMinor: bigint;
-  narration?: string | null;
+  adjustmentDirection?: AdjustmentDirection | null;
 }): bigint {
   switch (entry.entryType) {
     case "demand":
@@ -51,7 +54,7 @@ export function dcbBalanceEffect(entry: {
       // negative-signed refund (older fixtures/imports) means the same thing.
       return entry.amountMinor < 0n ? -entry.amountMinor : entry.amountMinor;
     case "adjustment":
-      return (entry.narration ?? "").startsWith("Adjustment credit") ? entry.amountMinor : -entry.amountMinor;
+      return entry.adjustmentDirection === "credit" ? entry.amountMinor : -entry.amountMinor;
     default:
       return -entry.amountMinor;
   }
@@ -108,9 +111,9 @@ export function computeNewBalance(
   currentBalance: bigint,
   entryType: string,
   amount: bigint,
-  narration: string | null = null,
+  adjustmentDirection: AdjustmentDirection | null = null,
 ): bigint {
-  return currentBalance + dcbBalanceEffect({ entryType, amountMinor: amount, narration });
+  return currentBalance + dcbBalanceEffect({ entryType, amountMinor: amount, adjustmentDirection });
 }
 
 /**

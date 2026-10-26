@@ -6,7 +6,7 @@ import Loading from "./loading";
 describe("opportunity-ageing loading (GAP-CRM-OPPORTUNITY-AGEING-06)", () => {
   it("uses the same heading as the loaded page ('Stage Ageing'), not 'Opportunity Ageing'", () => {
     renderWithIntl(<Loading />);
-    expect(screen.getByRole("heading", { name: "Stage Ageing" })).toBeInTheDocument();
+    expect(screen.getByText("Stage Ageing")).toHaveAttribute("data-skeleton-heading");
     expect(screen.queryByText("Opportunity Ageing")).not.toBeInTheDocument();
   });
 

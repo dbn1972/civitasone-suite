@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { MUNICIPAL_EVENT_TYPES } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -32,7 +31,8 @@ export function registerPermitConsumers(rawQueue: Queue): void {
       validUntil: string;
       conditions?: Record<string, unknown>;
     };
-    const permitNumber = generatePermitNumber("ULB", randomInt(1, 999999));
+    // Allocated from a Postgres sequence inside the transaction below (CLOS3-S4-09).
+    let permitNumber = "";
     const verificationCode = generateVerificationCode();
 
     // CRITICAL fix: previously this handler never consulted the application or
@@ -57,6 +57,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
     let appUpdated: Awaited<ReturnType<typeof appRepo.updateStatus>> = null;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      permitNumber = generatePermitNumber("ULB", await repo.nextPermitNumberSeq(tx));
       await repo.insertPermit(tx, {
         id: p.id,
         tenantId: msg.tenantId,
@@ -119,7 +120,7 @@ export function registerPermitConsumers(rawQueue: Queue): void {
     // their own cache.put calls) — this consumer mutates the SAME cached
     // resource from a different module and had no equivalent.
     if (appUpdated) await cache.put(`event:${msg.tenantId}:application:${p.applicationId}`, appUpdated);
-    log.info({ id: p.id, permitNumber }, "event permit issued");
+    if (permitNumber) log.info({ id: p.id, permitNumber }, "event permit issued");
   });
 
   queue.subscribe(COMMANDS.revokePermit, async (msg) => {

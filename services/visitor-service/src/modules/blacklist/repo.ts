@@ -15,10 +15,11 @@
  * `audit.event.record` via the shared DPDP helper when actor context is
  * provided.
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { logPiiAccess } from "../dpdp/consent.js";
+import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
+import { resolvePage, splitPage, type PageOpts, type Paged } from "../../shared/pagination.js";
 import { normalizeName, FUZZY_NAME_THRESHOLD } from "./domain.js";
 import {
   blacklistEntries, watchlistEntries,
@@ -89,27 +90,30 @@ export interface PiiAccessContext {
   correlationId?: string;
 }
 
-export interface ListBlacklistFilter {
+export interface ListBlacklistFilter extends PageOpts {
   status?: string | undefined;
   locationId?: string | undefined;
 }
 
-export async function listBlacklistEntries(tenantId: string, filter: ListBlacklistFilter = {}, piiCtx?: PiiAccessContext): Promise<BlacklistEntryRow[]> {
+export async function listBlacklistEntries(tenantId: string, filter: ListBlacklistFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<BlacklistEntryRow>> {
   const conditions = [eq(blacklistEntries.tenantId, tenantId)];
   if (filter.status !== undefined) conditions.push(eq(blacklistEntries.status, filter.status));
   if (filter.locationId !== undefined) conditions.push(eq(blacklistEntries.locationId, filter.locationId));
-  const rows = await scopedRead((tx) => tx.select().from(blacklistEntries).where(and(...conditions)));
+  // CLOS3-S6-16: bounded, deterministically ordered, +1 sentinel row for hasMore.
+  const { limit, offset } = resolvePage(filter);
+  const fetched = await scopedRead((tx) =>
+    tx.select().from(blacklistEntries).where(and(...conditions))
+      .orderBy(desc(blacklistEntries.createdAt), desc(blacklistEntries.id))
+      .limit(limit + 1).offset(offset));
+  const { rows, hasMore } = splitPage(fetched, limit);
 
   // Requirement 18.6: log PII access for each row containing decrypted personName
   if (piiCtx && rows.length > 0) {
-    await scopedRead(async (tx) => {
-      for (const row of rows) {
-        await logPiiAccess(tx, tenantId, piiCtx.actorId, "blacklist", row.id, "list_view", piiCtx.correlationId);
-      }
-    });
+    // CLOS3-S6-16: batched audit write (constant statements), one row + event per returned row.
+    await scopedRead((tx) => logPiiAccessBatch(tx, tenantId, piiCtx.actorId, "blacklist", rows.map((r) => r.id), "list_view", piiCtx.correlationId));
   }
 
-  return rows;
+  return { rows, hasMore };
 }
 
 /**
@@ -132,23 +136,26 @@ export async function getBlacklistEntryById(tenantId: string, id: string, piiCtx
   return row;
 }
 
-export interface ListWatchlistFilter {
+export interface ListWatchlistFilter extends PageOpts {
   locationId?: string | undefined;
 }
 
-export async function listWatchlistEntries(tenantId: string, filter: ListWatchlistFilter = {}, piiCtx?: PiiAccessContext): Promise<WatchlistEntryRow[]> {
+export async function listWatchlistEntries(tenantId: string, filter: ListWatchlistFilter = {}, piiCtx?: PiiAccessContext): Promise<Paged<WatchlistEntryRow>> {
   const conditions = [eq(watchlistEntries.tenantId, tenantId)];
   if (filter.locationId !== undefined) conditions.push(eq(watchlistEntries.locationId, filter.locationId));
-  const rows = await scopedRead((tx) => tx.select().from(watchlistEntries).where(and(...conditions)));
+  // CLOS3-S6-16: bounded, deterministically ordered, +1 sentinel row for hasMore.
+  const { limit, offset } = resolvePage(filter);
+  const fetched = await scopedRead((tx) =>
+    tx.select().from(watchlistEntries).where(and(...conditions))
+      .orderBy(desc(watchlistEntries.createdAt), desc(watchlistEntries.id))
+      .limit(limit + 1).offset(offset));
+  const { rows, hasMore } = splitPage(fetched, limit);
 
   // Requirement 18.6: log PII access for each row containing decrypted personName
   if (piiCtx && rows.length > 0) {
-    await scopedRead(async (tx) => {
-      for (const row of rows) {
-        await logPiiAccess(tx, tenantId, piiCtx.actorId, "watchlist", row.id, "list_view", piiCtx.correlationId);
-      }
-    });
+    // CLOS3-S6-16: batched audit write (constant statements), one row + event per returned row.
+    await scopedRead((tx) => logPiiAccessBatch(tx, tenantId, piiCtx.actorId, "watchlist", rows.map((r) => r.id), "list_view", piiCtx.correlationId));
   }
 
-  return rows;
+  return { rows, hasMore };
 }

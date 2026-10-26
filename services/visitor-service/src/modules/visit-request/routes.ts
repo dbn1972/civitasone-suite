@@ -213,8 +213,8 @@ export async function visitRequestRoutes(app: FastifyInstance): Promise<void> {
     const scopedFilter = hasAnyRole(ctx, ELEVATED_APPROVAL_ROLES)
       ? query
       : { ...query, hostEmployeeId: ctx.actorId };
-    const rows = await repo.listVisitRequests(ctx.tenantId, scopedFilter, { actorId: ctx.actorId, correlationId: ctx.correlationId });
-    return reply.send({ data: rows });
+    const { rows, hasMore } = await repo.listVisitRequests(ctx.tenantId, scopedFilter, { actorId: ctx.actorId, correlationId: ctx.correlationId });
+    return reply.send({ data: rows, meta: { limit: query.limit, offset: query.offset, hasMore } });
   });
 
   app.get("/v1/visitor/visit-requests/:id", async (req, reply) => {

@@ -1,5 +1,4 @@
 import { pino } from "pino";
-import { randomInt } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -29,12 +28,13 @@ export function registerEnforcementConsumers(rawQueue: Queue): void {
       photo?: string;
       challanRef?: string;
     };
-    // Mitigation, not a full fix — see bookings/consumer.ts for the same pattern.
-    const violationNumber = generateViolationNumber("ULB", randomInt(1, 999999));
+    let violationNumber = "";
     const fineMinor = calculateFineMinor(p.violationType);
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // V4-C-04: DB sequence drawn inside the txn (was randomInt -> global-UNIQUE collisions).
+      violationNumber = generateViolationNumber("ULB", await repo.nextViolationSeq(tx));
       await repo.insertViolation(tx, {
         id: p.id,
         tenantId: msg.tenantId,

@@ -40,7 +40,7 @@ export function BindingCreateForm({ currentUserId }: { currentUserId: string | n
       const res = await fetch("/api/proxy/v1/policy/bindings", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId, roleId, ...(reason ? { reason } : {}) }),
+        body: JSON.stringify({ userId, roleId, reason }),
       });
       if (!res.ok) {
         setStatus("error");
@@ -138,7 +138,9 @@ export function BindingCreateForm({ currentUserId }: { currentUserId: string | n
         }
         confirmLabel="Grant binding"
         requireReason
-        reasonLabel="Reason for this grant"
+        minReasonLength={5}
+        maxReasonLength={2000}
+        reasonLabel="Reason for this grant (min 5 characters)"
         busy={status === "pending"}
         onConfirm={(reason) => {
           setConfirmOpen(false);

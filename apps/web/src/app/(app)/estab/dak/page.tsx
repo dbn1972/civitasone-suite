@@ -79,6 +79,10 @@ export default function DakRegistryPage() {
   // GAP-ESTAB-DAK-03: polls that look up the number and barcode of an accepted registration; cancelled on unmount.
   const cancels = useRef<Array<() => void>>([]);
   const mounted = useRef(true);
+  // CLOS3-S1-10: the ref is the real in-flight guard (two submits in one tick both see a stale `registering`);
+  // the state only drives the button.
+  const registeringRef = useRef(false);
+  const [registering, setRegistering] = useState(false);
   // The latest reload (it follows the current search term), for callbacks that outlive a render.
   const reloadRef = useRef(reg.reload);
   reloadRef.current = reg.reload;
@@ -125,6 +129,7 @@ export default function DakRegistryPage() {
   // GAP-ESTAB-DAK-02: clerk-safe error on registerDak. GAP-ESTAB-DAK-03: validated payload.
   async function registerDak(e: React.FormEvent) {
     e.preventDefault();
+    if (registeringRef.current) return;
     setMessage("");
     setActionError("");
     const checked = validateDakForm(form, todayIST());
@@ -135,6 +140,8 @@ export default function DakRegistryPage() {
       return;
     }
     setFieldErrors({});
+    registeringRef.current = true;
+    setRegistering(true);
     try {
       const res = await fetch("/api/proxy/v1/estab/inward", {
         method: "POST",
@@ -159,6 +166,9 @@ export default function DakRegistryPage() {
       if (rowId && term) watchRegistration(rowId, term);
     } catch (err) {
       setActionError(formError.fromException("save", err).message);
+    } finally {
+      registeringRef.current = false;
+      if (mounted.current) setRegistering(false);
     }
   }
 
@@ -289,7 +299,7 @@ export default function DakRegistryPage() {
                 <input id="dak-source-section" value={form.sourceSection} onChange={(e) => setForm({ ...form, sourceSection: e.target.value })} style={inputStyle} />
               </div>
             </div>
-            <Button type="submit" style={{ marginTop: 12 }}>{t("dakRegisterBtn")}</Button>
+            <Button type="submit" disabled={registering} loading={registering} style={{ marginTop: 12 }}>{t("dakRegisterBtn")}</Button>
           </form>
         </div>
       ) : null}

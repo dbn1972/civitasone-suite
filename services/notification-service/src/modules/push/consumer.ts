@@ -90,14 +90,14 @@ export function registerPushConsumers(q: Queue): void {
     log.info({ subscriptionId: p.id, userId: p.userId, platform: p.platform }, "push subscription registered");
   });
 
-  q.subscribe<{ id: string; tenantId: string }>(COMMANDS.revokePushSubscription, async (msg) => {
+  q.subscribe<{ id: string; tenantId: string; userId?: string }>(COMMANDS.revokePushSubscription, async (msg) => {
     const p = msg.payload;
     // Returned from the transaction, not assigned to an outer `let`: TypeScript
     // cannot follow an assignment made inside an async callback and kept the
     // variable narrowed to its initialiser, so the check below did not compile.
     const outcome = await db.transaction(async (tx): Promise<"duplicate" | "revoked" | "missing"> => {
       if (!(await markProcessed(tx, msg.messageId))) return "duplicate";
-      const revoked = await repo.revokeSubscription(tx, p.tenantId, p.id, msg.actorId);
+      const revoked = await repo.revokeSubscription(tx, p.tenantId, p.id, msg.actorId, p.userId);
       if (!revoked) return "missing";
       await enqueue(tx, {
         topic: EVENTS.pushSubscriptionRevoked,

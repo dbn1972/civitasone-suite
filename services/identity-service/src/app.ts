@@ -20,12 +20,15 @@ import { apiKeyRoutes } from "./modules/apikeys/routes.js";
 import { apiKeyInternalRoutes } from "./modules/apikeys/internal-routes.js";
 import { breakGlassRoutes } from "./modules/breakglass/routes.js";
 import { samlRoutes } from "./modules/saml/routes.js";
+import { securitySummaryRoutes } from "./modules/security-summary/routes.js";
 import { scimRoutes, scimTokenRoutes } from "./modules/scim/routes.js";
 import { webauthnRoutes } from "./modules/webauthn/routes.js";
 import { operatorRoutes } from "./modules/operators/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
+    // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
+    bodyLimit: 1_048_576,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
@@ -69,6 +72,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(apiKeyInternalRoutes);
   await app.register(breakGlassRoutes);
   await app.register(samlRoutes);
+  await app.register(securitySummaryRoutes);
   await app.register(scimRoutes);
   await app.register(scimTokenRoutes);
   await app.register(webauthnRoutes);

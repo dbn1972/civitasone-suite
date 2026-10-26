@@ -81,7 +81,7 @@ test.describe('Accessibility — WCAG 2.2 AA', () => {
   test('Payroll Runs passes accessibility audit', async ({ page }) => {
     await page.goto('/hr/payroll');
     await page.waitForLoadState('load');
-    await page.locator('#page-heading').waitFor({ state: 'visible', timeout: 15000 }).catch(() => null);
+    await page.locator('#page-heading:visible').waitFor({ state: 'visible', timeout: 15000 }).catch(() => null);
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
       .analyze();
@@ -105,7 +105,7 @@ test.describe('Accessibility — WCAG 2.2 AA', () => {
       // Page may crash under the test runner (OOM during axe injection); skip gracefully
       return;
     }
-    await page.locator('#page-heading').waitFor({ state: 'visible', timeout: 10000 }).catch(() => null);
+    await page.locator('#page-heading:visible').waitFor({ state: 'visible', timeout: 10000 }).catch(() => null);
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag22aa'])
       .analyze();

@@ -1,4 +1,5 @@
-import { pgSchema, uuid, varchar, text, integer, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, text, integer, jsonb, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 const workflowSchema = pgSchema("workflow");
 
 export const cases = workflowSchema.table("cases", {
@@ -20,7 +21,10 @@ export const cases = workflowSchema.table("cases", {
   resolvedAt:      timestamp("resolved_at", { withTimezone: true }),
   createdBy:       uuid("created_by").notNull(),
   version:         integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // migrations/0047: numbers in the sequence-backed format (CASE-YYYY-NNNNNN) are globally unique.
+  caseNumberSeqFmtUq: uniqueIndex("uq_cases_case_number_seqfmt").on(t.caseNumber).where(sql`case_number ~ '^CASE-[0-9]{4}-[0-9]{6,}$'`),
+}));
 
 export const caseDeviations = workflowSchema.table("case_deviations", {
   id:          uuid("id").primaryKey().defaultRandom(),

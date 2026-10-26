@@ -258,8 +258,8 @@ describe("Assessment Repo", () => {
         { entryType: "demand", amountMinor: 100000n },
         { entryType: "collection", amountMinor: 60000n },
         { entryType: "refund", amountMinor: 10000n },
-        { entryType: "adjustment", amountMinor: 5000n, narration: "Adjustment debit: x" },
-        { entryType: "adjustment", amountMinor: 5000n, narration: "Adjustment credit: x" },
+        { entryType: "adjustment", amountMinor: 5000n, adjustmentDirection: "debit" },
+        { entryType: "adjustment", amountMinor: 5000n, adjustmentDirection: "credit" },
         { entryType: "waiver", amountMinor: 4000n },
       ])
       .mockResolvedValueOnce([{ total: "46000" }]); // service outstanding (latest balance per demand)

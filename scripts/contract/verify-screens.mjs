@@ -63,6 +63,12 @@ const SEED_IDS = {
   financeBill: 'dddddddd-0001-0000-0000-000000000007',
   financeSanction: 'dddddddd-0001-0000-0000-000000000005',
   helpdeskTicket: '55555555-0004-0000-0000-000000000001',
+  // Contract-verify fixtures (scripts/dev/seed-all.mjs, ids c0ffee00-*). These detail
+  // routes have no listable parent collection through the gateway, so a real id cannot be
+  // discovered and must be named here.
+  crmCampaign: 'c0ffee00-0001-0000-0000-000000000025',
+  crmAccount: 'c0ffee00-0001-0000-0000-000000000028',
+  payrollSlip: 'ffffffff-0001-0000-0000-000000000007',
 };
 
 /**
@@ -92,6 +98,9 @@ function resolveSeededPath(apiPath) {
     [/finance\/bills\/:param/, SEED_IDS.financeBill],
     [/finance\/sanctions\/:param/, SEED_IDS.financeSanction],
     [/citizen\/tickets\/:param/, SEED_IDS.helpdeskTicket],
+    [/crm\/campaigns\/:param\/roi/, SEED_IDS.crmCampaign],
+    [/recommendations\/health\/:param\/breakdown/, SEED_IDS.crmAccount],
+    [/payroll\/slips\/:param/, SEED_IDS.payrollSlip],
     [/policy\/roles\/:param/, SEED_IDS.role],
     [/identity\/users\/:param/, SEED_IDS.user],
   ];
@@ -265,10 +274,15 @@ async function run() {
     (!moduleFilter || r.module === moduleFilter),
   );
 
-  // Deduplicate by API path to avoid hammering same endpoint multiple times
+  // Deduplicate by (module, API path). The path alone is not enough: score.mjs scores A4
+  // per module from the results tagged with that module, so a module whose only loader
+  // paths were already verified under another module (learning reuses hr's
+  // /hrms/me/profile and /hrms/employees/:id) got zero live results and lost its whole
+  // A4 allowance. Resolved ids are cached by discoverId(), so a shared path costs one
+  // extra GET, not another discovery.
   const pathsSeen = new Set();
   const unique = toTest.filter(r => {
-    const key = r.apiPaths[0];
+    const key = `${r.module}::${r.apiPaths[0]}`;
     if (pathsSeen.has(key)) return false;
     pathsSeen.add(key);
     return true;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 
 // useSeededResource's cache fallback goes through these two functions. jsdom
@@ -11,7 +11,7 @@ vi.mock("./responseCache", () => ({
 }));
 
 import { readCache, writeCache } from "./responseCache";
-import { useSeededResource } from "./resource";
+import { useOfflineResource, useSeededResource } from "./resource";
 
 const mockedReadCache = vi.mocked(readCache);
 const mockedWriteCache = vi.mocked(writeCache);
@@ -98,5 +98,128 @@ describe("useSeededResource — UX-002 dataProvenance is the single source of tr
     expect(mockedWriteCache).toHaveBeenCalledWith("k.apiempty", []);
     // The stale cached rows are never read into state.
     expect(result.current.data).not.toEqual([{ id: 1 }]);
+  });
+});
+
+describe("useOfflineResource — CLOS3-S3-08 unavailable cache read", () => {
+  const map = (raw: { n: number }): { n: number } => ({ n: raw.n * 2 });
+  const initialData = { n: 0 };
+  const okJson = (body: unknown): Response =>
+    ({ ok: true, status: 200, json: async () => body }) as unknown as Response;
+
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+    mockedWriteCache.mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("treats a rejecting readCache as a cache miss and still fetches live", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    const fetchMock = vi.fn(async () => okJson({ n: 21 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useOfflineResource("k.s308a", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.data).toEqual({ n: 42 });
+    expect(result.current.source).toBe("live");
+    expect(result.current.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces the load error (no unhandled rejection) when readCache rejects and the fetch fails", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("net"); }));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() => useOfflineResource("k.s308b", "/v1/x", { map, initialData }));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      expect(result.current.error).not.toBeNull();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+});
+
+describe("useOfflineResource — CLOS3-S3-09 best-effort cache write", () => {
+  const map = (raw: { n: number }): { n: number } => ({ n: raw.n * 2 });
+  const initialData = { n: 0 };
+
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+    mockedReadCache.mockResolvedValue(null);
+    vi.stubGlobal("navigator", { onLine: true });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps live data and no error when writeCache rejects", async () => {
+    mockedWriteCache.mockRejectedValue(new Error("quota"));
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ n: 5 }) }) as unknown as Response));
+    const { result } = renderHook(() => useOfflineResource("k.s309a", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).toBeNull();
+    expect(result.current.source).toBe("live");
+    expect(result.current.data).toEqual({ n: 10 });
+    expect(mockedWriteCache).toHaveBeenCalledWith("k.s309a", { n: 10 });
+  });
+
+  it("still reports the load error when the live fetch fails and there is no cache", async () => {
+    mockedWriteCache.mockResolvedValue(undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }) as unknown as Response));
+    const { result } = renderHook(() => useOfflineResource("k.s309b", "/v1/x", { map, initialData }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.error).not.toBeNull();
+    expect(mockedWriteCache).not.toHaveBeenCalled();
+  });
+});
+
+describe("useSeededResource — CLOS3-S3-10 unavailable cache storage", () => {
+  beforeEach(() => {
+    mockedReadCache.mockReset();
+    mockedWriteCache.mockReset();
+  });
+
+  it("api source: a rejecting writeCache leaves live data and raises no unhandled rejection", async () => {
+    mockedWriteCache.mockRejectedValue(new Error("quota"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() =>
+        useSeededResource("k.s310a", [{ id: 1 }], "api", (d: unknown[]) => d.length === 0),
+      );
+      await waitFor(() => expect(mockedWriteCache).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(result.current.data).toEqual([{ id: 1 }]);
+      expect(result.current.provenance).toBe("live");
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
+  });
+
+  it("error source: a rejecting readCache is a cache miss -> error-no-data, no throw", async () => {
+    mockedReadCache.mockRejectedValue(new Error("idb blocked"));
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    try {
+      const { result } = renderHook(() =>
+        useSeededResource("k.s310b", [] as unknown[], "error", (d: unknown[]) => d.length === 0),
+      );
+      await waitFor(() => expect(mockedReadCache).toHaveBeenCalled());
+      await new Promise((r) => setTimeout(r, 0));
+      expect(result.current.provenance).toBe("error-no-data");
+      expect(result.current.fromCache).toBe(false);
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
   });
 });

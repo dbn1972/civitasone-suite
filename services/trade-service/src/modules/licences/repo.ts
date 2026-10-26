@@ -139,3 +139,16 @@ export async function updateValidUntil(
   }
   return result.length > 0;
 }
+
+/**
+ * V4-C-04: next licenceNumber sequence value from trade.licence_number_seq
+ * (migrations/0006). Replaces crypto.randomInt(1, 999999), which collided
+ * (birthday paradox) against the global UNIQUE column. Call inside the
+ * transaction that inserts the row.
+ */
+export async function nextLicenceSeq(tx: ScopedTx): Promise<number> {
+  const [row] = (await tx.execute(
+    sql`SELECT nextval('"trade"."licence_number_seq"')::bigint AS seq`,
+  )) as unknown as Array<{ seq: number | string }>;
+  return Number(row!.seq);
+}

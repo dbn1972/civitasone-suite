@@ -6,7 +6,7 @@ import Loading from "./loading";
 describe("linked-accounts loading (GAP-CRM-LINKED-ACCOUNTS-06)", () => {
   it("uses the one segment name 'Connected Accounts', not 'Linked Accounts'", () => {
     renderWithIntl(<Loading />);
-    expect(screen.getByRole("heading", { name: "Connected Accounts" })).toBeInTheDocument();
+    expect(screen.getByText("Connected Accounts")).toHaveAttribute("data-skeleton-heading");
     expect(screen.queryByText("Linked Accounts")).not.toBeInTheDocument();
   });
 

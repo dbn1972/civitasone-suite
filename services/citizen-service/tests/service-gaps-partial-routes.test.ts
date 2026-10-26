@@ -79,8 +79,39 @@ function isoDaysAgo(days: number): string {
 }
 
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); });
-afterAll(async () => { await app.close(); await sqlClient.end(); });
+
+// V4-G-12: an appeal is filed against a REAL rejected application and its filing
+// window runs from the server-recorded rejection time (client decisionDate is ignored).
+const APPEAL_APP_ID = "66666666-0000-4000-8000-000000000016"; // rejected 5 days ago
+const APPEAL_APP_OLD_ID = "66666666-0000-4000-8000-000000000116"; // rejected 60 days ago
+const APPEAL_SEEDS: Array<[string, number]> = [[APPEAL_APP_ID, 5], [APPEAL_APP_OLD_ID, 60]];
+
+async function seedRejectedApp(id: string, rejectedDaysAgo: number) {
+  await sqlClient.begin(async (sql) => {
+    await sql`select set_config('app.tenant_id', ${TENANT_A}, true)`;
+    await sql`DELETE FROM application.citizen_status_history WHERE application_id = ${id}`;
+    await sql`DELETE FROM application.citizen_applications WHERE id = ${id}`;
+    await sql`INSERT INTO application.citizen_applications (id, tenant_id, citizen_id, service_id, ref_no, status, created_by, updated_by)
+      VALUES (${id}, ${TENANT_A}, ${CITIZEN}, ${SERVICE_ID}, ${"REF-" + id.slice(-6)}, 'rejected', ${CITIZEN}, ${CITIZEN})`;
+    await sql`INSERT INTO application.citizen_status_history (tenant_id, application_id, from_status, to_status, created_at, created_by, updated_by)
+      VALUES (${TENANT_A}, ${id}, 'under_review', 'rejected', now() - make_interval(days => ${rejectedDaysAgo}), ${CHECKER}, ${CHECKER})`;
+  });
+}
+
+beforeAll(async () => {
+  app = await buildApp();
+  for (const [id, days] of APPEAL_SEEDS) await seedRejectedApp(id, days);
+}, 30000);
+afterAll(async () => {
+  for (const [id] of APPEAL_SEEDS) {
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT_A}, true)`;
+      await sql`DELETE FROM application.citizen_status_history WHERE application_id = ${id}`;
+      await sql`DELETE FROM application.citizen_applications WHERE id = ${id}`;
+    }).catch(() => {});
+  }
+  await app.close(); await sqlClient.end();
+});
 
 // ══════════════════════ SVC-081 Government service catalogue ═════════════════
 describe("SVC-081 versioned catalogue maker-checker publish", () => {
@@ -257,7 +288,7 @@ describe("SVC-082 draft/ack/tracking + assisted channel", () => {
   it("submit produces an ACKNOWLEDGEMENT with a unique tracking number", async () => {
     const res = await app.inject({ method: "POST", url: `/v1/citizen/intake/drafts/${draftId}/submit`, headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])), payload: {} });
     expect(res.statusCode).toBe(202);
-    expect(res.json().trackingNo).toMatch(/^CIT-\d{4}-[0-9A-F]{8}$/);
+    expect(res.json().trackingNo).toMatch(/^CIT-\d{4}-\d{6}$/);
     expect(res.json().channel).toBe("portal");
     trackingNo = res.json().trackingNo;
     await waitFor(async () => {
@@ -416,7 +447,7 @@ describe("SVC-089 appeal filing-window + order maker-checker + remand", () => {
   it("filing OUTSIDE the window is rejected 422 FILING_WINDOW_EXPIRED", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/citizen/appeals", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { applicationId: APP_ID, grounds: "unfair", decisionDate: isoDaysAgo(60), windowDays: 30 },
+      payload: { applicationId: APPEAL_APP_OLD_ID, grounds: "unfair", decisionDate: isoDaysAgo(60), windowDays: 30 },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("FILING_WINDOW_EXPIRED");

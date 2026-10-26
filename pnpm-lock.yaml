@@ -25,6 +25,9 @@ overrides:
   '@vitest/coverage-v8': ^3.2.6
   vite: ^6.4.4
   undici@6: ^6.28.1
+  undici@>=6.23.0 <6.29.1: 6.29.1
+  undici@>=7.0.0 <7.30.1: 7.30.1
+  body-parser@<1.20.9: 1.20.9
   source-map-js: ^1.2.2
   proxy-addr: ^2.0.8
   compression: ^1.8.2
@@ -32,6 +35,7 @@ overrides:
   tinypool: ^2.1.2
   handlebars: '>=4.7.10'
   legacy-javascript: 0.0.1
+  mutation-server-protocol>zod: 4.6.6
 
 importers:
 
@@ -800,6 +804,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas
@@ -5376,6 +5383,9 @@ importers:
       '@fastify/cors':
         specifier: ^9.0.0
         version: 9.0.1
+      '@fastify/multipart':
+        specifier: 8.3.1
+        version: 8.3.1
       drizzle-orm:
         specifier: ^0.30.0
         version: 0.30.10(@opentelemetry/api@1.9.1)(@types/react@18.3.31)(postgres@3.4.9)(react@18.3.1)
@@ -6904,11 +6914,20 @@ packages:
   '@fastify/ajv-compiler@3.6.0':
     resolution: {integrity: sha512-LwdXQJjmMD+GwLOkP7TVC68qa+pSSogeWWmznRJ/coyTcfe9qA05AHFSe1eZFwK6q+xVRpChnvFUkf1iYaSZsQ==}
 
+  '@fastify/busboy@3.2.4':
+    resolution: {integrity: sha512-lQS8xcXT54rdJb+wlG/Q7SMSdtkZEpLPHooSDUZyyZm9LJD7X1kONPhVoPaHq+dsPtWUGGLIz9gBNhs9qKbylw==}
+
   '@fastify/cors@9.0.1':
     resolution: {integrity: sha512-YY9Ho3ovI+QHIL2hW+9X4XqQjXLjJqsU+sMV/xFsxZkE8p3GNnYVFpoOxF7SsP5ZL76gwvbo3V9L+FIekBGU4Q==}
 
+  '@fastify/deepmerge@2.0.2':
+    resolution: {integrity: sha512-3wuLdX5iiiYeZWP6bQrjqhrcvBIf0NHbQH1Ur1WbHvoiuTYUEItgygea3zs8aHpiitn0lOB8gX20u1qO+FDm7Q==}
+
   '@fastify/error@3.4.1':
     resolution: {integrity: sha512-wWSvph+29GR783IhmvdwWnN4bUxTD01Vm5Xad4i7i1VuAOItLvbPAb69sb0IQ2N57yprvhNIwAP5B6xfKTmjmQ==}
+
+  '@fastify/error@4.2.1':
+    resolution: {integrity: sha512-MYBumuIwP+5MIpXSyKm6/o1Eigcoij186lWUssX3LH5U8KWqU0ktZhzC4CErIX9EJeQeRGI+zJZQWakBlFbUcg==}
 
   '@fastify/fast-json-stringify-compiler@4.3.0':
     resolution: {integrity: sha512-aZAXGYo6m22Fk1zZzEUKBvut/CIIQe/BapEORnxiD5Qr0kPHqqI69NtEMCme74h+at72sPhbkb4ZrLd1W3KRLA==}
@@ -6918,6 +6937,9 @@ packages:
 
   '@fastify/merge-json-schemas@0.1.1':
     resolution: {integrity: sha512-fERDVz7topgNjtXsJTTW1JKLy0rhuLRcquYqNR9rF7OcVpCa2OVW49ZPDIhaRRCaUuvVxI+N416xUoF76HNSXA==}
+
+  '@fastify/multipart@8.3.1':
+    resolution: {integrity: sha512-pncbnG28S6MIskFSVRtzTKE9dK+GrKAJl0NbaQ/CG8ded80okWFsYKzSlP9haaLNQhNRDOoHqmGQNvgbiPVpWQ==}
 
   '@fastify/rate-limit@9.1.0':
     resolution: {integrity: sha512-h5dZWCkuZXN0PxwqaFQLxeln8/LNwQwH9popywmDCFdKfgpi4b/HoMH1lluy6P+30CG9yzzpSpwTCIPNB9T1JA==}
@@ -9064,8 +9086,8 @@ packages:
   bmp-js@0.1.0:
     resolution: {integrity: sha512-vHdS19CnY3hwiNdkaqk93DvjVLfbEcI8mys4UjuWrlX1haDmroo8o4xCzh4wD6DGV6HxRCyauwhHRqMTfERtjw==}
 
-  body-parser@1.20.6:
-    resolution: {integrity: sha512-p5tAzS57i5MV9fZFDj9LeIiTZEufbSe2eDozP+ElheSUq1m74CRq1jI4mYNDdVs9vQztXFLuk/Gd6BWTdwRJ5g==}
+  body-parser@1.20.9:
+    resolution: {integrity: sha512-FISIQxV5u91Y9gvuFq3q/tA/qTqLJn3AhRcEvyozyhJTh5OBFFtv827AdHU7Rbyct4r+Ba1/99oFa1Y3yuFsdw==}
     engines: {node: '>= 0.8', npm: 1.2.8000 || >= 1.4.16}
 
   boolbase@1.0.0:
@@ -12514,6 +12536,10 @@ packages:
     resolution: {integrity: sha512-O9gl3zCl5h5blw1KGUzQKhA5oUXSl8rwUIM5o0S3nCXMliSvy5Dzx7/DJcI+SwgICv+IneSZwhBh1oSyEHA71A==}
     engines: {node: '>=0.6'}
 
+  qs@6.16.1:
+    resolution: {integrity: sha512-5Px6J7rfHBAGUhNQ3es4YzcOdBBw0SDcVtThJml4RdnKw4tKs2epA0kPZ+K8X+WiHktT93RHVcQ/3ym5aTCgtg==}
+    engines: {node: '>=0.6'}
+
   querystringify@2.2.0:
     resolution: {integrity: sha512-FIqgj2EUvTa7R50u0rGsyTftzjYmv/a3hO345bZNrqabNqjtgiDMgmo4mkUjd+nzU5oF3dClKqFIPUKybUyqoQ==}
 
@@ -12984,6 +13010,10 @@ packages:
   stream-combiner2@1.1.1:
     resolution: {integrity: sha512-3PnJbYgS56AeWgtKF5jtJRT6uFJe56Z0Hc5Ngg/6sI6rIt8iiMBTa9cvdyFfpMQjaVHr8dusbNeFGIIonxOvKw==}
 
+  stream-wormhole@1.1.0:
+    resolution: {integrity: sha512-gHFfL3px0Kctd6Po0M8TzEvt3De/xu6cnRrjlfYNhwbhLPLwigI2t1nc6jrzNuaYg5C4YF78PPFuQPzRiqn9ew==}
+    engines: {node: '>=4.0.0'}
+
   streamx@2.28.0:
     resolution: {integrity: sha512-1Yowhzjf0ivGMrTIkY9hav5TxobO9qIVqUE41fiCGMGgc3CLlf4MY+9AHmZqBWgDTue0fY9zWjYFVyf6Diuobw==}
 
@@ -13424,12 +13454,12 @@ packages:
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
-  undici@6.29.0:
-    resolution: {integrity: sha512-R+RODBqp6i2pPflGdq+xIOUkl+RNfGgHwoinecKu/JCuf2uO06cOKoDbI2P7Dn6KcswdKwrczbU6IYJ6K8X+wg==}
+  undici@6.29.1:
+    resolution: {integrity: sha512-EvRlUt/QqAEvXdQeRMYUfwOQsfzpDztykrG2owGEE/rBOBoYv9uF39ZzsNDh4lTFHhTr2XOZjKkYgueD12ZmGA==}
     engines: {node: '>=18.17'}
 
-  undici@7.29.1:
-    resolution: {integrity: sha512-RYONW2MeafgYlkVOKYKkA/Ag7BmXqgIWCa8t1m0JcxrQg9pI9lEqRhAOruOBCbAohOa/gkCF+iPi9hrgvTzu6Q==}
+  undici@7.30.1:
+    resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
     engines: {node: '>=20.18.1'}
 
   unicode-emoji-modifier-base@1.0.0:
@@ -13838,8 +13868,8 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
   zustand@4.5.7:
     resolution: {integrity: sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==}
@@ -13870,7 +13900,7 @@ snapshots:
   '@actions/http-client@4.0.1':
     dependencies:
       tunnel: 0.0.6
-      undici: 6.29.0
+      undici: 6.29.1
 
   '@actions/io@3.0.2': {}
 
@@ -15460,12 +15490,18 @@ snapshots:
       ajv-formats: 2.1.1(ajv@8.20.0)
       fast-uri: 2.4.7
 
+  '@fastify/busboy@3.2.4': {}
+
   '@fastify/cors@9.0.1':
     dependencies:
       fastify-plugin: 4.5.1
       mnemonist: 0.39.6
 
+  '@fastify/deepmerge@2.0.2': {}
+
   '@fastify/error@3.4.1': {}
+
+  '@fastify/error@4.2.1': {}
 
   '@fastify/fast-json-stringify-compiler@4.3.0':
     dependencies:
@@ -15479,6 +15515,15 @@ snapshots:
   '@fastify/merge-json-schemas@0.1.1':
     dependencies:
       fast-deep-equal: 3.1.3
+
+  '@fastify/multipart@8.3.1':
+    dependencies:
+      '@fastify/busboy': 3.2.4
+      '@fastify/deepmerge': 2.0.2
+      '@fastify/error': 4.2.1
+      fastify-plugin: 4.5.1
+      secure-json-parse: 2.7.0
+      stream-wormhole: 1.1.0
 
   '@fastify/rate-limit@9.1.0':
     dependencies:
@@ -16348,7 +16393,7 @@ snapshots:
       p-filter: 4.1.0
       semantic-release: 25.0.9(typescript@5.9.3)
       tinyglobby: 0.2.17
-      undici: 7.29.1
+      undici: 7.30.1
       url-join: 5.0.0
     transitivePeerDependencies:
       - kerberos
@@ -17881,7 +17926,7 @@ snapshots:
 
   bmp-js@0.1.0: {}
 
-  body-parser@1.20.6:
+  body-parser@1.20.9:
     dependencies:
       bytes: 3.1.2
       content-type: 1.0.5
@@ -17891,7 +17936,7 @@ snapshots:
       http-errors: 2.0.1
       iconv-lite: 0.4.24
       on-finished: 2.4.1
-      qs: 6.15.3
+      qs: 6.16.1
       raw-body: 2.5.3
       type-is: 1.6.18
       unpipe: 1.0.0
@@ -18052,7 +18097,7 @@ snapshots:
       parse5: 7.3.0
       parse5-htmlparser2-tree-adapter: 7.1.0
       parse5-parser-stream: 7.1.2
-      undici: 6.29.0
+      undici: 6.29.1
       whatwg-mimetype: 4.0.0
 
   chokidar@3.6.0:
@@ -19387,7 +19432,7 @@ snapshots:
     dependencies:
       accepts: 1.3.8
       array-flatten: 1.1.1
-      body-parser: 1.20.6
+      body-parser: 1.20.9
       content-disposition: 0.5.4
       content-type: 1.0.5
       cookie: 0.7.2
@@ -21273,7 +21318,7 @@ snapshots:
 
   mutation-server-protocol@0.4.1:
     dependencies:
-      zod: 4.6.5
+      zod: 4.6.6
 
   mutation-testing-elements@3.7.3: {}
 
@@ -22069,6 +22114,11 @@ snapshots:
       es-define-property: 1.0.1
       side-channel: 1.1.1
 
+  qs@6.16.1:
+    dependencies:
+      es-define-property: 1.0.1
+      side-channel: 1.1.1
+
   querystringify@2.2.0: {}
 
   queue-microtask@1.2.3: {}
@@ -22668,6 +22718,8 @@ snapshots:
       duplexer2: 0.1.4
       readable-stream: 2.3.8
 
+  stream-wormhole@1.1.0: {}
+
   streamx@2.28.0:
     dependencies:
       events-universal: 1.0.1
@@ -23202,9 +23254,9 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici@6.29.0: {}
+  undici@6.29.1: {}
 
-  undici@7.29.1: {}
+  undici@7.30.1: {}
 
   unicode-emoji-modifier-base@1.0.0: {}
 
@@ -23809,7 +23861,7 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.6.5: {}
+  zod@4.6.6: {}
 
   zustand@4.5.7(@types/react@18.3.31)(react@18.3.1):
     dependencies:

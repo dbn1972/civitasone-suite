@@ -11,7 +11,7 @@ const hi = (ui: React.ReactElement) => render(<NextIntlClientProvider locale="hi
 describe("CRM loading skeletons are translated", () => {
   it("renders Hindi headings and aria-labels (no English fallback)", () => {
     hi(<AgentWorkloadLoading />);
-    expect(screen.getByRole("heading", { name: "एजेंट कार्यभार" })).toBeInTheDocument();
+    expect(screen.getByText("एजेंट कार्यभार")).toHaveAttribute("data-skeleton-heading");
     expect(screen.queryByText("Agent Workload")).not.toBeInTheDocument();
   });
   it("translates PageHeader title and the busy label", () => {

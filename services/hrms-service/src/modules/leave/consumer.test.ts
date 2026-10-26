@@ -162,6 +162,7 @@ vi.mock("../attendance/leave-sync.js", () => ({
 import { registerLeaveConsumers } from "./consumer.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { markProcessed } from "../../shared/outbox.js";
+import { cache } from "../../shared/infra.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -812,6 +813,83 @@ describe("WORKFLOW_INSTANCE_REJECTED subscriber (routing-failure visibility)", (
     );
     await settle();
     expect(updateLeaveAppMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CLOS3-S5-18: every status-changing handler must clear the cached leave-requests
+// page/list (resource "leave_request_detail", read by listLeaveRequestDetails and
+// getLeaveRequestPage incl. the status-count tiles), not just the per-employee keys.
+describe("leave_request_detail cache invalidation", () => {
+  const APP = {
+    id: "app-inv-1", tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID, allocId: ALLOC_ID,
+    fromDate: "2025-06-01", toDate: "2025-06-03", daysApplied: 3, reason: null, approvedBy: null,
+    status: "pending", createdAt: new Date(), updatedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR, version: 1,
+  };
+  const invalidatedResources = () =>
+    (cache.invalidateResource as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => [c[0], c[1]]);
+
+  it("leaveApply invalidates leave_request_detail", async () => {
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveApply, makeMsg(COMMANDS.leaveApply, {
+      id: randomUUID(), tenantId: TENANT, employeeId: EMP, leaveTypeId: LT_ID, allocId: ALLOC_ID,
+      fromDate: "2025-06-01", toDate: "2025-06-03", daysApplied: 3,
+    }));
+    await settle();
+    expect(invalidatedResources()).toContainEqual([TENANT, "leave_request_detail"]);
+    await q.stop();
+  });
+
+  it("workflow-rejected (routing_failed) invalidates leave_request_detail", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    await q.publish("workflow.instance.rejected", makeMsg("workflow.instance.rejected", {
+      instanceId: "wf-1", reason: "unknown_definition", definitionCode: "leave_approval",
+      refType: "leave_app", refId: APP.id,
+    }));
+    await settle();
+    expect(invalidatedResources()).toContainEqual([TENANT, "leave_request_detail"]);
+    await q.stop();
+  });
+
+  it("leaveApprove invalidates leave_request_detail", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveApprove, makeMsg(COMMANDS.leaveApprove, { id: APP.id, tenantId: TENANT, approvedBy: ACTOR }));
+    await settle();
+    expect(invalidatedResources()).toContainEqual([TENANT, "leave_request_detail"]);
+    await q.stop();
+  });
+
+  it("leaveReject invalidates leave_request_detail", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...APP });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveReject, makeMsg(COMMANDS.leaveReject, { id: APP.id, tenantId: TENANT, rejectedBy: ACTOR, reason: "no" }));
+    await settle();
+    expect(invalidatedResources()).toContainEqual([TENANT, "leave_request_detail"]);
+    await q.stop();
+  });
+
+  it("leaveCancel invalidates leave_request_detail", async () => {
+    mockTx.select.mockReturnValueOnce({
+      from: () => ({ where: () => ({ limit: async () => [{ ...APP }] }) }),
+    });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveCancel, makeMsg(COMMANDS.leaveCancel, { id: APP.id, tenantId: TENANT }));
+    await settle();
+    expect(invalidatedResources()).toContainEqual([TENANT, "leave_request_detail"]);
+    await q.stop();
+  });
+
+  it("an already-cancelled leave (no-op) does not invalidate", async () => {
+    mockTx.select.mockReturnValueOnce({
+      from: () => ({ where: () => ({ limit: async () => [{ ...APP, status: "cancelled" }] }) }),
+    });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.leaveCancel, makeMsg(COMMANDS.leaveCancel, { id: APP.id, tenantId: TENANT }));
+    await settle();
+    expect(invalidatedResources()).not.toContainEqual([TENANT, "leave_request_detail"]);
     await q.stop();
   });
 });

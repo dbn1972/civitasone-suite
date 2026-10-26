@@ -9,7 +9,7 @@ export default function Loading() {
           {/* GAP-CRM-OPPORTUNITY-AGEING-06: the heading must match the loaded
               page title ("Stage Ageing"), not "Opportunity Ageing", so there is
               no title flip when the data arrives. */}
-          <h1 id="page-heading">{t("stageAgeingTitle")}</h1>
+          <div data-skeleton-heading="">{t("stageAgeingTitle")}</div>
         </div>
       </div>
       {/* The page renders two cards (breaches + stage day limits), not a stat-tile

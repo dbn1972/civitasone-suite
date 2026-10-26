@@ -10,10 +10,3 @@ export function calculateBillAmount(consumptionKl: number, ratePerKlMinor: bigin
   const totalMinor = amountMinor + taxMinor;
   return { amountMinor, taxMinor, totalMinor };
 }
-
-let billSeq = 0;
-export function generateBillNumber(): string {
-  billSeq += 1;
-  const ts = Date.now().toString(36).toUpperCase();
-  return `WB-${ts}-${String(billSeq).padStart(4, "0")}`;
-}

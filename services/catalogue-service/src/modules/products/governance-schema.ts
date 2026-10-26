@@ -6,7 +6,7 @@
  * names and CHECK allowlists below mirror those migrations exactly — do not
  * invent values that the database will reject.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, boolean, bigint } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, bigint, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const catalogueSchema = pgSchema("catalogue");
 
@@ -36,7 +36,10 @@ export const productVersions = catalogueSchema.table("product_versions", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   updatedBy: uuid("updated_by"),
   version: integer("version").notNull().default(1),
-});
+}, (t) => ({
+  // CLOS3-S4-05 (migration 0009): one row per (tenant, product, version number).
+  tenantProductNumberUq: uniqueIndex("uq_product_versions_tenant_product_number").on(t.tenantId, t.productId, t.versionNumber),
+}));
 
 export type ProductVersionRow = typeof productVersions.$inferSelect;
 export type ProductVersionInsert = typeof productVersions.$inferInsert;

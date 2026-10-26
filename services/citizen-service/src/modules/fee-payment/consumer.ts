@@ -3,15 +3,16 @@ import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import * as repo from "./repo.js";
 import * as catalogueRepo from "../catalogue/repo.js";
+import * as applicationRepo from "../application/repo.js";
 import {
   enqueuePackNotifications,
   formatAmountMajor,
 } from "../catalogue/notification-bindings.js";
-import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable } from "./domain.js";
+import { computeFee, buildReceiptNo, isGatewayConfigured, isRefundable, refundableBalance } from "./domain.js";
 import type { FeeScheduleRow } from "./schema.js";
 
 async function resolveHoaForSchedule(
@@ -70,11 +71,12 @@ async function audit(
   resourceType: string,
   resourceId: string,
   newValue?: Record<string, unknown>,
+  outcome: "success" | "failure" = "success",
 ) {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "citizen", action, resourceType, resourceId, outcome: "success", ...(newValue ? { newValue } : {}) },
+    payload: { service: "citizen", action, resourceType, resourceId, outcome, ...(newValue ? { newValue } : {}) },
   });
 }
 
@@ -88,6 +90,27 @@ async function resolveSchedule(
 
 export function registerFeePaymentConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
+
+  // V4-G-08: finance refused to post a collected fee (missing revenue/bank head). The payment is
+  // already paid + receipted, so leave a failure audit trail against it instead of dropping the news.
+  queue.subscribe(CONSUMED_EVENTS.financeGlRejected, async (msg) => {
+    const p = msg.payload as { paymentId?: string; receiptNo?: string; code?: string; reason?: string };
+    if (typeof p.paymentId !== "string") return; // not a citizen receipt (e.g. an asset journal)
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const pay = await repo.findPaymentByIdTx(tx, p.paymentId as string, msg.tenantId);
+      if (!pay) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "citizen", action: "payment_gl_post_failed", resourceType: "payment", resourceId: pay.id,
+          outcome: "failure", newValue: { receiptNo: p.receiptNo ?? pay.receiptNo ?? null, code: p.code ?? null },
+        },
+      });
+    });
+    log.error({ paymentId: p.paymentId, code: p.code }, "collected citizen fee was not posted to the GL");
+  });
 
   queue.subscribe(COMMANDS.feeScheduleCreate, async (msg) => {
     const p = msg.payload as {
@@ -106,23 +129,58 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
     log.info({ id: p.id }, "fee schedule created");
   });
 
-  queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {
+  queue.subscribe(COMMANDS.feeScheduleSupersede, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; applicationId: string; scheduleId?: string; serviceId?: string;
-      citizenId?: string; subject: Record<string, unknown>;
+      id: string; tenantId: string; supersedes: string; name: string;
+      baseAmount: number; currency: string; exemptions: unknown;
+    };
+    let applied = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const old = await repo.findScheduleByIdTx(tx, p.supersedes, p.tenantId);
+      // Lost a race with another edit (or the row is gone): never fork the chain, but never drop
+      // silently either -- the caller already got a 202, so record the rejection.
+      if (!old || !old.active) {
+        await audit(tx, msg, "fee_schedule_supersede_rejected", "fee_schedule", p.id, {
+          supersedes: p.supersedes, reason: old ? "SCHEDULE_SUPERSEDED" : "SCHEDULE_NOT_FOUND",
+        }, "failure");
+        return;
+      }
+      await repo.retireSchedule(tx, old.id, p.tenantId, p.id, msg.actorId);
+      await repo.insertSchedule(tx, {
+        id: p.id, tenantId: p.tenantId, serviceId: old.serviceId, name: p.name,
+        baseAmount: p.baseAmount, currency: p.currency, exemptions: p.exemptions as never,
+        createdBy: msg.actorId, updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "fee_schedule_supersede", "fee_schedule", p.id, { supersedes: old.id });
+      applied = true;
+    });
+    log.info({ id: p.id, supersedes: p.supersedes, applied }, "fee schedule superseded");
+  });
+
+  queue.subscribe(COMMANDS.paymentIntentCreate, async (msg) => {
+    // V4-G-02: only the application id is trusted from the payload. The owner, the service, the
+    // schedule and the exemption subject are all derived here from the server-side application, so
+    // a caller cannot supply {subject:{category:"BPL"}} (or another citizen/service) to cut the fee.
+    const p = msg.payload as {
+      id: string; tenantId: string; applicationId: string; scheduleId?: string;
     };
     const configured = isGatewayConfigured();
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, p.serviceId);
-      if (!sched) return;
+      const app = await applicationRepo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
+      if (!app) return;
+      const sched = await resolveSchedule(tx, p.tenantId, p.scheduleId, app.serviceId);
+      if (!sched || sched.serviceId !== app.serviceId) return;
+      const subject = await repo.findDraftFormDataByApplicationTx(tx, p.tenantId, app.id);
+      const citizenId = app.citizenId;
       // sched.baseAmount is a bigint({mode:"number"}) column (validator-capped at 100_000_000_00
       // paise, far below 2^53): already a safe-integer number, so passed with no coercion.
-      const fee = computeFee(sched.baseAmount, sched.exemptions, p.subject ?? {});
+      const fee = computeFee(sched.baseAmount, sched.exemptions, subject);
       const gatewayRef = configured ? `pi_${p.id}` : null;
       await repo.insertPayment(tx, {
         id: p.id, tenantId: p.tenantId, applicationId: p.applicationId, scheduleId: sched.id,
-        citizenId: p.citizenId ?? null, amount: fee.amount, currency: sched.currency,
+        citizenId, amount: fee.amount, currency: sched.currency,
         exemptionApplied: fee.exemptionApplied, method: "online", status: "pending",
         gatewayRef, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -135,12 +193,12 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
         },
       });
       // FN-08: payment_due bindings (amount + pay_link merge fields)
-      const serviceId = p.serviceId ?? sched.serviceId;
-      const recipient = p.citizenId ?? p.applicationId;
+      const serviceId = app.serviceId;
+      const recipient = citizenId;
       await enqueuePackNotifications(tx, {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         serviceId, lifecycleEvent: "payment_due",
-        recipient, ...(p.citizenId != null ? { recipientId: p.citizenId } : {}),
+        recipient, recipientId: citizenId,
         variables: {
           applicationId: p.applicationId,
           app_no: p.applicationId,
@@ -290,8 +348,9 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pay = await repo.findPaymentByIdTx(tx, p.paymentId, p.tenantId);
       if (!pay || !isRefundable(pay.status)) return;
-      if (p.amount > pay.amount) return; // both safe-integer paise numbers (see schema.ts mode:"number")
       const existing = await repo.listRefundsByPaymentTx(tx, p.tenantId, p.paymentId);
+      // both safe-integer paise numbers (see schema.ts mode:"number"); V4-G-09: net of approved refunds
+      if (p.amount > refundableBalance(pay.amount, existing)) return;
       if (existing.some((r) => r.status === "requested")) return;
       await repo.insertRefund(tx, {
         id: p.id, tenantId: p.tenantId, paymentId: p.paymentId, amount: p.amount,
@@ -310,13 +369,36 @@ export function registerFeePaymentConsumers(rawQueue: Queue): void {
       if (!refund || refund.status !== "requested") return;
       if (refund.requestedBy === msg.actorId) return;
       const approved = p.decision === "approve";
+      const pay = approved ? await repo.findPaymentByIdTx(tx, refund.paymentId, msg.tenantId) : null;
+      let balance = 0;
+      if (approved) {
+        if (!pay) return;
+        // V4-G-09: never approve more than is still refundable (earlier approved refunds count).
+        balance = refundableBalance(pay.amount, await repo.listRefundsByPaymentTx(tx, msg.tenantId, refund.paymentId));
+        if (refund.amount > balance) return;
+      }
       await repo.updateRefund(tx, p.refundId, msg.tenantId, {
         status: approved ? "approved" : "rejected",
         approvedBy: msg.actorId, decidedAt: new Date(), updatedBy: msg.actorId,
       });
-      if (approved) {
-        await repo.updatePayment(tx, refund.paymentId, msg.tenantId, {
-          status: "refunded", updatedBy: msg.actorId,
+      if (approved && pay) {
+        // The payment is only "refunded" once the approved refunds cover it; a partial refund leaves it
+        // collected so the remaining balance can still be refunded.
+        const fullyRefunded = refund.amount >= balance;
+        if (fullyRefunded) {
+          await repo.updatePayment(tx, refund.paymentId, msg.tenantId, { status: "refunded", updatedBy: msg.actorId });
+        }
+        const hoa = await resolveHoaForSchedule(tx, msg.tenantId, pay.scheduleId);
+        await enqueue(tx, {
+          topic: EVENTS.refundApproved, eventType: EVENTS.refundApproved,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            id: refund.id, paymentId: pay.id, applicationId: pay.applicationId,
+            receiptNo: pay.receiptNo ?? null,
+            amountMinor: BigInt(refund.amount).toString(), currency: pay.currency, fullyRefunded,
+            ...(hoa.hoaCode ? { hoaCode: hoa.hoaCode } : {}),
+            ...(hoa.serviceKey ? { serviceKey: hoa.serviceKey } : {}),
+          },
         });
       }
       await audit(tx, msg, approved ? "refund_approve" : "refund_reject", "refund", p.refundId);

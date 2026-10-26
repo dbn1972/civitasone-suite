@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { writeAudit } from "../../shared/audit.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { nextComplaintNumber, auditFailedCreate } from "../../shared/numbers.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "swm.complaints.consumer" });
@@ -20,8 +21,10 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
     const p = msg.payload as any;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Allocated inside the transaction: a retry re-runs nextval(), so it can never collide or be lost.
+      const complaintNumber: string = await nextComplaintNumber(tx);
       await repo.insert(tx, {
-        id: p.id, tenantId: msg.tenantId, complaintNumber: p.complaintNumber,
+        id: p.id, tenantId: msg.tenantId, complaintNumber,
         reportedBy: p.reportedBy, location: p.location, complaintType: p.complaintType,
         description: p.description, photo: p.photo, severity: p.severity, status: "reported",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -29,12 +32,12 @@ export function registerComplaintConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.complaintCreated, eventType: EVENTS.complaintCreated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { complaintId: p.id, complaintNumber: p.complaintNumber, complaintType: p.complaintType },
+        payload: { complaintId: p.id, complaintNumber, complaintType: p.complaintType },
       });
       await writeAudit(tx, ctxOf(msg), { action: "complaint.create", resourceType: "swm_complaint", resourceId: p.id });
     });
     log.info({ id: p.id }, "complaint created");
-  });
+  }, auditFailedCreate("complaint.create", "swm_complaint"));
 
   queue.subscribe(COMMANDS.complaintAssign, async (msg) => {
     const p = msg.payload as any;

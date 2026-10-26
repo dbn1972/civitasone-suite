@@ -130,7 +130,7 @@ type EnforcementMode = "off" | "shadow" | "enforce";
 // effective enforcement mode so the decision and the mode come from one fetch.
 // `outage` is true when the allow-list is unknown because admin-service could not
 // be reached (vs. a reachable admin reporting configured:false).
-type CacheEntry = { modules: Set<string> | null; mode: EnforcementMode; configured: boolean; expires: number; outage?: boolean };
+type CacheEntry = { modules: Set<string> | null; mode: EnforcementMode; configured: boolean; expires: number; outage?: boolean; stale?: boolean };
 const moduleCache = new Map<string, CacheEntry>();
 // This cache is per gateway HTTP app process and is NOT invalidated by the
 // queue-driven gateway worker (a separate process). A module toggle, composition
@@ -315,6 +315,34 @@ async function getEnabled(tenantId: string): Promise<CacheEntry> {
   const cached = moduleCache.get(tenantId);
   if (cached && cached.expires > Date.now()) return cached;
 
+  // CLOS3-S5-10: single-flight per (tenant, invalidation generation). Concurrent callers
+  // at expiry share ONE admin-service call, and a load that started before
+  // invalidateModuleCache() can never re-populate the cache afterwards (its generation
+  // is stale). A request that raced an invalidation retries once against the new
+  // generation so it does not act on the pre-change allow-list.
+  let entry: CacheEntry = await loadSingleFlight(tenantId);
+  if (entry.stale) entry = await loadSingleFlight(tenantId);
+  return entry;
+}
+
+/** Per-tenant invalidation generation; bumped by invalidateModuleCache(). */
+const moduleGen = new Map<string, number>();
+const inflight = new Map<string, Promise<CacheEntry>>();
+
+function loadSingleFlight(tenantId: string): Promise<CacheEntry> {
+  const gen = moduleGen.get(tenantId) ?? 0;
+  const key = `${tenantId}:${gen}`;
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const p = loadEntry(tenantId, gen).finally(() => {
+    if (inflight.get(key) === p) inflight.delete(key);
+  });
+  inflight.set(key, p);
+  return p;
+}
+
+async function loadEntry(tenantId: string, gen: number): Promise<CacheEntry> {
+  const current = (): boolean => (moduleGen.get(tenantId) ?? 0) === gen;
   try {
     const adminUrl = process.env.GATEWAY_ADMIN_URL ?? "http://127.0.0.1:3022";
     const useComposition = process.env.COMPOSITION_ENFORCEMENT === "on";
@@ -343,19 +371,21 @@ async function getEnabled(tenantId: string): Promise<CacheEntry> {
 
     const mode: EnforcementMode =
       body.mode === "off" || body.mode === "shadow" || body.mode === "enforce" ? body.mode : "off";
-    lastKnownMode.set(tenantId, mode);
+    if (current()) lastKnownMode.set(tenantId, mode);
 
     // Composition mode: a tenant that never onboarded is `configured:false`.
     // modules stay null (unknown) so off/shadow fail open and enforce fails
     // closed; the `mode` is still cached so enforce is honoured for it.
     if (useComposition && body.configured === false) {
       const entry: CacheEntry = { modules: null, mode, configured: false, expires: Date.now() + CACHE_TTL_MS };
+      if (!current()) return { ...entry, stale: true };
       moduleCache.set(tenantId, entry);
       return entry;
     }
 
     const modules = new Set<string>(body.data.map((m) => m.name));
     const entry: CacheEntry = { modules, mode, configured: true, expires: Date.now() + CACHE_TTL_MS };
+    if (!current()) return { ...entry, stale: true };
     moduleCache.set(tenantId, entry);
     return entry;
   } catch (err) {
@@ -383,12 +413,14 @@ async function getEnabled(tenantId: string): Promise<CacheEntry> {
  * the 60s TTL stays the fallback bound if that best-effort call fails.
  */
 export function invalidateModuleCache(tenantId: string): void {
+  moduleGen.set(tenantId, (moduleGen.get(tenantId) ?? 0) + 1);
   moduleCache.delete(tenantId);
   lastKnownMode.delete(tenantId);
 }
 
 /** Exposed for testing — access to internals */
 export const _test = {
+  getEnabled,
   ROUTE_TO_MODULE,
   PLATFORM_ROUTES,
   moduleCache,

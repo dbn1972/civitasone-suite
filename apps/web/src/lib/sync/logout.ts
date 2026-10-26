@@ -14,6 +14,27 @@ import { wipeSessionKey } from "./crypto";
 import { resolveNamespace, clearNamespaceCache } from "./identity";
 import { clearTrustToken } from "./headers";
 
+/**
+ * V4-A-01: the service worker's Cache Storage (civitasone-*) is keyed by URL only
+ * and outlives the session, so wipe it directly and also ask the worker to purge
+ * (it re-seeds only the public /offline fallback). Best-effort, never blocks logout.
+ */
+async function wipeCacheStorage(): Promise<void> {
+  try {
+    if (typeof caches !== "undefined") {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith("civitasone-")).map((k) => caches.delete(k)));
+    }
+  } catch {
+    /* best-effort */
+  }
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: "CIVITASONE_PURGE" });
+  } catch {
+    /* best-effort */
+  }
+}
+
 export async function performLogout(): Promise<void> {
   try {
     const ns = await resolveNamespace();
@@ -21,6 +42,7 @@ export async function performLogout(): Promise<void> {
   } catch {
     /* best-effort: never block logout on a wipe failure */
   }
+  await wipeCacheStorage();
   wipeSessionKey();
   clearTrustToken();
   clearNamespaceCache();

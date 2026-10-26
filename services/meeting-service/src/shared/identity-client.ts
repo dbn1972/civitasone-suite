@@ -26,10 +26,13 @@ async function loadTenantNames(tenantId: string): Promise<Map<string, string>> {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return new Map();
-    const rows = (await res.json()) as Array<{ id?: unknown; name?: unknown }>;
+    const body: unknown = await res.json();
+    // A malformed (non-array) body must degrade to "no names", not be cached as an empty success.
+    if (!Array.isArray(body)) return new Map();
+    const rows = body as Array<{ id?: unknown; name?: unknown } | null>;
     const names = new Map<string, string>();
     for (const r of rows) {
-      if (typeof r.id === "string" && typeof r.name === "string" && r.name.trim()) {
+      if (r && typeof r.id === "string" && typeof r.name === "string" && r.name.trim()) {
         names.set(r.id, r.name.trim());
       }
     }

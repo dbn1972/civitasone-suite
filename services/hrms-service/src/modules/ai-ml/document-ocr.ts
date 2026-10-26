@@ -43,6 +43,13 @@ const ocrRequestSchema = z.object({
  * - "external": configurable HTTP endpoint (OCR_ENDPOINT env)
  * - "mock": returns structured test data (dev/test default)
  */
+const DEFAULT_OCR_TIMEOUT_MS = 15_000;
+
+function ocrTimeoutMs(): number {
+  const n = Number(process.env.OCR_TIMEOUT_MS ?? DEFAULT_OCR_TIMEOUT_MS);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_OCR_TIMEOUT_MS;
+}
+
 async function performOcr(imageKey: string, docType: string): Promise<OcrResult> {
   const driver = process.env.OCR_DRIVER ?? "mock";
   // "textract" driver requires @aws-sdk/client-textract installed — see docs/runbooks/ocr-setup.md
@@ -51,9 +58,22 @@ async function performOcr(imageKey: string, docType: string): Promise<OcrResult>
   if (driver === "external") {
     const endpoint = process.env.OCR_ENDPOINT;
     if (!endpoint) return { rawText: "", confidence: 0, structured: {}, language: "eng" };
-    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageKey, docType }) });
-    if (!res.ok) return { rawText: "", confidence: 0, structured: {}, language: "eng" };
-    return await res.json() as OcrResult;
+    const empty: OcrResult = { rawText: "", confidence: 0, structured: {}, language: "eng" };
+    try {
+      // The signal covers the request AND the body read, so neither a hung endpoint nor a stalled body can
+      // block the awaiting request or consumer indefinitely (CLOS3-S5-23).
+      const res = await fetch(endpoint, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageKey, docType }),
+        signal: AbortSignal.timeout(ocrTimeoutMs()),
+      });
+      if (!res.ok) return empty;
+      return await res.json() as OcrResult;
+    } catch (err) {
+      const name = (err as { name?: string } | null)?.name;
+      // Timeout degrades to the existing "manual entry" result; any other network error keeps propagating.
+      if (name === "TimeoutError" || name === "AbortError") return empty;
+      throw err;
+    }
   }
 
   // Mock fallback (dev/test)

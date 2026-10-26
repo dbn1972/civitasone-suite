@@ -469,3 +469,57 @@ describe("DAK-05: status label and success message (GAP-ESTAB-DAK-05)", () => {
     expect(await screen.findByText(/DAK DAK\/2026\/555 registered\./)).toBeInTheDocument();
   });
 });
+
+// CLOS3-S1-10: the register form had no in-flight guard, so a double submit queued two inward registrations.
+describe("DAK-03: Register DAK is guarded against double submit (CLOS3-S1-10)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); identity.roles = ["estab_officer"]; });
+  afterEach(() => cleanup());
+
+  const posts = (spy: { mock: { calls: unknown[][] } }) =>
+    spy.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === "POST");
+
+  async function fillValidForm() {
+    render(<DakRegistryPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Home Ministry" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Memo" } });
+    return screen.getByRole("button", { name: "Register DAK" }).closest("form") as HTMLFormElement;
+  }
+
+  it("sends a single POST for two submits before the first resolves, then clears the form and re-enables", async () => {
+    let resolvePost: (r: Response) => void = () => {};
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? new Promise<Response>((res) => { resolvePost = res; })
+        : Promise.resolve(jsonResponse({ data: [], pagination: { total: 0 } })));
+    const form = await fillValidForm();
+
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    const btn = screen.getByRole("button", { name: "Register DAK" });
+    await waitFor(() => expect(btn).toBeDisabled());
+    expect(btn).toHaveAttribute("aria-busy", "true");
+    expect(posts(spy)).toHaveLength(1);
+
+    await act(async () => { resolvePost(jsonResponse({ id: "x", status: "accepted" }, 202)); });
+    await waitFor(() => expect((screen.getByLabelText(/^From/i) as HTMLInputElement).value).toBe(""));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeEnabled());
+    expect(posts(spy)).toHaveLength(1);
+  });
+
+  it("re-enables after a failed POST and allows a second attempt", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
+      init?.method === "POST"
+        ? Promise.reject(new Error("network"))
+        : Promise.resolve(jsonResponse({ data: [], pagination: { total: 0 } })));
+    const form = await fillValidForm();
+
+    fireEvent.submit(form);
+    await waitFor(() => expect(posts(spy)).toHaveLength(1));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeEnabled());
+
+    fireEvent.submit(form);
+    await waitFor(() => expect(posts(spy)).toHaveLength(2));
+  });
+});

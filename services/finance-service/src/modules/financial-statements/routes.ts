@@ -208,15 +208,20 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
     const fy = q.fy ?? deriveFYFromDate();
     const { start, end } = fyBounds(fy);
+    // Opening balance = net of every entry before the FY start (carried forward from prior years);
+    // closing = opening + FY receipts - FY payments. Rows are also returned for a cash/bank with only prior entries.
     const rows = await scopedRead((tx) => tx.execute(sql`
       SELECT bank_or_cash,
-             COALESCE(SUM(receipt_minor), 0)::bigint AS total_receipts,
-             COALESCE(SUM(payment_minor), 0)::bigint AS total_payments,
+             (COALESCE(SUM(receipt_minor) FILTER (WHERE entry_date < ${start}::date), 0)
+              - COALESCE(SUM(payment_minor) FILTER (WHERE entry_date < ${start}::date), 0))::bigint AS opening_balance,
+             COALESCE(SUM(receipt_minor) FILTER (WHERE entry_date >= ${start}::date), 0)::bigint AS total_receipts,
+             COALESCE(SUM(payment_minor) FILTER (WHERE entry_date >= ${start}::date), 0)::bigint AS total_payments,
              (COALESCE(SUM(receipt_minor), 0) - COALESCE(SUM(payment_minor), 0))::bigint AS closing_balance
       FROM gl.finance_cash_book
       WHERE tenant_id = ${ctx.tenantId}::uuid
-        AND entry_date >= ${start}::date AND entry_date <= ${end}::date
+        AND entry_date <= ${end}::date
       GROUP BY bank_or_cash
+      ORDER BY bank_or_cash
     `));
     return reply.send({ fiscalYear: fy, data: rows });
   });
@@ -237,7 +242,7 @@ export async function financialStatementsRoutes(app: FastifyInstance): Promise<v
       WHERE tenant_id = ${ctx.tenantId}::uuid
         AND entry_date >= ${start}::date AND entry_date <= ${end}::date
       GROUP BY EXTRACT(MONTH FROM entry_date)
-      ORDER BY month
+      ORDER BY (EXTRACT(MONTH FROM entry_date)::int + 8) % 12
     `));
     return reply.send({ fiscalYear: fy, monthlyFlows: rows });
   });

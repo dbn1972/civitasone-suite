@@ -14,4 +14,12 @@ describe("stage lifecycle transitions", () => {
     for (const s of ["pending", "active", "failed"]) expect(nextStageStatus("skip", s)).toBe("skipped");
     for (const s of ["in_progress", "completed", "skipped"]) expect(nextStageStatus("skip", s)).toBeNull();
   });
+  it("complete/fail: only in_progress -> completed/failed (Q9)", () => {
+    expect(nextStageStatus("complete", "in_progress")).toBe("completed");
+    expect(nextStageStatus("fail", "in_progress")).toBe("failed");
+    for (const s of ["pending", "active", "failed", "completed", "skipped"]) {
+      expect(nextStageStatus("complete", s)).toBeNull();
+      expect(nextStageStatus("fail", s)).toBeNull();
+    }
+  });
 });

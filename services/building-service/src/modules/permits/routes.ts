@@ -35,9 +35,12 @@ export async function permitRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: row });
   });
 
-  app.get("/v1/building/permits/verify", async (req, reply) => {
+  // PUBLIC (V4-B-06): anonymous QR verification, keyed on the opaque verification code. Reads the
+  // non-RLS public directory (migrations/0005_permit_public_directory.sql); without config.public
+  // authPlugin 401'd every caller.
+  app.get("/v1/building/permits/verify", { config: { public: true } }, async (req, reply) => {
     const q = verifyQuery.parse(req.query);
-    const permit = await repo.findByVerificationCode(q.code);
+    const permit = await repo.findPublicByVerificationCode(q.code);
     if (!permit) throw new HttpError(404, "PERMIT_NOT_FOUND", "No permit found for this verification code");
     return reply.send({ data: { permitNumber: permit.permitNumber, status: permit.status, issuedAt: permit.issuedAt, validUntil: permit.validUntil } });
   });

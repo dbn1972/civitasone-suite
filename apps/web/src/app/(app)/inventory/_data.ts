@@ -362,16 +362,28 @@ export function getInventoryNamedList(
   });
 }
 
-export async function getInventoryLowStock(): Promise<LoaderResult<InventoryLowStockRow[]>> {
+/** Q37: the exact number of low-stock items, from the service's `meta.total` (undefined when absent/invalid). */
+export function lowStockTotalOf(payload: unknown): number | undefined {
+  if (!isRecord(payload) || !isRecord(payload.meta)) return undefined;
+  const t = payload.meta.total;
+  return typeof t === "number" && Number.isInteger(t) && t >= 0 ? t : undefined;
+}
+
+export async function getInventoryLowStock(): Promise<LoaderResult<InventoryLowStockRow[]> & { total?: number }> {
+  let total: number | undefined;
   const res = await fetchJson<Envelope<InventoryLowStockRow>, InventoryLowStockRow[]>(`/api/v1/inventory/low-stock?limit=${LOW_STOCK_LIMIT}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "inventory.lowStock",
-    mapResponse: listOf,
+    mapResponse: (payload) => {
+      total = lowStockTotalOf(payload);
+      return listOf(payload);
+    },
   });
-  return withNames(res, async (rows) => {
+  const named = await withNames(res, async (rows) => {
     const stores = await getStoreNames();
     return rows.map((r) => ({ ...r, storeName: stores.get(r.storeId) ?? null }));
   });
+  return total === undefined || named.source === "error" ? named : { ...named, total };
 }
 
 export async function getInventoryBins(): Promise<LoaderResult<InventoryBinRow[]>> {

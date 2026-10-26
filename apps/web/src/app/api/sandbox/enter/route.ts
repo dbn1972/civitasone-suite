@@ -160,6 +160,33 @@ function originAllowed(req: Request): boolean {
   return false;
 }
 
+const MAX_BODY_BYTES = 16 * 1024;
+
+/** Read the request body, returning null as soon as it exceeds `max` bytes. */
+async function readBounded(req: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
+}
+
 export async function POST(req: Request): Promise<NextResponse> {
   if (!isSandboxEnabled()) {
     return NextResponse.json({ error: "Not available" }, { status: 404 });
@@ -182,8 +209,22 @@ export async function POST(req: Request): Promise<NextResponse> {
   // pass ?role=, but the marketing page posts it in the body.
   let roleParam: string | null = null;
   const contentType = req.headers.get("content-type") ?? "";
+  // The only field is a short role name: cap the body at MAX_BODY_BYTES. The declared
+  // Content-Length is checked first, but a chunked POST carries none, so the bytes
+  // actually read are bounded too before any form parsing happens.
+  const declaredHeader = req.headers.get("content-length");
+  if (declaredHeader !== null) {
+    const declaredLength = Number(declaredHeader);
+    if (!Number.isFinite(declaredLength) || declaredLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+  }
   if (contentType.includes("application/x-www-form-urlencoded") || contentType.includes("multipart/form-data")) {
-    const form = await req.formData();
+    const bounded = await readBounded(req, MAX_BODY_BYTES);
+    if (bounded === null) {
+      return NextResponse.json({ error: "Payload too large" }, { status: 413 });
+    }
+    const form = await new Response(bounded, { headers: { "content-type": contentType } }).formData();
     const r = form.get("role");
     roleParam = typeof r === "string" ? r : null;
   }

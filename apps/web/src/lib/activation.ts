@@ -122,7 +122,7 @@ export function trackActivation(step: FunnelStep): void {
     if (navigator.sendBeacon) {
       navigator.sendBeacon("/api/activation", new Blob([body], { type: "application/json" }));
     } else {
-      void fetch("/api/activation", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true });
+      void fetch("/api/activation", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true }).catch(() => { /* fire-and-forget: a network failure must not surface */ });
     }
   } catch {
     /* never let instrumentation break the UI */

@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { pino } from "pino";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -115,9 +116,17 @@ export async function sweepExpiredBreakGlass(now = new Date()): Promise<number> 
 }
 
 /** P1-2: start the periodic TTL sweeper. Returns the interval handle. */
-export function startBreakGlassSweeper(intervalMs = 60_000): NodeJS.Timeout {
+export function startBreakGlassSweeper(
+  intervalMs = 60_000,
+  logger: { error: (o: object, m: string) => void } = pino({ name: "break-glass-sweeper" }),
+): NodeJS.Timeout {
+  let running = false;
   const tick = (): void => {
-    void sweepExpiredBreakGlass().catch(() => { /* logged by caller context */ });
+    if (running) return; // overlap guard: a slow sweep must not be re-entered
+    running = true;
+    void sweepExpiredBreakGlass()
+      .catch((err) => logger.error({ err }, "break-glass sweep failed"))
+      .finally(() => { running = false; });
   };
   const handle = setInterval(tick, intervalMs);
   if (typeof handle.unref === "function") handle.unref();

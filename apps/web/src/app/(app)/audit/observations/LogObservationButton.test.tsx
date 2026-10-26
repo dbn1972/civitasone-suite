@@ -63,6 +63,27 @@ describe("LogObservationButton", () => {
     expect(body.amountInvolvedMinor).toBe("25000010");
   });
 
+  it("Q33: sends dueDate when set, omits it when blank", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+    render(<LogObservationButton />);
+    openAndFillDialog();
+    fireEvent.change(screen.getByLabelText(/Compliance due date/i), { target: { value: "2099-01-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log observation" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm & log" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body)).dueDate).toBe("2099-01-31");
+  });
+
+  it("Q33: a past due date is rejected before any POST", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+    render(<LogObservationButton />);
+    openAndFillDialog();
+    fireEvent.change(screen.getByLabelText(/Compliance due date/i), { target: { value: "2001-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Log observation" }));
+    expect(await screen.findByText(/cannot be in the past/i)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("rejects a money value with more than two decimal places (no float rounding)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
     render(<LogObservationButton />);

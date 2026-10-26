@@ -76,6 +76,27 @@ function loadConfig(): StorageConfig {
 let _client: S3Client | null = null;
 let _config: StorageConfig | null = null;
 
+const DEFAULT_S3_CONNECT_TIMEOUT_MS = 5_000;
+const DEFAULT_S3_REQUEST_TIMEOUT_MS = 60_000;
+
+function envMs(name: string, fallback: number): number {
+  const parsed = Number(process.env[name]);
+  return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : fallback;
+}
+
+/**
+ * CLOS3-S6-13: socket timeouts for the S3 client. The SDK's NodeHttpHandler has NO default
+ * timeouts, so a stalled endpoint hung every call (and the body stream) forever. requestTimeout is a
+ * socket-idle timeout, so a large but progressing download is not cut off.
+ * Overridable via S3_CONNECT_TIMEOUT_MS / S3_REQUEST_TIMEOUT_MS; invalid values fall back to the defaults.
+ */
+export function s3TimeoutConfig(): { connectionTimeout: number; requestTimeout: number } {
+  return {
+    connectionTimeout: envMs("S3_CONNECT_TIMEOUT_MS", DEFAULT_S3_CONNECT_TIMEOUT_MS),
+    requestTimeout: envMs("S3_REQUEST_TIMEOUT_MS", DEFAULT_S3_REQUEST_TIMEOUT_MS),
+  };
+}
+
 function getClient(): S3Client {
   if (_client) return _client;
   _config = loadConfig();
@@ -83,6 +104,10 @@ function getClient(): S3Client {
     region: _config.region,
     ..._config.endpoint ? { endpoint: _config.endpoint } : {},
     forcePathStyle: _config.forcePathStyle,
+    // The SDK builds a NodeHttpHandler from these options (no extra dependency needed).
+    // throwOnRequestTimeout: without it recent @smithy/node-http-handler only WARNS when
+    // requestTimeout elapses and the call still hangs.
+    requestHandler: { ...s3TimeoutConfig(), throwOnRequestTimeout: true },
     credentials: {
       accessKeyId: _config.accessKeyId,
       secretAccessKey: _config.secretAccessKey,
@@ -120,6 +145,14 @@ export interface PresignedUrlOptions {
    */
   contentLength?: number | undefined;
   /**
+   * PUT only: sign the Content-Type header into the URL (V4-E-05). By default
+   * the SDK leaves it unsigned, so the uploader may send ANY Content-Type
+   * regardless of `contentType` above. When true the object store rejects a
+   * PUT whose Content-Type differs. Opt-in because callers' clients must then
+   * send exactly `contentType`.
+   */
+  signContentType?: boolean | undefined;
+  /**
    * PUT only: server-side encryption at rest (SSE-S3 "AES256" or SSE-KMS).
    * The header is SIGNED into the URL, so the uploader must send
    * `x-amz-server-side-encryption` with the PUT -- an upload that omits it
@@ -142,7 +175,10 @@ export async function presignedPutUrl(opts: PresignedUrlOptions): Promise<string
     ...(opts.serverSideEncryption ? { ServerSideEncryption: opts.serverSideEncryption } : {}),
   };
   const command = new PutObjectCommand(input);
-  return getSignedUrl(client, command, { expiresIn: opts.expiresIn ?? 300 });
+  return getSignedUrl(client, command, {
+    expiresIn: opts.expiresIn ?? 300,
+    ...(opts.signContentType ? { signableHeaders: new Set(["content-type"]) } : {}),
+  });
 }
 
 /**

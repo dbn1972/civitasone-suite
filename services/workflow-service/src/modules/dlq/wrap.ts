@@ -19,6 +19,7 @@ export function dlqWrap(
   topic: string,
   handler: (msg: CommandEnvelope) => Promise<void>,
   maxAttempts = Number(process.env.WORKFLOW_DLQ_MAX_ATTEMPTS ?? 5),
+  onDeadLetter?: (msg: CommandEnvelope, reason: string, attempt: number) => Promise<void>,
 ): (msg: CommandEnvelope) => Promise<void> {
   return async (msg: CommandEnvelope) => {
     try {
@@ -30,6 +31,8 @@ export function dlqWrap(
       if (attempt >= maxAttempts) {
         await dlq.deadLetter(topic, msg.messageId, msg.tenantId, msg as unknown as Record<string, unknown>, message, attempt);
         log.error({ topic, messageId: msg.messageId, attempt, err: message }, "message dead-lettered after max attempts");
+        // Final failure of an accepted command: let the caller leave an audited failure record.
+        if (onDeadLetter) await onDeadLetter(msg, message, attempt).catch((e) => log.error({ topic, messageId: msg.messageId, err: String(e) }, "onDeadLetter hook failed"));
         return; // swallow: stop the broker redelivering a poison message
       }
       log.warn({ topic, messageId: msg.messageId, attempt, maxAttempts }, "handler failed; will retry");
@@ -43,6 +46,7 @@ export function subscribeWithDlq<T>(
   queue: Queue,
   topic: string,
   handler: (msg: CommandEnvelope<T>) => Promise<void>,
+  onDeadLetter?: (msg: CommandEnvelope, reason: string, attempt: number) => Promise<void>,
 ): void {
-  queue.subscribe<T>(topic, dlqWrap(topic, handler as (msg: CommandEnvelope) => Promise<void>) as (msg: CommandEnvelope<T>) => Promise<void>);
+  queue.subscribe<T>(topic, dlqWrap(topic, handler as (msg: CommandEnvelope) => Promise<void>, undefined, onDeadLetter) as (msg: CommandEnvelope<T>) => Promise<void>);
 }

@@ -83,6 +83,56 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
     );
   });
 
+  // ---- Team membership (drives crm_user team-based visibility) ----
+  const teamIdParam = z.object({ id: z.string().uuid() });
+  const memberParams = z.object({ id: z.string().uuid(), userId: z.string().uuid() });
+  const addMemberBody = z.object({ userId: z.string().uuid() });
+  const memberRate = { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } };
+
+  async function assertTeam(tenantId: string, teamId: string): Promise<void> {
+    const rows = await scopedRead(async (tx) => tx.execute(sql`
+      SELECT 1 FROM crm.teams WHERE id = ${teamId} AND tenant_id = ${tenantId}
+    `) as unknown as Array<unknown>);
+    if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "team not found");
+  }
+
+  app.get("/v1/crm/teams/:id/members", memberRate, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = teamIdParam.parse(req.params);
+    await assertTeam(ctx.tenantId, id);
+    const members = await scopedRead(async (tx) => tx.execute(sql`
+      SELECT id, team_id AS "teamId", user_id AS "userId", created_at AS "createdAt"
+      FROM crm.team_members
+      WHERE tenant_id = ${ctx.tenantId} AND team_id = ${id}
+      ORDER BY created_at ASC
+    `) as unknown as Array<Record<string, unknown>>);
+    const names = await resolveUserNames(ctx.tenantId, members.map((m) => m["userId"] as string));
+    return reply.send({
+      data: members.map((m) => {
+        const name = names.get(m["userId"] as string);
+        return name ? { ...m, name } : m;
+      }),
+    });
+  });
+
+  app.post("/v1/crm/teams/:id/members", memberRate, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = teamIdParam.parse(req.params);
+    const body = addMemberBody.parse(req.body);
+    await assertTeam(ctx.tenantId, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.addTeamMember(ctx, id, body.userId));
+  });
+
+  app.delete("/v1/crm/teams/:id/members/:userId", memberRate, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id, userId } = memberParams.parse(req.params);
+    await assertTeam(ctx.tenantId, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.removeTeamMember(ctx, id, userId));
+  });
+
   app.post("/v1/crm/contacts/:id/transfer", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);

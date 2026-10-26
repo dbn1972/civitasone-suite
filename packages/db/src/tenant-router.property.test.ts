@@ -132,6 +132,7 @@ describe("Property 1: Tenant tier resolution is pure and backward-compatible", (
             poolDsn: "postgres://shared",
             resolver: () => ({ tier: "pool" }),
             clientFactory: factory,
+            evictGraceMs: 0, // assertions below check the legacy immediate close
           });
 
           const clients = await Promise.all(tenantIds.map((id) => router.sqlFor(id)));
@@ -210,6 +211,7 @@ describe("Property 2: Silo/shard client cache respects its LRU cap", () => {
             poolDsn: "postgres://shared",
             resolver,
             clientFactory: factory,
+            evictGraceMs: 0, // assertions below check the legacy immediate close
             maxSiloClients,
           });
 
@@ -238,6 +240,7 @@ describe("Property 2: Silo/shard client cache respects its LRU cap", () => {
             poolDsn: "postgres://shared",
             resolver,
             clientFactory: factory,
+            evictGraceMs: 0, // assertions below check the legacy immediate close
             maxSiloClients,
           });
 
@@ -307,6 +310,7 @@ describe("Property 2: Silo/shard client cache respects its LRU cap", () => {
           poolDsn: "postgres://shared",
           resolver,
           clientFactory: factory,
+          evictGraceMs: 0, // assertions below check the legacy immediate close
           maxSiloClients,
         });
 

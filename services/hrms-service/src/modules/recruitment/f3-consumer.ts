@@ -1201,15 +1201,21 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the vacancy and the next corrigendum sequence number.
             const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
+            // CLOS3-S5-06: re-validate at write time (the route check ran before enqueue; an earlier queued cancel may have committed since).
+            if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be amended");
             const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "corrigendum", changes: body.changes, actorId: msg.actorId });
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__2": {
             // Restored: the vacancy, the old/new deadlines and the sequence.
             const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
+            // CLOS3-S5-06: re-validate at write time (the route check ran before enqueue; an earlier queued cancel may have committed since).
+            if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be extended");
             const oldDeadline = v.applicationDeadline as Date | null;
             const newDeadline = new Date(body.newDeadline);
             const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
@@ -1219,16 +1225,22 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                   });
                   // Extending REOPENS a closed vacancy so applications can resume (R-RA-0069).
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { applicationDeadline: newDeadline, status: "open", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__3": {
             // Restored: the vacancy and the next corrigendum sequence number.
             const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
+            // CLOS3-S5-06: re-validate at write time (the route check ran before enqueue; an earlier queued cancel may have committed since).
+            if (v.status === "cancelled") throw new HttpError(409, "ALREADY_CANCELLED", "vacancy is already cancelled");
             const seq = await publicationRepo.nextCorrigendumSeqTx(tx, p.tenantId, id);
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "cancellation", changes: body.reason, actorId: msg.actorId });
                   // Cancel preserves the advert (row untouched except status) — R-RA-0068.
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { status: "cancelled", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+                  // Status/deadline/corrigendum count change what listJobOpenings (cached under "job_opening") shows; mirror __4 (CLOS3-S5-17).
+                  await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_publication_routes__4": {

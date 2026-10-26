@@ -43,13 +43,31 @@
  * resolves the single card through a token-scoped RLS policy; this entry only lets the request past
  * the gateway bearer pre-check. Narrow to the `public` sub-tree, NOT /api/v1/hrms/visiting-card
  * (the authenticated /me routes keep their edge check).
+ *
+ * `/api/v1/citizen/certificates/verify` (V4-G-01) — the QR printed on an issued certificate opens
+ * GET .../verify/:token anonymously (a verifier scanning a paper certificate has no account), but
+ * the gateway 401d it before it could reach citizen-service. Narrowed to the `verify` sub-tree
+ * (`pathname === p || startsWith(p + "/")`), NOT /api/v1/citizen/certificates, so issuance,
+ * approval, list and lifecycle routes still require a bearer token. The upstream route is marked
+ * config:{public:true}, is keyed on an unguessable token (migration 0044 token-scoped SELECT
+ * policy), returns non-PII attestation fields only and rate-limits per client IP.
  */
+/** Payment-gateway callbacks: passed through with the RAW body (provider signatures cover the exact bytes). */
+export const BILLING_WEBHOOK_PREFIX = "/api/v1/billing/webhooks";
+
 export const PUBLIC_PREFIXES = [
   "/api/identity",
   "/api/v1/install",
+  // V4-B-06: anonymous permit QR verification (exact paths, not the whole service prefix).
+  "/api/v1/advertisement/permits/verify",
+  "/api/v1/building/permits/verify",
   "/api/v1/careers",
   "/api/v1/crm/public",
   "/api/v1/court/public",
   "/api/v1/tenant/msme-onboard",
   "/api/v1/hrms/visiting-card/public",
+  "/api/v1/citizen/certificates/verify",
+  // V4-B-03: payment-gateway server-to-server callbacks (Razorpay/PayU/CCAvenue). No bearer token
+  // exists on them; billing-service authenticates each by the provider signature / hash.
+  BILLING_WEBHOOK_PREFIX,
 ];

@@ -59,6 +59,11 @@ export AWS_ENDPOINT_URL="${AWS_ENDPOINT_URL:-http://localhost:4566}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
 export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-test}"
+# court / meeting / visitor each fail closed at boot without their at-rest PII key
+# (same dev-only placeholder contract as ecosystem.config.js piiKey()).
+export COURT_PII_KEY="${COURT_PII_KEY:-civitasone-court-pii-dev-key-not-for-prod}"
+export MEETING_PII_KEY="${MEETING_PII_KEY:-civitasone-meeting-pii-dev-key-not-for-prod}"
+export VISITOR_PII_KEY="${VISITOR_PII_KEY:-civitasone-visitor-pii-dev-key-not-for-prod}"
 
 # ── Start helper ─────────────────────────────────────────────────────────────
 start_svc() {
@@ -225,6 +230,28 @@ start_svc recommendation-service "$ROOT/services/recommendation-service" 3040 di
 start_svc ai-agent-service "$ROOT/services/ai-agent-service"     3041 dist/index.js \
   DATABASE_URL="postgres://ai_agent_svc:ai_agent_dev_pw@localhost:5435/civitas_ai_agent"
 
+# The gateway registry routes /api/v1/{meeting,court,visitor,inspection} to
+# :3033/:3034/:3035/:3037. They were never started here, so every request to them
+# answered 502/503 and the L4 API-contract lane (quality-program SQLi / traversal
+# probes of these "new surfaces") could not run against a real handler.
+start_svc meeting-service  "$ROOT/services/meeting-service"      3033 dist/index.js \
+  DATABASE_URL="postgres://meeting_svc:meeting_dev_pw@localhost:5435/civitas_meeting"
+
+start_svc court-service    "$ROOT/services/court-service"        3034 dist/index.js \
+  DATABASE_URL="postgres://court_svc:court_dev_pw@localhost:5435/civitas_court"
+
+start_svc visitor-service  "$ROOT/services/visitor-service"      3035 dist/index.js \
+  DATABASE_URL="postgres://visitor_svc:visitor_dev_pw@localhost:5435/civitas_visitor"
+
+# inspection-service validates DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME and
+# HRMS_SERVICE_URL at boot (same values ecosystem.config.js supplies).
+start_svc inspection-service "$ROOT/services/inspection-service" 3037 dist/index.js \
+  DATABASE_URL="postgres://inspection_svc:inspection_dev_pw@localhost:5435/civitas_inspection" \
+  S3_BUCKET_NAME="${S3_BUCKET_NAME:-civitas-inspection}" \
+  S3_ENDPOINT="${S3_ENDPOINT:-http://localhost:4566}" \
+  S3_REGION="${S3_REGION:-ap-south-1}" \
+  HRMS_SERVICE_URL="http://127.0.0.1:3012"
+
 # ── Gateway (last) ────────────────────────────────────────────────────────────
 sleep 3
 # gateway-service builds its tenant DB client (createTenantDb) at module load,
@@ -313,6 +340,10 @@ check_svc analytics-service    3031
 check_svc location-service     4012
 check_svc recommendation-service 3040
 check_svc ai-agent-service       3041
+check_svc meeting-service        3033
+check_svc court-service          3034
+check_svc visitor-service        3035
+check_svc inspection-service     3037
 check_svc gateway-service      8080
 
 echo "──────────────────────────────────────────────────────────"

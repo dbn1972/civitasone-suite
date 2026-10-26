@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { Button, ConfirmDialog, Modal } from "@/app/_components/ds";
+import { dueDateError, todayIST } from "./dueDate";
 
 interface FormState {
   obsNo: string;
@@ -13,6 +14,7 @@ interface FormState {
   category: "performance" | "compliance" | "financial";
   riskLevel: "low" | "medium" | "high" | "critical";
   amountRupees: string;
+  dueDate: string;
 }
 
 const EMPTY: FormState = {
@@ -22,6 +24,7 @@ const EMPTY: FormState = {
   category: "compliance",
   riskLevel: "medium",
   amountRupees: "",
+  dueDate: "",
 };
 
 export function LogObservationButton() {
@@ -47,6 +50,11 @@ export function LogObservationButton() {
       setError("Money value must be a non-negative rupee amount with at most two decimal places.");
       return;
     }
+    const dueErr = dueDateError(form.dueDate);
+    if (dueErr) {
+      setError(dueErr);
+      return;
+    }
     setConfirmOpen(true);
   }, [form]);
 
@@ -66,6 +74,11 @@ export function LogObservationButton() {
     setError(null);
     if (!form.obsNo.trim() || !form.auditeeRef.trim() || !form.finding.trim()) {
       setError("Observation number, auditee and finding are required.");
+      return;
+    }
+    const dueErr = dueDateError(form.dueDate);
+    if (dueErr) {
+      setError(dueErr);
       return;
     }
     const rupees = form.amountRupees.trim();
@@ -92,6 +105,7 @@ export function LogObservationButton() {
           category: form.category,
           riskLevel: form.riskLevel,
           amountInvolvedMinor,
+          ...(form.dueDate.trim() ? { dueDate: form.dueDate.trim() } : {}),
           // GAP-AUDIT-OBSERVATIONS-05: optional reason captured at confirm time.
           ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
         }),
@@ -170,6 +184,12 @@ export function LogObservationButton() {
               <label className="lbl" htmlFor="obs-amount">Money value (₹, optional)</label>
               <input id="obs-amount" className="inp" inputMode="decimal" value={form.amountRupees} onChange={(e) => set("amountRupees", e.target.value)} placeholder="e.g. 250000" />
 
+              <label className="lbl" htmlFor="obs-due">Compliance due date (optional)</label>
+              <input id="obs-due" className="inp" type="date" min={todayIST()} value={form.dueDate} onChange={(e) => set("dueDate", e.target.value)} />
+              {formError.fieldError("dueDate") && (
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("dueDate")}</span>
+              )}
+
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
@@ -188,6 +208,7 @@ export function LogObservationButton() {
         description={
           `Risk: ${form.riskLevel.toUpperCase()} · Category: ${form.category}` +
           (form.amountRupees.trim() ? ` · Money value: ₹${form.amountRupees.trim()}` : "") +
+          (form.dueDate.trim() ? ` · Due: ${form.dueDate.trim()}` : "") +
           ". This will be recorded in the audit trail."
         }
         confirmLabel="Confirm & log"

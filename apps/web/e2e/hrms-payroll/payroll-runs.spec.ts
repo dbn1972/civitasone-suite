@@ -22,7 +22,7 @@ test.describe('Payroll Runs', () => {
   test.describe('Payroll Runs List', () => {
     test('page loads with heading and stat cards', async ({ page }) => {
       await page.goto('/hr/payroll');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows KPI stat cards (total runs, status tiles, employees paid, gross)', async ({ page }) => {
@@ -61,7 +61,7 @@ test.describe('Payroll Runs', () => {
     test('shows "create structure first" prompt when no structures', async ({ page }) => {
       // page.route() only intercepts browser-fetch, not SSR; just verify page loads
       await page.goto('/hr/payroll');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
   });
 
@@ -70,12 +70,12 @@ test.describe('Payroll Runs', () => {
   test.describe('Payroll Run Detail', () => {
     test('loads run detail with pay period heading', async ({ page }) => {
       await page.goto('/hr/payroll/run-001');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows run details card (period, date, count, status, amounts)', async ({ page }) => {
       await page.goto('/hr/payroll/run-001');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('displays salary slips table with employee breakdown', async ({ page }) => {
@@ -84,9 +84,9 @@ test.describe('Payroll Runs', () => {
       const runLink = page.locator('tbody tr').first().getByRole('link').first();
       if (await runLink.isVisible()) {
         await runLink.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       } else {
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
 
@@ -128,12 +128,12 @@ test.describe('Payroll Runs', () => {
   test.describe('Salary Slips', () => {
     test('salary slips list page loads', async ({ page }) => {
       await page.goto('/hr/payroll/salary-slips');
-      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('#page-heading:visible')).toBeVisible();
     });
 
     test('shows salary slip data', async ({ page }) => {
       await page.goto('/hr/payroll/salary-slips');
-      await expect(page.locator('#page-heading').or(page.locator('tbody tr').first()).first()).toBeVisible();
+      await expect(page.locator('#page-heading:visible').or(page.locator('tbody tr').first()).first()).toBeVisible();
     });
   });
 
@@ -148,7 +148,7 @@ test.describe('Payroll Runs', () => {
       );
       if (await runLink.isVisible()) {
         await runLink.click();
-        await expect(page.locator('#page-heading')).toBeVisible();
+        await expect(page.locator('#page-heading:visible')).toBeVisible();
       }
     });
   });

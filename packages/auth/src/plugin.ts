@@ -15,7 +15,7 @@
 
 import fp from "fastify-plugin";
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from "fastify";
-import { verifyJwt, verifyToken, toRequestContext } from "./index.js";
+import { verifyJwt, verifyToken, toRequestContext, isDevOrTestEnv } from "./index.js";
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthContextError } from "./context.js";
@@ -37,7 +37,7 @@ const PUBLIC_PATHS = new Set(["/health", "/ready", "/metrics"]);
  * is never logged. Outside production the check is skipped so local dev is unaffected.
  */
 export function assertInternalServiceSecret(): void {
-  if (process.env.NODE_ENV !== "production") return;
+  if (isDevOrTestEnv()) return;
   const secret = process.env.INTERNAL_SERVICE_SECRET;
   if (typeof secret !== "string" || secret.length === 0) {
     throw new Error(
@@ -160,7 +160,7 @@ const authPluginImpl: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       // In non-production, try HS256 dev token as fallback before rejecting.
       const hs256Secret = process.env.JWT_SECRET;
-      if (process.env.NODE_ENV !== "production" && hs256Secret) {
+      if (isDevOrTestEnv() && hs256Secret) {
         try {
           const devPayload = verifyToken(token, hs256Secret);
           req.ctx = toRequestContext(

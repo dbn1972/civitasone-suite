@@ -8,11 +8,12 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function fileRti(ctx: RequestContext, body: FileRtiBody & { citizenId: string }): Promise<Accepted> {
   const id = randomUUID();
-  const rtiNo = `RTI/${new Date().getFullYear()}/${Date.now()}`;
+  // rtiNo is allocated by the consumer from a Postgres sequence inside the insert transaction
+  // (shared/numbers.ts) -- never generated here, so a retry cannot replay a colliding value.
   await queue.publish(COMMANDS.rtiFile, {
     messageId: id, type: COMMANDS.rtiFile,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, rtiNo, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -1,5 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
+
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const AUTH = {
+  authorization: `Bearer ${signToken({ sub: "ops-user", tid: "aaaaaaaa-0000-4000-8000-0000000000b2", roles: ["super_admin"], sid: "s-status" }, SECRET, 3600)}`,
+};
 import type { FastifyInstance } from "fastify";
 
 describe("queue-service status", () => {
@@ -19,11 +25,11 @@ describe("queue-service status", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("allows internal status probe", async () => {
+  it("allows an authenticated status probe", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/queue/status",
-      headers: { "x-internal": "1" },
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
@@ -40,7 +46,7 @@ describe("queue-service status", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/queue/drivers",
-      headers: { "x-internal": "1" },
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.supported).toEqual(expect.arrayContaining(["memory", "sqs", "rabbitmq"]));
@@ -50,7 +56,7 @@ describe("queue-service status", () => {
     const res = await app.inject({
       method: "GET",
       url: "/v1/queue/ops",
-      headers: { "x-internal": "1" },
+      headers: AUTH,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.role).toBe("platform_message_bus");

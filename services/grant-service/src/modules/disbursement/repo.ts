@@ -102,6 +102,35 @@ export async function updateDisbursement(tx: Writer, id: string, patch: Partial<
   await tx.update(grantDisbursements).set({ ...patch, updatedAt: new Date() }).where(eq(grantDisbursements.id, id));
 }
 
+/**
+ * V4-D-03: the live (not failed / not cancelled) disbursement for an installment, if any. An installment may be
+ * paid at most once, so a second initiate while one of these exists is a duplicate -- even when the first is still
+ * `pending_approval` and the installment itself has not been flipped to `disbursed` yet.
+ */
+export async function findActiveDisbursementForInstallmentTx(tx: Writer, installmentId: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(
+      eq(grantDisbursements.installmentId, installmentId),
+      eq(grantDisbursements.tenantId, tenantId),
+      inArray(grantDisbursements.status, ["pending_approval", "initiated", "completed"]),
+    ))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * V4-D-04: move an in-flight (`initiated`) disbursement to `failed` with a guarded UPDATE. Returns true only for the
+ * caller that actually performed the transition, so the compensation (budget release, installment revert) runs exactly
+ * once even when the failure event is delivered again.
+ */
+export async function failInitiatedDisbursementTx(tx: Writer, id: string, tenantId: string, patch: { failureReason: string; updatedBy: string }): Promise<boolean> {
+  const rows = await (tx as typeof db).update(grantDisbursements)
+    .set({ status: "failed", disbursedAt: null, failureReason: patch.failureReason, updatedBy: patch.updatedBy, updatedAt: new Date() })
+    .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId), eq(grantDisbursements.status, "initiated")))
+    .returning({ id: grantDisbursements.id });
+  return rows.length > 0;
+}
+
 export async function findDisbursementByPfmsTxnId(pfmsTxnId: string, tenantId: string): Promise<DisbursementRow | null> {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const rows = await tx.select().from(grantDisbursements)
@@ -131,6 +160,19 @@ export async function findDisbursementByPfmsTxnIdTx(tx: Writer, pfmsTxnId: strin
 export async function findDisbursementByIdTx(tx: Writer, id: string, tenantId: string): Promise<DisbursementRow | null> {
   const rows = await (tx as typeof db).select().from(grantDisbursements)
     .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
+/**
+ * V4-D-05: re-read a disbursement row `FOR UPDATE` inside the caller's transaction. Inbound payment-result events
+ * (finance.payment.made, PFMS reconcile) take this lock before validating the state transition, so two concurrent or
+ * re-delivered results for the same disbursement serialise and the second sees the first one's committed status.
+ */
+export async function lockDisbursementByIdTx(tx: Writer, id: string, tenantId: string): Promise<DisbursementRow | null> {
+  const rows = await (tx as typeof db).select().from(grantDisbursements)
+    .where(and(eq(grantDisbursements.id, id), eq(grantDisbursements.tenantId, tenantId)))
+    .limit(1)
+    .for("update");
   return rows[0] ?? null;
 }
 

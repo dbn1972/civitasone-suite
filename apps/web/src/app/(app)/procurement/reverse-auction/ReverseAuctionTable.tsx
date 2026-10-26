@@ -68,23 +68,30 @@ export function ReverseAuctionTable({ auctions, source = "api" }: { auctions: Re
   useEffect(() => {
     if (!hasLive) return;
     let cancelled = false;
+    // Latest-wins (CLOS3-S3-12): each tick aborts the previous request, so a slow or reordered
+    // response can never overwrite newer data and requests cannot pile up.
+    let ctrl: AbortController | null = null;
     const t = setInterval(() => {
+      ctrl?.abort();
+      const mine = new AbortController();
+      ctrl = mine;
       void (async () => {
         try {
-          const res = await fetch("/api/proxy/v1/procurement/reverse-auctions", { cache: "no-store" });
-          if (!res.ok || cancelled) return;
+          const res = await fetch("/api/proxy/v1/procurement/reverse-auctions", { cache: "no-store", signal: mine.signal });
+          if (!res.ok || cancelled || mine.signal.aborted) return;
           const body = (await res.json()) as { data?: ReverseAuction[] };
-          if (!cancelled && Array.isArray(body?.data)) {
+          if (!cancelled && !mine.signal.aborted && Array.isArray(body?.data)) {
             setLiveData(body.data);
             setUpdatedAt(Date.now());
           }
         } catch {
-          /* transient refresh failure: keep showing the last good data */
+          /* transient refresh failure (or AbortError from a superseding tick): keep showing the last good data */
         }
       })();
     }, REFRESH_MS);
     return () => {
       cancelled = true;
+      ctrl?.abort();
       clearInterval(t);
     };
   }, [hasLive]);

@@ -14,6 +14,7 @@
  * are rejected before ever reaching the queue.
  */
 import { z } from "zod";
+import { pageQueryShape } from "../../shared/pagination.js";
 
 export const idParam = z.object({ id: z.string().uuid("invalid id") });
 
@@ -48,5 +49,6 @@ export const listVisitRequestsQuery = z.object({
     .optional(),
   locationId: z.string().uuid("invalid locationId").optional(),
   hostEmployeeId: z.string().uuid("invalid hostEmployeeId").optional(),
+  ...pageQueryShape,
 });
 export type ListVisitRequestsQuery = z.infer<typeof listVisitRequestsQuery>;

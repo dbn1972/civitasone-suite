@@ -335,6 +335,9 @@ export const CONSUMED_EVENTS = {
   citizenRequestCreated:    "citizen.request.created",
   auditParaIssued:          "audit.para.issued",
   contractExpiryAlert:      "contract.expiry.alert",
+  /** workflow-service: a delegation was created / revoked — notify the delegator and their manager. */
+  workflowDelegationCreated: "workflow.delegation.created",
+  workflowDelegationRevoked: "workflow.delegation.revoked",
   /** Admin change/release management publishes release-notes broadcasts (LOOP 2). */
   notificationBroadcastSend: "notification.broadcast.send",
   /** ML prediction events — high-risk notifications */

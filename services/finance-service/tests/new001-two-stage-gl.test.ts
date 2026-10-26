@@ -151,7 +151,12 @@ describe("NEW-001 XS-1 — two-stage approval posts exactly one GL journal (both
     expect(debit!.accountCode).toBe(HEAD);
     expect(credit!.creditMinor).toBe(NET.toString());  // Cr AP control
     expect(credit!.accountCode).toBe(AP_HEAD);
-    expect(q.dlq).toHaveLength(0);
+    // relayOnce() drains EVERY pending row in the shared outbox, so rows left behind by
+    // earlier test files (e.g. comp-007's finance.gl.post rows for its own tenant, whose
+    // head code 1100 is not seeded here) are also delivered to this queue and may
+    // dead-letter depending on file order. Those are not this scenario's messages: stay
+    // strict about everything published for TENANT, and ignore foreign tenants' rows.
+    expect(q.dlq.filter((d) => d.msg.tenantId === TENANT)).toHaveLength(0);
 
     // ── Replay of the stage-2 approval: deterministic journal id -> no second journal ──
     // Remove the inbox marker to simulate a redelivery after an inbox purge

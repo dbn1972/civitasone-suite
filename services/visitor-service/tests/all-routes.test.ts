@@ -48,9 +48,9 @@ vi.mock("../src/modules/location/commands.js", () => ({
 
 /* ─── Mock blacklist repo & commands ─── */
 vi.mock("../src/modules/blacklist/repo.js", () => ({
-  listBlacklistEntries: vi.fn(async () => [fakeBlacklist]),
+  listBlacklistEntries: vi.fn(async () => ({ rows: [fakeBlacklist], hasMore: false })),
   getBlacklistEntryById: vi.fn(async (_tid: string, id: string) => (id === FAKE_ID ? fakeBlacklist : null)),
-  listWatchlistEntries: vi.fn(async () => []),
+  listWatchlistEntries: vi.fn(async () => ({ rows: [], hasMore: false })),
   fuzzyScreenName: vi.fn(async () => []),
 }));
 vi.mock("../src/modules/blacklist/commands.js", () => ({
@@ -67,7 +67,7 @@ vi.mock("../src/modules/blacklist/blind-index.js", () => ({
 
 /* ─── Mock visit-request repo & commands ─── */
 vi.mock("../src/modules/visit-request/repo.js", () => ({
-  listVisitRequests: vi.fn(async () => [fakeVisitRequest]),
+  listVisitRequests: vi.fn(async () => ({ rows: [fakeVisitRequest], hasMore: false })),
   getVisitRequestById: vi.fn(async (_tid: string, id: string) => (id === FAKE_ID ? fakeVisitRequest : null)),
 }));
 vi.mock("../src/modules/visit-request/commands.js", () => ({
@@ -174,7 +174,7 @@ vi.mock("../src/modules/analytics/domain.js", () => ({
 /* ─── Mock config-registry repo, commands, presets, domain ─── */
 vi.mock("../src/modules/config-registry/repo.js", () => ({
   listByNamespace: vi.fn(async () => [fakeConfig]),
-  getConfig: vi.fn(async (_tid: string, ns: string, key: string) => (key === "max_lead_days" ? fakeConfig : null)),
+  getConfig: vi.fn(async (_tid: string, ns: string, key: string) => (["max_lead_days", "visit_request.max_lead_days"].includes(key) ? fakeConfig : null)),
 }));
 vi.mock("../src/modules/config-registry/commands.js", () => ({
   setConfig: vi.fn(async () => fakeAccepted),
@@ -407,6 +407,17 @@ describe("Blacklist routes — auth", () => {
     const res = await app.inject({ method: "GET", url: "/v1/visitor/blacklist", headers: headers(["employee"]) });
     expect(res.statusCode).toBe(403);
   });
+  it("GET blacklist/watchlist → paged envelope + limit validation (CLOS3-S6-16)", async () => {
+    for (const u of ["blacklist", "watchlist"]) {
+      const ok = await app.inject({ method: "GET", url: `/v1/visitor/${u}?limit=10&offset=20`, headers: headers(["security_admin"]) });
+      expect(ok.statusCode).toBe(200);
+      expect(ok.json().meta).toEqual({ limit: 10, offset: 20, hasMore: false });
+      const dflt = await app.inject({ method: "GET", url: `/v1/visitor/${u}`, headers: headers(["security_admin"]) });
+      expect(dflt.json().meta).toEqual({ limit: 500, offset: 0, hasMore: false });
+      const bad = await app.inject({ method: "GET", url: `/v1/visitor/${u}?limit=100000`, headers: headers(["security_admin"]) });
+      expect(bad.statusCode).toBe(400);
+    }
+  });
   it("POST /v1/visitor/blacklist → 401 without token", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/visitor/blacklist", payload: { personName: "X", reason: "theft" } });
     expect(res.statusCode).toBe(401);
@@ -508,6 +519,19 @@ describe("Visit-request routes — happy paths", () => {
     const res = await app.inject({ method: "GET", url: "/v1/visitor/visit-requests", headers: headers(["employee"]) });
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toBeDefined();
+  });
+  it("GET /v1/visitor/visit-requests → paged envelope with meta (CLOS3-S6-15)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/visitor/visit-requests?limit=25&offset=50", headers: headers(["employee"]) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().meta).toEqual({ limit: 25, offset: 50, hasMore: false });
+    const dflt = await app.inject({ method: "GET", url: "/v1/visitor/visit-requests", headers: headers(["employee"]) });
+    expect(dflt.json().meta).toEqual({ limit: 500, offset: 0, hasMore: false });
+  });
+  it("GET /v1/visitor/visit-requests rejects an out-of-range limit/offset → 400 (CLOS3-S6-15)", async () => {
+    for (const qs of ["limit=5000", "limit=0", "offset=-1", "limit=abc"]) {
+      const res = await app.inject({ method: "GET", url: `/v1/visitor/visit-requests?${qs}`, headers: headers(["employee"]) });
+      expect(res.statusCode, qs).toBe(400);
+    }
   });
   it("GET /v1/visitor/visit-requests/:id → 200", async () => {
     const res = await app.inject({ method: "GET", url: `/v1/visitor/visit-requests/${FAKE_ID}`, headers: headers() });
@@ -987,7 +1011,7 @@ describe("Config-registry routes — 404", () => {
 
 describe("Config-registry routes — happy paths", () => {
   it("POST /v1/visitor/config → 202", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "30" } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "30" } });
     expect(res.statusCode).toBe(202);
   });
   it("GET /v1/visitor/config/:namespace → 200", async () => {
@@ -1005,12 +1029,12 @@ describe("Config-registry routes — happy paths", () => {
     expect(res.statusCode).toBe(202);
   });
   it("POST /v1/visitor/config with stale expectedVersion → 409 VERSION_CONFLICT (ADMIN-02)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 7 } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "31", expectedVersion: 7 } });
     expect(res.statusCode).toBe(409);
     expect(JSON.stringify(res.json())).toContain("VERSION_CONFLICT");
   });
   it("POST /v1/visitor/config with matching expectedVersion → 202 (ADMIN-02)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 1 } });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "visit_request.max_lead_days", value: "31", expectedVersion: 1 } });
     expect(res.statusCode).toBe(202);
   });
   it("PATCH /v1/visitor/config/:id/deactivate → 202", async () => {

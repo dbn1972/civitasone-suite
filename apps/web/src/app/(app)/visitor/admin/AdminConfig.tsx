@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Card, ConfirmDialog, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
 import type { ConfigEntry, PresetName } from "../_data/types";
 import { PRESET_NAMES } from "../_data/types";
@@ -60,6 +60,8 @@ export function AdminConfig({
   // GAP-VISITOR-ADMIN-01: the from -> to diff for the preset being confirmed.
   const [presetDiff, setPresetDiff] = useState<PresetDiffRow[] | null>(null);
   const [presetDiffFailed, setPresetDiffFailed] = useState(false);
+  // CLOS3-S3-20: only the latest openPreset (and none after a cancel) may set the diff.
+  const presetReq = useRef(0);
 
   const byKey = useMemo(() => {
     const m = new Map<string, ConfigEntry>();
@@ -133,9 +135,10 @@ export function AdminConfig({
     setPresetDiff(null);
     setPresetDiffFailed(false);
     setConfirmPreset(p);
+    const id = ++presetReq.current;
     void fetchPreset(p)
-      .then((values) => setPresetDiff(diffPreset(entries, values)))
-      .catch(() => setPresetDiffFailed(true));
+      .then((values) => { if (id === presetReq.current) setPresetDiff(diffPreset(entries, values)); })
+      .catch(() => { if (id === presetReq.current) setPresetDiffFailed(true); });
   }
 
   async function onApplyPreset(preset: PresetName, reason: string, diff: PresetDiffRow[] | null) {
@@ -399,7 +402,7 @@ export function AdminConfig({
             .then(() => setConfirmPreset(null))
             .catch((e) => setDialogErr(e instanceof Error ? e.message : "Could not apply the preset."));
         }}
-        onCancel={() => { if (presetBusy === null) setConfirmPreset(null); }}
+        onCancel={() => { if (presetBusy === null) { presetReq.current += 1; setConfirmPreset(null); } }}
       />
     </>
   );
