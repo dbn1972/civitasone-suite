@@ -16,6 +16,7 @@ import { queue, cache } from "../src/shared/infra.js";
 import { legalCases, legalParties } from "../src/modules/cases/schema.js";
 import { legalHearings, legalOrders } from "../src/modules/hearings/schema.js";
 import { legalReminders } from "../src/modules/reminders/schema.js";
+import { legalOpinions } from "../src/modules/opinions/schema.js";
 import { registerCaseConsumers } from "../src/modules/cases/consumer.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { setDocumentClient, type DocumentServiceClient } from "../src/shared/document-client.js";
@@ -49,12 +50,13 @@ async function wipe(): Promise<void> {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
     await tx.delete(legalReminders).where(eq(legalReminders.tenantId, TENANT));
+    await tx.delete(legalOpinions).where(eq(legalOpinions.tenantId, TENANT));
     await tx.delete(legalOrders).where(eq(legalOrders.tenantId, TENANT));
     await tx.delete(legalHearings).where(eq(legalHearings.tenantId, TENANT));
     await tx.delete(legalParties).where(eq(legalParties.tenantId, TENANT));
     await tx.delete(legalCases).where(eq(legalCases.tenantId, TENANT));
   }));
-  for (const r of ["case", "cases", "hearings", "court_orders"]) await cache.invalidateResource(TENANT, r);
+  for (const r of ["case", "cases", "hearings", "court_orders", "opinion", "opinions"]) await cache.invalidateResource(TENANT, r);
 }
 
 let app: FastifyInstance;
@@ -181,5 +183,62 @@ describe("creating a privileged case (decision #12)", () => {
     const row = (await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(legalCases).where(eq(legalCases.caseNo, "WP/PRIVNEW/2026")))))[0]!;
     expect(row.privileged).toBe(true);
     expect(row.assignedOfficerIds).toEqual([OFFICER_A]);
+  });
+});
+
+describe("dashboard aggregates and opinions honour the privileged flag (decision #12)", () => {
+  const OP_PRIV = "33333333-cccc-4000-8000-0000000d1401";
+  const OP_OPEN = "33333333-cccc-4000-8000-0000000d1402";
+  const OP_FREE = "33333333-cccc-4000-8000-0000000d1403";
+  const dash = async (h: Record<string, string>) => (await get("/v1/legal/dashboard", h)).json() as { activeCases: number; totalCases: number; hearingsThisWeek: number; ordersPending: number; disposedCases: number };
+  const seedOpinions = () => runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    const base = { tenantId: TENANT, question: "q", createdBy: OFFICER_A, updatedBy: OFFICER_A };
+    await tx.insert(legalOpinions).values([
+      { ...base, id: OP_PRIV, caseId: PRIV, opinionNo: "OP/SECRET/1", subject: "Secret subject" },
+      { ...base, id: OP_OPEN, caseId: OPEN, opinionNo: "OP/OPEN/1", subject: "Open subject" },
+      { ...base, id: OP_FREE, caseId: null, opinionNo: "OP/FREE/1", subject: "Standalone subject" },
+    ]);
+  }));
+
+  it("dashboard counters for a non-assigned officer exclude the privileged case; assigned officer and head see it", async () => {
+    const b = await dash(asB());
+    expect(b.totalCases).toBe(1);
+    expect(b.activeCases).toBe(1);
+    expect(b.ordersPending).toBe(1);
+    const listB = ((await get("/v1/legal/cases", asB())).json() as { items: unknown[] }).items.length;
+    expect(b.totalCases).toBe(listB);
+    for (const h of [asA(), asHead()]) {
+      const d = await dash(h);
+      expect(d.totalCases).toBe(2);
+      expect(d.activeCases).toBe(2);
+      expect(d.ordersPending).toBe(2);
+    }
+  });
+
+  it("a privileged hearing this week is not counted for a non-assigned officer", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(legalHearings).set({ hearingDate: today }).where(eq(legalHearings.tenantId, TENANT))));
+    expect((await dash(asB())).hearingsThisWeek).toBe(1);
+    expect((await dash(asA())).hearingsThisWeek).toBe(2);
+  });
+
+  it("opinion detail on a privileged case is 404 for a non-assigned officer and the audit reader, 200 for assigned/head", async () => {
+    await seedOpinions();
+    expect((await get(`/v1/legal/opinions/${OP_PRIV}`, asB())).statusCode).toBe(404);
+    expect((await get(`/v1/legal/opinions/${OP_PRIV}`, asAuditor())).statusCode).toBe(404);
+    expect((await get(`/v1/legal/opinions/${OP_PRIV}`, asA())).statusCode).toBe(200);
+    expect((await get(`/v1/legal/opinions/${OP_PRIV}`, asHead())).statusCode).toBe(200);
+    expect((await get(`/v1/legal/opinions/${OP_OPEN}`, asB())).statusCode).toBe(200);
+    expect((await get(`/v1/legal/opinions/${OP_FREE}`, asB())).statusCode).toBe(200);
+  });
+
+  it("opinion list hides privileged-case opinions (and caseId filter is 404) for a non-assigned officer", async () => {
+    await seedOpinions();
+    const ids = async (h: Record<string, string>) => ((await get("/v1/legal/opinions", h)).json() as { items: Array<{ id: string }> }).items.map((i) => i.id).sort();
+    expect(await ids(asB())).toEqual([OP_OPEN, OP_FREE].sort());
+    expect(await ids(asA())).toEqual([OP_PRIV, OP_OPEN, OP_FREE].sort());
+    expect(await ids(asHead())).toEqual([OP_PRIV, OP_OPEN, OP_FREE].sort());
+    expect((await get(`/v1/legal/opinions?caseId=${PRIV}`, asB())).statusCode).toBe(404);
+    expect((await get(`/v1/legal/opinions?caseId=${PRIV}`, asA())).statusCode).toBe(200);
   });
 });

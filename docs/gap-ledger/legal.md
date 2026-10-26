@@ -768,7 +768,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  Closed by 4fca2b58a (owner decision #12, 2026-10-26): no party-name masking for legal roles; privileged/confidential flag restricts a case, its sub-resources and the lists/aggregates to assigned officers + legal_admin, everyone else gets 404 (tests/gap-legal-privileged-case.test.ts); counsel-brief POST audit + integer-minor fee already present
+  Closed by 4fca2b58a (owner decision #12, 2026-10-26): no party-name masking for legal roles; privileged/confidential flag restricts a case, its sub-resources and the lists/aggregates to assigned officers + legal_admin, everyone else gets 404 (tests/gap-legal-privileged-case.test.ts); review round 1: dashboard counters (cases/hearings/orders) and opinions (detail, list, caseId filter) now honour the flag too; counsel-brief POST audit + integer-minor fee already present
 - **First-pass claim:** Petitioner/respondent names (party PII) print unmasked and there is no privilege marker; counsel-briefs endpoint, audit on POSTs and fee handling are undeterminable (legal-service absent from snapshot, referenced only in CaseActions.tsx comments).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/cases/:id', 'POST /api/v1/legal/counsel-briefs', 'POST /api/v1/legal/cases/:id/orders']`
 - **Question:** Does GET cases/:id return party names only to roles allowed to see them, do the POSTs write an audit row (actor, case id, action), and is fee handling validated server-side?
