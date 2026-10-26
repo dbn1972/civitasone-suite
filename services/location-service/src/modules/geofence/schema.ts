@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, timestamp, boolean, doublePrecision, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, timestamp, boolean, doublePrecision, jsonb } from "drizzle-orm/pg-core";
 
 export const geofenceSchema = pgSchema("geofence");
 
