@@ -193,7 +193,19 @@ self.addEventListener("sync", (event) => {
   );
 });
 
+// Only same-origin clients may command the worker (CodeQL js/missing-origin-check).
+function isSameOriginSource(event) {
+  const url = event.source && event.source.url;
+  if (typeof url !== "string") return false;
+  try {
+    return new URL(url).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 self.addEventListener("message", (event) => {
+  if (!isSameOriginSource(event)) return;
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
   if (event.data?.type === "CIVITASONE_PURGE") event.waitUntil(purgeCaches());
 });
