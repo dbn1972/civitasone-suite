@@ -19,7 +19,7 @@ function keyFor(tenantId: string, id: string) {
 export function registerJobConsumers(queue: Queue): void {
   // RLS (#146): every handler must run inside the message's tenant context.
   queue = tenantScoped(queue);
-  queue.subscribe<JobView>(COMMANDS.createJob, async (msg) => {
+  queue.subscribe<JobView & { piiUnmask?: { reason: string } }>(COMMANDS.createJob, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -39,6 +39,18 @@ export function registerJobConsumers(queue: Queue): void {
         version: 1,
       });
       await emit(tx, msg, EVENTS.jobCreated, { jobId: p.id, name: p.name }, "create", p.id);
+      // Owner decision #17: an unmasked-PII request is always audited, with its reason.
+      const unmaskReason = p.piiUnmask?.reason?.trim();
+      if (unmaskReason) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC,
+          eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: { service: "reports", action: "pii_unmask_requested", resourceType: "job", resourceId: p.id, outcome: "success", unmaskReason },
+        });
+      }
 
       // TX-009: trigger the render pipeline through the transactional outbox
       // instead of a direct post-commit queue.publish. The old code called
@@ -67,6 +79,8 @@ export function registerJobConsumers(queue: Queue): void {
           tenantId: msg.tenantId,
           templateHtml: `<html><body><h1>${p.name}</h1><p>Report type: ${p.reportType ?? "general"}</p><p>Generated at: ${new Date().toISOString()}</p></body></html>`,
           format: (p.format ?? "pdf") as "pdf" | "xlsx" | "csv" | "html",
+          // grantedBy is the AUTHENTICATED actor of this command, never a client-supplied id.
+          ...(unmaskReason ? { piiUnmask: { reason: unmaskReason, grantedBy: msg.actorId } } : {}),
         },
       });
     });

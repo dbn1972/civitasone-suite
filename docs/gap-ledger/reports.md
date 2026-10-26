@@ -558,7 +558,7 @@ Counts: ACTION 33, BACKEND-VERIFY 5
 
 ### GAP-REPORTS-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** Closed by fbdda49e1 (owner decision #17, 2026-10-26)
 - **First-pass claim:** downloadUrl is opened straight from the API payload (ReportJobsTable.tsx:124) — expiry, authorisation and DPDP handling of exported files are undeterminable without the report service.
 - **Service:** `report-service`  ·  **Endpoint(s):** `['GET /api/v1/reports/report-jobs']`
 - **Question:** Is downloadUrl a short-lived signed URL issued only to the job owner/authorised role, with download audited and PII exports DPDP-controlled?
