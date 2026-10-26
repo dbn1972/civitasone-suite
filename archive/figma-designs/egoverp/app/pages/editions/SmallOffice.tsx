@@ -1,4 +1,4 @@
-import { Card, Button, Badge } from '../../components/ui';
+import { Card, Button } from '../../components/ui';
 import {
   Building2,
   CheckCircle,
@@ -8,10 +8,6 @@ import {
   Shield,
   Cloud,
   Smartphone,
-  BarChart3,
-  FileText,
-  Package,
-  Calendar,
   TrendingUp,
   Clock,
 } from 'lucide-react';

@@ -12,7 +12,6 @@ import {
   MapPin,
   Building2,
   Star,
-  Calendar,
   DollarSign,
   Eye,
   Edit,
@@ -127,7 +126,7 @@ const SAMPLE_CONTACTS: Contact[] = [
 ];
 
 export function CRMContacts() {
-  const [contacts, setContacts] = useState<Contact[]>(SAMPLE_CONTACTS);
+  const [contacts] = useState<Contact[]>(SAMPLE_CONTACTS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');

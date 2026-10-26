@@ -3,17 +3,15 @@ import { Card, Button, Badge, Select, SelectContent, SelectItem, SelectTrigger, 
 import {
   BarChart3,
   Download,
-  Calendar,
   Clock,
   TrendingUp,
   TrendingDown,
   CheckCircle,
-  AlertTriangle,
   Users,
   FileText,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const TICKET_TREND_DATA = [
   { month: 'Jan', created: 145, resolved: 138, breached: 7 },

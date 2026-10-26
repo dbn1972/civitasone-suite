@@ -10,7 +10,6 @@ import {
   CheckCircle,
   XCircle,
   User,
-  Calendar,
   MoreVertical,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -106,7 +105,7 @@ const SAMPLE_TICKETS: HelpdeskTicket[] = [
 
 export function HelpdeskTickets() {
   const navigate = useNavigate();
-  const [tickets, setTickets] = useState<HelpdeskTicket[]>(SAMPLE_TICKETS);
+  const [tickets] = useState<HelpdeskTicket[]>(SAMPLE_TICKETS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');

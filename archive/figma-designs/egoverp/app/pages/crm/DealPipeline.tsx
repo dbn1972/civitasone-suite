@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Card, Button, Badge, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui';
-import { Plus, Search, Filter, List, LayoutGrid, User, Calendar, TrendingUp, Tag, MessageSquare, ChevronRight, X } from 'lucide-react';
+import { Plus, Search, Filter, List, LayoutGrid, Calendar, TrendingUp, MessageSquare, X } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { motion, AnimatePresence } from 'motion/react';

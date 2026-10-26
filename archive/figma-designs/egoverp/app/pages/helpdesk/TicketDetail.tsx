@@ -6,14 +6,10 @@ import {
   Send,
   Paperclip,
   Lock,
-  User,
   Mail,
   Phone,
   MessageSquare,
   Star,
-  Clock,
-  AlertCircle,
-  CheckCircle,
   Printer,
   MoreVertical,
   ChevronDown,
@@ -173,7 +169,7 @@ const CANNED_RESPONSES = [
 ];
 
 export function TicketDetail() {
-  const { id } = useParams();
+  useParams();
   const navigate = useNavigate();
   const [ticket] = useState<Ticket>(SAMPLE_TICKET);
   const [messages] = useState<Message[]>(SAMPLE_MESSAGES);

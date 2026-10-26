@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Input, FormField, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea, Label } from '../../components/ui';
+import { Card, Button, Input, FormField, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Textarea } from '../../components/ui';
 import { ChevronRight, Plus, Trash2, GripVertical, Save, Send } from 'lucide-react';
 import { motion } from 'motion/react';
 

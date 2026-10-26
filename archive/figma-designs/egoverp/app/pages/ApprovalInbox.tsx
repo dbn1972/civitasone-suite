@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, Button, Badge, Input, Textarea } from '../components/ui';
+import { Card, Button, Badge, Textarea } from '../components/ui';
 import {
   Filter,
   CheckCircle,
@@ -10,9 +10,7 @@ import {
   Package,
   UserPlus,
   Clock,
-  MoreVertical,
   RefreshCw,
-  AlertCircle,
 } from 'lucide-react';
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'motion/react';
 

@@ -1,5 +1,5 @@
 import { Card, Table, Badge, Button, Input } from '../../components/ui';
-import { Plus, Download, Search, Eye, Edit, UserPlus } from 'lucide-react';
+import { Download, Search, Eye, Edit, UserPlus } from 'lucide-react';
 
 export function HRMSEmployees() {
   const employees = [

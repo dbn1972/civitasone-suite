@@ -117,7 +117,7 @@ const SAMPLE_ASSETS: Asset[] = [
 ];
 
 export function AssetManagement() {
-  const [assets, setAssets] = useState<Asset[]>(SAMPLE_ASSETS);
+  const [assets] = useState<Asset[]>(SAMPLE_ASSETS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');

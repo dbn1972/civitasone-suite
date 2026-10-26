@@ -3,7 +3,6 @@ import { Card, Button, Badge } from '../../components/ui';
 import {
   Shield,
   Cloud,
-  Users,
   BarChart3,
   Lock,
   Zap,
@@ -13,7 +12,6 @@ import {
   RefreshCw,
   FileText,
   Smartphone,
-  ArrowRight,
   Play,
   Award,
   TrendingUp,
@@ -22,7 +20,6 @@ import {
   Bell,
   Key,
   MessageSquare,
-  Calendar,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router';
@@ -213,7 +210,7 @@ const CERTIFICATIONS = [
 export function Features() {
   const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState('security');
-  const [selectedFeature, setSelectedFeature] = useState(0);
+  useState(0);
 
   const currentCategory = FEATURE_CATEGORIES.find((cat) => cat.id === activeCategory) || FEATURE_CATEGORIES[0];
 
