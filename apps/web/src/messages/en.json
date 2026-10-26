@@ -16685,6 +16685,17 @@
       "approved": "Decision recorded: approved.",
       "rejected": "Decision recorded: rejected.",
       "actionsFor": "Decide on {label}"
+    },
+    "audit": {
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "revealFor": "Reveal actor and IP for {action}",
+      "hideFor": "Hide actor and IP for {action}",
+      "revealedActor": "actor (revealed)",
+      "revealedIp": "source IP (revealed)",
+      "dialogTitle": "Reveal this actor and IP address?",
+      "dialogBody": "The clear email and source IP are personal data. Revealing them is recorded in the audit log against your name, with the reason below.",
+      "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
     }
   },
   "tenantAdminW2": {
