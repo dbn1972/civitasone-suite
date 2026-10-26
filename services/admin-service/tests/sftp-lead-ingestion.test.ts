@@ -8,7 +8,7 @@
  * ledger and dead-letter routing.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 // Encryption key must be set BEFORE importing app/db so configKey() sees it.
 process.env.CONFIG_ENC_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

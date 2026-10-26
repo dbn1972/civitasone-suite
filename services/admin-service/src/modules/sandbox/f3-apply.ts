@@ -18,11 +18,11 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
+import { HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { auditEvent, domainEvent, type OutboxCtx } from "../../shared/audit.js";
 import { enqueue } from "../../shared/outbox.js";
-import { listEnvelope, singleEnvelope, parseOrThrow, registerEnvelopeErrorHandler } from "../../shared/envelope.js";
+import { parseOrThrow } from "../../shared/envelope.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import {
@@ -38,7 +38,6 @@ import {
 } from "./domain.js";
 import type { SandboxEnvironmentRow, MaskingRuleRow, RefreshJobRow, RefreshMaskedFieldRow } from "./schema.js";
 
-const SANDBOX_ROLES = [...TENANT_ADMIN_ROLES];
 const RESOURCE_SANDBOX = "sandbox_environment";
 const RESOURCE_JOB = "sandbox_refresh";
 
@@ -71,75 +70,11 @@ const rejectBody = z.object({
   reason: z.string().min(3).max(1000),
 });
 
-const listQuery = z.object({ limit: limitSchema, page: pageSchema });
-const jobListQuery = z.object({
-  limit: limitSchema,
-  page: pageSchema,
-  status: z.enum(["pending_approval", "rejected", "queued", "running", "completed", "failed"]).optional(),
-  sandboxId: z.string().uuid().optional(),
-});
 const idParam = z.object({ id: z.string().uuid() });
 
 function iso(value: Date | string | null | undefined): string | null {
   if (value === null || value === undefined) return null;
   return value instanceof Date ? value.toISOString() : String(value);
-}
-
-function serializeSandbox(row: SandboxEnvironmentRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    code: row.code,
-    name: row.name,
-    sourceEnvironment: row.sourceEnvironment,
-    status: row.status,
-    lastRefreshAt: iso(row.lastRefreshAt),
-    notes: row.notes,
-    createdAt: iso(row.createdAt),
-    version: row.version,
-  };
-}
-
-function serializeRule(row: MaskingRuleRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    sandboxId: row.sandboxId,
-    tableName: row.tableName,
-    fieldName: row.fieldName,
-    strategy: row.strategy,
-    justification: row.justification,
-    version: row.version,
-  };
-}
-
-function serializeJob(row: RefreshJobRow): Record<string, unknown> {
-  return {
-    id: row.id,
-    sandboxId: row.sandboxId,
-    sourceEnvironment: row.sourceEnvironment,
-    requestedFields: row.requestedFields,
-    status: row.status,
-    requestedBy: row.requestedBy,
-    approvedBy: row.approvedBy,
-    approvedAt: iso(row.approvedAt),
-    rejectedReason: row.rejectedReason,
-    startedAt: iso(row.startedAt),
-    completedAt: iso(row.completedAt),
-    dataMovement: row.dataMovement,
-    maskedFieldCount: row.maskedFieldCount,
-    preservedFieldCount: row.preservedFieldCount,
-    failureReason: row.failureReason,
-    createdAt: iso(row.createdAt),
-    version: row.version,
-  };
-}
-
-function serializeMaskedField(row: RefreshMaskedFieldRow): Record<string, unknown> {
-  return {
-    tableName: row.tableName,
-    fieldName: row.fieldName,
-    strategy: row.strategy,
-    ruleSource: row.ruleSource,
-  };
 }
 
 function toDomainRules(rows: readonly MaskingRuleRow[]): MaskingRule[] {
@@ -161,7 +96,7 @@ export async function apply_sandbox_0(ctx: any, req: { body: unknown; params: un
   // post:"/v1/admin/sandboxes"
     const body = parseOrThrow(registerBody, req.body);
 
-    const created = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       // `uq_sandbox_env_code` would otherwise raise a driver-level unique
       // violation, which the error handler can only report as 500 INTERNAL. A
       // duplicate code is a client error, so answer it as one.
@@ -195,7 +130,7 @@ export async function apply_sandbox_1(ctx: any, req: { body: unknown; params: un
     const body = parseOrThrow(ruleBody, req.body);
     assertPreserveJustified(body.strategy, body.justification);
 
-    const saved = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const sandbox = await repo.findSandboxTx(w, ctx.tenantId, id);
       if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
@@ -224,7 +159,7 @@ export async function apply_sandbox_2(ctx: any, req: { body: unknown; params: un
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(refreshBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const sandbox = await repo.findSandboxTx(w, ctx.tenantId, id);
       if (!sandbox) throw new HttpError(404, "NOT_FOUND", "sandbox not found");
@@ -262,7 +197,7 @@ export async function apply_sandbox_3(ctx: any, req: { body: unknown; params: un
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(decideBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const job = await repo.findRefreshJobTx(w, ctx.tenantId, id);
       if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
@@ -313,7 +248,7 @@ export async function apply_sandbox_4(ctx: any, req: { body: unknown; params: un
     const { id } = parseOrThrow(idParam, req.params);
     const body = parseOrThrow(rejectBody, req.body);
 
-    const result = await db.transaction(async (tx) => {
+    await db.transaction(async (tx) => {
       const w = tx as repo.Writer;
       const job = await repo.findRefreshJobTx(w, ctx.tenantId, id);
       if (!job) throw new HttpError(404, "NOT_FOUND", "refresh job not found");
