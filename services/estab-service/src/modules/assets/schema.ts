@@ -1,5 +1,11 @@
 import {
-  pgSchema, uuid, text, varchar, integer, boolean, timestamp, date,
+  pgSchema,
+  uuid,
+  text,
+  varchar,
+  integer,
+  timestamp,
+  date,
 } from "drizzle-orm/pg-core";
 
 export const assetsSchema = pgSchema("assets");

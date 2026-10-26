@@ -10,7 +10,6 @@ import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { randomUUID } from "node:crypto";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -18,10 +17,6 @@ const UNKNOWN_ID = "00000000-dead-4000-8000-000000000001";
 
 function makeToken(roles: string[] = ["estab_officer"], sub = "user-001") {
   return signToken({ sub, tid: TENANT, roles, sid: "sess-001" }, SECRET);
-}
-
-function makeAdminToken(sub = "admin-001") {
-  return signToken({ sub, tid: TENANT, roles: ["estab_admin"], sid: "sess-002" }, SECRET);
 }
 
 afterAll(async () => { await sqlClient.end(); });

@@ -27,7 +27,7 @@ import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { estabFiles, estabNotings } from "../src/modules/files/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerFilesConsumers } from "../src/modules/files/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 

@@ -9,7 +9,7 @@ import { computeDocHash, assertSigningAllowed, DomainError as EsignError } from 
 import { deriveChildFileNo, toRoman, computeNotingHash, assertValidFileType, assertValidClassification, computeFileDueBy, mapNoteTypeForUi, isTopSecret } from "../src/modules/files/domain.js";
 import { computeMileage, computeUtilisation, computeRunningCostPerKm, assertOdometerProgression, DomainError as FleetError } from "../src/modules/fleet/domain.js";
 import { assertValidTransition as qtrTransition, assertMakerChecker as qtrMakerChecker, computeEligibilityScore, computeOverstayPenalty } from "../src/modules/quarters/domain.js";
-import { computeReviewDueDate, assertWeedable, assertValidCategory, RETENTION_YEARS } from "../src/modules/records/domain.js";
+import { computeReviewDueDate, assertWeedable, RETENTION_YEARS } from "../src/modules/records/domain.js";
 import { isReferenceType, REFERENCE_TYPES } from "../src/modules/referencing/domain.js";
 import { assertValidAllotmentTransition, assertMakerChecker as spaceMakerChecker, assertSeatAllottable, computeOccupancy, computeProratedLicenceFee } from "../src/modules/spaces/domain.js";
 import { checkNoRoomOverlap, DomainError as FacError } from "../src/modules/facilities/domain.js";

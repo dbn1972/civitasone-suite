@@ -18,7 +18,7 @@
  *   5. Tenant isolation invariants
  *   6. Inactive/deleted rule filtering
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // ─── 1. Band Resolution Logic (source: resolver.ts inBand) ───────────────────
 
