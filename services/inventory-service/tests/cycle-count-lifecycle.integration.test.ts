@@ -33,7 +33,7 @@
  * physical count -- not just that the cycle_counts row itself looks right.
  */
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, afterAll, beforeAll } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { runWithTenant } from "@civitasone/db";
 import { eq, and } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";

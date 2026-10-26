@@ -48,7 +48,6 @@ const ITEM_A1  = "cccccccc-0000-4000-8000-00000000d001";
 const ITEM_A2  = "cccccccc-0000-4000-8000-00000000d002";
 const ITEM_B1  = "cccccccc-0000-4000-8000-00000000d003";
 const STORE_A  = "eeeeeeee-0000-4000-8000-00000000d001";
-const STORE_B  = "eeeeeeee-0000-4000-8000-00000000d002";
 
 function tokenFor(tenantId: string, actorId: string, roles = ["inventory_admin", "qc_inspector"]): string {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-c051" }, SECRET, 3600);

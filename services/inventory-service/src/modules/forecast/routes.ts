@@ -9,10 +9,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, registerErrorHandler, HttpError } from "../../shared/context.js";
-import { queue } from "../../shared/infra.js";
 import { enqueue } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
-import { EVENTS } from "../../topics.js";
 import { forecastParams, forecastQuery } from "./validators.js";
 import { predictDemand } from "./ml-client.js";
 import * as repo from "./repo.js";
