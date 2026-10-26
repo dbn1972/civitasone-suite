@@ -2,6 +2,8 @@ import { PageHeader } from "@/app/_components/ds/PageHeader";
 import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { getThemeTokens } from "../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, THEME_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { getLatestThemeRevisionVersion } from "../_data";
 import { ThemeActions } from "../ThemeActions";
 import { ThemeTokenTable } from "../ThemeTokenTable";
 import { ThemeContrastPanel } from "../ThemeContrastPanel";
@@ -42,6 +44,12 @@ export default async function Page() {
     );
   }
 
+  // GAP-THEMES-TOKENS-02: publishing is admin-only on the server (403 otherwise),
+  // so a plain theme_user is not shown a control that can only fail. Admins pin
+  // the latest published version so a stale page cannot clobber a newer revision.
+  const canPublish = hasAnyRole(getSessionRoles(), THEME_ADMIN_ROLES);
+  const latest = canPublish ? await getLatestThemeRevisionVersion() : null;
+
   const total = themeTokens.length;
   const colourTokens = themeTokens.filter((t) => isCssColour(String(t.value ?? ""))).length;
   const scalarTokens = total - colourTokens;
@@ -66,7 +74,26 @@ export default async function Page() {
           visible at a glance rather than discovered after it ships. */}
       <ThemeContrastPanel tokens={themeTokens} />
 
-      <ThemeActions tokens={themeTokens} />
+      {!canPublish ? (
+        <Card title="Publish theme revision">
+          <p className="pad muted">Only theme administrators can publish a theme revision. You can review the tokens below.</p>
+        </Card>
+      ) : latest && latest.source === "error" ? (
+        <Card title="Publish theme revision">
+          <div className="pad">
+            <RefreshErrorState
+              error={{
+                what: "We could not read the latest published revision.",
+                next: "Try again before publishing, so the publish is checked against the current revision.",
+                actions: ["retry"],
+              }}
+              source={{ area: "theme revision" }}
+            />
+          </div>
+        </Card>
+      ) : (
+        <ThemeActions tokens={themeTokens} expectedVersion={latest?.data ?? 0} />
+      )}
 
       <Card title="Token palette">
         <div className="pad">

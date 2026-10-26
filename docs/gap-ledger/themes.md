@@ -508,7 +508,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** [partial: web now sends expectedVersion (latest published revision, 409 STALE_REVISION surfaced) and shows the Publish control to theme_admin/super_admin only (tokens/page.test.tsx, ThemeActions.test.tsx); server role gate/reason/audit already live; remaining: maker-checker (approver != requester) needs the owner decision - is single-admin publish acceptable for UAT? @@HASH_GAP-THEMES-TOKENS-02@@]
 - **First-pass claim:** Publish is irreversible and tenant-wide ('promotes … to every tenant surface and cannot be undone', ThemeActions.tsx:8-10,62-64) yet the POST body carries only { name, reason } (ThemeActions.tsx:19-23): what is published is not in the request, and the control is shown to every viewer (no role gate: no themes/layout.tsx, middleware.ts:48-59). Server-side authorization and maker-checker are undeterminable (theme-service absent).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/themes/publish body {name, reason} (ThemeActions.tsx:19-23)', 'GET /api/v1/themes/tokens']`
 - **Question:** What exactly does publish promote (draft token set id/version), is it role-restricted, maker-checker enforced (approver != requester) and audited with the reason?

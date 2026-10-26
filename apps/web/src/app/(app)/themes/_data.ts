@@ -87,6 +87,26 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
+/**
+ * GAP-THEMES-TOKENS-02: the latest PUBLISHED revision version (0 when the
+ * tenant has never published). The publish control pins this as
+ * `expectedVersion`, so a publish built on a stale page is rejected by the
+ * server with 409 STALE_REVISION instead of silently clobbering a newer
+ * revision. Admin-only on the server (so call it only for admins).
+ */
+export function getLatestThemeRevisionVersion(): Promise<LoaderResult<number>> {
+  return fetchJson<unknown, number>("/api/v1/themes/revisions/latest", 0, {
+    telemetryKey: "themes.revisions.latest",
+    mapResponse: (payload: unknown): number | null => {
+      if (payload === null || payload === undefined) return 0; // never published
+      if (isRecord(payload) && typeof payload.version === "number" && Number.isInteger(payload.version) && payload.version >= 0) {
+        return payload.version;
+      }
+      return null; // unexpected shape: treat as a failed read, never guess a version
+    },
+  });
+}
+
 export const getThemeTemplates = moduleLoader("/api/v1/themes/templates", "themes.templates");
 export const getThemeBranding = moduleLoader("/api/v1/themes/branding", "themes.branding");
 export const getThemeBrand = moduleLoader("/api/v1/themes/brand", "themes.brand");
