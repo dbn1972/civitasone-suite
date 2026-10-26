@@ -47,6 +47,9 @@ export async function buildApp(): Promise<FastifyInstance> {
   validateEnv();
 
   const app = Fastify({
+    // Behind the gateway: key the per-IP rate limiter on the real client (X-Forwarded-For) instead of the gateway socket
+    // peer. Trust is limited to private/loopback hops (same value as hrms/billing), never `true`.
+    trustProxy: "loopback,linklocal,uniquelocal",
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
