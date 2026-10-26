@@ -1,7 +1,9 @@
+import Link from "next/link";
 import { Card, DataTable, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, FIELD_VISIT_LOCATION_ROLES } from "@/lib/auth/roleGuard";
-import { getFieldVisitsDetailed } from "../_data";
+import { resolveUsers, userDisplayLabel } from "@/lib/directory/resolveUsers";
+import { getFieldVisitsDetailed, getFieldTasksDetailed, parseVisitDay, FIELD_VISITS_LIMIT } from "../_data";
 import { formatCoord, outcomeLabel, openVisitHours, rankVisits, visitStatus, visitDisplayStatus } from "./visits";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +20,28 @@ type Row = {
   notes: string;
 };
 
-export default async function FieldVisitsPage() {
-  const { data, source } = await getFieldVisitsDetailed();
+type SearchParams = { offset?: string; from?: string; to?: string };
+
+function visitsHref(offset: number, from?: string, to?: string): string {
+  const params = new URLSearchParams();
+  if (offset > 0) params.set("offset", String(offset));
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  const qs = params.toString();
+  return qs ? `/field/visits?${qs}` : "/field/visits";
+}
+
+export default async function FieldVisitsPage(props: { searchParams?: Promise<SearchParams> } = {}) {
+  // GAP-FIELD-VISITS-04: paging + inclusive IST date range come from the URL;
+  // malformed values are dropped, never forwarded to the server.
+  const sp = (await props.searchParams) ?? {};
+  const requestedOffset = Number(sp.offset ?? 0);
+  const offset = Number.isFinite(requestedOffset) && requestedOffset > 0 ? Math.floor(requestedOffset) : 0;
+  const from = parseVisitDay(sp.from);
+  const to = parseVisitDay(sp.to);
+  const { data, source } = await getFieldVisitsDetailed({ offset, from, to });
   const { rows: visits, total, limit } = data;
+  const filtered = Boolean(from || to);
 
   // GAP-FIELD-VISITS-01 (FAILMASK): a failed load used to render real "0"
   // stats and the "No visits yet" empty state, indistinguishable from a tenant
@@ -58,13 +79,25 @@ export default async function FieldVisitsPage() {
 
   const ranked = rankVisits(visits);
   const open = visits.filter((v) => visitStatus(v) === "open").length;
-  const capped = total > visits.length;
+  const capped = total > visits.length && offset === 0;
+  const first = visits.length === 0 ? 0 : offset + 1;
+  const last = offset + visits.length;
+  const hasOlder = last < total;
+
+  // GAP-FIELD-VISITS-03: show who/what, not UUIDs. Names come from the shared
+  // tenant-scoped directory and the task list; an unresolved id degrades to a
+  // short id, never a guessed name.
+  const [names, tasks] = await Promise.all([
+    resolveUsers(visits.map((v) => v.agentId)),
+    getFieldTasksDetailed(),
+  ]);
+  const taskTitles = new Map((tasks.data ?? []).map((t) => [t.id, t.title]));
 
   const rows: Row[] = ranked.map((v) => ({
     id: v.id,
     status: visitDisplayStatus(v),
-    agent: v.agentId,
-    task: v.taskId,
+    agent: userDisplayLabel(names, v.agentId),
+    task: taskTitles.get(v.taskId) ?? `${v.taskId.slice(0, 8)}…`,
     checkIn: v.checkInAt ? formatIndianDateTime(v.checkInAt) : "—",
     gps: formatCoord(v.checkInLatitude, v.checkInLongitude),
     duration: v.durationMinutes != null ? `${v.durationMinutes} min` : (() => { const h = openVisitHours(v); return h != null && h > 0 ? `open ${h}h` : h === 0 ? "open <1h" : "—"; })(),
@@ -96,15 +129,42 @@ export default async function FieldVisitsPage() {
         Visit locations are personal data. They are shown rounded and {canSeeLocation ? "may be exported by supervisors for" : "are limited to"}{" "}
         field-operations purposes only.
       </p>
+      <form method="get" action="/field/visits" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "flex-end", margin: "12px 0" }}>
+        <div className="field">
+          <label className="label" htmlFor="visits-from">From</label>
+          <input id="visits-from" className="inp" type="date" name="from" defaultValue={from ?? ""} />
+        </div>
+        <div className="field">
+          <label className="label" htmlFor="visits-to">To</label>
+          <input id="visits-to" className="inp" type="date" name="to" defaultValue={to ?? ""} />
+        </div>
+        <button type="submit" className="btn">Filter</button>
+        {filtered && <Link href="/field/visits">Clear dates</Link>}
+      </form>
       <StatGrid>
         <StatCard
           icon="📍"
           tone="info"
-          label={capped ? `Visits (latest ${limit})` : "Visits"}
-          value={(capped ? total : visits.length).toLocaleString("en-IN")}
+          label={capped ? `Visits (latest ${limit})` : filtered ? "Visits in range" : "Visits"}
+          value={(total > visits.length ? total : visits.length).toLocaleString("en-IN")}
         />
         <StatCard icon="🚶" tone="warn" label={capped ? `Open (in latest ${limit})` : "Open"} value={open.toLocaleString("en-IN")} />
       </StatGrid>
+      <div role="note" data-testid="field-visits-window" style={{ fontSize: 13, color: "var(--mut)", margin: "8px 0" }}>
+        Showing visits {first}–{last} of {total.toLocaleString("en-IN")}, newest first.
+        {offset > 0 && (
+          <>
+            {" "}
+            <Link href={visitsHref(Math.max(0, offset - FIELD_VISITS_LIMIT), from, to)}>Show newer visits</Link>.
+          </>
+        )}
+        {hasOlder && (
+          <>
+            {" "}
+            <Link href={visitsHref(offset + FIELD_VISITS_LIMIT, from, to)}>Show older visits</Link>.
+          </>
+        )}
+      </div>
       <Card title="Recent visits">
         <DataTable<Row>
           columns={columns}
@@ -113,8 +173,12 @@ export default async function FieldVisitsPage() {
           exportable={canSeeLocation} exportAudit="field/visits"
           exportFilename="field-visits"
           emptyIcon="📍"
-          emptyTitle="No visits yet"
-          emptyMessage="Check in on a field task to record GPS and outcomes here."
+          emptyTitle={filtered ? "No visits in this date range" : "No visits yet"}
+          emptyMessage={
+            filtered
+              ? "Try a wider date range, or clear the dates to see all visits."
+              : "Check in on a field task to record GPS and outcomes here."
+          }
         />
       </Card>
     </>

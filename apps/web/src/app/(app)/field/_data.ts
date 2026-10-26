@@ -210,10 +210,39 @@ function extractTotal(payload: unknown): number | null {
   return null;
 }
 
+export type FieldVisitsQuery = {
+  /** Rows to skip (newest-first paging). */
+  offset?: number;
+  /** Inclusive calendar day (YYYY-MM-DD, IST) lower bound on check-in. */
+  from?: string;
+  /** Inclusive calendar day (YYYY-MM-DD, IST) upper bound on check-in. */
+  to?: string;
+};
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Accept only a real YYYY-MM-DD; anything else is dropped (never sent to the server). */
+export function parseVisitDay(value: unknown): string | undefined {
+  if (typeof value !== "string" || !DAY_RE.test(value)) return undefined;
+  const d = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(d.getTime()) || !d.toISOString().startsWith(value) ? undefined : value;
+}
+
+/** GAP-FIELD-VISITS-04: list path with paging + date-range params. */
+export function fieldVisitsPath(q: FieldVisitsQuery = {}): string {
+  const params = new URLSearchParams({ limit: String(FIELD_VISITS_LIMIT) });
+  if (q.offset && q.offset > 0) params.set("offset", String(Math.floor(q.offset)));
+  const from = parseVisitDay(q.from);
+  const to = parseVisitDay(q.to);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  return `/api/v1/field/visits?${params.toString()}`;
+}
+
 /** Typed visits list for the P1-10 GPS / outcome screen. */
-export async function getFieldVisitsDetailed(): Promise<LoaderResult<FieldVisitsPage>> {
+export async function getFieldVisitsDetailed(q: FieldVisitsQuery = {}): Promise<LoaderResult<FieldVisitsPage>> {
   const empty: FieldVisitsPage = { rows: [], total: 0, limit: FIELD_VISITS_LIMIT };
-  return fetchJson(`/api/v1/field/visits?limit=${FIELD_VISITS_LIMIT}`, empty, {
+  return fetchJson(fieldVisitsPath(q), empty, {
     revalidateSeconds: 30,
     telemetryKey: "field.visits.detailed",
     mapResponse: (payload: unknown): FieldVisitsPage => {
