@@ -65,6 +65,8 @@ export const COMMANDS = {
   // ── Arrears & Recovery (SVC-137) ─────────────────────────────────────────
   /** payload: { assesseeId, instalmentCount, startDate } — create instalment plan from outstanding */
   instalmentPlanCreate: "revenue.instalment.create",
+  /** payload: { planId, approve: boolean, reason? } — instalment plan, checker step (owner decision #3) */
+  instalmentPlanDecide: "revenue.instalment.decide",
   /** payload: { demandId, amountMinor (bigint string), reason, waiverType? } — waiver, maker step */
   waiverCreate: "revenue.waiver.create",
   /** payload: { waiverId, approve: boolean, reason? } — waiver, checker step */
@@ -110,6 +112,8 @@ export const EVENTS = {
 
   // ── Arrears ──────────────────────────────────────────────────────────────
   instalmentPlanCreated: "revenue.instalment.created",
+  /** A distinct checker approved the plan — it is now active (owner decision #3) */
+  instalmentPlanApproved: "revenue.instalment.approved",
   writeOffApplied: "revenue.write_off.applied",
   /** Recovery referred — triggers legal-service case creation */
   recoveryReferred: "revenue.recovery.referred",

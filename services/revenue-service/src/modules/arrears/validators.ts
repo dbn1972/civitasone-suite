@@ -20,6 +20,18 @@ export const createInstalmentBody = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
 });
 
+/** Owner decision #3: a distinct checker approves or rejects a pending instalment plan. */
+export const instalmentDecideBody = z.object({
+  approve: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+export const listInstalmentsQuery = z.object({
+  status: z.enum(['pending', 'active', 'rejected', 'completed', 'defaulted']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const createWriteOffBody = z.object({
   assesseeId: z.string().uuid(),
   // Owner decision #6 (2026-10-26): a new write-off MUST reference the demand

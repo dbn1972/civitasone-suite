@@ -48,6 +48,32 @@ export async function findWriteOffById(tenantId: string, id: string) {
 }
 
 /**
+ * Owner decision #3: tenant-scoped, paginated instalment plans across all
+ * assessees, optionally by status, so a second officer can DISCOVER plans
+ * awaiting approval (?status=pending) instead of being handed a UUID.
+ */
+export async function listInstalmentPlansByStatus(
+  tenantId: string,
+  opts: { status?: string; limit: number; offset: number },
+) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    const where = opts.status
+      ? and(eq(instalmentPlans.tenantId, tenantId), eq(instalmentPlans.status, opts.status))
+      : eq(instalmentPlans.tenantId, tenantId);
+    const rows = await t
+      .select()
+      .from(instalmentPlans)
+      .where(where)
+      .orderBy(desc(instalmentPlans.createdAt))
+      .limit(opts.limit)
+      .offset(opts.offset);
+    const counted = await t.select({ n: sql<number>`count(*)::int` }).from(instalmentPlans).where(where);
+    return { rows: rows ?? [], total: Number(counted[0]?.n ?? 0) };
+  });
+}
+
+/**
  * Owner decision #6: the demand a new write-off targets — its assessee, FY and
  * live DCB balance (latest running balance). Null when the demand does not
  * exist for the tenant. Tenant-scoped via tenantTransaction/RLS.

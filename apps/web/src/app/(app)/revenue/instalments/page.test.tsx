@@ -93,4 +93,22 @@ describe("InstalmentsPage", () => {
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
   });
+
+  // Owner decision #3: a second officer must be able to DISCOVER plans awaiting approval.
+  it("lists plans awaiting approval across assessees with a link to decide (owner decision #3)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("status=pending")) {
+        return Promise.resolve({
+          data: [{ id: "pp1", totalMinor: "900000", instalmentCount: 3, startDate: "2026-12-01", status: "pending" }],
+          source: "api",
+        });
+      }
+      return Promise.resolve(assesseesPage);
+    });
+    const ui = await InstalmentsPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
+    expect(screen.getByText("₹9,000.00")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Review/ })).toHaveAttribute("href", "/revenue/instalments/pp1");
+  });
 });
