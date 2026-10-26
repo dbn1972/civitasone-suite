@@ -41,8 +41,6 @@ vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: vi.fn(async () => undefined), makeKey: (...args: unknown[]) => args.join(":") },
 }));
 
-// Mock S3 download
-const downloadMock = vi.fn(async () => Buffer.from("fake-image-data"));
 vi.mock("@aws-sdk/client-s3", () => ({
   S3Client: vi.fn(() => ({
     send: async () => ({

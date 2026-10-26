@@ -7,7 +7,7 @@
  * is read-only.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { digitalPasses, type DigitalPassRow } from "./schema.js";
 

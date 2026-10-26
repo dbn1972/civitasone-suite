@@ -9,7 +9,6 @@ import {
   PrintJobStatus,
   PRINT_JOB_TRANSITIONS,
   canTransitionJob,
-  PrintPriority,
   computeJobScore,
   MAX_RETRIES,
   RETRY_DELAYS_MS,

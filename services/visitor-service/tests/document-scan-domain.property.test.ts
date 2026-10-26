@@ -22,7 +22,7 @@ const arbScore = fc.integer({ min: 0, max: 100 });
  * Generator for confidence score records with full_name and id_document_number
  * fields both below the threshold (80).
  */
-const arbLowScores: fc.Arbitrary<Record<string, number>> = fc
+fc
   .record({
     full_name: fc.integer({ min: 0, max: 79 }),
     id_document_number: arbScore,

@@ -8,11 +8,18 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  isValidScheduledDate, assertValidScheduledDate, findMissingRequiredFields,
-  assertTransitionAllowed, approve, reject, resolveInitialStatus,
-  isAutoRejectDue, MIN_SCHEDULE_LEAD_MS, MAX_SCHEDULE_LEAD_MS,
-  AUTO_REJECT_AFTER_MS, REMINDER_AFTER_MS, DEFAULT_AUTO_APPROVE_CATEGORIES,
-  DomainError, type VisitRequestStatus,
+  isValidScheduledDate,
+  assertValidScheduledDate,
+  assertTransitionAllowed,
+  approve,
+  reject,
+  isAutoRejectDue,
+  MIN_SCHEDULE_LEAD_MS,
+  MAX_SCHEDULE_LEAD_MS,
+  AUTO_REJECT_AFTER_MS,
+  REMINDER_AFTER_MS,
+  DomainError,
+  type VisitRequestStatus,
 } from "../src/modules/visit-request/domain.js";
 import {
   normalizeName, screenIdentity, assertDistinctMakerChecker,

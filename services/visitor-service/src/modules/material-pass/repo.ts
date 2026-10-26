@@ -8,7 +8,7 @@
  * Requirement 13.5: searchable log of Material_Pass records for audit.
  */
 import { and, eq } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { materialPasses, type MaterialPassRow } from "./schema.js";
 

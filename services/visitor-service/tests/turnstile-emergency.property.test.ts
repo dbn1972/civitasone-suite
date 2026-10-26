@@ -25,7 +25,7 @@ import { randomUUID } from "node:crypto";
 const arbDeviceType = fc.constantFrom("turnstile", "barrier", "kiosk", "scanner", "printer");
 
 /** Arbitrary active device record (simplified for property testing). */
-const arbActiveDevice = fc.record({
+fc.record({
   id: fc.uuid(),
   deviceType: arbDeviceType,
   locationId: fc.uuid(),

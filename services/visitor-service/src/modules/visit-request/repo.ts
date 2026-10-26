@@ -17,7 +17,7 @@
  * provided.
  */
 import { and, desc, eq, getTableColumns } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { maskPhone } from "../../shared/pii-crypto.js";
 import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
@@ -112,7 +112,7 @@ export async function getVisitRequestById(tenantId: string, id: string, piiCtx?:
 export async function listDistinctHosts(
   tenantId: string,
 ): Promise<string[]> {
-  const { sql: rawSql } = await import("drizzle-orm");
+  await import("drizzle-orm");
   const rows = await scopedRead((tx) =>
     tx
       .selectDistinct({ hostEmployeeId: visitRequests.hostEmployeeId })

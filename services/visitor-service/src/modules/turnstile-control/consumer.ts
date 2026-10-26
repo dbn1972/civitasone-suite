@@ -24,7 +24,7 @@ import { redisClientOptions } from "@civitasone/cache";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { cache, queue as appQueue } from "../../shared/infra.js";
+import { queue as appQueue } from "../../shared/infra.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { passageEvents } from "./schema.js";
 import { devices } from "../device-registry/schema.js";
@@ -377,7 +377,7 @@ export function registerTurnstileControlConsumers(queue: Queue): void {
     // Fetch all active turnstile/barrier devices at the location.
     // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
     // before this read — a bare db.select() runs with no RLS GUC set.
-    const activeDevices = await db.transaction((tx) =>
+    await db.transaction((tx) =>
       tx
         .select({ id: devices.id })
         .from(devices)

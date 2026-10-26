@@ -12,7 +12,7 @@
  *
  * Requirements validated: 3.2, 3.3, 3.4, 3.5, 3.6, 3.8
  */
-import { and, eq, or, sql, count, desc } from "drizzle-orm";
+import { and, eq, or, count, desc } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { scannerDb } from "../../shared/scanner-db.js";
 import { cache } from "../../shared/infra.js";

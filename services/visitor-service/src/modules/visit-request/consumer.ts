@@ -39,7 +39,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import type { RequestContext } from "@civitasone/types";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db, scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { enqueue, markProcessed, versionedUpdate } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import { visitRequests } from "./schema.js";
@@ -212,56 +212,6 @@ export interface WorkflowInstanceRejectedPayload {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-/**
- * Determines whether any of the permittedAreas on a request include a
- * Restricted_Area (securityLevel > 1). If yes, multi-level approval via
- * workflow-service is required (Requirement 3.6, 11.2).
- */
-async function hasRestrictedArea(
-  tenantId: string,
-  locationId: string,
-  permittedAreaIds: string[],
-): Promise<{ restricted: boolean; securityLevel: number; approvers: string[] }> {
-  if (permittedAreaIds.length === 0) {
-    return { restricted: false, securityLevel: 0, approvers: [] };
-  }
-
-  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
-  // before this read — a bare db.select() runs with no RLS GUC set.
-  const rows = await db.transaction((tx) =>
-    tx
-      .select({
-        id: areas.id,
-        securityLevel: areas.securityLevel,
-        authorizedApprovers: areas.authorizedApprovers,
-      })
-      .from(areas)
-      .where(
-        and(
-          eq(areas.tenantId, tenantId),
-          eq(areas.locationId, locationId),
-          inArray(areas.id, permittedAreaIds),
-        ),
-      ),
-  );
-
-  // Find the maximum security level among requested areas
-  let maxLevel = 0;
-  let approvers: string[] = [];
-  for (const row of rows) {
-    if (row.securityLevel > maxLevel) {
-      maxLevel = row.securityLevel;
-      approvers = row.authorizedApprovers ?? [];
-    }
-  }
-
-  return {
-    restricted: maxLevel > RESTRICTED_SECURITY_LEVEL,
-    securityLevel: maxLevel,
-    approvers,
-  };
-}
 
 /**
  * TX-018 — tenant-scoped sibling of hasRestrictedArea(). Reads through a

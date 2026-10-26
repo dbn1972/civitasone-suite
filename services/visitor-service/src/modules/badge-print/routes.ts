@@ -47,7 +47,6 @@ import {
   listTemplates,
   getNextJobForDevice,
   listPrintJobs,
-  getTemplateVersionChain,
 } from "./repo.js";
 import { z } from "zod";
 

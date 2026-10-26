@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { deviceAuth } from "../device-registry/device-auth.js";
-import { uploadScanParams, getResultParams, listScansQuery } from "./validators.js";
+import { getResultParams, listScansQuery } from "./validators.js";
 import { validateImage } from "./domain.js";
 import { publishScanProcess } from "./commands.js";
 import { getScanSession, getOcrResult, listScans } from "./repo.js";

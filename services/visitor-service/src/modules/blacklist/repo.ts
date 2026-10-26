@@ -16,7 +16,7 @@
  * provided.
  */
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { logPiiAccess, logPiiAccessBatch } from "../dpdp/consent.js";
 import { resolvePage, splitPage, type PageOpts, type Paged } from "../../shared/pagination.js";

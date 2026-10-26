@@ -10,7 +10,6 @@ import { eq, and, desc, count } from "drizzle-orm";
 import { Redis } from "ioredis";
 import { redisClientOptions } from "@civitasone/cache";
 import { db, scopedRead } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
 import { passageEvents, deviceCommands } from "./schema.js";
 
 // ── Redis Client ──────────────────────────────────────────────────────────
