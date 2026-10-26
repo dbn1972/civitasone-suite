@@ -31,8 +31,8 @@ export class FontDigestError extends Error {}
 
 /**
  * Verify `bytes` against the pinned digest for `name` and, only on a match, install them at `<dir>/<name>`.
- * The bytes are first written (flag wx, mode 0600) into a private mkdtemp staging directory, hashed from what is
- * actually on disk, and moved with an atomic rename. On any mismatch / missing pin the staging dir is deleted and
+ * The bytes are hashed and compared to the pin BEFORE anything touches disk, then written (flag wx, mode 0600) into a
+ * private mkdtemp staging directory and moved with an atomic rename. On any mismatch / missing pin the staging dir is deleted and
  * a FontDigestError is thrown; the final path is never touched. `pins` is injectable for tests.
  * @returns {Promise<string>} the final path
  */
@@ -40,12 +40,12 @@ export async function verifyAndInstall(dir, name, bytes, pins = FONT_SHA256) {
   if (name !== basename(name)) throw new FontDigestError(`refusing unsafe font name ${JSON.stringify(name)}`);
   const staging = await mkdtemp(join(tmpdir(), "bulk-scan-01-font-"));
   try {
-    const tmp = join(staging, `${randomBytes(6).toString("hex")}.part`);
-    await writeFile(tmp, bytes, { flag: "wx", mode: 0o600 });
     const want = pins[name];
     if (typeof want !== "string" || !/^[0-9a-f]{64}$/.test(want)) throw new FontDigestError(`no pinned SHA-256 for ${name}: refusing to install`);
     const got = sha256Hex(bytes);
     if (got !== want) throw new FontDigestError(`SHA-256 mismatch for ${name}: expected ${want}, got ${got}: refusing to install`);
+    const tmp = join(staging, `${randomBytes(6).toString("hex")}.part`);
+    await writeFile(tmp, bytes, { flag: "wx", mode: 0o600 });
     await mkdir(dir, { recursive: true, mode: 0o755 });
     const finalPath = join(dir, name);
     await chmod(tmp, 0o644);

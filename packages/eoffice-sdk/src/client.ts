@@ -71,6 +71,13 @@ export interface DecisionLogEntry {
   decided_at: string;
 }
 
+/** Strip trailing "/" characters in linear time (CodeQL js/polynomial-redos: `/\/+$/` is quadratic on "////…x"). */
+export function trimTrailingSlashes(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 47) end--;
+  return s.slice(0, end);
+}
+
 export class EOfficeClient {
   private readonly baseUrl: string;
   private readonly token: TokenProvider;
@@ -80,7 +87,7 @@ export class EOfficeClient {
   private readonly timeoutMs: number;
 
   constructor(opts: EOfficeClientOptions) {
-    this.baseUrl = opts.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(opts.baseUrl);
     this.token = opts.token;
     this.tenantId = opts.tenantId;
     this.correlationId = opts.correlationId;

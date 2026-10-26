@@ -119,11 +119,20 @@ async function tcpGreeting(host: string, port: number, useTls: boolean, timeoutM
     let settled = false;
     const done = (r: TestResult) => { if (!settled) { settled = true; try { socket.destroy(); } catch { /* */ } resolve(r); } };
     const socket = useTls
-      ? tls.connect({ host, port, rejectUnauthorized: false, servername: host })
+      ? tls.connect({ host, port, rejectUnauthorized: true, servername: host })
       : net.connect({ host, port });
     socket.setTimeout(timeoutMs);
     socket.once("timeout", () => done({ status: "failed", ok: false, error: `timeout connecting to ${host}:${port}` }));
-    socket.once("error", (e) => done({ status: "failed", ok: false, error: `${(e as Error).message}` }));
+    socket.once("error", (e) => {
+      // Certificate verification is ON (CodeQL js/disabling-certificate-validation): report an untrusted /
+      // mismatched certificate with a fixed string rather than echoing the TLS library's message.
+      const code = String((e as NodeJS.ErrnoException).code ?? "");
+      if (useTls && /CERT|SELF_SIGNED|UNABLE_TO_VERIFY|HOSTNAME_MISMATCH/i.test(code)) {
+        done({ status: "failed", ok: false, error: "TLS_CERT_INVALID: server certificate could not be verified" });
+        return;
+      }
+      done({ status: "failed", ok: false, error: `${(e as Error).message}` });
+    });
     socket.once("data", (buf) => {
       const line = buf.toString("utf8").split(/\r?\n/)[0] ?? "";
       done({ status: "connected", ok: true, detail: line.slice(0, 120) });
