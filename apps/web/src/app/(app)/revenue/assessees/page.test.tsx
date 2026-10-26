@@ -34,7 +34,7 @@ describe("AssesseesPage", () => {
 
   it("renders the assessee list", async () => {
     fetchJsonMock.mockResolvedValue({ data: pageOf([ASSESSEE]), source: "api" });
-    const ui = await AssesseesPage();
+    const ui = await AssesseesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("PROP-0001")).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("AssesseesPage", () => {
       data: pageOf([{ ...ASSESSEE, assesseeType: "water_connection", identifierNo: "WAT-1" }]),
       source: "api",
     });
-    const ui = await AssesseesPage();
+    const ui = await AssesseesPage({ searchParams: Promise.resolve({}) });
     render(ui);
     expect(screen.getAllByText("Water Connection").length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByText("water_connection")).not.toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("AssesseesPage", () => {
       ]),
       source: "api",
     });
-    const ui = await AssesseesPage();
+    const ui = await AssesseesPage({ searchParams: Promise.resolve({}) });
     render(ui);
     // Trade & Other tile exists and the trade assessee is counted there.
     expect(screen.getByText("Trade & Other")).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe("AssesseesPage", () => {
 
   it("renders an empty state when there are no assessees", async () => {
     fetchJsonMock.mockResolvedValue({ data: pageOf([]), source: "api" });
-    const ui = await AssesseesPage();
+    const ui = await AssesseesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     expect(screen.getByText("No assessees registered")).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe("AssesseesPage", () => {
 
   it("shows a retry error state and '—' tiles instead of a false 0 on error", async () => {
     fetchJsonMock.mockResolvedValue({ data: pageOf([]), source: "error" });
-    const ui = await AssesseesPage();
+    const ui = await AssesseesPage({ searchParams: Promise.resolve({}) });
     render(ui);
 
     // GAP-REVENUE-ASSESSEES-01: no false "No assessees registered" all-clear and

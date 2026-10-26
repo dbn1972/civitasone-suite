@@ -55,8 +55,8 @@ function pageHref(q: string, page: number): string {
   return qs ? `/revenue/assessees?${qs}` : "/revenue/assessees";
 }
 
-export default async function AssesseesPage(props?: { searchParams?: Promise<{ q?: string; page?: string }> }) {
-  const sp = (await props?.searchParams) ?? {};
+export default async function AssesseesPage(props: { searchParams: Promise<{ q?: string; page?: string }> }) {
+  const sp = (await props.searchParams) ?? {};
   const q = (sp.q ?? "").trim().slice(0, 100);
   const parsedPage = Number.parseInt(sp.page ?? "1", 10);
   const page = Number.isFinite(parsedPage) && parsedPage >= 1 ? parsedPage : 1;
