@@ -1,5 +1,5 @@
 import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, TENANT_ADMIN_ROLES } from "../../shared/context.js";
@@ -16,7 +16,7 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
    * This is a synchronous call (creates external order, no DB write) and
    * returns the order_id directly.
    */
-  app.post("/v1/billing/checkout", async (req, reply) => {
+  app.post("/v1/billing/checkout", { config: { rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => (r as { ctx?: { actorId?: string } }).ctx?.actorId ?? r.ip } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
 
@@ -87,7 +87,7 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
    * Verifies the Razorpay payment signature returned by Checkout.js.
    * On success, publishes a command to confirm the payment asynchronously.
    */
-  app.post("/v1/billing/payments/verify", async (req, reply) => {
+  app.post("/v1/billing/payments/verify", { config: { rateLimit: { max: 30, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => (r as { ctx?: { actorId?: string } }).ctx?.actorId ?? r.ip } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
 
@@ -130,7 +130,7 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
    * PUBLIC route (config.public -- a gateway callback carries no bearer token); the HMAC over the
    * RAW request bytes is the authentication. Publishes to the queue for async processing.
    */
-  app.post("/v1/billing/webhooks/razorpay", { config: { public: true }, preParsing: captureRawBody }, async (req, reply) => {
+  app.post("/v1/billing/webhooks/razorpay", { config: { public: true, rateLimit: { max: 300, timeWindow: "1 minute", keyGenerator: (r: FastifyRequest) => `webhook:${r.ip}` } }, preParsing: captureRawBody }, async (req, reply) => {
     const signature = req.headers["x-razorpay-signature"] as string | undefined;
     if (!signature) {
       throw new HttpError(400, "MISSING_SIGNATURE", "x-razorpay-signature header is required");
@@ -171,6 +171,11 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
     }
     if (err instanceof HttpError) {
       return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    }
+    // @fastify/rate-limit throws a plain object with statusCode 429; without this branch it would fall through to 500.
+    if ((err as { statusCode?: number }).statusCode === 429) {
+      const retryAfter = (err as { retryAfter?: number }).retryAfter ?? 60;
+      return reply.code(429).header("retry-after", String(retryAfter)).send({ code: "RATE_LIMITED", message: "rate limit exceeded", correlationId, retryable: true, retryAfter });
     }
     req.log.error({ err }, "unhandled error in checkout routes");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
