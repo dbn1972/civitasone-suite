@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 import { DomainPackActivatePanel } from "./DomainPackActivatePanel";
 import * as api from "./domainPackApi";
 import { MUNICIPAL_DOMAIN_PACK } from "./domainPackCatalog";
@@ -16,6 +17,7 @@ vi.mock("./domainPackApi", async (orig) => {
     fetchDomainPacksForInstallResult: vi.fn(),
     activateDomainPackStage3: vi.fn(),
     fetchActivationStageStatus: vi.fn(),
+    fetchDomainPackActivationStatus: vi.fn(),
   };
 });
 
@@ -32,6 +34,8 @@ beforeEach(() => {
   vi.mocked(api.activateDomainPackStage3).mockReset();
   vi.mocked(api.fetchActivationStageStatus).mockReset();
   vi.mocked(api.fetchActivationStageStatus).mockResolvedValue({ state: "queued" });
+  vi.mocked(api.fetchDomainPackActivationStatus).mockReset();
+  vi.mocked(api.fetchDomainPackActivationStatus).mockResolvedValue({ state: "none" });
   vi.mocked(api.fetchDomainPacksForInstall).mockResolvedValue(municipalList);
   vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({
     packs: municipalList,
@@ -153,22 +157,36 @@ describe("DomainPackActivatePanel (FN-17)", () => {
 
     it("polls the stage and shows completion once the job completes", async () => {
       vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
-      vi.mocked(api.fetchActivationStageStatus)
-        .mockResolvedValueOnce({ state: "queued" })
-        .mockResolvedValue({ state: "completed" });
+      vi.mocked(api.fetchDomainPackActivationStatus)
+        .mockResolvedValueOnce({ state: "none" })
+        .mockResolvedValueOnce({ state: "queued", activationId: accepted.id })
+        .mockResolvedValue({ state: "completed", activationId: accepted.id, draftCount: 3 });
       await activate();
       expect(await screen.findByText(/Activation completed/i, undefined, { timeout: 8000 })).toBeInTheDocument();
-      expect(api.fetchActivationStageStatus).toHaveBeenCalledWith("dddddddd-dddd-dddd-dddd-dddddddddddd");
+      expect(api.fetchDomainPackActivationStatus).toHaveBeenCalledWith("municipal-in-v1");
       expect(screen.queryByText(/Activation failed/i)).not.toBeInTheDocument();
     }, 15000);
 
     it("shows a failure state (not success) when the job fails", async () => {
       vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
-      vi.mocked(api.fetchActivationStageStatus).mockResolvedValue({ state: "failed" });
+      vi.mocked(api.fetchDomainPackActivationStatus)
+        .mockResolvedValueOnce({ state: "none" })
+        .mockResolvedValue({ state: "failed", activationId: accepted.id });
       await activate();
       expect(await screen.findByText(/Activation failed/i, undefined, { timeout: 8000 })).toBeInTheDocument();
       expect(screen.queryByText(/Activation completed/i)).not.toBeInTheDocument();
     }, 15000);
+
+    it("an older completed record is not mistaken for this activation while the new one is still being recorded", async () => {
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
+      // The status endpoint still returns the PREVIOUS activation's record (a different id).
+      vi.mocked(api.fetchDomainPackActivationStatus)
+        .mockResolvedValueOnce({ state: "none" })
+        .mockResolvedValue({ state: "completed", activationId: "ffffffff-ffff-ffff-ffff-ffffffffffff", draftCount: 3 });
+      await activate();
+      expect(await screen.findByText(/Waiting for the install job/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Activation completed/i)).not.toBeInTheDocument();
+    });
 
     it("shows the queued state while the job has not finished", async () => {
       vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
@@ -209,6 +227,55 @@ describe("DomainPackActivatePanel (FN-17)", () => {
       const back = screen.getByRole("link", { name: /Installer wizard/i });
       expect(back).toHaveAttribute("href", "/install");
       expect(back.textContent).not.toMatch(/[←→]/);
+    });
+  });
+
+  // Owner decision #28 (GAP-INSTALL-DOMAIN-PACKS-04): the activated state survives a reload because it
+  // comes from the durable per-tenant record, not React state.
+  describe("persisted activation (owner decision #28)", () => {
+    it("a completed activation recorded server-side shows Activated after a reload, with the draft count", async () => {
+      vi.mocked(api.fetchDomainPackActivationStatus).mockResolvedValue({
+        state: "completed", activationId: "cccccccc-cccc-cccc-cccc-cccccccccccc", draftCount: 3,
+        completedAt: "2026-10-26T10:00:00.000Z",
+      });
+      render(<DomainPackActivatePanel pollIntervalMs={20} />);
+      expect(await screen.findByText(/Activation completed/i)).toBeInTheDocument();
+      expect(screen.getByText(/3 drafts imported/i)).toBeInTheDocument();
+      const button = screen.getByRole("button", { name: /^Activated$/i });
+      expect(button).toBeDisabled();
+      expect(api.fetchDomainPackActivationStatus).toHaveBeenCalledWith("municipal-in-v1");
+    });
+
+    it("a failed activation recorded server-side shows the failure and leaves Retry available", async () => {
+      vi.mocked(api.fetchDomainPackActivationStatus).mockResolvedValue({
+        state: "failed", activationId: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      });
+      render(<DomainPackActivatePanel pollIntervalMs={20} />);
+      expect(await screen.findByText(/Activation failed/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Retry activation/i })).toBeEnabled();
+    });
+
+    it("an in-flight activation recorded server-side resumes polling until it completes", async () => {
+      const id = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+      vi.mocked(api.fetchDomainPackActivationStatus)
+        .mockResolvedValueOnce({ state: "queued", activationId: id })
+        .mockResolvedValue({ state: "completed", activationId: id, draftCount: 3 });
+      render(<DomainPackActivatePanel pollIntervalMs={20} />);
+      expect(await screen.findByText(/Waiting for the install job/i)).toBeInTheDocument();
+      expect(await screen.findByText(/Activation completed/i, undefined, { timeout: 8000 })).toBeInTheDocument();
+    }, 15000);
+
+    it("a never-activated pack offers Activate, and an unreadable status does not claim activation", async () => {
+      render(<DomainPackActivatePanel />);
+      await waitFor(() => expect(screen.getByRole("button", { name: /Activate Domain Pack/i })).toBeEnabled());
+      expect(screen.queryByText(/Activation completed/i)).not.toBeInTheDocument();
+    });
+
+    it("says so (does not invent a state) when the activation status cannot be read", async () => {
+      vi.mocked(api.fetchDomainPackActivationStatus).mockResolvedValue({ state: "unknown" });
+      render(<DomainPackActivatePanel />);
+      expect(await screen.findByText(/couldn't check whether this Domain Pack was already activated/i)).toBeInTheDocument();
+      expect(screen.queryByText(/Activation completed/i)).not.toBeInTheDocument();
     });
   });
 });

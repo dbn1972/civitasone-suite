@@ -1,7 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
-import type { StageView } from "./schema.js";
+import type { StageView, DomainPackActivationView } from "./schema.js";
 
 export async function getStage(id: string, tenantId: string): Promise<StageView | null> {
   return cache.getOrLoad<StageView>(cache.makeKey(tenantId, RESOURCE, id), () => repo.findById(id, tenantId));
@@ -15,4 +15,9 @@ export async function listStages(tenantId: string, limit: number, offset: number
       pagination: { hasMore: rows.length === limit, pageSize: limit, ...(rows.length ? { cursor: String(offset + rows.length) } : {}) },
     };
   });
+}
+
+/** Live (uncached): the activation state must be exactly what the consumer last committed. */
+export async function getLatestDomainPackActivation(tenantId: string, domainPackKey: string): Promise<DomainPackActivationView | null> {
+  return repo.findLatestActivation(tenantId, domainPackKey);
 }

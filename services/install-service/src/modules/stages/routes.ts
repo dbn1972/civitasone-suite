@@ -75,6 +75,24 @@ const domainPackActivateAcceptedSchema = z.object({
   stageId: z.string().uuid(),
 });
 
+const domainPackStatusQuery = z.object({
+  domainPackKey: z.string().min(1).max(64).optional().default("municipal-in-v1"),
+});
+
+const domainPackStatusSchema = z.object({
+  activation: z.object({
+    id: z.string().uuid(),
+    domainPackKey: z.string(),
+    packKeys: z.array(z.string()),
+    stageId: z.string().uuid(),
+    status: z.enum(["accepted", "completed", "failed"]),
+    draftIds: z.array(z.string()),
+    failureReason: z.string().nullable(),
+    completedAt: z.string().nullable(),
+    createdAt: z.string(),
+  }).nullable(),
+});
+
 export async function stagesRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/install/stages", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -124,6 +142,19 @@ export async function stagesRoutes(app: FastifyInstance): Promise<void> {
       status: "accepted" as const,
       stageNumber: 3 as const,
     });
+  });
+
+  /**
+   * Owner decision #28 (GAP-INSTALL-DOMAIN-PACKS-01/-04): the tenant's latest activation of a Domain
+   * Pack, from the durable record the citizen completion event moves to completed/failed. `activation`
+   * is an explicit null when the pack was never activated, so the UI can tell "never" from "failed to load".
+   */
+  app.get("/v1/install/stages/3/domain-pack/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const q = domainPackStatusQuery.parse(req.query);
+    const activation = await queries.getLatestDomainPackActivation(ctx.tenantId, q.domainPackKey);
+    sendValidated(reply, domainPackStatusSchema, { activation });
   });
 
   /** PATCH /v1/install/steps/:id/:verb — trigger step lifecycle (run, skip, retry, complete, fail) */

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   activateDomainPackStage3,
   fetchActivationStageStatus,
+  fetchDomainPackActivationStatus,
   fetchDomainPacksForInstall,
   fetchDomainPacksForInstallResult,
   mergeDomainPackCatalog,
@@ -156,6 +157,53 @@ describe("domainPackApi HTTP", () => {
       expect((await fetchActivationStageStatus("s1")).state).toBe("unknown");
       vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
       expect((await fetchActivationStageStatus("s1")).state).toBe("unknown");
+    });
+  });
+
+  // Owner decision #28: durable per-tenant activation record via GET .../domain-pack/status.
+  describe("fetchDomainPackActivationStatus", () => {
+    const get = (status: number, body: unknown) =>
+      vi.mocked(fetch).mockResolvedValue({ ok: status >= 200 && status < 300, status, json: async () => body } as Response);
+    const rec = (over: Record<string, unknown>) => ({
+      activation: {
+        id: "cccccccc-cccc-cccc-cccc-cccccccccccc", domainPackKey: "municipal-in-v1", packKeys: [],
+        stageId: "dddddddd-dddd-dddd-dddd-dddddddddddd", status: "accepted", draftIds: [], failureReason: null,
+        completedAt: null, createdAt: "2026-10-26T09:00:00.000Z", ...over,
+      },
+    });
+
+    it("calls the status endpoint for the pack key", async () => {
+      get(200, { activation: null });
+      await fetchDomainPackActivationStatus("municipal-in-v1");
+      expect(fetch).toHaveBeenCalledWith(
+        "/api/proxy/v1/install/stages/3/domain-pack/status?domainPackKey=municipal-in-v1",
+        expect.objectContaining({ cache: "no-store" }),
+      );
+    });
+
+    it("a null activation is 'none' (never activated), not an error", async () => {
+      get(200, { activation: null });
+      expect(await fetchDomainPackActivationStatus("municipal-in-v1")).toEqual({ state: "none" });
+    });
+
+    it("maps accepted -> queued, completed -> completed with the draft count, failed -> failed", async () => {
+      get(200, rec({ status: "accepted" }));
+      expect(await fetchDomainPackActivationStatus("k")).toMatchObject({ state: "queued", activationId: "cccccccc-cccc-cccc-cccc-cccccccccccc" });
+      get(200, rec({ status: "completed", draftIds: ["a", "b", "c"], completedAt: "2026-10-26T10:00:00.000Z" }));
+      expect(await fetchDomainPackActivationStatus("k")).toMatchObject({ state: "completed", draftCount: 3, completedAt: "2026-10-26T10:00:00.000Z" });
+      get(200, rec({ status: "failed", failureReason: "pg: boom" }));
+      const failed = await fetchDomainPackActivationStatus("k");
+      expect(failed.state).toBe("failed");
+      expect(JSON.stringify(failed)).not.toMatch(/pg: boom/);
+    });
+
+    it("reports unknown (never a guessed state) on an HTTP error, a thrown fetch or a malformed body", async () => {
+      get(500, {});
+      expect((await fetchDomainPackActivationStatus("k")).state).toBe("unknown");
+      vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+      expect((await fetchDomainPackActivationStatus("k")).state).toBe("unknown");
+      get(200, { activation: { status: "weird" } });
+      expect((await fetchDomainPackActivationStatus("k")).state).toBe("unknown");
     });
   });
 
