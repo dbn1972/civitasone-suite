@@ -87,6 +87,11 @@ export async function authorityRoutes(app: FastifyInstance): Promise<void> {
     const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
     if (err instanceof ZodError) return reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false });
     if (err instanceof HttpError) return reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    // @fastify/rate-limit throws a plain object with statusCode 429; without this branch it would fall through to 500.
+    if ((err as { statusCode?: number }).statusCode === 429) {
+      const retryAfter = (err as { retryAfter?: number }).retryAfter ?? 60;
+      return reply.code(429).header("retry-after", String(retryAfter)).send({ code: "RATE_LIMITED", message: "rate limit exceeded", correlationId, retryable: true, retryAfter });
+    }
     req.log.error({ err }, "unhandled error");
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
   });
