@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 /**
  * GAP-TENANT-ADMIN-SESSIONS-DETAIL-01/-04: the page now fetches a real session
@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionUserId: () => "admin-1",
+  getSessionRoles: () => [],
 }));
 
 vi.mock("@/app/_data/loaders", () => ({

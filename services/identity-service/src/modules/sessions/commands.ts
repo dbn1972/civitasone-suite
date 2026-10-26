@@ -38,6 +38,20 @@ export async function revokeSession(ctx: RequestContext, id: string, reason?: st
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * Owner decision #21: record that a security admin revealed a session's clear
+ * IP. Published BEFORE the value is returned, so a queue failure means no
+ * reveal (fail closed); the consumer writes the audit event via the outbox.
+ */
+export async function recordSessionIpReveal(ctx: RequestContext, id: string, reason: string): Promise<Accepted> {
+  await queue.publish(COMMANDS.revealSessionIp, {
+    messageId: randomUUID(),
+    type: COMMANDS.revealSessionIp, tenantId: ctx.tenantId, actorId: ctx.actorId,
+    correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, reason },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 // Revoke-all (P0 security): enqueue a single command carrying the target user.
 // The consumer enumerates + revokes that user's active sessions inside one
 // transaction and emits the audit via the outbox. Returns the userId as the

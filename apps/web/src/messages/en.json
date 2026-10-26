@@ -16740,6 +16740,15 @@
       "dialogTitle": "Reveal this actor and IP address?",
       "dialogBody": "The clear email and source IP are personal data. Revealing them is recorded in the audit log against your name, with the reason below.",
       "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
+    },
+    "session": {
+      "reveal": "Reveal",
+      "hide": "Hide",
+      "ipMasked": "IP address, partially masked for privacy",
+      "ipRevealed": "IP address, revealed",
+      "dialogTitle": "Reveal this IP address?",
+      "dialogBody": "The source IP is personal data. Revealing it is recorded in the audit log against your name, with the reason below.",
+      "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
     }
   },
   "tenantAdminW2": {
