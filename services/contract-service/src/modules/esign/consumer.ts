@@ -6,7 +6,7 @@ import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { cache } from "../../shared/infra.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { esignRoutes, type SignatoryEntry } from "./schema.js";
-import { validateSignatories, canSign, applySignature, checkDeadlineStatus } from "./domain.js";
+import { canSign, applySignature, checkDeadlineStatus } from "./domain.js";
 
 const log = pino({ name: "contract-esign-consumer" });
 
