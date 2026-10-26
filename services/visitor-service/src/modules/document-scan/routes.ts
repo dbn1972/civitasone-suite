@@ -19,6 +19,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { deviceAuth } from "../device-registry/device-auth.js";
+import { deviceRouteRateLimit } from "../device-registry/device-route-rate-limit.js";
 import { uploadScanParams, getResultParams, listScansQuery } from "./validators.js";
 import { validateImage } from "./domain.js";
 import { publishScanProcess } from "./commands.js";
@@ -67,7 +68,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
    *
    * Requirements: 6.1, 6.2
    */
-  app.post("/v1/visitor/scans/upload", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.post("/v1/visitor/scans/upload", { preHandler: [deviceAuth], config: { rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
 
     // Parse multipart file
@@ -123,7 +124,7 @@ export default async function documentScanRoutes(app: FastifyInstance): Promise<
    *
    * Requirements: 6.4
    */
-  app.get("/v1/visitor/scans/:sessionId/result", { preHandler: [deviceAuth] }, async (req, reply) => {
+  app.get("/v1/visitor/scans/:sessionId/result", { preHandler: [deviceAuth], config: { rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const { sessionId } = getResultParams.parse(req.params);
 

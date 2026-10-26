@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { cache } from "../../shared/infra.js";
 import { deviceAuth } from "./device-auth.js";
+import { deviceRouteRateLimit } from "./device-route-rate-limit.js";
 import {
   registerDeviceBody,
   updateDeviceBody,
@@ -171,7 +172,7 @@ export default async function deviceRegistryRoutes(app: FastifyInstance): Promis
    *
    * Requirements: 3.1, 3.2, 3.8, 8.3
    */
-  app.post("/v1/visitor/devices/heartbeat", { preHandler: [deviceAuth], config: { public: true } }, async (req, reply) => {
+  app.post("/v1/visitor/devices/heartbeat", { preHandler: [deviceAuth], config: { public: true, rateLimit: deviceRouteRateLimit } }, async (req, reply) => {
     const deviceCtx = req.deviceContext!;
     const body = heartbeatBody.parse(req.body);
 

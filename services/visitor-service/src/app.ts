@@ -60,6 +60,8 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // CodeQL js/missing-rate-limiting: per-user rate limiting (300 req/min keyed by actorId, ops paths
   // excluded), same shape as hrms/audit/billing. Registered AFTER authPlugin so req.ctx is populated.
+  // Device (deviceAuth) routes override this with their own per-IP site-sized bucket; see
+  // modules/device-registry/device-route-rate-limit.ts (many turnstiles share one NAT address).
   await registerRateLimit(app, {
     max: 300,
     timeWindow: "1 minute",
