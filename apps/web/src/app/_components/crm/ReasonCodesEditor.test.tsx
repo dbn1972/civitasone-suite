@@ -1,19 +1,8 @@
-import { NextIntlClientProvider } from "next-intl";
 import { renderWithIntl } from "@/lib/testUtils/intl";
-import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { ReasonCodesEditor } from "./ReasonCodesEditor";
 import * as lq from "@/lib/crm/leadQualification";
-import type { ReactElement } from "react";
-
-function render(ui: ReactElement) {
-  return rtlRender(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
-      {ui}
-    </NextIntlClientProvider>,
-  );
-}
 
 vi.mock("@/lib/crm/leadQualification", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/leadQualification")>();

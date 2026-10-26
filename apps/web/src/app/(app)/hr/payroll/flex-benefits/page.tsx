@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { PAYROLL_EMPLOYEE_ROLES } from "@/lib/auth/workRoles";
 import { CreateFlexPlanForm } from "./CreateFlexPlanForm";
 import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";

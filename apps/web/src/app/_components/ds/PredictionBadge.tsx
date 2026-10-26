@@ -52,7 +52,6 @@ export function PredictionBadge({
 }: PredictionBadgeProps) {
   const level = getConfidenceLevel(confidence);
   const colorClasses = getColorClasses(level);
-  const pct = Math.round(confidence * 100);
 
   const ariaLabel = `${label}, ${level} confidence${isFallback ? ", fallback model" : ""}${staleness ? `, predicted ${staleness}` : ""}`;
 

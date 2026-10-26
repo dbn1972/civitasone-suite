@@ -31,12 +31,6 @@ async function pickEmployee() {
   fireEvent.mouseDown(await screen.findByText(EMP.label));
 }
 
-function accepted() {
-  return vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
-    new Response(JSON.stringify({ id: "b1", status: "accepted", correlationId: "c1" }), { status: 202 }),
-  );
-}
-
 /** GET /v1/payroll/bonus/basic answers with the HRMS basic (+ rule); anything else is the 202 envelope. */
 function withBasic(basicMinor: string, rule: { wageCeilingMinor: string | null; eligibilityCeilingMinor: string | null } | null = null) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {

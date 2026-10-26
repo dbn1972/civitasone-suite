@@ -17,7 +17,6 @@ import type { Persona } from "./routes.js";
 
 const SECRET = process.env.JWT_SECRET ?? "civitasone-dev-secret";
 const TENANT = process.env.DEMO_TENANT_ID ?? "00000000-0000-0000-0000-000000000001";
-const TENANT2 = "00000000-0000-0000-0000-000000000002";
 const COOKIE = "civitasone_at";
 
 const ALL_ROLES = [

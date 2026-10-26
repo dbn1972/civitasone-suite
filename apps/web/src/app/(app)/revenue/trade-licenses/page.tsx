@@ -14,7 +14,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, DataTable, PageHeader, StatGrid, StatCard, Card, ErrorState, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { toHumanError } from "@/lib/messages";
 

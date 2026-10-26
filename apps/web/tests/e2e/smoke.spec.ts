@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin, goAsAdmin } from './helpers/auth';
+import { goAsAdmin } from './helpers/auth';
 
 test.describe('Smoke Tests — App Loads', () => {
   test('app loads without crash (root redirects or renders)', async ({ page }) => {

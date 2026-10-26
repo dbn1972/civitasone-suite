@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { getOidcConfig, COOKIE } from "./config";
 
 describe("getOidcConfig", () => {
-  const originalEnv = { ...process.env };
 
   beforeEach(() => {
     // Reset env to clean state

@@ -339,7 +339,6 @@ export default function ComposeNotificationPage() {
                   This template has placeholders. Fill them in so the recipient doesn&apos;t receive a blank value.
                 </p>
                 {requiredVariables.map((name) => {
-                  const fieldId = `${templateFieldId}-var-${name}`;
                   const value = variables[name] ?? "";
                   return (
                     <Field key={name} label={variableLabel(name)} required style={{ marginBottom: 10 }}>
