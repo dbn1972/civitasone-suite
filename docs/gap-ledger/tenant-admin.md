@@ -2915,7 +2915,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-IDP-05  ·  LOW  ·  interim  ·  theme BACKEND
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (UAT B2)
+- Closed by uat/b2-tenant-admin (UAT B2): IdpTable maps admin-service status enum (active/inactive/error) to pills, unknown stays neutral; per-status test in IdpTable.test.tsx
 - **W2 note (INTERIM, needs owner decision):** the status vocabulary cannot be defined yet: `GET /v1/admin/idp/providers` answers 501 NOT_IMPLEMENTED because no IdP-provider store exists (same blocker as SSO-01 / SSO-06). The page therefore always shows its load-error state.
 - **First-pass claim:** Identity backend is not in this snapshot; status vocabulary beyond 'active' undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/idp/providers (loaders.ts ~L4701)']`

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { buildOrgTree } from "./orgTree";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { normalizeHexColor } from "@/lib/orgLevels";
 import { pathSeg } from "@/lib/pathSegment";
@@ -6648,7 +6649,11 @@ export async function getOrgHierarchy(): Promise<LoaderResult<OrgHierarchyNode[]
   return fetchJson<unknown, OrgHierarchyNode[]>("/api/v1/admin/org-hierarchy", [], {
     revalidateSeconds: 300,
     telemetryKey: "admin.org-hierarchy",
-    mapResponse: (p) => getArrayPayload(p) as OrgHierarchyNode[] | null,
+    mapResponse: (p) => {
+      // GAP-TENANT-ORG-HIERARCHY-01: the backend read is flat (parentId); nest it.
+      const rows = getArrayPayload(p);
+      return rows ? (buildOrgTree(rows) as OrgHierarchyNode[]) : null;
+    },
   });
 }
 
