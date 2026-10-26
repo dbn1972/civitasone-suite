@@ -5,6 +5,7 @@ import { DataTable, EmptyState, PageHeader, RefreshErrorState, StatusPill } from
 import { maskPan, maskAccount, maskPhone, maskEmail, maskLast4 } from "../../../_components/ds";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { reportDownloadHref } from "../downloadHref";
 
 /**
  * GAP-REPORTS-DETAIL-02: the report payload is a generic dump of arbitrary
@@ -91,6 +92,8 @@ export default async function ReportDetailPage(props: { params: Promise<{ id: st
 
   // GAP-REPORTS-DETAIL-05: distinguish a FAILED job from one still pending.
   const isFailed = job.status === "failed";
+  // GAP-REPORTS-LIST-04: download goes through the owner-checked, audited endpoint, never a raw bearer URL.
+  const downloadHref = job.status === "completed" ? reportDownloadHref(job.downloadUrl) : null;
   const queueAgainHref = `/reports/list/new${job.module && job.module !== "general" ? `?reportType=${encodeURIComponent(job.module)}` : ""}`;
   return (
     <div className="wrap">
@@ -99,8 +102,8 @@ export default async function ReportDetailPage(props: { params: Promise<{ id: st
         subtitle={`${job.module} · Requested by ${job.requestedBy}`}
         back="/reports/list"
         actions={
-          job.status === "completed" && job.downloadUrl ? (
-            <a href={job.downloadUrl} target="_blank" rel="noopener noreferrer" className="btn primary">
+          downloadHref ? (
+            <a href={downloadHref} target="_blank" rel="noopener noreferrer" className="btn primary">
               Download report
             </a>
           ) : undefined
@@ -160,9 +163,9 @@ export default async function ReportDetailPage(props: { params: Promise<{ id: st
           <div className="pad" style={{ paddingTop: 0 }}>
             <p style={{ fontSize: "13px", color: "var(--mut)", margin: 0 }}>
               Showing the first {visibleRows.length.toLocaleString("en-IN")} rows.{" "}
-              {job.status === "completed" && job.downloadUrl ? (
+              {downloadHref ? (
                 <>
-                  <a href={job.downloadUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>
+                  <a href={downloadHref} target="_blank" rel="noopener noreferrer" style={{ color: "var(--primary)" }}>
                     Download the full report
                   </a>{" "}
                   to see all {totalRows.toLocaleString("en-IN")} rows.
