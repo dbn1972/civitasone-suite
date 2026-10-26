@@ -17,7 +17,7 @@
  *   - Existing field types MUST NOT change
  *   - Required fields MUST NOT be added
  */
-import { z, type ZodType } from "zod";
+import { type ZodType } from "zod";
 
 export class SchemaRegistryError extends Error {
   constructor(public readonly code: string, message: string) {
