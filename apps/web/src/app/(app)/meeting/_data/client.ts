@@ -30,11 +30,21 @@ import type {
   MajorityRule,
 } from "./types";
 
-function idempotencyKey(): Record<string, string> {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+export function idempotencyKey(): Record<string, string> {
+  const c = globalThis.crypto;
+  let uuid: string;
+  if (typeof c?.randomUUID === "function") {
+    uuid = c.randomUUID();
+  } else if (typeof c?.getRandomValues === "function") {
+    // Non-secure contexts expose getRandomValues but not randomUUID.
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    uuid = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+  } else {
+    throw new Error("A secure random source is required to create an idempotency key");
+  }
   return { "x-idempotency-key": uuid };
 }
 
