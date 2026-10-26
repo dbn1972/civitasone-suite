@@ -7,7 +7,8 @@ vi.mock("../ModuleGate", () => ({ ModuleGate: ({ children }: { children: unknown
 
 import TenantLayout from "./layout";
 import TenantAdminLayout from "../tenant-admin/layout";
-import { adminAreaRoles, TENANT_ADMIN_ROLES } from "./_roles";
+import { TENANT_ADMIN_ROLES } from "./_roles";
+import { adminAreaRoles } from "./_routeRoles";
 
 // Owner-decision officer roles must reach the screen that carries their action
 // (consent_officer #19, audit_officer #20, security_admin #21, migration_admin #23),

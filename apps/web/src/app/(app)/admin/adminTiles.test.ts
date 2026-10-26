@@ -86,7 +86,10 @@ describe("tile roles are pinned to the destination page gate", () => {
     const importedFrom = alias ? new RegExp(`import \\{[^}]*\\b${alias}\\b[^}]*\\} from "([^"]+)"`).exec(src)?.[1] : undefined;
     const siblingModules: Record<string, Record<string, readonly string[]>> = { "../tenant/_roles": tenantRoleModule };
     const imported = alias && importedFrom ? siblingModules[importedFrom]?.[alias] : undefined;
-    const expected = roleConsts[gate!] ?? imported ?? (literal ? (JSON.parse(literal) as string[]) : undefined);
+    // route-scoped layouts (tenant-admin) gate on adminAreaRoles(path): the BASE set it returns for
+    // every non-officer route is TENANT_ADMIN_ROLES, which is what the hub tile must mirror
+    const routeScoped = gate === "adminAreaRoles" ? tenantRoleModule.TENANT_ADMIN_ROLES : undefined;
+    const expected = roleConsts[gate!] ?? imported ?? routeScoped ?? (literal ? (JSON.parse(literal) as string[]) : undefined);
     expect(expected, `${gate} is not an exported role list`).toBeDefined();
     expect([...tile.roles].sort()).toEqual([...expected!].sort());
   });
