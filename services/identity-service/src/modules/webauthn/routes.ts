@@ -21,7 +21,6 @@ import * as repo from "./repo.js";
 
 const RP_ID = process.env.WEBAUTHN_RP_ID ?? "localhost";
 const RP_NAME = process.env.WEBAUTHN_RP_NAME ?? "CivitasOne";
-const ORIGIN = process.env.WEBAUTHN_ORIGIN ?? "http://localhost:3000";
 
 // H9 FIX: Challenge store backed by @civitasone/cache for fleet-wide consistency.
 // In a multi-pod deployment, "begin" on pod A and "finish" on pod B must work.

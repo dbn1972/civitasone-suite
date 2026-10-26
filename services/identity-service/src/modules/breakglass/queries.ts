@@ -1,4 +1,4 @@
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { isInForce, type GrantView, type GrantStatus } from "./domain.js";
 

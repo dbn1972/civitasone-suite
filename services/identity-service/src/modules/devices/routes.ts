@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import {
   deviceRegisterRequestSchema,
