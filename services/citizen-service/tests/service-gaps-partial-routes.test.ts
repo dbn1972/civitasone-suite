@@ -84,7 +84,14 @@ let app: FastifyInstance;
 // window runs from the server-recorded rejection time (client decisionDate is ignored).
 const APPEAL_APP_ID = "66666666-0000-4000-8000-000000000016"; // rejected 5 days ago
 const APPEAL_APP_OLD_ID = "66666666-0000-4000-8000-000000000116"; // rejected 60 days ago
-const APPEAL_SEEDS: Array<[string, number]> = [[APPEAL_APP_ID, 5], [APPEAL_APP_OLD_ID, 60]];
+// V4-G-10: a successful appeal moves the application out of "rejected", so every
+// test that files an appeal gets its OWN seeded rejected application (a shared one
+// is consumed by the first appeal and the next filing is refused).
+const APPEAL_APP_REMAND_ID = "66666666-0000-4000-8000-000000000216"; // rejected 2 days ago
+const APPEAL_APP_IDOR_ID = "66666666-0000-4000-8000-000000000316"; // rejected 3 days ago
+const APPEAL_SEEDS: Array<[string, number]> = [
+  [APPEAL_APP_ID, 5], [APPEAL_APP_OLD_ID, 60], [APPEAL_APP_REMAND_ID, 2], [APPEAL_APP_IDOR_ID, 3],
+];
 
 async function seedRejectedApp(id: string, rejectedDaysAgo: number) {
   await sqlClient.begin(async (sql) => {
@@ -533,7 +540,7 @@ describe("SVC-089 appeal filing-window + order maker-checker + remand", () => {
   it("REMAND path: a remand order requires a target and sets status remanded", async () => {
     const file = await app.inject({
       method: "POST", url: "/v1/citizen/appeals", headers: hdr(tok(TENANT_A, CITIZEN, ["citizen"])),
-      payload: { applicationId: APP_ID, grounds: "fresh evidence", decisionDate: isoDaysAgo(2), windowDays: 30 },
+      payload: { applicationId: APPEAL_APP_REMAND_ID, grounds: "fresh evidence", decisionDate: isoDaysAgo(2), windowDays: 30 },
     });
     const id = file.json().id;
     await waitFor(async () => {
@@ -639,7 +646,7 @@ describe("SVC-084 IDOR: a citizen cannot read/attribute another citizen's docume
 
 // ══════════════════════ SVC-089 IDOR — cross-citizen appeal access ═══════════
 describe("SVC-089 IDOR: a citizen cannot read/spoof another citizen's appeal", () => {
-  const APP_ID = "66666666-0000-4000-8000-000000000016";
+  const APP_ID = APPEAL_APP_IDOR_ID;
   const CITIZEN_B = "99999999-0000-4000-8000-000000000016";
   let appealId: string;
 

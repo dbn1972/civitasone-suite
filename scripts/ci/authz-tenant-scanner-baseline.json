@@ -4,9 +4,6 @@
   "count": 41,
   "entries": [
     "services/analytics-service/src/modules/activation/routes.ts::POST /v1/analytics/activation/events",
-    "services/billing-service/src/modules/gateways/routes.ts::POST /v1/billing/webhooks/ccavenue",
-    "services/billing-service/src/modules/gateways/routes.ts::POST /v1/billing/webhooks/payu",
-    "services/billing-service/src/modules/payments/checkout-routes.ts::POST /v1/billing/webhooks/razorpay",
     "services/crm-service/src/modules/contacts/routes.ts::POST /v1/crm/contacts/bulk/import/internal",
     "services/gateway-service/src/app.ts::PATCH /internal/config",
     "services/helpdesk-service/src/modules/sla/calendar-routes.ts::POST /v1/helpdesk/csat/ces",
@@ -29,7 +26,6 @@
     "services/identity-service/src/modules/webauthn/routes.ts::POST /v1/identity/webauthn/authenticate",
     "services/identity-service/src/modules/webauthn/routes.ts::POST /v1/identity/webauthn/register",
     "services/knowledge-service/src/modules/ai/routes.ts::POST /v1/knowledge/ai/classify",
-    "services/knowledge-service/src/modules/ai/routes.ts::POST /v1/knowledge/ai/prompt",
     "services/knowledge-service/src/modules/ai/routes.ts::POST /v1/knowledge/ai/search",
     "services/knowledge-service/src/modules/ai/routes.ts::POST /v1/knowledge/ai/summarize",
     "services/ml-service/src/modules/inference/routes.ts::POST /v1/ml/predict",

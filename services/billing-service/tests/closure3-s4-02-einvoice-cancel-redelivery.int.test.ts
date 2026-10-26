@@ -3,7 +3,7 @@
  * message (row-locked claim generated -> cancelling, lease for crashed attempts).
  *
  * Real Postgres (non-superuser billing_svc, RLS enforced); only the NIC client and the invoice
- * reader are mocked. Skips when Postgres is unreachable.
+ * reader are mocked. Fails loudly when Postgres is unreachable (never silently skips).
  */
 import { describe, it, expect, vi, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -18,6 +18,7 @@ async function probe(): Promise<boolean> {
   finally { await client.end({ timeout: 1 }).catch(() => undefined); }
 }
 const reachable = DSN !== "" && (await probe());
+if (!reachable) throw new Error(`closure3-s4-02: Postgres not reachable (DATABASE_URL=${DSN === "" ? "unset" : DSN.replace(/:[^:@/]+@/, ":***@")}); CI bootstraps it, locally run scripts/ci/bootstrap-postgres.sh`);
 
 const H = vi.hoisted(() => ({
   generateIrn: vi.fn(),
@@ -68,7 +69,7 @@ const seed = (v: Partial<typeof einvoiceRequests.$inferInsert> & { id: string; i
 
 const nicOk = () => ({ irn: `irn-${randomUUID()}`, ackNo: "1", ackDate: new Date().toISOString(), signedInvoice: "s", signedQrCode: "q" });
 
-describe.skipIf(!reachable)("CLOS3-S4-02 e-invoice cancel redelivery (real Postgres)", () => {
+describe("CLOS3-S4-02 e-invoice cancel redelivery (real Postgres)", () => {
   beforeEach(() => {
     H.generateIrn.mockReset().mockImplementation(async () => nicOk());
     H.cancelIrn.mockReset().mockResolvedValue(undefined);
