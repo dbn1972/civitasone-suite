@@ -41,6 +41,10 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const { id } = idParam.parse(req.params);
+    // GAP-LEGAL-OPINIONS-DETAIL-03: an unknown (or other-tenant) opinion must
+    // surface as 404 to the caller, not a 202 that the consumer then silently drops.
+    const existing = await queries.getOpinion(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "opinion not found");
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitOpinionForApproval(ctx, id));
   });
 

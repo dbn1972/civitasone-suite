@@ -843,7 +843,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-DETAIL-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by this commit (UAT B2): submit-approval now 404s an unknown opinion (was a silent 202); role gate + consumer pending_approval + audit tested; RaiseEOfficeNote already warns on notify failure
 - **First-pass claim:** After raising the eFile the component silently POSTs /api/proxy/v1/legal/opinions/:id/submit-approval and swallows any error (RaiseEOfficeNote.tsx notifyPath try/catch); SeekOpinionForm.tsx:9-11 says legal-service has no opinions write endpoint, so this route likely does not exist — undeterminable (legal-service absent).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/opinions/:id/submit-approval']`
 - **Question:** Does this route exist, and if so does it require the eFile reference, restrict roles and write an audit row?
