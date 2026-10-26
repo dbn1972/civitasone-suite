@@ -241,4 +241,26 @@ describe("dashboard aggregates and opinions honour the privileged flag (decision
     expect((await get(`/v1/legal/opinions?caseId=${PRIV}`, asB())).statusCode).toBe(404);
     expect((await get(`/v1/legal/opinions?caseId=${PRIV}`, asA())).statusCode).toBe(200);
   });
+
+  it("opinion write routes on a privileged case are 404 for a non-assigned officer, 202 for assigned/head", async () => {
+    await seedOpinions();
+    const send = (method: "POST" | "PATCH", url: string, h: Record<string, string>, payload?: unknown) => app.inject({ method, url, headers: h, payload: payload as Record<string, unknown> });
+    const seek = { subject: "s", question: "q", caseId: PRIV, addressee: { type: "external", name: "Law Dept" } };
+    const draft = { counselName: "Adv. X", opinionText: "text" };
+    const routes: Array<[string, "POST" | "PATCH", string, unknown]> = [
+      ["seek", "POST", "/v1/legal/opinions", seek],
+      ["draft", "PATCH", `/v1/legal/opinions/${OP_PRIV}/draft`, draft],
+      ["issue", "PATCH", `/v1/legal/opinions/${OP_PRIV}/issue`, {}],
+      ["submit-approval", "POST", `/v1/legal/opinions/${OP_PRIV}/submit-approval`, undefined],
+    ];
+    for (const [name, method, url, payload] of routes) {
+      expect((await send(method, url, asB(), payload)).statusCode, `${name} as non-assigned officer`).toBe(404);
+      expect((await send(method, url, asA(), payload)).statusCode, `${name} as assigned officer`).toBe(202);
+      expect((await send(method, url, asHead(), payload)).statusCode, `${name} as legal head`).toBe(202);
+    }
+    // Ordinary-case and standalone opinions stay writable by any legal officer.
+    expect((await send("PATCH", `/v1/legal/opinions/${OP_OPEN}/draft`, asB(), draft)).statusCode).toBe(202);
+    expect((await send("PATCH", `/v1/legal/opinions/${OP_FREE}/draft`, asB(), draft)).statusCode).toBe(202);
+    expect((await send("POST", "/v1/legal/opinions", asB(), { ...seek, caseId: OPEN })).statusCode).toBe(202);
+  });
 });
