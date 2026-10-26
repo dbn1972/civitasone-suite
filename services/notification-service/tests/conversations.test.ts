@@ -32,10 +32,6 @@ function token(tenantId = TENANT_A, roles = ["notification_user"]) {
   return signToken({ sub: ACTOR, tid: tenantId, roles, sid: "sess-conv-1" }, SECRET);
 }
 
-function adminToken(tenantId = TENANT_A) {
-  return token(tenantId, ["notification_admin"]);
-}
-
 let app: FastifyInstance;
 
 beforeAll(async () => {

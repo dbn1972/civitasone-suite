@@ -7,7 +7,7 @@
  * 3. Auth checks: 401/403
  * 4. Guard logic: checkQuota behavior
  */
-import { describe, it, expect, afterAll, vi, beforeEach } from "vitest";
+import { describe, it, expect, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";

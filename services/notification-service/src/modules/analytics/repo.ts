@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { openEvents, clickEvents, deliveryMetrics } from "./schema.js";
 

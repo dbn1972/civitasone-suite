@@ -12,10 +12,6 @@ export type DndWindow = {
 
 export type DndDecision = { action: "deliver" } | { action: "hold"; releaseAt: Date };
 
-const DAY_MAP: Record<string, number> = {
-  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
-};
-
 /**
  * Evaluate whether a single DND window is active at the given time.
  * Converts `now` to the window's timezone and checks if it falls within

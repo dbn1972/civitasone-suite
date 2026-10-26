@@ -18,7 +18,7 @@
  * URL the route returns — not merely a DB row pointing at a key nothing
  * ever wrote.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { S3Client, CreateBucketCommand } from "@aws-sdk/client-s3";
 import { signToken } from "@civitasone/auth";
 import { resetClient, objectExists, deleteObject } from "@civitasone/storage";

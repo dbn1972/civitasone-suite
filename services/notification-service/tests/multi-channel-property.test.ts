@@ -176,7 +176,7 @@ describe("Property 13: Webhook Includes Delivery ID Header", () => {
 
 // ─── Property 14-17: Analytics ─────────────────────────────────────────────────
 
-import { instrumentHtml, buildMetricsAggregate } from "../src/modules/analytics/domain.js";
+import { instrumentHtml } from "../src/modules/analytics/domain.js";
 
 describe("Property 14: Email Instrumentation Adds Tracking Pixel", () => {
   it("output always contains pixel URL for any deliveryId", () => {
@@ -262,7 +262,7 @@ describe("Property 21: Multiple DND Windows Evaluation", () => {
 
 // ─── Property 22: Priority ─────────────────────────────────────────────────────
 
-import { classify, getRetryPolicy, shouldBypassDigest } from "../src/modules/priority/domain.js";
+import { classify } from "../src/modules/priority/domain.js";
 
 describe("Property 22: Priority Default Assignment", () => {
   it("unknown/undefined input defaults to normal", () => {
@@ -327,7 +327,7 @@ describe("Property 25: Base Template Update Flags Variants Stale", () => {
 
 // ─── Property 26-28: Segments ──────────────────────────────────────────────────
 
-import { validateCriteria, buildSegmentQuery, isSegmentNonEmpty } from "../src/modules/segments/domain.js";
+import { buildSegmentQuery, isSegmentNonEmpty } from "../src/modules/segments/domain.js";
 
 describe("Property 26: Segment Resolution Returns Only Matching Recipients", () => {
   it("buildSegmentQuery creates correct filters for role criteria", () => {
