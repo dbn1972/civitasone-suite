@@ -212,3 +212,13 @@ describe("middleware public offline fallback", () => {
     expect(res.status).toBe(307);
   });
 });
+
+// Route-scoped officer gates (tenant/_roles.ts) read x-pathname; middleware must
+// always overwrite it so a client-sent value can never widen a layout gate.
+describe("middleware x-pathname request header", () => {
+  it("stamps the real pathname and overrides a spoofed client header", () => {
+    const req = new NextRequest(new URL("https://demo.test/contact"), { headers: { "x-pathname": "/tenant/consent-exchange" } });
+    const res = middleware(req);
+    expect(res.headers.get("x-middleware-request-x-pathname")).toBe("/contact");
+  });
+});
