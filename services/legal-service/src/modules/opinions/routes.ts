@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { seekOpinionBody, draftOpinionBody, issueOpinionBody, idParam, listOpinionsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
 import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
@@ -63,6 +64,8 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const opinion = await queries.getOpinion(id, ctx.tenantId);
     if (!opinion) throw new HttpError(404, "NOT_FOUND", "opinion not found");
+    // GAP-LEGAL-CASES-DETAIL-06: an opinion on a privileged case is as hidden as the case.
+    if (opinion.caseId) await assertCaseAccess(ctx, opinion.caseId);
     const [dto] = await queries.withAddressee([opinion], ctx.tenantId, ctx.correlationId);
     return reply.send(dto);
   });
@@ -71,8 +74,11 @@ export async function opinionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listOpinionsQuery.parse(req.query);
-    const rows = await queries.listOpinions(ctx.tenantId, q.status, q.caseId);
-    return reply.send({ items: await queries.withAddressee(rows ?? [], ctx.tenantId, ctx.correlationId) });
+    if (q.caseId) await assertCaseAccess(ctx, q.caseId);
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const rows = (await queries.listOpinions(ctx.tenantId, q.status, q.caseId)) ?? [];
+    const visible = rows.filter((o) => !o.caseId || !hidden.has(o.caseId));
+    return reply.send({ items: await queries.withAddressee(visible, ctx.tenantId, ctx.correlationId) });
   });
 
   app.setErrorHandler(errorHandler);
