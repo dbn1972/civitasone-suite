@@ -17157,5 +17157,25 @@
       "rejected": "Rejected",
       "failed": "Could not be processed"
     }
+  },
+  "legalCaseNew": {
+    "loading": "Loading…",
+    "selectCourt": "Select a court or tribunal…",
+    "courtOtherOption": "Other (not in the list)",
+    "courtOtherLabel": "Court / forum name *",
+    "courtUnverifiedNote": "A court that is not in the list is saved as typed and marked unverified.",
+    "group": {
+      "supreme": "Supreme Court",
+      "high_court": "High Courts",
+      "district": "District and subordinate courts",
+      "tribunal": "Tribunals and commissions"
+    },
+    "filingDateLabel": "Filing date *",
+    "filingDateInvalid": "Enter the filing date. It cannot be in the future.",
+    "departmentLabel": "Department *",
+    "selectDepartment": "Select the owning department…",
+    "departmentRequired": "Select the department that owns this case.",
+    "departmentsEmpty": "No departments are available. Ask an administrator to set up the organisation hierarchy.",
+    "refDataError": "The court and department lists could not be loaded. Reload the page to try again."
   }
 }

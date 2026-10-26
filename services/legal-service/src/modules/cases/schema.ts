@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, varchar, timestamp, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, varchar, timestamp, date, boolean } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 export const casesSchema = pgSchema("cases");
@@ -21,6 +21,11 @@ export const legalCases = casesSchema.table("legal_cases", {
   caseNo:     text("case_no").notNull(),
   title:      text("title").notNull(),
   court:      text("court").notNull(),
+  // Owner decision #10: court-master code ('other' = free text), verified flag, filing date, department id (org hierarchy).
+  courtCode:     text("court_code"),
+  courtVerified: boolean("court_verified").notNull().default(false),
+  filingDate:    date("filing_date"),
+  departmentId:  uuid("department_id"),
   subject:    text("subject"),
   caseTypeId: uuid("case_type_id"),
   petitioner: text("petitioner"),
