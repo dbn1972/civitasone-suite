@@ -17,7 +17,6 @@ import { disbursementTransfers } from "../disbursement-transfers/schema.js";
 import { COMMANDS } from "../../topics.js";
 
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
-const AUDIT_TOPIC = "audit.event.record";
 
 const pathParamSchema = z.object({
   id: z.string().uuid(),

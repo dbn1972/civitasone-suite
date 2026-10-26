@@ -110,10 +110,6 @@ const ALL_MSG_IDS = [
   MSG_XFER_RETURNED, MSG_PROMO_RETURNED, MSG_LEAVE_RETURNED, MSG_RECRUIT_RETURNED,
 ];
 
-// Additional IDs for malformed payload tests
-const MSG_XFER_MALFORMED = "cc00001a-0000-4000-8000-000000000077";
-const MSG_DISC_MALFORMED = "cc00001b-0000-4000-8000-000000000077";
-
 function wireTenantAwareQueue(q: Queue): Queue {
   const rawSubscribe = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>

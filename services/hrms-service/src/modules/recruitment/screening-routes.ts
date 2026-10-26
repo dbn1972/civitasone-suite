@@ -73,7 +73,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
       if (decision === "pending") { skipped++; continue; }
       screened++;
     }
-    await publishF3Write(ctx, "recruitment_screening_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_screening_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ jobOpeningId: id, screened, skipped, total: applications.length }) as any;
   });
 
@@ -226,7 +226,7 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
       if (BULK_SHORTLIST_BLOCKED.has(a.screeningDecision)) { skipped++; continue; }
       shortlisted++;
     }
-    await publishF3Write(ctx, "recruitment_screening_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_screening_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ jobOpeningId: id, shortlisted, skipped, requested: body.applicationIds.length }) as any;
   });
 

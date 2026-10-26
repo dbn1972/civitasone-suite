@@ -1,13 +1,16 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import {
-  gradeAttempt, decidePass, canAttempt, issueCertificate, evaluateCertificateStatus,
-  type GradableQuestion, type Qtype, type SubmittedAnswer,
+  gradeAttempt,
+  decidePass,
+  issueCertificate,
+  type GradableQuestion,
+  type Qtype,
+  type SubmittedAnswer,
 } from "./domain.js";
 import * as repo from "./repo.js";
 const log = pino({ name: "hrms-f3-assessment" });

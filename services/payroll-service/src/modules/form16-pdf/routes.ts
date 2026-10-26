@@ -16,7 +16,7 @@ import { payrollSlips } from "../payroll/schema.js";
 import { form16BulkJobs } from "./schema.js";
 import { publicFailureDetails } from "./failure-reasons.js";
 import { COMMANDS } from "../../topics.js";
-import { getObject, presignedGetUrl } from "@civitasone/storage";
+import { presignedGetUrl } from "@civitasone/storage";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 

@@ -7,7 +7,7 @@ import { HttpError } from "../../shared/context.js";
 import { isMaskedValue } from "../../shared/pii-mask.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
 import { idempotentId } from "@civitasone/auth";
 

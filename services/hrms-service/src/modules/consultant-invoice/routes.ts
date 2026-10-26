@@ -23,8 +23,6 @@ import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { EVENTS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { loadTypeResolver } from "../employee/engagement-policy.js";
 import { computeInvoiceTax } from "./domain.js";
@@ -210,7 +208,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
       grossMinor: inv.grossMinor, gstApplicable: inv.gstApplicable, gstRateBps,
       tdsRateBps, tdsThresholdMinor: TDS_194J_THRESHOLD_MINOR, ytdGrossMinor: ytd,
     });
-    await publishF3Write(ctx, "consultant_invoice_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "consultant_invoice_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({
       id: invId, status: "approved",
       grossMinor: inv.grossMinor, gstMinor: tax.gstMinor, tdsMinor: tax.tdsMinor,
@@ -223,7 +221,7 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { invId } = invParam.parse(req.params);
-    const body = z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ approverRemarks: z.string().max(2000).optional() }).parse(req.body ?? {});
     const inv = await mustInvoice(ctx.tenantId, invId);
     if (inv.status !== "submitted" && inv.status !== "verified") {
       throw new HttpError(409, "WRONG_STATE", `invoice is '${inv.status}', cannot reject`);

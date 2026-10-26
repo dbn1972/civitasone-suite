@@ -413,7 +413,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { suspId } = suspParam.parse(req.params);
-    const body = z.object({
+    z.object({
       revokedDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       remarks: z.string().max(2000).optional(),
     }).parse(req.body);

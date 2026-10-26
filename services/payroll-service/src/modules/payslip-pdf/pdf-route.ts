@@ -15,7 +15,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { eq, and } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 

@@ -11,11 +11,6 @@
  * - Alerts flow to HR admin dashboard for investigation
  */
 
-import { eq, and, sql, gte, lte } from "drizzle-orm";
-import { db } from "../../shared/db.js";
-import { hrmsGeoAttendance } from "../geo-attendance/schema.js";
-import { randomUUID } from "node:crypto";
-
 // ═══ Types ═══
 export interface FraudAlert {
   alertType: string;
@@ -282,7 +277,7 @@ export function detectApproverCollusion(
     }
   }
 
-  for (const [approver, count] of approverCounts) {
+  for (const [, count] of approverCounts) {
     const ratio = count / leaveRecords.length;
     if (ratio > 0.9 && totalApprovers > 2) {
       return {

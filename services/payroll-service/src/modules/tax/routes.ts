@@ -6,7 +6,6 @@ import { scopeEmployeeId, staffRolesOf, isRouteStaff, requireOwnEmployeeId } fro
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
-import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations, taxDeclarationWindows } from "./schema.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";

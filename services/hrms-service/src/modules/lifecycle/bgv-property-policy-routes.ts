@@ -6,9 +6,9 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsBgvChecks, hrmsPropertyReturns, hrmsMandatoryDocConfigs, hrmsPolicyAcknowledgements } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -19,8 +19,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   // ── BGV checks ──
   app.post("/v1/hrms/employees/:id/bgv-checks", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const { id } = idParam.parse(req.params);
-    const body = z.object({
+    idParam.parse(req.params);
+    z.object({
       checkType: z.string().min(1).max(32),
       provider: z.string().max(64).optional(),
     }).parse(req.body);
@@ -51,8 +51,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   // ── Property returns ──
   app.post("/v1/hrms/employees/:id/property-returns", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const { id } = idParam.parse(req.params);
-    const body = z.object({ itemDescription: z.string().min(1).max(500) }).parse(req.body);
+    idParam.parse(req.params);
+    z.object({ itemDescription: z.string().min(1).max(500) }).parse(req.body);
     const pid = randomUUID();
     await publishF3Write(ctx, "lifecycle_bgv_property_policy_routes__2", pid, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: pid, returnStatus: "pending" }) as any;
@@ -76,7 +76,7 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   // ── Mandatory-doc config ──
   app.post("/v1/hrms/mandatory-doc-configs", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
-    const body = z.object({
+    z.object({
       employeeType: z.string().min(1).max(32),
       docType: z.string().min(1).max(64),
       required: z.boolean().default(true),
@@ -96,8 +96,8 @@ export async function bgvPropertyPolicyRoutes(app: FastifyInstance): Promise<voi
   // ── Policy acknowledgements ──
   app.post("/v1/hrms/employees/:id/policy-acknowledgements", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, [...HR_ROLES, "employee"]);
-    const { id } = idParam.parse(req.params);
-    const body = z.object({
+    idParam.parse(req.params);
+    z.object({
       policyName: z.string().min(1).max(200),
       policyVersion: z.string().max(24).optional(),
     }).parse(req.body);

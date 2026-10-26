@@ -19,8 +19,6 @@ const TENANT = randomUUID();
 
 // Arjun Nair — regular employee
 const ARJUN = { id: randomUUID(), roles: ["employee"] };
-// Priya — HR admin (for comparison)
-const PRIYA = { id: randomUUID(), roles: ["hr_admin", "super_admin"] };
 
 function h(p: { id: string; roles: string[] }) {
   const token = signToken({ sub: p.id, tid: TENANT, roles: p.roles, sid: `s-${p.id.slice(0,6)}` }, SECRET, 7200);

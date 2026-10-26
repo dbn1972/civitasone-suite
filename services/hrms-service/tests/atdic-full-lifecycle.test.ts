@@ -127,7 +127,7 @@ describe("1. Seed 100 Employees", () => {
   }, 60_000);
 
   it("should list employees after seeding", async () => {
-    const { status, body } = await GET(HRMS, "/v1/hrms/employees");
+    const { status } = await GET(HRMS, "/v1/hrms/employees");
     expect(status).toBe(200);
   });
 });
@@ -313,7 +313,7 @@ describe("6. Recruitment — Full Hire Flow", () => {
   let appId: string;
 
   it("GET /v1/hrms/recruitment/jobs — list openings", async () => {
-    const { status, body } = await GET(HRMS, "/v1/hrms/recruitment/jobs");
+    const { status } = await GET(HRMS, "/v1/hrms/recruitment/jobs");
     expect(status).toBeLessThan(600);
   });
 
@@ -360,7 +360,7 @@ describe("6. Recruitment — Full Hire Flow", () => {
   });
 
   it("GET /v1/hrms/requisitions — list", async () => {
-    const { status, body } = await GET(HRMS, "/v1/hrms/requisitions");
+    const { status } = await GET(HRMS, "/v1/hrms/requisitions");
     expect(status).toBeLessThan(600);
   });
 
@@ -407,7 +407,7 @@ describe("7. Disciplinary Cases (CCS CCA Rules)", () => {
   });
 
   it("GET — list cases", async () => {
-    const { status, body } = await GET(HRMS, `/v1/hrms/employees/${empId}/disciplinary-cases`);
+    const { status } = await GET(HRMS, `/v1/hrms/employees/${empId}/disciplinary-cases`);
     expect(status).toBeLessThan(600);
   });
 
@@ -451,7 +451,7 @@ describe("7. Disciplinary Cases (CCS CCA Rules)", () => {
   });
 
   it("POST — open minor proceeding", async () => {
-    const { status, body } = await POST(HRMS, `/v1/hrms/employees/${empId}/disciplinary-cases`, {
+    const { status } = await POST(HRMS, `/v1/hrms/employees/${empId}/disciplinary-cases`, {
       caseNo: `DISC-MINOR-${Date.now()}`, proceedingType: "minor",
       allegation: "Habitual late-coming in violation of office timings.",
     });

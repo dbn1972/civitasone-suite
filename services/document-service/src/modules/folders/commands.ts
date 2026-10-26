@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
-import { queue, cache } from "../../shared/infra.js";
+import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type { CreateFolderBody } from "./validators.js";
 

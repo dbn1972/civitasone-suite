@@ -28,7 +28,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";

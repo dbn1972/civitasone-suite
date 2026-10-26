@@ -13,8 +13,8 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { hrms360Feedback, hrmsAparDisclosures, hrmsRatingAppeals } from "./schema.js";
+import { scopedRead } from "../../shared/db.js";
+import { hrms360Feedback, hrmsRatingAppeals } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -24,7 +24,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/appraisals/:id/360-feedback", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       reviewerId: z.string().uuid(),
       relationship: z.enum(["self", "peer", "subordinate", "supervisor", "external"]),
       ratings: z.string().max(2000).optional(),
@@ -51,7 +51,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/appraisals/:id/disclosure", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ employeeId: z.string().uuid() }).parse(req.body);
+    z.object({ employeeId: z.string().uuid() }).parse(req.body);
     const did = randomUUID();
     await publishF3Write(ctx, "appraisals_feedback_routes__1", did, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: did, appraisalId: id, disclosed: true }) as any;
@@ -60,7 +60,7 @@ export async function feedbackRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/appraisals/:id/appeal", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({
+    z.object({
       employeeId: z.string().uuid(),
       appealReason: z.string().min(10).max(5000),
       pipLinked: z.boolean().default(false),

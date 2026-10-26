@@ -23,7 +23,7 @@ describe("shared/context — HttpError", () => {
 
 describe("shared/context — requireRole", () => {
   it("throws 403 when caller has no matching role", async () => {
-    const { requireRole, HttpError } = await import("../src/shared/context.js");
+    const { requireRole } = await import("../src/shared/context.js");
     const ctx = {
       actorId: "a1", tenantId: "t1", roles: ["employee"],
       correlationId: "c1", actorType: "user" as const,

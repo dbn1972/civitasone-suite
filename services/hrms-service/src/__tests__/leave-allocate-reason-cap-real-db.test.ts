@@ -24,7 +24,6 @@ const CAPPED = "facade00-a110-4000-8000-0000000000b4"; // maxDays 12
 const UNCAPPED = "facade00-a110-4000-8000-0000000000b5"; // maxDays 0 == no cap
 
 const authAs = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s-alloc-cap" }, SECRET)}` });
-const auth = () => authAs(["hr_admin"]);
 let app: Awaited<ReturnType<typeof buildApp>>;
 const asTenant = <T>(fn: (tx: typeof sqlClient) => Promise<T>) => withRawTenantGuc(sqlClient, TENANT, fn);
 

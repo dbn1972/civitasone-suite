@@ -2,7 +2,7 @@ import { minorFromDb, toSafeInt, roundMinorToRupees } from "../../shared/money.j
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { eq, and, inArray } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";

@@ -16,7 +16,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   computePanelScore, visibleScores, type Competency, type InterviewerScore,
 } from "./interview-scoring.js";
@@ -114,7 +113,7 @@ export async function interviewScoringRoutes(app: FastifyInstance): Promise<void
     // Per-interviewer normalised overall (0-100) for quick display.
     const overall = computePanelScore(template, [{ interviewerId: ctx.actorId, scores: body.scores }]).weightedScore;
     try {
-      await publishF3Write(ctx, "recruitment_interview_scoring_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "recruitment_interview_scoring_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       if (String((err as { code?: string }).code) === "23505") throw new HttpError(409, "ALREADY_SUBMITTED", "you have already submitted your score for this interview") as any;
       throw err;
@@ -152,7 +151,7 @@ export async function interviewScoringRoutes(app: FastifyInstance): Promise<void
     const submitted: InterviewerScore[] = rows.filter((s) => s.submitted).map((s) => ({ interviewerId: s.interviewerId, scores: s.scores, submitted: true }));
     if (submitted.length === 0) throw new HttpError(409, "NO_SCORES", "no submitted interviewer scores to consolidate");
     const result = computePanelScore(template, submitted, iv.cutoffScore ?? null);
-    await publishF3Write(ctx, "recruitment_interview_scoring_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_interview_scoring_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, ...result })) as any;
   });
 

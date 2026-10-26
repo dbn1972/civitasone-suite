@@ -74,7 +74,6 @@ const asTenant = <T>(fn: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0
   runWithTenant(tenant, () => db.transaction(fn));
 const q = (text: ReturnType<typeof sql>, tenant = TENANT) =>
   withTenantScope(db as never, tenant, async (tx: { execute: (x: unknown) => Promise<unknown> }) => rowsOf(await tx.execute(text)));
-const auditsFor = (resourceId: string) => audits.filter((a) => a.payload.resourceId === resourceId);
 
 beforeAll(async () => {
   const raw = queue.subscribe.bind(queue);

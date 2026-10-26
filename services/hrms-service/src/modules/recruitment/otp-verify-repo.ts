@@ -4,11 +4,6 @@ import { hrmsCandidates, hrmsCandidateOtpChallenges, type OtpChallengeRow } from
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-function affected(res: unknown): number {
-  const r = res as { rowCount?: number; count?: number };
-  return r.rowCount ?? r.count ?? 0;
-}
-
 export async function insertChallenge(tx: Writer, row: typeof hrmsCandidateOtpChallenges.$inferInsert): Promise<void> {
   await tx.insert(hrmsCandidateOtpChallenges).values(row);
 }

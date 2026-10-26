@@ -19,9 +19,13 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
-  DEFAULT_GOVT_CHAIN, currentStageRole, isFinalStage, canPublish, isEditable, cloneFields, toVacancyType,
+  DEFAULT_GOVT_CHAIN,
+  currentStageRole,
+  isFinalStage,
+  canPublish,
+  isEditable,
+  cloneFields,
   type ApprovalStage,
 } from "./requisition-domain.js";
 import * as repo from "./requisition-repo.js";
@@ -113,7 +117,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (b.approvalChain && !privileged) throw new HttpError(403, "CHAIN_NOT_ALLOWED", "only HR admins may set a custom approval chain");
     const chain: ApprovalStage[] = b.approvalChain ?? DEFAULT_GOVT_CHAIN;
     validateChain(chain);
-    await publishF3Write(ctx, "recruitment_requisition_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(201).send({ id, requisitionNo: reqNo(id), status: "draft" }) as any;
     function reqNo(x: string) { return `REQ-${x.slice(0, 8).toUpperCase()}`; }
   });
@@ -165,7 +169,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
       validateChain(b.approvalChain);
       patch.approvalChain = b.approvalChain;
     }
-    await publishF3Write(ctx, "recruitment_requisition_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send({ id, status: r.status }) as any;
   });
 
@@ -181,14 +185,14 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (r.status !== "draft" && r.status !== "returned") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot submit`);
     const chain = r.approvalChain as ApprovalStage[];
     if (!Array.isArray(chain) || chain.length === 0) throw new HttpError(400, "NO_APPROVAL_CHAIN", "requisition has no approval chain configured");
-    await publishF3Write(ctx, "recruitment_requisition_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, status: "pending_approval", currentStage: 0 })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ comments: z.string().max(2000).optional() }).parse(req.body ?? {});
+    z.object({ comments: z.string().max(2000).optional() }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
     // HIGH finding: this route (like /return below) had NO department-scoping
     // check at all — only the stage-role gate further down. A department-
@@ -215,14 +219,14 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "SOD_VIOLATION", "you have already approved an earlier stage of this requisition");
     }
     const final = isFinalStage(chain, r.currentStage);
-    await publishF3Write(ctx, "recruitment_requisition_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, status: final ? "approved" : "pending_approval", currentStage: final ? r.currentStage : r.currentStage + 1 })) as any;
   });
 
   app.post("/v1/hrms/requisitions/:id/return", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ comments: z.string().min(1).max(2000) }).parse(req.body ?? {}); // mandatory (R-RA-0054)
+    z.object({ comments: z.string().min(1).max(2000) }).parse(req.body ?? {}); // mandatory (R-RA-0054)
     const r = await mustReq(ctx.tenantId, id);
     // HIGH finding: department scoping, same gap and same fix as /approve above.
     assertCanView(ctx, r, await resolveDeptScope(req, ctx));
@@ -231,7 +235,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const role = currentStageRole(chain, r.currentStage);
     if (!role) throw new HttpError(409, "NO_STAGE", "no active approval stage");
     requireRole(ctx, [role, "super_admin"]);
-    await publishF3Write(ctx, "recruitment_requisition_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "recruitment_requisition_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.send(jsonSafe({ id, status: "returned" })) as any;
   });
 
@@ -239,7 +243,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
+    z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
     if (r.status !== "pending_approval" && r.status !== "approved") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot hold`);
     await publishF3Write(ctx, "recruitment_requisition_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -262,7 +266,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
+    z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
     if (r.status === "published" || r.status === "cancelled" || r.status === "closed") {
       throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot cancel`);
@@ -275,7 +279,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
+    z.object({ reason: z.string().min(1).max(2000) }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
     if (r.status !== "approved" && r.status !== "published" && r.status !== "on_hold") {
       throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot close`);
@@ -291,7 +295,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const r = await mustReq(ctx.tenantId, id);
     assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     const newId = randomUUID();
-    const carried = cloneFields(r as unknown as Record<string, unknown>);
+    cloneFields(r as unknown as Record<string, unknown>);
     await publishF3Write(ctx, "recruitment_requisition_routes__9", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.code(201).send({ id: newId, clonedFrom: id, status: "draft" }) as any;
   });

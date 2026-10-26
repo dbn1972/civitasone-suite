@@ -181,7 +181,7 @@ describe("hrms.employee.separated → gratuity computation", () => {
     await settle();
 
     expect(insertGratuityMock).toHaveBeenCalledOnce();
-    const [tx, row] = insertGratuityMock.mock.calls[0]!;
+    const [, row] = insertGratuityMock.mock.calls[0]!;
     expect(row.tenantId).toBe(TENANT);
     expect(row.employeeId).toBe("emp-1");
     expect(row.separationRef).toBe("separation:2025-06-30");

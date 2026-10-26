@@ -27,10 +27,8 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
-import { enqueue } from "../../shared/outbox.js";
-import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { computeVacancy, allocateRoster, canApprove } from "./domain.js";
+import { computeVacancy, canApprove } from "./domain.js";
 import {
   createPlanBody, updatePlanBody, setRosterBody, approvePlanBody,
   advertiseRequisitionBody, idParam,
@@ -38,7 +36,6 @@ import {
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const READ_ROLES = [...HR_ROLES, "manager", "finance_officer"];
-const AUDIT = "audit.event.record";
 
 function withVacancy(plan: {
   requiredStrength: number; sanctionedStrength: number; filledStrength: number;
@@ -80,7 +77,7 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
       // different id meant the row the consumer inserted was never the row
       // this handler's 201 response pointed the client at — every immediate
       // follow-up read/write against the returned id 404'd.
-      await publishF3Write(ctx, "manpower_planning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "manpower_planning_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     } catch (err) {
       // Belt-and-braces: a genuine concurrent create racing the pre-check
       // above would still surface as a 23505 inside the consumer (silently
@@ -134,7 +131,7 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     if (plan.status !== "draft") {
       throw new HttpError(409, "INVALID_STATE", "only a draft plan can be edited");
     }
-    await publishF3Write(ctx, "manpower_planning_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "manpower_planning_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // The actual update (and its resulting `version`/`updatedAt`) is applied
     // later, asynchronously, by the consumer — this route cannot read it back
     // synchronously. It used to destructure `{ ...row }` off publishF3Write's
@@ -203,7 +200,7 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = approvePlanBody.parse(req.body ?? {});
+    approvePlanBody.parse(req.body ?? {});
     const plan = await repo.getPlan(ctx.tenantId, id);
     if (!plan) throw new HttpError(404, "NOT_FOUND", "manpower plan not found");
 
@@ -237,7 +234,7 @@ export async function manpowerPlanningRoutes(app: FastifyInstance): Promise<void
     // guessed. Callers that need the generated requisition should read it
     // back via GET /v1/hrms/manpower/requisitions?planId=... once the write
     // has landed.
-    await publishF3Write(ctx, "manpower_planning_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "manpower_planning_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
 
     return reply.code(202).send({
       id, status: "approved", approvedBy: ctx.actorId, vacancy: vac.vacancy,

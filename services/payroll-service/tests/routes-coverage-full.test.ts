@@ -8,7 +8,6 @@
 import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = "test_secret_for_civitasone_32chr";

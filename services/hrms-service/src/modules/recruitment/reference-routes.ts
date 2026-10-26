@@ -17,7 +17,6 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
 import {
   DISABILITY_TYPES, validateReservationAttributes, validateReferences, validateRelationshipDeclaration,
   type Reference, type RelationshipDeclaration,
@@ -55,8 +54,7 @@ export async function candidateReferenceRoutes(app: FastifyInstance): Promise<vo
 
     // Persist a NORMALISED (uppercase) category so the reservation-shortlist module
     // (#257) sees a canonical value and never mis-buckets a lowercase "obc".
-    const category = body.category ? body.category.trim().toUpperCase() : null;
-    await publishF3Write(ctx, "recruitment_reference_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
+    await publishF3Write(ctx, "recruitment_reference_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any;
     void c;
     return reply.send({ id, updated: true });
   });
