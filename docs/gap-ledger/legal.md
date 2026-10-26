@@ -775,7 +775,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  Closed by this commit (UAT B2): backend 409 DUPLICATE_CASE_NO + accepted id already existed; CreateCaseForm now shows 409 as a Case number field error and opens /legal/cases/:id once readable (CreateCaseForm.test.tsx)
+  Closed by 1af21bfad (UAT B2): backend 409 DUPLICATE_CASE_NO + accepted id already existed; CreateCaseForm now shows 409 as a Case number field error and opens /legal/cases/:id once readable (CreateCaseForm.test.tsx)
 - **First-pass claim:** After success the user is sent to the list, not the new case (CreateCaseForm.tsx:56); duplicate case number handling and audit on create are undeterminable (legal-service absent from snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases']`
 - **Question:** Does create reject a duplicate case number with 409 and a field-level error, return the new id, and write an audit row?
@@ -798,7 +798,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-DASHBOARD-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  Closed by this commit (UAT B2): tokens already gone; tests/gap-legal-dashboard-parity.test.ts proves activeCases/disposedCases/totalCases equal the list-endpoint totals (3 active + 2 disposed)
+  Closed by a4b287943 (UAT B2): tokens already gone; tests/gap-legal-dashboard-parity.test.ts proves activeCases/disposedCases/totalCases equal the list-endpoint totals (3 active + 2 disposed)
 - **First-pass claim:** Description text colour and card copy use hard-coded #667085 rather than tokens (page.tsx:43,58,68); backend legal-service not in snapshot so the counters' definitions are undeterminable.
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/dashboard (loader in legal/dashboard/page.tsx)']`
 - **Question:** How does the service define each dashboard counter (open, hearings this week, overdue) and is the count scoped by user role/department?
@@ -810,7 +810,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-HEARINGS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason) [partial: no dispatcher sends due reminders to a recipient at remind_at; recipient rule (creator vs assigned officer/counsel) needs an owner decision]
-  Partially closed by this commit (UAT B2): migration 0030 aligns reminders.legal_reminders with the model (the consumer INSERT failed on a real DB, so reminders were never stored/audited); 403/401 + persistence + legal.reminder.created audit tested
+  Partially closed by d0bcdd505 (UAT B2): migration 0030 aligns reminders.legal_reminders with the model (the consumer INSERT failed on a real DB, so reminders were never stored/audited); 403/401 + persistence + legal.reminder.created audit tested
 - **First-pass claim:** Countdown colours are hard-coded hex (#b42318, #b54708, #067647) (HearingsTable.tsx:60-79); reminder POST audit and recipient are undeterminable (legal-service absent from the snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases/:id/reminder', 'POST /api/v1/legal/hearings']`
 - **Question:** Does the reminder POST resolve recipients server-side (assigned counsel/officer), enqueue via notification queue, and write an audit row?
@@ -833,7 +833,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-OPINIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  Closed by this commit (UAT B2): list and detail return one DTO (soughtBy/counselName): tests/gap-legal-opinion-dto-parity.test.ts + apiMappers.legalOpinionContract.test.ts
+  Closed by 5f4741810 (UAT B2): list and detail return one DTO (soughtBy/counselName): tests/gap-legal-opinion-dto-parity.test.ts + apiMappers.legalOpinionContract.test.ts
 - **First-pass claim:** List reads advisorName / requestedBy (OpinionsTable.tsx:11-12) while the detail page reads counselName / soughtBy (opinions/[id]/page.tsx:41-42): field names disagree, so one of the two shows blanks; whether the API returns both is undeterminable (legal-service not in snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/opinions', 'GET /api/v1/legal/opinions/:id']`
 - **Question:** Do list and detail return the same field names (advisorName/counselName, requestedBy/soughtBy)?
@@ -845,7 +845,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-OPINIONS-DETAIL-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  Closed by this commit (UAT B2): submit-approval now 404s an unknown opinion (was a silent 202); role gate + consumer pending_approval + audit tested; RaiseEOfficeNote already warns on notify failure
+  Closed by ccc3fbf31 (UAT B2): submit-approval now 404s an unknown opinion (was a silent 202); role gate + consumer pending_approval + audit tested; RaiseEOfficeNote already warns on notify failure
 - **First-pass claim:** After raising the eFile the component silently POSTs /api/proxy/v1/legal/opinions/:id/submit-approval and swallows any error (RaiseEOfficeNote.tsx notifyPath try/catch); SeekOpinionForm.tsx:9-11 says legal-service has no opinions write endpoint, so this route likely does not exist — undeterminable (legal-service absent).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/opinions/:id/submit-approval']`
 - **Question:** Does this route exist, and if so does it require the eFile reference, restrict roles and write an audit row?
