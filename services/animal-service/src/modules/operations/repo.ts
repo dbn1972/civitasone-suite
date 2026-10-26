@@ -1,4 +1,4 @@
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { animalOperations, type OperationRow, type OperationInsert } from "./schema.js";
 
