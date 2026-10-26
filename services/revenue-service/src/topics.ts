@@ -75,8 +75,12 @@ export const COMMANDS = {
   writeOffCreate: "revenue.write_off.create",
   /** payload: { writeOffId, approvalId, approve: boolean, reason? } — checker step */
   writeOffDecide: "revenue.write_off.decide",
-  /** payload: { assesseeId, reason } — refer to legal-service */
+  /** payload: { assesseeId, reason } — recovery referral, maker step (needs a served + lapsed demand notice) */
   recoveryRefer: "revenue.recovery.refer",
+  /** payload: { referralId, approve: boolean, reason? } — recovery referral, checker step (owner decision #4) */
+  recoveryReferDecide: "revenue.recovery.decide",
+  /** payload: { assesseeId, noticeNo, servedOn, noticePeriodDays, demandId? } — record a served demand notice */
+  demandNoticeServe: "revenue.demand_notice.serve",
 
   // ── BBPS Biller (SVC-134) ────────────────────────────────────────────────
   /** payload: { assesseeIdentifier } — returns outstanding via DCB */

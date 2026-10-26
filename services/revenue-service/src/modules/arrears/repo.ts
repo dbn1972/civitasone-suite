@@ -8,7 +8,8 @@ import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./sc
 import { waivers } from "../trade-license/schema.js";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { demands } from "../assessment/schema.js";
-import { getLatestDemandBalance } from "./outstanding.js";
+import { getLatestDemandBalance, getAssesseeOutstanding } from "./outstanding.js";
+import { listNoticesTx } from "./recovery-notice.js";
 
 export async function listInstalmentPlans(
   tenantId: string,
@@ -45,6 +46,37 @@ export async function findWriteOffById(tenantId: string, id: string) {
       .limit(1);
   });
   return rows[0] ?? null;
+}
+
+/** Owner decision #4: one referral by id, tenant-scoped (the decide screen + the route pre-check). */
+export async function findRecoveryReferralById(tenantId: string, id: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select()
+      .from(recoveryReferrals)
+      .where(and(eq(recoveryReferrals.tenantId, tenantId), eq(recoveryReferrals.id, id)))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
+ * Owner decision #4: what the officer needs to see BEFORE raising a coercive
+ * referral — the live outstanding (latest balance per demand), the demand
+ * notices served and whether their period has lapsed, and the resulting
+ * eligibility. The consumer enforces the same rules in-transaction.
+ */
+export async function getRecoveryReadiness(tenantId: string, assesseeId: string) {
+  return tenantTransaction(db, tenantId, async (tx) => {
+    const outstanding = await getAssesseeOutstanding(tx, tenantId, assesseeId);
+    const notices = await listNoticesTx(tx, tenantId, assesseeId);
+    return {
+      outstandingMinor: outstanding,
+      notices,
+      eligible: outstanding > 0n && notices.some((n) => n.lapsed),
+    };
+  });
 }
 
 /**
@@ -176,12 +208,14 @@ export async function listRecoveryReferrals(
   tenantId: string,
   pagination: { limit: number; offset: number },
   assesseeId?: string,
+  status?: string,
 ) {
   return tenantTransaction(db, tenantId, async (tx) => {
     const t = tx as typeof db;
-    const where = assesseeId
-      ? and(eq(recoveryReferrals.tenantId, tenantId), eq(recoveryReferrals.assesseeId, assesseeId))
-      : eq(recoveryReferrals.tenantId, tenantId);
+    const conds = [eq(recoveryReferrals.tenantId, tenantId)];
+    if (assesseeId) conds.push(eq(recoveryReferrals.assesseeId, assesseeId));
+    if (status) conds.push(eq(recoveryReferrals.status, status));
+    const where = and(...conds);
     const rows = await t
       .select()
       .from(recoveryReferrals)

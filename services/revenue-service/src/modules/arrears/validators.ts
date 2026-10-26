@@ -77,6 +77,26 @@ export const recoveryReferralListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   assesseeId: z.string().uuid().optional(),
+  // Owner decision #4: the checker queue (?status=pending).
+  status: z.enum(['pending', 'referred', 'rejected', 'accepted', 'resolved']).optional(),
+});
+
+/** Owner decision #4: a distinct checker approves or rejects a pending recovery referral. */
+export const recoveryDecideBody = z.object({
+  approve: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+/**
+ * Owner decision #4: serve a demand notice. The notice period (days) is entered
+ * per notice by the serving officer — no statutory default is assumed.
+ */
+export const serveDemandNoticeBody = z.object({
+  assesseeId: z.string().uuid(),
+  demandId: z.string().uuid().optional(),
+  noticeNo: z.string().min(1).max(64),
+  servedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+  noticePeriodDays: z.number().int().min(1).max(365),
 });
 
 export const createWaiverBody = z.object({

@@ -12,6 +12,8 @@ import {
   writeOffDecideBody,
   createRecoveryReferralBody,
   recoveryReferralListQuery,
+  recoveryDecideBody,
+  serveDemandNoticeBody,
   createWaiverBody,
   waiverDecideBody,
     listWaiversQuery,
@@ -139,6 +141,57 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: result });
   });
 
+  // ── POST /v1/revenue/demand-notices (owner decision #4) ─────────────────────
+  // Record that a demand notice was served. A recovery referral is allowed only
+  // after a served notice's period has lapsed.
+  app.post("/v1/revenue/demand-notices", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const body = serveDemandNoticeBody.parse(req.body);
+    const result = await commands.serveDemandNotice(ctx, body as unknown as Record<string, unknown>);
+    return reply.code(202).send({ data: result });
+  });
+
+  // ── GET /v1/revenue/assessees/:id/recovery-readiness (owner decision #4) ────
+  // Amount outstanding, notices served (and whether their period lapsed) and
+  // eligibility — shown to the officer before they raise a coercive referral.
+  app.get("/v1/revenue/assessees/:id/recovery-readiness", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const r = await repo.getRecoveryReadiness(ctx.tenantId, id);
+    return reply.send({ data: { ...r, outstandingMinor: r.outstandingMinor.toString() } });
+  });
+
+  // ── GET /v1/revenue/recovery-referrals/:id ──────────────────────────────────
+  app.get("/v1/revenue/recovery-referrals/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const referral = await repo.findRecoveryReferralById(ctx.tenantId, id);
+    if (!referral) throw new HttpError(404, "NOT_FOUND", "recovery referral not found");
+    return reply.send({ data: referral });
+  });
+
+  // ── PATCH /v1/revenue/recovery-referrals/:id/decide (checker step) ──────────
+  app.patch("/v1/revenue/recovery-referrals/:id/decide", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, REVENUE_ROLES);
+    const { id } = uuidParam.parse(req.params);
+    const body = recoveryDecideBody.parse(req.body);
+    // Synchronous pre-check (409) — the consumer re-enforces both in-transaction.
+    const referral = await repo.findRecoveryReferralById(ctx.tenantId, id);
+    if (!referral) throw new HttpError(404, "NOT_FOUND", "recovery referral not found");
+    if (referral.status !== "pending") {
+      throw new HttpError(409, "RECOVERY_NOT_PENDING", `recovery referral is already ${referral.status}`);
+    }
+    if (referral.createdBy === ctx.actorId) {
+      throw new HttpError(409, "MAKER_CHECKER_VIOLATION", "the maker of a recovery referral cannot decide it (separation of duties)");
+    }
+    const result = await commands.decideRecoveryReferral(ctx, id, body as unknown as Record<string, unknown>);
+    return reply.code(202).send({ data: result });
+  });
+
   // ── GET /v1/revenue/recovery-referrals ──────────────────────────────────────
   // The recovery register (GAP-REVENUE-RECOVERY-02): a coercive referral takes
   // effect immediately, so who referred whom (and when, and why) must be
@@ -152,6 +205,7 @@ export async function arrearsRoutes(app: FastifyInstance): Promise<void> {
       ctx.tenantId,
       { limit: q.limit, offset: q.offset },
       q.assesseeId,
+      q.status,
     );
     return reply.send({
       data: rows,
