@@ -4,7 +4,8 @@
  * Usage: node scripts/dev/procurement-e2e.mjs [--base http://127.0.0.1:3000]
  */
 import { chromium } from '@playwright/test';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
 const BASE = (() => {
@@ -12,7 +13,8 @@ const BASE = (() => {
   return idx >= 0 ? process.argv[idx + 1] : (process.env.WEB_URL ?? 'http://127.0.0.1:3000');
 })();
 
-const OUT = '/tmp/procurement-e2e';
+// Unpredictable, owner-only (0700) output dir; override with E2E_OUT for CI artifact paths.
+const OUT = process.env.E2E_OUT ?? mkdtempSync(join(tmpdir(), 'procurement-e2e-'));
 mkdirSync(OUT, { recursive: true });
 
 const SCREENS = [
