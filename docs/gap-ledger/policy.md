@@ -401,7 +401,8 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 9fe523231 (UAT B2): evaluate now writes the decision (permission, subject, decision, onBehalfOf) to audit.event.record in the same txn; tests/gap-policy-evaluate-05-audit.test.ts.
 - **First-pass claim:** Evaluate is a POST but has no audit note; if evaluation decisions are audited server-side that is undeterminable here (policy-service absent).
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['POST /api/v1/policy/evaluate']`
 - **Question:** Does evaluate emit an audit/decision-log event, and is it restricted to policy admins?
