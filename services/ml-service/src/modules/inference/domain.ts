@@ -26,7 +26,6 @@ import { mlPredictions } from "../predictions/schema.js";
 import { mlExperiments } from "../training/schema.js";
 import { EVENTS } from "../../topics.js";
 import { recordPrediction } from "../observability/metrics.js";
-import { randomUUID } from "node:crypto";
 import type { FeatureDomain } from "../feature-store/schema.js";
 import type { ModelDomain } from "../models/schema.js";
 
@@ -264,7 +263,7 @@ export async function predict(
     // Execute through circuit breaker
     const response = await inferenceBreaker.call(async () => {
       // Resolve A/B experiment
-      const { useChallenger, experimentId: resolvedExpId } = await resolveExperiment(
+      const { experimentId: resolvedExpId } = await resolveExperiment(
         tenantId,
         domain,
         experimentId,

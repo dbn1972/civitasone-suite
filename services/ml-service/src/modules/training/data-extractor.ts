@@ -241,7 +241,6 @@ export function applyStratifiedSampling(
 
   const minorityIsPositive = positiveCount < negativeCount;
   const minorityCount = minorityIsPositive ? positiveCount : negativeCount;
-  const majorityCount = minorityIsPositive ? negativeCount : positiveCount;
   const minorityLabel = minorityIsPositive ? 1 : 0;
 
   const currentRatio = minorityCount / totalCount;
