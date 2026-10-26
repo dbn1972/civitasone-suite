@@ -511,7 +511,7 @@ describe("Opinions routes", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/legal/opinions",
       headers: authHeader(),
-      payload: { opinionNo: "OP-TEST-1", subject: "Validity of clause", question: "Is it valid?" },
+      payload: { opinionNo: "OP-TEST-1", subject: "Validity of clause", question: "Is it valid?", addressee: { type: "external", name: "Test Addressee" } },
     });
     expect(res.statusCode).toBe(202);
   });
