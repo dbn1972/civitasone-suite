@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/app/_components/ds";
+import Link from "next/link";
 import { useEstabT } from "@/lib/estab/useEstabT";
 
 interface MeetingActionsProps {
@@ -15,20 +15,13 @@ export function MeetingActions({ meetingId: _meetingId }: MeetingActionsProps) {
         GAP-ESTAB-MEETINGS-DETAIL-05: the header "Agenda" link was removed; it duplicated the
         Agenda tab, which is the single route to the agenda.
 
-        GAP-ESTAB-MEETINGS-DETAIL-04 (NEEDS OWNER DECISION): this screen cannot capture or generate
-        minutes. There is no generate-MOM endpoint, and no MOM field on this page; minutes are only
-        shown when the meeting service already holds them. The control stays disabled and says so,
-        instead of promising a feature or pointing at a field that does not exist.
+        GAP-ESTAB-MEETINGS-DETAIL-04 (owner decision #30): the dead, disabled "Generate MOM" button is
+        gone. The MOM is produced through meeting-service's minutes workflow and linked from this
+        meeting, so the header action jumps to the Minutes (MOM) section where that link is managed.
       */}
-      <Button
-        type="button"
-        style={{ minHeight: 44 }}
-        disabled
-        aria-disabled="true"
-        title={t("momUnavailableTitle")}
-      >
-        {t("momGenerate")}
-      </Button>
+      <Link className="btn" style={{ minHeight: 44 }} href="#mom">
+        {t("momLink")}
+      </Link>
     </>
   );
 }

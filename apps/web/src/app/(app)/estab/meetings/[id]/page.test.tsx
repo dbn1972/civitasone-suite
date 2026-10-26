@@ -9,6 +9,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+vi.mock("../../../meeting/_data/client", () => ({
+  fetchMinutes: vi.fn().mockResolvedValue(null),
+  createMinutes: vi.fn(),
+}));
+
 import MeetingDetailPage from "./page";
 
 function makeMeeting(overrides: Record<string, unknown> = {}) {
@@ -129,6 +134,22 @@ describe("MeetingDetailPage", () => {
     expect(h1.textContent).toContain("Budget Review");
     expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/estab/meetings");
     expect(screen.getAllByRole("tab", { name: /^Agenda/ })).toHaveLength(1);
-    expect(screen.getByRole("button", { name: "Generate MOM" })).toBeDisabled();
+    // Owner decision #30: the dead disabled Generate MOM button is replaced by a link to the MOM section.
+    expect(screen.queryByRole("button", { name: "Generate MOM" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Minutes (MOM)" })).toHaveAttribute("href", "#mom");
+  });
+
+  it("owner decision #30: an unlinked meeting offers to link a meeting from the Meetings module", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
+    render(await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("button", { name: "Link a meeting" })).toBeInTheDocument();
+  });
+
+  it("owner decision #30: a linked meeting shows the link and routes into the minutes workflow", async () => {
+    const gov = "11111111-1111-4111-8111-111111111111";
+    fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ governanceMeetingId: gov, status: "completed" }), source: "api" });
+    render(await MeetingDetailPage({ params: Promise.resolve({ id: "m1" }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByText("Linked to the Meetings module")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Open minutes workflow" })).toHaveAttribute("href", `/meeting/meetings/${gov}/minutes`);
   });
 });
