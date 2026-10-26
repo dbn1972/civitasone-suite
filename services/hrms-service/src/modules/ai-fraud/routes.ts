@@ -109,7 +109,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
 
     // Store alerts
     for (const alert of alerts) {
-      await publishF3Write(ctx, "ai_fraud_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await publishF3Write(ctx, "ai_fraud_routes__0", randomUUID(), { alert, body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     }
 
     const duration = Date.now() as any - startTime;
@@ -160,7 +160,7 @@ export async function aiFraudRoutes(app: FastifyInstance): Promise<void> {
         upcomingProbationEnd: [],
       });
       for (const rec of recs) {
-        await publishF3Write(ctx, "ai_fraud_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+        await publishF3Write(ctx, "ai_fraud_routes__1", randomUUID(), { rec, body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
       }
       const fresh = await scopedRead((tx) => tx.select().from(hrmsRecommendations).where(eq(hrmsRecommendations.tenantId, ctx.tenantId)).limit(50)) as any;
       return reply.send({ data: fresh });
