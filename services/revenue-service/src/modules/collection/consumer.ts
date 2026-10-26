@@ -113,7 +113,11 @@ export function registerCollectionConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const { receiptId, reason } = msg.payload as { receiptId: string; reason: string };
+      const { receiptId, reason, amountMinor: requestedAmount } = msg.payload as {
+        receiptId: string;
+        reason: string;
+        amountMinor?: string;
+      };
 
       // Load the original receipt to get its amount
       const receiptRows = await tx
@@ -141,14 +145,16 @@ export function registerCollectionConsumers(queue: Queue): void {
       }
 
       // Domain validation
-      validateRefund(receipt.amountMinor, receipt.amountMinor);
+      // Owner decision #1: optional partial amount, default = full receipt.
+      const refundAmount = requestedAmount !== undefined ? BigInt(requestedAmount) : receipt.amountMinor;
+      validateRefund(refundAmount, receipt.amountMinor);
 
       // Insert refund (status: pending, makerUserId: actorId)
       await tx.insert(refunds).values({
         tenantId: msg.tenantId,
         receiptId,
         assesseeId: receipt.assesseeId,
-        amountMinor: receipt.amountMinor,
+        amountMinor: refundAmount,
         reason,
         status: "pending",
         makerUserId: msg.actorId,

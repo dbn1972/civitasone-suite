@@ -67,6 +67,18 @@ export async function collectionRoutes(app: FastifyInstance): Promise<void> {
     if (live) {
       throw new HttpError(409, "REFUND_ALREADY_EXISTS", `a ${live.status} refund already exists for this receipt`);
     }
+    // Owner decision #1: an explicit (partial) amount must be positive and never
+    // above the refundable balance. With one live refund per receipt, the
+    // refundable balance is the receipt amount.
+    if (body.amountMinor !== undefined) {
+      const amount = BigInt(body.amountMinor);
+      if (amount <= 0n) throw new HttpError(422, "INVALID_AMOUNT", "refund amount must be positive");
+      const receipt = await repo.findReceipt(ctx.tenantId, body.receiptId);
+      if (!receipt) throw new HttpError(404, "NOT_FOUND", "receipt not found");
+      if (amount > receipt.amountMinor) {
+        throw new HttpError(422, "REFUND_EXCEEDS_RECEIPT", "refund amount exceeds the refundable balance of the receipt");
+      }
+    }
     const result = await commands.createRefund(ctx, body);
     return reply.code(202).send({ data: result });
   });
