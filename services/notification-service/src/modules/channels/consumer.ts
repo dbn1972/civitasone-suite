@@ -5,6 +5,9 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { getAdapter } from "../../adapters/index.js";
+import { maskRecipient } from "../../adapters/mask.js";
+import { fetchActorEmail } from "./identity-client.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -39,6 +42,41 @@ export function registerChannelConsumers(q: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.channel, msg.payload.id));
     },
   );
+  // Owner decision #25: test-send. markProcessed, the send and the audit row share ONE
+  // transaction; the recipient is the actor's own address (never from the payload) and is
+  // masked in the audit row. A redelivered message is a no-op (markProcessed).
+  q.subscribe<{ id: string; tenantId: string }>(COMMANDS.testSendChannel, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const ch = await repo.findChannelByIdTx(tx, msg.payload.id, msg.tenantId);
+      if (!ch) return; // not this tenant's channel: nothing to send, nothing to audit
+      let recipient: string | undefined;
+      let outcome: "success" | "failure" = "failure";
+      let reason: string | null = null;
+      if (!ch.enabled) reason = "channel_disabled";
+      else if (ch.type === "email") recipient = await fetchActorEmail(msg.tenantId, msg.actorId);
+      else if (ch.type === "in_app") recipient = msg.actorId;
+      if (!reason && !recipient) reason = "no_recipient_on_file";
+      const adapter = getAdapter(ch.type);
+      if (!reason && !adapter) reason = "no_adapter";
+      if (!reason && adapter && recipient) {
+        const res = await adapter.send({
+          recipient, tenantId: msg.tenantId, userId: msg.actorId,
+          subject: "CivitasOne test message",
+          body: `This is a test message for the "${ch.name}" channel. If you can read it, the channel is working.`,
+        });
+        if (res.ok) outcome = "success"; else reason = "send_failed"; // provider detail stays in logs, not the audit row
+      }
+      await enqueue(tx as Parameters<typeof enqueue>[0], {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "notification", action: "test_send_channel", resourceType: "channel", resourceId: ch.id,
+          outcome, reason, channelType: ch.type, recipient: maskRecipient(recipient),
+        },
+      });
+    });
+  });
   q.subscribe<{ id: string; tenantId: string; type: string; name: string; isDefault: boolean; enabled: boolean }>(
     COMMANDS.createChannel, async (msg) => {
       await db.transaction(async (tx) => {

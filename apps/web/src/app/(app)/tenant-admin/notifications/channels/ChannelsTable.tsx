@@ -41,7 +41,7 @@ export function ChannelsTable({ channels, canManage = false }: { channels: Chann
               key: "id",
               label: t("actionsHeader"),
               sortable: false,
-              render: (c: Channel) => <ChannelRowActions id={c.id} name={c.name} enabled={c.enabled} isDefault={c.isDefault} />,
+              render: (c: Channel) => <ChannelRowActions id={c.id} name={c.name} type={c.type} enabled={c.enabled} isDefault={c.isDefault} />,
             }]
           : []),
       ]}
