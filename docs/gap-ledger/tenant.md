@@ -70,7 +70,8 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [~] **Status** (INTERIM — needs tenant-service effective-dated code-value endpoint and /tenant/code-lists/[code] detail page; web+backend feature build, not invented here)
+- [x] **Status** (UAT B2)
+- Closed by uat/b2-tenant-admin (UAT B2): tenant/code-lists/[code] drill-down lists effective-dated values (getTenantCodeListValues zod loader drops rows missing effectiveFrom; rows link via ModuleListTable detailHrefBase; tenant-service /v1/tenant/code-lists/:code/values alias) — _data.test.ts, [code]/page.test.tsx, tests/code-list-values-alias.test.ts
 - **W0 note:** partly fixed by #1916 — mapCodeListRows maps header fields (code, system/custom); no [code] detail route or effective dates
 - **First-pass claim:** Subtitle promises 'effective-dated values' but only list headers are shown; values, effectiveFrom/effectiveTo are not mapped (tenant/_data.ts:32-75) and there is no drill-down link, so the reference data cannot be inspected.
 - **Verified evidence:** mapTenantRows (tenant/_data.ts:32-75) flattens rows to id/label/sublabel/status/meta; it reads row.value but not a values array, effectiveFrom or effectiveTo. ModuleListTable has no link column and no [id] route exists under tenant/code-lists (only page.tsx). Payload shape from tenant-service is cannot-verify.
