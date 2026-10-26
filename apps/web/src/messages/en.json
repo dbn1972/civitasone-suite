@@ -24,13 +24,13 @@
   },
   "themes": {
     "title": "Themes",
-    "description": "Design tokens, templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
+    "description": "Design tokens, document templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
     "editBrandLabel": "Edit tenant brand",
     "editBrandNote": "Change the logo and colours tenants see",
     "tokensLabel": "Tokens",
     "tokensNote": "Review tokens and publish a theme revision to all tenant screens",
-    "templatesLabel": "Templates",
-    "templatesNote": "Ready-made looks you can start from (read-only)",
+    "templatesLabel": "Document templates",
+    "templatesNote": "Email, letter and certificate templates (read-only)",
     "brandingLabel": "Branding",
     "brandingNote": "View branding packs (read-only)",
     "brandLabel": "Brand preset",
@@ -39,8 +39,8 @@
     "brandPageSubtitle": "The active brand and available presets for your organisation.",
     "brandingPageTitle": "Themes — Branding",
     "brandingPageSubtitle": "Branding packs for your organisation.",
-    "templatesPageTitle": "Themes — Templates",
-    "templatesPageSubtitle": "Ready-made looks you can start from."
+    "templatesPageTitle": "Themes — Document templates",
+    "templatesPageSubtitle": "Email, letter and certificate templates for your organisation. These are document templates, not theme presets."
   },
   "action": {
     "save": "Save",
