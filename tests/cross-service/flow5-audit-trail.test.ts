@@ -5,7 +5,7 @@
  * audit-service which records the immutable trail.
  *   Emitters : contract-service, citizen-service (representative) both enqueue
  *              AUDIT_TOPIC = "audit.event.record" on every mutation.
- *   Consumer : audit CONSUME_TOPICS.auditEventRecord = "audit.event.record".
+ *   Consumer : audit CONSUMED_EVENTS.auditEventRecord = "audit.event.record".
  *
  * (A) EMIT  — drive the REAL contract create + citizen grievance-register
  *     mutations and assert BOTH write an "audit.event.record" to the outbox.
@@ -19,7 +19,7 @@ import { ChainHarness, setCurrentHarness } from "../integration/harness.js";
 import { RecordingQueue, envelope, collect, TENANT } from "./_helpers.js";
 import { COMMANDS as CONTRACT_COMMANDS } from "../../services/contract-service/src/topics.js";
 import { COMMANDS as CIT_COMMANDS } from "../../services/citizen-service/src/topics.js";
-import { CONSUME_TOPICS as AUDIT_CONSUME } from "../../services/audit-service/src/topics.js";
+import { CONSUMED_EVENTS as AUDIT_CONSUME } from "../../services/audit-service/src/topics.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 

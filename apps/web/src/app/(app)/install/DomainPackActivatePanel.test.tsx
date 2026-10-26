@@ -15,6 +15,7 @@ vi.mock("./domainPackApi", async (orig) => {
     fetchDomainPacksForInstall: vi.fn(),
     fetchDomainPacksForInstallResult: vi.fn(),
     activateDomainPackStage3: vi.fn(),
+    fetchActivationStageStatus: vi.fn(),
   };
 });
 
@@ -29,6 +30,8 @@ beforeEach(() => {
   vi.mocked(api.fetchDomainPacksForInstall).mockReset();
   vi.mocked(api.fetchDomainPacksForInstallResult).mockReset();
   vi.mocked(api.activateDomainPackStage3).mockReset();
+  vi.mocked(api.fetchActivationStageStatus).mockReset();
+  vi.mocked(api.fetchActivationStageStatus).mockResolvedValue({ state: "queued" });
   vi.mocked(api.fetchDomainPacksForInstall).mockResolvedValue(municipalList);
   vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({
     packs: municipalList,
@@ -56,6 +59,7 @@ describe("DomainPackActivatePanel (FN-17)", () => {
       domainPackKey: "municipal-in-v1",
       stageNumber: 3,
       packKeys: ["pack:trade-license", "pack:pgr", "pack:water-connection"],
+      stageId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
     });
 
     render(<DomainPackActivatePanel />);
@@ -123,5 +127,88 @@ describe("DomainPackActivatePanel (FN-17)", () => {
     // heading/outcome line. Assert they are not in an open/visible position by
     // checking the summary label is what is shown.
     expect(screen.getAllByText(/Technical details/i).length).toBeGreaterThanOrEqual(1);
+  });
+
+  // GAP-INSTALL-DOMAIN-PACKS-01: the activation result follows the tracked job
+  // until it reaches completed or failed.
+  describe("activation job status", () => {
+    const accepted = {
+      id: "cccccccc-cccc-cccc-cccc-cccccccccccc",
+      stageId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      status: "accepted",
+      correlationId: "corr",
+      domainPackKey: "municipal-in-v1",
+      stageNumber: 3,
+      packKeys: ["pack:trade-license", "pack:pgr", "pack:water-connection"],
+    };
+
+    async function activate() {
+      render(<DomainPackActivatePanel pollIntervalMs={20} />);
+      await waitFor(() => expect(screen.getByRole("button", { name: /Activate Domain Pack/i })).toBeEnabled());
+      fireEvent.click(screen.getByRole("button", { name: /Activate Domain Pack/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Activate$/i }));
+      await screen.findByText(/Activation accepted/i);
+    }
+
+    it("polls the stage and shows completion once the job completes", async () => {
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
+      vi.mocked(api.fetchActivationStageStatus)
+        .mockResolvedValueOnce({ state: "queued" })
+        .mockResolvedValue({ state: "completed" });
+      await activate();
+      expect(await screen.findByText(/Activation completed/i, undefined, { timeout: 8000 })).toBeInTheDocument();
+      expect(api.fetchActivationStageStatus).toHaveBeenCalledWith("dddddddd-dddd-dddd-dddd-dddddddddddd");
+      expect(screen.queryByText(/Activation failed/i)).not.toBeInTheDocument();
+    }, 15000);
+
+    it("shows a failure state (not success) when the job fails", async () => {
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
+      vi.mocked(api.fetchActivationStageStatus).mockResolvedValue({ state: "failed" });
+      await activate();
+      expect(await screen.findByText(/Activation failed/i, undefined, { timeout: 8000 })).toBeInTheDocument();
+      expect(screen.queryByText(/Activation completed/i)).not.toBeInTheDocument();
+    }, 15000);
+
+    it("shows the queued state while the job has not finished", async () => {
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue(accepted);
+      await activate();
+      expect(await screen.findByText(/Waiting for the install job/i)).toBeInTheDocument();
+    });
+  });
+
+  // GAP-INSTALL-DOMAIN-PACKS-04: the panel is themed with design-system tokens,
+  // not hard-coded Tailwind palette classes (which do not follow dark mode).
+  describe("design-system tokens (GAP-INSTALL-DOMAIN-PACKS-04)", () => {
+    it("renders no hard-coded Tailwind palette colour classes", async () => {
+      const { container } = render(<DomainPackActivatePanel variant="page" />);
+      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      const palette = /\b(?:bg|text|border|ring|from|to)-(?:indigo|slate|emerald|amber|red|gray|green|blue)-\d{2,3}/;
+      expect(container.innerHTML).not.toMatch(palette);
+    });
+
+    it("renders no palette classes in the embedded variant, error banner or result state either", async () => {
+      vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({ packs: municipalList, error: true });
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue({
+        id: "c", stageId: "d", status: "accepted", correlationId: "x", domainPackKey: "municipal-in-v1",
+        stageNumber: 3, packKeys: [],
+      });
+      const { container } = render(<DomainPackActivatePanel variant="embedded" pollIntervalMs={20} />);
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: /Activate Domain Pack/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Activate$/i }));
+      await screen.findByText(/Activation accepted/i);
+      const palette = /\b(?:bg|text|border|ring|from|to)-(?:indigo|slate|emerald|amber|red|gray|green|blue)-\d{2,3}/;
+      expect(container.innerHTML).not.toMatch(palette);
+    });
+
+    it("the page back link is a real link without a hand-typed arrow glyph", async () => {
+      render(<DomainPackActivatePanel variant="page" />);
+      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      const back = screen.getByRole("link", { name: /Installer wizard/i });
+      expect(back).toHaveAttribute("href", "/install");
+      expect(back.textContent).not.toMatch(/[←→]/);
+    });
   });
 });

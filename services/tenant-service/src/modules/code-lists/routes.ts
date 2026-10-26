@@ -21,13 +21,17 @@ export async function codeListRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/tenant/code-lists", listLists);
 
   // Lookup active values for a list code (tenant-owned or global fallback).
-  app.get("/v1/code-lists/:code/values", async (req, reply) => {
+  const listValues: RouteHandlerMethod = async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READ);
     const { code } = z.object({ code: z.string().min(1).max(64) }).parse(req.params);
     const values = await repo.lookupActiveValues(ctx.tenantId, code);
     if (values === null) throw new HttpError(404, "LIST_NOT_FOUND", "code list not found");
     return reply.send({ data: values, meta: { total: values.length } });
-  });
+  };
+  app.get("/v1/code-lists/:code/values", listValues);
+  // GAP-TENANT-CODE-LISTS-01: alias for the web drill-down (gateway forwards
+  // /api/v1/tenant/code-lists/:code/values verbatim).
+  app.get("/v1/tenant/code-lists/:code/values", listValues);
 
   // Create a tenant-scoped code list.
   app.post("/v1/code-lists", async (req, reply) => {

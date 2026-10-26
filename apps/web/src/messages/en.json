@@ -1138,6 +1138,19 @@
     "documentsCount": "{count, plural, =0 {None} one {# document} other {# documents}}",
     "slaDays": "{days, plural, one {# day} other {# days}}"
   },
+  "courtCaseSelector": {
+    "label": "Case",
+    "placeholder": "Search by title or CNR…",
+    "searching": "Searching…",
+    "searchFailed": "Search is unavailable right now. Try again shortly.",
+    "noMatches": "No matching cases",
+    "untitled": "Untitled matter",
+    "truncated": "Showing the first 100 cases — type a CNR or title to search the whole registry.",
+    "loadErrorTitle": "Couldn't load your cases",
+    "loadErrorBody": "Live data couldn't be reached, so the case list isn't available right now. Try again shortly.",
+    "emptyTitle": "No cases to pick from",
+    "emptyBody": "Register a case first, then come back here to work its hearings and orders."
+  },
   "citizenCertificates": {
     "pageTitle": "Certificates & Licences",
     "pageSubtitle": "Verify a certificate and view issued ones.",
@@ -16531,6 +16544,37 @@
       "unresolved": "Not available"
     }
   },
+  "fieldHub": {
+    "title": "Field Operations",
+    "subtitle": "Task management, visit tracking, and route optimization.",
+    "tasksTitle": "Tasks",
+    "tasksDescription": "Field task assignments and completion tracking.",
+    "visitsTitle": "Visits",
+    "visitsDescription": "Check-in/check-out logs with location verification.",
+    "routesTitle": "Routes",
+    "routesDescription": "Daily agent routes with optimised stop order.",
+    "agentsTitle": "Agents",
+    "agentsDescription": "Agents with assigned tasks and their task counts.",
+    "syncTitle": "Offline Sync",
+    "syncDescription": "Pending device sync changes pulled from the field."
+  },
+  "fieldTasks": {
+    "actionsColumn": "Actions",
+    "startLabel": "Start",
+    "startTitle": "Start this task?",
+    "startDescription": "Marks the task as in progress. It is recorded in the audit log.",
+    "startConfirm": "Start task",
+    "completeLabel": "Mark complete",
+    "completeTitle": "Mark this task complete?",
+    "completeDescription": "Closes the task as completed. It is recorded in the audit log and cannot be undone.",
+    "completeConfirm": "Complete task",
+    "assignLabel": "Assign",
+    "assignTitle": "Assign this task",
+    "assignDescription": "Choose the field agent who will carry out this task. It is recorded in the audit log.",
+    "assignConfirm": "Assign task",
+    "assignPicker": "Agent",
+    "assignPlaceholder": "Search agents by name"
+  },
   "fieldSync": {
     "title": "Offline Sync",
     "description": "Device sync changes pulled from the last {days} days.",
@@ -16814,6 +16858,9 @@
     "office": "Office",
     "codeListsTitle": "Office — Code Lists",
     "codeListsSubtitle": "Reference code lists and their dated values.",
+    "codeListsBack": "Back to code lists",
+    "codeValuesTitle": "Code List Values",
+    "codeValuesSubtitle": "Effective-dated values in this code list (read-only).",
     "consentExchangeTitle": "Office — Consent Exchange",
     "consentExchangeSubtitle": "Cross-organisation consent requests (read-only).",
     "dataMigrationTitle": "Office — Data Migration",

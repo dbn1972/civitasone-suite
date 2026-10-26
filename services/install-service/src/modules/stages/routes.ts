@@ -72,6 +72,7 @@ const domainPackActivateAcceptedSchema = z.object({
   domainPackKey: z.string(),
   stageNumber: z.literal(3),
   packKeys: z.array(z.string()),
+  stageId: z.string().uuid(),
 });
 
 export async function stagesRoutes(app: FastifyInstance): Promise<void> {

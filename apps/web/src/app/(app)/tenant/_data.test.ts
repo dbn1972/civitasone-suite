@@ -16,6 +16,7 @@ import {
   mapConsentRows,
   mapMigrationRows,
   mapCodeListRows,
+  mapCodeValueRows,
   mapPlanRows,
   mapOverviewRows,
 } from "./_data";
@@ -184,6 +185,30 @@ describe("mapCodeListRows (GAP-TENANT-CODE-LISTS-01)", () => {
     expect(row.sublabel).toBe("Legal gender codes");
     expect(row.status).toBe("System");
     expect(row.meta).toBe("GENDER");
+  });
+});
+
+describe("mapCodeValueRows (GAP-TENANT-CODE-LISTS-01)", () => {
+  it("shows label, code and the effective-dated window", () => {
+    const rows = mapCodeValueRows({
+      data: [
+        { id: "v1", code: "URBAN", label: "Urban", effectiveFrom: "2026-01-01T00:00:00Z", effectiveTo: null },
+        { id: "v2", code: "RURAL", label: "Rural", effectiveFrom: "2025-01-01T00:00:00Z", effectiveTo: "2026-01-01T00:00:00Z" },
+      ],
+    });
+    expect(rows[0]).toMatchObject({ id: "v1", label: "Urban", sublabel: "URBAN", status: "Active" });
+    expect(rows[0].meta).toMatch(/^From 0?1 Jan 2026$/);
+    expect(rows[1].status).toBe("Superseded");
+    expect(rows[1].meta).toMatch(/^From 0?1 Jan 2025 to 0?1 Jan 2026$/);
+  });
+
+  it("rejects value rows that are missing effectiveFrom", () => {
+    expect(mapCodeValueRows({ data: [{ id: "v1", code: "X", label: "X" }] })).toEqual([]);
+  });
+
+  it("code list rows are keyed by code so the row can link to its values", () => {
+    const [row] = mapCodeListRows({ data: [{ id: "uuid-1", code: "GENDER", name: "Gender" }] });
+    expect(row.id).toBe("GENDER");
   });
 });
 

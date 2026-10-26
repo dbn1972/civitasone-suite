@@ -16,18 +16,16 @@ import {
   todayIso,
 } from "../../_data/format";
 import {
-  adjournHearing,
-  approveAndIssueOrder,
   fetchCaseHearings,
   fetchCaseOrders,
-  recallOrder,
-  recordHearingOutcome,
   recordOrder,
   scheduleHearing,
-  sendBackOrder,
   submitOrderForApproval,
   transitionCase,
 } from "../../_data/client";
+import { formatShortId } from "@/lib/formatters";
+import { ApproveIssueDialog, RecallDialog, SendBackPanel } from "../../_components/OrderActionDialogs";
+import { AdjournDialog, OutcomeDialog } from "../../_components/HearingActionDialogs";
 
 const mono: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -170,6 +168,7 @@ export function CaseConsole({
         {tab === "Hearings" && (
           <HearingsPanel
             caseId={caseDetail.id}
+            caseLabel={caseDetail.title || caseDetail.cnrNumber || "this case"}
             hearings={hearings}
             source={hearingsSource}
             onDone={async (msg) => {
@@ -182,6 +181,7 @@ export function CaseConsole({
         {tab === "Orders" && (
           <OrdersPanel
             caseId={caseDetail.id}
+            caseLabel={caseDetail.title || caseDetail.cnrNumber || "this case"}
             orders={orders}
             source={ordersSource}
             onDone={async (msg) => {
@@ -419,12 +419,14 @@ function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
 
 function HearingsPanel({
   caseId,
+  caseLabel,
   hearings,
   source,
   onDone,
   onError,
 }: {
   caseId: string;
+  caseLabel: string;
   hearings: Hearing[];
   source: "api" | "error";
   onDone: (msg: string) => Promise<void> | void;
@@ -499,7 +501,7 @@ function HearingsPanel({
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {hearings.map((h) => (
-            <HearingRow key={h.id} hearing={h} onDone={onDone} onError={onError} />
+            <HearingRow key={h.id} hearing={h} caseId={caseId} caseLabel={caseLabel} onDone={onDone} />
           ))}
         </div>
       )}
@@ -509,58 +511,19 @@ function HearingsPanel({
 
 function HearingRow({
   hearing,
+  caseId,
+  caseLabel,
   onDone,
-  onError,
 }: {
   hearing: Hearing;
+  caseId: string;
+  caseLabel: string;
   onDone: (msg: string) => Promise<void> | void;
-  onError: (err: unknown, fallback: string) => void;
 }) {
   const [mode, setMode] = useState<"none" | "adjourn" | "outcome">("none");
-  const [reason, setReason] = useState("");
-  const [nextDate, setNextDate] = useState(todayIso());
-  const [outcome, setOutcome] = useState<"held" | "cancelled">("held");
-  const [notes, setNotes] = useState("");
-  const [busy, setBusy] = useState(false);
   const canAct = hearing.status === "scheduled";
-
-  async function doAdjourn(confirmReason?: string) {
-    const effectiveReason = (confirmReason ?? reason).trim();
-    if (!effectiveReason || !nextDate) return;
-    setBusy(true);
-    try {
-      await adjournHearing(hearing.id, {
-        reason: effectiveReason,
-        nextDate,
-        expectedVersion: hearing.version,
-      });
-      setMode("none");
-      setReason("");
-      await onDone("Hearing adjourned.");
-    } catch (err) {
-      onError(err, "Could not adjourn the hearing.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function doOutcome() {
-    setBusy(true);
-    try {
-      await recordHearingOutcome(hearing.id, {
-        outcome,
-        ...(notes.trim() ? { notes: notes.trim() } : {}),
-        expectedVersion: hearing.version,
-      });
-      setMode("none");
-      setNotes("");
-      await onDone("Hearing outcome recorded.");
-    } catch (err) {
-      onError(err, "Could not record the outcome.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Same row label as /court/hearings so both screens name the hearing identically.
+  const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel} (#${formatShortId(hearing.id)})`;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 10, padding: 12 }}>
@@ -587,10 +550,20 @@ function HearingRow({
           <StatusPill status={hearingPillStatus(hearing.status)} label={humanize(hearing.status)} />
           {canAct && mode === "none" && (
             <>
-              <Button variant="ghost" size="sm" onClick={() => setMode("adjourn")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Adjourn the ${rowLabel}`}
+                onClick={() => setMode("adjourn")}
+              >
                 Adjourn
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setMode("outcome")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Record outcome for the ${rowLabel}`}
+                onClick={() => setMode("outcome")}
+              >
                 Record outcome
               </Button>
             </>
@@ -598,80 +571,25 @@ function HearingRow({
         </div>
       </div>
 
-      {/* GAP-COURT-CASES-CASEID-01: adjourn via a danger ConfirmDialog (alertdialog,
-          focus-trapped, Esc cancels), reason mandatory — matching OrdersConsole/
-          HearingsConsole's ds ConfirmDialog UX contract instead of a bespoke inline panel. */}
-      <ConfirmDialog
-        open={mode === "adjourn"}
-        danger
-        title="Adjourn this hearing?"
-        confirmLabel="Confirm adjourn"
-        requireReason
-        reasonLabel="Adjournment reason"
-        description={
-          <>
-            <p>
-              Adjourning records a reason and a next date on{" "}
-              <strong>{fmtDateTime(hearing.scheduledDate)}</strong>. It does not itself schedule the
-              next hearing.
-            </p>
-            <div style={{ display: "grid", gap: 4, marginTop: 8 }}>
-              <label htmlFor={`${hearing.id}-nextdate`} style={{ fontSize: 12.5, fontWeight: 600 }}>
-                Next date
-              </label>
-              <input
-                id={`${hearing.id}-nextdate`}
-                type="date"
-                value={nextDate}
-                onChange={(e) => setNextDate(e.target.value)}
-                style={{ ...fieldStyle, width: "auto" }}
-              />
-            </div>
-          </>
-        }
-        busy={busy}
-        confirmDisabled={!nextDate}
-        onConfirm={(r) => {
-          setReason(r ?? "");
-          void doAdjourn(r);
-        }}
-        onCancel={() => setMode("none")}
-      />
-
-      <ConfirmDialog
-        open={mode === "outcome"}
-        title="Record hearing outcome?"
-        confirmLabel="Confirm outcome"
-        description={
-          <>
-            <p>
-              Record the outcome of the hearing on{" "}
-              <strong>{fmtDateTime(hearing.scheduledDate)}</strong>.
-            </p>
-            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
-              <select
-                aria-label="Outcome"
-                value={outcome}
-                onChange={(e) => setOutcome(e.target.value as "held" | "cancelled")}
-                style={{ ...fieldStyle, width: "auto" }}
-              >
-                <option value="held">Held</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <input
-                aria-label="Notes (optional)"
-                placeholder="Notes (optional)"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                style={fieldStyle}
-              />
-            </div>
-          </>
-        }
-        busy={busy}
-        onConfirm={() => void doOutcome()}
-        onCancel={() => setMode("none")}
-      />
+      {/* GAP-COURT-CASES-CASEID-01: the SAME adjourn / outcome dialogs the standalone
+          /court/hearings console uses (one component, one UX contract). */}
+      {mode === "adjourn" && (
+        <AdjournDialog
+          hearing={hearing}
+          caseId={caseId}
+          rowLabel={rowLabel}
+          onClose={() => setMode("none")}
+          onDone={onDone}
+        />
+      )}
+      {mode === "outcome" && (
+        <OutcomeDialog
+          hearing={hearing}
+          rowLabel={rowLabel}
+          onClose={() => setMode("none")}
+          onDone={onDone}
+        />
+      )}
     </div>
   );
 }
@@ -680,12 +598,14 @@ function HearingRow({
 
 function OrdersPanel({
   caseId,
+  caseLabel,
   orders,
   source,
   onDone,
   onError,
 }: {
   caseId: string;
+  caseLabel: string;
   orders: CourtOrder[];
   source: "api" | "error";
   onDone: (msg: string) => Promise<void> | void;
@@ -771,7 +691,7 @@ function OrdersPanel({
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {orders.map((o) => (
-            <OrderRow key={o.id} order={o} onDone={onDone} onError={onError} />
+            <OrderRow key={o.id} order={o} caseLabel={caseLabel} onDone={onDone} onError={onError} />
           ))}
         </div>
       )}
@@ -781,17 +701,20 @@ function OrdersPanel({
 
 function OrderRow({
   order,
+  caseLabel,
   onDone,
   onError,
 }: {
   order: CourtOrder;
+  caseLabel: string;
   onDone: (msg: string) => Promise<void> | void;
   onError: (err: unknown, fallback: string) => void;
 }) {
   const [mode, setMode] = useState<"none" | "issue" | "sendback" | "recall" | "submit">("none");
-  const [dsc, setDsc] = useState("");
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Same row label as /court/orders so both screens name the order identically.
+  const rowLabel = `${humanize(order.orderType)} order (${fmtDate(order.orderDate)}) for ${caseLabel} (#${formatShortId(order.id)})`;
 
   const run = useCallback(
     async (fn: () => Promise<void>, ok: string, bad: string) => {
@@ -799,7 +722,6 @@ function OrderRow({
       try {
         await fn();
         setMode("none");
-        setDsc("");
         await onDone(ok);
       } catch (err) {
         onError(err, bad);
@@ -838,6 +760,7 @@ function OrderRow({
             <Button
               variant="ghost"
               size="sm"
+              aria-label={`Submit the ${rowLabel} for approval`}
               onClick={() => setMode("submit")}
             >
               Submit for approval
@@ -845,16 +768,31 @@ function OrderRow({
           )}
           {mode === "none" && order.status === "pending_approval" && (
             <>
-              <Button variant="primary" size="sm" onClick={() => setMode("issue")}>
+              <Button
+                variant="primary"
+                size="sm"
+                aria-label={`Approve and issue the ${rowLabel}`}
+                onClick={() => setMode("issue")}
+              >
                 Approve &amp; issue
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setMode("sendback")}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Send back the ${rowLabel}`}
+                onClick={() => setMode("sendback")}
+              >
                 Send back
               </Button>
             </>
           )}
           {mode === "none" && order.status === "issued" && (
-            <Button variant="ghost" size="sm" onClick={() => setMode("recall")}>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Recall the ${rowLabel}`}
+              onClick={() => setMode("recall")}
+            >
               Recall
             </Button>
           )}
@@ -897,98 +835,17 @@ function OrderRow({
           }}
         />
       )}
+
+      {/* The SAME approve & issue / send back / recall components the standalone
+          /court/orders console uses (one component, one UX contract). */}
       {mode === "issue" && (
-        <ConfirmDialog
-          open
-          danger
-          title="Approve & issue this order?"
-          confirmLabel="Confirm approve & issue"
-          description={
-            <>
-              <p style={{ fontSize: 12.5, color: "var(--ink2)" }}>
-                Issuing <strong>{humanize(order.orderType)}</strong> is a human, DSC-signed act by an
-                officer other than the drafter (the service rejects self-approval). Paste the
-                detached Digital Signature Certificate (DSC) blob below.
-              </p>
-              <textarea
-                aria-label="DSC signature"
-                placeholder="-----BEGIN PKCS7----- …"
-                value={dsc}
-                onChange={(e) => setDsc(e.target.value)}
-                rows={3}
-                style={{ ...fieldStyle, resize: "vertical", ...mono, marginTop: 8 }}
-              />
-            </>
-          }
-          busy={busy}
-          confirmDisabled={dsc.trim().length === 0}
-          onConfirm={() =>
-            void run(
-              () =>
-                approveAndIssueOrder(order.id, {
-                  dscSignature: dsc.trim(),
-                  expectedVersion: order.version,
-                }),
-              "Order approved & issued.",
-              "Could not issue the order (a self-approval is rejected — the approver must differ from the maker).",
-            )
-          }
-          onCancel={() => setMode("none")}
-        />
+        <ApproveIssueDialog order={order} rowLabel={rowLabel} onClose={() => setMode("none")} onDone={onDone} />
       )}
-
       {mode === "sendback" && (
-        <ConfirmDialog
-          open
-          title="Send this order back?"
-          confirmLabel="Confirm send back"
-          optionalReason
-          reasonLabel="Remarks for the maker (optional)"
-          description={<p>Return this pending order to its maker for revision.</p>}
-          busy={busy}
-          onConfirm={(r) =>
-            void run(
-              () =>
-                sendBackOrder(order.id, {
-                  expectedVersion: order.version,
-                  ...(r ? { remarks: r } : {}),
-                }),
-              "Order sent back to the maker.",
-              "Could not send the order back.",
-            )
-          }
-          onCancel={() => setMode("none")}
-        />
+        <SendBackPanel order={order} onClose={() => setMode("none")} onDone={onDone} />
       )}
-
       {mode === "recall" && (
-        <ConfirmDialog
-          open
-          danger
-          title="Recall this issued order?"
-          confirmLabel="Confirm recall"
-          requireReason
-          reasonLabel="Reason for recall"
-          description={
-            <p>
-              Recalling withdraws an already-issued order. This is a significant judicial act and is
-              recorded with your reason.
-            </p>
-          }
-          busy={busy}
-          onConfirm={(r) =>
-            void run(
-              () =>
-                recallOrder(order.id, {
-                  recallReason: (r ?? "").trim(),
-                  expectedVersion: order.version,
-                }),
-              "Order recalled.",
-              "Could not recall the order.",
-            )
-          }
-          onCancel={() => setMode("none")}
-        />
+        <RecallDialog order={order} rowLabel={rowLabel} onClose={() => setMode("none")} onDone={onDone} />
       )}
     </div>
   );

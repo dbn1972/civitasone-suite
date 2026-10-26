@@ -130,6 +130,16 @@ async function getPendingRefunds(): Promise<LoaderResult<PendingRefundRow[]>> {
   });
 }
 
+// GAP-REVENUE-REFUNDS-02: every live (non-rejected) refund for the assessee, so
+// approved/processed refunds are flagged too -- not just the pending ones.
+async function getLiveRefunds(assesseeId: string): Promise<LoaderResult<PendingRefundRow[]>> {
+  return fetchJson<unknown, PendingRefundRow[]>(
+    `/api/v1/revenue/refunds?status=live&assesseeId=${encodeURIComponent(assesseeId)}&limit=200`,
+    [],
+    { telemetryKey: "revenue.refunds.live", mapResponse: mapPendingRefunds },
+  );
+}
+
 export default async function RefundsPage(
   props: {
     searchParams?: Promise<{ assesseeId?: string }>;
@@ -145,6 +155,14 @@ export default async function RefundsPage(
     : ({ data: [] as ReceiptRow[], source: "api" as const });
 
   const receipts = receiptsResult.data;
+
+  const liveResult = assesseeId
+    ? await getLiveRefunds(assesseeId)
+    : ({ data: [] as PendingRefundRow[], source: "api" as const });
+  const refundStatusByReceiptId: Record<string, string> = {};
+  for (const r of liveResult.data) {
+    if (r.receiptId && r.status) refundStatusByReceiptId[r.receiptId] = r.status;
+  }
 
   const pendingResult = await getPendingRefunds();
   const pendingRefunds = pendingResult.data;
@@ -225,6 +243,7 @@ export default async function RefundsPage(
             <RefundCreateForm
               assesseeId={assesseeId}
               receipts={receipts}
+              refundStatusByReceiptId={refundStatusByReceiptId}
               pendingRefundReceiptIds={pendingRefunds
                 .map((r) => r.receiptId)
                 .filter((x): x is string => typeof x === "string" && x.length > 0)}

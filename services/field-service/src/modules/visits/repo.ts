@@ -1,7 +1,7 @@
 /**
  * visits/repo.ts — Database operations for visit logs.
  */
-import { eq, and, sql, desc, type SQL } from "drizzle-orm";
+import { eq, and, sql, desc, gte, lt, type SQL } from "drizzle-orm";
 import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { visits, type VisitRow, type VisitInsert } from "./schema.js";
 
@@ -104,10 +104,13 @@ export async function listRecent(
   limit: number,
   offset: number,
   agentId?: string,
+  range?: { from?: Date; toExclusive?: Date },
 ): Promise<{ rows: VisitRow[]; total: number }> {
-  const where = agentId
-    ? and(eq(visits.tenantId, tenantId), eq(visits.agentId, agentId))
-    : eq(visits.tenantId, tenantId);
+  const conds: SQL[] = [eq(visits.tenantId, tenantId)];
+  if (agentId) conds.push(eq(visits.agentId, agentId));
+  if (range?.from) conds.push(gte(visits.checkInAt, range.from));
+  if (range?.toExclusive) conds.push(lt(visits.checkInAt, range.toExclusive));
+  const where = and(...conds);
   const rows = await scopedRead((tx) =>
     tx.select().from(visits)
       .where(where)

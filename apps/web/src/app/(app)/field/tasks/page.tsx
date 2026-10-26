@@ -1,5 +1,8 @@
-import { Card, DataTable, PageHeader, RefreshErrorState } from "../../../_components/ds";
-import { getFieldTasksDetailed, type FieldTaskRow, FIELD_TASKS_LIMIT } from "../_data";
+import { Card, PageHeader, RefreshErrorState } from "../../../_components/ds";
+import { getSessionRoles, hasAnyRole, FIELD_AGENT_ROSTER_ROLES } from "@/lib/auth/roleGuard";
+import { resolveUsers, userDisplayLabel } from "@/lib/directory/resolveUsers";
+import { getFieldTasksDetailed, FIELD_TASKS_LIMIT } from "../_data";
+import { FieldTasksTable } from "./FieldTasksTable";
 
 export const dynamic = "force-dynamic";
 
@@ -21,27 +24,18 @@ export default async function Page() {
     );
   }
 
+  // GAP-FIELD-TASKS-05: show the assignee's name, not a UUID; an unresolved id
+  // degrades to a short id, never a guessed name.
+  const names = await resolveUsers(data.map((t) => t.assigneeId ?? ""));
+  const rows = data.map((t) => (t.assigneeId ? { ...t, assignee: userDisplayLabel(names, t.assigneeId) } : t));
+  // Assign is supervisor-only server-side; the UI only offers it to them.
+  const canAssign = hasAnyRole(getSessionRoles(), FIELD_AGENT_ROSTER_ROLES);
+
   return (
     <>
       <PageHeader title="Tasks" subtitle="Field task assignments from field-service." back="/field" backLabel="Field Operations" />
       <Card title={data.length >= FIELD_TASKS_LIMIT ? `Tasks (latest ${FIELD_TASKS_LIMIT})` : "Tasks"}>
-        <DataTable<FieldTaskRow>
-          columns={[
-            { key: "title", label: "Title" },
-            { key: "taskType", label: "Type" },
-            { key: "assignee", label: "Assignee" },
-            { key: "dueDate", label: "Due", cellType: "date" },
-            { key: "status", label: "Status", cellType: "status" },
-          ]}
-          rows={data}
-          sortable
-          filterable
-          filterPlaceholder="Filter tasks…"
-          pageSize={20}
-          emptyIcon="✅"
-          emptyTitle="No tasks yet"
-          emptyMessage="Field task assignments will appear here."
-        />
+        <FieldTasksTable rows={rows} canAssign={canAssign} />
       </Card>
     </>
   );

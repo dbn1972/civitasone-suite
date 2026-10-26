@@ -9,7 +9,10 @@ import { loadCompiledRules } from "../abac/repo.js";
 import { evaluateWithAbac } from "./domain.js";
 import type { AttrBag } from "../abac/domain.js";
 
-const AUDIT = "policy.decision";
+// Decision log: written to the generic audit topic (the one audit-service ingests).
+// A dedicated policy.decision topic had no consumer, so decisions were never recorded.
+const AUDIT_TOPIC = "audit.event.record";
+const DECISION_EVENT = "policy.decision";
 
 // GAP-POLICY-EVALUATE-01: roles permitted to evaluate a permission *for another
 // user* (admin "why was X denied?"). Mirrors the ADMIN set gating bindings/abac
@@ -127,14 +130,20 @@ export async function evaluateRoutes(app: FastifyInstance): Promise<void> {
 
     await db.transaction(async (tx) => {
       await enqueue(tx as Parameters<typeof enqueue>[0], {
-        topic: AUDIT,
-        eventType: AUDIT,
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
         tenantId: actor.tenantId,
         // Subject override: audit under the admin asking. Otherwise keep the evaluated actor
         // (trusted internal callers pass an explicit actor distinct from the service principal).
         actorId: isSubjectOverride ? ctx.actorId : actor.userId,
         correlationId: ctx.correlationId,
         payload: {
+          eventType: DECISION_EVENT,
+          service: "policy",
+          action: "evaluate",
+          resourceType: "permission",
+          resourceId: body.permissionKey,
+          outcome: "success",
           permissionKey: body.permissionKey,
           decision: result.decision,
           reason: result.reason,

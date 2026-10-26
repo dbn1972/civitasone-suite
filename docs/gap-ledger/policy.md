@@ -379,7 +379,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): apps/web/src/app/(app)/policy/layout.tsx (POLICY_ADMIN_ROLES) + services/policy-service/src/modules/bindings/routes.ts:10,58-61 (ADMIN role gate, SELF_BINDING_FORBIDDEN) and role-features (all 5 routes requireRole); test comp-007-bindings-smoke.test.ts (403 non-admin, self-binding 403, grant/revoke audit))
 - **First-pass claim:** No gate on a module that edits authorisation: policy/ has no layout.tsx, ModuleGate or requireAnyRole, so any signed-in user reaches Bindings (grant role to any user id) and Role Features. Server-side enforcement undeterminable (policy-service absent).
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['POST /api/v1/policy/bindings', 'role features endpoints']`
 - **Question:** Binding creation must require a policy/tenant admin role and forbid self-escalation (granting oneself a higher role); audit each grant.
@@ -390,7 +390,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-BINDINGS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Verified on main e64260031 (UAT B1/B2): services/policy-service/src/modules/bindings/routes.ts:36-45 (GET list, admin-gated, tenant-scoped, {data,limit,offset,count,total}); test comp-007-bindings-smoke.test.ts (list, pagination, cross-tenant invisibility))
 - **First-pass claim:** List depends on an endpoint the loader comment says may not exist ("GET is attempted for F1 wiring", _data.ts:36) — a 404 would surface as the error state on every load. Undeterminable: policy-service is not in the snapshot.
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['GET /api/v1/policy/bindings', 'POST /api/v1/policy/bindings']`
 - **Question:** GET /v1/policy/bindings must exist and return the documented list shape; a 404 must not occur.
@@ -401,7 +401,8 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 9fe523231 (UAT B2): evaluate now writes the decision (permission, subject, decision, onBehalfOf) to audit.event.record in the same txn; tests/gap-policy-evaluate-05-audit.test.ts.
 - **First-pass claim:** Evaluate is a POST but has no audit note; if evaluation decisions are audited server-side that is undeterminable here (policy-service absent).
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['POST /api/v1/policy/evaluate']`
 - **Question:** Does evaluate emit an audit/decision-log event, and is it restricted to policy admins?
