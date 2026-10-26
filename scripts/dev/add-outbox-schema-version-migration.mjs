@@ -100,15 +100,23 @@ function main() {
     const num = nextMigrationNumber(files);
     const filename = `${num}_perf008_outbox_schema_version.sql`;
     const filePath = join(migrationsDir, filename);
-    if (existsSync(filePath)) {
-      console.log(`[skip] ${svc}: ${filename} already exists`);
-      continue;
-    }
-
     if (DRY_RUN) {
+      if (existsSync(filePath)) {
+        console.log(`[skip] ${svc}: ${filename} already exists`);
+        continue;
+      }
       console.log(`[dry-run] would write ${svc}/${filename}`);
     } else {
-      writeFileSync(filePath, MIGRATION_SQL);
+      try {
+        // "wx" = O_CREAT|O_EXCL: create-or-fail atomically, never overwrite.
+        writeFileSync(filePath, MIGRATION_SQL, { flag: "wx" });
+      } catch (err) {
+        if (err && err.code === "EEXIST") {
+          console.log(`[skip] ${svc}: ${filename} already exists`);
+          continue;
+        }
+        throw err;
+      }
       console.log(`[ok]   ${svc}/${filename}`);
     }
     written++;
