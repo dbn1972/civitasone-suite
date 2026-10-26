@@ -5,7 +5,7 @@
  * _Requirements: SVC-136_
  */
 import {
-  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, boolean,
+  pgSchema, uuid, text, integer, varchar, timestamp, date, bigint, boolean, jsonb,
 } from "drizzle-orm/pg-core";
 
 export const ratesSchema = pgSchema("rates");
@@ -19,6 +19,8 @@ export const rateHeads = ratesSchema.table("rate_heads", {
   category:     varchar("category", { length: 64 }).notNull(), // property_tax, water, sewerage
   unitOfMeasure: varchar("unit_of_measure", { length: 32 }),
   isActive:     boolean("is_active").notNull().default(true),
+  // Owner decision #2: deactivation is an END-DATE, never an in-place delete/flip.
+  effectiveTo:  date("effective_to"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
@@ -56,6 +58,9 @@ export const penaltyRules = ratesSchema.table("penalty_rules", {
   graceDays:    integer("grace_days").notNull().default(0),
   capMonths:    integer("cap_months"), // null = uncapped
   roundingMode: varchar("rounding_mode", { length: 16 }).notNull().default("round_half_up"),
+  // Owner decision #2: versioned with effective dates; existing rows are open-ended from the epoch.
+  effectiveFrom: date("effective_from").notNull().default("1970-01-01"),
+  effectiveTo:  date("effective_to"),
   isActive:     boolean("is_active").notNull().default(true),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -72,6 +77,8 @@ export const rebateRules = ratesSchema.table("rebate_rules", {
   rebateType:   varchar("rebate_type", { length: 24 }).notNull(), // early_payment, category
   discountBps:  integer("discount_bps").notNull(), // basis points
   validUntilDaysBeforeDue: integer("valid_until_days_before_due"),
+  effectiveFrom: date("effective_from").notNull().default("1970-01-01"),
+  effectiveTo:  date("effective_to"),
   isActive:     boolean("is_active").notNull().default(true),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -79,6 +86,31 @@ export const rebateRules = ratesSchema.table("rebate_rules", {
   updatedBy:    uuid("updated_by").notNull(),
   version:      integer("version").notNull().default(1),
 });
+
+// ── rates.config_proposals ────────────────────────────────────────────────────
+// Owner decision #2 (GAP-REVENUE-CONFIG-01): maker-checker, versioned config. A
+// proposal is applied (end-dating the old row, inserting the new version) only
+// when a DIFFERENT officer approves it.
+export const configProposals = ratesSchema.table("config_proposals", {
+  id:             uuid("id").primaryKey(),
+  tenantId:       uuid("tenant_id").notNull(),
+  kind:           varchar("kind", { length: 16 }).notNull(), // rate_head, rate_slab, penalty_rule, rebate_rule
+  action:         varchar("action", { length: 16 }).notNull(), // create, revise, end_date
+  targetId:       uuid("target_id"),
+  rateHeadId:     uuid("rate_head_id"),
+  effectiveFrom:  date("effective_from").notNull(),
+  payload:        jsonb("payload").notNull().default({}),
+  status:         varchar("status", { length: 16 }).notNull().default("pending"), // pending, approved, rejected
+  makerUserId:    uuid("maker_user_id").notNull(),
+  checkerUserId:  uuid("checker_user_id"),
+  decidedAt:      timestamp("decided_at", { withTimezone: true }),
+  decisionReason: text("decision_reason"),
+  appliedRef:     uuid("applied_ref"),
+  createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  version:        integer("version").notNull().default(1),
+});
+
+export type ConfigProposalRow = typeof configProposals.$inferSelect;
 
 // ── Inferred types ────────────────────────────────────────────────────────────
 export type RateHeadRow = typeof rateHeads.$inferSelect;
@@ -90,4 +122,4 @@ export type PenaltyRuleInsert = typeof penaltyRules.$inferInsert;
 export type RebateRuleRow = typeof rebateRules.$inferSelect;
 export type RebateRuleInsert = typeof rebateRules.$inferInsert;
 
-export const schema = { rateHeads, rateSlabs, penaltyRules, rebateRules };
+export const schema = { rateHeads, rateSlabs, penaltyRules, rebateRules, configProposals };

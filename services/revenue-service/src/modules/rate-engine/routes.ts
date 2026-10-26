@@ -16,6 +16,25 @@ import {
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
 
+/**
+ * Owner decision #2 (2026-10-26, GAP-REVENUE-CONFIG-01): rate configuration is
+ * maker-checker, versioned and effective-dated. The legacy routes below apply a
+ * change IMMEDIATELY with no second officer, so they are CLOSED by default; the
+ * supported path is POST /v1/revenue/rate-config/proposals (+ a different
+ * officer's approval). RATE_CONFIG_DIRECT_WRITE_ENABLED=true re-opens them for
+ * seeding/test fixtures only — it must never be set in a UAT or production
+ * deployment.
+ */
+function assertDirectWriteAllowed(): void {
+  if (process.env.RATE_CONFIG_DIRECT_WRITE_ENABLED !== "true") {
+    throw new HttpError(
+      409,
+      "RATE_CONFIG_REQUIRES_APPROVAL",
+      "Rate configuration changes need a second officer's approval: propose the change at /v1/revenue/rate-config/proposals",
+    );
+  }
+}
+
 export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
   app.setErrorHandler((error, req, reply) => {
     if (error instanceof ZodError) {
@@ -37,6 +56,7 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rate-heads", async (req, reply) => {
     const ctx = resolveContext(req);
+    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
     const body = createRateHeadBody.parse(req.body);
     const result = await commands.createRateHead(ctx, body);
@@ -45,6 +65,7 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rate-slabs", async (req, reply) => {
     const ctx = resolveContext(req);
+    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
     const body = createRateSlabBody.parse(req.body);
     const result = await commands.createRateSlab(ctx, body);
@@ -58,6 +79,7 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
    */
   app.put("/v1/revenue/rate-heads/:rateHeadId/slabs", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
+    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
     const { rateHeadId } = rateHeadParam.parse(req.params);
     const body = replaceRateSlabsBody.parse(req.body);
@@ -67,6 +89,7 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/penalty-rules", async (req, reply) => {
     const ctx = resolveContext(req);
+    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
     const body = createPenaltyRuleBody.parse(req.body);
     const result = await commands.createPenaltyRule(ctx, body);
@@ -75,6 +98,7 @@ export async function rateEngineRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/revenue/rebate-rules", async (req, reply) => {
     const ctx = resolveContext(req);
+    assertDirectWriteAllowed();
     requireRole(ctx, REVENUE_ROLES);
     const body = createRebateRuleBody.parse(req.body);
     const result = await commands.createRebateRule(ctx, body);

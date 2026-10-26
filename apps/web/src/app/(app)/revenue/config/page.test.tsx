@@ -9,6 +9,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const getSessionUserIdMock = vi.fn<() => string | null>(() => "checker-1");
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionUserId: () => getSessionUserIdMock(),
+}));
+
 import RateConfigPage from "./page";
 
 const rateHead = { id: "rh1", code: "PT", name: "Property Tax", category: "property_tax", unitOfMeasure: "sq_ft", isActive: true };
@@ -76,5 +81,44 @@ describe("RateConfigPage", () => {
     expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
     // The misleading "create the first rate head" prompt must not show on failure.
     expect(screen.queryByText("No rate heads configured")).not.toBeInTheDocument();
+  });
+
+  // Owner decision #2 (2026-10-26): maker-checker, versioned rate configuration.
+  it("shows proposals awaiting approval and lets a different officer decide them (owner decision #2)", async () => {
+    getSessionUserIdMock.mockReturnValue("checker-1");
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/rate-config/proposals")) {
+        return Promise.resolve({
+          data: [{ id: "pr1", kind: "penalty_rule", action: "revise", status: "pending", makerUserId: "maker-1", effectiveFrom: "2099-04-01", targetId: "p1", rateHeadId: "rh1", payload: { annualRateBps: 1800 }, decisionReason: null }],
+          source: "api",
+        });
+      }
+      if (path.includes("/rate-heads")) return Promise.resolve({ data: [rateHead], source: "api" });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
+    expect(screen.getByText(/New version of a penalty rule/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve rate-config proposal" })).toBeEnabled();
+  });
+
+  it("offers existing rows for a versioned change or end-date (owner decision #2)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/rate-heads")) return Promise.resolve({ data: [rateHead], source: "api" });
+      if (path.includes("/penalty-rules")) {
+        return Promise.resolve({
+          data: [{ id: "p1", rateHeadId: "rh1", interestType: "simple", annualRateBps: 1200, graceDays: 0, capMonths: null, roundingMode: "floor", isActive: true, effectiveFrom: "2026-04-01", effectiveTo: null, version: 1 }],
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    const ui = await RateConfigPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    const select = screen.getByLabelText(/^Row to change/) as HTMLSelectElement;
+    const labels = Array.from(select.options).map((o) => o.textContent ?? "");
+    expect(labels.some((l) => l.includes("Penalty rule") && l.includes("12"))).toBe(true);
+    expect(labels.some((l) => l.includes("Rate head") && l.includes("PT"))).toBe(true);
   });
 });

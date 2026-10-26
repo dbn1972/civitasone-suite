@@ -6,6 +6,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerRateEngineConsumers } from "./modules/rate-engine/consumer.js";
+import { registerRateConfigConsumers } from "./modules/rate-config/consumer.js";
 import { registerAssesseeConsumers } from "./modules/assessee/consumer.js";
 import { registerAssessmentConsumers } from "./modules/assessment/consumer.js";
 import { registerBillingConsumers } from "./modules/billing/consumer.js";
@@ -31,6 +32,7 @@ const log = pino({ name: "revenue-worker" });
 
 // Register all module consumers
 registerRateEngineConsumers(queue);
+registerRateConfigConsumers(queue);
 registerAssesseeConsumers(queue);
 registerAssessmentConsumers(queue);
 registerBillingConsumers(queue);

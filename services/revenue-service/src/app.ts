@@ -11,6 +11,7 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { rateEngineRoutes } from "./modules/rate-engine/routes.js";
+import { rateConfigRoutes } from "./modules/rate-config/routes.js";
 import { assesseeRoutes } from "./modules/assessee/routes.js";
 import { assessmentRoutes } from "./modules/assessment/routes.js";
 import { billingRoutes } from "./modules/billing/routes.js";
@@ -49,6 +50,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   // Module routes
   await app.register(rateEngineRoutes);
+  await app.register(rateConfigRoutes);
   await app.register(assesseeRoutes);
   await app.register(assessmentRoutes);
   await app.register(billingRoutes);

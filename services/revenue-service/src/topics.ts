@@ -28,6 +28,12 @@ export const COMMANDS = {
   /** payload: { rateHeadId, rebateType: "early_payment"|"category", discountBps, validUntilDaysBeforeDue? } */
   rebateRuleCreate: "revenue.rebate_rule.create",
 
+  // ── Rate configuration maker-checker (owner decision #2) ─────────────────
+  /** payload: { id, kind, action, targetId?, rateHeadId?, effectiveFrom, payload } — rate-config proposal, maker step */
+  rateConfigPropose: "revenue.rate_config.propose",
+  /** payload: { proposalId, approve: boolean, reason? } — rate-config proposal, checker step */
+  rateConfigDecide: "revenue.rate_config.decide",
+
   // ── Assessee (SVC-131) ───────────────────────────────────────────────────
   /** payload: { assesseeType: "property"|"water_connection", identifierNo, ownerName, address, wardNo?, zoneNo?, connectionSize?, propertyType?, builtUpArea? } */
   assesseeCreate: "revenue.assessee.create",
@@ -95,6 +101,9 @@ export const EVENTS = {
   rateSlabCreated: "revenue.rate_slab.created",
   penaltyRuleCreated: "revenue.penalty_rule.created",
   rebateRuleCreated: "revenue.rebate_rule.created",
+
+  /** An approved rate-config proposal was applied (owner decision #2) */
+  rateConfigApplied: "revenue.rate_config.applied",
 
   // ── Assessment ───────────────────────────────────────────────────────────
   assesseeCreated: "revenue.assessee.created",
