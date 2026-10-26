@@ -31,7 +31,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { receipts } from "../src/modules/collection/schema.js";
 import { dcbEntries } from "../src/modules/assessment/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerCollectionConsumers } from "../src/modules/collection/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
