@@ -97,8 +97,28 @@ export function registerArrearsConsumers(queue: Queue): void {
 
       const amount = BigInt(amountMinor);
 
-      // Load outstanding balance for validation
-      const outstanding = await getAssesseeOutstanding(tx, msg.tenantId, assesseeId);
+      let outstanding: bigint;
+      let resolvedFy: string | null = financialYear ?? null;
+      if (demandId) {
+        // Owner decision #6: the write-off is bound to ONE demand — it must
+        // exist for the tenant and belong to this assessee, the FY is the
+        // demand's own, and the cap is THAT demand's live balance.
+        const demandRows = await tx
+          .select({ assesseeId: demands.assesseeId, financialYear: demands.financialYear })
+          .from(demands)
+          .where(and(eq(demands.tenantId, msg.tenantId), eq(demands.id, demandId)))
+          .limit(1);
+        const demand = demandRows[0];
+        if (!demand) throw new DomainError("DEMAND_NOT_FOUND", `Demand ${demandId} not found`);
+        if (demand.assesseeId !== assesseeId) {
+          throw new DomainError("DEMAND_ASSESSEE_MISMATCH", "The demand does not belong to this assessee");
+        }
+        resolvedFy = demand.financialYear;
+        outstanding = await getLatestDemandBalance(tx, msg.tenantId, demandId);
+      } else {
+        // Legacy (pre-decision-#6) command shape: cap against the assessee total.
+        outstanding = await getAssesseeOutstanding(tx, msg.tenantId, assesseeId);
+      }
 
       // Domain validation
       validateWriteOff(amount, outstanding);
@@ -108,7 +128,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         assesseeId,
         demandId: demandId ?? null,
-        financialYear: financialYear ?? null,
+        financialYear: resolvedFy,
         amountMinor: amount,
         reason,
         status: "pending",
@@ -122,7 +142,7 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "create", resourceType: "write_off", outcome: "success", demandId: demandId ?? null, financialYear: financialYear ?? null },
+        payload: { service: SERVICE, action: "create", resourceType: "write_off", outcome: "success", demandId: demandId ?? null, financialYear: resolvedFy },
       });
     });
   });
@@ -170,7 +190,11 @@ export function registerArrearsConsumers(queue: Queue): void {
         // against the balance at request time, but together they may exceed it.
         // An over-outstanding approval is refused (audited), leaving the write-off pending.
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`writeoff:${msg.tenantId}:${writeOff.assesseeId}`}, 0))`);
-        const outstandingNow = await getAssesseeOutstanding(tx, msg.tenantId, writeOff.assesseeId);
+        // Owner decision #6: a demand-linked write-off is re-checked against ITS
+        // demand's live balance; a legacy row (no demand) against the assessee total.
+        const outstandingNow = writeOff.demandId
+          ? await getLatestDemandBalance(tx, msg.tenantId, writeOff.demandId)
+          : await getAssesseeOutstanding(tx, msg.tenantId, writeOff.assesseeId);
         try {
           validateWriteOff(writeOff.amountMinor, outstandingNow);
         } catch (err) {

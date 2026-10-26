@@ -22,10 +22,12 @@ export const createInstalmentBody = z.object({
 
 export const createWriteOffBody = z.object({
   assesseeId: z.string().uuid(),
-  // GAP-REVENUE-WRITE-OFFS-03: optional demand reference + its FY, so the
-  // write-off records which year's demand it reduced. Optional for backward
-  // compatibility; the UI supplies them when a demand is selected.
-  demandId: z.string().uuid().optional(),
+  // Owner decision #6 (2026-10-26): a new write-off MUST reference the demand
+  // it reduces, so the audit trail says which year was written off. Legacy
+  // rows (no demand) are untouched and surfaced as "legacy, not linked". The
+  // financial year is taken from the demand server-side; a client-sent value
+  // is accepted for compatibility but ignored.
+  demandId: z.string().uuid(),
   financialYear: z.string().min(1).max(16).optional(),
   amountMinor: bigintStringCoerce,
   reason: z.string().min(1).max(500),
