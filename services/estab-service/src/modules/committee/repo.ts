@@ -26,6 +26,23 @@ export async function findMeetingById(id: string, tenantId: string): Promise<Mee
   return rows[0] ?? null;
 }
 
+/** The estab meeting (if any) already linked to this governance meeting in the tenant. */
+export async function findMeetingByGovernanceId(tx: Writer, tenantId: string, governanceMeetingId: string): Promise<MeetingRow | null> {
+  const rows = await (tx as typeof db).select().from(estabMeetings)
+    .where(and(eq(estabMeetings.tenantId, tenantId), eq(estabMeetings.governanceMeetingId, governanceMeetingId))).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function findMeetingByGovernanceIdScoped(tenantId: string, governanceMeetingId: string): Promise<MeetingRow | null> {
+  return db.transaction((tx) => findMeetingByGovernanceId(tx as unknown as Writer, tenantId, governanceMeetingId));
+}
+
+export async function findMeetingByIdTx(tx: Writer, id: string, tenantId: string): Promise<MeetingRow | null> {
+  const rows = await (tx as typeof db).select().from(estabMeetings)
+    .where(and(eq(estabMeetings.id, id), eq(estabMeetings.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function countResolutions(tx: Writer, meetingId: string): Promise<number> {
   const rows = await (tx as typeof db).select().from(estabResolutions).where(eq(estabResolutions.meetingId, meetingId));
   return rows.length;

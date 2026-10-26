@@ -19,12 +19,14 @@ import * as queries from "./queries.js";
 import * as kpiQueries from "../kpis/queries.js";
 import * as misQueries from "../mis/queries.js";
 import { queue } from "../../shared/infra.js";
+import { presignedGetUrl } from "@civitasone/storage";
+import { DOWNLOAD_LINK_TTL_SECONDS, jobStorageKey } from "../../shared/download.js";
 // GAP2-REPORTS-ROLES-01: single canonical report role vocabulary shared with
 // the dashboard and scheduled modules. READ_ROLES gates the GET surfaces,
 // WRITE_ROLES the POST surfaces (create/share a job). Previously this file
 // used a bare ["report_user","report_admin","super_admin"] that disagreed
 // with the scheduled routes' ["report_viewer", ...].
-import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES, isReportAdmin, ownerScope } from "../../shared/roles.js";
+import { REPORT_READ_ROLES as READ_ROLES, REPORT_JOB_WRITE_ROLES as WRITE_ROLES, REPORT_PII_UNMASK_ROLES, isReportAdmin, ownerScope } from "../../shared/roles.js";
 import type { RequestContext } from "@civitasone/types";
 import type { JobView } from "./schema.js";
 
@@ -58,6 +60,9 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = createJobBody.parse(req.body);
+    // Owner decision #17: unmasked PII only for report_admin (and only with a reason,
+    // enforced by the validator). Everyone else exports masked.
+    if (body.unmaskPii) requireRole(ctx, REPORT_PII_UNMASK_ROLES);
     sendAccepted(reply, acceptedResponseSchema, await commands.createJob(ctx, body));
   });
 
@@ -153,7 +158,9 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     if (job.status !== "completed" || !job.downloadUrl) {
       throw new HttpError(409, "NOT_READY", "report not yet completed");
     }
-    const result = await commands.shareJob(ctx, id, { recipients, ...(message !== undefined ? { message } : {}), downloadUrl: job.downloadUrl });
+    // Owner decision #17: recipients get a link that expires in 15 minutes.
+    const downloadUrl = await presignedGetUrl({ key: jobStorageKey(job.tenantId, job.id, job.format), expiresIn: DOWNLOAD_LINK_TTL_SECONDS });
+    const result = await commands.shareJob(ctx, id, { recipients, ...(message !== undefined ? { message } : {}), downloadUrl });
     return reply.code(202).send({ data: result });
   });
 
@@ -171,9 +178,12 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     // watermarkText is available for use in downstream re-render if needed;
     // for pre-rendered jobs, the watermark was applied at render time.
     // Ad-hoc watermark on already-rendered files is a future enhancement.
+    // Owner decision #17: mint a fresh link that expires in 15 minutes from the
+    // deterministic key. A stored (legacy 24h) URL is never handed out.
+    const signed = await presignedGetUrl({ key: jobStorageKey(job.tenantId, job.id, job.format), expiresIn: DOWNLOAD_LINK_TTL_SECONDS });
     const url = watermarkText
-      ? `${job.downloadUrl}${job.downloadUrl.includes("?") ? "&" : "?"}wm=${encodeURIComponent(watermarkText)}`
-      : job.downloadUrl;
+      ? `${signed}${signed.includes("?") ? "&" : "?"}wm=${encodeURIComponent(watermarkText)}`
+      : signed;
     // GAP-REPORTS-LIST-04: audit every download fetch; fail closed so a file is
     // never handed out without a trail. Denied (404) and not-ready (409) fetches
     // threw above, so only a real hand-out is recorded. No URL/watermark in payload.

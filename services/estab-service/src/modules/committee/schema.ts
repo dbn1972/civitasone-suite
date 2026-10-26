@@ -27,6 +27,8 @@ export const estabMeetings = committeeSchema.table("estab_meetings", {
   whenAt:      timestamp("when_at", { withTimezone: true }).notNull(),
   venue:       text("venue"),
   minutesUrl:  text("minutes_url"),
+  // Migration 0056 (owner decision #30): the meeting-service meeting whose minutes workflow produces the MOM.
+  governanceMeetingId: uuid("governance_meeting_id"),
   status:      varchar("status", { length: 24 }).notNull().default("scheduled"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

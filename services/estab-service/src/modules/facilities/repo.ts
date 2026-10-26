@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabGuesthouses, estabRoomBookings, estabRooms, estabLibraryBooks, estabIssues } from "./schema.js";
 import type {
@@ -120,14 +120,20 @@ export async function getIssueByIdTx(tx: Writer, id: string): Promise<IssueRow |
   return rows[0];
 }
 
-export async function markIssueReturned(tx: Writer, id: string, returnedAt: Date, actorId: string): Promise<void> {
+export async function markIssueReturned(
+  tx: Writer, id: string, returnedAt: Date, actorId: string,
+  returned: { condition?: string | null; notes?: string | null } = {},
+): Promise<void> {
   await tx.update(estabIssues)
-    .set({ status: "returned", returnedAt, updatedBy: actorId, updatedAt: new Date() })
+    .set({
+      status: "returned", returnedAt, updatedBy: actorId, updatedAt: new Date(),
+      returnCondition: returned.condition ?? null, returnNotes: returned.notes ?? null,
+    })
     .where(eq(estabIssues.id, id));
 }
 
 export async function updateIssueDueAt(tx: Writer, id: string, dueAt: Date, actorId: string): Promise<void> {
   await tx.update(estabIssues)
-    .set({ dueAt, updatedBy: actorId, updatedAt: new Date() })
+    .set({ dueAt, renewalCount: sql`${estabIssues.renewalCount} + 1`, updatedBy: actorId, updatedAt: new Date() })
     .where(eq(estabIssues.id, id));
 }

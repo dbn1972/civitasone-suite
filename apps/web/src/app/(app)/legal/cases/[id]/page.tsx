@@ -6,6 +6,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getLegalCaseById } from "../../../../_data/loaders";
 import { CaseActions } from "./CaseActions";
+import { AffidavitFiles } from "./AffidavitFiles";
 
 type HearingRow = {
   id: string;
@@ -228,6 +229,9 @@ export default async function LegalCaseDetailPage(props: { params: Promise<{ id:
               />
             )}
           </div>
+
+          {/* GAP-LEGAL-CASES-DETAIL-01 (decision #9): affidavit file attachments via document-service. */}
+          <AffidavitFiles caseId={caseData.id} />
 
           {/* GAP-LEGAL-CASES-DETAIL-01: affidavit filings are a distinct record
               type that must not inflate the compliance-tracked court-order count.

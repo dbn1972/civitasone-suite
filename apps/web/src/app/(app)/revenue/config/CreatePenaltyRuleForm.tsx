@@ -3,9 +3,10 @@
 import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { proposeConfig, proposedMessage } from "./proposeConfig";
+import { todayIST } from "@/lib/formatters";
 import { percentToBps as sharedPercentToBps } from "@/lib/money";
-import type { AcceptedResponse, InterestType, RoundingMode } from "./types";
+import type { InterestType, RoundingMode } from "./types";
 
 interface CreatePenaltyRuleFormProps {
   rateHeadId: string;
@@ -43,6 +44,8 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
   const [annualRate, setAnnualRate] = useState("");
   const [graceDays, setGraceDays] = useState("0");
   const [capMonths, setCapMonths] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState(todayIST());
+  const effId = useId();
   const [roundingMode, setRoundingMode] = useState<RoundingMode>("round_half_up");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -90,23 +93,21 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
     setDialogError(undefined);
     try {
       const cap = toInt(capMonths);
-      const res = await browserJson<AcceptedResponse>("v1/revenue/penalty-rules", {
-        method: "POST",
-        body: JSON.stringify({
+      const res = await proposeConfig({
+        kind: "penalty_rule",
+        action: "create",
+        effectiveFrom,
+        payload: {
           rateHeadId,
           interestType,
           annualRateBps: percentToBps(annualRate),
           graceDays: toInt(graceDays),
           capMonths: cap ?? undefined,
           roundingMode,
-        }),
+        },
       });
       setConfirmOpen(false);
-      setSuccessMessage(
-        res.id
-          ? `Penalty rule submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
-          : "Penalty rule submitted.",
-      );
+      setSuccessMessage(proposedMessage("Penalty rule", res.id));
       setAnnualRate("");
       setGraceDays("0");
       setCapMonths("");
@@ -120,7 +121,7 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Penalty Rule" padding>
+      <Card title="Propose Penalty Rule" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
@@ -217,9 +218,27 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
             </div>
           </div>
 
+          <div style={{ display: "grid", gap: 6, maxWidth: 240 }}>
+            <label htmlFor={effId} style={{ fontSize: 13, fontWeight: 600 }}>
+              Effective from <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
+            </label>
+            <input
+              id={effId}
+              type="date"
+              value={effectiveFrom}
+              min={todayIST()}
+              onChange={(e) => setEffectiveFrom(e.target.value)}
+              aria-required="true"
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+            />
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              Changes are never made in place: the new rate applies from this date, after a second officer approves.
+            </span>
+          </div>
+
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Penalty Rule
+              Propose Penalty Rule
             </Button>
           </div>
 
@@ -233,13 +252,13 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this penalty rule?"
-        confirmLabel="Create penalty rule"
+        title="Propose this penalty rule?"
+        confirmLabel="Propose penalty rule"
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Create a <strong>{interestType}</strong> penalty rule at <strong>{annualRate || "—"}%</strong> p.a. for{" "}
+            Propose a <strong>{interestType}</strong> penalty rule at <strong>{annualRate || "—"}%</strong> p.a. for{" "}
             <strong>{rateHeadLabel}</strong>.
           </>
         }

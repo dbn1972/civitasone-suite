@@ -1,4 +1,5 @@
-import { pgSchema, uuid, text, integer, varchar, timestamp, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, text, integer, varchar, timestamp, date, boolean } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const casesSchema = pgSchema("cases");
 
@@ -20,10 +21,22 @@ export const legalCases = casesSchema.table("legal_cases", {
   caseNo:     text("case_no").notNull(),
   title:      text("title").notNull(),
   court:      text("court").notNull(),
+  // Owner decision #10: court-master code ('other' = free text), verified flag, filing date, department id (org hierarchy).
+  courtCode:     text("court_code"),
+  courtVerified: boolean("court_verified").notNull().default(false),
+  filingDate:    date("filing_date"),
+  departmentId:  uuid("department_id"),
   subject:    text("subject"),
   caseTypeId: uuid("case_type_id"),
   petitioner: text("petitioner"),
   counselRef: text("counsel_ref"),
+  // Owner decision #14: link to the empanelled-advocate master (counselRef stays as legacy free text).
+  advocateId: uuid("advocate_id"),
+  // Owner decision #8 (GAP-LEGAL-HEARINGS-05): the officers a case is assigned to;
+  // reminder notifications go to them (creator cc'd).
+  // Owner decision #12: privileged/confidential flag (restricts the case to assigned officers + legal head).
+  privileged: boolean("privileged").notNull().default(false),
+  assignedOfficerIds: uuid("assigned_officer_ids").array().notNull().default(sql`'{}'::uuid[]`),
   status:     varchar("status", { length: 24 }).notNull().default("pending"),
   nextDate:   date("next_date"),
   disposition: text("disposition"),

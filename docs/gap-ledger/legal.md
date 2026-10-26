@@ -61,7 +61,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 911ede185 (owner decision #9, 2026-10-26): affidavit files are attached through document-service (its ClamAV scan, OCR, retention) via a legal-service client; start/complete/list/open endpoints are legal-roles only and every open is audited (tests/gap-legal-affidavit-attachments.test.ts, AffidavitFiles.test.tsx)
 - **W0 note:** partly fixed by #1916 — button/dialog renamed 'Record affidavit filing' and no longer says upload; but affidavits still render as generic 'Court order' rows in the case Court orders table (page.tsx orderType fallback, no affidavit filter/Filings card) and there is still no file attachment/documents endpoint
 - **First-pass claim:** 'Upload Affidavit' uploads nothing: it records the text as a court order with orderType 'affidavit' via POST /cases/:id/orders (CaseActions.tsx:8-19,96-113), so affidavits show up in the Court orders list and compliance data, with no document attached.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx:329-348 posts to /api/proxy/v1/legal/cases/{id}/orders with orderType:'affidavit', summary, orderDate; the form (453-473) has no file input and its own amber note says 'no file-upload endpoint in legal-service'; the file header (254-259) admits it is a workaround. The detail page maps every order into 'Court orders' (page.tsx:74-79) and labels it 'Court order' since orderType is not shown. Whether it also enters compliance stats on /legal/court-orders cannot be verified (legal-service absent from snapshot); the list there keys on complianceRequired/status.
@@ -147,7 +148,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-NEW-01  ·  HIGH  ·  partly  ·  theme DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed - superseded per owner decision #40, 2026-10-26: the 'Adverse risk' tab was removed and replaced by the honest case-category 'Writ / Criminal' count (GAP-LEGAL-LIST-01, case-type master in GAP-LEGAL-CASES-NEW-01 part 1); no code change.
 - **W0 note:** partly fixed by #1934 — case-type select (caseTypeId) added to the form and mapLegalCaseSummaries prefers the server type with caseNo fallback; list column is now 'Case type'/Writ & Criminal; remaining: the typed subject text is still not mapped or shown in the list ('Subject column shows the typed subject text' unmet)
 - **First-pass claim:** The form never sends a case type: the 'Subject' textarea is posted as subject (CreateCaseForm.tsx:40-47) while the list's Subject column and 'Adverse Risk' logic read type (list/LegalCasesTable.tsx:49,73), so cases created here show a blank/default subject and can never count as adverse risk.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:45-52 posts caseNo,title,court,subject,petitioner,counselRef - no type, as stated. But the list does not read a server 'type': mapLegalCaseSummaries (apps/web/src/app/_data/apiMappers.ts:667-711) derives type from the caseNo prefix (WP/WRIT -> writ, ARB -> arbitration, else other) and never 'criminal'. So the Subject column (apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx:69) shows 'writ/arbitration/other', not the entered subject, and Adverse risk (:49, list/page.tsx:12) counts only WP/WRIT-numbered cases. A case numbered WP/... created here does count; the claim it 'can never count' is overstated. Detail page reads caseData.type (page.tsx:116) unmapped; API shape cannot be verified (service absent).
@@ -165,7 +167,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-NEW-02  ·  MEDIUM  ·  partly  ·  theme FORM (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by e678a4854 (owner decision #10, 2026-10-26): seeded court/tribunal master (GET /v1/legal/courts), Other free text marked unverified, filing date and department required, Courts/Fora counted on the normalised value (tests/gap-legal-court-master.test.ts, CreateCaseForm.test.tsx)
 - **W0 note:** partly fixed by #1916 — Respondent field added (sent via parties); remaining: Court is still a free-text input (no court master/normalisation; Courts/Fora still counts raw strings), no filing-date or department fields on the form
 - **First-pass claim:** Court is free text (CreateCaseForm.tsx:82): the 'High Court' filter and the Courts / Fora count depend on identical spelling; no court picker, no case-type, filing date or respondent fields although the detail page shows Respondent, Raised date and Department (cases/[id]/page.tsx:105-124).
 - **Verified evidence:** True: court is a free-text input (apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:79-82 area, id 'court'), and form has no case-type, filing date, respondent or department fields; detail page shows Respondent/Raised date/Department (cases/[id]/page.tsx:120-139). Courts / Fora = new Set of exact court strings (list/page.tsx:10), so spelling variants inflate it. Correction: the 'High Court' filter is a case-insensitive substring match on 'high court' (LegalCasesTable.tsx:47), not identical spelling. Not a date-format issue.
@@ -316,7 +319,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-NEW-04  ·  LOW  ·  confirmed  ·  theme ENTITYNAME (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by f790a0c7d (owner decision #11, 2026-10-26): deptRef stores the org-hierarchy department id (422 unknown, 503 when the org service is down); the list resolves the name (tests/gap-legal-order-department.test.ts, RecordOrderForm.test.tsx)
 - **W0 note:** partly fixed by #1916 — inline #fff backgrounds removed from RecordOrderForm; remaining: Owning department (deptRef) is still a free-text input, no department picker/loader
 - **First-pass claim:** Owning department is free text (deptRef) with no picker, although the banner on the orders page says orders route to the owning department; inline #fff field backgrounds (RecordOrderForm.tsx:82-110).
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx:245-248 deptRef is a free-text input; every field wrapper uses inline background:'#fff' (lines 215-245). Banner claim about routing is on court-orders/page.tsx:23. No department picker loader located in the snapshot (verify hr department loader).
@@ -763,7 +767,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 4fca2b58a (owner decision #12, 2026-10-26): no party-name masking for legal roles; privileged/confidential flag restricts a case, its sub-resources and the lists/aggregates to assigned officers + legal_admin, everyone else gets 404 (tests/gap-legal-privileged-case.test.ts); review round 1: dashboard counters (cases/hearings/orders) and opinions (detail, list, caseId filter) now honour the flag too; counsel-brief POST audit + integer-minor fee already present
 - **First-pass claim:** Petitioner/respondent names (party PII) print unmasked and there is no privilege marker; counsel-briefs endpoint, audit on POSTs and fee handling are undeterminable (legal-service absent from snapshot, referenced only in CaseActions.tsx comments).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/cases/:id', 'POST /api/v1/legal/counsel-briefs', 'POST /api/v1/legal/cases/:id/orders']`
 - **Question:** Does GET cases/:id return party names only to roles allowed to see them, do the POSTs write an audit row (actor, case id, action), and is fee handling validated server-side?
@@ -809,7 +814,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason) [partial: no dispatcher sends due reminders to a recipient at remind_at; recipient rule (creator vs assigned officer/counsel) needs an owner decision]
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 8f557059b (owner decision #8, 2026-10-26): a 5-minute dispatcher sweep sends due case reminders through notification-service: recipient = the case assigned officer(s), creator cc; exactly-once, audited (tests/gap-legal-reminder-dispatch.test.ts)
   Partially closed by d0bcdd505 (UAT B2): migration 0030 aligns reminders.legal_reminders with the model (the consumer INSERT failed on a real DB, so reminders were never stored/audited); 403/401 + persistence + legal.reminder.created audit tested
 - **First-pass claim:** Countdown colours are hard-coded hex (#b42318, #b54708, #067647) (HearingsTable.tsx:60-79); reminder POST audit and recipient are undeterminable (legal-service absent from the snapshot).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/cases/:id/reminder', 'POST /api/v1/legal/hearings']`
@@ -821,7 +827,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-LIST-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 616f14001 (owner decision #14, 2026-10-26): empanelled-advocate master (name, Bar enrolment no., contact) with legal_admin-only create; cases link via advocateId and lists show the advocate name from the master (tests/gap-legal-advocate-master.test.ts, AdvocatesManager.test.tsx)
 - **First-pass claim:** Counsel is a free-text name with '—' fallback (LegalCasesTable.tsx:74); legal-service is not in the snapshot, so whether advocateName is joined from a counsel master is undeterminable.
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['GET /api/v1/legal/cases']`
 - **Question:** Is advocateName a free-text column or joined from a counsel master (counsel id -> name) in the list response?
@@ -856,7 +863,8 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  Closed by 70421d72e (owner decision #13, 2026-10-26): addressee is an internal department (picker, id validated) or an external party (free text), required; list and detail return one resolved addressee (tests/gap-legal-opinion-addressee.test.ts, SeekOpinionForm.test.tsx)
 - **First-pass claim:** 'Addressed to' is free text sent as partyRef (SeekOpinionForm.tsx:39) with no directory or role picker, so routing 'to the addressee' (page.tsx:16) depends on typing an exact reference; how partyRef is resolved is undeterminable (legal-service absent).
 - **Service:** `legal-service`  ·  **Endpoint(s):** `['POST /api/v1/legal/notices']`
 - **Question:** How is partyRef resolved (employee id, dept code, free text) and is an unresolvable value rejected with 422?

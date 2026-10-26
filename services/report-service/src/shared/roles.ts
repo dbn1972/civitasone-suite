@@ -51,6 +51,13 @@ export const REPORT_JOB_WRITE_ROLES = REPORT_WRITE_ROLES;
  */
 export const REPORT_ADMIN_ROLES = ["report_admin", "finance_admin", "admin", "tenant_admin", "super_admin"];
 
+/**
+ * UAT owner decision #17: ONLY report_admin may export PII columns unmasked, and
+ * only with a recorded reason. No other admin role (finance_admin, tenant_admin,
+ * admin, super_admin) is enough.
+ */
+export const REPORT_PII_UNMASK_ROLES = ["report_admin"];
+
 export function isReportAdmin(ctx: { roles: readonly string[] }): boolean {
   return ctx.roles.some((r) => REPORT_ADMIN_ROLES.includes(r));
 }

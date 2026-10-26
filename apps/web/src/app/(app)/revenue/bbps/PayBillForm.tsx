@@ -5,29 +5,34 @@ import Link from "next/link";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney, humanizeStatus } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 import { BBPS_CHANNELS, channelLabel } from "@/lib/revenue/channels";
 import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
-import type { AssesseeOption } from "./FetchBillForm";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
 const CHANNELS = BBPS_CHANNELS;
 
+/**
+ * Owner decision #7 (2026-10-26): a bill the SERVER issued via fetch-bill. The
+ * token is single-use and expiring; the assessee and the amount are read from
+ * it server-side, so this form never sends — or lets the clerk type — either.
+ */
+export type IssuedBill = {
+  token: string;
+  identifierNo: string;
+  ownerName: string | null;
+  /** Bill amount in paise, as issued by the server. */
+  amountMinor: string;
+  expiresAt: string | null;
+};
+
 interface PayBillFormProps {
-  /**
-   * GAP-REVENUE-BBPS-03: assessees loaded by the server component. When empty
-   * the form falls back to a free-text identifier input (backward-compat with
-   * tests that render without props).
-   */
-  assessees?: ReadonlyArray<AssesseeOption>;
+  /** The bill issued by the most recent successful fetch-bill; null until one is fetched. */
+  bill?: IssuedBill | null;
 }
 
-export function PayBillForm({ assessees = [] }: PayBillFormProps) {
-  const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
-  const [assesseeOwnerName, setAssesseeOwnerName] = useState<string | null>(null);
-  const [amount, setAmount] = useState("");
+export function PayBillForm({ bill = null }: PayBillFormProps) {
   const [bbpsTxnId, setBbpsTxnId] = useState("");
   const [channel, setChannel] = useState<(typeof CHANNELS)[number]>("online");
   const [busy, setBusy] = useState(false);
@@ -36,53 +41,28 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [lastAssesseeId, setLastAssesseeId] = useState<string>("");
+  const [lastIdentifier, setLastIdentifier] = useState<string>("");
   const [messageId, setMessageId] = useState<string | null>(null);
   const { status, pollFailed, reset: resetStatus } = useBbpsRequestStatus(messageId);
 
-  function handleAssesseeChange(identifierNo: string) {
-    setAssesseeIdentifier(identifierNo);
-    const found = assessees.find((a) => a.identifierNo === identifierNo);
-    setAssesseeOwnerName(found?.ownerName ?? null);
-  }
-
-  const identifierId = useId();
-  const amountId = useId();
   const txnId = useId();
   const channelId = useId();
   const summaryId = useId();
-
-  const identifierErrorId = `${identifierId}-error`;
-  const amountErrorId = `${amountId}-error`;
   const txnErrorId = `${txnId}-error`;
-
-  const identifierRef = useRef<HTMLInputElement>(null);
-  const amountRef = useRef<HTMLInputElement>(null);
   const txnRef = useRef<HTMLInputElement>(null);
-
-  const minorAmount = rupeesToMinorString(amount);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    if (!bill) return;
     const errors: Record<string, string> = {};
-    const trimmedIdentifier = assesseeIdentifier.trim();
-    const trimmedTxn = bbpsTxnId.trim();
-    if (!trimmedIdentifier) errors.assesseeIdentifier = "Enter the assessee identifier.";
-    if (!minorAmount) errors.amount = "Enter a valid payment amount greater than zero.";
-    if (!trimmedTxn) errors.bbpsTxnId = "Enter the BBPS transaction ID from the biller.";
+    if (!bbpsTxnId.trim()) errors.bbpsTxnId = "Enter the BBPS transaction ID from the biller.";
     setFieldErrors(errors);
 
     if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage("Please correct the highlighted fields.");
-      if (errors.assesseeIdentifier) {
-        identifierRef.current?.focus();
-      } else if (errors.amount) {
-        amountRef.current?.focus();
-      } else if (errors.bbpsTxnId) {
-        txnRef.current?.focus();
-      }
+      txnRef.current?.focus();
       return;
     }
 
@@ -91,35 +71,24 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
   }
 
   async function payBill() {
-    if (!minorAmount) return;
+    if (!bill) return;
     setBusy(true);
     setDialogError(undefined);
     resetStatus();
     setMessageId(null);
-    const submittedIdentifier = assesseeIdentifier.trim();
     try {
+      // Only the server-issued token goes over the wire (plus the biller's txn
+      // id and the channel). The server derives assessee and amount from it.
       const res = await browserJson<AcceptedResponse>("v1/revenue/bbps/pay-bill", {
         method: "POST",
-        body: JSON.stringify({
-          assesseeIdentifier: submittedIdentifier,
-          amountMinor: minorAmount,
-          bbpsTxnId: bbpsTxnId.trim(),
-          channel,
-        }),
+        body: JSON.stringify({ billToken: bill.token, bbpsTxnId: bbpsTxnId.trim(), channel }),
       });
       setConfirmOpen(false);
       setTone("good");
-      setLastAssesseeId(submittedIdentifier);
+      setLastIdentifier(bill.identifierNo);
       const id = res.data?.messageId ?? null;
       setMessageId(id);
-      setMessage(
-        id
-          ? "Payment request submitted — tracking its outcome below."
-          : "Payment request submitted.",
-      );
-      setAssesseeIdentifier("");
-      setAssesseeOwnerName(null);
-      setAmount("");
+      setMessage(id ? "Payment request submitted — tracking its outcome below." : "Payment request submitted.");
       setBbpsTxnId("");
       setFieldErrors({});
     } catch (err) {
@@ -133,78 +102,28 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} aria-label="Record BBPS payment">
       <Card title="Record BBPS Payment" padding>
         <div style={{ display: "grid", gap: 14 }}>
+          {bill ? (
+            <dl
+              aria-label="Fetched bill"
+              style={{ margin: 0, display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 14px", fontSize: 13.5 }}
+            >
+              <dt style={{ fontWeight: 600, color: "var(--ink2)" }}>Assessee</dt>
+              <dd style={{ margin: 0 }}>
+                {bill.ownerName ? <strong>{bill.ownerName}</strong> : null}
+                {bill.ownerName ? " " : null}
+                <span className="mono">({bill.identifierNo})</span>
+              </dd>
+              <dt style={{ fontWeight: 600, color: "var(--ink2)" }}>Bill amount</dt>
+              <dd style={{ margin: 0, fontWeight: 700 }}>{formatMoney(bill.amountMinor)}</dd>
+            </dl>
+          ) : (
+            <p role="status" style={{ margin: 0, fontSize: 13.5, color: "var(--ink2)" }}>
+              Fetch a bill above first. A payment can only be recorded against a bill issued by the server — the
+              assessee and amount are taken from it and cannot be typed here.
+            </p>
+          )}
+
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={identifierId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Assessee Identifier{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                  *
-                </span>
-              </label>
-              {assessees.length > 0 ? (
-                <select
-                  id={identifierId}
-                  value={assesseeIdentifier}
-                  onChange={(e) => handleAssesseeChange(e.target.value)}
-                  aria-required="true"
-                  aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
-                  aria-describedby={fieldErrors.assesseeIdentifier ? identifierErrorId : undefined}
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, minWidth: 280 }}
-                >
-                  <option value="">Select an assessee…</option>
-                  {assessees.map((a) => (
-                    <option key={a.id} value={a.identifierNo}>
-                      {a.ownerName} — {a.identifierNo} ({humanizeStatus(a.assesseeType)})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id={identifierId}
-                  ref={identifierRef}
-                  value={assesseeIdentifier}
-                  onChange={(e) => setAssesseeIdentifier(e.target.value)}
-                  maxLength={100}
-                  aria-required="true"
-                  aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
-                  aria-describedby={fieldErrors.assesseeIdentifier ? identifierErrorId : undefined}
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-                />
-              )}
-              {fieldErrors.assesseeIdentifier && (
-                <p id={identifierErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
-                  {fieldErrors.assesseeIdentifier}
-                </p>
-              )}
-            </div>
-
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Amount (₹){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                  *
-                </span>
-              </label>
-              <input
-                id={amountId}
-                ref={amountRef}
-                type="number"
-                step="any"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                aria-required="true"
-                aria-invalid={!!fieldErrors.amount || undefined}
-                aria-describedby={fieldErrors.amount ? amountErrorId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-              {fieldErrors.amount && (
-                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
-                  {fieldErrors.amount}
-                </p>
-              )}
-            </div>
-
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={txnId} style={{ fontSize: 13, fontWeight: 600 }}>
                 BBPS Transaction ID{" "}
@@ -218,6 +137,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 value={bbpsTxnId}
                 onChange={(e) => setBbpsTxnId(e.target.value)}
                 maxLength={50}
+                disabled={!bill}
                 aria-required="true"
                 aria-invalid={!!fieldErrors.bbpsTxnId || undefined}
                 aria-describedby={fieldErrors.bbpsTxnId ? txnErrorId : undefined}
@@ -241,6 +161,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 id={channelId}
                 value={channel}
                 onChange={(e) => setChannel(e.target.value as (typeof CHANNELS)[number])}
+                disabled={!bill}
                 aria-required="true"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
@@ -254,7 +175,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || !bill} loading={busy}>
               Record BBPS payment
             </Button>
           </div>
@@ -274,17 +195,15 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
             <div aria-live="polite" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13.5 }}>
               <span style={{ fontWeight: 600 }}>Payment status:</span>
               <StatusPill status={status.status} />
-              {status.status === "pending" && (
-                <span style={{ color: "var(--ink2)" }}>Checking with the biller…</span>
-              )}
+              {status.status === "pending" && <span style={{ color: "var(--ink2)" }}>Checking with the biller…</span>}
               {status.status === "success" && (
-                <Link href={`/revenue/receipts?assesseeId=${encodeURIComponent(lastAssesseeId)}`} className="link">
+                <Link href={`/revenue/receipts?assesseeId=${encodeURIComponent(lastIdentifier)}`} className="link">
                   View the receipt
                 </Link>
               )}
               {status.status === "failed" && (
                 <span role="alert" style={{ color: "var(--bad)" }}>
-                  {status.failureReason || "The payment could not be processed."} You can submit it again.
+                  {status.failureReason || "The payment could not be processed."} Fetch the bill again to retry.
                 </span>
               )}
             </div>
@@ -306,17 +225,19 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
         busy={busy}
         errorMessage={dialogError}
         description={
-          minorAmount ? (
+          bill ? (
             <>
-              Record a BBPS payment of <strong>{formatMoney(minorAmount)}</strong> via{" "}
+              Record the fetched bill of <strong>{formatMoney(bill.amountMinor)}</strong> via{" "}
               <strong>{channelLabel(channel)}</strong> for assessee{" "}
-              {assesseeOwnerName ? (
-                <><strong>{assesseeOwnerName}</strong>{" "}({assesseeIdentifier.trim()})</>
+              {bill.ownerName ? (
+                <>
+                  <strong>{bill.ownerName}</strong> ({bill.identifierNo})
+                </>
               ) : (
-                <strong>{assesseeIdentifier.trim()}</strong>
-              )}, using BBPS transaction ID{" "}
-              <strong>{bbpsTxnId.trim()}</strong>. This records a payment already made at the biller and
-              credits the assessee — it cannot be undone from this screen.
+                <strong>{bill.identifierNo}</strong>
+              )}
+              , using BBPS transaction ID <strong>{bbpsTxnId.trim()}</strong>. This records a payment already made
+              at the biller and credits the assessee — it cannot be undone from this screen.
             </>
           ) : (
             "Record this BBPS payment?"

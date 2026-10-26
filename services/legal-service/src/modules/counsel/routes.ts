@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { assignBriefBody, idParam, listBriefsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { assertCaseAccess, hiddenCaseIds } from "../cases/access.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -15,6 +16,7 @@ export async function counselBriefRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, LEGAL_ROLES);
     const body = assignBriefBody.parse(req.body);
+    await assertCaseAccess(ctx, body.caseId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.assignBrief(ctx, body));
   });
 
@@ -24,6 +26,7 @@ export async function counselBriefRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const brief = await queries.getBrief(id, ctx.tenantId);
     if (!brief) throw new HttpError(404, "NOT_FOUND", "counsel brief not found");
+    await assertCaseAccess(ctx, brief.caseId);
     return reply.send(brief);
   });
 
@@ -31,7 +34,10 @@ export async function counselBriefRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listBriefsQuery.parse(req.query);
-    return reply.send({ items: await queries.listBriefs(ctx.tenantId, q.caseId, q.status) });
+    if (q.caseId) await assertCaseAccess(ctx, q.caseId);
+    const hidden = new Set(await hiddenCaseIds(ctx));
+    const items = await queries.listBriefs(ctx.tenantId, q.caseId, q.status);
+    return reply.send({ items: (items ?? []).filter((b) => !hidden.has(b.caseId)) });
   });
 
   app.setErrorHandler(errorHandler);

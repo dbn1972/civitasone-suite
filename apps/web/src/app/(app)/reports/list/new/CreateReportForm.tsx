@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Select } from "@/app/_components/ds";
 
@@ -32,8 +33,17 @@ const REPORT_TYPES: { value: string; label: string }[] = [
 
 const KNOWN_VALUES = new Set(REPORT_TYPES.map((t) => t.value));
 
-export function CreateReportForm({ defaultReportType = "" }: { defaultReportType?: string }) {
+/**
+ * Owner decision #17 (GAP-REPORTS-LIST-04): personal-data columns are masked in
+ * exports by default. Only a report_admin (`canUnmaskPii`, from the session roles;
+ * the service re-checks) sees the control to export them unmasked, and must give a
+ * reason that is audited.
+ */
+export function CreateReportForm({ defaultReportType = "", canUnmaskPii = false }: { defaultReportType?: string; canUnmaskPii?: boolean }) {
   const router = useRouter();
+  const t = useTranslations("reportsPiiExport");
+  const [unmask, setUnmask] = useState(false);
+  const [unmaskReason, setUnmaskReason] = useState("");
   const [name, setName] = useState("");
   // If an unknown reportType arrives via the query string, fall back to the
   // "General" option rather than silently keeping an invalid value.
@@ -49,11 +59,18 @@ export function CreateReportForm({ defaultReportType = "" }: { defaultReportType
       setMessage("Report name is required.");
       return;
     }
+    const wantsUnmask = canUnmaskPii && unmask;
+    if (wantsUnmask && unmaskReason.trim().length < 10) {
+      setStatus("error");
+      setMessage(t("reasonRequired"));
+      return;
+    }
     setStatus("submitting");
     setMessage("");
     const body = {
       name: name.trim(),
       reportType: reportType.trim() || undefined,
+      ...(wantsUnmask ? { unmaskPii: true, unmaskReason: unmaskReason.trim() } : {}),
     };
     try {
       const res = await fetch("/api/proxy/v1/reports/jobs", {
@@ -90,6 +107,24 @@ export function CreateReportForm({ defaultReportType = "" }: { defaultReportType
               <option key={t.value || "general"} value={t.value}>{t.label}</option>
             ))}
           </Select>
+        </div>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("maskedByDefault")}</p>
+          {canUnmaskPii ? (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+                <input type="checkbox" checked={unmask} onChange={(e) => setUnmask(e.target.checked)} />
+                {t("unmaskLabel")}
+              </label>
+              {unmask ? (
+                <div className="field" style={{ marginTop: 8 }}>
+                  <label className="label" htmlFor="unmaskReason">{t("reasonLabel")}</label>
+                  <textarea id="unmaskReason" className="inp" rows={2} maxLength={500} value={unmaskReason} onChange={(e) => setUnmaskReason(e.target.value)} />
+                  <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("auditNote")}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

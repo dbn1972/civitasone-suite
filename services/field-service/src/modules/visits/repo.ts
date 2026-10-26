@@ -5,16 +5,31 @@ import { eq, and, sql, desc, gte, lt, type SQL } from "drizzle-orm";
 import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
 import { visits, type VisitRow, type VisitInsert } from "./schema.js";
 
-export function toView(r: VisitRow) {
+/** Coordinates are shown rounded to this many decimals (about 110 m): owner decision #35. */
+const COORD_DECIMALS = 3;
+
+/** Round a stored numeric coordinate string to 3dp; null in, null out. */
+function roundCoord(v: string | null): string | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(COORD_DECIMALS) : null;
+}
+
+/**
+ * GAP-FIELD-VISITS-03 / owner decision #35: full-precision GPS never leaves the
+ * server. Permitted roles (canSeeLocation) get 3dp-rounded coordinates; every
+ * other caller gets null coordinates. Defaults to the redacted (no-location) view.
+ */
+export function toView(r: VisitRow, canSeeLocation = false) {
   return {
     id: r.id,
     tenantId: r.tenantId,
     taskId: r.taskId,
     agentId: r.agentId,
-    checkInLatitude: r.checkInLatitude,
-    checkInLongitude: r.checkInLongitude,
-    checkOutLatitude: r.checkOutLatitude,
-    checkOutLongitude: r.checkOutLongitude,
+    checkInLatitude: canSeeLocation ? roundCoord(r.checkInLatitude) : null,
+    checkInLongitude: canSeeLocation ? roundCoord(r.checkInLongitude) : null,
+    checkOutLatitude: canSeeLocation ? roundCoord(r.checkOutLatitude) : null,
+    checkOutLongitude: canSeeLocation ? roundCoord(r.checkOutLongitude) : null,
     checkInAt: r.checkInAt?.toISOString() ?? null,
     checkOutAt: r.checkOutAt?.toISOString() ?? null,
     durationMinutes: r.durationMinutes,

@@ -9,6 +9,11 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { SubscriptionView } from "./repo.js";
+import { and, eq } from "drizzle-orm";
+import { downgradeRequests, type UsageCheck } from "./schema.js";
+import * as plansRepo from "../plans/repo.js";
+import * as quotasRepo from "../quotas/repo.js";
+import { exceededLimits } from "./downgrade.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const RESOURCE = "subscription";
@@ -189,6 +194,82 @@ export function registerSubscriptionConsumers(queue: Queue): void {
     },
   );
 
+  // OWNER DECISION #24: record a downgrade REQUEST. markProcessed + the guarded
+  // insert + the audit event share ONE transaction. The partial unique index
+  // (one pending request per tenant) makes a racing second request a no-op
+  // instead of a second pending row.
+  queue.subscribe<{ id: string; subscriptionId: string; fromPlanId: string; targetPlanId: string; reason: string; usage: { checks: UsageCheck[] } }>(
+    COMMANDS.subscriptionDowngradeRequest,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const p = msg.payload;
+        const existing = await tx.select({ id: downgradeRequests.id }).from(downgradeRequests)
+          .where(and(eq(downgradeRequests.tenantId, msg.tenantId), eq(downgradeRequests.status, "pending"))).limit(1);
+        if (existing[0]) throw new NonRetryableError("REQUEST_ALREADY_PENDING: a downgrade request is already awaiting approval");
+        await tx.insert(downgradeRequests).values({
+          id: p.id, tenantId: msg.tenantId, subscriptionId: p.subscriptionId, fromPlanId: p.fromPlanId, targetPlanId: p.targetPlanId,
+          reason: p.reason, usageSnapshot: p.usage, status: "pending", requestedBy: msg.actorId,
+        });
+        await emit(tx, msg, EVENTS.subscriptionDowngradeRequested, {
+          requestId: p.id, subscriptionId: p.subscriptionId, fromPlanId: p.fromPlanId, targetPlanId: p.targetPlanId,
+        }, "downgrade_request", p.id, { reason: p.reason });
+      });
+    },
+  );
+
+  // OWNER DECISION #24: platform billing approves or rejects. Approver != requester
+  // is re-enforced HERE (the consumer is the only writer). An approval re-checks the
+  // live usage against the target plan: if usage grew past the limit since the request
+  // was made it is rejected (never applied) and says why. All of it, plus the audit
+  // event, in ONE transaction with the request row locked.
+  queue.subscribe<{ id: string; decision: "approve" | "reject"; reason: string | null }>(
+    COMMANDS.subscriptionDowngradeDecision,
+    async (msg) => {
+      const p = msg.payload;
+      // Reads of other modules' tables happen BEFORE the write transaction (L2, and
+      // no nested transaction): the request, its target plan and the live usage.
+      const preview = await repo.findDowngradeRequest(msg.tenantId, p.id);
+      const targetPlan = preview ? await plansRepo.findByIdScoped(msg.tenantId, preview.targetPlanId) : null;
+      const quotas = await quotasRepo.findAllByTenantScoped(msg.tenantId);
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const rows = await tx.select().from(downgradeRequests)
+          .where(and(eq(downgradeRequests.id, p.id), eq(downgradeRequests.tenantId, msg.tenantId))).limit(1).for("update");
+        const req = rows[0];
+        if (!req) throw new NonRetryableError("NOT_FOUND: downgrade request not found");
+        if (req.status !== "pending") throw new NonRetryableError(`ALREADY_DECIDED: request is ${req.status}`);
+        if (req.requestedBy === msg.actorId) throw new NonRetryableError("SELF_APPROVAL: the requester cannot decide their own downgrade");
+
+        let outcome: "approved" | "rejected" = p.decision === "approve" ? "approved" : "rejected";
+        let decisionReason = p.reason;
+        if (outcome === "approved") {
+          const target = targetPlan && targetPlan.id === req.targetPlanId ? targetPlan : null;
+          const sub = await repo.findByIdTx(tx as unknown as repo.Writer, req.subscriptionId);
+          const used = (r: string) => quotas.find((q) => q.resource === r)?.used ?? 0;
+          const over = target ? exceededLimits({ users: used("users"), storage_gb: used("storage_gb") }, target) : [];
+          // The subscription must still be on the plan the request was made from; otherwise the request is stale.
+          if (!target || !sub || sub.planId !== req.fromPlanId || over.length > 0) {
+            outcome = "rejected";
+            decisionReason = over.length > 0 ? "USAGE_EXCEEDS_TARGET_PLAN" : "PLAN_OR_SUBSCRIPTION_CHANGED";
+          } else {
+            await repo.update(tx as unknown as repo.Writer, sub.id, { planId: req.targetPlanId, updatedBy: msg.actorId, version: sub.version + 1 });
+          }
+        }
+        await tx.update(downgradeRequests).set({
+          status: outcome, decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: decisionReason ?? null, updatedAt: new Date(), version: req.version + 1,
+        }).where(and(eq(downgradeRequests.id, p.id), eq(downgradeRequests.tenantId, msg.tenantId)));
+        if (outcome === "approved") {
+          await emit(tx, msg, EVENTS.subscriptionDowngraded, { subscriptionId: req.subscriptionId, oldPlanId: req.fromPlanId, newPlanId: req.targetPlanId, requestId: p.id }, "downgrade_approve", p.id, { reason: decisionReason ?? null });
+        } else {
+          await emit(tx, msg, EVENTS.subscriptionDowngradeRejected, { subscriptionId: req.subscriptionId, requestId: p.id }, "downgrade_reject", p.id, { reason: decisionReason ?? null });
+        }
+      });
+      const sub = await repo.findByTenantIdScoped(msg.tenantId);
+      if (sub) await cache.invalidate(keyFor(msg.tenantId, sub.id));
+    },
+  );
+
   queue.subscribe<{ reason: string; feedback?: string }>(
     COMMANDS.subscriptionCancelSelf,
     async (msg) => {
@@ -224,6 +305,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  auditExtra: Record<string, unknown> = {},
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -233,6 +315,6 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "tenant", action, resourceType: "subscription", resourceId, outcome: "success" },
+    payload: { service: "tenant", action, resourceType: "subscription", resourceId, outcome: "success", ...auditExtra },
   });
 }

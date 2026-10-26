@@ -5,6 +5,9 @@ import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { legalCases } from "../src/modules/cases/schema.js";
 import { legalOrders } from "../src/modules/hearings/schema.js";
+import { useFakeOrg, TEST_DEPT_ID } from "./helpers/org-fake.js";
+// GAP-LEGAL-CASES-NEW-02: creating a case now requires filingDate + a department from the org hierarchy.
+useFakeOrg();
 
 /**
  * GAP-LEGAL-CASES-NEW-03: POSTing a case with an existing (tenant, caseNo)
@@ -57,7 +60,7 @@ describe("create case duplicate handling (GAP-LEGAL-CASES-NEW-03)", () => {
       method: "POST",
       url: "/v1/legal/cases",
       headers: { authorization: `Bearer ${makeToken(["legal_officer"])}`, "x-tenant-id": TENANT },
-      payload: { caseNo: "WP/DUP/2026", title: "Another", court: "High Court" },
+      payload: { caseNo: "WP/DUP/2026", title: "Another", court: "High Court", filingDate: "2026-03-01", departmentId: TEST_DEPT_ID },
     });
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("DUPLICATE_CASE_NO");
@@ -70,7 +73,7 @@ describe("create case duplicate handling (GAP-LEGAL-CASES-NEW-03)", () => {
       method: "POST",
       url: "/v1/legal/cases",
       headers: { authorization: `Bearer ${makeToken(["legal_officer"])}`, "x-tenant-id": TENANT },
-      payload: { caseNo: "WP/FRESH/2026", title: "Fresh", court: "High Court" },
+      payload: { caseNo: "WP/FRESH/2026", title: "Fresh", court: "High Court", filingDate: "2026-03-01", departmentId: TEST_DEPT_ID },
     });
     expect(res.statusCode).toBe(202);
     await app.close();

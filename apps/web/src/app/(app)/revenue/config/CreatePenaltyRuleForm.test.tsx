@@ -16,7 +16,7 @@ describe("CreatePenaltyRuleForm", () => {
 
   it("requires an annual interest rate before opening the confirm dialog", () => {
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
-    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Penalty Rule" }));
     expect(screen.getByText(/Annual Interest Rate \(%\) is required/)).toBeInTheDocument();
   });
 
@@ -28,19 +28,23 @@ describe("CreatePenaltyRuleForm", () => {
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Annual Interest Rate/), { target: { value: "12" } });
     fireEvent.change(screen.getByLabelText(/^Grace Days/), { target: { value: "15" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Penalty Rule" }));
 
-    await waitFor(() => expect(screen.getByText("Create this penalty rule?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create penalty rule"));
+    await waitFor(() => expect(screen.getByText("Propose this penalty rule?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose penalty rule"));
 
     await waitFor(() => {
       expect(screen.getByText(/Penalty rule submitted/)).toBeInTheDocument();
     });
 
     const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(init.body as string) as { annualRateBps: number; graceDays: number };
-    expect(body.annualRateBps).toBe(1200); // 12% -> 1200 bps
-    expect(body.graceDays).toBe(15);
+    const env = JSON.parse(init.body as string) as { kind: string; action: string; effectiveFrom: string; payload: { annualRateBps: number; graceDays: number } };
+    // Owner decision #2: a change is a PROPOSAL (effective-dated), never a direct write.
+    expect(String(fetchSpy.mock.calls[0]![0])).toContain("v1/revenue/rate-config/proposals");
+    expect(env).toMatchObject({ kind: "penalty_rule", action: "create" });
+    expect(env.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(env.payload.annualRateBps).toBe(1200); // 12% -> 1200 bps
+    expect(env.payload.graceDays).toBe(15);
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -49,10 +53,10 @@ describe("CreatePenaltyRuleForm", () => {
 
     render(<CreatePenaltyRuleForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Annual Interest Rate/), { target: { value: "12" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Penalty Rule" }));
+    fireEvent.click(screen.getByRole("button", { name: "Propose Penalty Rule" }));
 
-    await waitFor(() => expect(screen.getByText("Create this penalty rule?")).toBeInTheDocument());
-    fireEvent.click(screen.getByText("Create penalty rule"));
+    await waitFor(() => expect(screen.getByText("Propose this penalty rule?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Propose penalty rule"));
 
     await waitFor(() => {
       expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();

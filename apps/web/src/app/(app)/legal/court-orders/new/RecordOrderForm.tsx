@@ -3,7 +3,8 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
@@ -19,6 +20,7 @@ type CaseOption = { id: string; label: string };
  * and date are being filed (GAP-LEGAL-COURT-ORDERS-NEW-03).
  */
 export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
+  const t = useTranslations("legalOrderNew");
   const router = useRouter();
   const searchParams = useSearchParams();
   // GAP-LEGAL-COURT-ORDERS-NEW-03: do NOT silently default to the first case
@@ -36,6 +38,25 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
   const [complianceDeadline, setComplianceDeadline] = useState("");
   const [message, setMessage] = useState("");
   const formError = useFormError("court order");
+
+  // GAP-LEGAL-COURT-ORDERS-NEW-04 (owner decision #11): the owning department is picked from the org
+  // hierarchy and the department ID is what is stored (deptRef); free text is no longer accepted.
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [deptState, setDeptState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/legal/departments");
+        if (!res.ok) throw new Error("departments unavailable");
+        const json = (await res.json()) as { items?: Array<{ id: string; name: string }> };
+        if (active) { setDepartments(json.items ?? []); setDeptState("ready"); }
+      } catch {
+        if (active) setDeptState("error");
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   const selectedCase = useMemo(() => cases.find((c) => c.id === caseId), [cases, caseId]);
 
@@ -129,7 +150,12 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
         </div>
         <div className="field">
           <label className="label" htmlFor="deptRef">Owning department</label>
-          <input id="deptRef" className="inp" value={deptRef} onChange={(e) => setDeptRef(e.target.value)} style={{ minHeight: 44 }} />
+          <select id="deptRef" className="inp" value={deptRef} onChange={(e) => setDeptRef(e.target.value)} style={{ minHeight: 44 }} disabled={deptState !== "ready"}>
+            <option value="">{deptState === "loading" ? t("loading") : t("selectDepartment")}</option>
+            {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+          {deptState === "error" ? <p role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{t("departmentsError")}</p> : null}
+          {deptState === "ready" && departments.length === 0 ? <p style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--ink2)" }}>{t("departmentsEmpty")}</p> : null}
         </div>
         <div className="field">
           <label className="label" htmlFor="complianceRequired" style={{ display: "flex", alignItems: "center", gap: 8 }}>

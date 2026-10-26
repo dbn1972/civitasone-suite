@@ -3,6 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_componen
 import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { DecideActions } from "../../_components/DecideActions";
 
 type ScheduleLine = {
   id: string;
@@ -19,6 +21,8 @@ type PlanDetail = {
   instalmentCount: number;
   startDate: string;
   status: string;
+  /** The officer who raised the plan (maker); a different officer must approve it. */
+  createdBy: string | null;
   schedule: ScheduleLine[];
 };
 
@@ -54,6 +58,7 @@ function mapPlan(payload: unknown): PlanDetail | null {
     instalmentCount: typeof body.instalmentCount === "number" ? body.instalmentCount : Number(body.instalmentCount ?? 0),
     startDate: typeof body.startDate === "string" ? body.startDate : "",
     status: typeof body.status === "string" ? body.status : "unknown",
+    createdBy: typeof body.createdBy === "string" ? body.createdBy : null,
     schedule,
   };
 }
@@ -91,6 +96,7 @@ export default async function InstalmentPlanDetailPage(props: { params: Promise<
     );
   }
 
+  const currentUserId = getSessionUserId();
   const scheduleRows = plan.schedule.map((s) => ({ ...s, dueDateDisplay: formatIndianDate(s.dueDate) }));
 
   return (
@@ -106,6 +112,28 @@ export default async function InstalmentPlanDetailPage(props: { params: Promise<
         <StatCard icon="📆" tone="good" label="Instalments" value={plan.instalmentCount} />
         <StatCard icon="📅" tone="warn" label="Start Date" value={formatIndianDate(plan.startDate)} />
       </StatGrid>
+
+      {/* Owner decision #3: an instalment plan defers a demand, so a second officer approves it. */}
+      <Card title="Approval" padding>
+        {plan.status === "pending" && (
+          <p style={{ margin: "0 0 12px", fontSize: 13.5, color: "var(--ink2)" }}>
+            This plan is awaiting approval by a second officer. Nothing is deferred until it is approved.
+          </p>
+        )}
+        <DecideActions
+          decideUrl={`v1/revenue/instalments/${plan.id}/decide`}
+          noun="instalment plan"
+          status={plan.status}
+          makerUserId={plan.createdBy}
+          currentUserId={currentUserId}
+          summary={
+            <>
+              an instalment plan of <strong>{formatMoney(plan.totalMinor)}</strong> over{" "}
+              <strong>{plan.instalmentCount}</strong> instalments starting {formatIndianDate(plan.startDate)}
+            </>
+          }
+        />
+      </Card>
 
       <Card title="Schedule">
         <DataTable<(typeof scheduleRows)[number]>

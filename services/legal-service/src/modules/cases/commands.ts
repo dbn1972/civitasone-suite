@@ -38,7 +38,9 @@ export const DEFAULT_CASE_TYPES: ReadonlyArray<{ code: string; name: string }> =
   { code: "other",       name: "Other" },
 ];
 
-export async function createCase(ctx: RequestContext, body: CreateCaseBody): Promise<Accepted> {
+export type ResolvedCreateCase = CreateCaseBody & { court: string; courtCode: string; courtVerified: boolean };
+
+export async function createCase(ctx: RequestContext, body: ResolvedCreateCase): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.caseCreate, {
     messageId: id, type: COMMANDS.caseCreate,

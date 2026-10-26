@@ -102,6 +102,9 @@ function buildNextResponse(req: NextRequest): NextResponse {
 
   const requestHeaders = new Headers(req.headers);
   requestHeaders.set('x-nonce', nonce);
+  // Route-scoped layout gates (tenant/_roles.ts adminAreaRoles) read this. Always overwritten
+  // here so a client-sent x-pathname can never widen a gate.
+  requestHeaders.set('x-pathname', req.nextUrl.pathname);
 
   const csp = [
     "default-src 'self'",

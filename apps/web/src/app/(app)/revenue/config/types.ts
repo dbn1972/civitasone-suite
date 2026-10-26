@@ -5,6 +5,8 @@ export interface RateHeadRow {
   category: string;
   unitOfMeasure: string | null;
   isActive: boolean;
+  /** Owner decision #2: deactivation is an end-date. */
+  effectiveTo?: string | null;
 }
 
 export type SlabType = "flat" | "ad_valorem" | "band";
@@ -22,6 +24,7 @@ export interface RateSlabRow {
   effectiveFrom: string;
   effectiveTo: string | null;
   isActive: boolean;
+  version?: number;
 }
 
 export type InterestType = "simple" | "compound";
@@ -37,6 +40,10 @@ export interface PenaltyRuleRow {
   capMonths: number | null;
   roundingMode: RoundingMode;
   isActive: boolean;
+  /** Owner decision #2: versioned, effective-dated. */
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
+  version?: number;
 }
 
 export interface RebateRuleRow {
@@ -47,6 +54,9 @@ export interface RebateRuleRow {
   discountBps: number;
   validUntilDaysBeforeDue: number | null;
   isActive: boolean;
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
+  version?: number;
 }
 
 export interface AcceptedResponse {

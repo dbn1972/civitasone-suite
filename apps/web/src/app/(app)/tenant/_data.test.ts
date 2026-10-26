@@ -262,3 +262,12 @@ describe("mapOverviewRows (GAP-TENANT-OVERVIEW-01 / OVERVIEW-02)", () => {
     expect(row.label).not.toMatch(/^[0-9a-f]{8}-/i);
   });
 });
+describe("mapImportBatches (owner decision #23)", () => {
+  it("keeps the counters and the server's retryable flag, and drops malformed rows", async () => {
+    const { mapImportBatches } = await import("./_data");
+    expect(mapImportBatches({ data: [
+      { id: "b1", status: "completed", total: 5, inserted: 2, failed: 3, retryCount: 1, retryable: true, createdAt: "2026-10-26T10:00:00Z" },
+      { status: "no id" },
+    ] })).toEqual([{ id: "b1", entityType: "org_unit", status: "completed", total: 5, inserted: 2, failed: 3, retryCount: 1, retryable: true, createdAt: "2026-10-26T10:00:00Z" }]);
+  });
+});

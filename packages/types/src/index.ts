@@ -1943,6 +1943,8 @@ export type MeetingSummary = {
 };
 
 export type MeetingDetail = MeetingSummary & {
+  /** Owner decision #30: the meeting-service meeting whose minutes workflow produces this meeting's MOM. */
+  governanceMeetingId?: string | null;
   agenda: Array<{
     id: string;
     itemNo: number;
@@ -2030,6 +2032,11 @@ export type LibraryIssueSummary = {
   dueAt: string;
   returnedAt?: string;
   status: "issued" | "returned" | "overdue";
+  /** Owner decision #29: how many times the loan was renewed. */
+  renewalCount?: number;
+  /** Owner decision #29: condition the book came back in (absent for legacy returns). */
+  returnCondition?: "good" | "fair" | "damaged";
+  returnNotes?: string;
 };
 
 export type AssetDashboard = {

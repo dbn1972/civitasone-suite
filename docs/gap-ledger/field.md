@@ -395,7 +395,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-VISITS-03  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** [partial: Agent/Task now resolved names (shared directory + task titles, short-id fallback), rounding/role-gated GPS+export already live; remaining: audited full-precision reveal and API-level coordinate redaction need the DPO decision (is rounded-only display sufficient for UAT?) 93eea8220]
+- [x] **Status** Closed by a2794d412 (owner decision #35, 2026-10-26): field-service now returns coordinates rounded to 3dp only to field_admin/super_admin and null to every other role (full precision never sent; tests/visits-coordinate-redaction.test.ts). The audited full-precision reveal is deferred per the decision.
 - **W0 note:** partly fixed by ##1923 — Done: role gate (FIELD_VISIT_LOCATION_ROLES) on GPS column + CSV export, coords rounded to 3dp, agent/task cols (raw ids), purpose note. Remains: no audited full-precision reveal; agent/task shown as ids not resolved names
 - **First-pass claim:** Precise GPS positions of field staff are shown and CSV-exported (exportable, visits/page.tsx:59-60; formatCoord visits.ts:21-24) with no role gate, no masking/rounding and no purpose note — location of an identifiable employee is personal data (DPDP). The row has no agent or task column, so a coordinate cannot be traced to a person or job from the screen (agentId/taskId fetched, never shown).
 - **Verified evidence:** Confirmed: precise lat/lon (check-in only) rendered in the GPS column (visits/page.tsx:28, formatCoord visits.ts:21-24 = full-precision decimal strings) and the DataTable has exportable (59-60) with the CSV path exporting row values; the page has no role/permission check (field/layout.tsx only applies ModuleGate for tenant module enablement) and no purpose note. agentId/taskId are in FieldVisitRow (_data.ts:97-98) but not in Row/columns, so a coordinate cannot be traced to a person from the screen. Whether the gateway/backend enforces roles for /api/v1/field/visits cannot be verified (service absent). The DPDP framing is a policy judgement, not a code fact.
@@ -450,7 +450,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-HOME-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** [partial: hub strings now next-intl en+hi (UAT B2, ba501507e); remaining: server-side edition entitlement - gateway-service module-guard ROUTE_TO_MODULE has no field mapping so /api/v1/field is not entitlement-gated at the edge (outside this lane, needs gateway change + fail-open/closed decision)]
+- [x] **Status** Closed by e953e6456 (owner decision #36, 2026-10-26): gateway module-guard maps the field route to module key field; a tenant whose allow-list omits it gets 403 MODULE_DISABLED (fails closed; module-guard.test.ts). Per-edition tile filtering needs admin-service to carry a field module in the composition catalogue (see PR note).
 - **First-pass claim:** Hard-coded English strings, no next-intl; field-service is not in the snapshot so tile availability per edition (Govt/PSU/Small Office) is undeterminable.
 - **Service:** `field-service`  ·  **Endpoint(s):** `['GET /api/v1/field/tasks', 'GET /api/v1/field/routes', 'GET /api/v1/field/visits']`
 - **Question:** Is the field module entitled per edition (Govt/PSU/Small Office) so tiles for unavailable features return 403/404 rather than empty?

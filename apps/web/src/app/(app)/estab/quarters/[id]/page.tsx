@@ -50,6 +50,7 @@ async function getAllotmentsForQuarter(quarterId: string): Promise<LoaderResult<
 export default async function QuarterDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const tFallback = await getTranslations("employeeFallback");
+  const tEstab = await getTranslations("estabW2");
   const { data: quarter, source: quarterSource } = await getQuarter(params.id);
 
   if (!quarter) {
@@ -86,7 +87,7 @@ export default async function QuarterDetailPage(props: { params: Promise<{ id: s
     <div className="page-main wrap">
       <PageHeader
         title={quarter.quarterNo}
-        subtitle={`${quarter.quarterType.replace(/_/g, " ").toUpperCase()} · ${quarter.category}${quarter.locality ? ` · ${quarter.locality}` : ""}`}
+        subtitle={`${quarter.quarterType.replace(/_/g, " ").toUpperCase()} · ${tEstab(`quarterCategory_${quarter.category}`)}${quarter.locality ? ` · ${quarter.locality}` : ""}`}
         back="/estab/quarters"
         actions={<StatusPill status={quarter.status} />}
       />

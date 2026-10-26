@@ -114,7 +114,21 @@ export async function bbpsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const body = payBillBody.parse(req.body);
-    const result = await commands.payBill(ctx, body);
+    // Owner decision #7: resolve the server-issued token; the assessee and the
+    // amount come from the bill the server issued — never from the caller.
+    const bill = await repo.findBillByToken(ctx.tenantId, body.billToken);
+    if (!bill) throw new HttpError(404, "BILL_TOKEN_NOT_FOUND", "Unknown bill token; fetch the bill again");
+    if (bill.billConsumedAt) throw new HttpError(409, "BILL_TOKEN_USED", "This bill has already been paid; fetch it again");
+    if (!bill.billExpiresAt || bill.billExpiresAt.getTime() <= Date.now()) {
+      throw new HttpError(410, "BILL_TOKEN_EXPIRED", "This bill has expired; fetch it again");
+    }
+    const result = await commands.payBill(ctx, {
+      assesseeIdentifier: bill.identifierNo,
+      amountMinor: bill.amountMinor.toString(),
+      bbpsTxnId: body.bbpsTxnId,
+      channel: body.channel,
+      billToken: body.billToken,
+    });
     return reply.code(202).send({ data: result });
   });
 

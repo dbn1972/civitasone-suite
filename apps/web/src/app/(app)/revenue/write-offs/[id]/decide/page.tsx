@@ -158,7 +158,7 @@ export default async function WriteOffDecidePage(props: { params: Promise<{ id: 
             {writeOff.financialYear ? (
               <>FY {writeOff.financialYear}</>
             ) : (
-              <span style={{ color: "var(--ink2)" }}>Against the assessee (no specific demand)</span>
+              <span style={{ color: "var(--ink2)" }}>Legacy, not linked to a demand</span>
             )}
           </dd>
           <dt style={{ fontWeight: 600, color: "var(--ink2)" }}>Outstanding arrears</dt>

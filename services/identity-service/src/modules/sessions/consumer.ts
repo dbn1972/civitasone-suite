@@ -43,6 +43,14 @@ export function registerSessionConsumers(q: Queue): void {
     await denylistSession(msg.payload.id);
   });
 
+  // Owner decision #21: audited reveal of a session's clear source IP.
+  q.subscribe<{ id: string; reason: string }>(COMMANDS.revealSessionIp, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await emitAudit(tx, msg, EVENTS.sessionIpRevealed, { sessionId: msg.payload.id, reason: msg.payload.reason }, "reveal_ip", msg.payload.id, { reason: msg.payload.reason, fields: ["ip"] });
+    });
+  });
+
   q.subscribe<{ userId: string; reason?: string | null }>(COMMANDS.revokeAllSessions, async (msg) => {
     let revokedIds: string[] = [];
     await db.transaction(async (tx) => {
@@ -67,12 +75,12 @@ export function registerSessionConsumers(q: Queue): void {
   });
 }
 
-async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string): Promise<void> {
+async function emitAudit(tx: unknown, msg: CommandEnvelope, eventType: string, payload: Record<string, unknown>, action: string, resourceId: string, auditExtra: Record<string, unknown> = {}): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, { topic: eventType, eventType, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload });
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "identity", action, resourceType: "session", resourceId, outcome: "success" },
+    payload: { service: "identity", action, resourceType: "session", resourceId, outcome: "success", ...auditExtra },
   });
 }

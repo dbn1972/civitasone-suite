@@ -9,6 +9,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const getSessionUserIdMock = vi.fn<() => string | null>(() => "checker-1");
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionUserId: () => getSessionUserIdMock(),
+}));
+
 import RecoveryPage from "./page";
 
 const ASSESSEE = {
@@ -85,5 +90,33 @@ describe("RecoveryPage", () => {
     expect(screen.queryByText(/BACKEND FOLLOW-UPS/)).not.toBeInTheDocument();
     expect(screen.queryByText(/in this PR/)).not.toBeInTheDocument();
     expect(screen.queryByText(/does not yet expose a list endpoint/)).not.toBeInTheDocument();
+  });
+
+  // Owner decision #4: a pending referral is decided by a DIFFERENT officer.
+  it("lists pending referrals under 'Awaiting approval' with Approve/Reject for a different officer (owner decision #4)", async () => {
+    getSessionUserIdMock.mockReturnValue("checker-1");
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" })
+      .mockResolvedValueOnce({
+        data: [{ id: "ref-9", assesseeId: ASSESSEE.id, reason: "Notice lapsed, dues unpaid", status: "pending", referredAt: "2026-10-01T10:00:00.000Z", createdBy: "maker-1" }],
+        source: "api",
+      });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    expect(screen.getByText("Awaiting approval")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Approve recovery referral" })).toBeEnabled();
+  });
+
+  it("disables the decision for the maker of a pending referral", async () => {
+    getSessionUserIdMock.mockReturnValue("maker-1");
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [ASSESSEE], source: "api" })
+      .mockResolvedValueOnce({
+        data: [{ id: "ref-9", assesseeId: ASSESSEE.id, reason: "x", status: "pending", referredAt: "2026-10-01T10:00:00.000Z", createdBy: "maker-1" }],
+        source: "api",
+      });
+    const ui = await RecoveryPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    expect(screen.getByRole("button", { name: "Approve recovery referral" })).toBeDisabled();
   });
 });

@@ -147,3 +147,32 @@ export function exportActorLabel(actor: Record<string, unknown> | null | undefin
   }
   return "system";
 }
+
+/**
+ * OWNER DECISION #20 (TENANT-ADMIN-AUDIT-03, DPDP): actor identifiers and source
+ * IPs leave the tenant audit LIST masked by default. The clear values are only
+ * available through the audited reveal route (audit_officer + reason).
+ */
+export function maskActorLabel(actor: string): string {
+  const at = actor.indexOf("@");
+  if (at < 1) return actor; // service ids / usernames are not personal identifiers here
+  return `${actor.slice(0, 1)}***${actor.slice(at)}`;
+}
+
+export function maskIpAddress(ip: string): string {
+  const v = ip.trim();
+  if (v.includes(":")) return `${v.split(":")[0] ?? ""}:*:*:*`;
+  const parts = v.split(".");
+  if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`;
+  return "***";
+}
+
+/** The human label of an event actor (email, else name, else "system"). */
+export function actorLabel(actor: unknown): string {
+  if (typeof actor === "object" && actor !== null) {
+    const a = actor as Record<string, unknown>;
+    if (typeof a.email === "string" && a.email.length > 0) return a.email;
+    if (typeof a.name === "string" && a.name.length > 0) return a.name;
+  }
+  return "system";
+}

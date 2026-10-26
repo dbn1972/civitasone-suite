@@ -20,12 +20,26 @@ export const createInstalmentBody = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
 });
 
+/** Owner decision #3: a distinct checker approves or rejects a pending instalment plan. */
+export const instalmentDecideBody = z.object({
+  approve: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+export const listInstalmentsQuery = z.object({
+  status: z.enum(['pending', 'active', 'rejected', 'completed', 'defaulted']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const createWriteOffBody = z.object({
   assesseeId: z.string().uuid(),
-  // GAP-REVENUE-WRITE-OFFS-03: optional demand reference + its FY, so the
-  // write-off records which year's demand it reduced. Optional for backward
-  // compatibility; the UI supplies them when a demand is selected.
-  demandId: z.string().uuid().optional(),
+  // Owner decision #6 (2026-10-26): a new write-off MUST reference the demand
+  // it reduces, so the audit trail says which year was written off. Legacy
+  // rows (no demand) are untouched and surfaced as "legacy, not linked". The
+  // financial year is taken from the demand server-side; a client-sent value
+  // is accepted for compatibility but ignored.
+  demandId: z.string().uuid(),
   financialYear: z.string().min(1).max(16).optional(),
   amountMinor: bigintStringCoerce,
   reason: z.string().min(1).max(500),
@@ -63,6 +77,26 @@ export const recoveryReferralListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
   offset: z.coerce.number().int().min(0).default(0),
   assesseeId: z.string().uuid().optional(),
+  // Owner decision #4: the checker queue (?status=pending).
+  status: z.enum(['pending', 'referred', 'rejected', 'accepted', 'resolved']).optional(),
+});
+
+/** Owner decision #4: a distinct checker approves or rejects a pending recovery referral. */
+export const recoveryDecideBody = z.object({
+  approve: z.boolean(),
+  reason: z.string().max(500).optional(),
+});
+
+/**
+ * Owner decision #4: serve a demand notice. The notice period (days) is entered
+ * per notice by the serving officer — no statutory default is assumed.
+ */
+export const serveDemandNoticeBody = z.object({
+  assesseeId: z.string().uuid(),
+  demandId: z.string().uuid().optional(),
+  noticeNo: z.string().min(1).max(64),
+  servedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'must be YYYY-MM-DD'),
+  noticePeriodDays: z.number().int().min(1).max(365),
 });
 
 export const createWaiverBody = z.object({

@@ -228,6 +228,35 @@ export async function insert(tx: Writer, row: DocumentInsert): Promise<void> {
   await tx.insert(documents).values(row);
 }
 
+/**
+ * UAT owner decision #15: insert unless a live (non-archived) document with the
+ * same (tenant, case-insensitive trimmed title) already exists. Returns false
+ * when the unique index `documents_tenant_title_live_uq` swallowed the row, so
+ * the consumer can record a rejection instead of failing the whole transaction.
+ */
+export async function insertUnlessDuplicateTitle(tx: Writer, row: DocumentInsert): Promise<boolean> {
+  const inserted = await tx.insert(documents).values(row).onConflictDoNothing().returning({ id: documents.id });
+  return inserted.length > 0;
+}
+
+/** Oldest live document in the tenant whose title matches case-insensitively after trimming. */
+export async function findLiveByTitle(
+  tenantId: string,
+  title: string,
+): Promise<{ id: string; accessLevel: string } | null> {
+  const rows = await tenantTransaction(db, tenantId, (tx) =>
+    (tx as Writer).select({ id: documents.id, accessLevel: documents.accessLevel }).from(documents)
+      .where(and(
+        eq(documents.tenantId, tenantId),
+        sql`lower(btrim(${documents.title})) = lower(btrim(${title}))`,
+        sql`${documents.status} <> 'archived'`,
+      ))
+      .orderBy(documents.createdAt)
+      .limit(1)
+  );
+  return rows[0] ? { id: rows[0].id, accessLevel: rows[0].accessLevel ?? "internal" } : null;
+}
+
 export async function getById(tenantId: string, id: string, levels?: Clearance): Promise<DocumentView | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(documents)

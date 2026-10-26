@@ -3,7 +3,8 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -24,12 +25,34 @@ import { useFormError } from "@/lib/useFormError";
  * accessible ConfirmDialog.
  */
 export function SeekOpinionForm() {
+  const t = useTranslations("legalOpinionNew");
   const router = useRouter();
   const [reference, setReference] = useState("");
   const [soughtBy, setSoughtBy] = useState("");
   const [subject, setSubject] = useState("");
   const [question, setQuestion] = useState("");
   const [message, setMessage] = useState("");
+  // GAP-LEGAL-OPINIONS-NEW-03 (owner decision #13): the opinion is addressed to an internal department
+  // (picked from the org hierarchy, the default) or to an external party (free text).
+  const [addresseeType, setAddresseeType] = useState<"department" | "external">("department");
+  const [departmentId, setDepartmentId] = useState("");
+  const [externalName, setExternalName] = useState("");
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [deptState, setDeptState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/legal/departments");
+        if (!res.ok) throw new Error("departments unavailable");
+        const json = (await res.json()) as { items?: Array<{ id: string; name: string }> };
+        if (active) { setDepartments(json.items ?? []); setDeptState("ready"); }
+      } catch {
+        if (active) setDeptState("error");
+      }
+    })();
+    return () => { active = false; };
+  }, []);
   const createdIdRef = useRef<string | null>(null);
   const formError = useFormError("opinion request");
 
@@ -44,6 +67,9 @@ export function SeekOpinionForm() {
         ...(soughtBy.trim() ? { soughtBy: soughtBy.trim() } : {}),
         subject: subject.trim(),
         question: question.trim(),
+        addressee: addresseeType === "department"
+          ? { type: "department" as const, departmentId }
+          : { type: "external" as const, name: externalName.trim() },
       };
       const res = await fetch("/api/proxy/v1/legal/opinions", {
         method: "POST",
@@ -71,6 +97,10 @@ export function SeekOpinionForm() {
       setMessage("Opinion subject and the question (each min 3 chars) are required.");
       return;
     }
+    if (addresseeType === "department" ? !departmentId : externalName.trim().length < 1) {
+      setMessage(addresseeType === "department" ? t("departmentRequired") : t("externalRequired"));
+      return;
+    }
     setMessage("");
     trigger();
   }
@@ -86,6 +116,35 @@ export function SeekOpinionForm() {
           <label className="label" htmlFor="soughtBy">Sought by</label>
           <input id="soughtBy" className="inp" value={soughtBy} onChange={(e) => setSoughtBy(e.target.value)} maxLength={256} style={{ minHeight: 44 }} placeholder="Requesting officer / department" />
         </div>
+        <fieldset className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px", border: 0 }}>
+          <legend className="label">{t("addresseeLegend")}</legend>
+          <div style={{ display: "flex", gap: 16, marginBottom: 8, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="radio" name="addresseeType" checked={addresseeType === "department"} onChange={() => setAddresseeType("department")} />
+              {t("internalDepartment")}
+            </label>
+            <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input type="radio" name="addresseeType" checked={addresseeType === "external"} onChange={() => setAddresseeType("external")} />
+              {t("externalParty")}
+            </label>
+          </div>
+          {addresseeType === "department" ? (
+            <>
+              <label className="label" htmlFor="addresseeDepartment">{t("departmentLabel")}</label>
+              <select id="addresseeDepartment" className="inp" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} required disabled={deptState !== "ready"} style={{ minHeight: 44, width: "100%" }}>
+                <option value="">{deptState === "loading" ? t("loading") : t("selectDepartment")}</option>
+                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              {deptState === "error" ? <p role="alert" style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--bad)" }}>{t("departmentsError")}</p> : null}
+              {deptState === "ready" && departments.length === 0 ? <p style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--ink2)" }}>{t("departmentsEmpty")}</p> : null}
+            </>
+          ) : (
+            <>
+              <label className="label" htmlFor="addresseeExternal">{t("externalLabel")}</label>
+              <input id="addresseeExternal" className="inp" value={externalName} onChange={(e) => setExternalName(e.target.value)} required maxLength={256} style={{ minHeight: 44, width: "100%" }} />
+            </>
+          )}
+        </fieldset>
         <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="subject">Subject *</label>
           <input id="subject" className="inp" value={subject} onChange={(e) => setSubject(e.target.value)} required maxLength={256} style={{ minHeight: 44 }} placeholder="Short subject of the opinion sought" />

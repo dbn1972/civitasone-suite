@@ -194,7 +194,7 @@ describe("dashboard figures", () => {
 describe("seekOpinion placeholder", () => {
   it("is readable by the creating tenant straight after create (no 404 flash on redirect)", async () => {
     const ctx = { tenantId: TENANT, actorId: ACTOR, correlationId: "c-ph", roles: ["legal_officer"] } as never;
-    const { id } = await opinionCommands.seekOpinion(ctx, { subject: "S", question: "Q", soughtBy: "Legal Cell" });
+    const { id } = await opinionCommands.seekOpinion(ctx, { subject: "S", question: "Q", soughtBy: "Legal Cell", addressee: { type: "external", name: "Test Addressee" } });
     const row = await opinionQueries.getOpinion(id, TENANT);
     expect(row).not.toBeNull();
     expect(row).toMatchObject({ id, status: "sought", soughtBy: "Legal Cell" });

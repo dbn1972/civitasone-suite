@@ -2,7 +2,8 @@ import { PageHeader, StatCard, StatusPill, EmptyState, Card, RefreshErrorState }
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-import { getSubscription } from "../../../_data/loaders";
+import { getSubscription, getTenantInvoices } from "../../../_data/loaders";
+import { InvoiceList } from "./InvoiceList";
 import { PLANS_HREF } from "../navConstants";
 
 const STATUS_KEYS = new Set(["active", "past_due", "cancelled", "trial", "suspended"]);
@@ -14,7 +15,7 @@ function moduleDisplayName(key: string): string {
 
 export default async function SubscriptionPage() {
   const tStatus = await getTranslations("tenantAdminW2.subscription.status");
-  const result = await getSubscription();
+  const [result, invoiceResult] = await Promise.all([getSubscription(), getTenantInvoices()]);
   const { data: subscription } = result;
   // null-on-api (genuinely no subscription) is distinct from source:"error".
   const errored = result.source === "error";
@@ -33,12 +34,9 @@ export default async function SubscriptionPage() {
           // outage — they would act on data we failed to load.
           errored ? undefined : (
             <>
-              {/* GAP-TENANT-ADMIN-SUBSCRIPTION-04 (INTERIM, needs owner decision): the
-                  "Download invoice" link pointed at /v1/billing/invoices/latest?format=pdf,
-                  which no service implements (billing-service has GET
-                  /v1/billing/invoices/:id with a uuid id and no PDF renderer), so it was a
-                  dead control that always failed. Removed rather than left misleading; an
-                  invoice list + PDF download needs a billing-service invoice-PDF endpoint. */}
+              {/* GAP-TENANT-ADMIN-SUBSCRIPTION-04 / owner decision #27: the dead "latest" link is
+                  gone; the invoice list below links each issued invoice to billing-service's
+                  GET /v1/billing/invoices/:id/pdf through the authenticated proxy. */}
               {/* GAP-TENANT-ADMIN-SUBSCRIPTION-02: tenant upgrade -> tenant-admin plans. */}
               <a href={PLANS_HREF} className="btn primary" style={{ minHeight: 44 }}>Upgrade plan</a>
             </>
@@ -111,6 +109,16 @@ export default async function SubscriptionPage() {
                   <EmptyState icon="🧩" title="No modules listed" message="Module access will appear here." />
                 )}
               </div>
+            </div>
+          </div>
+          <div className="card" style={{ marginTop: 18 }}>
+            <div className="card-h"><h3>Invoices</h3></div>
+            <div className="pad">
+              {invoiceResult.source === "error" ? (
+                <RefreshErrorState error={toHumanError("load", { area: "invoices" })} backHref="/tenant-admin" />
+              ) : (
+                <InvoiceList invoices={invoiceResult.data} pdfBasePath="/api/proxy/v1/billing/invoices" />
+              )}
             </div>
           </div>
         </>

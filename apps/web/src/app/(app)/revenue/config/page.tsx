@@ -2,7 +2,11 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { RefreshErrorState } from "@/app/_components/ds/RefreshErrorState";
 import { fetchJson, type LoaderResult, type LoaderSource } from "@/app/_data/apiClient";
+import { formatBps, formatIndianDate, formatMoney } from "@/lib/formatters";
+import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { RateConfigConsole } from "./RateConfigConsole";
+import { ConfigProposalsPanel, type ConfigProposal } from "./ConfigProposalsPanel";
+import type { ChangeTarget } from "./ProposeChangeForm";
 import type { RateHeadRow, RateSlabRow, PenaltyRuleRow, RebateRuleRow } from "./types";
 
 async function getRateHeads(): Promise<LoaderResult<RateHeadRow[]>> {
@@ -57,6 +61,37 @@ async function getRebateRules(rateHeadId: string): Promise<LoaderResult<RebateRu
   );
 }
 
+// Owner decision #2: proposals awaiting a second officer, plus the recent decisions.
+async function getProposals(): Promise<LoaderResult<ConfigProposal[]>> {
+  return fetchJson<unknown, ConfigProposal[]>("/api/v1/revenue/rate-config/proposals?limit=50", [], {
+    telemetryKey: "revenue.config.proposals",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: ConfigProposal[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
+}
+
+/** Rows that are still in force (not ended) — the ones a change or end-date can target. */
+function buildChangeTargets(
+  heads: RateHeadRow[],
+  slabs: RateSlabRow[],
+  penalties: PenaltyRuleRow[],
+  rebates: RebateRuleRow[],
+): ChangeTarget[] {
+  const live = (r: { isActive: boolean; effectiveTo?: string | null }) => r.isActive && !r.effectiveTo;
+  const from = (d?: string) => (d ? ` from ${formatIndianDate(d)}` : "");
+  return [
+    ...heads.filter(live).map((h) => ({ id: h.id, kind: "rate_head" as const, label: `${h.code} — ${h.name}` })),
+    ...slabs.filter(live).map((s) => ({
+      id: s.id, kind: "rate_slab" as const, slabType: s.slabType,
+      label: `${s.slabType === "ad_valorem" ? formatBps(s.rateValue) : formatMoney(s.rateValue)} ${s.slabType}${from(s.effectiveFrom)}`,
+    })),
+    ...penalties.filter(live).map((r) => ({ id: r.id, kind: "penalty_rule" as const, label: `${r.interestType} ${formatBps(r.annualRateBps)} p.a.${from(r.effectiveFrom)}` })),
+    ...rebates.filter(live).map((r) => ({ id: r.id, kind: "rebate_rule" as const, label: `${r.rebateType} ${formatBps(r.discountBps)}${from(r.effectiveFrom)}` })),
+  ];
+}
+
 export default async function RateConfigPage(
   props: {
     searchParams?: Promise<{ rateHeadId?: string }>;
@@ -80,6 +115,11 @@ export default async function RateConfigPage(
         { data: [] as PenaltyRuleRow[], source: "api" as const },
         { data: [] as RebateRuleRow[], source: "api" as const },
       ];
+
+  const proposalsResult = await getProposals();
+  const proposals = proposalsResult?.data ?? [];
+  const currentUserId = getSessionUserId();
+  const changeTargets = buildChangeTargets(rateHeads, slabsResult.data, penaltyResult.data, rebateResult.data);
 
   const activeHeads = rateHeads.filter((rh) => rh.isActive).length;
   const slabsError = (slabsResult.source as LoaderSource) === "error";
@@ -124,6 +164,8 @@ export default async function RateConfigPage(
             />
           </StatGrid>
 
+          <ConfigProposalsPanel proposals={proposals} currentUserId={currentUserId} />
+
           <Card title="Rate Engine Configuration">
             <RateConfigConsole
               rateHeads={rateHeads}
@@ -135,6 +177,7 @@ export default async function RateConfigPage(
               penaltyRulesSource={penaltyResult.source}
               rebateRules={rebateResult.data}
               rebateRulesSource={rebateResult.source}
+              changeTargets={changeTargets}
             />
           </Card>
         </>

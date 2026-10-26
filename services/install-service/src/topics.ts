@@ -7,6 +7,8 @@ export const COMMANDS = {
   stepComplete: "install.step.complete",
   stepSkip: "install.step.skip",
   siloProvisionUpdate: "install.silo_provision.update",
+  /** payload: { id, domainPackKey, packKeys, stageId } — durable Domain Pack activation record (owner decision #28). */
+  recordDomainPackActivation: "install.domain_pack_activation.record",
 } as const;
 
 /**
@@ -36,4 +38,6 @@ export const RESOURCE = "stage";
 /** Events consumed from other services. */
 export const CONSUMED_EVENTS = {
   tenantIsolationChanged: "tenant.tenant.isolation_changed",
+  /** citizen-service outcome of citizen.pack.domain_activate (owner decision #28). */
+  citizenPackDomainActivated: "citizen.pack.domain_activated",
 } as const;

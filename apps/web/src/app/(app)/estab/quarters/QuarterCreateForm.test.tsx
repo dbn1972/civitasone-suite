@@ -134,4 +134,42 @@ describe("QuarterCreateForm", () => {
     const body = JSON.parse((browserJsonMock.mock.calls[0][1] as { body: string }).body);
     expect(body.carpetAreaSqft).toBe(450);
   });
+
+  // Owner decision #31 (GAP-ESTAB-QUARTERS-04): Category is a closed list, not suggestions plus free text.
+  describe("Category is a closed list (owner decision #31)", () => {
+    it("renders Category as a select offering exactly the standard categories", () => {
+      render(<QuarterCreateForm />);
+      const select = screen.getByLabelText("Category") as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      expect(Array.from(select.options).map((o) => o.value)).toEqual(
+        ["general", "physically_handicapped", "medical", "defence", "other"],
+      );
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual(
+        ["General", "Physically handicapped", "Medical", "Defence", "Other"],
+      );
+      expect(select.value).toBe("general");
+    });
+
+    it("submits the chosen category", async () => {
+      browserJsonMock.mockResolvedValue({ status: "accepted" });
+      render(<QuarterCreateForm />);
+      fireEvent.change(screen.getByLabelText(/Quarter No\./), { target: { value: "B-15" } });
+      fireEvent.change(screen.getByLabelText("Category"), { target: { value: "medical" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add Quarter" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Add quarter" }));
+      await waitFor(() => expect(browserJsonMock).toHaveBeenCalled());
+      const body = JSON.parse(String((browserJsonMock.mock.calls[0]![1] as RequestInit).body));
+      expect(body.category).toBe("medical");
+    });
+
+    it("the confirmation names the category by its label, not the raw key", async () => {
+      render(<QuarterCreateForm />);
+      fireEvent.change(screen.getByLabelText(/Quarter No\./), { target: { value: "B-16" } });
+      fireEvent.change(screen.getByLabelText("Category"), { target: { value: "physically_handicapped" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add Quarter" }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(dialog.textContent).toMatch(/Physically handicapped/);
+      expect(dialog.textContent).not.toMatch(/physically_handicapped/);
+    });
+  });
 });

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, notInArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { legalHearings, legalOrders, legalOpinions, type HearingRow } from "./schema.js";
 
@@ -52,24 +52,24 @@ export async function listOrdersByTenant(tenantId: string, limit: number) {
  * first) so the compliance table is pageable instead of silently capped at
  * the first 50 rows.
  */
-export async function listOrdersByTenantPaged(tenantId: string, limit: number, offset: number) {
+export async function listOrdersByTenantPaged(tenantId: string, limit: number, offset: number, excludeCaseIds: string[] = []) {
   return db.transaction(async (tx) =>
     tx
       .select()
       .from(legalOrders)
-      .where(eq(legalOrders.tenantId, tenantId))
+      .where(orderScope(tenantId, excludeCaseIds))
       .orderBy(desc(legalOrders.orderDate))
       .limit(limit)
       .offset(offset));
 }
 
 /** GAP2-LEGAL-COURT-ORDERS-10: true total for the tenant (not the page size). */
-export async function countOrdersByTenant(tenantId: string): Promise<number> {
+export async function countOrdersByTenant(tenantId: string, excludeCaseIds: string[] = []): Promise<number> {
   return db.transaction(async (tx) => {
     const rows = await tx
       .select({ n: sql<number>`count(*)::int` })
       .from(legalOrders)
-      .where(eq(legalOrders.tenantId, tenantId));
+      .where(orderScope(tenantId, excludeCaseIds));
     return rows[0]?.n ?? 0;
   });
 }
@@ -85,6 +85,7 @@ export async function countOrdersByTenant(tenantId: string): Promise<number> {
 export async function aggregateOrderStats(
   tenantId: string,
   today: string,
+  excludeCaseIds: string[] = [],
 ): Promise<{ total: number; pendingCompliance: number; complied: number; contemptRisk: number }> {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -94,7 +95,7 @@ export async function aggregateOrderStats(
         contemptRisk: sql<number>`count(*) filter (where ${legalOrders.complianceRequired} and ${legalOrders.complianceDeadline} is not null and ${legalOrders.complianceDeadline} < ${today})::int`,
       })
       .from(legalOrders)
-      .where(eq(legalOrders.tenantId, tenantId));
+      .where(orderScope(tenantId, excludeCaseIds));
     const r = rows[0];
     return {
       total: r?.total ?? 0,
@@ -103,6 +104,13 @@ export async function aggregateOrderStats(
       contemptRisk: r?.contemptRisk ?? 0,
     };
   });
+}
+
+/** Tenant scope for order reads; owner decision #12 excludes orders of cases the viewer may not see. */
+function orderScope(tenantId: string, excludeCaseIds: string[]) {
+  return excludeCaseIds.length > 0
+    ? and(eq(legalOrders.tenantId, tenantId), notInArray(legalOrders.caseId, excludeCaseIds))
+    : eq(legalOrders.tenantId, tenantId);
 }
 
 export async function listOpinionsByTenant(tenantId: string, limit: number) {

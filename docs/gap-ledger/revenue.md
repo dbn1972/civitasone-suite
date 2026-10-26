@@ -83,7 +83,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ADJUSTMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by f487f4c68 (owner decision #5, 2026-10-26))
+  - principal only is movable; penalty/interest stay with their demand; cap = live DCB outstanding less retained charges, enforced server-side at request (422 + consumer) and again at approval; form shows the server-issued cap (adjustment-movable-cap/-route tests). Follow-up 4ecf0f3fa derives retained charges as net - principal + rebate (no double count).
 - **W0 note:** partly fixed by #1868 — source-demand breakdown (principal/rebate/penalty/interest/net) and net-demand cap wording shipped; remaining: decision on whether penalty/interest may be moved, and confirming the cap matches the backend rule (UI still caps at netMinor, not DCB outstanding).
 - **First-pass claim:** Amount cap is checked against the source demand netMinor, which includes penalty/interest, while the option label shows only "FY … — ₹… (status)" — the clerk cannot see which component is being moved (AdjustmentCreateForm.tsx:70-72,181).
 - **Verified evidence:** Option labels show 'FY {fy} — {formatMoney(netMinor)} ({status})' at AdjustmentCreateForm.tsx:322 and 353 (cited :70-72,181 are wrong); cap check compares BigInt(amount) to fromDemand.netMinor at l.238 and the error text calls it 'outstanding balance'. mapDemands (adjustments/page.tsx:51-67) drops principal/penalty/interest/rebate although the same endpoint returns them (DemandRow in assessees/[id]/AssesseeDetailTabs.tsx:9-19 has them). Whether netMinor includes penalty/interest, and whether it is net of payments (DCB balance = demand - collected), is cannot-verify without revenue-service; UI columns suggest Net Demand is principal-rebate+penalty+interest, i.e. NOT outstanding after receipts, so the 'outstanding balance' wording may be wrong.
@@ -805,7 +806,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-REFUNDS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
 - [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-  - Closed by 5f33bb455 (UAT B2): refunds list supports status=live&assesseeId=, page disables receipts with a pending/approved/processed refund (RefundCreateForm/page tests); POST /v1/revenue/refunds now answers 409 REFUND_ALREADY_EXISTS synchronously when the receipt already has a non-rejected refund (collection-routes.test.ts; consumer keeps its in-txn no-op as defence in depth). Partial-refund amountMinor remains an owner decision (not built).
+  - Closed by 5f33bb455 (UAT B2): refunds list supports status=live&assesseeId=, page disables receipts with a pending/approved/processed refund (RefundCreateForm/page tests); POST /v1/revenue/refunds now answers 409 REFUND_ALREADY_EXISTS synchronously when the receipt already has a non-rejected refund (collection-routes.test.ts; consumer keeps its in-txn no-op as defence in depth). Partial refunds: closed by 7b239d61f (owner decision #1, 2026-10-26) — POST /v1/revenue/refunds takes an optional amountMinor, positive and never above the receipt (422 REFUND_EXCEEDS_RECEIPT), re-checked in the consumer; omitting it keeps the full-refund default; the raise-refund form has an optional amount field (refund-partial-amount/-consumer tests).
 - **W0 note:** partly fixed by #1868 — receipts that already have a pending refund are disabled with "(refund pending)" in RefundCreateForm; remaining: already-approved/processed refunds are not flagged (only the pending list is loaded), partial-refund decision (POST still sends only receiptId+reason), server 409 on duplicates unverified.
 - **First-pass claim:** Refund is raised on a receipt with no amount field — full receipt amount only — and the select does not mark receipts already refunded or pending refund, so duplicate refunds can be raised (RefundCreateForm.tsx:74-80,122-125).
 - **Verified evidence:** RefundCreateForm.tsx posts only { receiptId, reason } (l.74-80), so full-receipt refund is the API contract as sent; there is no amount field. The receipt select (l.122-126) shows receiptNo, amount, channel and receipt status but nothing about existing/pending refunds, and refunds/page.tsx loads no refund list, so the UI cannot prevent duplicates. The submit button already has disabled/loading while busy (l.163). Whether the server rejects duplicate refunds is cannot-verify (revenue-service absent). Partial-amount refunds would need a backend contract change.
@@ -1147,7 +1148,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 14204570f (owner decision #6, 2026-10-26))
+  - demandId mandatory on new write-offs, FY taken from the demand, capped at that demand's live balance at create and approval; legacy rows untouched and flagged 'legacy, not linked' (writeoff-demand-mandatory test).
 - **W0 note:** partly fixed by #1868 — WriteOffCreateForm has an optional demand selector that posts demandId+financialYear and the decide page shows the FY; remaining: demand is optional (decision to require it + backend contract pending) and the amount cap is against the assessee DCB balance, not the chosen demand.
 - **First-pass claim:** Write-off is against the assessee, not a specific demand/FY, so the audit trail cannot say which year's demand was reduced (WriteOffCreateForm.tsx:62-70).
 - **Verified evidence:** WriteOffCreateForm.tsx:116-120 posts { assesseeId, amountMinor, reason } with no demandId or financialYear, and the page has no demand selector; the decide page's WriteOffRecord (decide/page.tsx:7-14) carries none either. Whether the backend can accept/record a demandId is cannot-verify.
@@ -1273,7 +1275,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ADJUSTMENTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by d3eca1f45 (owner decision #41, 2026-10-26))
+  - the decide-step audit payload now carries fromDemandId, toDemandId and amountMinor (adjustment-decide-audit test).
 - **First-pass claim:** Balance transfer between demands applies immediately with no maker-checker, unlike refunds/write-offs/waivers (AdjustmentCreateForm.tsx:283-300 says so explicitly); it can move arrears off a defaulter's oldest demand. Server-side controls undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/adjustments']`
 - **Question:** Does a balance-transfer adjustment require a different approver (maker-checker) or a specific role, and is it audited with both demand ids?
@@ -1307,7 +1310,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BBPS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 1a7d53c1f (owner decision #7, 2026-10-26))
+  - no live BBPS in UAT; manual pay-bill stays disabled by default; fetch-bill issues a single-use 15-minute server token and pay-bill takes only that token (assessee + amount derived server-side); UI pays only a fetched bill (bbps-bill-token test).
 - **First-pass claim:** "Pay Bill" is a manual entry of a BBPS transaction ID and amount typed by the officer; the page posts it to record a payment without any bill lookup, amount match or verification on screen, so a mistyped or invented BBPS Txn ID credits an assessee (PayBillForm.tsx:47-49,74-83). Server verification undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/bbps/fetch-bill', 'POST /api/v1/revenue/bbps/pay-bill']`
 - **Question:** Does pay-bill verify the BBPS txn id against the BBPS/BBPCU gateway (bill match, amount match, uniqueness) before crediting?
@@ -1318,7 +1322,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-CONFIG-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by bb2e7c5ca (owner decision #2, 2026-10-26))
+  - rate configuration is maker-checker: revenue_admin proposes (POST /v1/revenue/rate-config/proposals), a different officer approves; edits end-date the old row and insert a new effective-dated version, deactivation is an end-date, the approver previews the effect on a computed demand first; legacy direct-write routes closed by default (rate-config-domain/-proposals tests).
 - **First-pass claim:** Rate configuration is create-only: no edit, deactivate or end-date action exists for heads, slabs or rules, and creation posts immediately with no maker-checker or preview although these rows drive every demand, penalty and rebate computed by the rate engine (config/Create*Form.tsx POSTs; RateConfigConsole.tsx tables have no actions). Server audit/versioning undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/rate-heads', 'POST /api/v1/revenue/rate-slabs', 'POST /api/v1/revenue/penalty-rules', 'POST /api/v1/revenue/rebate-rules']`
 - **Question:** Are rate rows versioned with effective dates, restricted to a config-admin role, audited, and is maker-checker enforced?
@@ -1329,7 +1334,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-INSTALMENTS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 0bd6191fa (owner decision #3, 2026-10-26))
+  - instalment plans are created pending and need a different officer's approval (PATCH /v1/revenue/instalments/:id/decide, maker!=checker enforced in the consumer, audited); queue + decide UI (instalment-plan-approval test).
 - **First-pass claim:** No maker-checker or approval on an instalment plan although it defers a demand; the flow is a single-officer create. Server checks undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/instalments']`
 - **Question:** Does creating an instalment plan require approval by a second officer/role and audit the deferment?
@@ -1351,7 +1357,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECOVERY-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by a487cd166 (owner decision #4, 2026-10-26))
+  - recovery referral is maker-checker and allowed only after a demand notice is served and its notice period has lapsed (new demand-notices record + serve endpoint; period entered per notice, no statutory default assumed); legal-service is notified only on approval (recovery-referral-approval test).
 - **First-pass claim:** Coercive recovery referral is a single-officer action that takes effect immediately with no maker-checker and no view of amount, age or notices before confirming (RecoveryReferralCreateForm.tsx:116-125); the request carries only assesseeId + reason. Server audit undeterminable: revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/recovery-referrals']`
 - **Question:** Does a recovery referral need maker-checker, validate the assessee has overdue arrears and notices served, and emit an audit event?

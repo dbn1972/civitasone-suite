@@ -6052,6 +6052,47 @@ export async function getSubscription(): Promise<LoaderResult<SubscriptionSummar
   });
 }
 
+// Owner decision #27 (GAP-TENANT-ADMIN-SUBSCRIPTION-04): the tenant's invoice list from
+// billing-service GET /v1/billing/invoices. Money arrives as minor-unit STRINGS (bigint-safe).
+export type TenantInvoice = {
+  id: string;
+  invoiceNumber?: string | null;
+  periodMonth?: string | null;
+  issuedAt?: string | null;
+  status: string;
+  totalMinor: string;
+  supplierGstin?: string | null;
+  recipientGstin?: string | null;
+  placeOfSupply?: string | null;
+  cgstMinor?: string | null;
+  sgstMinor?: string | null;
+  igstMinor?: string | null;
+};
+
+const TenantInvoiceListSchema: z.ZodType<TenantInvoice[], z.ZodTypeDef, unknown> = z.array(z.object({
+  id: z.string(),
+  invoiceNumber: z.string().nullable().optional(),
+  periodMonth: z.string().nullable().optional(),
+  issuedAt: z.string().nullable().optional(),
+  status: z.string(),
+  totalMinor: z.string(),
+  supplierGstin: z.string().nullable().optional(),
+  recipientGstin: z.string().nullable().optional(),
+  placeOfSupply: z.string().nullable().optional(),
+  cgstMinor: z.string().nullable().optional(),
+  sgstMinor: z.string().nullable().optional(),
+  igstMinor: z.string().nullable().optional(),
+}));
+
+export async function getTenantInvoices(): Promise<LoaderResult<TenantInvoice[]>> {
+  return fetchJson<unknown, TenantInvoice[]>("/api/v1/billing/invoices?limit=100", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "admin.invoices",
+    responseSchema: TenantInvoiceListSchema,
+    mapResponse: (p) => getArrayPayload(p) as TenantInvoice[] | null,
+  });
+}
+
 export async function getAPIKeys(): Promise<LoaderResult<APIKeySummary[]>> {
   return fetchJson<unknown, APIKeySummary[]>("/api/v1/admin/api-keys", [], {
     revalidateSeconds: 60,
@@ -6499,6 +6540,14 @@ export type InvoiceSummary = {
   date: string;
   amount: number;
   status: "paid" | "pending" | "failed";
+  // Owner decision #26 (GAP-TENANT-ADMIN-PLANS-04): GST tax-invoice detail when the API provides it.
+  invoiceNumber?: string | null;
+  supplierGstin?: string | null;
+  recipientGstin?: string | null;
+  placeOfSupply?: string | null;
+  cgstMinor?: number;
+  sgstMinor?: number;
+  igstMinor?: number;
 };
 
 export type PlansData = {
@@ -6506,6 +6555,8 @@ export type PlansData = {
   currentPlanId: string;
   invoices: InvoiceSummary[];
   trialDaysLeft: number | null;
+  /** Tenant edition (govt / govt_dept / small_office / psu ...): drives the payment modes shown. */
+  edition?: string | null;
 };
 
 /**
@@ -6534,9 +6585,41 @@ export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.ob
     date: z.string(),
     amount: z.number(),
     status: z.enum(["paid", "pending", "failed"]),
+    invoiceNumber: z.string().nullable().optional(),
+    supplierGstin: z.string().nullable().optional(),
+    recipientGstin: z.string().nullable().optional(),
+    placeOfSupply: z.string().nullable().optional(),
+    cgstMinor: z.number().optional(),
+    sgstMinor: z.number().optional(),
+    igstMinor: z.number().optional(),
   })),
   trialDaysLeft: z.number().nullable(),
+  edition: z.string().nullable().optional(),
 });
+
+/**
+ * OWNER DECISION #24 (TENANT-ADMIN-PLANS-02): a downgrade is a request that
+ * platform billing approves. tenant-service lists this tenant's requests so the
+ * plans page can show the pending state.
+ */
+export type DowngradeRequestSummary = {
+  id: string;
+  targetPlanId: string;
+  fromPlanId: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  requestedAt: string;
+  decidedAt?: string | null;
+  decisionReason?: string | null;
+};
+
+export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequestSummary[]>> {
+  return fetchJson<unknown, DowngradeRequestSummary[]>("/api/v1/tenant/subscription/downgrade-requests", [] as DowngradeRequestSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.downgrade-requests",
+    mapResponse: (p) => (getArrayPayload(p) as DowngradeRequestSummary[] | null) ?? [],
+  });
+}
 
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {
   return fetchJson<unknown, PlansData>(
@@ -6618,6 +6701,10 @@ export type DataExportRequest = {
   createdAt: string;
   expiresAt: string | null;
   downloadUrl: string | null;
+  /** Owner decision #22: machine reason when status is "failed". */
+  failureReason?: string | null;
+  /** Owner decision #22: per-file summary (storage keys never reach the browser). */
+  files?: { entity: string; rowCount: number; sizeBytes: number }[];
 };
 
 export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]>> {

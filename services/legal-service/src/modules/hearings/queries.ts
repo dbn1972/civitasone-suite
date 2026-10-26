@@ -1,6 +1,18 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as caseRepo from "../cases/repo.js";
+import { departmentNames } from "../../shared/org-client.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Owner decision #11: deptRef stores a department id; show its name. A legacy free-text value is shown as
+ * typed, and an id that cannot be resolved is omitted rather than shown as a raw uuid.
+ */
+export function departmentDisplay(raw: string | null | undefined, names: Map<string, string>): string | undefined {
+  if (!raw) return undefined;
+  return UUID_RE.test(raw) ? names.get(raw) : raw;
+}
 
 function mapHearingStatus(status: string): "scheduled" | "completed" | "adjourned" | "cancelled" {
   if (status === "completed") return "completed";
@@ -58,6 +70,7 @@ export async function listCourtOrderSummaries(tenantId: string, limit: number) {
   const caseIds = [...new Set(list.map((row) => row.caseId))];
   const cases = await caseRepo.findCasesByIds(caseIds);
   const caseById = new Map(cases.map((c) => [c.id, c]));
+  const deptNames = await departmentNames({ tenantId, correlationId: "court-orders" });
 
   return list.map((row) => {
     const legalCase = caseById.get(row.caseId);
@@ -74,7 +87,7 @@ export async function listCourtOrderSummaries(tenantId: string, limit: number) {
       // the Boolean(direction) fallback at write time.
       complianceRequired: row.complianceRequired,
       complianceDeadline: row.complianceDeadline ? row.complianceDeadline.toString() : undefined,
-      department: row.deptRef ?? undefined,
+      department: departmentDisplay(row.deptRef, deptNames),
       status: "pending" as const,
     };
   });
@@ -93,16 +106,18 @@ export async function listCourtOrderSummariesPaged(
   limit: number,
   offset: number,
   today: string,
+  excludeCaseIds: string[] = [],
 ) {
   const [rows, total, stats] = await Promise.all([
-    repo.listOrdersByTenantPaged(tenantId, limit, offset),
-    repo.countOrdersByTenant(tenantId),
-    repo.aggregateOrderStats(tenantId, today),
+    repo.listOrdersByTenantPaged(tenantId, limit, offset, excludeCaseIds),
+    repo.countOrdersByTenant(tenantId, excludeCaseIds),
+    repo.aggregateOrderStats(tenantId, today, excludeCaseIds),
   ]);
 
   const caseIds = [...new Set(rows.map((row) => row.caseId))];
   const cases = await caseRepo.findCasesByIds(caseIds);
   const caseById = new Map(cases.map((c) => [c.id, c]));
+  const deptNames = await departmentNames({ tenantId, correlationId: "court-orders" });
 
   const items = rows.map((row) => {
     const legalCase = caseById.get(row.caseId);
@@ -116,7 +131,7 @@ export async function listCourtOrderSummariesPaged(
       summary: row.summary,
       complianceRequired: row.complianceRequired,
       complianceDeadline: row.complianceDeadline ? row.complianceDeadline.toString() : undefined,
-      department: row.deptRef ?? undefined,
+      department: departmentDisplay(row.deptRef, deptNames),
       status: "pending" as const,
     };
   });

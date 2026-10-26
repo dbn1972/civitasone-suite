@@ -1,4 +1,5 @@
 import { PageHeader } from "../../../../_components/ds";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { CreateReportForm } from "./CreateReportForm";
 
 export default async function NewReportPage(props: { searchParams: Promise<{ reportType?: string }> }) {
@@ -24,7 +25,7 @@ export default async function NewReportPage(props: { searchParams: Promise<{ rep
           report job (the closest available command).
         </div>
       )}
-      <CreateReportForm defaultReportType={reportType} />
+      <CreateReportForm defaultReportType={reportType} canUnmaskPii={getSessionRoles().includes("report_admin")} />
     </div>
   );
 }
