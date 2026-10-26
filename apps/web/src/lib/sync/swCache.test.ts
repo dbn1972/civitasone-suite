@@ -57,9 +57,13 @@ function boot(network: (req: Request) => Promise<Response>) {
     listeners.fetch({ request: req, respondWith: (x: Promise<Response>) => (p = x) });
     return p;
   }
-  async function dispatchMessage(data: unknown, sourceUrl: string | null = `${ORIGIN}/`) {
+  function originOf(u: string | null): string {
+    if (u === null) return "";
+    try { return new URL(u).origin; } catch { return ""; }
+  }
+  async function dispatchMessage(data: unknown, sourceUrl: string | null = `${ORIGIN}/`, eventOrigin: string = originOf(sourceUrl)) {
     const waits: Promise<unknown>[] = [];
-    listeners.message({ data, source: sourceUrl === null ? undefined : { url: sourceUrl }, waitUntil: (x: Promise<unknown>) => waits.push(x) });
+    listeners.message({ data, origin: eventOrigin, source: sourceUrl === null ? undefined : { url: sourceUrl }, waitUntil: (x: Promise<unknown>) => waits.push(x) });
     await Promise.all(waits);
   }
   async function install() {
@@ -158,6 +162,14 @@ describe("service worker cache hygiene (V4-A-01)", () => {
     await sw.install();
     await sw.dispatchMessage({ type: "CIVITASONE_PURGE" });
     expect(await sw.allCachedUrls()).toEqual([]);
+  });
+
+  it("ignores a message whose event.origin is foreign even when the source URL looks same-origin", async () => {
+    const sw = boot(async () => new Response("x", { status: 200 }));
+    sw.caches.set("civitasone-shell-v1", new FakeCache());
+    await sw.caches.get("civitasone-shell-v1")!.put(`${ORIGIN}/a`, new Response("secret"));
+    await sw.dispatchMessage({ type: "CIVITASONE_PURGE" }, `${ORIGIN}/`, "https://evil.example");
+    expect(sw.caches.get("civitasone-shell-v1")!.store.has(`${ORIGIN}/a`)).toBe(true);
   });
 
   it("ignores CIVITASONE_PURGE from a foreign origin or a message with no source", async () => {

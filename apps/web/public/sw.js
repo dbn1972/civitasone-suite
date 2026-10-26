@@ -205,6 +205,7 @@ function isSameOriginSource(event) {
 }
 
 self.addEventListener("message", (event) => {
+  if (event.origin !== self.location.origin) return;
   if (!isSameOriginSource(event)) return;
   if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
   if (event.data?.type === "CIVITASONE_PURGE") event.waitUntil(purgeCaches());
