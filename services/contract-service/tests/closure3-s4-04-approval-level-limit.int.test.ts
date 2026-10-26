@@ -2,7 +2,7 @@
  * CLOS3-S4-04: approval-level creation must hold the 5-level cap and unique ordinals even when
  * several create commands are published before any is consumed (the route's count read is stale).
  *
- * Real Postgres as the non-superuser contract_svc role (FORCE RLS enforced). Skips when
+ * Real Postgres as the non-superuser contract_svc role (FORCE RLS enforced). Fails loudly when
  * Postgres is unreachable.
  */
 import { describe, it, expect, afterAll } from "vitest";
@@ -18,6 +18,7 @@ async function probe(): Promise<boolean> {
   finally { await client.end({ timeout: 1 }).catch(() => undefined); }
 }
 const reachable = DSN !== "" && (await probe());
+if (!reachable) throw new Error(`closure3-s4-04: Postgres not reachable (DATABASE_URL=${DSN === "" ? "unset" : DSN.replace(/:[^:@/]+@/, ":***@")}); CI bootstraps it, locally run scripts/ci/bootstrap-postgres.sh`);
 
 const { db, sqlClient } = await import("../src/shared/db.js");
 const { runWithTenant } = await import("@civitasone/db");
@@ -51,7 +52,7 @@ const levels = (tenantId: string) =>
   Promise.resolve(runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(approvalLevels).where(eq(approvalLevels.tenantId, tenantId)))));
 const seed = (tenantId: string, ordinal: number) => create(createMsg(tenantId, ordinal));
 
-describe.skipIf(!reachable)("CLOS3-S4-04 approval level cap + ordinals (real Postgres)", () => {
+describe("CLOS3-S4-04 approval level cap + ordinals (real Postgres)", () => {
   afterAll(async () => {
     for (const t of tenants) {
       await Promise.resolve(runWithTenant(t, () => db.transaction(async (tx) => { await tx.delete(approvalLevels).where(eq(approvalLevels.tenantId, t)); }))).catch(() => undefined);

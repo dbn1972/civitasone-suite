@@ -18,6 +18,7 @@ async function probe(): Promise<boolean> {
   finally { await client.end({ timeout: 1 }).catch(() => undefined); }
 }
 const reachable = DSN !== "" && (await probe());
+if (!reachable) throw new Error(`closure3-s4-14: Postgres not reachable (DATABASE_URL=${DSN === "" ? "unset" : DSN.replace(/:[^:@/]+@/, ":***@")}); CI bootstraps it, locally run scripts/ci/bootstrap-postgres.sh`);
 
 const { db, sqlClient, scopedPlatformRead } = await import("../src/shared/db.js");
 const { runWithTenant } = await import("@civitasone/db");
@@ -39,7 +40,7 @@ const sweep = (tenantId: string, now: Date) =>
   Promise.resolve(runWithTenant(tenantId, () => db.transaction((tx) => repo.sweepOverdueBatch(tx, now, 100))));
 const candidates = (now: Date) => scopedPlatformRead((tx) => repo.findOverdueTenantIds(tx, now));
 
-describe.skipIf(!reachable)("CLOS3-S4-14 overdue sweep uses the IST date (real Postgres)", () => {
+describe("CLOS3-S4-14 overdue sweep uses the IST date (real Postgres)", () => {
   afterAll(async () => {
     for (const t of tenants) {
       await Promise.resolve(runWithTenant(t, () => db.transaction(async (tx) => { await tx.delete(auditPendingRegister).where(eq(auditPendingRegister.tenantId, t)); }))).catch(() => undefined);

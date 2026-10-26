@@ -4,7 +4,7 @@
  * are published before any is consumed; and the route's open-version guard must not stop at the
  * newest 200 rows.
  *
- * Real Postgres as the non-superuser catalogue_svc role (FORCE RLS enforced). Skips when
+ * Real Postgres as the non-superuser catalogue_svc role (FORCE RLS enforced). Fails loudly when
  * Postgres is unreachable.
  */
 import { describe, it, expect, afterAll } from "vitest";
@@ -20,6 +20,7 @@ async function probe(): Promise<boolean> {
   finally { await client.end({ timeout: 1 }).catch(() => undefined); }
 }
 const reachable = DSN !== "" && (await probe());
+if (!reachable) throw new Error(`closure3-s4-05: Postgres not reachable (DATABASE_URL=${DSN === "" ? "unset" : DSN.replace(/:[^:@/]+@/, ":***@")}); CI bootstraps it, locally run scripts/ci/bootstrap-postgres.sh`);
 
 const { db, sqlClient } = await import("../src/shared/db.js");
 const { runWithTenant } = await import("@civitasone/db");
@@ -52,7 +53,7 @@ const addVersion = (t: string, productId: string, versionNumber: number, status:
     await tx.insert(productVersions).values({ tenantId: t, productId, versionNumber, status, createdBy: ACTOR });
   }));
 
-describe.skipIf(!reachable)("CLOS3-S4-05 product version open race (real Postgres)", () => {
+describe("CLOS3-S4-05 product version open race (real Postgres)", () => {
   afterAll(async () => {
     for (const t of tenants) {
       await asTenant(t, () => db.transaction(async (tx) => { await tx.delete(productVersions).where(eq(productVersions.tenantId, t)); })).catch(() => undefined);
