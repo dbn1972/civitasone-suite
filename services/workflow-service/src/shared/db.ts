@@ -18,7 +18,6 @@ import { schema as messagesModule } from "../modules/messages/schema.js";
 import { schema as decisionsModule } from "../modules/decisions/schema.js";
 import { schema as forwardingModule } from "../modules/forwarding/schema.js";
 import { schema as designerModule } from "../modules/designer/schema.js";
-import { schema as dmnModule } from "../modules/dmn/schema.js";
 import { schema as authorityModule } from "../modules/authority/schema.js";
 import { schema as quorumModule } from "../modules/quorum/schema.js";
 import { schema as slaModule } from "../modules/sla/schema.js";

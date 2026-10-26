@@ -5,7 +5,7 @@
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { completeTask, claimTask, assignTask, bulkComplete } from "../src/modules/tasks/commands.js";

@@ -279,7 +279,7 @@ describe("GET /v1/workflow/instances/:instanceId/subscriptions", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 describe("Messages domain logic", () => {
   it("validates message names", async () => {
-    const { assertValidMessageName, DomainError } = await import("../src/modules/messages/domain.js");
+    const { assertValidMessageName } = await import("../src/modules/messages/domain.js");
 
     // Valid names
     expect(() => assertValidMessageName("payment.confirmed")).not.toThrow();

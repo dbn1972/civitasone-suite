@@ -7,15 +7,15 @@
  * These tests go beyond route coverage: they seed real DB subscriptions and
  * verify the full correlation pipeline via app.inject().
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { messageSubscriptions, signalSubscriptions } from "../src/modules/messages/schema.js";
-import { eq, and } from "drizzle-orm";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { eq } from "drizzle-orm";
+import { asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000001";

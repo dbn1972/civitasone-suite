@@ -7,7 +7,6 @@
  * matrix must never reintroduce for a sovereign-scale authority ceiling.
  */
 import { describe, it, expect, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";

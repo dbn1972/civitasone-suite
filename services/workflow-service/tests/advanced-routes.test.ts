@@ -15,7 +15,6 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerDecisionConsumers } from "../src/modules/decisions/consumer.js";
 import { registerAssignmentConsumers } from "../src/modules/assignment/consumer.js";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000088";

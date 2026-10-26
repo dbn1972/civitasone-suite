@@ -47,16 +47,6 @@ const positionArb: fc.Arbitrary<{ x: number; y: number }> = fc.record({
   y: fc.integer({ min: 0, max: 2000 }),
 });
 
-/** Generate a DesignerNode with a given ID and type */
-function nodeArb(id: string, type: (typeof BPMN_NODE_TYPES)[number]): fc.Arbitrary<DesignerNode> {
-  return fc.tuple(labelArb, positionArb).map(([label, position]) => ({
-    id,
-    type,
-    label,
-    position,
-  }));
-}
-
 /**
  * Generate a valid workflow graph with:
  * - 1 start event
@@ -318,34 +308,6 @@ describe("Property 7: BPMN Invalid Input Rejection", () => {
 // ─── Property 8: DMN Decision Table Evaluation ───────────────────────────────
 
 describe("Property 8: DMN Decision Table Evaluation", () => {
-  /**
-   * Arbitrary for a simple numeric decision table with a known hit policy.
-   * Generates tables with numeric input conditions and deterministic outputs.
-   */
-  const numericDmnTableArb = (hitPolicy: DmnHitPolicy): fc.Arbitrary<{
-    table: DmnTableDef;
-    context: Record<string, unknown>;
-  }> =>
-    fc
-      .tuple(
-        fc.integer({ min: 1, max: 10 }), // number of rules
-        fc.integer({ min: 0, max: 1000 }), // context value for "amount"
-      )
-      .map(([ruleCount, contextAmount]) => {
-        const inputs = [{ key: "amount", label: "Amount", type: "number" as const }];
-        const outputs = [{ key: "result", label: "Result", type: "string" as const }];
-
-        // Create rules with non-overlapping ranges (for UNIQUE testing)
-        const rules = Array.from({ length: ruleCount }, (_, i) => ({
-          inputs: { amount: `>= ${i * 100} && amount < ${(i + 1) * 100}` } as Record<string, string>,
-          outputs: { result: `tier_${i}` } as Record<string, unknown>,
-        }));
-
-        return {
-          table: { hitPolicy, inputs, outputs, rules },
-          context: { amount: contextAmount },
-        };
-      });
 
   /**
    * FIRST hit policy: the first matching rule's output is always returned.

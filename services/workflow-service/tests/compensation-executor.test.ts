@@ -6,7 +6,7 @@ import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
-import { runCompensation, appendCompletedNode, SYSTEM_ACTOR_ID } from "../src/modules/compensation/executor.js";
+import { runCompensation, appendCompletedNode } from "../src/modules/compensation/executor.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";

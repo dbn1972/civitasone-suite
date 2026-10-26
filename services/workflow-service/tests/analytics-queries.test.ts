@@ -5,7 +5,7 @@
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { summary, bottlenecks } from "../src/modules/analytics/queries.js";
 import { TestQueue, seedDefinition, cleanup, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";

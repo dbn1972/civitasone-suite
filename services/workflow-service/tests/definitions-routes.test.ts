@@ -9,10 +9,9 @@
  */
 import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerDefinitionConsumers } from "../src/modules/definitions/consumer.js";
 import { seedDefinition, cleanup } from "./helpers/engine-harness.js";
@@ -21,7 +20,6 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-ccc000000001";
 const ACTOR = "aaaaaaaa-3333-4000-8000-ccc000000001";
 
-const tenants: string[] = [TENANT];
 function adminToken() {
   return signToken({ sub: ACTOR, tid: TENANT, roles: ["workflow_admin"], sid: "sess-001" }, SECRET);
 }

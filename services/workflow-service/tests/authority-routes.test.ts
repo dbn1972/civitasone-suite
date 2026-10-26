@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAuthorityConsumers } from "../src/modules/authority/consumer.js";
 import { sqlAsTenant } from "./helpers/engine-harness.js";

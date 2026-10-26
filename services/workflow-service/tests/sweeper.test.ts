@@ -5,7 +5,7 @@
 import { describe, it, expect, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import {
   sweepOverdueTasks,
   sweepReminders,
@@ -13,9 +13,8 @@ import {
   startSlaSweeper,
   startReminderSweeper,
   startTimerSweeper,
-  SYSTEM_ACTOR_ID,
 } from "../src/modules/tasks/sweeper.js";
-import { TestQueue, cleanup, seedDefinition, sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { TestQueue, cleanup, seedDefinition, sqlAsTenant } from "./helpers/engine-harness.js";
 import { registerInstancesConsumers } from "../src/modules/instances/consumer.js";
 import { registerTasksConsumers } from "../src/modules/tasks/consumer.js";
 import { COMMANDS } from "../src/topics.js";
@@ -100,7 +99,7 @@ describe("sweeper — sweepOverdueTasks", () => {
     `);
 
     // Sweep with a 1-hour cooldown — should not re-escalate since last was 5 min ago
-    const count = await sweepOverdueTasks(new Date(), 100, 60 * 60 * 1000);
+    await sweepOverdueTasks(new Date(), 100, 60 * 60 * 1000);
     // The task should NOT be escalated again
     const task = await sqlAsTenant(tenantId, 
       sql`SELECT escalation_count FROM workflow.tasks WHERE instance_id = ${instanceId}`,
@@ -180,7 +179,7 @@ describe("sweeper — sweepReminders", () => {
       WHERE instance_id = ${instanceId} AND status = 'pending'
     `);
 
-    const count = await sweepReminders(new Date(), 100);
+    await sweepReminders(new Date(), 100);
     // Should not have sent reminders for this task (threshold not met)
     const task = await sqlAsTenant(tenantId, 
       sql`SELECT reminder_count FROM workflow.tasks WHERE instance_id = ${instanceId}`,

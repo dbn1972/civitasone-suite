@@ -6,7 +6,6 @@ import { describe, it, expect, afterAll, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { randomUUID } from "node:crypto";
 import { seedDefinition, cleanup } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";

@@ -8,7 +8,7 @@ import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { messageSubscriptions, signalSubscriptions } from "../src/modules/messages/schema.js";
 import * as repo from "../src/modules/messages/repo.js";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { asTenant } from "./helpers/engine-harness.js";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000088";
 const cleanupMsgs: string[] = [];

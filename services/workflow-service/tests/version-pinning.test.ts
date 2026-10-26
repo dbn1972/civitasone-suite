@@ -15,10 +15,10 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerDefinitionConsumers } from "../src/modules/definitions/consumer.js";
-import { sqlAsTenant, asTenant } from "./helpers/engine-harness.js";
+import { sqlAsTenant } from "./helpers/engine-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "b0000000-1111-4000-8000-000000000001";
