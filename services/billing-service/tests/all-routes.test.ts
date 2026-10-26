@@ -328,6 +328,7 @@ const SEED_INVOICE = {
   totalMinor: 100000n, paidMinor: 0n, taxMinor: 18000n, chargesMinor: 0n,
   currency: "INR", issuedAt: "2026-07-01", paidAt: null, cancelledAt: null,
   cancelReason: null, issuedBy: ACTOR_ID, cancelledBy: null,
+  supplierGstin: null, recipientGstin: null, placeOfSupply: null, cgstMinor: 0n, sgstMinor: 0n, igstMinor: 0n,
 };
 
 const SEED_PAYMENT = {

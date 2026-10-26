@@ -6498,6 +6498,14 @@ export type InvoiceSummary = {
   date: string;
   amount: number;
   status: "paid" | "pending" | "failed";
+  // Owner decision #26 (GAP-TENANT-ADMIN-PLANS-04): GST tax-invoice detail when the API provides it.
+  invoiceNumber?: string | null;
+  supplierGstin?: string | null;
+  recipientGstin?: string | null;
+  placeOfSupply?: string | null;
+  cgstMinor?: number;
+  sgstMinor?: number;
+  igstMinor?: number;
 };
 
 export type PlansData = {
@@ -6505,6 +6513,8 @@ export type PlansData = {
   currentPlanId: string;
   invoices: InvoiceSummary[];
   trialDaysLeft: number | null;
+  /** Tenant edition (govt / govt_dept / small_office / psu ...): drives the payment modes shown. */
+  edition?: string | null;
 };
 
 /**
@@ -6533,8 +6543,16 @@ export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.ob
     date: z.string(),
     amount: z.number(),
     status: z.enum(["paid", "pending", "failed"]),
+    invoiceNumber: z.string().nullable().optional(),
+    supplierGstin: z.string().nullable().optional(),
+    recipientGstin: z.string().nullable().optional(),
+    placeOfSupply: z.string().nullable().optional(),
+    cgstMinor: z.number().optional(),
+    sgstMinor: z.number().optional(),
+    igstMinor: z.number().optional(),
   })),
   trialDaysLeft: z.number().nullable(),
+  edition: z.string().nullable().optional(),
 });
 
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {

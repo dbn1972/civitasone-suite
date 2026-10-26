@@ -1,16 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, EmptyState, ConfirmDialog, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatMoney } from "@/lib/formatters";
-import { formatDateTimeIST } from "@/lib/formatters";
+import { paymentModesForEdition, type PaymentMode } from "@/lib/billing/paymentModes";
+import { InvoiceList, type InvoiceRow } from "../subscription/InvoiceList";
 import type { PlansData } from "@/app/_data/loaders";
 
 const ALL_MODULES = ["finance", "hrms", "payroll", "procurement", "contract", "asset", "helpdesk", "knowledge", "projects", "inventory", "grant", "citizen", "legal", "crm", "estab"];
 
 export function PlansClient({ plansData, source }: { plansData: PlansData; source: "api" | "error" }) {
+  const t = useTranslations("tenantAdminW2.billingInvoices");
   const { data, provenance, offline, cachedAt } = useSeededResource("admin.plans", plansData, source, (d) => d.plans.length === 0);
   // GAP-TENANT-ADMIN-PLANS-03: single source of truth — the current plan is
   // derived from the loader data, never a locally-mutated copy that could
@@ -38,14 +41,27 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
     );
   }
 
-  function getInvoiceStatusBadge(status: string) {
-    switch (status) {
-      case "paid": return <span className="pill good">Paid</span>;
-      case "pending": return <span className="pill warn">Pending</span>;
-      case "failed": return <span className="pill bad">Failed</span>;
-      default: return <span className="pill mut">{status}</span>;
-    }
-  }
+  // Owner decision #26: how this tenant pays, by edition (government: PO/GeM, treasury
+  // e-challan, online; everyone else: online). Wording only, no gateway is named.
+  const paymentModes = paymentModesForEdition(data.edition);
+  const MODE_KEYS: Record<PaymentMode, { label: string; hint: string }> = {
+    po_gem: { label: "payPoGem", hint: "payPoGemHint" },
+    treasury_challan: { label: "payTreasury", hint: "payTreasuryHint" },
+    online: { label: "payOnline", hint: "payOnlineHint" },
+  };
+  const invoiceRows: InvoiceRow[] = invoices.map((inv) => ({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber ?? null,
+    issuedAt: inv.date,
+    status: inv.status,
+    totalMinor: String(inv.amount),
+    supplierGstin: inv.supplierGstin ?? null,
+    recipientGstin: inv.recipientGstin ?? null,
+    placeOfSupply: inv.placeOfSupply ?? null,
+    cgstMinor: String(inv.cgstMinor ?? 0),
+    sgstMinor: String(inv.sgstMinor ?? 0),
+    igstMinor: String(inv.igstMinor ?? 0),
+  }));
 
   return (
     <>
@@ -95,35 +111,27 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
         })}
       </div>
 
+      <section className="card" style={{ marginTop: 18 }} aria-label={t("payHeading")}>
+        <div className="card-h"><h3>{t("payHeading")}</h3></div>
+        <ul style={{ listStyle: "none", padding: "0 16px 12px", margin: 0 }}>
+          {paymentModes.map((mode) => (
+            <li key={mode} style={{ padding: "6px 0" }}>
+              <strong>{t(MODE_KEYS[mode].label)}</strong>
+              <div style={{ fontSize: 13, color: "var(--mut)" }}>{t(MODE_KEYS[mode].hint)}</div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Invoice History</h3>
           <Button size="sm" onClick={() => setShowInvoices(!showInvoices)}>{showInvoices ? "Hide" : "Show"}</Button>
         </div>
-        {showInvoices && (
-          invoices.length === 0 ? (
-            <EmptyState icon="🧾" title="No invoices yet" message="Invoice history will appear here after your first billing cycle." />
-          ) : (
-            <table className="data-table" role="table" aria-label="Invoice history">
-              <thead>
-                <tr><th scope="col">Date</th><th scope="col">Amount</th><th scope="col">Status</th></tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr key={inv.id}>
-                    <td>{formatDateTimeIST(inv.date)}</td>
-                    <td>{formatMoney(inv.amount)}</td>
-                    <td>{getInvoiceStatusBadge(inv.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )
-        )}
-        {/* GAP-TENANT-ADMIN-PLANS-04: the "📥 PDF" button had no handler and no
-            invoice-download endpoint exists, so it is removed rather than left
-            as a dead control. GST invoice columns will be added once the billing
-            API exposes invoice number/GSTIN/tax split. */}
+        {showInvoices && <InvoiceList invoices={invoiceRows} />}
+        {/* GAP-TENANT-ADMIN-PLANS-04 / owner decision #26: GST invoice columns (number,
+            supplier + recipient GSTIN, place of supply, CGST/SGST/IGST) come from InvoiceList;
+            the dead "PDF" button stays gone. */}
       </div>
 
       {/* GAP-TENANT-ADMIN-PLANS-01/-02/-05: no fake "payment"/"success". Plan

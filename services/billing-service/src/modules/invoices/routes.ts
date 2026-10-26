@@ -31,7 +31,7 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
     requireSuperAdmin(ctx);
     const body = createInvoiceBody.parse(req.body);
     if (body.tenantId !== ctx.tenantId) throw new HttpError(403, "FORBIDDEN", "cross-tenant invoice creation is not permitted");
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createInvoice(ctx, body.tenantId, body.periodMonth, body.items, body.gst));
   });
 
   // Request issue (maker step; maker-checker routes value-significant bills to approval).

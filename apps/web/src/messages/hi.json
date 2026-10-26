@@ -16593,6 +16593,28 @@
     "users": {
       "exportNotice": "निर्यात ऑडिट लॉग में दर्ज किए जाते हैं।"
     },
+    "billingInvoices": {
+      "tableLabel": "चालान",
+      "number": "चालान सं.",
+      "date": "तिथि",
+      "supplierGstin": "आपूर्तिकर्ता GSTIN",
+      "recipientGstin": "प्राप्तकर्ता GSTIN",
+      "placeOfSupply": "आपूर्ति का स्थान",
+      "cgst": "केंद्रीय GST (CGST)",
+      "sgst": "राज्य GST (SGST)",
+      "igst": "एकीकृत GST (IGST)",
+      "total": "कुल",
+      "status": "स्थिति",
+      "emptyTitle": "अभी कोई चालान नहीं",
+      "emptyMessage": "आपके पहले बिलिंग चक्र के बाद चालान का इतिहास यहाँ दिखेगा।",
+      "payHeading": "भुगतान कैसे करें",
+      "payPoGem": "क्रय आदेश / GeM",
+      "payPoGemHint": "GeM या अपने विभाग द्वारा जारी क्रय आदेश के विरुद्ध भुगतान करें।",
+      "payTreasury": "कोषागार ई-चालान",
+      "payTreasuryHint": "ई-चालान के माध्यम से राज्य कोषागार में भुगतान करें।",
+      "payOnline": "ऑनलाइन भुगतान",
+      "payOnlineHint": "कार्ड, UPI या नेट बैंकिंग से ऑनलाइन भुगतान करें।"
+    },
     "subscription": {
       "status": {
         "active": "सक्रिय",
