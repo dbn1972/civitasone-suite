@@ -8,12 +8,17 @@
  */
 import { describe, it, expect } from "vitest";
 import {
-  APPLICATION_STATUSES, assertStatusTransition, isResolvedStatus,
-  computeDeadline, isSlaBreached, assertRequiredDocuments,
+  assertStatusTransition,
+  isResolvedStatus,
+  isSlaBreached,
+  assertRequiredDocuments,
 } from "../src/modules/application/domain.js";
 import {
-  evaluateRule, evaluateEligibility, assertRulesWellFormed,
-  ELIGIBILITY_OPS, type EligibilityRule, type Subject,
+  evaluateRule,
+  evaluateEligibility,
+  assertRulesWellFormed,
+  type EligibilityRule,
+  type Subject,
 } from "../src/modules/eligibility/domain.js";
 
 // ═══ Application Status Machine ═══
