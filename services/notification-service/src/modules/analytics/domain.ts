@@ -2,14 +2,33 @@
  * Analytics domain logic — HTML instrumentation and metrics aggregation.
  */
 
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+/**
+ * HMAC-SHA256 over (deliveryId, href): binds a tracked click link to the delivery it was minted for so
+ * /t/click can only ever redirect to a destination this service itself put into an outgoing email
+ * (CodeQL js/server-side-unvalidated-url-redirection: an unsigned ?url= is an open redirector).
+ */
+export function signTrackedLink(secret: string, deliveryId: string, href: string): string {
+  return createHmac("sha256", secret).update(`${deliveryId}\n${href}`).digest("hex");
+}
+
+export function verifyTrackedLink(secret: string, deliveryId: string, href: string, sig: string | undefined): boolean {
+  if (!secret || !sig || !/^[0-9a-f]{64}$/.test(sig)) return false;
+  const want = Buffer.from(signTrackedLink(secret, deliveryId, href), "hex");
+  const got = Buffer.from(sig, "hex");
+  return want.length === got.length && timingSafeEqual(want, got);
+}
+
 /**
  * Instruments HTML for open/click tracking.
  * - Adds a 1x1 tracking pixel before </body>
  * - Wraps all <a href="..."> links through a click-tracking redirect
  * If optedOut is true, returns the original html unmodified.
+ * When `signingSecret` is given every tracked link carries `&sig=` (required by the click endpoint).
  */
 export function instrumentHtml(
-  html: string, deliveryId: string, baseUrl: string, optedOut: boolean,
+  html: string, deliveryId: string, baseUrl: string, optedOut: boolean, signingSecret?: string,
 ): string {
   if (optedOut) return html;
 
@@ -27,7 +46,8 @@ export function instrumentHtml(
   instrumented = instrumented.replace(
     /<a\s([^>]*?)href="([^"]+)"([^>]*?)>/gi,
     (_match, before, href, after) => {
-      const trackUrl = `${baseUrl}/t/click/${deliveryId}?url=${encodeURIComponent(href)}`;
+      const sig = signingSecret ? `&sig=${signTrackedLink(signingSecret, deliveryId, href)}` : "";
+      const trackUrl = `${baseUrl}/t/click/${deliveryId}?url=${encodeURIComponent(href)}${sig}`;
       return `<a ${before}href="${trackUrl}"${after}>`;
     },
   );
