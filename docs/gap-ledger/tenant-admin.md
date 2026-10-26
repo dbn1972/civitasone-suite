@@ -1173,7 +1173,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by 421a9a1b4 (owner decision #25, 2026-10-26): test-send goes only to the calling admin's own address via the platform-provisioned channel (POST /notifications/channels/:id/test-send, CQRS + masked audit); Edit is moot because channel credentials live only in the secrets manager. Email and in-app are testable; sms/whatsapp/push have no admin number or device on file and are refused 422.)
 - **W2 note (INTERIM):** Add form (#1864) plus, new in W2, audited Enable/Disable (PATCH /notifications/channels/:id, CQRS command, markProcessed + guarded write + audit in one transaction, reason mandatory to disable, tenant-isolated; real-DB test `services/notification-service/tests/channel-enable-disable.test.ts`). STILL OPEN, needs owner decision: Test-send (no provider send path for a single channel is exposed) and Edit (the channel model is {type,name,isDefault,enabled}; no provider/config store exists).
 - **W0 note:** partly fixed by #1864 — ChannelForm Add form exists; edit, test-send and disable intentionally not built (backend has create+list only)
 - **First-pass claim:** Subtitle says 'Configure … providers' but the only way to add a channel is to hand-craft a POST body shown in a <pre>; no Add channel form, edit, test-send or disable (page.tsx:37-42,67-87).
@@ -1483,6 +1483,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
 - [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- **Owner decision #26 (2026-10-26), built in 1a2eaabd1:** GST invoice fields (supplier/recipient GSTIN, place of supply, CGST/SGST/IGST, HSN/SAC per line) in billing-service + payment modes by edition (govt/govt_dept: PO/GeM, treasury e-challan, online; others online) + GST columns in the shared InvoiceList. LEFT OPEN: the plans page loader (getPlansData) still reads /v1/billing/plans, a bare plan array with no edition or invoices (see PLANS-06), so edition and invoice rows only reach this page once that wiring decision is made; the real invoice list with PDF is on the subscription page (SUBSCRIPTION-04).
 - **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
 - **First-pass claim:** 'Pay via Razorpay' presents a card-gateway checkout to a Government department whose payments run through PO/GeM/treasury; GST invoice details are absent from the invoice table and the 📥 PDF button has no handler (PlansClient.tsx:171,145).
@@ -2398,7 +2399,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  interim  ·  theme WIRING (was DATEFMT)
 
-- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (Closed by ac9d1d1d8 (owner decision #27, 2026-10-26): billing-service owns the invoice PDF (GET /v1/billing/invoices/:id/pdf, tenant-scoped, issued bills only); the subscription page lists invoices with a per-invoice PDF link through the authenticated proxy.)
 - **W2 INTERIM (needs owner decision):** the 'Download invoice' link targeted /v1/billing/invoices/latest?format=pdf which NO service implements (billing-service has GET /invoices/:id with a uuid id and no PDF renderer) — it was a dead control, removed (subscription/page.tsx). An invoice list + PDF download needs a billing-service invoice-PDF endpoint.
 - **W0 note:** partly fixed by #1864 — Download routed via /api/proxy; still latest-only link, no invoice list
 - **First-pass claim:** "Download invoice" is a plain link to the "latest" invoice with no invoice list, date or amount, and goes to /api/v1 directly rather than through the proxy used by mutations (page.tsx:28).
