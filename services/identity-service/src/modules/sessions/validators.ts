@@ -17,6 +17,11 @@ export type CreateSessionBody = z.infer<typeof createSessionBody>;
 
 export const sessionIdParam = z.object({ id: z.string().uuid() });
 
+/** Owner decision #21: a recorded reason is mandatory to reveal a session's source IP. */
+export const sessionRevealIpBody = z.object({
+  reason: z.string().trim().min(10).max(500),
+});
+
 /**
  * GAP-TENANT-ADMIN-USERS-DETAIL-02: optional, audited reason on a single-session
  * revoke. Additive — the self-service sign-out path sends no body.

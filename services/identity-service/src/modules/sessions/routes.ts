@@ -4,11 +4,14 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { SessionSummaryListSchema } from "@civitasone/schemas/web";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createSessionBody, sessionIdParam, sessionRevokeBody } from "./validators.js";
+import { createSessionBody, sessionIdParam, sessionRevokeBody, sessionRevealIpBody } from "./validators.js";
+import { shortUserAgent, maskSessionIp } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
 const SESSION_ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+// Owner decision #21: only the security admin may reveal a session's clear IP.
+const SESSION_IP_REVEAL = ["security_admin"];
 
 export async function sessionRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/sessions", async (req, reply) => {
@@ -59,7 +62,27 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
     const view = await queries.getSession(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
     if (view.userId !== ctx.actorId) requireRole(ctx, SESSION_ADMIN);
-    return reply.send(view);
+    // Owner decision #21: an admin looking at SOMEONE ELSE's session gets a masked
+    // IP and a "browser on OS" user agent; the owner sees their own session as-is.
+    if (view.userId === ctx.actorId) return reply.send(view);
+    return reply.send({ ...view, ip: maskSessionIp(view.ip), userAgent: shortUserAgent(view.userAgent) });
+  });
+
+  // Owner decision #21: audited reveal of the clear source IP (security admin,
+  // reason required, caller's own tenant only). The audit command is published
+  // before the value is returned, so a failed audit means no reveal.
+  app.post("/identity/sessions/:id/reveal-ip", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SESSION_IP_REVEAL);
+    const { id } = sessionIdParam.parse(req.params);
+    const parsed = sessionRevealIpBody.safeParse(req.body ?? {});
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "a reason of at least 10 characters is required to reveal an IP address");
+    const { reason } = parsed.data;
+    const view = await queries.getSession(ctx.tenantId, id);
+    if (!view) throw new HttpError(404, "NOT_FOUND", "session not found");
+    await commands.recordSessionIpReveal(ctx, id, reason);
+    void reply.header("cache-control", "no-store");
+    return reply.send({ id, ipAddress: view.ip });
   });
 
   app.get("/identity/sessions", async (req, reply) => {
@@ -72,8 +95,8 @@ export async function sessionRoutes(app: FastifyInstance): Promise<void> {
       userId: s.userId,
       userEmail: s.userEmail,
       userName: s.userName ?? undefined,
-      ipAddress: s.ip,
-      userAgent: s.userAgent ?? undefined,
+      ipAddress: maskSessionIp(s.ip),
+      userAgent: shortUserAgent(s.userAgent) ?? undefined,
       createdAt: s.startedAt,
       lastActiveAt: s.lastActiveAt,
       expiresAt: s.expiresAt,
