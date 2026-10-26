@@ -165,9 +165,9 @@ export async function broadcastRoutes(app: FastifyInstance): Promise<void> {
 
     // Check flow is approved (if flowId is set)
     if (broadcast.flowId) {
-      const flowRows = await scopedRead(ctx.tenantId, (tx) => tx.execute(sql`
+      await scopedRead(ctx.tenantId, (tx) => tx.execute(sql`
         SELECT id FROM telephony.ivr_hits WHERE id = ${broadcast.flowId} LIMIT 1
-      `)).catch(() => []) as unknown as Array<{ id: string }>;
+      `)).catch(() => []);
       // Simplified flow approval check — in production, check against an IVR flows table
       // If flow doesn't exist in ivr system, reject
       // For now, we treat any non-null flowId as needing verification

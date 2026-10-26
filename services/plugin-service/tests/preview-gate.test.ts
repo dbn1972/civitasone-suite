@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { isPreviewEnabled, isPreviewPlugin, isPluginAllowed } from "../src/modules/events/preview.js";
 import type { PluginManifest } from "../src/modules/sandbox/types.js";
 

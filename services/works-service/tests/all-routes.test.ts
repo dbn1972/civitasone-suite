@@ -4,7 +4,6 @@
  * Uses buildApp + inject with HS256 tokens.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
 // Mock DB/infra modules before importing app
@@ -232,7 +231,6 @@ vi.mock("@civitasone/auth", () => ({
   hasAnyRole: (ctx: any, roles: string[]) => roles.some((r: string) => ctx.roles?.includes(r)),
 }));
 
-const SECRET = "test_secret_for_civitasone_32chr";
 const ACTOR = "00000000-aaaa-4000-8000-000000000001";
 const TENANT = "11111111-bbbb-4000-8000-000000000001";
 

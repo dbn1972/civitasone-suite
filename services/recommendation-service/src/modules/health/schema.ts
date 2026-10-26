@@ -1,7 +1,7 @@
 /**
  * health module — Account health score schema.
  */
-import { pgSchema, uuid, varchar, integer, timestamp, jsonb, numeric } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const recommendationSchema = pgSchema("recommendation");
 

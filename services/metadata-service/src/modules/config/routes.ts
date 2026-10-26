@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { withTenant } from "../../shared/scope.js";
 import { publishCommand } from "../../shared/publish.js";
 import { COMMANDS } from "../../topics.js";

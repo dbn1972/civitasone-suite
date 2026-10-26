@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, text } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 const swmSchema = pgSchema("civitas_swm");
 

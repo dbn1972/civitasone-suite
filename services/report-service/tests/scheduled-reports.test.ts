@@ -10,7 +10,7 @@
  *  - Optimistic locking on update
  */
 import { randomUUID } from "node:crypto";
-import { describe, it, expect, afterAll, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, afterAll, beforeAll, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";

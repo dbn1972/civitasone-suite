@@ -15,7 +15,7 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerApplicationConsumers } from "../src/modules/applications/consumer.js";
 import * as repo from "../src/modules/applications/repo.js";
-import { hdr, drainQueue, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, ACTOR_A } from "./support.js";
+import { hdr, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 

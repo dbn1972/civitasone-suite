@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, boolean, integer, bigint, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, boolean, integer, bigint } from "drizzle-orm/pg-core";
 
 export const works = pgSchema("works");
 

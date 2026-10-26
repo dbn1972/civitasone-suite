@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { cnrParam } from "./validators.js";
-import { lookupCnr, ECourtsAdapterError, getBreakerState } from "./adapter.js";
+import { lookupCnr, ECourtsAdapterError } from "./adapter.js";
 import { CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
 
 const LEGAL_ROLES = ["legal_officer", "legal_admin", "super_admin"];

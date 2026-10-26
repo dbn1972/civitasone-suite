@@ -1,5 +1,5 @@
 import { eq, and, sql, desc } from "drizzle-orm";
-import { db, scopedRead, type ScopedTx } from "../../shared/db.js";
+import { scopedRead, type ScopedTx } from "../../shared/db.js";
 import { swmCollectionRequests, swmFieldTasks, type CollectionRequestRow, type CollectionRequestInsert, type FieldTaskRow, type FieldTaskInsert } from "./schema.js";
 
 export function requestToView(r: CollectionRequestRow) {

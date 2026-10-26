@@ -32,7 +32,6 @@ import { incrementConsumerError, incrementDlqMessage, captureError, recordConsum
 import type { Queue, QueueDriver, CommandEnvelope, PublishInput, Handler, PublishOptions, SubscribeOptions } from "../bus.js";
 import {
   NonRetryableError,
-  isFifoTopic,
   computeBackoffSeconds,
   DEFAULT_SQS_BACKOFF_BASE_SECONDS,
   DEFAULT_SQS_BACKOFF_MAX_SECONDS,

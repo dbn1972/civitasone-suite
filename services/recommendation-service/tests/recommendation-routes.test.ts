@@ -1066,7 +1066,7 @@ describe("GET /v1/recommendations/health/:accountId", () => {
   it("200 — classifies a low score as critical", async () => {
     H.cacheGetOrLoadMock.mockResolvedValue(makeHealthScore({ score: 12 }));
     const app = await buildApp();
-    const r = await app.inject({
+    await app.inject({
       method: "GET",
       url: `/v1/recommendations/health/${ACCOUNT_ID}`,
       headers: readerAuth(),

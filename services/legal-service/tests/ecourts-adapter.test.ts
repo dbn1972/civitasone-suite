@@ -33,7 +33,7 @@ describe("e-Courts adapter", () => {
       vi.stubEnv("ECOURTS_BASE_URL", "https://ecourts.example.com");
       vi.stubEnv("ECOURTS_API_KEY", "test-key");
 
-      const { lookupCnr, ECourtsAdapterError } = await import(
+      const { lookupCnr } = await import(
         "../src/modules/ecourts/adapter.js"
       );
 

@@ -456,16 +456,6 @@ export class MemoryQueue implements Queue {
   }
 }
 
-function topicToQueueName(topic: string): string {
-  // 05-T4: AWS requires FIFO queue names to end with `.fifo`. Preserve the
-  // suffix and only sanitise the base so the broker accepts the FIFO create.
-  if (isFifoTopic(topic)) {
-    const base = topic.slice(0, -".fifo".length).replace(/\./g, "-").slice(0, 75);
-    return `${base}.fifo`;
-  }
-  return topic.replace(/\./g, "-").slice(0, 80);
-}
-
 // QUE-FANOUT: cross-service fan-out fix. Previously every service that subscribed
 // to a topic polled the SAME topic-named SQS queue -> competing consumers, so a
 // multi-subscriber event (e.g. procurement.grn.accepted, consumed by finance +

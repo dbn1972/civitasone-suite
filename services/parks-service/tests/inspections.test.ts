@@ -27,8 +27,6 @@ import { registerComplaintConsumers } from "../src/modules/complaints/consumer.j
 import { registerTreeRequestConsumers } from "../src/modules/tree_requests/consumer.js";
 import { registerInspectionConsumers } from "../src/modules/inspections/consumer.js";
 import * as inspectionsRepo from "../src/modules/inspections/repo.js";
-import * as complaintsRepo from "../src/modules/complaints/repo.js";
-import * as treeRequestsRepo from "../src/modules/tree_requests/repo.js";
 import { COMMANDS } from "../src/topics.js";
 import { authHeader, ADMIN_ROLES, drainQueue } from "./_helpers.js";
 

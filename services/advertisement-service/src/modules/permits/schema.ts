@@ -1,4 +1,4 @@
-import { pgSchema, uuid, varchar, integer, bigint, boolean, timestamp, jsonb, date } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, integer, bigint, timestamp, jsonb, date } from "drizzle-orm/pg-core";
 
 export const advPermitsSchema = pgSchema("adv_permits");
 

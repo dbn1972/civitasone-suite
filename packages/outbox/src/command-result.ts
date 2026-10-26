@@ -42,7 +42,6 @@ import { pgSchema, uuid, varchar, jsonb, timestamp, text, integer, boolean } fro
 import { NonRetryableError } from "@civitasone/queue";
 import type { Queue, Handler, SubscribeOptions, CommandOutcome } from "@civitasone/queue";
 import {
-  markProcessed,
   type DrizzleTx,
   type CommandOutcomeStatus,
 } from "./index.js";

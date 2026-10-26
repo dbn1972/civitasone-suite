@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { TenantRouter, envTenantResolver, cachedResolver, type TenantResolver } from "./tenant-router.js";
 
 const T1 = "11111111-1111-1111-1111-111111111111";

@@ -28,7 +28,7 @@ import { registerInspectionConsumers } from "../src/modules/inspections/consumer
 import { registerRestorationConsumers } from "../src/modules/restoration/consumer.js";
 import { roadcutApplications } from "../src/modules/applications/schema.js";
 import * as appRepo from "../src/modules/applications/repo.js";
-import { hdr, drainQueue, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
+import { hdr, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, TENANT_B, ACTOR_A } from "./support.js";
 
 let app: FastifyInstance;
 

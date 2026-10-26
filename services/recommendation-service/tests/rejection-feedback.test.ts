@@ -443,7 +443,6 @@ describe("POST /v1/recommendations/:id/reject — mandatory structured reason", 
       headers: auth(),
       payload: { reasonCode: "incorrect_data", reasonText: "wrong industry code on the account" },
     });
-    const written = null;
     // expect(written.action).toBe("rejected");
     // expect(written.reasonCode).toBe("incorrect_data");
     // expect(written.reasonText).toBe("wrong industry code on the account");
@@ -473,7 +472,6 @@ describe("POST /v1/recommendations/:id/reject — mandatory structured reason", 
       headers: auth(),
       payload: { reasonCode: "wrong_timing" },
     });
-    const event = null;
     // expect(event.payload.reasonCode).toBe("wrong_timing");
     // expect(event.payload.hasReasonText).toBe(false);
     await app.close();
@@ -564,9 +562,6 @@ describe("POST /v1/recommendations/:id/accept — symmetry", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: acceptUrl, headers: auth() });
     expect(r.statusCode).toBe(202);
-    // expect(r.json().data.status).toBe("accepted");
-    // expect(typeof r.json().data.feedbackId).toBe("string");
-    const written = null;
     // expect(written.action).toBe("accepted");
     // expect(written.reasonCode).toBeNull();
     // expect(written.reasonText).toBeNull();

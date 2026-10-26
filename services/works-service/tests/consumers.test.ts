@@ -43,7 +43,6 @@ const mockTx = {
     })),
   }),
 };
-const mockTransaction = vi.fn((fn: Function) => fn(mockTx));
 
 vi.mock("../src/shared/db.js", () => ({
   db: { transaction: (fn: Function) => fn(mockTx) },
