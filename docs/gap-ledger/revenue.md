@@ -220,6 +220,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-ASSESSEES-04  ·  LOW  ·  partly  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - [partial: backend ?q= search + exact total + tenant-wide summary and the server-paginated/searchable register page are done (0d58e77f5, 221abed7b); remaining: replace the ~10 limit=200 assessee pickers (bills/receipts/refunds/instalments/adjustments/recovery/write-offs) with a server-searching combobox (SmartCombobox is string-only, needs an id/label server-search variant) and add the truncation notice.]
 - **First-pass claim:** Only 15 rows per page client-side after loading the full unpaged list from /assessees (page.tsx:8-13); other pages request ?limit=200 — pagination is inconsistent and large registers will truncate silently there (adjustments/page.tsx:83).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/page.tsx:8 requests /api/v1/revenue/assessees with no limit; AssesseesTable.tsx:89 pages 15 rows client-side (true). Pickers on bills/receipts/refunds/instalments/adjustments/recovery/write-offs use ?limit=200 (e.g. adjustments/page.tsx:70, cited :83 wrong), so registers >200 are silently truncated there. Whether the unpaged list call is truncated by a backend default is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/page.tsx`, `apps/web/src/app/(app)/revenue/assessees/AssesseesTable.tsx`, `apps/web/src/app/_components/SmartCombobox.tsx`, `apps/web/src/app/(app)/revenue/bills/page.tsx`, `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `revenue-service (search + total)`
@@ -803,7 +804,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - Closed by 5f33bb455 (UAT B2): refunds list supports status=live&assesseeId=, page disables receipts with a pending/approved/processed refund (RefundCreateForm/page tests); server dedup 409/no-op already in 0014. Partial-refund amountMinor remains an owner decision (not built).
 - **W0 note:** partly fixed by #1868 — receipts that already have a pending refund are disabled with "(refund pending)" in RefundCreateForm; remaining: already-approved/processed refunds are not flagged (only the pending list is loaded), partial-refund decision (POST still sends only receiptId+reason), server 409 on duplicates unverified.
 - **First-pass claim:** Refund is raised on a receipt with no amount field — full receipt amount only — and the select does not mark receipts already refunded or pending refund, so duplicate refunds can be raised (RefundCreateForm.tsx:74-80,122-125).
 - **Verified evidence:** RefundCreateForm.tsx posts only { receiptId, reason } (l.74-80), so full-receipt refund is the API contract as sent; there is no amount field. The receipt select (l.122-126) shows receiptNo, amount, channel and receipt status but nothing about existing/pending refunds, and refunds/page.tsx loads no refund list, so the UI cannot prevent duplicates. The submit button already has disabled/loading while busy (l.163). Whether the server rejects duplicate refunds is cannot-verify (revenue-service absent). Partial-amount refunds would need a backend contract change.
@@ -1293,7 +1295,8 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - Closed by 0d58e77f5 (UAT B2): POST pre-checks (tenant, identifierNo) and returns 409 DUPLICATE_IDENTIFIER before publishing (assessee-routes.test.ts), create form shows it inline (AssesseeCreateForm.test.tsx); unique index + DPDP note were already in.
 - **First-pass claim:** Register form collects contact phone/email (DPDP personal data) with no consent or purpose note, and no duplicate-identifier check before submit (AssesseeCreateForm.tsx:79-95). revenue-service is not in the /home/claude/civitas snapshot (services/ contains only hrms-service); every /api/v1/revenue/* contract is inferred from the client mappers and is undeterminable server-side.
 - **Service:** `revenue-service`  ·  **Endpoint(s):** `['POST /api/v1/revenue/assessees']`
 - **Question:** Does create reject a duplicate identifier (PAN/property id) with 409 and record purpose/consent for phone and email?
