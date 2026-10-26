@@ -3,7 +3,7 @@
  * Pack #02. Source: modules/activities/recurrence-domain.ts, next-action-domain.ts, task-escalation-domain.ts
  */
 import { describe, it, expect } from "vitest";
-import { nextOccurrence, shouldEscalate, isCadence, CADENCES } from "../src/modules/activities/recurrence-domain.js";
+import { nextOccurrence, shouldEscalate, isCadence } from "../src/modules/activities/recurrence-domain.js";
 import { requiresNextAction, isOverdue } from "../src/modules/activities/next-action-domain.js";
 import { evaluateTask, findOverdueTasks } from "../src/modules/activities/task-escalation-domain.js";
 
