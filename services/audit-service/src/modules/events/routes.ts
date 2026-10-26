@@ -6,11 +6,15 @@ import { auditEventsListSchema, TenantAuditEventListSchema } from "@civitasone/s
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
-import { exportActorLabel, exportOutcome } from "./domain.js";
+import { exportActorLabel, exportOutcome, maskActorLabel, maskIpAddress, actorLabel } from "./domain.js";
 import { MAX_EXPORT_ROWS } from "../exports/validators.js";
 import { toCsv } from "../../shared/csv.js";
 
 const EVENT_READ_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_admin"];
+// OWNER DECISION #20: revealing a masked actor / IP is reserved to the audit
+// officer. tenant_admin stays excluded from the audit log altogether; the
+// platform/super/audit admin roles may read the (masked) list but not reveal.
+const EVENT_REVEAL_ROLES = ["audit_officer"];
 
 /**
  * G-FIX-3 (partial): CLAUDE.md requires cross-tenant data access to "trigger
@@ -217,18 +221,44 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     const to = q.to ? new Date(q.to) : new Date();
     // G-FIX-3: see the identical note on GET /audit/events above — RLS
     // scoping is guaranteed inside queries.listEvents()/repo.listEvents().
+    // Owner decision #20: the list never carries a clear email or IP; reading
+    // the list is not itself logged per row (a reveal is, below).
     sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset, toFilters(q))).map((event) => ({
       id: event.id,
-      actor: typeof event.actor === "object" && event.actor !== null && "email" in event.actor
-        ? String(event.actor.email)
-        : typeof event.actor === "object" && event.actor !== null && "name" in event.actor
-          ? String(event.actor.name)
-          : "system",
+      actor: maskActorLabel(actorLabel(event.actor)),
       action: event.type,
       resource: event.target ?? undefined,
       outcome: event.severity === "error" || event.severity === "critical" ? "failure" : "success",
       timestamp: event.occurredAt,
+      ...(event.ipAddress ? { ipAddress: maskIpAddress(event.ipAddress) } : {}),
     })));
+  });
+
+  // OWNER DECISION #20 (TENANT-ADMIN-AUDIT-03): audited reveal of one event's
+  // clear actor identifier + source IP. audit_officer only, reason required,
+  // caller's own tenant only. The audit.viewed event is written BEFORE any data
+  // leaves, so a failed audit write means no reveal (fail closed).
+  app.post("/v1/audit/events/:id/reveal", RATE_LIMIT, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EVENT_REVEAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(10).max(1000) }).parse(req.body ?? {});
+    const event = await queries.getEvent(ctx.tenantId, id);
+    if (!event) throw new HttpError(404, "NOT_FOUND", "event not found");
+    await queries.writeEvent(
+      ctx.tenantId,
+      ctx.actorId,
+      "audit.viewed",
+      "audit_event",
+      id,
+      "info",
+      { service: "audit", action: "reveal", outcome: "success", reason: body.reason, fields: ["actor", "ipAddress"] },
+      ctx.correlationId,
+      (req.headers["x-forwarded-for"] as string | undefined) ?? req.ip,
+      req.headers["user-agent"] as string | undefined,
+    );
+    void reply.header("cache-control", "no-store");
+    return reply.send({ id, actor: actorLabel(event.actor), ipAddress: event.ipAddress ?? null });
   });
 
   // GAP-TENANT-ADMIN-AUDIT-04/-06: whole-history counts for the CALLER's tenant
