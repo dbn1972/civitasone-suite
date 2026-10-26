@@ -6,7 +6,9 @@ import { useEffect, useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
 import {
   activateDomainPackStage3,
+  fetchActivationStageStatus,
   fetchDomainPacksForInstallResult,
+  type ActivationJobState,
   type DomainPackActivateResult,
   type DomainPackListItem,
 } from "./domainPackApi";
@@ -29,12 +31,18 @@ export type DomainPackActivatePanelProps = {
    * decides whether the UI offers the mutation.
    */
   canOperate?: boolean;
+  /** How often the activation job is polled (ms). Default 3000. */
+  pollIntervalMs?: number;
 };
+
+/** Poll the job at most this many times before telling the user it is still running. */
+const MAX_JOB_POLLS = 20;
 
 export function DomainPackActivatePanel({
   variant = "page",
   initialPackKey = MUNICIPAL_DOMAIN_PACK_KEY,
   canOperate = true,
+  pollIntervalMs = 3000,
 }: DomainPackActivatePanelProps) {
   const router = useRouter();
   const [packs, setPacks] = useState<DomainPackListItem[]>([]);
@@ -46,6 +54,38 @@ export function DomainPackActivatePanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DomainPackActivateResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [jobState, setJobState] = useState<ActivationJobState | "slow">("queued");
+
+  // GAP-INSTALL-DOMAIN-PACKS-01: follow the activation job until it completes or
+  // fails (bounded; after MAX_JOB_POLLS we say it is still running).
+  const stageId = result?.stageId;
+  useEffect(() => {
+    if (!stageId) return;
+    let cancelled = false;
+    let polls = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setJobState("queued");
+    const tick = async () => {
+      const { state } = await fetchActivationStageStatus(stageId);
+      if (cancelled) return;
+      polls += 1;
+      if (state === "completed" || state === "failed") {
+        setJobState(state);
+        return;
+      }
+      if (polls >= MAX_JOB_POLLS) {
+        setJobState(state === "unknown" ? "unknown" : "slow");
+        return;
+      }
+      setJobState(state);
+      timer = setTimeout(() => void tick(), pollIntervalMs);
+    };
+    timer = setTimeout(() => void tick(), pollIntervalMs);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [stageId, pollIntervalMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -218,6 +258,7 @@ export function DomainPackActivatePanel({
             </Link>{" "}
             to review editable drafts in this session.
           </p>
+          {result.stageId ? <ActivationJobLine state={jobState} /> : null}
         </div>
       ) : null}
 
@@ -232,11 +273,11 @@ export function DomainPackActivatePanel({
           <button
             type="button"
             className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
-            disabled={busy || loading || !selected || Boolean(result)}
+            disabled={busy || loading || !selected || (Boolean(result) && jobState !== "failed")}
             aria-busy={busy}
             onClick={() => setConfirmOpen(true)}
           >
-            {result ? "Activated" : "Activate Domain Pack"}
+            {result && jobState !== "failed" ? "Activated" : result ? "Retry activation" : "Activate Domain Pack"}
           </button>
         ) : (
           <p className="text-sm text-slate-600" role="note">
@@ -318,5 +359,45 @@ function OutcomePreview({ pack }: { pack: DomainPackCatalogEntry }) {
         </ul>
       </details>
     </div>
+  );
+}
+
+function ActivationJobLine({ state }: { state: ActivationJobState | "slow" }) {
+  if (state === "completed") {
+    return (
+      <p className="mt-2 font-medium" data-job-state="completed">
+        Activation completed
+      </p>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <p className="mt-2 font-medium text-red-700" data-job-state="failed">
+        Activation failed. The install job reported a problem — check the{" "}
+        <Link href="/install/console" className="underline">
+          Install console
+        </Link>{" "}
+        for details, then retry.
+      </p>
+    );
+  }
+  if (state === "slow" || state === "unknown") {
+    return (
+      <p className="mt-2" data-job-state={state}>
+        {state === "unknown"
+          ? "We couldn't check the install job's progress. "
+          : "Still processing — this is taking longer than usual. "}
+        Follow it in the{" "}
+        <Link href="/install/console" className="underline">
+          Install console
+        </Link>
+        .
+      </p>
+    );
+  }
+  return (
+    <p className="mt-2" data-job-state="queued">
+      Waiting for the install job to finish…
+    </p>
   );
 }
