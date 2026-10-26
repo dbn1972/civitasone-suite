@@ -15,6 +15,10 @@ export type BbpsRequestStatus = {
   failureReason?: string | null;
   requestType?: string | null;
   bbpsTxnId?: string | null;
+  /** Owner decision #7: server-issued single-use bill token (fetch rows). */
+  billToken?: string | null;
+  billExpiresAt?: string | null;
+  amountMinor?: string | null;
 };
 
 type StatusResponse = { data?: BbpsRequestStatus };

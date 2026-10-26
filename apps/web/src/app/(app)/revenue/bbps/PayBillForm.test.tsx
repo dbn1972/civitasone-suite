@@ -1,19 +1,28 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PayBillForm } from "./PayBillForm";
+import type { IssuedBill } from "./PayBillForm";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-function fillForm() {
-  fireEvent.change(screen.getByLabelText(/Assessee Identifier/), { target: { value: "PROP-001" } });
-  fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "150.50" } });
+// Owner decision #7 (2026-10-26): the form pays ONLY a bill the server issued
+// (fetch-bill token). Assessee and amount are read-only, never typed.
+const BILL: IssuedBill = {
+  token: "a".repeat(48),
+  identifierNo: "PROP-001",
+  ownerName: "Priya Singh",
+  amountMinor: "15050",
+  expiresAt: "2099-01-01T00:00:00.000Z",
+};
+
+function fillTxn() {
   fireEvent.change(screen.getByLabelText(/BBPS Transaction ID/), { target: { value: "TXN-9001" } });
 }
 
 function mockFetchRouting(statusBody: Record<string, unknown>) {
-  vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+  return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
     const url = String(input);
     if (url.includes("/bbps/requests/")) {
       return Promise.resolve(new Response(JSON.stringify({ data: statusBody }), { status: 200 }));
@@ -27,16 +36,30 @@ describe("PayBillForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("requires all fields before opening the confirm dialog", () => {
-    render(<PayBillForm />);
+  it("offers no free-typed amount or assessee: they come from the fetched bill (owner decision #7)", () => {
+    render(<PayBillForm bill={BILL} />);
+    expect(screen.queryByLabelText(/^Amount/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Assessee Identifier/)).not.toBeInTheDocument();
+    const summary = screen.getByLabelText("Fetched bill");
+    expect(summary).toHaveTextContent("Priya Singh");
+    expect(summary).toHaveTextContent("PROP-001");
+    expect(summary).toHaveTextContent("₹150.50");
+  });
+
+  it("is disabled until a bill has been fetched, and says to fetch one first", () => {
+    render(<PayBillForm bill={null} />);
+    expect(screen.getByRole("button", { name: "Record BBPS payment" })).toBeDisabled();
+    expect(screen.getByText(/Fetch a bill above first/)).toBeInTheDocument();
+  });
+
+  it("requires the biller transaction id before opening the confirm dialog", () => {
+    render(<PayBillForm bill={BILL} />);
     fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
-    expect(screen.getByText(/Enter the assessee identifier/)).toBeInTheDocument();
-    expect(screen.getByText(/Enter a valid payment amount/)).toBeInTheDocument();
     expect(screen.getByText(/Enter the BBPS transaction ID/)).toBeInTheDocument();
   });
 
   it("shows human channel labels, not raw codes (BBPS-04)", () => {
-    render(<PayBillForm />);
+    render(<PayBillForm bill={BILL} />);
     const select = screen.getByLabelText(/Channel/) as HTMLSelectElement;
     const labels = Array.from(select.options).map((o) => o.textContent);
     expect(labels).toContain("Net banking");
@@ -44,88 +67,54 @@ describe("PayBillForm", () => {
     expect(labels).not.toContain("netbanking");
   });
 
-  it("records the payment and polls to success, linking to the receipt (BBPS-02/05)", async () => {
-    mockFetchRouting({ messageId: "msg-2", status: "success", receiptId: "rc-1" });
-
-    render(<PayBillForm />);
-    fillForm();
+  it("posts ONLY the server-issued token + txn id + channel — never an amount or assessee (owner decision #7)", async () => {
+    const spy = mockFetchRouting({ messageId: "msg-2", status: "success", receiptId: "rc-1" });
+    render(<PayBillForm bill={BILL} />);
+    fillTxn();
     fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
-
     await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
-    expect(screen.getByText(/₹150.50/)).toBeInTheDocument();
+    expect(screen.getAllByText(/₹150.50/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByText("Record payment"));
 
-    await waitFor(() => {
-      expect(screen.getByText(/tracking its outcome below/)).toBeInTheDocument();
-    });
-    await waitFor(() => {
-      expect(screen.getByText("View the receipt")).toBeInTheDocument();
-    }, { timeout: 4000 });
+    await waitFor(() => expect(screen.getByText(/tracking its outcome below/)).toBeInTheDocument());
+    const post = spy.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "POST")!;
+    const body = JSON.parse(String((post[1] as RequestInit).body));
+    expect(body).toEqual({ billToken: BILL.token, bbpsTxnId: "TXN-9001", channel: "online" });
+    await waitFor(() => expect(screen.getByText("View the receipt")).toBeInTheDocument(), { timeout: 4000 });
   });
 
   it("shows a failure with the reason and an invitation to retry on a failed outcome (BBPS-02)", async () => {
     mockFetchRouting({ messageId: "msg-2", status: "failed", failureReason: "exceeds outstanding" });
-
-    render(<PayBillForm />);
-    fillForm();
+    render(<PayBillForm bill={BILL} />);
+    fillTxn();
     fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
     await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Record payment"));
-
-    await waitFor(() => {
-      expect(screen.getByText(/exceeds outstanding/)).toBeInTheDocument();
-    }, { timeout: 4000 });
+    await waitFor(() => expect(screen.getByText(/exceeds outstanding/)).toBeInTheDocument(), { timeout: 4000 });
   });
 
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/message (error path, UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: { code: "BBPS_OVERPAYMENT", message: "exceeds outstanding" } }), { status: 422 }),
     );
-
-    render(<PayBillForm />);
-    fillForm();
+    render(<PayBillForm bill={BILL} />);
+    fillTxn();
     fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
-
     await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Record payment"));
-
     await waitFor(() => {
       expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/BBPS_OVERPAYMENT: exceeds outstanding/)).not.toBeInTheDocument();
   });
 
-  describe("with assessees list (GAP-REVENUE-BBPS-03)", () => {
-    const ASSESSEES = [
-      { id: "a1", ownerName: "Priya Singh", identifierNo: "PROP-101", assesseeType: "residential" },
-      { id: "a2", ownerName: "Ravi Kumar", identifierNo: "PROP-202", assesseeType: "commercial" },
-    ];
-
-    it("renders a select instead of a free-text input when assessees are provided", () => {
-      render(<PayBillForm assessees={ASSESSEES} />);
-      const select = screen.getByLabelText(/Assessee Identifier/) as HTMLSelectElement;
-      expect(select.tagName).toBe("SELECT");
-      const labels = Array.from(select.options).map((o) => o.textContent ?? "");
-      expect(labels.some((l) => l.includes("Priya Singh"))).toBe(true);
-      expect(labels.some((l) => l.includes("PROP-101"))).toBe(true);
-    });
-
-    it("shows ownerName in the confirm dialog description (GAP-REVENUE-BBPS-03)", async () => {
-      vi.spyOn(globalThis, "fetch").mockResolvedValue(
-        new Response(JSON.stringify({ data: { messageId: "msg-99" } }), { status: 202 }),
-      );
-      render(<PayBillForm assessees={ASSESSEES} />);
-      fireEvent.change(screen.getByLabelText(/Assessee Identifier/), { target: { value: "PROP-101" } });
-      fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "200" } });
-      fireEvent.change(screen.getByLabelText(/BBPS Transaction ID/), { target: { value: "TXN-9999" } });
-      fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
-
-      await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
-      // Dialog must show the owner name, not just the raw identifier.
-      // There may be multiple elements containing "Priya Singh" (the select option + the dialog),
-      // so assert the dialog's description paragraph contains the name.
-      const dialogText = document.querySelector("[role=dialog]")?.textContent ?? document.body.textContent ?? "";
-      expect(dialogText).toContain("Priya Singh");
-    });
+  it("names the assessee owner in the confirm dialog (GAP-REVENUE-BBPS-03)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { messageId: "msg-99" } }), { status: 202 }));
+    render(<PayBillForm bill={BILL} />);
+    fillTxn();
+    fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
+    await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
+    const dialogText = document.querySelector("[role=dialog]")?.textContent ?? document.body.textContent ?? "";
+    expect(dialogText).toContain("Priya Singh");
   });
 });

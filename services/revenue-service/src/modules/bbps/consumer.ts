@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull, gt } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -9,6 +10,9 @@ import { receipts } from "../collection/schema.js";
 import { dcbEntries } from "../assessment/schema.js";
 import { buildFetchBillResponse, validateBbpsPayment, DomainError } from "./domain.js";
 import { getDcbOutstandingTx } from "./repo.js";
+
+/** Owner decision #7: a fetched bill can be paid for 15 minutes, once. */
+const BILL_TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export function registerBbpsConsumers(queue: Queue): void {
   // ── bbpsFetchBill ─────────────────────────────────────────────────────────
@@ -36,6 +40,9 @@ export function registerBbpsConsumers(queue: Queue): void {
         status: "pending",
         messageId: msg.messageId,
         requestType: "fetch",
+        // Owner decision #7: server-issued, single-use, 15-minute bill token.
+        billToken: randomBytes(24).toString("hex"),
+        billExpiresAt: new Date(Date.now() + BILL_TOKEN_TTL_MS),
       });
 
       // Audit
@@ -52,11 +59,12 @@ export function registerBbpsConsumers(queue: Queue): void {
 
   // ── bbpsPayBill ───────────────────────────────────────────────────────────
   queue.subscribe(COMMANDS.bbpsPayBill, async (msg) => {
-    const { assesseeIdentifier, amountMinor, bbpsTxnId, channel } = msg.payload as {
+    const { assesseeIdentifier, amountMinor, bbpsTxnId, channel, billToken } = msg.payload as {
       assesseeIdentifier: string;
       amountMinor: string;
       bbpsTxnId: string;
       channel: string;
+      billToken?: string;
     };
 
     const paymentAmount = BigInt(amountMinor);
@@ -76,6 +84,28 @@ export function registerBbpsConsumers(queue: Queue): void {
       }
 
       assesseeId = dcb.assesseeId;
+
+      // Owner decision #7: a server-issued bill token is consumed EXACTLY once,
+      // in this same transaction — claimed with a guarded UPDATE so a replay,
+      // an expired token or an unknown token writes nothing (the failure is
+      // recorded as a `failed` request status by the catch below).
+      if (billToken) {
+        const claimedBill = await tx
+          .update(bbpsTransactions)
+          .set({ billConsumedAt: new Date(), updatedAt: new Date() })
+          .where(
+            and(
+              eq(bbpsTransactions.tenantId, msg.tenantId),
+              eq(bbpsTransactions.billToken, billToken),
+              isNull(bbpsTransactions.billConsumedAt),
+              gt(bbpsTransactions.billExpiresAt, new Date()),
+            ),
+          )
+          .returning({ id: bbpsTransactions.id });
+        if (claimedBill.length === 0) {
+          throw new DomainError("BILL_TOKEN_INVALID", "The bill token is unknown, expired or already used");
+        }
+      }
 
       // SEC-001: the amount actually posted below is never a bare pass-through
       // of the caller-declared amountMinor. It is bound against dcb.totalOutstandingMinor
