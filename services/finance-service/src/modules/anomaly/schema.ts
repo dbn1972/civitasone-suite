@@ -12,7 +12,6 @@ import {
   text,
   timestamp,
   jsonb,
-  boolean,
   integer,
   numeric,
   bigint,

@@ -25,7 +25,7 @@
 
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole } from "../../shared/context.js";
 import { submitPaymentBody, referenceParam } from "./validators.js";
 import * as repo from "./repo.js";
 import {

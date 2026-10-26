@@ -56,13 +56,11 @@ describe("period close RBAC", () => {
 describe("period close effects on GL posting", () => {
   it("hard_close blocks all journal posting", () => {
     const periodStatus = "hard_close";
-    const journalType = "journal";
     const blocked = periodStatus === "hard_close";
     expect(blocked).toBe(true);
   });
 
   it("soft_close allows only adjustment/closing journals", () => {
-    const periodStatus = "soft_close";
     const allowedTypes = ["adjustment", "closing"];
     expect(allowedTypes.includes("adjustment")).toBe(true);
     expect(allowedTypes.includes("journal")).toBe(false);

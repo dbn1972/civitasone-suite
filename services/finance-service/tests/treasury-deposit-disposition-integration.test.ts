@@ -31,7 +31,6 @@ import { eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
-import { db } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { registerTreasuryConsumers } from "../src/modules/treasury/consumer.js";
 import { COMMANDS } from "../src/topics.js";

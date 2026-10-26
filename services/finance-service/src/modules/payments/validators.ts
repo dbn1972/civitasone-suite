@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { zMoneyMinor as zMoneyMinorBase } from "@civitasone/schemas/money";
-import { PFMS_DDO_REGEX, PFMS_HOA_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
+import { PFMS_DDO_REGEX, PFMS_AGENCY_REGEX, PFMS_SCHEME_REGEX } from "../../shared/pfms.js";
 
 const ddoCodeField = z.string().regex(PFMS_DDO_REGEX, "DDO code must be 6–12 alphanumeric characters (PFMS format)");
 

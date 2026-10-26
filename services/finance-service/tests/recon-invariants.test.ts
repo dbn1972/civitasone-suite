@@ -24,17 +24,18 @@
  *   I14 Journal idempotency (duplicate post is a no-op)
  */
 
-import { describe, it, expect, vi, beforeEach, afterAll, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // T1: PURE DOMAIN TESTS (no DB, no mocks)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { assertJournalBalances, DomainError as GlDomainError } from "../src/modules/gl/domain.js";
+import { assertJournalBalances } from "../src/modules/gl/domain.js";
 import {
-  assertBudgetNotExceeded, availableBalance,
-  assertValidFY, assertReappropriationValid, assertReleaseWithinSanction,
+  assertValidFY,
+  assertReappropriationValid,
+  assertReleaseWithinSanction,
   assertSanctionApproverDistinct,
 } from "../src/modules/budget/domain.js";
 import { assertValidPfmsHoA, assertValidDdoCode } from "../src/shared/pfms.js";

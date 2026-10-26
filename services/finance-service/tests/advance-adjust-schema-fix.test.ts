@@ -34,7 +34,7 @@ import { signToken } from "@civitasone/auth";
 import type { MemoryQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeAdvances } from "../src/modules/payments/schema.js";
 import { registerPaymentsConsumers } from "../src/modules/payments/consumer.js";

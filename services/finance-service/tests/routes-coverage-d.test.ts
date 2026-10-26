@@ -10,7 +10,6 @@ import { randomUUID } from "node:crypto";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const UUID = "aaaaaaaa-aaaa-4000-8000-000000000001";
-const FAKE = randomUUID();
 
 function token(roles = ["finance_admin", "super_admin"]) {
   return signToken({ sub: UUID, tid: TENANT, roles, sid: "s1" }, SECRET);

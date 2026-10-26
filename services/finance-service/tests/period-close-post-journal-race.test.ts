@@ -36,7 +36,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { getPeriodStatusTx, upsertPeriodClose } from "../src/modules/period-close/repo.js";
 import { financePeriodClose } from "../src/modules/period-close/schema.js";
 import { deriveFY } from "../src/modules/reports/routes.js";

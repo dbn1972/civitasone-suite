@@ -4,7 +4,7 @@
  * Asserts exact field positions in header, detail, and trailer records so that
  * any regression in the file format is caught before files reach PFMS/NPCI.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import {
   generateNACHFile,
   type BankFileRow,

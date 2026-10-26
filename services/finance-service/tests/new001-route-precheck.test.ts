@@ -18,7 +18,7 @@ import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeBills } from "../src/modules/payments/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";

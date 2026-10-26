@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { createQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";

@@ -62,7 +62,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import type { CommandEnvelope } from "@civitasone/queue";
-import { db, sqlClient } from "../src/shared/db.js";
+import { sqlClient } from "../src/shared/db.js";
 import {
   handleAllocationDistributionCreate,
   type AllocationDistributionCreatePayload,
