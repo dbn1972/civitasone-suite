@@ -35,7 +35,7 @@
  *   SKIP_MODULE_DATA=1   skip the seed-all.mjs module-data step
  *   SKIP_KEYCLOAK=1      skip Keycloak provisioning
  */
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -109,7 +109,7 @@ const ALL_ROLE_KEYS = [...new Set(PERSONAS.flatMap((p) => p.roles))].sort();
 // ── helpers ──────────────────────────────────────────────────────────────────
 let errors = 0;
 function psql(db, sql) {
-  execSync(`docker exec -i ${PG_CONTAINER} psql -U civitas_admin -d ${db} -v ON_ERROR_STOP=1`, {
+  execFileSync("docker", ["exec", "-i", PG_CONTAINER, "psql", "-U", "civitas_admin", "-d", db, "-v", "ON_ERROR_STOP=1"], {
     input: sql,
     stdio: ["pipe", "pipe", "pipe"],
   });
@@ -125,7 +125,7 @@ function step(db, label, sql) {
   }
 }
 function q(db, sql) {
-  return execSync(`docker exec -i ${PG_CONTAINER} psql -U civitas_admin -d ${db} -tA`, {
+  return execFileSync("docker", ["exec", "-i", PG_CONTAINER, "psql", "-U", "civitas_admin", "-d", db, "-tA"], {
     input: sql,
     stdio: ["pipe", "pipe", "pipe"],
   }).toString().trim();
