@@ -12,19 +12,6 @@ import * as invoiceRepo from "../src/modules/invoices/repo.js";
 import { computeTotals, outstandingMinor, requiresApproval } from "../src/modules/invoices/domain.js";
 import { COMMANDS } from "../src/topics.js";
 
-/**
- * Test-harness fix: MemoryQueue used directly does NOT auto-wrap handlers with
- * withTenantConsumer. Production wiring (queue-service's createQueue()) decorates
- * subscribe() so every consumer handler runs inside runWithTenant(msg.tenantId, ...),
- * letting db.transaction() pick up the tenant GUC. Mirror that here.
- */
-function wireTenantAwareQueue(q: Queue): Queue {
-  const rawSubscribe = q.subscribe.bind(q);
-  q.subscribe = ((topic: string, handler: Handler) =>
-    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
-  return q;
-}
-
 const ACTOR = "00000000-aaaa-4000-8000-0000000000a1";
 const CHECKER = "00000000-aaaa-4000-8000-0000000000a2";
 const T1 = "11111111-1111-4000-8000-0000000000b1";
