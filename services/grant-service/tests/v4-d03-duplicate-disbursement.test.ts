@@ -21,10 +21,12 @@ import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { registerDisbursementConsumers } from "../src/modules/disbursement/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
-const TENANT = "2a000000-aaaa-4000-8000-0000000000f4";
-const ACTOR  = "10000000-aaaa-4000-8000-0000000000f4";
-const SCHEME = "2a000000-bbbb-4000-8000-0000000000f4";
-const BEN    = "2a000000-dddd-4000-8000-0000000000f4";
+// Unique ids per file: vitest runs files in parallel against one shared DB and wipe()/seed()
+// are tenant/scheme-wide, so files MUST NOT share TENANT/SCHEME (see PR for V4-D-03/04/05 flake).
+const TENANT = "2a000000-aaaa-4000-8000-0000000000d3";
+const ACTOR  = "10000000-aaaa-4000-8000-0000000000d3";
+const SCHEME = "2a000000-bbbb-4000-8000-0000000000d3";
+const BEN    = "2a000000-dddd-4000-8000-0000000000d3";
 
 function wireTenantAwareQueue(q: Queue): Queue {
   const rawSubscribe = q.subscribe.bind(q);
