@@ -15,6 +15,7 @@ import { adminAreaRoles, TENANT_ADMIN_ROLES } from "./_roles";
 const OFFICER_ROUTES: Array<[string, string, "tenant" | "tenant-admin"]> = [
   ["/tenant/consent-exchange", "consent_officer", "tenant"],
   ["/tenant/data-migration", "migration_admin", "tenant"],
+  ["/tenant-admin/audit", "audit_officer", "tenant-admin"],
 ];
 
 describe("adminAreaRoles: officer roles are route-scoped", () => {
