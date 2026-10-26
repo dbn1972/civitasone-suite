@@ -64,7 +64,8 @@ describe("Knowledge — Cross-Tenant RLS Isolation", () => {
       url: "/v1/knowledge/documents",
       headers: { authorization: `Bearer ${tokenA}`, "content-type": "application/json" },
       payload: {
-        title: "RLS Isolation Test Document",
+        // Fixed tenant ids persist across runs; titles are unique per tenant (owner decision #15), so make it unique per run.
+        title: `RLS Isolation Test Document ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         body: "This document verifies cross-tenant isolation in the knowledge base.",
         category: "general",
         tags: ["rls-test"],

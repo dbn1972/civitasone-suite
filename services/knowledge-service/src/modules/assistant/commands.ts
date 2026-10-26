@@ -7,6 +7,7 @@ import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import { normalizeSteps, type Citation } from "./domain.js";
 import { answerQuestion } from "./grounded.js";
+import { retentionExpiry } from "./retention.js";
 import { clearedAccessLevels } from "../documents/clearance.js";
 import { redactPii } from "../ai/pii-redact.js";
 import * as repo from "./repo.js";
@@ -134,12 +135,17 @@ export async function ask(ctx: RequestContext, body: AskBody): Promise<AskResult
       id: interactionId, tenantId: ctx.tenantId, question: storedQuestion,
       answer: result.answer || null, answered: result.answered, escalated: false,
       citations: result.citations, createdBy: ctx.actorId,
+      expiresAt: retentionExpiry(),
     });
     await enqueue(tx as unknown as DrizzleTx, {
       topic: EVENTS.assistantAnswered, eventType: EVENTS.assistantAnswered,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
       payload: { interactionId, answered: result.answered, citationCount: result.citations.length },
     });
+    // GAP-KNOWLEDGE-ASSISTANT-06: one audit event per interaction, same txn. Carries
+    // only the interaction id (never the free-text question) so no personal data
+    // reaches the audit trail.
+    await audit(tx as unknown as DrizzleTx, ctx, "ask", "assistant_interaction", interactionId);
   });
   return {
     interactionId,
@@ -165,7 +171,7 @@ export async function escalate(ctx: RequestContext, body: EscalateBody): Promise
       await repo.insertInteraction(tx as unknown as repo.Writer, {
         id: randomUUID(), tenantId: ctx.tenantId, question: safeQuestion,
         answer: null, answered: false, escalated: true, citations: [], ticketRef,
-        createdBy: ctx.actorId,
+        createdBy: ctx.actorId, expiresAt: retentionExpiry(),
       });
     }
     // Outbox command → helpdesk opens a ticket.
