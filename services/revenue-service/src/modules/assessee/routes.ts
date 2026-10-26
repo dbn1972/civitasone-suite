@@ -1,11 +1,15 @@
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { uuidParam, paginationQuery } from "../../shared/validators.js";
+import { z } from "zod";
 import { createAssesseeBody, updateAssesseeBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
+
+// GAP-REVENUE-ASSESSEES-04: optional ?q= server-side search (owner name / identifier).
+const listQuery = paginationQuery.extend({ q: z.string().trim().min(1).max(100).optional() });
 
 export async function assesseeRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/revenue/assessees — create assessee
@@ -13,6 +17,13 @@ export async function assesseeRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
     const body = createAssesseeBody.parse(req.body);
+    // GAP-REVENUE-ASSESSEES-03: reject a duplicate (tenant, identifierNo)
+    // synchronously with 409 -- the async create consumer would otherwise hit the
+    // unique index only after the API returned 202 (silent background failure).
+    const existing = await repo.findAssesseeByIdentifier(ctx.tenantId, body.identifierNo);
+    if (existing) {
+      throw new HttpError(409, "DUPLICATE_IDENTIFIER", "an assessee with this identifier already exists");
+    }
     const result = await commands.createAssessee(ctx, body);
     return reply.code(202).send({ data: result });
   });
@@ -41,8 +52,8 @@ export async function assesseeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/revenue/assessees", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, REVENUE_ROLES);
-    const q = paginationQuery.parse(req.query);
-    const result = await repo.listAssessees(ctx.tenantId, q);
+    const { q: search, ...q } = listQuery.parse(req.query);
+    const result = await repo.listAssessees(ctx.tenantId, q, search);
     return reply.send(result);
   });
 }

@@ -17,7 +17,7 @@ export type AssesseeRow = {
 
 type Row = AssesseeRow & { statusLabel: string };
 
-export function AssesseesTable({ assessees }: { assessees: AssesseeRow[] }) {
+export function AssesseesTable({ assessees, searching = false }: { assessees: AssesseeRow[]; searching?: boolean }) {
   const rows: Row[] = assessees.map((a) => ({ ...a, statusLabel: a.isActive ? "active" : "inactive" }));
 
   return (
@@ -34,12 +34,14 @@ export function AssesseesTable({ assessees }: { assessees: AssesseeRow[] }) {
       rowLinkKey="id"
       rowLinkPrefix="/revenue/assessees/"
       sortable
-      filterable
-      filterPlaceholder="Filter by identifier, owner, or ward…"
       pageSize={15}
       emptyIcon="🧾"
-      emptyTitle="No assessees registered"
-      emptyMessage="Taxpayers/property or water-connection holders will appear here once registered."
+      emptyTitle={searching ? "No assessees match your search" : "No assessees registered"}
+      emptyMessage={
+        searching
+          ? "Try a different owner name or identifier."
+          : "Taxpayers/property or water-connection holders will appear here once registered."
+      }
     />
   );
 }

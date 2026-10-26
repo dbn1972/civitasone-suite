@@ -56,9 +56,9 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
   return {
     ...original,
     // The real repo pushes limit/offset into SQL and returns { rows, total }.
-    listRefunds: vi.fn(async (tenantId: string, p: { limit: number; offset: number }, status?: string) => {
-      const all = REFUND_STORE[tenantId] ?? [];
-      const rows = status ? all.filter((r) => r.status === status) : all;
+    listRefunds: vi.fn(async (tenantId: string, p: { limit: number; offset: number }, status?: string, assesseeId?: string) => {
+      const all = (REFUND_STORE[tenantId] ?? []).filter((r) => !assesseeId || r.assesseeId === assesseeId);
+      const rows = status === "live" ? all.filter((r) => r.status !== "rejected") : status ? all.filter((r) => r.status === status) : all;
       return { rows: rows.slice(p.offset, p.offset + p.limit), total: rows.length };
     }),
   };
@@ -140,6 +140,19 @@ describe("GET /v1/revenue/refunds (register)", () => {
     expect(data).toHaveLength(1);
     expect(data[0].status).toBe("pending");
     expect(data[0].reason).toBe("Duplicate payment");
+  });
+
+  it("status=live excludes rejected refunds and assesseeId narrows (GAP-REVENUE-REFUNDS-02)", async () => {
+    REFUND_STORE[TENANT_ID]!.push({
+      id: "rf-3", tenantId: TENANT_ID, receiptId: "r-x", assesseeId: "other-assessee",
+      amountMinor: 1n, reason: "x", status: "rejected", makerUserId: "m", createdAt: "2026-01-02T10:00:00.000Z",
+    });
+    const live = await app.inject({ method: "GET", url: `/v1/revenue/refunds?status=live&assesseeId=${ASSESSEE_ID}`, headers: AUTH });
+    expect(live.statusCode).toBe(200);
+    expect(live.json().data.map((r: any) => r.id).sort()).toEqual(["rf-1", "rf-2"]);
+    const bad = await app.inject({ method: "GET", url: "/v1/revenue/refunds?assesseeId=not-a-uuid", headers: AUTH });
+    expect(bad.statusCode).toBe(400);
+    REFUND_STORE[TENANT_ID]!.pop();
   });
 
   it("is tenant-scoped: another tenant sees none of these refunds", async () => {

@@ -17,6 +17,7 @@ const USER_ID = "u1111111-1111-1111-1111-111111111111";
 const ASSESSEE_ID = "a2222222-2222-2222-2222-222222222222";
 const DEMAND_ID = "d1111111-1111-1111-1111-111111111111";
 const RECEIPT_ID = "11111111-1111-1111-1111-111111111111";
+const DUP_RECEIPT_ID = "44444444-4444-4444-4444-444444444444";
 const REFUND_ID = "22222222-2222-2222-2222-222222222222";
 
 function makeToken(roles: string[], tenantId: string = TENANT_ID) {
@@ -71,6 +72,10 @@ vi.mock("../src/modules/collection/repo.js", async (importOriginal) => {
     listReceipts: vi.fn(async () => ({ rows: [], total: 0 })),
     listAdjustments: vi.fn(async () => ({ rows: [], total: 0 })),
     listAdjustmentsByStatus: vi.fn(async () => ({ rows: [], total: 0 })),
+    // GAP-REVENUE-REFUNDS-02: only DUP_RECEIPT_ID already has a live refund.
+    findLiveRefundByReceipt: vi.fn(async (_tenantId: string, receiptId: string) =>
+      receiptId === DUP_RECEIPT_ID ? { id: REFUND_ID, status: "pending" } : null,
+    ),
     findRefundById: vi.fn(async (tenantId: string, id: string) => {
       const row = REFUND_STORE[id];
       if (!row || row.tenantId !== tenantId) return null;
@@ -191,6 +196,15 @@ describe("POST /v1/revenue/receipts", () => {
 
 describe("POST /v1/revenue/refunds", () => {
   const VALID_BODY = { receiptId: RECEIPT_ID, reason: "Duplicate payment" };
+
+  it("returns 409 when the receipt already has a live refund", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/revenue/refunds", headers: AUTH,
+      payload: { receiptId: DUP_RECEIPT_ID, reason: "Duplicate payment" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("REFUND_ALREADY_EXISTS");
+  });
 
   it("returns 202 with valid body", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/revenue/refunds", headers: AUTH, payload: VALID_BODY });

@@ -6,7 +6,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { ASSESSEE_TYPES } from "./assesseeTypes";
 
 type FieldErrors = {
@@ -81,7 +81,7 @@ export function AssesseeCreateForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      await browserJson<{ status: string }>("v1/revenue/assessees", {
+      const res = await browserFetch("v1/revenue/assessees", {
         method: "POST",
         body: JSON.stringify({
           assesseeType,
@@ -93,6 +93,19 @@ export function AssesseeCreateForm() {
           contactEmail: contactEmail.trim() || undefined,
         }),
       });
+      if (!res.ok) {
+        // GAP-REVENUE-ASSESSEES-03: a duplicate identifier is answered synchronously
+        // with 409 DUPLICATE_IDENTIFIER -- show it inline on the field, not as a
+        // generic dialog error.
+        if (res.status === 409 && (await errorCodeFromResponse(res)) === "DUPLICATE_IDENTIFIER") {
+          setConfirmOpen(false);
+          setErrors({ identifierNo: "An assessee with this Identifier No. is already registered. Search the register instead of adding a duplicate." });
+          identifierRef.current?.focus();
+          return;
+        }
+        setDialogError(await errorMessageFromResponse(res));
+        return;
+      }
       setConfirmOpen(false);
       setMessage(`Assessee "${ownerName.trim()}" submitted for registration.`);
       setAssesseeType("");
