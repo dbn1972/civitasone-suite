@@ -49,7 +49,7 @@ export function registerCaseConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; caseNo: string; title: string; court: string;
       subject?: string; caseTypeId?: string; petitioner?: string; counselRef?: string;
-      assignedOfficerIds?: string[]; privileged?: boolean;
+      assignedOfficerIds?: string[]; privileged?: boolean; advocateId?: string;
       courtCode?: string; courtVerified?: boolean; filingDate?: string; departmentId?: string;
       parties?: Array<{ name: string; role?: string }>;
     };
@@ -59,7 +59,7 @@ export function registerCaseConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, caseNo: p.caseNo, title: p.title, court: p.court,
         subject: p.subject ?? null, caseTypeId: p.caseTypeId ?? null,
         petitioner: p.petitioner ?? null, counselRef: p.counselRef ?? null,
-        assignedOfficerIds: p.assignedOfficerIds ?? [], privileged: p.privileged ?? false,
+        assignedOfficerIds: p.assignedOfficerIds ?? [], privileged: p.privileged ?? false, advocateId: p.advocateId ?? null,
         courtCode: p.courtCode ?? null, courtVerified: p.courtVerified ?? false,
         filingDate: p.filingDate ?? null, departmentId: p.departmentId ?? null,
         status: "pending", createdBy: msg.actorId, updatedBy: msg.actorId,

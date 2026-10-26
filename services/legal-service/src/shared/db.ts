@@ -15,6 +15,7 @@ import { schema as counselModule } from "../modules/counsel/schema.js";
 import { schema as filingsModule } from "../modules/filings/schema.js";
 import { schema as remindersModule } from "../modules/reminders/schema.js";
 import { schema as attachmentsModule } from "../modules/attachments/schema.js";
+import { schema as advocatesModule } from "../modules/advocates/schema.js";
 import { syncSchema } from "../modules/ecourts/sync-schema.js";
 import { schema as documentsModule } from "../modules/documents/schema.js";
 import { schema as limitationsModule } from "../modules/limitations/schema.js";
@@ -33,6 +34,7 @@ const SCHEMA = {
   ...filingsModule,
   ...remindersModule,
   ...attachmentsModule,
+  ...advocatesModule,
   ...syncSchema,
   ...documentsModule,
   ...limitationsModule,

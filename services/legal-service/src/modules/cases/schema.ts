@@ -30,6 +30,8 @@ export const legalCases = casesSchema.table("legal_cases", {
   caseTypeId: uuid("case_type_id"),
   petitioner: text("petitioner"),
   counselRef: text("counsel_ref"),
+  // Owner decision #14: link to the empanelled-advocate master (counselRef stays as legacy free text).
+  advocateId: uuid("advocate_id"),
   // Owner decision #8 (GAP-LEGAL-HEARINGS-05): the officers a case is assigned to;
   // reminder notifications go to them (creator cc'd).
   // Owner decision #12: privileged/confidential flag (restricts the case to assigned officers + legal head).

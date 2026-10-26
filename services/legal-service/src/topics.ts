@@ -18,6 +18,7 @@ export const COMMANDS = {
   counselBriefAssign:   "legal.counsel_brief.assign",
   filingRecord:         "legal.filing.record",
   reminderCreate:       "legal.reminder.create",
+  advocateCreate:       "legal.advocate.create",
   attachmentRegister:   "legal.attachment.register",
   attachmentUploaded:   "legal.attachment.uploaded",
   attachmentSync:       "legal.attachment.sync",
