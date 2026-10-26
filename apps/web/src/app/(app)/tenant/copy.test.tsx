@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 import { findBannedTerms } from "@/lib/labels";
 
 vi.mock("next/navigation", () => ({
@@ -13,6 +13,7 @@ vi.mock("../_data", () => ({
   getTenantCodeLists: empty,
   getTenantConsentExchange: empty,
   getTenantDataMigration: empty,
+  getTenantImportBatches: empty,
   getTenantOverview: empty,
   getTenantPlans: empty,
 }));

@@ -46,6 +46,20 @@ export function findImportBatch(tenantId: string, id: string): Promise<ImportBat
   });
 }
 
+/** What the browser may see of a batch: counters and the per-record error report, never the stored payloads. */
+export function toBatchView(b: ImportBatchRow) {
+  const { failedRecords, ...rest } = b;
+  return { ...rest, retryable: (failedRecords ?? []).length > 0 && b.status !== "processing" };
+}
+
+export function listImportBatches(tenantId: string) {
+  return scoped(tenantId, async (tx) => {
+    const rows = await tx.select().from(importBatches)
+      .where(eq(importBatches.tenantId, tenantId)).orderBy(desc(importBatches.createdAt)).limit(50);
+    return rows.map(toBatchView);
+  });
+}
+
 export function findExportJob(tenantId: string, id: string): Promise<ExportJobRow | undefined> {
   return scoped(tenantId, async (tx) => {
     const rows = await tx.select().from(exportJobs)
