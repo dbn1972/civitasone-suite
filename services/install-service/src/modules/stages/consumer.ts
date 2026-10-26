@@ -2,7 +2,7 @@ import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
+import { COMMANDS, CONSUMED_EVENTS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import type { StageView } from "./schema.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -38,12 +38,83 @@ export function registerStageConsumers(rawQueue: Queue): void {
     await cache.invalidateResource(msg.tenantId, RESOURCE);
   });
 
+  // install.domain_pack_activation.record — durable per-tenant activation record (owner decision #28).
+  queue.subscribe<{ id: string; domainPackKey: string; packKeys: string[]; stageId: string }>(
+    COMMANDS.recordDomainPackActivation,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const p = msg.payload;
+        await repo.insertActivation(tx, {
+          id: p.id, tenantId: msg.tenantId, domainPackKey: p.domainPackKey, packKeys: p.packKeys,
+          stageId: p.stageId, status: "accepted", createdBy: msg.actorId, updatedBy: msg.actorId,
+        });
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "install", action: "domain_pack_activation_requested", resourceType: "domain_pack_activation", resourceId: p.id, outcome: "success", domainPackKey: p.domainPackKey },
+        });
+      });
+    },
+  );
+
+  // citizen.pack.domain_activated — the outcome of citizen.pack.domain_activate (owner decision #28).
+  queue.subscribe<ActivationOutcomePayload>(CONSUMED_EVENTS.citizenPackDomainActivated, async (msg) => {
+    await db.transaction((tx) => applyActivationOutcome(tx, msg));
+    await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+
   // install.stage.transition — run / skip / retry on a stage (PATCH /v1/install/steps/:id/:verb).
   queue.subscribe<StageTransitionPayload>(COMMANDS.transitionStage, async (msg) => {
     const { id } = msg.payload;
     await db.transaction((tx) => applyStageTransition(tx, msg));
     await cache.invalidate(keyFor(msg.tenantId, id));
     await cache.invalidateResource(msg.tenantId, RESOURCE);
+  });
+}
+
+export type ActivationOutcomePayload = {
+  activationId: string;
+  stageId?: string | null;
+  domainPackKey?: string;
+  outcome: "completed" | "failed";
+  reason?: string;
+  draftIds?: string[];
+};
+
+/**
+ * Move the activation record AND its Stage 3 row to the outcome citizen-service reported, in ONE
+ * transaction with the inbox mark and the audit event. The record is the guard: only an `accepted`
+ * row of this tenant moves, so a duplicate, stale or cross-tenant event is audited as rejected and
+ * changes nothing. The stage id comes from our own record, never from the event payload.
+ */
+export async function applyActivationOutcome(tx: unknown, msg: CommandEnvelope<ActivationOutcomePayload>): Promise<void> {
+  const t = tx as Parameters<typeof repo.findRowTx>[0];
+  if (!(await markProcessed(tx as Parameters<typeof markProcessed>[0], msg.messageId))) return;
+  const p = msg.payload;
+  const outcome = p.outcome === "completed" ? "completed" : "failed";
+  const reason = outcome === "failed" ? (p.reason ?? "activation_failed") : null;
+  const moved = await repo.completeActivation(t, msg.tenantId, p.activationId, msg.actorId, {
+    status: outcome, draftIds: outcome === "completed" ? (p.draftIds ?? []) : [], failureReason: reason,
+  });
+  const auditBase = { service: "install", resourceType: "domain_pack_activation", resourceId: p.activationId };
+  if (!moved) {
+    await enqueue(tx as Parameters<typeof enqueue>[0], {
+      topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+      payload: { ...auditBase, action: "domain_pack_activation_outcome_rejected", outcome: "rejected", reason: "no_pending_activation" },
+    });
+    return;
+  }
+  const stage = await repo.findRowTx(t, moved.stageId, msg.tenantId);
+  if (stage && stage.status !== "completed" && stage.status !== "skipped") {
+    await repo.updateLifecycle(t, stage.id, msg.tenantId, msg.actorId, stage.version, {
+      status: outcome,
+      completedAt: outcome === "completed" ? new Date() : null,
+      errorMessage: reason,
+    });
+  }
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { ...auditBase, action: `domain_pack_activation_${outcome}`, outcome: "success", draftCount: moved.draftIds.length, ...(reason ? { reason } : {}) },
   });
 }
 

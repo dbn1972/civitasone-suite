@@ -1138,6 +1138,13 @@
     "documentsCount": "{count, plural, =0 {None} one {# document} other {# documents}}",
     "slaDays": "{days, plural, one {# day} other {# days}}"
   },
+  "installDomainPack": {
+    "recordedTitle": "{name} activation",
+    "draftsImported": "{count, plural, =0 {No drafts were imported.} one {# draft imported.} other {# drafts imported.}}",
+    "completedOn": "Completed on {date}.",
+    "statusUnknownTitle": "Activation status unavailable",
+    "statusUnknownBody": "We couldn't check whether this Domain Pack was already activated. You can still activate it, but look in the Service Designer first so you do not create duplicate drafts."
+  },
   "courtCaseSelector": {
     "label": "Case",
     "placeholder": "Search by title or CNR…",

@@ -1,7 +1,11 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
-import { stages, type StageRow, type StageInsert, type StageView } from "./schema.js";
+import {
+  stages, domainPackActivations,
+  type StageRow, type StageInsert, type StageView,
+  type DomainPackActivationRow, type DomainPackActivationInsert, type DomainPackActivationView,
+} from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -83,6 +87,63 @@ export async function updateLifecycle(
     .where(and(eq(stages.id, id), eq(stages.tenantId, tenantId), eq(stages.version, version)))
     .returning({ id: stages.id });
   return updated.length;
+}
+
+function toActivationView(r: DomainPackActivationRow): DomainPackActivationView {
+  return {
+    id: r.id,
+    domainPackKey: r.domainPackKey,
+    packKeys: r.packKeys,
+    stageId: r.stageId,
+    status: r.status as DomainPackActivationView["status"],
+    draftIds: r.draftIds,
+    failureReason: r.failureReason,
+    completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/** Newest activation of a pack for the tenant (null when it has never been activated). */
+export async function findLatestActivation(tenantId: string, domainPackKey: string): Promise<DomainPackActivationView | null> {
+  const rows = await tenantScoped(tenantId, (tx) =>
+    (tx as unknown as typeof db)
+      .select()
+      .from(domainPackActivations)
+      .where(and(eq(domainPackActivations.tenantId, tenantId), eq(domainPackActivations.domainPackKey, domainPackKey)))
+      .orderBy(desc(domainPackActivations.createdAt))
+      .limit(1),
+  );
+  return rows[0] ? toActivationView(rows[0]) : null;
+}
+
+/** Idempotent: a redelivered record command (or a replay) never overwrites a row that moved on. */
+export async function insertActivation(tx: Writer, row: DomainPackActivationInsert): Promise<void> {
+  await tx.insert(domainPackActivations).values(row).onConflictDoNothing({ target: domainPackActivations.id });
+}
+
+/**
+ * Terminal transition, guarded: only an `accepted` row of THIS tenant moves, so a stale, duplicate or
+ * cross-tenant completion event can never rewrite a finished activation. Returns the row (for its stage id)
+ * or null when nothing moved.
+ */
+export async function completeActivation(
+  tx: Writer,
+  tenantId: string,
+  id: string,
+  actorId: string,
+  patch: { status: "completed" | "failed"; draftIds: string[]; failureReason: string | null },
+): Promise<DomainPackActivationRow | null> {
+  const now = new Date();
+  const updated = await tx
+    .update(domainPackActivations)
+    .set({ ...patch, completedAt: now, updatedAt: now, updatedBy: actorId })
+    .where(and(
+      eq(domainPackActivations.id, id),
+      eq(domainPackActivations.tenantId, tenantId),
+      eq(domainPackActivations.status, "accepted"),
+    ))
+    .returning();
+  return updated[0] ?? null;
 }
 
 export { toView };
