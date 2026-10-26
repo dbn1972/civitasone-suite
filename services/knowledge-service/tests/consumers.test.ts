@@ -41,6 +41,7 @@ vi.mock("../src/shared/infra.js", () => ({
 
 vi.mock("../src/modules/documents/repo.js", () => ({
   insert: vi.fn().mockResolvedValue(undefined),
+  insertUnlessDuplicateTitle: vi.fn().mockResolvedValue(true),
   toView: vi.fn((r: unknown) => r),
 }));
 

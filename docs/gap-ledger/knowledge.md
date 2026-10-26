@@ -1004,7 +1004,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 knowledge REOPENED in #2059 by PROVISIONAL re-check - needs owner decision: title length (200) + trim and the document.created audit event are covered by tests, but duplicate-title handling is NOT implemented (acceptance: same title twice -> 409 DUPLICATE_TITLE or a new version). Choosing 409 vs versioning (and a unique index on lower(title) per tenant) is a product call. Was: W0 PROVISIONAL closed by #1916.)
+- [x] **Status** Closed by 39528462c (owner decision #15, 2026-10-26)
 - **First-pass claim:** Audit event on document creation, title length limit and duplicate-title handling are undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/documents']`
 - **Question:** POST /v1/knowledge/documents must zod-validate title (max length, trim), reject or version duplicate titles per tenant, restrict to a publisher role and emit a document.created audit event.
