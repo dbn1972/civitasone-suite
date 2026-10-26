@@ -95,6 +95,10 @@ const ROUTE_TO_MODULE: Record<string, string> = {
   // smarttransfer-service additionally re-checks entitlement in-process and
   // fails CLOSED (shared/entitlement.ts).
   smarttransfer: "smarttransfer",
+  // GAP-FIELD-HOME-04 / owner decision #36 (2026-10-26): /api/v1/field is
+  // entitlement-gated at the edge; a tenant whose allow-list omits field is
+  // denied (fail CLOSED), matching the web ModuleGate moduleKey="field".
+  field: "field",
 };
 
 // Platform routes — always available, NEVER module-gated, in EVERY mode
