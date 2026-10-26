@@ -16742,6 +16742,28 @@
       "confirmTitle": "Retry the failed records?",
       "confirmBody": "Only the {count, plural, one {# record} other {# records}} that did not load will be tried again. Records that already loaded are left alone. The retry is recorded in the audit log.",
       "retryQueued": "Retry queued for {count, plural, one {# record} other {# records}}. Refresh in a moment to see the result."
+    },
+    "plans": {
+      "pendingTitle": "Downgrade requested.",
+      "pendingBody": "Your request to move to {plan} is awaiting approval from platform billing. Nothing changes until it is approved.",
+      "lastApproved": "Your last downgrade request was approved.",
+      "lastRejected": "Your last downgrade request was not approved. {reason}",
+      "rejectReason": {
+        "USAGE_EXCEEDS_TARGET_PLAN": "Your usage was above the limits of the requested plan when it was reviewed.",
+        "PLAN_OR_SUBSCRIPTION_CHANGED": "Your plan or subscription changed before it was reviewed."
+      },
+      "dialogTitle": "Request downgrade to {plan}",
+      "dialogIntro": "You are requesting a downgrade from {from} to {to}. Platform billing reviews every downgrade; your current plan stays in force until it is approved.",
+      "reasonLabel": "Reason for the downgrade (at least 10 characters, recorded in the audit log)",
+      "submit": "Submit request",
+      "blockedTitle": "This downgrade is blocked: your current usage is above the target plan's limits.",
+      "blockedLine": "{resource}: using {used}, the target plan allows {limit}",
+      "resource": {
+        "users": "Users",
+        "storage_gb": "Storage (GB)"
+      },
+      "alreadyPending": "A downgrade request is already awaiting approval.",
+      "approvalNote": "This is a request, not an immediate change. You will not be charged differently until platform billing approves it."
     }
   },
   "tenantAdminW2": {

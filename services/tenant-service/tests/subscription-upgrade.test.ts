@@ -134,20 +134,32 @@ describe("POST /v1/tenant/subscription/upgrade", () => {
 // POST /v1/tenant/subscription/downgrade
 // ══════════════════════════════════════════════════════════════════════════════
 describe("POST /v1/tenant/subscription/downgrade", () => {
-  it("returns 202 with valid downgrade body", async () => {
+  // Owner decision #24: a downgrade is a REQUEST with a reason, not a self-serve
+  // change. A well-formed request for a tenant that has no subscription is a 404
+  // (the full request / approval lifecycle is in w3-downgrade-request.test.ts).
+  it("returns 404 for a well-formed request when the tenant has no subscription (nothing is queued)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/tenant/subscription/downgrade",
+      headers: authHeader(["tenant_admin"]),
+      payload: { targetPlanId: VALID_UUID, acknowledgement: true, reason: "Reducing headcount next quarter" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("returns 400 without a reason (owner decision #24)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/tenant/subscription/downgrade",
       headers: authHeader(["tenant_admin"]),
       payload: { targetPlanId: VALID_UUID, acknowledgement: true },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns 400 without acknowledgement", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/tenant/subscription/downgrade",
       headers: authHeader(["tenant_admin"]),
-      payload: { targetPlanId: VALID_UUID, acknowledgement: false },
+      payload: { targetPlanId: VALID_UUID, acknowledgement: false, reason: "Reducing headcount next quarter" },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -156,7 +168,7 @@ describe("POST /v1/tenant/subscription/downgrade", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/tenant/subscription/downgrade",
       headers: authHeader(["tenant_admin"]),
-      payload: { acknowledgement: true },
+      payload: { acknowledgement: true, reason: "Reducing headcount next quarter" },
     });
     expect(res.statusCode).toBe(400);
   });
@@ -165,7 +177,7 @@ describe("POST /v1/tenant/subscription/downgrade", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/tenant/subscription/downgrade",
       headers: authHeader(["employee"]),
-      payload: { targetPlanId: VALID_UUID, acknowledgement: true },
+      payload: { targetPlanId: VALID_UUID, acknowledgement: true, reason: "Reducing headcount next quarter" },
     });
     expect(res.statusCode).toBe(403);
   });
