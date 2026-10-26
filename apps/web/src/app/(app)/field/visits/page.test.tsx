@@ -64,14 +64,14 @@ describe("FieldVisitsPage", () => {
 
   it("GAP-FIELD-VISITS-01: a failed load shows a retry, never '0' stats or 'No visits yet'", async () => {
     getVisitsMock.mockResolvedValueOnce({ data: { rows: [], total: 0, limit: 100 }, source: "error" });
-    render(await FieldVisitsPage());
+    render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getAllByText(/try again|retry/i).length).toBeGreaterThan(0);
     expect(screen.queryByText("No visits yet")).not.toBeInTheDocument();
   });
 
   it("GAP-FIELD-VISITS-03: rounds coordinates and shows the Agent/Task columns for a privileged role", async () => {
     getVisitsMock.mockResolvedValueOnce(page([visit()]));
-    const { container } = render(await FieldVisitsPage());
+    const { container } = render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     // rounded to 3 dp, not the full precision string
     expect(screen.getByText("28.614, 77.209")).toBeInTheDocument();
     expect(container.textContent).not.toContain("28.613900");
@@ -82,7 +82,7 @@ describe("FieldVisitsPage", () => {
   it("GAP-FIELD-VISITS-03: a non-privileged role sees no GPS column and no export", async () => {
     mockRoles = ["field_agent"];
     getVisitsMock.mockResolvedValueOnce(page([visit()]));
-    const { container } = render(await FieldVisitsPage());
+    const { container } = render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.queryByText("GPS")).not.toBeInTheDocument();
     // coordinates not present at all
     expect(container.textContent).not.toContain("28.614");
@@ -95,7 +95,7 @@ describe("FieldVisitsPage", () => {
     const longOpen = visit({ id: "lo", checkInAt: new Date(now - 20 * 3600 * 1000).toISOString() });
     const done = visit({ id: "dn", checkInAt: new Date(now - 3 * 3600 * 1000).toISOString(), checkOutAt: new Date(now - 2 * 3600 * 1000).toISOString(), outcome: "completed", durationMinutes: 60 });
     getVisitsMock.mockResolvedValueOnce(page([longOpen, done]));
-    render(await FieldVisitsPage());
+    render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Overdue")).toBeInTheDocument();
     // "Completed" appears both as the status pill and (humanized) in the
     // outcome column — assert at least one is present.
@@ -108,7 +108,7 @@ describe("FieldVisitsPage", () => {
 
   it("GAP-FIELD-VISITS-04: KPI says 'latest N' and uses the server total when capped", async () => {
     getVisitsMock.mockResolvedValueOnce(page([visit()], 250));
-    render(await FieldVisitsPage());
+    render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText(/Visits \(latest 100\)/)).toBeInTheDocument();
     expect(screen.getByText("250")).toBeInTheDocument();
   });
@@ -134,7 +134,7 @@ describe("FieldVisitsPage", () => {
       source: "api",
     });
     getVisitsMock.mockResolvedValueOnce(page([visit({ id: "v1", agentId: A1, taskId: T1 }), visit({ id: "v2", agentId: A2, taskId: "cccccccc-1111-4000-8000-000000000001" })]));
-    const { container } = render(await FieldVisitsPage());
+    const { container } = render(await FieldVisitsPage({ searchParams: Promise.resolve({}) }));
     expect(screen.getByText("Asha Verma")).toBeInTheDocument();
     expect(screen.getByText("Inspect pole 14")).toBeInTheDocument();
     // unresolved ids degrade to a short id, never a guessed name

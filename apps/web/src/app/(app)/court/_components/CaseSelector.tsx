@@ -213,7 +213,7 @@ function CaseCombobox({
         </div>
       )}
       {open && searchFailed && (
-        <div role="alert" style={{ fontSize: 12, color: "var(--danger, #b00020)", marginTop: 2 }}>
+        <div role="alert" style={{ fontSize: 12, color: "var(--danger)", marginTop: 2 }}>
           {t("searchFailed")}
         </div>
       )}

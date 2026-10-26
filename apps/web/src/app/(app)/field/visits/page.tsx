@@ -31,7 +31,7 @@ function visitsHref(offset: number, from?: string, to?: string): string {
   return qs ? `/field/visits?${qs}` : "/field/visits";
 }
 
-export default async function FieldVisitsPage(props: { searchParams?: Promise<SearchParams> } = {}) {
+export default async function FieldVisitsPage(props: { searchParams: Promise<SearchParams> }) {
   // GAP-FIELD-VISITS-04: paging + inclusive IST date range come from the URL;
   // malformed values are dropped, never forwarded to the server.
   const sp = (await props.searchParams) ?? {};
