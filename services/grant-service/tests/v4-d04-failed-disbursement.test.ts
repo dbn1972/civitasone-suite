@@ -92,8 +92,6 @@ const instStatus = async (id: string) =>
   (await scopedQuery((tx) => tx.select().from(grantInstallments).where(eq(grantInstallments.id, id))))[0]!.status;
 const schemeDisbursed = async () =>
   (await scopedQuery((tx) => tx.select().from(grantSchemes).where(eq(grantSchemes.id, SCHEME))))[0]!.disbursedMinor;
-const eventCount = async (t: string) =>
-  (await scopedQuery((tx) => tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, TENANT)))).filter((r) => r.eventType === t).length;
 
 async function boot(): Promise<Queue> {
   const q = wireTenantAwareQueue(new MemoryQueue()); registerDisbursementConsumers(q); await q.start(); return q;
