@@ -8,7 +8,6 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 import {
   emitMunicipalFeeChallan,
   emitMunicipalNotification,
-  municipalDecisionNotificationEventType,
   MUNICIPAL_EVENT_TYPES,
 } from "../../shared/cross-events.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
