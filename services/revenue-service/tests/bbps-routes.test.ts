@@ -57,6 +57,10 @@ vi.mock("../src/modules/bbps/repo.js", async (importOriginal) => {
       };
     }),
     listRequests: vi.fn(async () => ({ rows: [], total: 0 })),
+    // Owner decision #7: pay-bill resolves a server-issued bill token to the bill (assessee + amount).
+    findBillByToken: vi.fn(async () => ({
+      identifierNo: "PROP-001", amountMinor: 200000n, billExpiresAt: new Date(Date.now() + 600_000), billConsumedAt: null,
+    })),
     // GAP2-REVENUE-BBPS-10/11: fetch-bill now resolves the identifier
     // synchronously via getDcbOutstanding. Any identifier starting with
     // "UNKNOWN" maps to no assessee (null) so the 404 path can be exercised;
@@ -216,7 +220,8 @@ describe("POST /v1/revenue/bbps/pay-bill (validation)", () => {
 // protection this fix also adds.
 
 describe("SEC-001: POST /v1/revenue/bbps/pay-bill authorization gate (BBPS_ENABLED=true)", () => {
-  const payload = { assesseeIdentifier: "PROP-001", amountMinor: "200000", bbpsTxnId: "BBPS-TXN-001", channel: "bbps" };
+  // Owner decision #7: pay-bill takes the server-issued bill token; assessee + amount are derived from it.
+  const payload = { billToken: "a".repeat(48), bbpsTxnId: "BBPS-TXN-001", channel: "bbps" };
 
   beforeEach(() => {
     process.env.BBPS_ENABLED = "true";

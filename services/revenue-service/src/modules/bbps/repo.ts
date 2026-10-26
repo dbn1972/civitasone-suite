@@ -41,6 +41,29 @@ export async function findRequestByMessageId(tenantId: string, messageId: string
 }
 
 /**
+ * Owner decision #7: resolve a server-issued bill token to the bill it was
+ * issued for (assessee identifier + amount + expiry/consumed state). Tenant-
+ * scoped. Only fetch rows carry a token.
+ */
+export async function findBillByToken(tenantId: string, billToken: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select({
+        identifierNo: assessees.identifierNo,
+        amountMinor: bbpsTransactions.amountMinor,
+        billExpiresAt: bbpsTransactions.billExpiresAt,
+        billConsumedAt: bbpsTransactions.billConsumedAt,
+      })
+      .from(bbpsTransactions)
+      .innerJoin(assessees, eq(assessees.id, bbpsTransactions.assesseeId))
+      .where(and(eq(bbpsTransactions.tenantId, tenantId), eq(bbpsTransactions.billToken, billToken)))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
  * GAP-REVENUE-BBPS-02: list recent BBPS requests (newest first) for the
  * "Recent BBPS requests" card. Tenant-scoped.
  */

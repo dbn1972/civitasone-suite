@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button, Card } from "@/app/_components/ds";
 import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
 import { humanizeStatus } from "@/lib/formatters";
 import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
+import type { IssuedBill } from "./PayBillForm";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
@@ -23,9 +24,11 @@ interface FetchBillFormProps {
    * (e.g. in tests) the form falls back to a free-text input.
    */
   assessees?: ReadonlyArray<AssesseeOption>;
+  /** Owner decision #7: called with the server-issued bill once a fetch succeeds, so it can be paid. */
+  onBillReady?: (bill: IssuedBill) => void;
 }
 
-export function FetchBillForm({ assessees = [] }: FetchBillFormProps) {
+export function FetchBillForm({ assessees = [], onBillReady }: FetchBillFormProps) {
   const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -33,6 +36,22 @@ export function FetchBillForm({ assessees = [] }: FetchBillFormProps) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [messageId, setMessageId] = useState<string | null>(null);
   const { status, reset: resetStatus } = useBbpsRequestStatus(messageId);
+
+  // Hand the server-issued bill (token + amount) on once the fetch settles.
+  const fetchedIdentifier = useRef("");
+  useEffect(() => {
+    if (status?.status === "success" && status.billToken && status.amountMinor != null && onBillReady) {
+      const identifier = fetchedIdentifier.current;
+      onBillReady({
+        token: status.billToken,
+        identifierNo: identifier,
+        ownerName: assessees.find((a) => a.identifierNo === identifier)?.ownerName ?? null,
+        amountMinor: String(status.amountMinor),
+        expiresAt: status.billExpiresAt ?? null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.status, status?.billToken]);
 
   const inputId = useId();
   const summaryId = useId();
@@ -58,6 +77,7 @@ export function FetchBillForm({ assessees = [] }: FetchBillFormProps) {
     try {
       resetStatus();
       setMessageId(null);
+      fetchedIdentifier.current = trimmed;
       const res = await browserJson<AcceptedResponse>("v1/revenue/bbps/fetch-bill", {
         method: "POST",
         body: JSON.stringify({ assesseeIdentifier: trimmed }),
@@ -149,7 +169,7 @@ export function FetchBillForm({ assessees = [] }: FetchBillFormProps) {
               <StatusPill status={status.status} />
               {status.status === "pending" && <span style={{ color: "var(--ink2)" }}>Fetching the bill…</span>}
               {status.status === "success" && (
-                <span style={{ color: "var(--ink2)" }}>Bill fetched — see the assessee&apos;s Bills &amp; Demands.</span>
+                <span style={{ color: "var(--ink2)" }}>Bill fetched — it is ready to record against below.</span>
               )}
               {status.status === "failed" && (
                 <span role="alert" style={{ color: "var(--bad)" }}>
