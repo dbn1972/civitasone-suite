@@ -437,7 +437,7 @@ describe("recording consumer — buildStorageKey pattern", () => {
 
 describe("IVR domain logic", () => {
   it("canAddHits returns true when under limit", async () => {
-    const { canAddHits, MAX_IVR_HITS_PER_CALL } = await import("../src/modules/ivr/domain.js");
+    const { canAddHits } = await import("../src/modules/ivr/domain.js");
     expect(canAddHits(0, 1)).toBe(true);
     expect(canAddHits(49, 1)).toBe(true);
     expect(canAddHits(25, 25)).toBe(true);
