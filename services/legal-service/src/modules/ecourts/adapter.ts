@@ -13,7 +13,7 @@
  * No PII is logged — only entity IDs and status codes.
  */
 
-import { CircuitBreaker, CircuitBreakerOpenError } from "@civitasone/circuit-breaker";
+import { CircuitBreaker } from "@civitasone/circuit-breaker";
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ export async function lookupCnr(cnrNumber: string): Promise<CnrLookupResult> {
     );
 
     if (!res.ok) {
-      const text = await res.text().catch(() => "");
+      await res.text().catch(() => "");
       throw new ECourtsAdapterError(
         `e-Courts API returned ${res.status}`,
         "ECOURTS_API_ERROR",
