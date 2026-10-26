@@ -176,4 +176,39 @@ describe("DomainPackActivatePanel (FN-17)", () => {
       expect(await screen.findByText(/Waiting for the install job/i)).toBeInTheDocument();
     });
   });
+
+  // GAP-INSTALL-DOMAIN-PACKS-04: the panel is themed with design-system tokens,
+  // not hard-coded Tailwind palette classes (which do not follow dark mode).
+  describe("design-system tokens (GAP-INSTALL-DOMAIN-PACKS-04)", () => {
+    it("renders no hard-coded Tailwind palette colour classes", async () => {
+      const { container } = render(<DomainPackActivatePanel variant="page" />);
+      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      const palette = /\b(?:bg|text|border|ring|from|to)-(?:indigo|slate|emerald|amber|red|gray|green|blue)-\d{2,3}/;
+      expect(container.innerHTML).not.toMatch(palette);
+    });
+
+    it("renders no palette classes in the embedded variant, error banner or result state either", async () => {
+      vi.mocked(api.fetchDomainPacksForInstallResult).mockResolvedValue({ packs: municipalList, error: true });
+      vi.mocked(api.activateDomainPackStage3).mockResolvedValue({
+        id: "c", stageId: "d", status: "accepted", correlationId: "x", domainPackKey: "municipal-in-v1",
+        stageNumber: 3, packKeys: [],
+      });
+      const { container } = render(<DomainPackActivatePanel variant="embedded" pollIntervalMs={20} />);
+      await screen.findByRole("alert");
+      fireEvent.click(screen.getByRole("button", { name: /Activate Domain Pack/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Activate$/i }));
+      await screen.findByText(/Activation accepted/i);
+      const palette = /\b(?:bg|text|border|ring|from|to)-(?:indigo|slate|emerald|amber|red|gray|green|blue)-\d{2,3}/;
+      expect(container.innerHTML).not.toMatch(palette);
+    });
+
+    it("the page back link is a real link without a hand-typed arrow glyph", async () => {
+      render(<DomainPackActivatePanel variant="page" />);
+      await waitFor(() => expect(screen.getByText(/Municipal India/i)).toBeInTheDocument());
+      const back = screen.getByRole("link", { name: /Installer wizard/i });
+      expect(back).toHaveAttribute("href", "/install");
+      expect(back.textContent).not.toMatch(/[←→]/);
+    });
+  });
 });

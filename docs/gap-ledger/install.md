@@ -249,6 +249,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-DOMAIN-PACKS-04  ·  MEDIUM  ·  partly  ·  theme DSDRIFT (was FABRICATED)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - [partial: DomainPackActivatePanel now uses ds Button/Alert/StatusPill + civitas-ds CSS tokens (no Tailwind indigo/slate/emerald, dark-mode safe) and a plain Installer wizard back link, with token tests; remains: activated state is not persisted across reload, which needs a durable per-tenant activation record + status endpoint (depends on DOMAIN-PACKS-01 completion contract, owner decision)] (UAT B2, PENDING-HASH)
 - **W0 note:** partly fixed by #1923 — breadcrumb replaced with Link; DomainPackActivatePanel and domain-packs page still use Tailwind indigo/slate classes instead of DS tokens
 - **First-pass claim:** Panel is Tailwind-styled (indigo/slate) with hard-coded colours, breadcrumb is hand-rolled with '←' text; 'Activated' button is disabled with no way to re-run or view result after reload (DomainPackActivatePanel.tsx).
 - **Verified evidence:** Tailwind indigo/slate classes are real (Panel :78-89,201; page.tsx:51-55 hand-rolled breadcrumb with '←' text and plain <a>). Overstated on 'Activated' disabled: that is React state only (Panel :36,202,206); after reload result is null, so the button is enabled again and a second activation is possible; no view of the prior result exists. Theme not FABRICATED.
