@@ -1,5 +1,118 @@
 # Release readiness
 
+<!-- V4-CERT-BEGIN -->
+## V4 certification refresh 2026-10-26 (frozen SHA `66b04aedd827b7e4fdcb402731d6d45a678badc8`)
+
+Scope: MASTER PROMPT V4.0 certification of the integrated main commit `66b04aedd827b7e4fdcb402731d6d45a678badc8` (66b04aedd, the squash of bundle #2280; bundles #2279 `e845c0401` and #2281 `400dbc822` are ancestors). Discovery baseline was `1eaeecae7`. This section was written by the Release Certification Auditor on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` into it (no history rewrite). The certification lanes were read-only on code. Anything not executed is marked NOT_RUN; no gate is claimed that was not run or read from a recorded result.
+
+**Release decision (V4): FAIL.** Detail in `release-readiness.md`. Earlier sections of this file are kept below unchanged as history.
+
+### V4 release decision
+
+**DECISION: FAIL**
+
+Rules applied (V4): PASS only if every mandatory gate PASSes (PASS_WITH_KNOWN only for owner-accepted deferrals), evidence is complete, approvals are satisfied and no release-blocking defect is open. A NOT_RUN mandatory gate without an owner deferral gives BLOCKED. A failing gate or an open HIGH/CRITICAL defect gives FAIL. FAIL outranks BLOCKED here because gates fail and HIGH/CRITICAL defects are open; the NOT_RUN gates would on their own have forced BLOCKED. Nothing was rounded up.
+
+### Consolidated defect table (V4 cycle, computed by `consolidate-defects.py`)
+
+| Severity | Found | Fixed | Verified | Awaiting Approval | Unresolved | Other (owner-accepted) |
+|---|---|---|---|---|---|---|
+| CRITICAL | 1 | 0 | 0 | 0 | 1 | 0 |
+| HIGH | 18 | 15 | 15 | 0 | 3 | 0 |
+| MEDIUM | 34 | 26 | 26 | 0 | 8 | 0 |
+| LOW | 19 | 12 | 12 | 0 | 7 | 0 |
+| TOTAL | 72 | 53 | 53 | 0 | 19 | 0 |
+
+How the numbers are produced: `consolidate-defects.py` reads `v4-registry.json` (one row per defect) and counts rows by `severity` and `closureStatus`. Found = rows not DUPLICATE/NOT_REPRODUCED. Fixed = fix merged to main (FIXED_MERGED + VERIFIED + VERIFICATION_BLOCKED); Verified is a subset of Fixed (merged AND its regression test passed in the regression lane, no contradicting lane). Awaiting Approval = BLOCKED_FOR_APPROVAL. Unresolved = UNRESOLVED. Other = owner-accepted deferral. Invariant asserted by the script: Found = Fixed + Awaiting + Unresolved + Other. Excluded from Found: V4-B-05 (NOT_REPRODUCED), V4-E-01 (DUPLICATE of V4-B-02), V4-E-04 (DUPLICATE of V4-A-03), V4-G-04 (DUPLICATE of V4-B-02). Severity for V4-A..G is the independent verifier's (verify-*.json), not the discoverer's. Certification-found rows (V4-INTEG-01, V4-CERT-nn) carry a provisional severity assigned by the Release Certification Auditor; V4-CERT-15/16 each count one row for many scanner alerts (5 and 245). Earlier-run rows (RUN1/RUN2/RUN3) have no independent per-defect verification, so none of them is Verified.
+
+### Why FAIL (each item has evidence)
+
+| Gate / condition | Result | Detail | Evidence |
+|---|---|---|---|
+| Gate 4 unit/service tests | FAIL | build lane 118/123 tasks; GitHub CI Tests job failed (citizen-service#test, web#test) | cert/build.json; ci-run-40258410831.json |
+| Gate 5/9 service suites with DB | FAIL | 63/67 green locally; analytics, audit (flaky), citizen, grant red locally; citizen red in CI | cert/db.json |
+| Gate 6a contract tests | FAIL | cross-service-events 2 failures (confirmed in CI) | cert/contract-e2e.json |
+| Gate 11 tenant isolation/IDOR/RLS tests | FAIL | tests/security idor-inventory deterministic failure | cert/db.json |
+| Gate 12 cross-service flows (tests/cross-service) | FAIL | 5 failed / 9 passed | cert/db.json |
+| Gate 13 DB integrity (tests/data-integrity) | FAIL | 7 failed / 19 passed, BYPASSRLS roles + PII at rest | cert/db.json |
+| Gate 14 Architecture Guard | FAIL | tenant-table-rls-guard, flaky-skip-guard, authz-tenant-scanner (confirmed in CI) | cert/build.json; CI Architecture Guard |
+| Gate 14 gitleaks (CI) | FAIL | 2 findings in the frozen-SHA commit; not runnable locally | job-121365184496.log |
+| Gate 15b open code-scanning alerts | FAIL | 5 critical / 245 high open on main, untriaged | cert/security-perf/codeql-all.json |
+| Gate 18 recovery/resilience | FAIL (unverified) | root 91/91, circuit-breaker 18/18, billing adapters 37/37 pass; finance pfms-adapter 12/28 failed on an unmigrated test DB and was NOT rerun; lane called it PASS_WITH_KNOWN but no owner deferral covers it, so it cannot be PASS | cert/security-perf.json |
+| Gate 19 cross-service-live | FAIL | payroll-posting-history 2 tests deterministic | cert/contract-e2e/xs.log, xs2.log |
+| Gate 20 regression | FAIL | citizen-service service-gaps-partial-routes 10/38 red (V4-INTEG-01) | cert/regression.json |
+| Release Gate (evidence audit, CI) | FAIL | L3, L6 and SLO UNMEASURED | job-121392646315.log |
+
+### Open HIGH / CRITICAL defects
+
+| ID | Sev | Run | Status | Title |
+|---|---|---|---|---|
+| V4-G-12 | HIGH | V4 | UNRESOLVED | Appeal filing window is evaluated against a client-supplied decisionDate (never the application's actual decis |
+| V4-CERT-10 | HIGH | V4-CERT | UNRESOLVED | service roles citizen_svc, legal_svc, telephony_svc have BYPASSRLS in the bootstrapped DB (RLS inert) |
+| V4-CERT-15 | CRITICAL | V4-CERT | UNRESOLVED | open CRITICAL code-scanning alerts on main: 5 (CodeQL 2, Trivy 3) |
+| V4-CERT-16 | HIGH | V4-CERT | UNRESOLVED | open HIGH code-scanning alerts on main: 245 (CodeQL 68, Trivy 177) |
+| FINAL-GATE-02 | HIGH | RUN1 | UNRESOLVED | Release Gate evidence audit, 11 gates UNMEASURED |
+
+### Gates that passed
+
+| Gate | Result | Detail | Evidence |
+|---|---|---|---|
+| Gate 1 install --frozen-lockfile | PASS | exit 0 | cert/build/g1-install.log |
+| Gate 2 turbo build, web tsc, web next build | PASS | 99/99 tasks; tsc empty; next build ok | cert/build |
+| Gate 3 forced typecheck, forced lint, jsx-a11y ratchet | PASS | 0 lint errors (warnings only) | cert/build |
+| Gate 14 other architecture guards (18+) and guard unit tests | PASS | exit 0 | cert/build/a01..b-* |
+| Gate 14 secret scan (repo scripts) | PASS | secret-scanner.mjs and ci.yml grep clean | cert/build/s01, s02 |
+| Gate 14 dependency scan | PASS_WITH_KNOWN | 0 unallow-listed HIGH/CRITICAL; 11 allow-listed, 10 expire 2026-11-08, zod 2026-11-23; owner deferral recorded | cert/security-perf/cve-gate.log |
+| Gate 16 bootstrap-postgres, tenant-index-guard, schema-drift-guard | PASS | 0 migration failures, 8 baselined drifts, no new | cert/db.json |
+| Gate 12 root integration + eOffice loop-back | PASS | 133 passed, 9 skipped (LocalStack) | cert/db.json |
+| Gate 6b remaining contract files; 19c module-gating-standalone | PASS | 45 tests; 10/10 | cert/contract-e2e.json |
+
+### Gates executed only by GitHub CI (not run on the certification host)
+
+These are recorded from the GitHub run record (snapshot 2026-10-26T04:42:48Z); this lane did not execute them.
+
+| Gate | Status |
+|---|---|
+| Gate 8 Playwright E2E | NOT_RUN locally; CI job E2E (Playwright) success; Procurement E2E Gate success |
+| Gate 7 live-stack contract score 10/10 | NOT_RUN locally; CI job Live Stack Verification success |
+| Gate 15 Trivy container scan | NOT_RUN locally; CI Trivy jobs (hrms, gateway, finance) success |
+| Mobile (Flutter) tests | NOT_RUN locally; CI job Mobile (Flutter) success |
+| Accessibility axe, Mutation, Screen Verification, QA Readiness, L10/L11, ZAP DAST, CodeQL SAST job, CVE/SCA gate | executed only in GitHub CI; jobs success |
+
+The GitHub CI run (`40258410831`) for the frozen SHA ended **failure**; the Docker image matrix jobs succeeded. Job table in `baseline-assessment.md`.
+
+### NOT_RUN with no owner deferral
+
+| Lane | Gate | Status | Reason |
+|---|---|---|---|
+| build | 4b Gateway SEC-021 real-subprocess test (GATEWAY_SPAWN_TESTS=1) | NOT_RUN | omitted for time after the main test failures; containers torn down |
+| build | 14 gitleaks (local) | NOT_RUN | gitleaks not installed on cloudsphere-ec2 (GitHub CI ran it: FAIL, see CI table) |
+| contract-e2e | 6c render-smoke contract (apps/web jsdom) | NOT_RUN | not executed in the lane (GitHub CI Contract Tests job executed it) |
+| contract-e2e | 7 scripts/contract/score.mjs 10/10 on a live stack | NOT_RUN | needs live gateway stack on fixed shared ports |
+| contract-e2e | 8 Playwright E2E; 19d journey e2e (tests/e2e-live, tests/e2e-personas, apps/web/e2e) | NOT_RUN | needs full live stack; prefer-CI rule |
+| contract-e2e | mobile integration tests (apps/mobile Flutter) | NOT_RUN | flutter/dart not installed on EC2 |
+| db | Web tsc / next build / LocalStack cross-process / Keycloak e2e | NOT_RUN | out of scope for the db lane; LocalStack absent (tests/integration/cross-process.localstack.test.ts skipped) |
+| security-perf | 15 Trivy (local) | NOT_RUN | no local Trivy for the SHA (GitHub Security Scan Trivy jobs ran: see CI table) |
+| security-perf | 17 Performance/load (k6 scripts/perf, tests/load; service N+1 suites) | NOT_RUN | needs a booted stack on shared dev Postgres/Redis, forbidden by the lane rules; only packages/db perf 3/3 and packages/cache perf-007 6/6 ran |
+| regression | 20e web tsc / next build | NOT_RUN | outside the regression lane (build lane ran them: PASS) |
+
+### Approvals and evidence completeness
+
+- V4 HIGH and BLOCKED_FOR_APPROVAL PRs: approved ("close all by tomorrow morning"), reviewed CLEAN. Not covered: the new dependency in #2282; every NOT_RUN gate.
+- Awaiting approval from earlier runs: 6 rows (listed in `deferred-approval-items.md`).
+- Evidence incomplete: SEC-021 spawn test, perf/load, local E2E/journey/mobile/LocalStack/Keycloak, finance pfms-adapter rerun, render-smoke locally.
+- Environment caveat: tests ran on amd64-emulated Postgres; some local-only failures (grant-service, analytics-service, IDOR timeouts) did not reproduce in GitHub CI or on rerun and are recorded as LOW/environmental, not dismissed.
+
+### What would change the decision
+
+Clear V4-INTEG-01, V4-CERT-02..07 (small test/baseline fixes); resolve or formally triage V4-CERT-10, V4-CERT-15, V4-CERT-16, FINAL-GATE-02 (Release Gate L3/L6/SLO evidence); resolve V4-CERT-17 gitleaks; run or have the owner defer the NOT_RUN gates; record the approval for the #2282 dependency and decide the 6 pending earlier-run approvals; rerun finance pfms-adapter on a migrated DB. Then recertify a new frozen SHA: this decision applies to `66b04aedd827b7e4fdcb402731d6d45a678badc8` only.
+
+### Residual risk accepted by the owner (does not change the decision)
+
+Credentials in git history (not rotated); CVE exceptions until 2026-11-08 / 2026-11-23; payroll visual snapshots stale; 27 coverage services and visual snapshots deferred.
+
+<!-- V4-CERT-END -->
+
 ## Refresh 2026-10-24 (final defect-closure run)
 
 Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.

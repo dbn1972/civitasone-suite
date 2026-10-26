@@ -1,5 +1,105 @@
 # Regression results (PASS 3)
 
+<!-- V4-CERT-BEGIN -->
+## V4 certification refresh 2026-10-26 (frozen SHA `66b04aedd827b7e4fdcb402731d6d45a678badc8`)
+
+Scope: MASTER PROMPT V4.0 certification of the integrated main commit `66b04aedd827b7e4fdcb402731d6d45a678badc8` (66b04aedd, the squash of bundle #2280; bundles #2279 `e845c0401` and #2281 `400dbc822` are ancestors). Discovery baseline was `1eaeecae7`. This section was written by the Release Certification Auditor on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` into it (no history rewrite). The certification lanes were read-only on code. Anything not executed is marked NOT_RUN; no gate is claimed that was not run or read from a recorded result.
+
+**Release decision (V4): FAIL.** Detail in `release-readiness.md`. Earlier sections of this file are kept below unchanged as history.
+
+### V4 regression results (frozen SHA)
+
+Regression lane (`cert/regression.json`, logs `~/orch-logs/closure/v4/cert/regression/`, per-log hashes `log-hashes.json`): DB tests on a disposable `postgis:16-3.4` on 127.0.0.1:55912, bootstrapped by `bootstrap-postgres.sh` (exit 0), reruns with the correct per-service DB and `--no-file-parallelism` are authoritative (earlier attempts kept in `attempt*/`).
+
+| Gate | Status | Exit | Result |
+|---|---|---|---|
+| 20a-v4-pr-regression-tests | FAIL | 1 | 78 of 79 V4 PR test files PASS on the frozen SHA across 29 packages (apps/web, 25 services, packages/db,auth,storage). 1 file FAILS: citizen-service tests/service-gaps-partial-routes.test.ts (PR 2246, V4-G-12 fixtures) 10/38 red - see newDefects. All other defects PASS: V4-A-01..09, V4-B-01..11, V4-C-01..06, V4-D-01..07, V4-E-01..07, V4-F-01..06, V4-G-01..11 (V4-G-12 appeal-filing-integrity.test.ts 9/9 passes; its fixture suite is the red one). PR 2284 (V4-C-04 rest) building/event v4-c-04 test files do not exist at the SHA (superseded by closure3-s4-09-reference-sequences tests, which pass in 20c); parking/trade v4-c-04 pass. PR 2268 (V4-B-03) pass. Parallel-file runs of citizen/grant/building initially showed DB-collision/wrong-DB artefacts of my harness (kept in attempt*/ dirs); reruns with correct per-service DB and --no-file-parallelism are the authoritative logs. |
+| 20b-run3-and-delta-regression-tests | FAIL | 1 | 242 of 243 collected files pass (2533 tests pass); 54 of 55 package jobs EXIT=0. Only failure is the same citizen-service service-gaps-partial-routes.test.ts (10 tests). One file in the list was not counted as passed by vitest summaries (244 listed vs 243 reported)- skipped/no tests, not a failure. |
+| 20c-revert-proves-test-fails | PASS | 0 | All 10 tests FAIL when the fix is reverted, and PASS on the SHA (restored, git status clean each time): PR2241 V4-G-03 (2 fail), PR2238 V4-E-02 (2), PR2244 V4-G-06 (3), PR2240 V4-B-02/G-04/E-01 (3), PR2246 V4-G-12 appeal-filing-integrity (8), PR2270 V4-D-06 (3), PR2275 V4-G-05 (6), PR2258 V4-D-02 (2), PR2260 V4-D-01 (4), PR2266 V4-A-02 (4). Method note: bundles are squashed, so the reversal is the PR diff (non-test files) reverse-applied rather than git revert of a commit; PR2240 and PR2258 reversals delete a source file so failures there may be import-resolution rather than assertion failures. 4 other HIGH diffs (2242, 2261, 2262, 2252) did not reverse-apply cleanly due to later edits and were not used. |
+| 20d-delta-static-integration-review | PASS_WITH_KNOWN | 0 | No conflict markers; no new migration number collision (the 15 duplicate-prefix dirs are pre-existing 'NNNb' or crm 0112 pairs, none among the 28 added files); tsc --noEmit EXIT=0 with 0 errors in all 55 changed services/packages. Delta is 4 release commits (#2227,#2279,#2281,#2280), 685 files. The only integration defect found is V4-INTEG-01 (test collision). apps/web tsc and next build were not run in this lane. |
+| 20e-web-tsc-next-build | NOT_RUN |  | Out of this lane's scope; only web vitest regression tests run (apps/web 12 V4 files + 61 delta files pass). |
+
+Cross-check by this auditor (command recorded as `xcheck-regression-logs`, log `cert/reports/xcheck-regression-logs.log`): grepping every regression log for failed Test Files/Tests finds only `services_citizen-service.log` (1 file failed, 10 tests failed) and `delta_services_citizen-service.log`; no other package log reports a failure.
+
+Revert-proof (gate 20c): with the PR's non-test diff reverse-applied, the tests fail; on the SHA they pass. Caveat from the lane: PR2240 and PR2258 reversals delete a source file, so those failures may be import-resolution rather than assertion failures; 4 other HIGH diffs (#2242, #2261, #2262, #2252) did not reverse-apply cleanly, so their revert proof is not available from this lane (#2252 and others were shown to fail on origin/main by the reviewers in the PR comments).
+
+| PR | Defect | Tests failing when reverted |
+|---|---|---|
+| PR #2241 | V4-G-03 | 2 |
+| PR #2238 | V4-E-02 | 2 |
+| PR #2244 | V4-G-06 | 3 |
+| PR #2240 | V4-B-02 / V4-G-04 / V4-E-01 | 3 |
+| PR #2246 | V4-G-12 (appeal-filing-integrity) | 8 |
+| PR #2270 | V4-D-06 | 3 |
+| PR #2275 | V4-G-05 | 6 |
+| PR #2258 | V4-D-02 | 2 |
+| PR #2260 | V4-D-01 | 4 |
+| PR #2266 | V4-A-02 | 4 |
+
+Other regression facts: 244 test files added or modified between `1eaeecae7` and the SHA (55 packages) ran serially: 242 of 243 collected files, 2533 tests pass; the only failure is `services/citizen-service/tests/service-gaps-partial-routes.test.ts` (V4-INTEG-01). apps/web: 12 V4 files and 61 delta files pass. `tsc --noEmit` exits 0 in all 55 changed services and packages. No conflict markers; no migration-number collision.
+
+Full-suite results outside the regression lane (build/db/contract lanes and GitHub CI): see `release-readiness.md`. Summary of red results at the frozen SHA: citizen-service (10 tests, confirmed in GitHub CI), web auditResource (1 test, confirmed in GitHub CI), three architecture guards, cross-service-events contract (2 tests), tests/data-integrity (7), tests/cross-service (5), tests/cross-service-live payroll-posting-history (2), tests/security (1 deterministic), analytics-service (1, local only), grant-service (4 local only, passes in GitHub CI), finance pfms-adapter (12, unmigrated test DB, not rerun).
+
+### Per-defect regression evidence
+
+| Defect | Sev | Regression test(s) | Related CI guard / contract | Result |
+|---|---|---|---|---|
+| V4-A-01 | HIGH | apps/web/src/lib/sync/logout.test.ts; apps/web/src/lib/sync/swCache.test.ts; apps/web/src/middleware.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-02 | HIGH | apps/web/src/middlewareCspStorage.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-03 | MEDIUM | apps/web/src/app/api/careers/auth/tenantBinding.test.ts; apps/web/src/app/api/notification/upstreamFailure.test.ts; apps/web/src/app/api/proxy/[...path]/pathGuard.test.ts; apps/web/src/app/api/proxy/[...path]/upstreamFailure.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-04 | LOW | apps/web/src/middleware.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-05 | LOW | apps/web/src/app/api/careers/auth/tenantBinding.test.ts; apps/web/src/app/api/notification/upstreamFailure.test.ts; apps/web/src/app/api/proxy/[...path]/pathGuard.test.ts; apps/web/src/app/api/proxy/[...path]/upstreamFailure.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-06 | MEDIUM | apps/web/src/app/api/careers/auth/tenantBinding.test.ts; apps/web/src/app/api/notification/upstreamFailure.test.ts; apps/web/src/app/api/proxy/[...path]/pathGuard.test.ts; apps/web/src/app/api/proxy/[...path]/upstreamFailure.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-07 | LOW | apps/web/src/app/(app)/admin/metering/usageLimits.test.ts; apps/web/src/app/(app)/procurement/tenders/new/CreateTenderForm.test.tsx; apps/web/src/lib/money.formGuard.test.ts; apps/web/src/lib/money.safeNumber.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-08 | LOW | apps/web/src/app/(app)/admin/metering/usageLimits.test.ts; apps/web/src/app/(app)/procurement/tenders/new/CreateTenderForm.test.tsx; apps/web/src/lib/money.formGuard.test.ts; apps/web/src/lib/money.safeNumber.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-A-09 | LOW | apps/web/src/middleware.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-01 | MEDIUM | services/hrms-service/src/__tests__/comp-off-persist-real-db.test.ts; services/hrms-service/src/modules/leave/comp-off-authz.test.ts | tenant-table-rls-guard (new RLS table passes); web auditResource.test (FAILS, V4-CERT-02) | PASS in regression gate 20a/20b |
+| V4-B-02 | HIGH | services/citizen-service/src/modules/documents/ownership.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-03 | MEDIUM | services/billing-service/tests/v4-b03-webhooks-public.test.ts; services/gateway-service/tests/v4-b03-billing-webhook-prefix.test.ts | authz-tenant-scanner (webhook entries were baselined; now stale) | PASS in regression gate 20a/20b |
+| V4-B-04 | MEDIUM | services/notification-service/tests/v4b04-push-revoke-ownership.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-06 | MEDIUM | services/advertisement-service/tests/v4-b06-permit-verify-public.test.ts; services/building-service/tests/v4-b06-permit-verify-public.test.ts; services/gateway-service/tests/v4-b06-permit-verify-public-prefix.test.ts | tenant-table-rls-guard (FAILS on the new directory tables) | PASS in regression gate 20a/20b |
+| V4-B-07 | MEDIUM | services/helpdesk-service/tests/v4-b07-ces-requester.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-08 | MEDIUM | services/finance-service/tests/statements-receipts-payments-opening.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-09 | LOW | services/knowledge-service/tests/v4-b-09-ai-prompt-hardening.test.ts | authz-tenant-scanner (ai/prompt entry was baselined; now stale) | PASS in regression gate 20a/20b |
+| V4-B-10 | LOW | services/queue-service/tests/status.test.ts; services/queue-service/tests/v4-b-10-ops-auth.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-B-11 | LOW | services/finance-service/tests/statements-cashflow-fy-order.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-C-01 | MEDIUM | services/market-service/tests/v4-c-01-property-code-per-tenant.test.ts | tenant-index-guard + schema-drift-guard (PASS, db lane) | PASS in regression gate 20a/20b |
+| V4-C-02 | MEDIUM | services/court-service/tests/commands-coverage.test.ts; services/court-service/tests/v4-c-02-addparty-case-tenant.test.ts; services/works-service/tests/v4-d-07-contractor-consumer-rethrow.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-C-03 | MEDIUM | services/asset-service/tests/v4-c-03-streetlight-pole-id-per-tenant.test.ts | tenant-index-guard + schema-drift-guard (PASS, db lane) | PASS in regression gate 20a/20b |
+| V4-C-04 | MEDIUM | services/market-service/tests/v4-c-04-reference-numbers-unique.test.ts; services/building-service/tests/v4-c-04-reference-numbers-unique.test.ts [absent at SHA]; services/event-service/tests/v4-c-04-reference-numbers-unique.test.ts [absent at SHA]; services/parking-service/tests/v4-c-04-reference-numbers-unique.test.ts; services/trade-service/tests/v4-c-04-reference-numbers-unique.test.ts | closure3-s4-09 reference-sequence tests; schema-drift-guard | PASS in regression gate 20a/20b |
+| V4-C-05 | MEDIUM | services/refund-service/tests/v4-c-05-request-number-unique.test.ts | schema-drift-guard | PASS in regression gate 20a/20b |
+| V4-C-06 | LOW | packages/db/src/pool.timeouts.test.ts; packages/db/src/tenant-router.evict.test.ts; packages/db/src/tenant-router.property.test.ts; packages/db/src/tenant-router.test.ts | packages/db perf tests (PASS) | PASS in regression gate 20a/20b |
+| V4-D-01 | HIGH | services/finance-service/tests/eft-initiate-tx-scope.test.ts; services/finance-service/tests/v4-d01-eft-payment-made-after-egress.test.ts | cross-service-events contract (stale baseline entry finance.payment.file_decided, V4-CERT-06) | PASS in regression gate 20a/20b |
+| V4-D-02 | HIGH | services/finance-service/src/modules/payments/eoffice-rejection-reversal.test.ts; services/finance-service/tests/consumer-coverage-ext.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-D-03 | HIGH | services/grant-service/tests/v4-d03-duplicate-disbursement.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-D-04 | HIGH | services/grant-service/tests/v4-d04-failed-disbursement.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-D-05 | MEDIUM | services/grant-service/tests/v4-d05-disbursement-state-guard.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-D-06 | HIGH | services/hrms-service/src/modules/contracts/expiry-escalated.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-D-07 | MEDIUM | services/court-service/tests/commands-coverage.test.ts; services/court-service/tests/v4-c-02-addparty-case-tenant.test.ts; services/works-service/tests/v4-d-07-contractor-consumer-rethrow.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-E-02 | HIGH | services/citizen-service/src/modules/grievance/requests-list-scope.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-E-03 | MEDIUM | packages/auth/tests/v4-e-03-env-allowlist-call-sites.test.ts | secret-scanner.mjs (PASS) | PASS in regression gate 20a/20b |
+| V4-E-05 | MEDIUM | packages/storage/src/index.test.ts; services/admin-service/tests/v4-e-05-presign-limits.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-E-06 | MEDIUM | services/hrms-service/src/modules/id-cards/qr-secret.security.test.ts | secret-scanner.mjs (PASS) | PASS in regression gate 20a/20b |
+| V4-E-07 | MEDIUM | services/citizen-service/src/modules/issuance/seal-key.test.ts | secret-scanner.mjs (PASS) | PASS in regression gate 20a/20b |
+| V4-F-01 | MEDIUM | services/gateway-service/tests/upstream-proxy-5xx-body.test.ts; services/telephony-service/tests/recording-download-cap.test.ts; services/workflow-service/tests/messages-expiry-race.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-F-02 | MEDIUM | services/visitor-service/tests/document-scan-multipart.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-F-03 | LOW | services/ml-service/tests/purge-s3-client-reuse.test.ts; services/visitor-service/tests/s3-client-singleton.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-F-04 | MEDIUM | packages/db/src/pool.timeouts.test.ts; packages/db/src/tenant-router.evict.test.ts; packages/db/src/tenant-router.property.test.ts; packages/db/src/tenant-router.test.ts | packages/db perf tests (PASS) | PASS in regression gate 20a/20b |
+| V4-F-05 | LOW | services/gateway-service/tests/upstream-proxy-5xx-body.test.ts; services/telephony-service/tests/recording-download-cap.test.ts; services/workflow-service/tests/messages-expiry-race.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-F-06 | LOW | services/gateway-service/tests/upstream-proxy-5xx-body.test.ts; services/telephony-service/tests/recording-download-cap.test.ts; services/workflow-service/tests/messages-expiry-race.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-01 | HIGH | services/citizen-service/tests/v4g01-cert-verify-public.test.ts; services/gateway-service/tests/v4g01-cert-verify-public-prefix.test.ts | gateway public-prefixes contract tests (tests/contract/gateway.contract.test.ts) | PASS in regression gate 20a/20b |
+| V4-G-02 | HIGH | services/citizen-service/src/modules/fee-payment/payment-intent-fee.test.ts; services/citizen-service/tests/service-gaps-routes.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-03 | HIGH | services/citizen-service/src/modules/documents/digilocker-legacy-verify.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-05 | HIGH | services/audit-service/tests/v4-g-05-hash-chain-verifiable.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-06 | HIGH | services/citizen-service/src/modules/catalogue/notification-bindings.recipient.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-07 | MEDIUM | services/notification-service/tests/v4g07-retry-payload.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-08 | HIGH | services/citizen-service/src/modules/fee-payment/gl-rejected.test.ts; services/finance-service/src/modules/revenue-gl/journal-type.test.ts; services/finance-service/src/modules/revenue-gl/unposted-receipt.test.ts; services/finance-service/tests/revenue-gl-consumer.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-09 | MEDIUM | services/citizen-service/src/modules/fee-payment/refund-approval.test.ts; services/finance-service/src/modules/revenue-gl/refund-gl.test.ts | cross-service-events contract (orphan citizen.refund.approved, V4-CERT-07) | PASS in regression gate 20a/20b |
+| V4-G-10 | MEDIUM | services/citizen-service/tests/appeal-outcome-application.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+| V4-G-11 | MEDIUM | services/citizen-service/tests/issuance-application-gate.test.ts | none identified (regression test is the only control) | PASS in regression gate 20a/20b |
+
+<!-- V4-CERT-END -->
+
 ## Refresh 2026-10-24 (final defect-closure run)
 
 Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.

@@ -1,5 +1,41 @@
 # Autonomous fixes
 
+<!-- V4-CERT-BEGIN -->
+## V4 certification refresh 2026-10-26 (frozen SHA `66b04aedd827b7e4fdcb402731d6d45a678badc8`)
+
+Scope: MASTER PROMPT V4.0 certification of the integrated main commit `66b04aedd827b7e4fdcb402731d6d45a678badc8` (66b04aedd, the squash of bundle #2280; bundles #2279 `e845c0401` and #2281 `400dbc822` are ancestors). Discovery baseline was `1eaeecae7`. This section was written by the Release Certification Auditor on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` into it (no history rewrite). The certification lanes were read-only on code. Anything not executed is marked NOT_RUN; no gate is claimed that was not run or read from a recorded result.
+
+**Release decision (V4): FAIL.** Detail in `release-readiness.md`. Earlier sections of this file are kept below unchanged as history.
+
+### V4 autonomous fixes
+
+Autonomy rule for V4: AUTO_FIX defects (LOW/MEDIUM, no protected area) were fixed and reviewed without a separate owner ask; HIGH and BLOCKED_FOR_APPROVAL defects were fixed on branches and integrated only under the owner approval "close all by tomorrow morning" (see `deferred-approval-items.md`). 14 PRs were AUTO class. Each was reviewed by an independent agent (review comment CLEAN) and merged inside a bundle; the originals are closed.
+
+| PR | Slice | Defects | Bundle | Review round (CLEAN) |
+|---|---|---|---|---|
+| #2235 | web-proxy | V4-A-03, V4-A-05, V4-A-06, V4-E-04 | #2280 | 1 |
+| #2236 | web-money | V4-A-07, V4-A-08 | #2280 | 1 |
+| #2237 | citizen-issuance-appeal | V4-E-07 | #2280 | 1 |
+| #2239 | notification | V4-B-04 | #2280 | 1 |
+| #2247 | web-mw | V4-A-04, V4-A-09 | #2280 | 1 |
+| #2250 | knowledge-queue | V4-B-09 | #2280 | 1 |
+| #2253 | helpdesk | V4-B-07 | #2280 | 3 |
+| #2255 | finance-statements | V4-B-11 | #2280 | 1 |
+| #2257 | db-pkg | V4-C-06, V4-F-04 | #2281 | 1 |
+| #2259 | court-works | V4-C-02, V4-D-07 | #2280 | 1 |
+| #2269 | hrms | V4-E-06 | #2280 | 1 |
+| #2277 | visitor-ml | V4-F-03 | #2280 | 1 |
+| #2278 | reliability | V4-F-01, V4-F-05, V4-F-06 | #2280 | 1 |
+| #2282 | visitor-ml cycle 2 | V4-F-02 | #2280 | 1 |
+
+Not autonomous even though small: #2282 (V4-F-02) adds the runtime dependency `@fastify/multipart` 8.3.1 with lockfile additions; the remediation lane had stated this needs owner approval, and no dependency-specific approval is recorded. Listed as an open approval-evidence item in `deferred-approval-items.md`.
+
+Unfixed by the autonomous lane and later resolved by cycle 2: V4-A-07 (CreateTenderForm, #2236), V4-G-01 (#2283), V4-F-02 (#2282), V4-D-02 second half (#2258), V4-B-01 persistence (#2271), V4-B-03 (#2268), V4-C-04 parking/trade (#2284), V4-G-12 fixtures (#2246). Each has an Independent review comment; see `defect-registry.md`.
+
+Not fixed: V4-B-05 (NOT_REPRODUCED; latent dead code), and every certification-found row (V4-INTEG-01, V4-CERT-01..17).
+
+<!-- V4-CERT-END -->
+
 ## Refresh 2026-10-24 (final defect-closure run)
 
 Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.

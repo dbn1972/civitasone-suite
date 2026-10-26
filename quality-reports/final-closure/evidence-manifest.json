@@ -1884,5 +1884,1805 @@
       "dev-superadmin password",
       "UAT demo password"
     ]
+  },
+  "v4_certification": {
+    "generatedUtc": "2026-10-26T04:42:48Z",
+    "decision": "FAIL",
+    "frozenSha": "66b04aedd827b7e4fdcb402731d6d45a678badc8",
+    "dbPath": "disposable postgis/postgis:16-3.4 (amd64 emulated), private docker netns; shared dev PG not used",
+    "bundles": {
+      "2279": "e845c04015b7090e789c96993a09b2bbc82150d9",
+      "2280": "66b04aedd827b7e4fdcb402731d6d45a678badc8",
+      "2281": "400dbc8222dc64aa382b892cf2a5aff2b37e74a0"
+    },
+    "consolidated": {
+      "V4 cycle (discovery V4-*, plus certification-found V4-INTEG/V4-CERT)": {
+        "CRITICAL": {
+          "found": 1,
+          "fixed": 0,
+          "verified": 0,
+          "awaiting": 0,
+          "unresolved": 1,
+          "other": 0
+        },
+        "HIGH": {
+          "found": 18,
+          "fixed": 15,
+          "verified": 15,
+          "awaiting": 0,
+          "unresolved": 3,
+          "other": 0
+        },
+        "MEDIUM": {
+          "found": 34,
+          "fixed": 26,
+          "verified": 26,
+          "awaiting": 0,
+          "unresolved": 8,
+          "other": 0
+        },
+        "LOW": {
+          "found": 19,
+          "fixed": 12,
+          "verified": 12,
+          "awaiting": 0,
+          "unresolved": 7,
+          "other": 0
+        },
+        "TOTAL": {
+          "found": 72,
+          "fixed": 53,
+          "verified": 53,
+          "awaiting": 0,
+          "unresolved": 19,
+          "other": 0
+        }
+      },
+      "V4 discovered defects only (V4-A..G)": {
+        "CRITICAL": {
+          "found": 0,
+          "fixed": 0,
+          "verified": 0,
+          "awaiting": 0,
+          "unresolved": 0,
+          "other": 0
+        },
+        "HIGH": {
+          "found": 16,
+          "fixed": 15,
+          "verified": 15,
+          "awaiting": 0,
+          "unresolved": 1,
+          "other": 0
+        },
+        "MEDIUM": {
+          "found": 26,
+          "fixed": 26,
+          "verified": 26,
+          "awaiting": 0,
+          "unresolved": 0,
+          "other": 0
+        },
+        "LOW": {
+          "found": 12,
+          "fixed": 12,
+          "verified": 12,
+          "awaiting": 0,
+          "unresolved": 0,
+          "other": 0
+        },
+        "TOTAL": {
+          "found": 54,
+          "fixed": 53,
+          "verified": 53,
+          "awaiting": 0,
+          "unresolved": 1,
+          "other": 0
+        }
+      },
+      "All runs (Run 1, Run 2, Run 3, V4, certification-found)": {
+        "CRITICAL": {
+          "found": 1,
+          "fixed": 0,
+          "verified": 0,
+          "awaiting": 0,
+          "unresolved": 1,
+          "other": 0
+        },
+        "HIGH": {
+          "found": 39,
+          "fixed": 35,
+          "verified": 15,
+          "awaiting": 0,
+          "unresolved": 4,
+          "other": 0
+        },
+        "MEDIUM": {
+          "found": 140,
+          "fixed": 125,
+          "verified": 26,
+          "awaiting": 5,
+          "unresolved": 9,
+          "other": 1
+        },
+        "LOW": {
+          "found": 106,
+          "fixed": 94,
+          "verified": 12,
+          "awaiting": 1,
+          "unresolved": 11,
+          "other": 0
+        },
+        "TOTAL": {
+          "found": 286,
+          "fixed": 254,
+          "verified": 53,
+          "awaiting": 6,
+          "unresolved": 25,
+          "other": 1
+        }
+      }
+    },
+    "byRun": {
+      "RUN1": {
+        "rows": 60,
+        "status": {
+          "FIXED_MERGED": 51,
+          "BLOCKED_FOR_APPROVAL": 5,
+          "ACCEPTED_DEFERRAL": 1,
+          "UNRESOLVED": 3
+        }
+      },
+      "RUN2": {
+        "rows": 53,
+        "status": {
+          "FIXED_MERGED": 51,
+          "UNRESOLVED": 1,
+          "BLOCKED_FOR_APPROVAL": 1
+        }
+      },
+      "RUN3": {
+        "rows": 101,
+        "status": {
+          "FIXED_MERGED": 99,
+          "UNRESOLVED": 2
+        }
+      },
+      "V4": {
+        "rows": 58,
+        "status": {
+          "VERIFIED": 53,
+          "NOT_REPRODUCED": 1,
+          "DUPLICATE": 3,
+          "UNRESOLVED": 1
+        }
+      },
+      "V4-CERT": {
+        "rows": 18,
+        "status": {
+          "UNRESOLVED": 18
+        }
+      }
+    },
+    "excludedFromFound": {
+      "V4-B-05": {
+        "status": "NOT_REPRODUCED",
+        "duplicateOf": null
+      },
+      "V4-E-01": {
+        "status": "DUPLICATE",
+        "duplicateOf": "V4-B-02"
+      },
+      "V4-E-04": {
+        "status": "DUPLICATE",
+        "duplicateOf": "V4-A-03"
+      },
+      "V4-G-04": {
+        "status": "DUPLICATE",
+        "duplicateOf": "V4-B-02"
+      }
+    },
+    "openHighCritical": [
+      {
+        "id": "V4-G-12",
+        "severity": "HIGH",
+        "status": "UNRESOLVED",
+        "run": "V4",
+        "title": "Appeal filing window is evaluated against a client-supplied decisionDate (never the application's actual decision time); applicationId/ownership not verified"
+      },
+      {
+        "id": "V4-CERT-10",
+        "severity": "HIGH",
+        "status": "UNRESOLVED",
+        "run": "V4-CERT",
+        "title": "service roles citizen_svc, legal_svc, telephony_svc have BYPASSRLS in the bootstrapped DB (RLS inert)"
+      },
+      {
+        "id": "V4-CERT-15",
+        "severity": "CRITICAL",
+        "status": "UNRESOLVED",
+        "run": "V4-CERT",
+        "title": "open CRITICAL code-scanning alerts on main: 5 (CodeQL 2, Trivy 3)"
+      },
+      {
+        "id": "V4-CERT-16",
+        "severity": "HIGH",
+        "status": "UNRESOLVED",
+        "run": "V4-CERT",
+        "title": "open HIGH code-scanning alerts on main: 245 (CodeQL 68, Trivy 177)"
+      },
+      {
+        "id": "FINAL-GATE-02",
+        "severity": "HIGH",
+        "status": "UNRESOLVED",
+        "run": "RUN1",
+        "title": "Release Gate evidence audit, 11 gates UNMEASURED"
+      }
+    ],
+    "approvalPending": [
+      {
+        "id": "CLOS-S1-17",
+        "severity": "MEDIUM",
+        "run": "RUN1"
+      },
+      {
+        "id": "CLOS-S4-04",
+        "severity": "MEDIUM",
+        "run": "RUN1"
+      },
+      {
+        "id": "CLOS-S5-05",
+        "severity": "MEDIUM",
+        "run": "RUN1"
+      },
+      {
+        "id": "CLOS-S6-02",
+        "severity": "LOW",
+        "run": "RUN1"
+      },
+      {
+        "id": "CLOS-S6-06",
+        "severity": "MEDIUM",
+        "run": "RUN1"
+      },
+      {
+        "id": "CLOS2-S2-09",
+        "severity": "MEDIUM",
+        "run": "RUN2"
+      }
+    ],
+    "scripts": [
+      "quality-reports/final-closure/v4-build-registry.py",
+      "quality-reports/final-closure/consolidate-defects.py",
+      "quality-reports/final-closure/v4-gen-reports.py"
+    ],
+    "registry": "quality-reports/final-closure/v4-registry.json",
+    "registrySha256": "d071cec3da312009d1f9197c8d41d5ee5096695aa8ee2032b9b374061fe9c392",
+    "commands": [
+      {
+        "name": "w0-fetch-worktree",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T00:00:00Z",
+        "endedUtc": "",
+        "log": "",
+        "sha256": "",
+        "command": "git worktree add --detach ~/worktrees/cert-reports 66b04aed; git checkout -B cert-reports-local origin/docs/final-closure-reports (local branch name differs: docs/final-closure-reports is checked out in another worktree)"
+      },
+      {
+        "name": "build-registry",
+        "exitCode": "1",
+        "startedUtc": "2026-10-26T04:37:41Z",
+        "endedUtc": "2026-10-26T04:37:42Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/build-registry.log",
+        "sha256": "827fc46d866f1998c6fa27e23d8cf107f9bf471a31fa6c7a05bb3e2dd375ec77",
+        "command": "python3 quality-reports/final-closure/v4-build-registry.py /home/ec2-user/worktrees/cert-reports quality-reports/final-closure/v4-registry.json"
+      },
+      {
+        "name": "build-registry",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:37:54Z",
+        "endedUtc": "2026-10-26T04:37:55Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/build-registry.log",
+        "sha256": "75c416ac97b2ae9a5b0f8a87127cf796eb8fe623db7780728c28f31dd02b38f7",
+        "command": "python3 v4-build-registry.py $PWD/../.. v4-registry.json"
+      },
+      {
+        "name": "build-registry",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:38:20Z",
+        "endedUtc": "2026-10-26T04:38:20Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/build-registry.log",
+        "sha256": "75c416ac97b2ae9a5b0f8a87127cf796eb8fe623db7780728c28f31dd02b38f7",
+        "command": "python3 quality-reports/final-closure/v4-build-registry.py /home/ec2-user/worktrees/cert-reports quality-reports/final-closure/v4-registry.json"
+      },
+      {
+        "name": "xcheck-regression-logs",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:38:25Z",
+        "endedUtc": "2026-10-26T04:38:25Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/xcheck-regression-logs.log",
+        "sha256": "c3bdea4bcaf1e8c122340e393955f1f5160c4cf3becb8bcdbfb5cdfa42e3649b",
+        "command": "bash -c grep -H -E \"^ *(Test Files|Tests) \" apps_web.log packages_*.log services_*.log delta_*.log run-delta.out 2>/dev/null | grep -i failed"
+      },
+      {
+        "name": "consolidate",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:38:43Z",
+        "endedUtc": "2026-10-26T04:38:43Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/consolidate.log",
+        "sha256": "df0a089a24ece98a87265dcaa91de1b9caeb5fd6812891793b81de4a5464c48b",
+        "command": "python3 quality-reports/final-closure/consolidate-defects.py quality-reports/final-closure/v4-registry.json quality-reports/final-closure/defect-summary.json"
+      },
+      {
+        "name": "ci-runs-frozen-sha",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:39:17Z",
+        "endedUtc": "2026-10-26T04:39:18Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/ci-runs-frozen-sha.log",
+        "sha256": "dd60813a6669f2edb28795d92be8afc373077f81a0aaaeccfbcc1f187d77ecfa",
+        "command": "gh run list --repo dbn1972/civitasone-suite --commit 66b04aedd827b7e4fdcb402731d6d45a678badc8 --json databaseId,workflowName,status,conclusion,createdAt,updatedAt,url --limit 30"
+      },
+      {
+        "name": "build-registry",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:41:27Z",
+        "endedUtc": "2026-10-26T04:41:28Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/build-registry.log",
+        "sha256": "75c416ac97b2ae9a5b0f8a87127cf796eb8fe623db7780728c28f31dd02b38f7",
+        "command": "python3 quality-reports/final-closure/v4-build-registry.py /home/ec2-user/worktrees/cert-reports quality-reports/final-closure/v4-registry.json"
+      },
+      {
+        "name": "consolidate",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:41:28Z",
+        "endedUtc": "2026-10-26T04:41:28Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/consolidate.log",
+        "sha256": "df0a089a24ece98a87265dcaa91de1b9caeb5fd6812891793b81de4a5464c48b",
+        "command": "python3 quality-reports/final-closure/consolidate-defects.py quality-reports/final-closure/v4-registry.json quality-reports/final-closure/defect-summary.json"
+      },
+      {
+        "name": "build-registry",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:41:45Z",
+        "endedUtc": "2026-10-26T04:41:46Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/build-registry.log",
+        "sha256": "fef0c505b0efa3a58e6176a258c0133088fbb6320060e51fd1a3efc8bca387c9",
+        "command": "python3 quality-reports/final-closure/v4-build-registry.py /home/ec2-user/worktrees/cert-reports quality-reports/final-closure/v4-registry.json"
+      },
+      {
+        "name": "consolidate",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:41:46Z",
+        "endedUtc": "2026-10-26T04:41:46Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/consolidate.log",
+        "sha256": "fbad05d80d63e448395160a3fc20dd3b29df35eb7614db90629d99f71e8cd3dd",
+        "command": "python3 quality-reports/final-closure/consolidate-defects.py quality-reports/final-closure/v4-registry.json quality-reports/final-closure/defect-summary.json"
+      },
+      {
+        "name": "gen-reports",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:44:59Z",
+        "endedUtc": "2026-10-26T04:45:00Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/gen-reports.log",
+        "sha256": "4c17f3bdd99c4a139ae9acad369e45f69fb6ce7897591733b8175198a472447d",
+        "command": "python3 v4-gen-reports.py /home/ec2-user/worktrees/cert-reports/quality-reports/final-closure"
+      },
+      {
+        "name": "gen-reports",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:45:28Z",
+        "endedUtc": "2026-10-26T04:45:28Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/gen-reports.log",
+        "sha256": "cbd81aba7a51bd2955606b45f937fe6c6f4ac2ad19473903f3a6a713b48f28d6",
+        "command": "python3 v4-gen-reports.py /home/ec2-user/worktrees/cert-reports/quality-reports/final-closure"
+      },
+      {
+        "name": "secret-scanner-on-reports",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:45:45Z",
+        "endedUtc": "2026-10-26T04:45:47Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/secret-scanner-on-reports.log",
+        "sha256": "55d079cd544dca8770fa40a43194a748846c915f7ea7c6f4a2802be69ad9690c",
+        "command": "node scripts/ci/secret-scanner.mjs"
+      },
+      {
+        "name": "secret-grep-on-reports",
+        "exitCode": "0",
+        "startedUtc": "2026-10-26T04:46:00Z",
+        "endedUtc": "2026-10-26T04:46:00Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/reports/secret-grep-on-reports.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "command": "bash /home/ec2-user/orch-logs/closure/v4/cert/reports/grep-patterns.sh"
+      }
+    ],
+    "gates": [
+      {
+        "lane": "build",
+        "gate": "g1-install",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:21:51Z",
+        "endedUtc": "2026-10-26T02:21:59Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g1-install.log",
+        "sha256": "a60f21e1997a203a22ac2ef3ece3347af2cb12f7b55240286e1b8c0c740cc801"
+      },
+      {
+        "lane": "build",
+        "gate": "g2-turbo-build",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:22:03Z",
+        "endedUtc": "2026-10-26T02:34:37Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g2-turbo-build.log",
+        "sha256": "3211132b057a223255530370a8864b157739cc543ab92c6855458105b44885e5"
+      },
+      {
+        "lane": "build",
+        "gate": "g3-typecheck",
+        "status": "NOT_RELIED_ON (turbo cache replay)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:34:37Z",
+        "endedUtc": "2026-10-26T02:34:40Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g3-typecheck.log",
+        "sha256": "756603ca60fd966176b60672b28755973c043e6f0c86d1a5232092a8565a8f11"
+      },
+      {
+        "lane": "build",
+        "gate": "g3-lint",
+        "status": "NOT_RELIED_ON (turbo cache replay)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:34:40Z",
+        "endedUtc": "2026-10-26T02:34:43Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g3-lint.log",
+        "sha256": "fa7a4623ce4993b290822867bb5201984ca0d4e21b5455963324f486e7069fa9"
+      },
+      {
+        "lane": "build",
+        "gate": "g3-jsx-a11y",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:34:43Z",
+        "endedUtc": "2026-10-26T02:36:02Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g3-jsx-a11y.log",
+        "sha256": "ea19329148215f3ca878f889a94c13fbe7d74967c4e5af151d908cf85f7315dd"
+      },
+      {
+        "lane": "build",
+        "gate": "g3-typecheck-force",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:42:28Z",
+        "endedUtc": "2026-10-26T02:47:15Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g3-typecheck-force.log",
+        "sha256": "a5b25a1debf3ddecf1ae0415f61b890dafbd5d82548f521223f3d753d08d35ba"
+      },
+      {
+        "lane": "build",
+        "gate": "g3-lint-force",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:47:15Z",
+        "endedUtc": "2026-10-26T02:49:45Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g3-lint-force.log",
+        "sha256": "bfffb42d7eb614321aa7980194124a12360ae1c48b46c166a94af5e8e2b7c531"
+      },
+      {
+        "lane": "build",
+        "gate": "a01-db-per-service",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:06Z",
+        "endedUtc": "2026-10-26T03:02:07Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a01-db-per-service.log",
+        "sha256": "b4e8f19868308199d913c092fc961aa74047795898c165bac2ee7c2887aa27ad"
+      },
+      {
+        "lane": "build",
+        "gate": "a02-package-exports",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:07Z",
+        "endedUtc": "2026-10-26T03:02:07Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a02-package-exports.log",
+        "sha256": "202de7758adb0ac5b5094d59df182034cfb358a5bbfde26d444c88117ac3e1f2"
+      },
+      {
+        "lane": "build",
+        "gate": "a03-deployment-declaration",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:07Z",
+        "endedUtc": "2026-10-26T03:02:07Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a03-deployment-declaration.log",
+        "sha256": "dbe2832a0dce6b9a8d56863e7f835e82ed3c9cb1ce629d68c1741992c9d4b771"
+      },
+      {
+        "lane": "build",
+        "gate": "a04-ci-config",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:07Z",
+        "endedUtc": "2026-10-26T03:02:07Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a04-ci-config.log",
+        "sha256": "15cbdf961fcd1cb85e06fd64cfd8fd6c8d22fc80570e19fa50bcb17077c464ae"
+      },
+      {
+        "lane": "build",
+        "gate": "a05-test-ledger-poison",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:07Z",
+        "endedUtc": "2026-10-26T03:02:07Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a05-test-ledger-poison.log",
+        "sha256": "19c525ed2d9336c1abb3170706dedcf28a51431d99be00d90ad45078ad68d410"
+      },
+      {
+        "lane": "build",
+        "gate": "a06-raw-status-leak-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:07Z",
+        "endedUtc": "2026-10-26T03:02:09Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a06-raw-status-leak-tests.log",
+        "sha256": "e20b41dd721bf68ef7df4bfaf15e91cf0e13e1a7f6335881e085c988bdeacf67"
+      },
+      {
+        "lane": "build",
+        "gate": "a07-raw-status-leak",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:09Z",
+        "endedUtc": "2026-10-26T03:02:10Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a07-raw-status-leak.log",
+        "sha256": "0d409a563aff0d59e4a9f7913dc9dcfcf8b1f088a108280027a2a37d4b5de5ae"
+      },
+      {
+        "lane": "build",
+        "gate": "a08-no-cross-service-db-joins",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:10Z",
+        "endedUtc": "2026-10-26T03:02:10Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a08-no-cross-service-db-joins.log",
+        "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"
+      },
+      {
+        "lane": "build",
+        "gate": "a09-no-console-log",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:10Z",
+        "endedUtc": "2026-10-26T03:02:10Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a09-no-console-log.log",
+        "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"
+      },
+      {
+        "lane": "build",
+        "gate": "a10-no-exported-any",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:10Z",
+        "endedUtc": "2026-10-26T03:02:11Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a10-no-exported-any.log",
+        "sha256": "dc51b8c96c2d745df3bd5590d990230a482fd247123599548e0632fdbf97fc22"
+      },
+      {
+        "lane": "build",
+        "gate": "a11-ops-regression-locks",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:11Z",
+        "endedUtc": "2026-10-26T03:02:13Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a11-ops-regression-locks.log",
+        "sha256": "bd63eb4b4027b8fe801c3df9c67b4527adea57881c42ea9a599176fd4659cf7e"
+      },
+      {
+        "lane": "build",
+        "gate": "a12-tenant-router",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:13Z",
+        "endedUtc": "2026-10-26T03:02:13Z",
+        "log": "~/orch-logs/closure/v4/cert/build/a12-tenant-router.log",
+        "sha256": "cd363c506d8fadc3bcb65b503b6b985087c6eee46e8908dd7967ce871e4b2e56"
+      },
+      {
+        "lane": "build",
+        "gate": "b-raw-session-guc-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:13Z",
+        "endedUtc": "2026-10-26T03:02:15Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-raw-session-guc-tests.log",
+        "sha256": "984b7b08acc27ae3c619fad193eebfa822b8891fdcccd60c8a8a28da8ed560df"
+      },
+      {
+        "lane": "build",
+        "gate": "b-raw-session-guc",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:15Z",
+        "endedUtc": "2026-10-26T03:02:17Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-raw-session-guc.log",
+        "sha256": "d7071af74e618315e15b58ece4bf562adc911f5e4de111d24a2deaa6ef3f5218"
+      },
+      {
+        "lane": "build",
+        "gate": "b-fastify-bodylimit-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:17Z",
+        "endedUtc": "2026-10-26T03:02:21Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-fastify-bodylimit-tests.log",
+        "sha256": "588a87dcce83114238e0480e48aed82527bcb19e5ecc222f7b7e11e9b17849f9"
+      },
+      {
+        "lane": "build",
+        "gate": "b-fastify-bodylimit",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:21Z",
+        "endedUtc": "2026-10-26T03:02:22Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-fastify-bodylimit.log",
+        "sha256": "10ff3c12dc230a1824d680dc5780d37cfcc2715019b277968f493f908994aa1d"
+      },
+      {
+        "lane": "build",
+        "gate": "b-empty-vs-error-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:22Z",
+        "endedUtc": "2026-10-26T03:02:24Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-empty-vs-error-tests.log",
+        "sha256": "4286bb456ca469638ed55186c8b44fa2557f2c0b538551da16dfb0c92b808f5b"
+      },
+      {
+        "lane": "build",
+        "gate": "b-empty-vs-error",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:24Z",
+        "endedUtc": "2026-10-26T03:02:26Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-empty-vs-error.log",
+        "sha256": "d510666422bcc88547884e1e1c12163d38e649b493fa524236a0544bbdf3992b"
+      },
+      {
+        "lane": "build",
+        "gate": "b-tenant-table-rls-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:26Z",
+        "endedUtc": "2026-10-26T03:02:28Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-tenant-table-rls-tests.log",
+        "sha256": "cd3c7518d30f887371de80de1b98fe1edc05ae05e6805d90128f7978997741e6"
+      },
+      {
+        "lane": "build",
+        "gate": "b-tenant-table-rls",
+        "status": "FAIL",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T03:02:28Z",
+        "endedUtc": "2026-10-26T03:02:28Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-tenant-table-rls.log",
+        "sha256": "326eb12bafadcc427c51da8ca83c3beb0206d89c40aa4dafc1ff6f85ad54c412"
+      },
+      {
+        "lane": "build",
+        "gate": "b-nested-tx-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:29Z",
+        "endedUtc": "2026-10-26T03:02:31Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-nested-tx-tests.log",
+        "sha256": "51fa7096ea55fdae17ad39266c781e595708734fd6cff166c0056e2ff05d5f29"
+      },
+      {
+        "lane": "build",
+        "gate": "b-nested-tx",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:31Z",
+        "endedUtc": "2026-10-26T03:02:32Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-nested-tx.log",
+        "sha256": "04651ee032f418a4838b34d0e88c09a9fb2b60dedf8c0937eb7f2127d3ec5dce"
+      },
+      {
+        "lane": "build",
+        "gate": "b-evidence-suite-dbs-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:32Z",
+        "endedUtc": "2026-10-26T03:02:34Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-evidence-suite-dbs-tests.log",
+        "sha256": "d85f4b8292e912084b7a90f863304bcfd1dcb983a58bf35ddb443047bc92d54f"
+      },
+      {
+        "lane": "build",
+        "gate": "b-evidence-suite-dbs",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:34Z",
+        "endedUtc": "2026-10-26T03:02:34Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-evidence-suite-dbs.log",
+        "sha256": "954cadaf48b3a20768494868f8869d4194dc7daf5534207310bdedffed9d717e"
+      },
+      {
+        "lane": "build",
+        "gate": "b-flaky-skip-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:34Z",
+        "endedUtc": "2026-10-26T03:02:37Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-flaky-skip-tests.log",
+        "sha256": "9957bda79b7f6c2db29df5d751b70a0d5cd0134e2de4164c918a8d73b89fa257"
+      },
+      {
+        "lane": "build",
+        "gate": "b-flaky-skip",
+        "status": "FAIL",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T03:02:37Z",
+        "endedUtc": "2026-10-26T03:02:38Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-flaky-skip.log",
+        "sha256": "6abecf6ead6a88affb577b810ee0e04eece2e47f6ceb33e93778ad936a059178"
+      },
+      {
+        "lane": "build",
+        "gate": "b-authz-tenant-scanner-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:38Z",
+        "endedUtc": "2026-10-26T03:02:39Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-authz-tenant-scanner-tests.log",
+        "sha256": "f6dab45e798b2871249c4d8c775c84c308f4315a2ea37aa48a3623a6e2628733"
+      },
+      {
+        "lane": "build",
+        "gate": "b-authz-tenant-scanner",
+        "status": "FAIL",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T03:02:40Z",
+        "endedUtc": "2026-10-26T03:02:41Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-authz-tenant-scanner.log",
+        "sha256": "efe40dc420de51aa972cc1a01e88452f215d27766a01371a6c808fd61ac9a39a"
+      },
+      {
+        "lane": "build",
+        "gate": "b-queue-publish-messageid-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:41Z",
+        "endedUtc": "2026-10-26T03:02:43Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-queue-publish-messageid-tests.log",
+        "sha256": "c8e3c1816d9257f2a5a43abccb89d63f94b81fd050e605f0277985152bc677b8"
+      },
+      {
+        "lane": "build",
+        "gate": "b-queue-publish-messageid",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:43Z",
+        "endedUtc": "2026-10-26T03:02:48Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-queue-publish-messageid.log",
+        "sha256": "a17004aa4895a5de3074a7bde2fe3cfa52f98211830ef9fb6d1d904cbe2f35ae"
+      },
+      {
+        "lane": "build",
+        "gate": "b-stat-tile-literal-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:48Z",
+        "endedUtc": "2026-10-26T03:02:51Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-stat-tile-literal-tests.log",
+        "sha256": "edeaee48d90da900f17f4e352c12e65194cc972222b27c4cb81da9cb81c23d51"
+      },
+      {
+        "lane": "build",
+        "gate": "b-stat-tile-literal",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:51Z",
+        "endedUtc": "2026-10-26T03:02:54Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-stat-tile-literal.log",
+        "sha256": "94376dde9e0113477e8d49e56c32ce769d1e915ba800d2f763eb984ba82f4f74"
+      },
+      {
+        "lane": "build",
+        "gate": "b-datatable-render-tests",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:54Z",
+        "endedUtc": "2026-10-26T03:02:56Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-datatable-render-tests.log",
+        "sha256": "e78bfaec639fe3ae1fa4869f6d4e0e024789334a07987c62743d5be7b19444ca"
+      },
+      {
+        "lane": "build",
+        "gate": "b-datatable-render",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:56Z",
+        "endedUtc": "2026-10-26T03:02:57Z",
+        "log": "~/orch-logs/closure/v4/cert/build/b-datatable-render.log",
+        "sha256": "1f0837b0dffe454c79bdd13207328beb6b1a75c92c50e9e753c532f2c0bec27a"
+      },
+      {
+        "lane": "build",
+        "gate": "s01-secret-scanner",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:02:57Z",
+        "endedUtc": "2026-10-26T03:03:01Z",
+        "log": "~/orch-logs/closure/v4/cert/build/s01-secret-scanner.log",
+        "sha256": "3ec9ae4d5634a5e484d1d69f2db999cecc878e53e5b788a36d08d40c7dd7e181"
+      },
+      {
+        "lane": "build",
+        "gate": "s02-ci-secret-scan-grep",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T03:03:01Z",
+        "endedUtc": "2026-10-26T03:03:03Z",
+        "log": "~/orch-logs/closure/v4/cert/build/s02-ci-secret-scan-grep.log",
+        "sha256": "2e22da2ab13713309ac75219e525b8e06ed02f3f1963b8feef203fa25827f93d"
+      },
+      {
+        "lane": "build",
+        "gate": "g4-turbo-test",
+        "status": "FAIL",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T03:16:38Z",
+        "endedUtc": "2026-10-26T04:01:21Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g4-turbo-test.log",
+        "sha256": "80c57b0d6cf9b9676a3565955c5e4385c14d7704a982275902f64460137f9660"
+      },
+      {
+        "lane": "build",
+        "gate": "r-ocr-host",
+        "status": "PASS (diagnostic rerun)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:13:03Z",
+        "endedUtc": "2026-10-26T04:13:41Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-ocr-host.log",
+        "sha256": "5a1b41e1a3c28e15ccb279a70dbac0c4a1ff794da9d75952272762dfeb8e794c"
+      },
+      {
+        "lane": "build",
+        "gate": "g2-web-tsc",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:13:58Z",
+        "endedUtc": "2026-10-26T04:14:09Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g2-web-tsc.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "lane": "build",
+        "gate": "g4-bootstrap-pg2",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:12:43Z",
+        "endedUtc": "2026-10-26T04:20:44Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g4-bootstrap-pg2.log",
+        "sha256": "82bc1790dc6f8862e383b2a1c969491402ff97372dccbd403be1b69ad96155b1"
+      },
+      {
+        "lane": "build",
+        "gate": "r-citizen-service",
+        "status": "FAIL (diagnostic rerun)",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T04:20:50Z",
+        "endedUtc": "2026-10-26T04:22:05Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-citizen-service.log",
+        "sha256": "4210045daadebcb903e81f9d6b6ba92e339eafcd4cd7c1b7b4e7565c456c2b63"
+      },
+      {
+        "lane": "build",
+        "gate": "g2-web-next-build",
+        "status": "PASS",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:14:09Z",
+        "endedUtc": "2026-10-26T04:22:23Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g2-web-next-build.log",
+        "sha256": "c600ad0a180976b00a38c13ffc9dcb40b2830a47c8f347f82cbe43d83db8d981"
+      },
+      {
+        "lane": "build",
+        "gate": "r-audit-service",
+        "status": "PASS (diagnostic rerun)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:22:05Z",
+        "endedUtc": "2026-10-26T04:22:40Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-audit-service.log",
+        "sha256": "e51aa6ce66dca7f0446a12d4050d4955b653a2b177d01c27e67a1acee31f50a4"
+      },
+      {
+        "lane": "build",
+        "gate": "r-grant-service",
+        "status": "FAIL (diagnostic rerun)",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T04:22:40Z",
+        "endedUtc": "2026-10-26T04:23:10Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-grant-service.log",
+        "sha256": "421e5a26889fab745078d50f0079bec02705ca1df5dad8fc810e2369b369aa76"
+      },
+      {
+        "lane": "build",
+        "gate": "r-grant-solo",
+        "status": "PASS (diagnostic rerun)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T04:23:21Z",
+        "endedUtc": "2026-10-26T04:23:26Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-grant-solo.log",
+        "sha256": "e6ef48b4ad111b3bd04758907525701206002be2896bc20f0e52f9ad42ca1d3b"
+      },
+      {
+        "lane": "build",
+        "gate": "r-citizen-solo",
+        "status": "FAIL (diagnostic rerun)",
+        "command": "",
+        "exit": "1",
+        "startedUtc": "2026-10-26T04:23:31Z",
+        "endedUtc": "2026-10-26T04:23:41Z",
+        "log": "~/orch-logs/closure/v4/cert/build/r-citizen-solo.log",
+        "sha256": "a56a05187d28129271e0f51585c7923ae270fe3046f0bbef10d7759959d7fd06"
+      },
+      {
+        "lane": "build",
+        "gate": "g4-bootstrap-pg(run1)",
+        "status": "DISCARDED (first DB)",
+        "command": "",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:24:47Z",
+        "endedUtc": "2026-10-26T02:35:00Z",
+        "log": "~/orch-logs/closure/v4/cert/build/g4-bootstrap-pg(run1).log",
+        "sha256": "5a406fafd7998e4a3d851d34c5a7a8743c43d3d2db352dd37ba90aa91f8cd71b"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "6a tests/contract (5 files)",
+        "status": "FAIL",
+        "command": "pnpm exec vitest run --maxWorkers=2 tests/contract/gateway.contract.test.ts tests/contract/cross-service-events.contract.test.ts tests/contract/screens.contract.test.ts tests/contract/crm-link-integrity.contract.test.ts tests/contract/route-existence.contract.test.ts",
+        "exit": "1",
+        "startedUtc": "2026-10-26T02:21:58Z",
+        "endedUtc": "2026-10-26T02:22:18Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/c1.log",
+        "sha256": "62bbc48637286f477752d85909bb45202605f2039bc8e14a2d722937052d757a"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "6b remaining tests/contract (4 files)",
+        "status": "PASS",
+        "command": "pnpm exec vitest run --maxWorkers=2 tests/contract/command-result.contract.test.ts tests/contract/disciplinary-case-actions-parity.contract.test.ts tests/contract/global-search-routes.contract.test.ts tests/contract/hr-role-matrix.contract.test.ts",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:26:25Z",
+        "endedUtc": "2026-10-26T02:26:32Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/c2b.log",
+        "sha256": "e16349cf78fbfda61eba796d642546a5ab95fcc26516b800aa8ff5436e50bd93"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "7 scripts/contract/score.mjs static-only (informational, NOT a valid gate result)",
+        "status": "NOT_RUN",
+        "command": "node scripts/contract/score.mjs",
+        "exit": "1",
+        "startedUtc": "2026-10-26T02:26:37Z",
+        "endedUtc": "2026-10-26T02:26:37Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/score.log",
+        "sha256": "bb9d0cc44c76910a7e6cdc785883c8d378437aaf49ca0cbeb71dc0ae2e78717f"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "19a tests/cross-service-live full dir",
+        "status": "FAIL",
+        "command": "CI=true PGHOST=127.0.0.1 PGPORT=56432 CACHE_DRIVER=memory pnpm exec vitest run --maxWorkers=2 tests/cross-service-live/",
+        "exit": "1",
+        "startedUtc": "2026-10-26T02:34:49Z",
+        "endedUtc": "2026-10-26T02:35:15Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/xs.log",
+        "sha256": "2b2ebd4140551af213d89ba1c163a16da04e329c7e891e14098230667251d7c3"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "19b payroll-posting-history isolated",
+        "status": "FAIL",
+        "command": "CI=true PGHOST=127.0.0.1 PGPORT=56432 CACHE_DRIVER=memory pnpm exec vitest run --maxWorkers=1 tests/cross-service-live/payroll-posting-history.test.ts",
+        "exit": "1",
+        "startedUtc": "2026-10-26T02:35:22Z",
+        "endedUtc": "2026-10-26T02:35:28Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/xs2.log",
+        "sha256": "447dd5f4818ee2f748390b95b1e72b2fcd30019e4524edce5dad93514293369d"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "19c module-gating-standalone.live",
+        "status": "PASS",
+        "command": "CI=true PGHOST=127.0.0.1 PGPORT=56432 CACHE_DRIVER=memory DATABASE_URL=postgres://admin_svc:admin_dev_pw@127.0.0.1:56432/civitas_admin pnpm exec vitest run --maxWorkers=1 tests/cross-service-live/module-gating-standalone.live.test.ts",
+        "exit": "0",
+        "startedUtc": "2026-10-26T02:35:36Z",
+        "endedUtc": "2026-10-26T02:35:44Z",
+        "log": "~/orch-logs/closure/v4/cert/contract-e2e/xs3.log",
+        "sha256": "1a07f57792fa4534983d27593fe5cedd130efa3413f722920c5d2a7e30089c81"
+      },
+      {
+        "lane": "db",
+        "gate": "db-setup (pnpm install frozen + packages build)",
+        "status": "PASS",
+        "command": "cd ~/worktrees/cert-db && pnpm install --frozen-lockfile --prefer-offline ; cd ~/worktrees/cert-db && pnpm turbo build --filter=\"./packages/*\"",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:22:05Z",
+        "endedUtc": "2026-10-26T02:23:40Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/install.log, /home/ec2-user/orch-logs/closure/v4/cert/db/build-packages.log",
+        "sha256": "install=185609a12186176d78185870bf38496229caaa6039a090418c37c99b3bf5d339, build-packages=3b59a20127c458e89a85c470dd2059620d1a99db06ab0ab7303b0b47e73cec92"
+      },
+      {
+        "lane": "db",
+        "gate": "G16 bootstrap-postgres.sh",
+        "status": "PASS",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && bash scripts/ci/bootstrap-postgres.sh\"",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:23:41Z",
+        "endedUtc": "2026-10-26T02:32:34Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/bootstrap.log",
+        "sha256": "bootstrap=5489cdfd2ca307b1b9a29a0942dcdd7eb129937c0073340ecd339e3601bbed4d"
+      },
+      {
+        "lane": "db",
+        "gate": "G16 tenant-index-guard + schema-drift-guard",
+        "status": "PASS",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && node scripts/ci/tenant-index-guard.mjs\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && POSTGRES_ADMIN_USER=civitas POSTGRES_ADMIN_PASSWORD=civitas_test node scripts/ci/schema-drift-guard.mjs\"",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:32:59Z",
+        "endedUtc": "2026-10-26T02:33:24Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/g-tenant-index.log, /home/ec2-user/orch-logs/closure/v4/cert/db/g-schema-drift.log",
+        "sha256": "g-tenant-index=382a43cc75fdec8050995d7f1ae365e710dfb4ab87c3a1579052a70704c392fd, g-schema-drift=9a16de9c7c33c1421bbfe3a3260b832b73639dfcd8a229c2adc3189bc8ae7529"
+      },
+      {
+        "lane": "db",
+        "gate": "G9/G10 authz-tenant-scanner unit tests",
+        "status": "PASS",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run tests/architecture/authz-tenant-scanner.test.ts\"",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:33:22Z",
+        "endedUtc": "2026-10-26T02:33:24Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/g-authz-scanner-tests.log",
+        "sha256": "g-authz-scanner-tests=3b1a21c56da600b93038042b0a3bcb6994d129c6e1037795e00e617e6568f45b"
+      },
+      {
+        "lane": "db",
+        "gate": "G9/G10 authz-tenant-scanner (SEC-014 ratchet)",
+        "status": "FAIL",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && node scripts/ci/authz-tenant-scanner.mjs\"",
+        "exit": 1,
+        "startedUtc": "2026-10-26T02:33:21Z",
+        "endedUtc": "2026-10-26T02:33:22Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/g-authz-scanner.log",
+        "sha256": "g-authz-scanner=efe40dc420de51aa972cc1a01e88452f215d27766a01371a6c808fd61ac9a39a"
+      },
+      {
+        "lane": "db",
+        "gate": "G11/G12 root integration (outbox/idempotency/concurrent-writes/chains) + eOffice loop-back",
+        "status": "PASS",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run tests/integration/\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && CACHE_DRIVER=memory pnpm exec vitest run --maxWorkers=2 tests/cross-service-live/eoffice-smarttransfer-callbacks.test.ts\"",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:33:24Z",
+        "endedUtc": "2026-10-26T02:33:58Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/root-integration.log, /home/ec2-user/orch-logs/closure/v4/cert/db/root-xsl-eoffice.log",
+        "sha256": "root-integration=45a0e86e43557ffbec68149005c86bde92ec439246b31b901d329f489bf81dcf, root-xsl-eoffice=abe54a4fc0092ea47a01db507738c9fbd754ac4b9443e5cb63b77d1150a5b3c2"
+      },
+      {
+        "lane": "db",
+        "gate": "G11 tenant-isolation / IDOR / RLS-GUC (tests/security)",
+        "status": "FAIL",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run --maxWorkers=2 tests/security/\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run --maxWorkers=2 tests/security/\"",
+        "exit": 1,
+        "startedUtc": "2026-10-26T02:33:25Z",
+        "endedUtc": "2026-10-26T03:16:37Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/root-security.log, /home/ec2-user/orch-logs/closure/v4/cert/db/rerun-root-security.log",
+        "sha256": "root-security=97774cbc8a89bda8f80c1ae038adaf618091cb59710d1ef9f9be4bbfd3d4ef39, rerun-root-security=d6b585bcc3b2c7c3d5d595ed27585794518a6470f54686283afb63bab85eaebf"
+      },
+      {
+        "lane": "db",
+        "gate": "G13 DB-integrity (tests/data-integrity: RLS no-GUC, PII at rest, money types)",
+        "status": "FAIL",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run --maxWorkers=2 tests/data-integrity/\"",
+        "exit": 1,
+        "startedUtc": "2026-10-26T02:33:35Z",
+        "endedUtc": "2026-10-26T02:33:46Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/root-data-integrity.log",
+        "sha256": "root-data-integrity=70cf79c485f7bb7d68b3bc5d0794e59bab166aa1cbfec38fe0f4e32002373f00"
+      },
+      {
+        "lane": "db",
+        "gate": "G12 cross-service flows (tests/cross-service, informational: not in ci.yml test job)",
+        "status": "FAIL",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && pnpm exec vitest run --maxWorkers=2 tests/cross-service/\"",
+        "exit": 1,
+        "startedUtc": "2026-10-26T02:33:46Z",
+        "endedUtc": "2026-10-26T02:33:53Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/root-cross-service.log",
+        "sha256": "root-cross-service=34bededf74e82a331c373379c2690afbee4f76096d89742882710cb247f61840"
+      },
+      {
+        "lane": "db",
+        "gate": "G5/G9 service suites with DB: 67 services, vitest run --maxWorkers=2, 2 at a time",
+        "status": "FAIL",
+        "command": "/home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/advertisement-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/ai-agent-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/analytics-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/animal-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/admin-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/audit-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/asset-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/building-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/catalogue-service && pnpm exec vitest run --maxWorkers=2\" ; /home/ec2-user/orch-logs/closure/v4/cert/db/nsrun.sh \"cd ~/worktrees/cert-db && cd services/billing-service && pnpm exec vitest run --maxWorkers=",
+        "exit": 1,
+        "startedUtc": "2026-10-26T02:33:55Z",
+        "endedUtc": "2026-10-26T03:14:35Z",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/db/<name>.log (see summary.json)",
+        "sha256": "svc-advertisement-service=5dbc9c20e709e01dd14ecd4a481ed5a8f299081ef30c98d8beb5ab7cc29d235f, svc-ai-agent-service=b2a9698dbf35b6a1b88eec12185d8159d0a3a8778cd0e147c7d05c015d0ef4d7, svc-analytics-service=82e30bf441e921b71d8fb6c00fe06785fc3ff2384e9ecf279c0a68647f852ff4, svc-animal-service=d2058f4216ad6a9199b6aa7712a1066a68f8f28998f00732b2aead2d050764ce, svc-admin-service=3a4d98e7e716268b7379652ddc5f5313dfc2babeed81b8956822eb81cc9b191f, svc-audit-service=7a8d5efc894fcb7473411273742c1c05e6ca490764d773c6dd08eb526cf11307, svc-asset-service=0486d18af5e1173a14d865a4faa157638e6c049800f209c1275d8bf3f9477648, svc-building-service=77a9ac01678d2c23496cc6ea4262f4e15a80d871f69b6ab7c82c756f4a6041ba, svc-catalogue-service=4da0b5a930759682efcd2b6c83bbaf8914feabb681f370a4f6ba55fade8d4df6, svc-billing-service=ec1798b8805dd9476615095032cdff801800ef4615c985bb02eb02d2ef48f8eb, svc-cdp-service=86df91c04918330aafedc583670f5da284514ebe9749f0860488e2d95fb050a3, svc-contract-service=4109abcae0b33fc85af0852a3222c47b5bb31cfc20e85d4026b532df27160084, svc-citizen-service=881ec08062f59f6614b90d771a3bd4bcf278ef8d78afe93f6ca906a9dc759b31, svc-court-service=a1c4b33676fc0fbb53bdd3b8e4ddae63aa99cd8d9ba61c7501fbf048ef805433, svc-crematorium-service=b1d6a777a13757d63e292fca7e1fb5a79a0bd32b46e722e8d04fb2a8025aa70c, svc-document-service=bb72dcc25c6faaf89752a3128a7305054cc606f26e786bb519f5d591ea2a27e9, svc-drainage-service=beaed8017de371ddc2dedf33e92d68e18e3b95b3a76ab6845b60eb8845bebc50, svc-estab-service=aa999c86d8351efcb15d51f51adce7843a577e69466bfc8279a50b9f2dbf83dd, svc-event-service=96ea54d12a380241593af01cd92a7b08a6d0bae395355bb93df081e806feb537, svc-field-service=3975fb29191f8fc6a53b49ebf9e3a5ed1f3836ac7f388d485da779d7efd50b7e, svc-crm-service=bc7060a685d850700884d7aeab7abd69b535340911e5f71676a6b6074d7fb942, svc-fire-service=f63d780c3a286e60d841b7601413f40616aadd35b2d5ba8d6ab0dee12a5fb108, svc-gateway-service=100d6d9a1faa944759b0343dd37d5eec82d9930800f1598025a39d81fa232b6e, svc-grant-service=8cd4c16793e007c44c5834cbe73e7b3fd1df6b469abec5a145a25c6f8dff4f75, svc-helpdesk-service=94c2f5a0b4cf3e68366dce1873feb8628b9f7e09e1bab52fc162fe1a57e73d56, svc-finance-service=e2f9e0e53bdfbff70c7378d63a2b9b6fe830d370830fd5892cecd644c875c1e3, svc-identity-service=c90c31248b28559475b930b6fa2e24ae14330005208bc4f7c335293e9f4f7858, svc-inspection-service=0936832d29bd42143a549abdcb14d5a4161fa0c33b9ee976e96bc2f5ccde7c62, svc-install-service=c3275989d893780c02f1a8356036bf9504691beee8cd64ed3f97ff30a95a1101, svc-inventory-service=e9dffd44ae9abf490995c1f4836f92bb681e963d2d0c7ec7258925a32a51c61e, svc-journey-service=c84b5760248778aa2e78b93cc05347da29ce9d9aef7bfdd68d89c5420d777795, svc-knowledge-service=630fd8c050e1d3e7ae6d9e7221938636588f7475198b2370741f7ba68d0d280f, svc-legal-service=755d27409f37d6f8315ec2a7e74359bc7c9f50f67dc701c97bc7a582ae6822f6, svc-location-service=96bc1032c46763a6552897a6422cee526e04262d52fe3b2c52a7af37d920accf, svc-loyalty-service=f71df304553956962639f65242cf0557bd7fdeb1f816416845fbc9687"
+      },
+      {
+        "lane": "db",
+        "gate": "G16 workflow/maker-checker, outbox/idempotency, concurrency (within service suites)",
+        "status": "FAIL",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "",
+        "sha256": ""
+      },
+      {
+        "lane": "db",
+        "gate": "Web tsc / next build / LocalStack cross-process / Keycloak e2e",
+        "status": "NOT_RUN",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "",
+        "sha256": ""
+      },
+      {
+        "lane": "security-perf",
+        "gate": "14_dependency_scan",
+        "status": "PASS_WITH_KNOWN",
+        "command": "node scripts/ci/cve-audit-gate.mjs",
+        "exit": 0,
+        "startedUtc": "2026-10-26T02:21:48Z",
+        "endedUtc": "2026-10-26T02:24:57Z",
+        "log": "cve-gate.log",
+        "sha256": "SHA256SUMS in ~/orch-logs/closure/v4/cert/security-perf/"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "15_trivy",
+        "status": "NOT_RUN",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "see lane note",
+        "sha256": "SHA256SUMS in ~/orch-logs/closure/v4/cert/security-perf/"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "codeql_alerts",
+        "status": "FAIL",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "see lane note",
+        "sha256": "SHA256SUMS in ~/orch-logs/closure/v4/cert/security-perf/"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "17_performance_load",
+        "status": "NOT_RUN",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "see lane note",
+        "sha256": "SHA256SUMS in ~/orch-logs/closure/v4/cert/security-perf/"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "18_resilience",
+        "status": "PASS_WITH_KNOWN",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "see lane note",
+        "sha256": "SHA256SUMS in ~/orch-logs/closure/v4/cert/security-perf/"
+      },
+      {
+        "lane": "regression",
+        "gate": "20a-v4-pr-regression-tests",
+        "status": "FAIL",
+        "command": "per package: run-suite.sh -> pnpm exec vitest run (79 test files from 47 V4 PRs, DATABASE_URL -> disposable postgis:16-3.4 on 127.0.0.1:55912, bootstrap via scripts/ci/bootstrap-postgres.sh EXIT=0)",
+        "exit": 1,
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/regression",
+        "sha256": "per-log hashes in ~/orch-logs/closure/v4/cert/regression/log-hashes.json"
+      },
+      {
+        "lane": "regression",
+        "gate": "20b-run3-and-delta-regression-tests",
+        "status": "FAIL",
+        "command": "run-suite.sh over jobs-delta.txt (244 test files added/modified between 1eaeecae7 and the SHA, 55 packages, MW=1 --no-file-parallelism) covering closure run-3 bundles #2227/#2279 and V4 bundles #2280/#2281",
+        "exit": 1,
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/regression/run-delta.out",
+        "sha256": "per-log hashes in ~/orch-logs/closure/v4/cert/regression/log-hashes.json"
+      },
+      {
+        "lane": "regression",
+        "gate": "20c-revert-proves-test-fails",
+        "status": "PASS",
+        "command": "git apply -R <PR source diff excluding test files> in separate worktree, run PR tests, git checkout -- . (10 HIGH fixes)",
+        "exit": 0,
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/regression/revert-summary.txt",
+        "sha256": "per-log hashes in ~/orch-logs/closure/v4/cert/regression/log-hashes.json"
+      },
+      {
+        "lane": "regression",
+        "gate": "20d-delta-static-integration-review",
+        "status": "PASS_WITH_KNOWN",
+        "command": "git diff 1eaeecae7 SHA; migration prefix scan of 28 new migration files; git grep conflict markers; pnpm exec tsc --noEmit in 55 changed services/packages",
+        "exit": 0,
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "/home/ec2-user/orch-logs/closure/v4/cert/regression/tsc-summary.txt",
+        "sha256": "per-log hashes in ~/orch-logs/closure/v4/cert/regression/log-hashes.json"
+      },
+      {
+        "lane": "regression",
+        "gate": "20e-web-tsc-next-build",
+        "status": "NOT_RUN",
+        "command": "",
+        "exit": "",
+        "startedUtc": "",
+        "endedUtc": "",
+        "log": "",
+        "sha256": "per-log hashes in ~/orch-logs/closure/v4/cert/regression/log-hashes.json"
+      }
+    ],
+    "notRun": [
+      {
+        "lane": "build",
+        "gate": "4b Gateway SEC-021 real-subprocess test (GATEWAY_SPAWN_TESTS=1)",
+        "status": "NOT_RUN",
+        "reason": "omitted for time after the main test failures; containers torn down"
+      },
+      {
+        "lane": "build",
+        "gate": "14 gitleaks (local)",
+        "status": "NOT_RUN",
+        "reason": "gitleaks not installed on cloudsphere-ec2 (GitHub CI ran it: FAIL, see CI table)"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "6c render-smoke contract (apps/web jsdom)",
+        "status": "NOT_RUN",
+        "reason": "not executed in the lane (GitHub CI Contract Tests job executed it)"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "7 scripts/contract/score.mjs 10/10 on a live stack",
+        "status": "NOT_RUN",
+        "reason": "needs live gateway stack on fixed shared ports"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "8 Playwright E2E; 19d journey e2e (tests/e2e-live, tests/e2e-personas, apps/web/e2e)",
+        "status": "NOT_RUN",
+        "reason": "needs full live stack; prefer-CI rule"
+      },
+      {
+        "lane": "contract-e2e",
+        "gate": "mobile integration tests (apps/mobile Flutter)",
+        "status": "NOT_RUN",
+        "reason": "flutter/dart not installed on EC2"
+      },
+      {
+        "lane": "db",
+        "gate": "Web tsc / next build / LocalStack cross-process / Keycloak e2e",
+        "status": "NOT_RUN",
+        "reason": "out of scope for the db lane; LocalStack absent (tests/integration/cross-process.localstack.test.ts skipped)"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "15 Trivy (local)",
+        "status": "NOT_RUN",
+        "reason": "no local Trivy for the SHA (GitHub Security Scan Trivy jobs ran: see CI table)"
+      },
+      {
+        "lane": "security-perf",
+        "gate": "17 Performance/load (k6 scripts/perf, tests/load; service N+1 suites)",
+        "status": "NOT_RUN",
+        "reason": "needs a booted stack on shared dev Postgres/Redis, forbidden by the lane rules; only packages/db perf 3/3 and packages/cache perf-007 6/6 ran"
+      },
+      {
+        "lane": "regression",
+        "gate": "20e web tsc / next build",
+        "status": "NOT_RUN",
+        "reason": "outside the regression lane (build lane ran them: PASS)"
+      }
+    ],
+    "githubCi": {
+      "40258410829": {
+        "conclusion": "failure",
+        "snapshotUtc": "2026-10-26T04:42:48Z",
+        "jobs": {
+          "Secret Scan": "failure",
+          "CodeQL SAST (javascript-typescript)": "success",
+          "Trivy Container Scan (hrms-service)": "success",
+          "Trivy Container Scan (gateway-service)": "success",
+          "Dependency Audit (hygiene)": "success",
+          "Trivy Container Scan (finance-service)": "success",
+          "CVE / SCA Gate": "success",
+          "ZAP DAST (gateway baseline)": "success"
+        }
+      },
+      "40258410831": {
+        "conclusion": "failure",
+        "snapshotUtc": "2026-10-26T04:42:48Z",
+        "jobs": {
+          "Tests": "failure",
+          "Secret Scan": "success",
+          "Mobile (Flutter)": "success",
+          "Web Build": "success",
+          "Architecture Guard": "failure",
+          "Typecheck & Lint": "success",
+          "E2E (Playwright)": "success",
+          "Procurement E2E Gate": "success",
+          "Accessibility (WCAG 2.2 AA, axe-core)": "success",
+          "Quality Gates \u2014 Domain (L10) & Canary (L11)": "success",
+          "Screen Verification Gate": "success",
+          "Contract Tests": "failure",
+          "Mutation Testing (Stryker)": "success",
+          "Live Stack Verification": "success",
+          "QA Readiness": "success",
+          "Derive Docker Build Matrix": "success",
+          "Build & Push Docker Images (analytics-service, dist/index.js, 3031)": "success",
+          "Build & Push Docker Images (animal-service, dist/index.js, 3082)": "success",
+          "Build & Push Docker Images (admin-service, dist/index.js, 3022)": "success",
+          "Build & Push Docker Images (asset-service, dist/index.js, 3015)": "success",
+          "Build & Push Docker Images (catalogue-service, dist/index.js, 3044)": "success",
+          "Build & Push Docker Images (cdp-service, dist/index.js, 3047)": "success",
+          "Build & Push Docker Images (court-service, dist/index.js, 3034)": "success",
+          "Build & Push Docker Images (citizen-service, dist/index.js, 3020)": "success",
+          "Build & Push Docker Images (document-service, dist/index.js, 3049)": "success",
+          "Build & Push Docker Images (crematorium-service, dist/index.js, 3083)": "success",
+          "Build & Push Docker Images (event-service, dist/index.js, 3076)": "success",
+          "Build & Push Docker Images (building-service, dist/index.js, 3071)": "success",
+          "Build & Push Docker Images (finance-service, dist/index.js, 3007)": "success",
+          "Build & Push Docker Images (install-service, dist/index.js, 3005)": "success",
+          "Build & Push Docker Images (contract-service, dist/index.js, 3009)": "success",
+          "Build & Push Docker Images (grant-service, dist/index.js, 3019)": "success",
+          "Build & Push Docker Images (advertisement-service, dist/index.js, 3073)": "success",
+          "Build & Push Docker Images (fire-service, dist/index.js, 3072)": "success",
+          "Build & Push Docker Images (hrms-service, dist/index.js, 3012)": "success",
+          "Build & Push Docker Images (audit-service, dist/index.js, 3004)": "success",
+          "Build & Push Docker Images (drainage-service, dist/index.js, 3080)": "success",
+          "Build & Push Docker Images (billing-service, dist/index.js, 3023)": "success",
+          "Build & Push Docker Images (field-service, dist/index.js, 3046)": "success",
+          "Build & Push Docker Images (gateway-service, dist/index.js, 8080)": "success",
+          "Build & Push Docker Images (ai-agent-service, dist/index.js, 3041)": "success",
+          "Build & Push Docker Images (inventory-service, dist/index.js, 3025)": "success",
+          "Build & Push Docker Images (crm-service, dist/index.js, 3024)": "success",
+          "Build & Push Docker Images (helpdesk-service, dist/index.js, 3027)": "success",
+          "Build & Push Docker Images (identity-service, dist/index.js, 3001)": "success",
+          "Build & Push Docker Images (estab-service, dist/index.js, 3010)": "success",
+          "Build & Push Docker Images (revenue-service, dist/index.js, 3038)": "success",
+          "Build & Push Docker Images (procurement-service, dist/index.js, 3008)": "success",
+          "Build & Push Docker Images (stock-service, dist/index.js, 3011)": "success",
+          "Build & Push Docker Images (theme-service, dist/index.js, 3018)": "success",
+          "Build & Push Docker Images (project-service, dist/index.js, 3014)": "success",
+          "Build & Push Docker Images (notification-service, dist/index.js, 3006)": "success",
+          "Build & Push Docker Images (loyalty-service, dist/index.js, 3048)": "success",
+          "Build & Push Docker Images (vendor-service, dist/index.js, 3074)": "success",
+          "Build & Push Docker Images (tenant-service, dist/index.js, 3002)": "success",
+          "Build & Push Docker Images (inspection-service, dist/index.js, 3037)": "success",
+          "Build & Push Docker Images (refund-service, dist/index.js, 3077)": "success",
+          "Build & Push Docker Images (report-service, dist/index.js, 3016)": "success",
+          "Build & Push Docker Images (plugin-service, dist/index.js, 3017)": "success",
+          "Build & Push Docker Images (smarttransfer-service, dist/index.js, 3086)": "success",
+          "Build & Push Docker Images (swm-service, dist/index.js, 3079)": "success",
+          "Build & Push Docker Images (journey-service, dist/index.js, 3045)": "success",
+          "Build & Push Docker Images (telephony-service, dist/index.js, 3026)": "success",
+          "Build & Push Docker Images (payroll-service, dist/index.js, 3013)": "success",
+          "Build & Push Docker Images (legal-service, dist/index.js, 3021)": "success",
+          "Build & Push Docker Images (location-service, dist/index.js, 4012)": "success",
+          "Build & Push Docker Images (market-service, dist/index.js, 3085)": "success",
+          "Build & Push Docker Images (parks-service, dist/index.js, 3081)": "success",
+          "Build & Push Docker Images (metadata-service, dist/index.js, 3039)": "success",
+          "Build & Push Docker Images (parking-service, dist/index.js, 3084)": "success",
+          "Build & Push Docker Images (roadcut-service, dist/index.js, 3075)": "success",
+          "Build & Push Docker Images (ml-service, dist/index.js, 3032)": "success",
+          "Build & Push Docker Images (recommendation-service, dist/index.js, 3040)": "success",
+          "Build & Push Docker Images (policy-service, dist/index.js, 3003)": "success",
+          "Build & Push Docker Images (trade-service, dist/index.js, 3070)": "success",
+          "Build & Push Docker Images (knowledge-service, dist/index.js, 3028)": "success",
+          "Build & Push Docker Images (sewerage-service, dist/index.js, 3078)": "success",
+          "Build & Push Docker Images (meeting-service, dist/index.js, 3033)": "success",
+          "Build & Push Docker Images (queue-service, dist/server.js, 3030)": "success",
+          "Build & Push Docker Images (shop-service, dist/index.js, 3060)": "success",
+          "Build & Push Docker Images (works-service, dist/index.js, 3036)": "success",
+          "Build & Push Docker Images (visitor-service, dist/index.js, 3035)": "success",
+          "Build & Push Docker Images (workflow-service, dist/index.js, 3029)": "success",
+          "Release Gate (evidence audit)": "failure",
+          "Quality Gates \u2014 Schema Integrity (L3)": "skipped",
+          "Coverage Gate": "skipped",
+          "Integration Tests": "skipped"
+        }
+      }
+    },
+    "sourceFileHashes": {
+      "~/orch-logs/closure/deferred-approval.md": "cc77f67dec01359a1bac86536c91be0c529b456a45bed539128616117e15016a",
+      "~/orch-logs/closure/owner-questions-decided.md": "04b5b4e5780821908ef77df0b2a3ea5924d98bd5def5a203c318f17860d925f4",
+      "~/orch-logs/closure/v4/FROZEN_SHA": "5406cb7993e19696d6296b90a8f6cc221d2e0fcd6440b62cdee70dc97b224042",
+      "~/orch-logs/closure/v4/cert/build.json": "f1a487c380d334d220501805e50933f12f4bc5a5d165e90728d27de00dee0266",
+      "~/orch-logs/closure/v4/cert/contract-e2e.json": "b3ac2e581d7f2c90c84280ee5e2819817025abcf9dfef7d1a60c67e5f570d62a",
+      "~/orch-logs/closure/v4/cert/db.json": "d560fc8c1d0ab09771fdf98e9cf17bc5a4d98e86d06523967a0336289a1d3945",
+      "~/orch-logs/closure/v4/cert/regression.json": "196b045631eb8f8f7f78ded2737bbfba21aa7e6e13b4f243c9cca58b69fb57aa",
+      "~/orch-logs/closure/v4/cert/security-perf.json": "ab2a7d58a828df996fd91fee97bd4f33d06352738440f7fa81f1e71eeb51d4ec",
+      "~/orch-logs/closure/v4/cycle2-result.json": "1a82000bdc897f9cd12dce474466853c69cf0ffd8b1ea8ba9c260bf79c868da5",
+      "~/orch-logs/closure/v4/discovery-result.json": "a4f787b093fa0d8c300b2654bd43cde45c2d8d508b38732f96651bab4009042a",
+      "~/orch-logs/closure/v4/lane-A.json": "223016575fcc9807d30c2d4ab4bec667181c64d36dc219de2d171cfa5cd66281",
+      "~/orch-logs/closure/v4/lane-B.json": "262b43798ae23fbe9f9470b722e3f9d77ff3ecafb053bad5d3c8564483250798",
+      "~/orch-logs/closure/v4/lane-C.json": "26053d48bab4770b822c5b097268a85ce0654228ebcfed852e771395f77d33e8",
+      "~/orch-logs/closure/v4/lane-D.json": "50631d40848970fdb536f6d53d6669c1dc04e5efca9e482fed80eab02f09832d",
+      "~/orch-logs/closure/v4/lane-E.json": "23a378c10507f08c76bb0fbae8c9e8ae1aa81e20d2a33eea9d0fae311c9c8464",
+      "~/orch-logs/closure/v4/lane-F.json": "f1c0ffbe80f2f5c102355353db90ee208baea23c07a1b0499963b6b431e09c84",
+      "~/orch-logs/closure/v4/lane-G.json": "6326bbd7d015009b67bcc26683fb61c9fc089150959fd86f89584f7e75cdc5f0",
+      "~/orch-logs/closure/v4/remediation-result.json": "b07b3761230232a73940f812f801013f92ce2e566e01d840600069ccbb3d4957",
+      "~/orch-logs/closure/v4/verify-A.json": "8c32cac701952a63b3777236fa3788f7729a80a7e53614a6a7304342f6855d26",
+      "~/orch-logs/closure/v4/verify-B.json": "5eb5cced29c878be6f5f73a19156e42b63c7d338be44d7a0ac890c8f625cb357",
+      "~/orch-logs/closure/v4/verify-C.json": "0941f17ecbdf8c56a1f473f980a79a6dd2087f103b63405ad5c79236d1a14675",
+      "~/orch-logs/closure/v4/verify-D.json": "33765888226ef115a92e2ea5a3b868bc56e19b676fa05fea98be0b2e99ad3804",
+      "~/orch-logs/closure/v4/verify-E.json": "bd3cc49f8e21d25c9fc84af0268bec02de9205ed8f40bb085bfe2ccfe77a2072",
+      "~/orch-logs/closure/v4/verify-F.json": "263f5b85152d5182ec923a8f041caf6d2b2d9e0adef9635081e152d2c8698e93",
+      "~/orch-logs/closure/v4/verify-G.json": "41cf1e230a28df18748a0d0fb144076c8e29b0c960bb13c3997f2d04174aa6e8"
+    },
+    "pullRequests": {
+      "2235": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): web-proxy \u2014 BFF path guard, upstream failure envelope, careers tenant binding"
+      },
+      "2236": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): web-money \u2014 safe paise conversion + usage-limit thresholds"
+      },
+      "2237": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): citizen-issuance-appeal \u2014 fail closed on unset certificate seal key"
+      },
+      "2238": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-E-02 citizen requests list leaks all citizens"
+      },
+      "2239": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): notification \u2014 push subscription revoke ownership (V4-B-04)"
+      },
+      "2240": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-B-02 citizen documents object-level ownership (resubmit/upload/checklist)"
+      },
+      "2241": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-03 legacy DigiLocker fetch must not self-verify"
+      },
+      "2242": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-02 payment intent fee derived from server-side application"
+      },
+      "2243": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-G-10 appeal overturned/remanded outcome re-opens the application"
+      },
+      "2244": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-06 citizen notifications addressed to UUID, resolve email/mobile"
+      },
+      "2245": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-G-11 gate certificate issuance on approved/paid application"
+      },
+      "2246": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-12 derive appeal filing window from the application and verify ownership"
+      },
+      "2247": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): web-mw \u2014 middleware public allow-list boundary + /logout,/offline public"
+      },
+      "2248": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-G-07 retry sweeper drops variables/category, persist payload"
+      },
+      "2249": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-08 unpostable citizen fee receipt is visible and replayable"
+      },
+      "2250": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): knowledge-queue \u2014 harden ai/prompt (V4-B-09)"
+      },
+      "2251": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-B-10 verify queue-service ops auth"
+      },
+      "2252": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-A-01 service worker caches authenticated data, never purged on logout"
+      },
+      "2253": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): helpdesk \u2014 CES requester check"
+      },
+      "2254": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-G-09 approved refund reaches GL; partial refunds keep balance"
+      },
+      "2255": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): finance-statements \u2014 cash-flow months in FY order"
+      },
+      "2256": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-B-08 receipts-payments closing balance omits opening balance"
+      },
+      "2257": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): db-pkg \u2014 silo-client eviction grace + DB statement/idle-tx timeouts"
+      },
+      "2258": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-D-02 reverse eOffice-rejected payment (bill, GL, cash book, appropriation)"
+      },
+      "2259": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): court-works \u2014 addParty case tenant check, contractor consumer rethrow"
+      },
+      "2260": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-D-01 emit finance.payment.made only after the bank file is sent"
+      },
+      "2261": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-D-03 reject duplicate grant disbursement for an installment"
+      },
+      "2262": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-D-04 release budget and re-open installment on failed grant disbursement"
+      },
+      "2263": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-D-05 state-guard inbound grant disbursement result events"
+      },
+      "2264": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-C-01 market property_code unique per tenant"
+      },
+      "2265": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-C-04 market reference numbers from DB sequences (market slice)"
+      },
+      "2266": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-A-02 CSP connect-src blocks presigned storage uploads"
+      },
+      "2267": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-C-05 refund request number from DB sequence"
+      },
+      "2268": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-B-03 billing payment-gateway webhooks unreachable"
+      },
+      "2269": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): hrms - ID-card QR secret fails closed"
+      },
+      "2270": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-D-06 contract expiry detector handles escalated contracts"
+      },
+      "2271": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-B-01 comp-off HR-granted and owner-scoped"
+      },
+      "2272": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-C-03 streetlight pole_id unique per tenant"
+      },
+      "2273": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-B-06 advertisement and building permit public verification 401"
+      },
+      "2274": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-E-03 auth dev fallbacks use NODE_ENV allow-list (auth boundary)"
+      },
+      "2275": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-05 audit hash chain re-verifiable"
+      },
+      "2276": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-E-05 presigned upload enforces content-type and size (contract boundary)"
+      },
+      "2277": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): visitor-ml \u2014 reuse a single S3Client"
+      },
+      "2278": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): reliability \u2014 message-expiry CAS, recording size cap, 5xx body cancel"
+      },
+      "2279": {
+        "state": "MERGED",
+        "mergeCommit": "e845c04015b7090e789c96993a09b2bbc82150d9",
+        "title": "release: wave-2 bundle \u2014 closure run 3 owner-approved fixes (29 findings)"
+      },
+      "2280": {
+        "state": "MERGED",
+        "mergeCommit": "66b04aedd827b7e4fdcb402731d6d45a678badc8",
+        "title": "release: V4 bundle A \u2014 36 reviewed V4 defect fixes (LOW/MEDIUM auto + owner-approved HIGH/BLOCKED)"
+      },
+      "2281": {
+        "state": "MERGED",
+        "mergeCommit": "400dbc8222dc64aa382b892cf2a5aff2b37e74a0",
+        "title": "release: V4 bundle B \u2014 shared packages (db pool/router, auth env allow-list, storage upload limits)"
+      },
+      "2282": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4): visitor-ml \u2014 register @fastify/multipart for document scan (V4-F-02)"
+      },
+      "2283": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][HIGH]: V4-G-01 public certificate QR verification"
+      },
+      "2284": {
+        "state": "CLOSED",
+        "mergeCommit": null,
+        "title": "fix(v4)[APPROVAL REQUIRED][BLOCKED]: V4-C-04 per-tenant reference sequences (building, event, parking, trade)"
+      }
+    },
+    "ownerDecisions": [
+      {
+        "date": "2026-10-25",
+        "id": "credentials",
+        "verbatim": "continue with the current credentials ,no change",
+        "status": "ACCEPTED_RISK"
+      },
+      {
+        "date": "2026-10-25",
+        "id": "high-blocked-integration",
+        "verbatim": "close all by tomorrow morning",
+        "status": "APPROVED_FOR_INTEGRATION_AFTER_REVIEW"
+      },
+      {
+        "date": "2026-10-25",
+        "id": "fastify-drizzle-find-my-way-majors",
+        "verbatim": null,
+        "note": "relayed by orchestrator task; deferred until after outstanding tasks; exceptions expire 2026-11-08",
+        "status": "DEFERRED"
+      },
+      {
+        "date": "2026-10-25",
+        "id": "zod-3x",
+        "verbatim": null,
+        "note": "relayed by orchestrator task; exception expires 2026-11-23",
+        "status": "ACCEPTED_DEFERRAL"
+      },
+      {
+        "date": "2026-10-25",
+        "id": "coverage-and-visual",
+        "verbatim": null,
+        "note": "relayed by orchestrator task: 27 coverage services + visual snapshots accepted deferrals",
+        "status": "ACCEPTED_DEFERRAL"
+      }
+    ]
   }
 }

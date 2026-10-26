@@ -1,5 +1,63 @@
 # Deferred approval items
 
+<!-- V4-CERT-BEGIN -->
+## V4 certification refresh 2026-10-26 (frozen SHA `66b04aedd827b7e4fdcb402731d6d45a678badc8`)
+
+Scope: MASTER PROMPT V4.0 certification of the integrated main commit `66b04aedd827b7e4fdcb402731d6d45a678badc8` (66b04aedd, the squash of bundle #2280; bundles #2279 `e845c0401` and #2281 `400dbc822` are ancestors). Discovery baseline was `1eaeecae7`. This section was written by the Release Certification Auditor on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` into it (no history rewrite). The certification lanes were read-only on code. Anything not executed is marked NOT_RUN; no gate is claimed that was not run or read from a recorded result.
+
+**Release decision (V4): FAIL.** Detail in `release-readiness.md`. Earlier sections of this file are kept below unchanged as history.
+
+### V4 deferred and approval items
+
+#### Owner decisions recorded for this cycle
+
+| Date | Decision | Wording | Status |
+|---|---|---|---|
+| 2026-10-25 | Credential rotation (Keycloak admin-cli client secret, dev-superadmin password, UAT demo password, all previously present in git history) | Owner, verbatim in chat: "continue with the current credentials ,no change" (source `~/orch-logs/closure/deferred-approval.md`) | ACCEPTED_RISK, not rotated, not a release blocker by owner decision |
+| 2026-10-25 | Integration of V4 HIGH and BLOCKED_FOR_APPROVAL PRs | Orchestrator asked "may I merge the 16 high-severity fixes and the 14 protected-area fixes once they pass review?"; owner replied, verbatim: "close all by tomorrow morning" (source `deferred-approval.md`) | Approval to integrate after independent review CLEAN and CI gate; no review or gate step waived. Does not cover the new dependency in #2282 or any NOT_RUN gate |
+| 2026-10-25 | Run 3 BLOCKED_FOR_APPROVAL items | Quoted in the #2279 PR body: "yes approved to fix all" | 29 findings fixed and merged in #2279 |
+| 2026-10-25 | fastify / drizzle-orm / find-my-way major upgrades | Relayed by the orchestrator task for this certification (the owner's own wording is not in the logs this lane could read, so it is not quoted): deferred until after the outstanding tasks | DEFERRED; CVE exceptions expire 2026-11-08 (13 days after the certification date) |
+| 2026-10-25 | zod 3.x | Relayed by the orchestrator task: exception accepted | Exception GHSA-mrhx-c7xc-m3w5 expires 2026-11-23 |
+| 2026-10-25 | 27 coverage services and visual snapshots | Relayed by the orchestrator task: accepted deferrals | ACCEPTED_DEFERRAL; payroll visual-regression snapshots also accepted known-stale on 2026-10-23 22:10 IST (deferred-approval.md) |
+
+#### Approval status (computed)
+
+BLOCKED_FOR_APPROVAL rows across all runs: 6; V4 cycle rows awaiting approval: 0 (all V4 HIGH/BLOCKED PRs were integrated under "close all by tomorrow morning"). The pending rows are carried over from earlier runs, unchanged and not re-checked in V4 certification:
+
+| ID | Sev | Run | Status |
+|---|---|---|---|
+| CLOS-S1-17 | MEDIUM | RUN1 | BLOCKED_FOR_APPROVAL |
+| CLOS-S4-04 | MEDIUM | RUN1 | BLOCKED_FOR_APPROVAL |
+| CLOS-S5-05 | MEDIUM | RUN1 | BLOCKED_FOR_APPROVAL |
+| CLOS-S6-02 | LOW | RUN1 | BLOCKED_FOR_APPROVAL |
+| CLOS-S6-06 | MEDIUM | RUN1 | BLOCKED_FOR_APPROVAL |
+| CLOS2-S2-09 | MEDIUM | RUN2 | BLOCKED_FOR_APPROVAL |
+
+#### Open approval-evidence items (not decided by the owner in any record this lane could read)
+
+1. **#2282 / V4-F-02 new runtime dependency** `@fastify/multipart` 8.3.1 (exact pin; lockfile additions: multipart, busboy, deepmerge, error, stream-wormhole). The remediation lane marked it as needing owner approval; the PR carries no APPROVAL REQUIRED tag; the blanket approval covers HIGH and BLOCKED_FOR_APPROVAL PRs only. Needs an explicit owner acknowledgement or removal.
+2. **Gate waivers**: none recorded. Every NOT_RUN mandatory gate below therefore has no owner deferral: gateway SEC-021 real-subprocess test, performance/load (gate 17), local Playwright/journey E2E, local live-stack contract score, local gitleaks, local Trivy, mobile tests, LocalStack cross-process, Keycloak e2e. (GitHub CI executed E2E, Live Stack Verification, Trivy and mobile jobs for the SHA and they succeeded; see `release-readiness.md`.)
+3. **Time-boxed exceptions**: 10 CVE exceptions expire 2026-11-08; zod 2026-11-23.
+4. **Decisions needed on certification findings**: whether `adv_permit_directory`/`building_permit_directory` get RLS or a justified baseline (V4-CERT-03); whether the two gitleaks findings are fake test values (V4-CERT-17); production role attributes (V4-CERT-10); triage policy for 5 critical / 245 high scanner alerts (V4-CERT-15/16).
+5. **Deferred feature work from V4 notes**: none outstanding after cycle 2 (V4-A-07 tender, V4-D-02 second half, V4-B-01 persistence, V4-G-01, V4-F-02, V4-C-04 rest, V4-B-03 were all completed in cycle 2).
+
+#### Not-run gates (no owner deferral)
+
+| Lane | Gate | Status | Reason |
+|---|---|---|---|
+| build | 4b Gateway SEC-021 real-subprocess test (GATEWAY_SPAWN_TESTS=1) | NOT_RUN | omitted for time after the main test failures; containers torn down |
+| build | 14 gitleaks (local) | NOT_RUN | gitleaks not installed on cloudsphere-ec2 (GitHub CI ran it: FAIL, see CI table) |
+| contract-e2e | 6c render-smoke contract (apps/web jsdom) | NOT_RUN | not executed in the lane (GitHub CI Contract Tests job executed it) |
+| contract-e2e | 7 scripts/contract/score.mjs 10/10 on a live stack | NOT_RUN | needs live gateway stack on fixed shared ports |
+| contract-e2e | 8 Playwright E2E; 19d journey e2e (tests/e2e-live, tests/e2e-personas, apps/web/e2e) | NOT_RUN | needs full live stack; prefer-CI rule |
+| contract-e2e | mobile integration tests (apps/mobile Flutter) | NOT_RUN | flutter/dart not installed on EC2 |
+| db | Web tsc / next build / LocalStack cross-process / Keycloak e2e | NOT_RUN | out of scope for the db lane; LocalStack absent (tests/integration/cross-process.localstack.test.ts skipped) |
+| security-perf | 15 Trivy (local) | NOT_RUN | no local Trivy for the SHA (GitHub Security Scan Trivy jobs ran: see CI table) |
+| security-perf | 17 Performance/load (k6 scripts/perf, tests/load; service N+1 suites) | NOT_RUN | needs a booted stack on shared dev Postgres/Redis, forbidden by the lane rules; only packages/db perf 3/3 and packages/cache perf-007 6/6 ran |
+| regression | 20e web tsc / next build | NOT_RUN | outside the regression lane (build lane ran them: PASS) |
+
+<!-- V4-CERT-END -->
+
 ## Refresh 2026-10-24 (final defect-closure run)
 
 Scope of this refresh: Run 1 (`~/orch-logs/closure/pass1-result.json`, pass2-*.json) and Run 2 (run2-* files, `~/orch-logs/closure/run2-blocked-approved.json`), the owner-approved release-blocker fixes (#2181, #2182, #2184, #2186-#2188, #2190-#2192), the E2E fixes (#2183, #2185, #2189), and every security PR merged since 2026-10-22. Reports were refreshed on the existing PR #2172 branch `docs/final-closure-reports` after merging `origin/main` (`9d93535e57b686e557cb36d998008a5f9687e1a6`) into it; no force-push.
