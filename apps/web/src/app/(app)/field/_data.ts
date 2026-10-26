@@ -262,8 +262,12 @@ export type FieldTaskRow = {
   id: string;
   title: string;
   taskType: string;
-  /** Assignee id, or null when unassigned. */
+  /** Assignee display text: the resolved name on the page; id/"Unassigned" from the raw mapper. */
   assignee: string;
+  /** Raw assignee id (null when unassigned) — used to resolve the name. */
+  assigneeId?: string | null;
+  /** Row version, pinned by the start/complete/assign actions (409 on a stale click). */
+  version: number;
   status: string;
   priority: number | null;
   dueDate: string | null;
@@ -283,6 +287,8 @@ export function mapTasks(payload: unknown): FieldTaskRow[] {
       title: toText(row.title) ?? toText(row.taskType) ?? "Untitled task",
       taskType: toText(row.taskType) ?? "—",
       assignee: toText(row.assigneeId) ?? "Unassigned",
+      assigneeId: toText(row.assigneeId) ?? null,
+      version: typeof row.version === "number" ? row.version : 1,
       status: toText(row.status) ?? "unassigned",
       priority: typeof row.priority === "number" ? row.priority : null,
       dueDate: toText(row.dueDate) ?? null,

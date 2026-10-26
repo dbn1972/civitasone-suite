@@ -339,7 +339,8 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-TASKS-05  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (UAT B2 closed)
+- Closed by @@HASH_GAP-FIELD-TASKS-05@@ (UAT B2): tasks page shows resolved assignee names (not ids) and Start / Mark complete / Assign controls (supervisor-only Assign) through confirm dialogs to the existing role-gated, audit-emitting field-service endpoints with the row version pinned (tasks/FieldTaskActions.test.tsx, field-pages.test.tsx, _data.test.ts); hub copy is now true
 - **W0 note:** partly fixed by #1923 — Assignee column added (raw assigneeId, not name); no Assign/Mark complete actions and hub copy still says completion tracking
 - **First-pass claim:** No create/assign/complete control exists on this page although the module description promises "Field task assignments and completion tracking" (field/page.tsx:6); tasks can only be listed here. Task assignee is not a column, so the list cannot be read by agent.
 - **Verified evidence:** No create/assign/complete controls in tasks/page.tsx (only ModuleListPage). The mapper (_data.ts:51-59) only surfaces agentId as a last-resort sublabel after description/status, so assignee is effectively never displayed. field-service mutation endpoints cannot be verified (service absent), so which actions exist is unknown.

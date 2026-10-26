@@ -16442,6 +16442,23 @@
     "syncTitle": "ऑफ़लाइन सिंक",
     "syncDescription": "फ़ील्ड से खींचे गए लंबित डिवाइस सिंक बदलाव।"
   },
+  "fieldTasks": {
+    "actionsColumn": "कार्रवाई",
+    "startLabel": "शुरू करें",
+    "startTitle": "यह कार्य शुरू करें?",
+    "startDescription": "कार्य को प्रगति में चिह्नित करता है। यह ऑडिट लॉग में दर्ज होता है।",
+    "startConfirm": "कार्य शुरू करें",
+    "completeLabel": "पूर्ण चिह्नित करें",
+    "completeTitle": "यह कार्य पूर्ण चिह्नित करें?",
+    "completeDescription": "कार्य को पूर्ण के रूप में बंद करता है। यह ऑडिट लॉग में दर्ज होता है और वापस नहीं किया जा सकता।",
+    "completeConfirm": "कार्य पूर्ण करें",
+    "assignLabel": "आवंटित करें",
+    "assignTitle": "यह कार्य आवंटित करें",
+    "assignDescription": "वह फ़ील्ड एजेंट चुनें जो यह कार्य करेगा। यह ऑडिट लॉग में दर्ज होता है।",
+    "assignConfirm": "कार्य आवंटित करें",
+    "assignPicker": "एजेंट",
+    "assignPlaceholder": "नाम से एजेंट खोजें"
+  },
   "fieldSync": {
     "title": "ऑफ़लाइन सिंक",
     "description": "पिछले {days} दिनों में डिवाइस से सिंक किए गए बदलाव।",

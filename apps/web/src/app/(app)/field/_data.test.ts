@@ -28,6 +28,12 @@ describe("mapTasks (GAP-FIELD-TASKS-03/05)", () => {
     // unassigned task falls back cleanly
     expect(rows[1]).toMatchObject({ id: "t2", title: "survey", assignee: "Unassigned", status: "unassigned", dueDate: null });
   });
+
+  it("keeps the raw assigneeId and the row version for the start/complete/assign actions (GAP-FIELD-TASKS-05)", () => {
+    const rows = mapTasks({ data: [{ id: "t1", assigneeId: "agent-9", status: "assigned", version: 5 }, { id: "t2", status: "unassigned" }] });
+    expect(rows[0]).toMatchObject({ assigneeId: "agent-9", version: 5 });
+    expect(rows[1]).toMatchObject({ assigneeId: null, version: 1 });
+  });
 });
 
 describe("mapRoutesDetailed (GAP-FIELD-ROUTES-02/04)", () => {
