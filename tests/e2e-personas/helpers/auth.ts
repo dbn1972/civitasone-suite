@@ -173,7 +173,6 @@ export async function loginAs(
   persona: PersonaName,
   baseURL?: string,
 ): Promise<void> {
-  const u = PERSONAS[persona];
   const urlStr = baseURL || page.url() || "http://localhost:3000";
   const url = new URL(urlStr);
   await page.context().clearCookies();

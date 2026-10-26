@@ -27,8 +27,6 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
 const TENANT_A = "aaaaaaaa-cccc-4000-8000-000000000001";
 const TENANT_B = "bbbbbbbb-dddd-4000-8000-000000000002";
-const ACTOR_A = "aaaaaaaa-aaaa-4000-8000-aaaaaaaaaaaa";
-const ACTOR_B = "bbbbbbbb-bbbb-4000-8000-bbbbbbbbbbbb";
 
 function makeToken(tenantId: string, roles: string[] = ["finance_officer"], sub?: string): string {
   return signToken(

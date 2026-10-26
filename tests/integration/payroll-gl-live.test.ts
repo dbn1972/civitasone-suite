@@ -65,7 +65,6 @@ describe.skipIf(!localstackUp)("Payroll→GL Live SQS Integration", () => {
 
   it("publishes payroll.run.finalized and receives finance.gl.posted via live SQS", async () => {
     const correlationId = `payroll-gl-${Date.now()}`;
-    const messageId = randomUUID();
 
     // Set up subscriber to capture the finance.gl.posted event
     const postedReceived = new Promise<CommandEnvelope>((resolve, reject) => {
