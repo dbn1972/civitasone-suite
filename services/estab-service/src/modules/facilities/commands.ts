@@ -5,7 +5,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { checkNoRoomOverlap } from "./domain.js";
 import { HttpError } from "../../shared/context.js";
-import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody, EditBookBody, WithdrawBookBody } from "./validators.js";
+import type { CreateGuesthouseBody, BookRoomBody, CheckoutBody, AddBookBody, IssueBookBody, RenewIssueBody, ReturnIssueBody, EditBookBody, WithdrawBookBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -136,14 +136,18 @@ export async function issueBook(ctx: RequestContext, body: IssueBookBody): Promi
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function returnBook(ctx: RequestContext, issueId: string): Promise<Accepted> {
+export async function returnBook(ctx: RequestContext, issueId: string, body: ReturnIssueBody = {}): Promise<Accepted> {
   const issue = await repo.getIssueById(ctx.tenantId, issueId);
   if (!issue) throw new HttpError(404, "NOT_FOUND", "issue not found");
   const messageId = randomUUID();
   await queue.publish(COMMANDS.libraryReturn, {
     messageId, type: COMMANDS.libraryReturn,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { issueId, tenantId: ctx.tenantId },
+    payload: {
+      issueId, tenantId: ctx.tenantId,
+      ...(body.condition ? { condition: body.condition } : {}),
+      ...(body.notes ? { notes: body.notes } : {}),
+    },
   });
   return { id: issueId, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -153,6 +157,10 @@ export async function renewBook(ctx: RequestContext, issueId: string, body: Rene
   if (!issue) throw new HttpError(404, "NOT_FOUND", "issue not found");
   if (issue.status === "returned") {
     throw new HttpError(409, "ALREADY_RETURNED", "this issue has already been returned and cannot be renewed");
+  }
+  // Owner decision #29: a renewal EXTENDS the loan; a due date that is not after the current one is refused.
+  if (new Date(body.dueAt).getTime() <= new Date(issue.dueAt as unknown as string).getTime()) {
+    throw new HttpError(409, "INVALID_RENEWAL", "the new due date must be after the current due date");
   }
   const messageId = randomUUID();
   await queue.publish(COMMANDS.libraryRenew, {

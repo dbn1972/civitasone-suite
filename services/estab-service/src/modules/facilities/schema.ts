@@ -79,6 +79,10 @@ export const estabIssues = facilitiesSchema.table("estab_issues", {
   dueAt:       timestamp("due_at", { withTimezone: true }).notNull(),
   returnedAt:  timestamp("returned_at", { withTimezone: true }),
   status:      varchar("status", { length: 24 }).notNull().default("issued"),
+  // Migration 0055 (owner decision #29): condition on return + renewal counter.
+  returnCondition: varchar("return_condition", { length: 16 }),
+  returnNotes:     text("return_notes"),
+  renewalCount:    integer("renewal_count").notNull().default(0),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:   timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:   uuid("created_by").notNull(),

@@ -125,4 +125,12 @@ describe("LibraryIssuesPage", () => {
     // The form card shows the catalogue error.
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
   });
+
+  // Owner decision #29: fines are not in UAT scope, and the screen must say so rather than imply they are charged.
+  it("states that fine rules are not configured (no fine is charged)", async () => {
+    fetchJsonMock.mockResolvedValueOnce(issuesPage).mockResolvedValueOnce(booksPage);
+    const ui = await LibraryIssuesPage({ searchParams: Promise.resolve({}) });
+    render(ui);
+    expect(await screen.findByText(/fine rules are not configured/i)).toBeInTheDocument();
+  });
 });

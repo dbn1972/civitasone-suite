@@ -2030,6 +2030,11 @@ export type LibraryIssueSummary = {
   dueAt: string;
   returnedAt?: string;
   status: "issued" | "returned" | "overdue";
+  /** Owner decision #29: how many times the loan was renewed. */
+  renewalCount?: number;
+  /** Owner decision #29: condition the book came back in (absent for legacy returns). */
+  returnCondition?: "good" | "fair" | "damaged";
+  returnNotes?: string;
 };
 
 export type AssetDashboard = {

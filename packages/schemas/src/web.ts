@@ -2144,6 +2144,10 @@ export const LibraryIssueSummarySchema = z.object({
   dueAt: z.string(),
   returnedAt: z.string().optional(),
   status: z.enum(["issued", "returned", "overdue"]),
+  // Owner decision #29 (GAP-ESTAB-LIBRARY-ISSUES-05): renewals and the condition a book came back in.
+  renewalCount: z.number().int().nonnegative().optional(),
+  returnCondition: z.enum(["good", "fair", "damaged"]).optional(),
+  returnNotes: z.string().optional(),
 });
 export const LibraryIssueSummaryListSchema = z.array(LibraryIssueSummarySchema);
 
