@@ -462,7 +462,8 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HEARINGS-02  ·  MEDIUM  ·  confirmed  ·  theme SCALE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+  - Closed by PENDING-HASH (UAT B2): CaseSelector now server-searches via ?q= (searchCases, client.ts), arrow/enter/escape keyboard nav with aria-activedescendant, courtCaseSelector en/hi i18n; CaseSelector.test.tsx covers beyond-100 reach, search error vs no-match, keyboard, hi locale.
 - **W0 note:** partly fixed by #1923 — CaseSelector is now a searchable title/CNR/filing combobox with a 'first 100 cases' notice; remaining: still limited to the first 100 cases (no server-side search, case beyond the 100th unreachable from here) and options are mouse-only buttons (no arrow-key listbox navigation)
 - **First-pass claim:** Case selector option labels combine title, CNR and status in a single native select for the entire registry — no search on a long list (CaseSelector.tsx:62-78).
 - **Verified evidence:** CaseSelector.tsx:60-83 is a plain native <select> listing every case (title · CNR — humanised status). Loader getCases caps at limit=100 (loaders.ts:191), so beyond 100 cases some cannot be picked at all. No search/filter. Strings are hard-coded English (no next-intl). Status is text so not colour-only.

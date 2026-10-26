@@ -1138,6 +1138,19 @@
     "documentsCount": "{count, plural, =0 {None} one {# document} other {# documents}}",
     "slaDays": "{days, plural, one {# day} other {# days}}"
   },
+  "courtCaseSelector": {
+    "label": "Case",
+    "placeholder": "Search by title or CNR…",
+    "searching": "Searching…",
+    "searchFailed": "Search is unavailable right now. Try again shortly.",
+    "noMatches": "No matching cases",
+    "untitled": "Untitled matter",
+    "truncated": "Showing the first 100 cases — type a CNR or title to search the whole registry.",
+    "loadErrorTitle": "Couldn't load your cases",
+    "loadErrorBody": "Live data couldn't be reached, so the case list isn't available right now. Try again shortly.",
+    "emptyTitle": "No cases to pick from",
+    "emptyBody": "Register a case first, then come back here to work its hearings and orders."
+  },
   "citizenCertificates": {
     "pageTitle": "Certificates & Licences",
     "pageSubtitle": "Verify a certificate and view issued ones.",
