@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
 import {
   activateDomainPackStage3,
+  fetchActivationStageStatus,
   fetchDomainPacksForInstallResult,
+  type ActivationJobState,
   type DomainPackActivateResult,
   type DomainPackListItem,
 } from "./domainPackApi";
@@ -29,12 +31,18 @@ export type DomainPackActivatePanelProps = {
    * decides whether the UI offers the mutation.
    */
   canOperate?: boolean;
+  /** How often the activation job is polled (ms). Default 3000. */
+  pollIntervalMs?: number;
 };
+
+/** Poll the job at most this many times before telling the user it is still running. */
+const MAX_JOB_POLLS = 20;
 
 export function DomainPackActivatePanel({
   variant = "page",
   initialPackKey = MUNICIPAL_DOMAIN_PACK_KEY,
   canOperate = true,
+  pollIntervalMs = 3000,
 }: DomainPackActivatePanelProps) {
   const router = useRouter();
   const [packs, setPacks] = useState<DomainPackListItem[]>([]);
@@ -46,6 +54,38 @@ export function DomainPackActivatePanel({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DomainPackActivateResult | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [jobState, setJobState] = useState<ActivationJobState | "slow">("queued");
+
+  // GAP-INSTALL-DOMAIN-PACKS-01: follow the activation job until it completes or
+  // fails (bounded; after MAX_JOB_POLLS we say it is still running).
+  const stageId = result?.stageId;
+  useEffect(() => {
+    if (!stageId) return;
+    let cancelled = false;
+    let polls = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    setJobState("queued");
+    const tick = async () => {
+      const { state } = await fetchActivationStageStatus(stageId);
+      if (cancelled) return;
+      polls += 1;
+      if (state === "completed" || state === "failed") {
+        setJobState(state);
+        return;
+      }
+      if (polls >= MAX_JOB_POLLS) {
+        setJobState(state === "unknown" ? "unknown" : "slow");
+        return;
+      }
+      setJobState(state);
+      timer = setTimeout(() => void tick(), pollIntervalMs);
+    };
+    timer = setTimeout(() => void tick(), pollIntervalMs);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [stageId, pollIntervalMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,61 +127,57 @@ export function DomainPackActivatePanel({
     }
   }
 
-  const btn =
-    "inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50";
+  const activated = Boolean(result) && jobState !== "failed";
 
   return (
     <section
       aria-labelledby="domain-pack-stage3-heading"
-      className={
-        variant === "embedded"
-          ? "rounded-xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm"
-          : "rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
-      }
+      style={{
+        border: `1px solid ${variant === "embedded" ? "var(--primary-soft)" : "var(--line)"}`,
+        background: variant === "embedded" ? "var(--primary-soft)" : "var(--panel)",
+        borderRadius: "var(--r)",
+        boxShadow: "var(--sh)",
+        padding: variant === "embedded" ? 20 : 24,
+        color: "var(--ink)",
+      }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+          <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: ".04em", textTransform: "uppercase", color: "var(--primary)", margin: 0 }}>
             Install Stage 3
           </p>
-          <h2 id="domain-pack-stage3-heading" className="mt-1 text-lg font-semibold text-slate-900">
+          <h2 id="domain-pack-stage3-heading" style={{ marginTop: 4, fontSize: 18, fontWeight: 600 }}>
             Domain Pack — browse &amp; activate
           </h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+          <p style={{ marginTop: 4, maxWidth: 672, fontSize: 14, color: "var(--ink2)" }}>
             Choose a Domain Pack to import service drafts for local review. Activating{" "}
-            <span className="font-medium text-slate-800">Municipal India (ULB)</span> yields editable{" "}
-            <span className="font-medium">Trade License</span>,{" "}
-            <span className="font-medium">Public Grievance Redressal</span>, and{" "}
-            <span className="font-medium">Water Connection</span> catalogue drafts. Nothing goes live
-            until your office publishes.
+            <strong style={{ color: "var(--ink)" }}>Municipal India (ULB)</strong> yields editable{" "}
+            <strong style={{ color: "var(--ink)" }}>Trade License</strong>,{" "}
+            <strong style={{ color: "var(--ink)" }}>Public Grievance Redressal</strong>, and{" "}
+            <strong style={{ color: "var(--ink)" }}>Water Connection</strong> catalogue drafts. Nothing goes
+            live until your office publishes.
           </p>
         </div>
         {variant === "embedded" ? (
-          <Link
-            href="/install/domain-packs"
-            className="text-sm font-medium text-indigo-700 hover:text-indigo-900"
-          >
-            Open full panel →
+          <Link href="/install/domain-packs" style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)" }}>
+            Open full panel
           </Link>
         ) : (
-          <Link href="/install" className="text-sm font-medium text-slate-600 hover:text-slate-900">
-            ← Installer wizard
+          <Link href="/install" style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)" }}>
+            Installer wizard
           </Link>
         )}
       </div>
 
       {loading ? (
-        /* Not part of the original catalogue -- found during tranche 5
-           verification: text-slate-500 (#64748b) measured 4.43:1 here
-           (this card's background is slightly off-white, var(--line2), not
-           pure white), just under 4.5:1, and only surfaced on some runs
-           depending on load-state timing. var(--ink2) clears both
-           backgrounds with a comfortable margin. */
-        <p className="mt-4 text-sm" style={{ color: "var(--ink2)" }} role="status">
+        <p style={{ marginTop: 16, fontSize: 14, color: "var(--ink2)" }} role="status">
           Loading Domain Packs…
         </p>
       ) : (
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2" aria-label="Domain Pack library">
+        <ul
+          style={{ marginTop: 16, display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", listStyle: "none", padding: 0 }}
+          aria-label="Domain Pack library"
+        >
           {packs.map((pack) => {
             const active = pack.domainPackKey === selected?.domainPackKey;
             return (
@@ -154,22 +190,23 @@ export function DomainPackActivatePanel({
                     setResult(null);
                     setError(null);
                   }}
-                  className={`w-full rounded-lg border p-4 text-start transition ${
-                    active
-                      ? "border-indigo-500 bg-white ring-2 ring-indigo-200"
-                      : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
+                  style={{
+                    width: "100%",
+                    textAlign: "start",
+                    padding: 16,
+                    borderRadius: "var(--r-sm)",
+                    border: `${active ? 2 : 1}px solid ${active ? "var(--primary)" : "var(--line)"}`,
+                    background: "var(--panel)",
+                    color: "var(--ink)",
+                    cursor: "pointer",
+                  }}
                 >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-slate-900">{pack.name}</span>
-                    {pack.recommended ? (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                        Recommended
-                      </span>
-                    ) : null}
+                  <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontWeight: 600 }}>{pack.name}</span>
+                    {pack.recommended ? <StatusPill status="recommended" label="Recommended" variant="good" /> : null}
                   </div>
-                  <p className="mt-2 text-sm text-slate-600">{pack.summary}</p>
-                  <p className="mt-2 text-xs font-medium text-slate-700">
+                  <p style={{ marginTop: 8, fontSize: 14, color: "var(--ink2)" }}>{pack.summary}</p>
+                  <p style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "var(--ink2)" }}>
                     Outcome: {outcomeLabels(pack)}
                   </p>
                 </button>
@@ -180,75 +217,66 @@ export function DomainPackActivatePanel({
       )}
 
       {loadError ? (
-        <div
-          role="alert"
-          className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
-        >
-          <p className="font-medium">Showing built-in pack only</p>
-          <p className="mt-1">
-            The Domain Pack library could not be loaded, so only the built-in municipal pack is
-            shown. Other packs may be missing.
-          </p>
-          <button
-            type="button"
-            className="mt-2 inline-flex min-h-[36px] items-center rounded-md border border-amber-300 bg-white px-3 text-sm font-medium text-amber-900 hover:bg-amber-100"
-            onClick={() => setReloadNonce((n) => n + 1)}
+        <div style={{ marginTop: 16 }}>
+          <Alert
+            variant="warning"
+            role="alert"
+            title="Showing built-in pack only"
+            action={
+              <Button variant="ghost" size="sm" onClick={() => setReloadNonce((n) => n + 1)}>
+                Retry
+              </Button>
+            }
           >
-            Retry
-          </button>
+            The Domain Pack library could not be loaded, so only the built-in municipal pack is shown. Other
+            packs may be missing.
+          </Alert>
         </div>
       ) : null}
 
       {selected ? <OutcomePreview pack={selected} /> : null}
 
       {result ? (
-        <div
-          role="status"
-          className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
-        >
-          <p className="font-medium">Activation accepted (Stage {result.stageNumber})</p>
-          <p className="mt-1">
+        <div style={{ marginTop: 16 }}>
+          <Alert variant={jobState === "failed" ? "danger" : "success"} role="status" title={`Activation accepted (Stage ${result.stageNumber})`}>
             {selected?.name ?? "Domain Pack"} queued. Expected drafts:{" "}
             {result.packKeys.length > 0
               ? result.packKeys.map((k) => k.replace(/^pack:/, "")).join(", ")
               : outcomeLabels(selected!)}
             . Open the{" "}
-            <Link href="/designer" className="font-medium underline">
+            <Link href="/designer" style={{ fontWeight: 600, textDecoration: "underline" }}>
               Service Designer
             </Link>{" "}
             to review editable drafts in this session.
-          </p>
+            {result.stageId ? <ActivationJobLine state={jobState} /> : null}
+          </Alert>
         </div>
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-red-600">
+        <p role="alert" style={{ marginTop: 12, fontSize: 14, color: "var(--bad)" }}>
           {error}
         </p>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8 }}>
         {canOperate ? (
-          <button
-            type="button"
-            className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
-            disabled={busy || loading || !selected || Boolean(result)}
+          <Button
+            variant="primary"
+            className="btn-tall"
+            disabled={busy || loading || !selected || activated}
             aria-busy={busy}
             onClick={() => setConfirmOpen(true)}
           >
-            {result ? "Activated" : "Activate Domain Pack"}
-          </button>
+            {activated ? "Activated" : result ? "Retry activation" : "Activate Domain Pack"}
+          </Button>
         ) : (
-          <p className="text-sm text-slate-600" role="note">
-            You have read-only access. Activating a Domain Pack requires an installer or tenant-admin
-            role.
+          <p style={{ fontSize: 14, color: "var(--ink2)" }} role="note">
+            You have read-only access. Activating a Domain Pack requires an installer or tenant-admin role.
           </p>
         )}
         {result ? (
-          <Link
-            href="/designer"
-            className={`${btn} border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}
-          >
+          <Link href="/designer" className="btn ghost btn-tall">
             Review drafts
           </Link>
         ) : null}
@@ -261,10 +289,9 @@ export function DomainPackActivatePanel({
           description={
             selected ? (
               <span>
-                This runs Install Stage 3 for{" "}
-                <strong>{selected.name}</strong> and imports{" "}
-                <strong>{outcomeLabels(selected)}</strong> as editable catalogue drafts. Services stay
-                draft until published.
+                This runs Install Stage 3 for <strong>{selected.name}</strong> and imports{" "}
+                <strong>{outcomeLabels(selected)}</strong> as editable catalogue drafts. Services stay draft
+                until published.
               </span>
             ) : undefined
           }
@@ -280,43 +307,86 @@ export function DomainPackActivatePanel({
   );
 }
 
+const TECH_STYLE = { fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--ink2)" } as const;
+
 function OutcomePreview({ pack }: { pack: DomainPackCatalogEntry }) {
   return (
-    <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <p className="text-sm font-medium text-slate-900">
+    <div style={{ marginTop: 16, border: "1px solid var(--line)", background: "var(--line2)", borderRadius: "var(--r-sm)", padding: 16 }}>
+      <p style={{ fontSize: 14, fontWeight: 600 }}>
         {pack.name}
         {" → "}
-        <span className="text-slate-800">{outcomeLabels(pack)}</span>
-        <span className="ms-1 font-normal text-slate-600">editable drafts</span>
+        <span>{outcomeLabels(pack)}</span>
+        <span style={{ marginInlineStart: 4, fontWeight: 400, color: "var(--ink2)" }}>editable drafts</span>
       </p>
-      <ol className="mt-3 space-y-2" aria-label="Service packs imported on activate">
+      <ol style={{ marginTop: 12, display: "grid", gap: 8, listStyle: "none", padding: 0 }} aria-label="Service packs imported on activate">
         {pack.outcomes.map((o) => (
           <li
             key={o.packKey}
-            className="flex flex-wrap items-start gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+            style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", gap: 8, border: "1px solid var(--line)", background: "var(--panel)", borderRadius: 8, padding: "8px 12px", fontSize: 14 }}
           >
-            <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-800">
+            <span style={{ background: "var(--primary-soft)", color: "var(--primary-d)", borderRadius: 4, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
               {o.shortLabel}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-medium text-slate-900">{o.label}</p>
-              <p className="text-xs text-slate-500">{o.description}</p>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontWeight: 600 }}>{o.label}</p>
+              <p style={{ fontSize: 12, color: "var(--ink2)" }}>{o.description}</p>
             </div>
-            <span className="text-xs text-slate-500">draft</span>
+            <span style={{ fontSize: 12, color: "var(--ink2)" }}>draft</span>
           </li>
         ))}
       </ol>
-      <details className="mt-3">
-        <summary className="cursor-pointer text-xs text-slate-500">Technical details</summary>
-        <p className="mt-1 font-mono text-[11px] text-slate-500">{pack.domainPackKey}</p>
-        <ul className="mt-1 space-y-0.5">
+      <details style={{ marginTop: 12 }}>
+        <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--ink2)" }}>Technical details</summary>
+        <p style={{ ...TECH_STYLE, marginTop: 4 }}>{pack.domainPackKey}</p>
+        <ul style={{ marginTop: 4, listStyle: "none", padding: 0 }}>
           {pack.outcomes.map((o) => (
-            <li key={o.packKey} className="font-mono text-[11px] text-slate-500">
+            <li key={o.packKey} style={TECH_STYLE}>
               {o.packKey}
             </li>
           ))}
         </ul>
       </details>
     </div>
+  );
+}
+
+function ActivationJobLine({ state }: { state: ActivationJobState | "slow" }) {
+  const line = { marginTop: 8, display: "block" } as const;
+  if (state === "completed") {
+    return (
+      <strong style={line} data-job-state="completed">
+        Activation completed
+      </strong>
+    );
+  }
+  if (state === "failed") {
+    return (
+      <strong style={line} data-job-state="failed">
+        Activation failed. The install job reported a problem — check the{" "}
+        <Link href="/install/console" style={{ textDecoration: "underline" }}>
+          Install console
+        </Link>{" "}
+        for details, then retry.
+      </strong>
+    );
+  }
+  if (state === "slow" || state === "unknown") {
+    return (
+      <span style={line} data-job-state={state}>
+        {state === "unknown"
+          ? "We couldn't check the install job's progress. "
+          : "Still processing — this is taking longer than usual. "}
+        Follow it in the{" "}
+        <Link href="/install/console" style={{ textDecoration: "underline" }}>
+          Install console
+        </Link>
+        .
+      </span>
+    );
+  }
+  return (
+    <span style={line} data-job-state="queued">
+      Waiting for the install job to finish…
+    </span>
   );
 }

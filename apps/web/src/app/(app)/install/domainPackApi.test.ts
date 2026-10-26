@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   activateDomainPackStage3,
+  fetchActivationStageStatus,
   fetchDomainPacksForInstall,
   fetchDomainPacksForInstallResult,
   mergeDomainPackCatalog,
@@ -105,6 +106,57 @@ describe("domainPackApi HTTP", () => {
     );
     expect(result.stageNumber).toBe(3);
     expect(result.packKeys).toHaveLength(3);
+  });
+
+  it("activateDomainPackStage3 returns the stageId that tracks the activation (GAP-INSTALL-DOMAIN-PACKS-01)", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 202,
+      json: async () => ({
+        id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+        stageId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        status: "accepted",
+        stageNumber: 3,
+      }),
+    } as Response);
+    const result = await activateDomainPackStage3("municipal-in-v1");
+    expect(result.stageId).toBe("dddddddd-dddd-dddd-dddd-dddddddddddd");
+  });
+
+  describe("fetchActivationStageStatus", () => {
+    const get = (status: number, body: unknown) =>
+      vi.mocked(fetch).mockResolvedValue({ ok: status >= 200 && status < 300, status, json: async () => body } as Response);
+
+    it("maps a completed stage to completed", async () => {
+      get(200, { id: "s1", status: "completed", errorMessage: null });
+      expect(await fetchActivationStageStatus("s1")).toEqual({ state: "completed" });
+    });
+
+    it("maps a failed stage to failed without leaking the raw server error text", async () => {
+      get(200, { id: "s1", status: "failed", errorMessage: "pg: relation x does not exist" });
+      const r = await fetchActivationStageStatus("s1");
+      expect(r.state).toBe("failed");
+      expect(JSON.stringify(r)).not.toMatch(/relation x/);
+    });
+
+    it("maps active/pending/in_progress to queued", async () => {
+      for (const st of ["active", "pending", "in_progress"]) {
+        get(200, { id: "s1", status: st });
+        expect((await fetchActivationStageStatus("s1")).state).toBe("queued");
+      }
+    });
+
+    it("treats 404 as not-yet-recorded (the stage row is written asynchronously)", async () => {
+      get(404, {});
+      expect((await fetchActivationStageStatus("s1")).state).toBe("queued");
+    });
+
+    it("reports unknown (not queued) when the status call itself fails", async () => {
+      get(500, {});
+      expect((await fetchActivationStageStatus("s1")).state).toBe("unknown");
+      vi.mocked(fetch).mockRejectedValue(new TypeError("Failed to fetch"));
+      expect((await fetchActivationStageStatus("s1")).state).toBe("unknown");
+    });
   });
 
   it("activateDomainPackStage3 surfaces a clerk-safe message, never the raw API error text (UX-016)", async () => {

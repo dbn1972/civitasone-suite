@@ -22,6 +22,7 @@ import type {
   CertifiedCopy,
   CasesPage,
   ConfigEntry,
+  Bench,
   Court,
   CopyStatus,
   CourtCase,
@@ -378,5 +379,21 @@ export function getCourts(): Promise<LoaderResult<Court[]>> {
         courtType: strOrNull(o.courtType),
         establishmentCode: strOrNull(o.establishmentCode),
       })),
+  });
+}
+
+/**
+ * Benches of one court (GAP-COURT-HEARINGS-05) — lets a hearing row show its
+ * bench by NAME instead of a raw bench UUID. Empty on failure (the row then
+ * omits the bench rather than printing an id).
+ */
+export function getCourtBenches(courtId: string): Promise<LoaderResult<Bench[]>> {
+  return fetchJson<unknown, Bench[]>(`/api/v1/court/courts/${encodeURIComponent(courtId)}/benches`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "court.benches",
+    mapResponse: (p) =>
+      pickItems(p)
+        .map((o) => ({ id: str(o.id), name: str(o.name) }))
+        .filter((b) => b.id && b.name),
   });
 }

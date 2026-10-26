@@ -562,6 +562,16 @@ describe("Case Registry Routes", () => {
       const res = await app.inject({ method: "GET", url: "/v1/court/cases/analytics", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
     });
+
+    it("returns 401 without auth", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/court/cases/analytics" });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("returns 403 for a role outside COURT_READ_ROLES", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/court/cases/analytics", headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` } });
+      expect(res.statusCode).toBe(403);
+    });
   });
 
   describe("GET /v1/court/cases/pendency", () => {
@@ -569,6 +579,16 @@ describe("Case Registry Routes", () => {
       mockState.queryResult = [{ status: "filed", count: 3 }];
       const res = await app.inject({ method: "GET", url: "/v1/court/cases/pendency", headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
+    });
+
+    it("returns 401 without auth", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/court/cases/pendency" });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("returns 403 for a role outside COURT_READ_ROLES", async () => {
+      const res = await app.inject({ method: "GET", url: "/v1/court/cases/pendency", headers: { authorization: `Bearer ${NO_ROLE_TOKEN()}` } });
+      expect(res.statusCode).toBe(403);
     });
   });
 

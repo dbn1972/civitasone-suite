@@ -111,6 +111,13 @@ describe("install Stage 3 + onboarding routes", () => {
     expect(body.domainPackKey).toBe("municipal-in-v1");
     expect(body.packKeys.length).toBeGreaterThanOrEqual(3);
     expect(spy).toHaveBeenCalled();
+    // GAP-INSTALL-DOMAIN-PACKS-01: the accepted body carries the id of the install
+    // stage row that tracks this activation, so the UI can follow its status.
+    const stageCall = spy.mock.calls.find((c) => c[0] === "install.stage.create");
+    expect(stageCall).toBeDefined();
+    const stageBody = body as { stageId?: string };
+    expect(stageBody.stageId).toBeTruthy();
+    expect((stageCall![1].payload as { id: string }).id).toBe(stageBody.stageId);
     spy.mockRestore();
   });
 
