@@ -10,7 +10,17 @@ import {
   fetchCase,
   fetchCauseListByCourtDate,
   fetchCauseListItems,
+  fetchConfigNamespace,
 } from "../_data/client";
+import {
+  causeListCourtroomNamespace,
+  causeListSlotNamespace,
+  DEFAULT_CAUSE_LIST_COURTROOMS,
+  DEFAULT_CAUSE_LIST_SLOTS,
+  effectiveCauseListOptions,
+  type CauseListOption,
+} from "../_data/causeListConfig";
+import { useEstabT } from "@/lib/estab/useEstabT";
 import { formatShortId } from "@/lib/formatters";
 
 const mono: React.CSSProperties = {
@@ -304,6 +314,7 @@ export function CauseListConsole({
         <>
           <AddItemForm
             causeListId={causeListId}
+            courtId={courtId}
             cases={casesForCourt}
             existingItems={items}
             nextItemNumber={items.length + 1}
@@ -381,6 +392,7 @@ export function CauseListConsole({
 
 function AddItemForm({
   causeListId,
+  courtId,
   cases,
   existingItems,
   nextItemNumber,
@@ -388,18 +400,50 @@ function AddItemForm({
   onError,
 }: {
   causeListId: string;
+  courtId: string;
   cases: CourtCase[];
   existingItems: CauseListItem[];
   nextItemNumber: number;
   onDone: (msg: string) => Promise<void> | void;
   onError: (err: unknown) => void;
 }) {
+  const t = useEstabT("courtCauseListSlots");
   const [caseId, setCaseId] = useState("");
   const [itemNumber, setItemNumber] = useState(String(nextItemNumber));
   const [slot, setSlot] = useState("");
   const [courtroom, setCourtroom] = useState("");
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+
+  // Owner decision #33: slots and courtrooms come from the court's own config namespaces (seeded with
+  // defaults when the court was created), never free text. A failed read is an error state with Retry -
+  // it must not silently degrade to typing arbitrary values the service would refuse.
+  const [slotOptions, setSlotOptions] = useState<CauseListOption[] | null>(null);
+  const [roomOptions, setRoomOptions] = useState<CauseListOption[] | null>(null);
+  const [optionsError, setOptionsError] = useState(false);
+  const [optionsNonce, setOptionsNonce] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setSlotOptions(null);
+    setRoomOptions(null);
+    setOptionsError(false);
+    Promise.all([
+      fetchConfigNamespace(causeListSlotNamespace(courtId)),
+      fetchConfigNamespace(causeListCourtroomNamespace(courtId)),
+    ])
+      .then(([slots, rooms]) => {
+        if (cancelled) return;
+        setSlotOptions(effectiveCauseListOptions(slots, DEFAULT_CAUSE_LIST_SLOTS));
+        setRoomOptions(effectiveCauseListOptions(rooms, DEFAULT_CAUSE_LIST_COURTROOMS));
+      })
+      .catch(() => {
+        if (!cancelled) setOptionsError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [courtId, optionsNonce]);
+  const optionsReady = slotOptions !== null && roomOptions !== null;
 
   const usedItemNumbers = useMemo(
     () => new Set(existingItems.map((it) => it.itemNumber).filter((n): n is number => n != null)),
@@ -408,9 +452,8 @@ function AddItemForm({
 
   async function add() {
     setLocalError(null);
-    // GAP-COURT-CAUSE-LIST-03: validate item number is a positive integer and
-    // not already used, and normalise slot/courtroom (uppercase + trim) so
-    // "am 1" and "AM-1" don't diverge.
+    // GAP-COURT-CAUSE-LIST-03: item number is a positive integer and not already used; slot and courtroom
+    // are chosen from the court's configured values (owner decision #33), so there is nothing to normalise.
     const n = Number(itemNumber);
     if (!Number.isInteger(n) || n < 1) {
       setLocalError("Item number must be a whole number of 1 or more.");
@@ -420,10 +463,12 @@ function AddItemForm({
       setLocalError(`Item number ${n} is already used on this cause list.`);
       return;
     }
-    const normSlot = slot.trim().toUpperCase().replace(/\s+/g, "-");
-    const normCourtroom = courtroom.trim().toUpperCase();
-    if (!caseId || !normSlot || !normCourtroom) {
-      setLocalError("Pick a case and enter a slot and courtroom.");
+    if (!caseId) {
+      setLocalError("Pick a case.");
+      return;
+    }
+    if (!slot || !courtroom) {
+      setLocalError(t("chooseBoth"));
       return;
     }
     setBusy(true);
@@ -431,8 +476,8 @@ function AddItemForm({
       await addCauseListItem(causeListId, {
         caseId,
         itemNumber: n,
-        slot: normSlot,
-        courtroom: normCourtroom,
+        slot,
+        courtroom,
       });
       setCaseId("");
       setSlot("");
@@ -478,21 +523,40 @@ function AddItemForm({
               onChange={(e) => setItemNumber(e.target.value)}
               style={{ ...fieldStyle, width: 90, ...mono, textAlign: "end" }}
             />
-            <input
-              aria-label="Slot"
-              placeholder="Slot (e.g. AM-1)"
-              value={slot}
-              onChange={(e) => setSlot(e.target.value)}
-              style={{ ...fieldStyle, width: 120 }}
-            />
-            <input
-              aria-label="Courtroom"
-              placeholder="Courtroom"
-              value={courtroom}
-              onChange={(e) => setCourtroom(e.target.value)}
-              style={{ ...fieldStyle, width: 140 }}
-            />
-            <Button variant="primary" disabled={busy} onClick={() => void add()}>
+            {optionsError ? (
+              <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--bad)" }}>
+                {t("loadError")}
+                <Button variant="ghost" onClick={() => setOptionsNonce((n) => n + 1)}>{t("retry")}</Button>
+              </span>
+            ) : !optionsReady ? (
+              <span role="status" style={{ fontSize: 13, color: "var(--ink2)" }}>{t("loading")}</span>
+            ) : (
+              <>
+                <select
+                  aria-label="Slot"
+                  value={slot}
+                  onChange={(e) => setSlot(e.target.value)}
+                  style={{ ...fieldStyle, width: 150 }}
+                >
+                  <option value="">{t("slotPlaceholder")}</option>
+                  {slotOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Courtroom"
+                  value={courtroom}
+                  onChange={(e) => setCourtroom(e.target.value)}
+                  style={{ ...fieldStyle, width: 170 }}
+                >
+                  <option value="">{t("roomPlaceholder")}</option>
+                  {roomOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </>
+            )}
+            <Button variant="primary" disabled={busy || !optionsReady} onClick={() => void add()}>
               {busy ? "Listing…" : "List case"}
             </Button>
           </div>

@@ -3,6 +3,7 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { loadSlotConfigTx, slotConfigViolation } from "./slot-config.js";
 
 type GenerateCauseListPayload = {
   id: string;
@@ -62,6 +63,11 @@ export function registerCauseListConsumers(
 
       const parent = await repo.getCauseListTx(tx, p.tenantId, p.causeListId);
       if (!parent) throw new NonRetryableError(`CAUSELIST_NOT_FOUND: ${p.causeListId}`);
+
+      // Owner decision #33 (defence in depth): re-validate against the court's own slot/courtroom config on the
+      // locked connection - the route check can be stale, and a command may not have come through the route.
+      const violation = slotConfigViolation(await loadSlotConfigTx(tx, p.tenantId, parent.courtId), p.slot, p.courtroom);
+      if (violation) throw new NonRetryableError(`${violation.code}: ${violation.message}`);
 
       try {
         await repo.insertCauseListItem(tx, {
