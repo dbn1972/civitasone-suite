@@ -33,6 +33,7 @@ export const MIGRATION_RETRY_ROLES = ["migration_admin"];
  */
 export const OFFICER_ROUTE_ROLES: ReadonlyArray<{ prefix: string; roles: readonly string[] }> = [
   { prefix: "/tenant/consent-exchange", roles: CONSENT_DECISION_ROLES },
+  { prefix: "/tenant/data-migration", roles: MIGRATION_RETRY_ROLES },
 ];
 
 /** Roles the /tenant and /tenant-admin layouts admit for this request path. */

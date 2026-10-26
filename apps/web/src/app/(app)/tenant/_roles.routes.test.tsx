@@ -14,6 +14,7 @@ import { adminAreaRoles, TENANT_ADMIN_ROLES } from "./_roles";
 // and ONLY that screen: every other page in the area stays tenant-admin only.
 const OFFICER_ROUTES: Array<[string, string, "tenant" | "tenant-admin"]> = [
   ["/tenant/consent-exchange", "consent_officer", "tenant"],
+  ["/tenant/data-migration", "migration_admin", "tenant"],
 ];
 
 describe("adminAreaRoles: officer roles are route-scoped", () => {
