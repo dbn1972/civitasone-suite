@@ -8,7 +8,6 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const EMP_A = "bbbbbbbb-0000-4000-8000-00000000000a";
-const EMP_B = "bbbbbbbb-0000-4000-8000-00000000000b";
 const ACTOR_A = "aaaaaaaa-0000-4000-8000-00000000000a";
 const ACTOR_B = "aaaaaaaa-0000-4000-8000-00000000000b";
 const ACTOR_HR = "aaaaaaaa-0000-4000-8000-0000000000f1";
