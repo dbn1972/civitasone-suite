@@ -184,7 +184,10 @@ export class MeilisearchEngine implements SearchEngine {
   }
 
   private escape(value: string): string {
-    return value.replace(/[^a-zA-Z0-9\-_.: /]/g, "").replace(/"/g, '\\"');
+    // Allow-list: every character that could terminate or escape the quoted filter literal (", \\, ...) is
+    // removed outright, so no escaping step is needed (an escaping step that handled `"` but not `\\` would be
+    // the CodeQL js/incomplete-sanitization shape).
+    return value.replace(/[^a-zA-Z0-9\-_.: /]/g, "");
   }
 
   /**
