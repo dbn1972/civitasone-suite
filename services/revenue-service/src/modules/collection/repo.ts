@@ -128,6 +128,23 @@ export async function findRefundById(tenantId: string, id: string) {
 }
 
 /**
+ * GAP-REVENUE-REFUNDS-02: the live (non-rejected) refund for a receipt, if any.
+ * The create route uses it to answer 409 synchronously instead of 202 + a
+ * silent consumer no-op. Tenant-scoped via tenantTransaction/RLS.
+ */
+export async function findLiveRefundByReceipt(tenantId: string, receiptId: string) {
+  const rows = await tenantTransaction(db, tenantId, async (tx) => {
+    const t = tx as typeof db;
+    return t
+      .select({ id: refunds.id, status: refunds.status })
+      .from(refunds)
+      .where(and(eq(refunds.tenantId, tenantId), eq(refunds.receiptId, receiptId), ne(refunds.status, "rejected")))
+      .limit(1);
+  });
+  return rows[0] ?? null;
+}
+
+/**
  * GAP-REVENUE-REFUNDS-01: list refunds for the tenant, newest first,
  * optionally filtered by status (e.g. ?status=pending so a checker can find
  * refunds awaiting approval without being handed a UUID). Tenant-scoped via
