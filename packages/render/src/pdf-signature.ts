@@ -119,7 +119,7 @@ export function preparePdfForSigning(
 
   // Step 1: Build without ByteRange actual values to measure prefix length
   const prefixWithPlaceholders = sigDictPrefix;
-  const prefixBytes = Buffer.from(prefixWithPlaceholders, "binary");
+  Buffer.from(prefixWithPlaceholders, "binary");
 
   // offset1 = position just before '<' (the '<' is the last char of prefix)
   // Actually: the prefix ends with '<', so position of '<' is originalLength + prefixBytes.length - 1
@@ -184,7 +184,7 @@ export function preparePdfForSigning(
   const byteRangeStr = `[0 ${beforeContentsLen} ${afterContentsStart} ${afterContentsLen}]`;
 
   // Replace the placeholder ByteRange in the prefix
-  const finalPrefix = prefixBeforeAngleBracket.replace(
+  prefixBeforeAngleBracket.replace(
     "/ByteRange [0 __OFFSET1__ __OFFSET2__ __LENGTH2__]",
     `/ByteRange ${byteRangeStr}`,
   );
