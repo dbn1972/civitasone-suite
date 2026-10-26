@@ -53,14 +53,11 @@ import {
   nextComplaintNumber,
   insertNotice,
   updateNotice,
-  findNoticeById,
   nextNoticeNumber,
   insertHearing,
   updateHearing,
-  findHearingById,
   insertRemoval,
   updateRemoval,
-  findRemovalById,
 } from "./repo.js";
 import type {
   CreateComplaintPayload,

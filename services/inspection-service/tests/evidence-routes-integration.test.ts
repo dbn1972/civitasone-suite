@@ -28,45 +28,9 @@ function makeToken(roles: string[] = ["super_admin"]): string {
 }
 
 const INSPECTOR_HEADER = { authorization: `Bearer ${makeToken(["inspector"])}` };
-const REVIEWER_HEADER = { authorization: `Bearer ${makeToken(["reviewing_officer"])}` };
-const AUDIT_HEADER = { authorization: `Bearer ${makeToken(["audit_officer"])}` };
 const NO_ROLE_HEADER = { authorization: `Bearer ${makeToken(["employee"])}` };
 
 // ── Mock evidence data ────────────────────────────────────────────────────────
-
-const MOCK_EVIDENCE = {
-  id: EVIDENCE_ID,
-  tenantId: TENANT_ID,
-  inspectionId: INSPECTION_ID,
-  findingId: null,
-  sha256Hash: "a".repeat(64),
-  s3Key: `evidence/${TENANT_ID}/${INSPECTION_ID}/${EVIDENCE_ID}/photo.jpg`,
-  mimeType: "image/jpeg",
-  fileSizeBytes: 1024 * 1024, // 1 MB
-  integrityStatus: "valid",
-  captureLatitude: "28.6139391",
-  captureLongitude: "77.2090212",
-  captureTimestamp: new Date().toISOString(),
-  deviceId: "device-001",
-  inspectorId: USER_ID,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  createdBy: USER_ID,
-  version: 1,
-};
-
-const MOCK_CUSTODY_ENTRIES = [
-  {
-    id: "cust-0001-0001-0001-000000000001",
-    tenantId: TENANT_ID,
-    evidenceId: EVIDENCE_ID,
-    action: "upload",
-    actorId: USER_ID,
-    details: { deviceId: "device-001", mimeType: "image/jpeg" },
-    recordedAt: new Date().toISOString(),
-    version: 1,
-  },
-];
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 

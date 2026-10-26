@@ -8,7 +8,6 @@
  *
  * _Requirements: 1.1, 1.2, 1.6, 1.9_
  */
-import { SYSTEM_ACTOR_ID } from "@civitasone/outbox";
 import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import { db, sqlClient } from "./shared/db.js";

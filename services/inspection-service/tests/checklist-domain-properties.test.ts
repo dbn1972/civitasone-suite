@@ -114,14 +114,6 @@ function sectionsWithRequired(): fc.Arbitrary<ChecklistSection[]> {
   );
 }
 
-/** Generate a response entry. */
-function responseEntryArb(): fc.Arbitrary<ResponseEntry> {
-  return fc.record({
-    value: fc.oneof(fc.string(), fc.integer(), fc.boolean()),
-    answeredAt: fc.constant(new Date().toISOString()),
-  });
-}
-
 // ── Property 16: Checklist Instance Deep-Copy Integrity ───────────────────────
 
 describe("Property 16: Checklist Instance Deep-Copy Integrity", () => {
