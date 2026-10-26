@@ -172,7 +172,7 @@ const TABLE_SEPARATOR_RE = /^\|?[\s:|-]+\|?$/;
 // heading, since it isn't itself a heading) would dilute that *preceding*
 // section's table ratio and could flip its classification after a
 // relocation round-trip, which is not a real change in the content.
-const HTML_COMMENT_LINE_RE = /^<!--.*-->$/;
+const HTML_COMMENT_LINE_RE = /^<!--.*--!?>$/;
 
 /** Strips full-line HTML comments before measuring body composition. */
 function stripCommentLines(bodyText: string): string {
