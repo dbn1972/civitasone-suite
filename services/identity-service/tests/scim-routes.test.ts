@@ -13,10 +13,6 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
-// SCIM uses its own bearer token, not JWT — configured via vitest.config.ts env
-const SCIM_TOKEN_VALUE = "test-scim-bearer-token-for-coverage";
-const SCIM_TENANT_VALUE = "aaaaaaaa-1111-4000-8000-000000000099";
-
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
 const ACTOR = "a0000000-0000-4000-8000-0000000000aa";

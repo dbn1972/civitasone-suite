@@ -1,8 +1,6 @@
-import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
-import { queue as rawQueue } from "../../shared/infra.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";

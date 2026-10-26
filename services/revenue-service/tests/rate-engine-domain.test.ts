@@ -13,7 +13,6 @@ import {
   computeInterest,
   computeRebate,
   lookupEffectiveSlab,
-  lookupEffectiveSlabs,
   applyRounding,
   assertMakerChecker,
   daysBetween,
@@ -27,7 +26,6 @@ import {
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const RATE_HEAD_ID = "rh-property-tax";
-const TENANT_ID = "t-001";
 
 function flatSlab(overrides: Partial<RateSlab> = {}): RateSlab {
   return {

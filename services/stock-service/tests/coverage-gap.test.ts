@@ -10,13 +10,11 @@ import { signToken } from "@civitasone/auth";
 import { db, sqlClient } from "../src/shared/db.js";
 import { stockItems, stockItemCategories, stockUoms } from "../src/modules/item/schema.js";
 import { stockEntries } from "../src/modules/entry/schema.js";
-import { stockLedger } from "../src/modules/ledger/schema.js";
 import { stockValuationRates } from "../src/modules/valuation/schema.js";
 import { ewayBills } from "../src/modules/eway-bill/schema.js";
 import * as itemRepo from "../src/modules/item/repo.js";
 import * as entryRepo from "../src/modules/entry/repo.js";
 import * as ewayRepo from "../src/modules/eway-bill/repo.js";
-import * as valuationRepo from "../src/modules/valuation/repo.js";
 
 const TENANT = "11111111-cccc-4000-8000-000000000001";
 const ACTOR = "00000000-cccc-4000-8000-000000000001";

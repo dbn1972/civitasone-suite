@@ -2,7 +2,7 @@
  * Comprehensive route coverage tests for stock-service
  * Covers all routes, auth guards, validation, domain functions, and error paths.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 

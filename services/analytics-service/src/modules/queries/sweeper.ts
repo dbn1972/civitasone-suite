@@ -7,7 +7,7 @@
  * Cadence intervals: hourly=60min, daily=1440min, weekly=10080min, monthly=43200min.
  */
 import { pino } from "pino";
-import { eq, and, sql, isNull, or, lte } from "drizzle-orm";
+import { eq, and, isNull, or, lte } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";

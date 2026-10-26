@@ -11,7 +11,6 @@ import {
   addClauseBody,
   updateClauseBody,
   templateClauseParams,
-  renderQuery,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";

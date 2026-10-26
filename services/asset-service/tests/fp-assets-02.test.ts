@@ -530,7 +530,6 @@ describe("no combination of settings commands skips the GL approval (round-2 rev
     infraQueue.subscribe(COMMANDS.f3RouteWrite, async (m) => { captured.push(m.payload as Record<string, any>); });
     await infraQueue.start();
   });
-  const ops = () => captured.map((c) => c.op);
   const asFinanceAdmin = () => auth(T1, OTHER, ["finance_admin"]);
 
   it("PATCH with heads AND glMakerChecker:true while approval is ON becomes a pending request, never a direct update", async () => {

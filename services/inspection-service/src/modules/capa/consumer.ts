@@ -23,7 +23,7 @@ import {
   DomainError,
   type CapaState,
 } from "./domain.js";
-import { insertCapa, updateCapa, findCapaById, findCapaByIdTx } from "./repo.js";
+import { insertCapa, updateCapa, findCapaByIdTx } from "./repo.js";
 import type {
   CapaCreatePayload,
   CapaUpdatePayload,

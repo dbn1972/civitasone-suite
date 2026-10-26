@@ -6,7 +6,7 @@
  * These modules' tables may not exist in the test DB, so we mock the repo layer
  * for read operations and test that write operations correctly publish to queue.
  */
-import { describe, it, expect, afterAll, vi, beforeEach } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";

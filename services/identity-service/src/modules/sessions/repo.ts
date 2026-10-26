@@ -106,7 +106,7 @@ export async function reapExpiredSessions(batch = 500): Promise<number> {
   }
 
   let reaped = 0;
-  for (const [tenantId, ids] of byTenant) {
+  for (const [tenantId] of byTenant) {
     // Must go through db.transaction(): wrapWithTenantGuc only intercepts
     // transaction(), not a bare db.update() — the exact same class of bug this
     // function exists to fix, reproduced one level down. A bare db.update()

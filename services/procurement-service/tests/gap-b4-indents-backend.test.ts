@@ -6,7 +6,6 @@
  *   GAP-PROCUREMENT-INDENTS-NEW-06   — GFR mode-bands thresholds + server re-derivation; value/mode mismatch rejected
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";

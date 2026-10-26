@@ -328,7 +328,7 @@ export function registerAssessmentConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      const { assessmentId, approve, reason } = msg.payload as {
+      const { assessmentId, approve } = msg.payload as {
         assessmentId: string;
         approve: boolean;
         reason?: string;

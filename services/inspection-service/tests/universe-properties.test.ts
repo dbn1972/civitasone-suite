@@ -9,7 +9,6 @@ import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import {
   VALID_ENTITY_TYPES,
-  validateEntityType,
   incrementVersion,
   buildSearchVector,
   serializeEntity,

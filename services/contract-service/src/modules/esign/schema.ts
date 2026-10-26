@@ -1,4 +1,4 @@
-import { pgSchema, uuid, text, integer, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, integer, varchar, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 export const esignSchema = pgSchema("esign");
 

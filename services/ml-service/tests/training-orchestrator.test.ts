@@ -55,7 +55,6 @@ import {
   trainTenantDomain,
   runTrainingLoop,
   checkDataThreshold,
-  getActiveTenants,
   ALL_DOMAINS,
   DEFAULT_TRAINING_CONFIG,
   _runningJobs,

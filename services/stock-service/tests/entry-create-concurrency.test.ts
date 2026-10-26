@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, beforeEach, afterAll, afterEach, vi } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";

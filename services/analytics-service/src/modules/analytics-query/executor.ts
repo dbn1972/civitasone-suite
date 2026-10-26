@@ -30,8 +30,6 @@ import {
   JOIN_ROW_CAP,
   DRILL_THROUGH_ROW_CAP,
   type CalcExpression,
-  CalcFieldError,
-  JoinError,
   DrillThroughError,
 } from "./domain.js";
 import type { FilterSpec } from "../registry/spec.js";

@@ -10,7 +10,7 @@
 import { describe, it, expect } from "vitest";
 import { canTransition, assertTransition, DomainError } from "../src/modules/tenant/domain.js";
 import { createTenantBody, updateTenantBody, suspendTenantBody, setIsolationBody, onboardTenantBody, updateQuotasBody, msmeOnboardBody } from "../src/modules/tenant/validators.js";
-import { createSubscriptionBody, upgradeSubscriptionBody, cancelSubscriptionBody, renewSubscriptionBody, suspendSubscriptionBody, downgradeBody } from "../src/modules/subscriptions/validators.js";
+import { createSubscriptionBody, cancelSubscriptionBody, downgradeBody } from "../src/modules/subscriptions/validators.js";
 import { quotaSetBody, quotaIncrementBody, quotaCheckBody } from "../src/modules/quotas/validators.js";
 
 // ═══ TENANT LIFECYCLE (domain.ts) ═══

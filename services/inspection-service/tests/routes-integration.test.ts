@@ -22,7 +22,6 @@ function makeToken(roles: string[] = ["super_admin"]): string {
 }
 
 const AUTH_HEADER = { authorization: `Bearer ${makeToken()}` };
-const INSPECTOR_HEADER = { authorization: `Bearer ${makeToken(["inspector"])}` };
 const NO_ROLE_HEADER = { authorization: `Bearer ${makeToken(["employee"])}` };
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -53,17 +52,6 @@ const mockRiskModel = {
   createdAt: new Date().toISOString(),
 };
 
-const mockRiskScore = {
-  id: "bbbbbbbb-cccc-dddd-eeee-ffffffffffff",
-  tenantId: TENANT_ID,
-  entityId: mockEntity.id,
-  modelId: mockRiskModel.id,
-  score: 72,
-  factorBreakdown: [{ factorName: "history", weight: 0.5, rawScore: 80, weightedScore: 40 }],
-  previousScore: 65,
-  computedAt: new Date().toISOString(),
-};
-
 const mockPlan = {
   id: "cccccccc-dddd-eeee-ffff-000000000000",
   tenantId: TENANT_ID,
@@ -72,16 +60,6 @@ const mockPlan = {
   entityIds: [mockEntity.id],
   selectionCriteria: { riskThreshold: 70 },
   version: 1,
-  createdAt: new Date().toISOString(),
-};
-
-const mockAssignment = {
-  id: "dddddddd-eeee-ffff-0000-111111111111",
-  tenantId: TENANT_ID,
-  inspectorId: USER_ID,
-  entityId: mockEntity.id,
-  scheduledDate: "2025-03-15",
-  status: "assigned",
   createdAt: new Date().toISOString(),
 };
 

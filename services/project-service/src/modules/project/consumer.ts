@@ -1,11 +1,10 @@
-import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { projectMembers, type ProjectInsert } from "./schema.js";
+import { type ProjectInsert } from "./schema.js";
 import { assertTaskTransitionAllowed, assertMilestoneCanComplete } from "./domain.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 

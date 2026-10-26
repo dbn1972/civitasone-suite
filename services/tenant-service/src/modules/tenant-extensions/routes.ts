@@ -4,11 +4,10 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, readScoped } from "../../shared/db.js";
-import { tenants, tenantQuotas, tenantConfigs } from "../tenant/schema.js";
-import { eq, and } from "drizzle-orm";
+import { tenantQuotas, tenantConfigs } from "../tenant/schema.js";
+import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 
 const ADMIN  = ["platform_admin", "super_admin", "tenant_admin"];

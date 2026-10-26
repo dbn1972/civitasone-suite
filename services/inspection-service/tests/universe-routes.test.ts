@@ -698,8 +698,8 @@ describe("Version Conflict (409) on concurrent entity updates", () => {
     // In CQRS, the route publishes the command and returns 202.
     // The actual 409 is raised by the consumer calling repo.updateEntity.
     // We verify that the repo throws HttpError(409) for version mismatch.
-    const { HttpError } = await import("../src/shared/context.js");
-    const { updateEntity } = await import("../src/modules/universe/repo.js");
+    await import("../src/shared/context.js");
+    await import("../src/modules/universe/repo.js");
 
     // The repo mock is already set up — we verify the error path exists
     // by checking that the route handles the case where findEntityById returns

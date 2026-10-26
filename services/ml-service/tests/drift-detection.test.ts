@@ -198,7 +198,7 @@ describe("computeDeviations", () => {
       { territory: "South", predictionCount: 100, meanConfidence: 0.7, meanPrediction: 0.50 },
       { territory: "East", predictionCount: 100, meanConfidence: 0.7, meanPrediction: 0.55 },
     ];
-    const result = computeDeviations(territories);
+    computeDeviations(territories);
     // Mean ≈ 0.5167, East deviation ≈ |0.55 - 0.5167| / 0.5167 ≈ 0.064
     // At threshold 0.10, warn threshold is 0.07
     // 0.064 < 0.07 so this is actually "pass"

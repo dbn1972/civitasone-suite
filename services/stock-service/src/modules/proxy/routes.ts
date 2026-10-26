@@ -18,12 +18,6 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 
 const INVENTORY_SERVICE_URL = process.env.INVENTORY_SERVICE_URL ?? "http://localhost:3025";
 
-/** Header indicating routes are deprecated in favor of inventory-service. */
-const DEPRECATION_HEADER = "Deprecation";
-const DEPRECATION_VALUE = "true";
-const SUNSET_HEADER = "Sunset";
-const LINK_HEADER = "Link";
-
 /**
  * Proxy routes at /v1/inventory/* paths served by stock-service port.
  * Forwards to the canonical inventory-service.

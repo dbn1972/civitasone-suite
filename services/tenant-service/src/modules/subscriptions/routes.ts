@@ -13,7 +13,6 @@ import {
   renewSubscriptionBody,
   suspendSubscriptionBody,
   subscriptionIdParam,
-  tenantIdParam,
   upgradeInitiateBody,
   downgradeBody,
   cancelSubscriptionSelfBody,
@@ -99,7 +98,7 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
 
   // GET available plans with pricing & feature comparison
   app.get("/v1/tenant/plans", async (req, reply) => {
-    const ctx = resolveContext(req);
+    resolveContext(req);
     // Available to all authenticated users (to show plan comparison)
     const plans = [
       {

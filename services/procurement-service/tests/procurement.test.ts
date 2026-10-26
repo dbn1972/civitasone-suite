@@ -23,7 +23,6 @@ import { procurementIndents } from "../src/modules/indent/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
 import { docCounters } from "../src/shared/numbering.js";
-import { registerIndentConsumers } from "../src/modules/indent/consumer.js";
 import { registerGrnConsumers }    from "../src/modules/grn/consumer.js";
 import { registerPoConsumers }     from "../src/modules/po/consumer.js";
 import { assertTransitionAllowed } from "../src/modules/indent/domain.js";
@@ -39,7 +38,6 @@ const ACTOR  = "00000000-aaaa-4000-8000-000000000001";
 const INSPECTOR = "00000000-aaaa-4000-8000-000000000009";
 const TENANT = "11111111-aaaa-4000-8000-000000000002";
 
-const IND_1  = "22222222-bbbb-4000-8000-000000000001";
 const GRN_1  = "33333333-cccc-4000-8000-000000000001";
 const GRN_2  = "33333333-cccc-4000-8000-000000000002";
 const PO_1   = "44444444-dddd-4000-8000-000000000001";

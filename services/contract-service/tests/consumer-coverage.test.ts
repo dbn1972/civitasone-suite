@@ -10,7 +10,7 @@ import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { eq } from "drizzle-orm";
 import { db, sqlClient } from "../src/shared/db.js";
 import { clauseLibrary } from "../src/modules/clauses/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages } from "../src/shared/outbox.js";
 import { registerClauseConsumers } from "../src/modules/clauses/consumer.js";
 import {
   validateBody, validateMergeFields, ClauseDomainError,

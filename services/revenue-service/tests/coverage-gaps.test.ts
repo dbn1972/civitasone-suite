@@ -5,7 +5,7 @@
  * uncovered route handlers (GET endpoints for rate-engine), BBPS enabled paths,
  * billing/billing error paths.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // ── Common mock setup ─────────────────────────────────────────────────────────
 

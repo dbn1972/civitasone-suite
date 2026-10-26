@@ -1,5 +1,14 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, date, timestamp, jsonb, numeric,
+  pgSchema,
+  uuid,
+  text,
+  integer,
+  bigint,
+  char,
+  varchar,
+  date,
+  timestamp,
+  numeric,
 } from "drizzle-orm/pg-core";
 
 export const waterMeteringSchema = pgSchema("water_metering");
