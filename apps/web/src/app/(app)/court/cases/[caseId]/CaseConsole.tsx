@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, ConfirmDialog, EmptyState, Masked, StatusPill, Tabs, TabPanel } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { Button, Card, ConfirmDialog, EmptyState, StatusPill, Tabs, TabPanel } from "@/app/_components/ds";
 import type { CaseStatus, CertifiedCopy, CourtCaseDetail, CourtOrder, Hearing } from "../../_data/types";
 import { CASE_TRANSITIONS } from "../../_data/types";
 import { CertifiedCopiesPanel } from "./CertifiedCopiesPanel";
@@ -373,12 +374,16 @@ function LifecyclePanel({
 // ─── Parties ─────────────────────────────────────────────────────────────────
 
 function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
+  const t = useTranslations("courtPartyIdentity");
   return (
     <Card title={`Parties (${caseDetail.parties.length})`} padding>
       {caseDetail.parties.length === 0 ? (
         <EmptyState icon="👥" title="No parties recorded" message="No parties are on this case." />
       ) : (
         <div style={{ overflowX: "auto" }}>
+          {caseDetail.identityRevealed === false ? (
+            <p className="sub" role="note" style={{ margin: "0 0 10px" }}>{t("maskedNote")}</p>
+          ) : null}
           <table className="tbl" style={{ width: "100%" }}>
             <thead>
               <tr>
@@ -394,17 +399,8 @@ function PartiesPanel({ caseDetail }: { caseDetail: CourtCaseDetail }) {
                   <td>{humanize(p.partyRole)}</td>
                   <td>{p.name ?? "—"}</td>
                   <td>{p.advocateName ?? "—"}</td>
-                  <td style={mono}>
-                    {p.advocateBarId ? (
-                      <Masked
-                        value={p.advocateBarId}
-                        kind="last4"
-                        ariaLabel={`Advocate Bar ID ending ${p.advocateBarId.slice(-4)}`}
-                      />
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+                  {/* The server decides what this role may see (full vs masked) and audits every reveal. */}
+                  <td style={mono}>{p.advocateBarId ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

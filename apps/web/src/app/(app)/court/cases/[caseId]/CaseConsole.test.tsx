@@ -129,11 +129,25 @@ describe("CaseConsole", () => {
     fetchCaseHearingsMock.mockResolvedValue([]);
   });
 
-  it("CASEID-04: masks the advocate Bar ID (not shown in the clear)", () => {
-    renderConsole();
-    // Masked last4 → "•••• 2010"; full id not rendered.
-    expect(screen.getByText(/•••• 2010/)).toBeInTheDocument();
-    expect(screen.queryByText("D/1234/2010")).not.toBeInTheDocument();
+  // Owner decision #32 (GAP-COURT-CASES-CASEID-04): the SERVER decides who sees identity (judges, registrars,
+  // court staff) and audits every reveal; the console shows exactly what it is given and says when it is masked.
+  it("CASEID-04: an authorised viewer sees the full party name and advocate Bar ID, with no masking note", () => {
+    renderConsole(caseDetail({ identityRevealed: true }));
+    expect(screen.getByText("D/1234/2010")).toBeInTheDocument();
+    expect(screen.queryByText(/masked for your role/i)).not.toBeInTheDocument();
+  });
+
+  it("CASEID-04: a viewer without the reveal role sees the server-masked values as given, plus a note", () => {
+    renderConsole(caseDetail({
+      identityRevealed: false,
+      parties: [{
+        id: "p1", caseId: "case-1", partyRole: "petitioner", name: "R*** K*** S***",
+        advocateName: "A*** R***", advocateBarId: "********2010", version: 1,
+      }],
+    }));
+    expect(screen.getByText("R*** K*** S***")).toBeInTheDocument();
+    expect(screen.getByText("********2010")).toBeInTheDocument();
+    expect(screen.getByText(/masked for your role/i)).toBeInTheDocument();
   });
 
   it("CASEID-05: disposing a case opens a danger confirm with required reason and no PATCH until confirmed", async () => {

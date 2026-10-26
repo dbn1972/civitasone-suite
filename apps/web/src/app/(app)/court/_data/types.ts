@@ -72,6 +72,12 @@ export interface CourtCase {
 
 export interface CourtCaseDetail extends CourtCase {
   parties: CaseParty[];
+  /**
+   * Owner decision #32: true when the server delivered party / advocate identity unmasked (judge, registrar,
+   * court staff). false = the names and Bar IDs in `parties` are already masked for this role. Absent from an
+   * older service: the console then says nothing about masking.
+   */
+  identityRevealed?: boolean;
 }
 
 /**

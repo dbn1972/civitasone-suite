@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { idParam, registerCaseBody, listCasesQuery } from "./validators.js";
-import { presentParty, PII_PRIVILEGED_ROLES } from "../party/domain.js";
+import { presentCaseParties } from "../party/routes.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import * as domain from "./domain.js";
@@ -114,9 +113,8 @@ export async function caseRegistryRoutes(app: FastifyInstance): Promise<void> {
     // cleartext party PII — name/address/phone/email — to every
     // COURT_READ_ROLES caller, including registrar/court_clerk who are NOT
     // privileged to see it).
-    const privileged = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
-    const parties = rows.map((r) => presentParty(r, privileged));
-    return reply.send({ ...found, parties, piiRevealed: privileged });
+    const { items: parties, piiRevealed, identityRevealed } = await presentCaseParties(ctx, id, rows, "case_detail");
+    return reply.send({ ...found, parties, piiRevealed, identityRevealed });
   });
 
   app.setErrorHandler((err, req, reply) => {

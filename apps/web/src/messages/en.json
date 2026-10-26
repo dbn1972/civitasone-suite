@@ -1192,6 +1192,9 @@
     "state_circulated": "Circulated",
     "workflowNote": "Edits and sign-off happen in the Meetings module, where the maker and checker are kept separate."
   },
+  "courtPartyIdentity": {
+    "maskedNote": "Party names and advocate Bar IDs are masked for your role. Judges, registrars and court staff see them in full."
+  },
   "courtCaseSelector": {
     "label": "Case",
     "placeholder": "Search by title or CNR…",

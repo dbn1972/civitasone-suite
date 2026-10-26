@@ -53,6 +53,8 @@ export const ERROR_CODES = {
   CONFIG_VERSION_CONFLICT: 409,
   FILING_INVALID: 400,
   COURT_NOT_FOUND: 404,
+  // Owner decision #32: unmasked party identity is refused while the reveal cannot be audited.
+  AUDIT_UNAVAILABLE: 503,
   // Cross-cutting auth/generic codes (also raised by resolveContext / requireRole).
   UNAUTHENTICATED: 401,
   FORBIDDEN: 403,

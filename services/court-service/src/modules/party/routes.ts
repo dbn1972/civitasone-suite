@@ -3,7 +3,7 @@ import { ZodError } from "zod";
 import { hasAnyRole } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { caseIdParam, partyIdParam, addPartyBody, updateAdvocateBody } from "./validators.js";
-import { presentParty, PII_PRIVILEGED_ROLES } from "./domain.js";
+import { presentParty, PII_PRIVILEGED_ROLES, IDENTITY_REVEAL_ROLES, partiesRevealingIdentity, type PartyRowForPresentation } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 
@@ -16,6 +16,27 @@ export const PARTY_READ_ROLES  = ["registrar", "court_admin", "super_admin", "co
 // embeds a case's parties in GET /cases/:id) shares the SAME constant and the
 // SAME presentParty() masking so the two endpoints can never disagree on what
 // PII a role may see.
+
+/**
+ * Present a case's parties for the caller's role and audit any unmasked identity delivery.
+ * Shared by GET .../parties and the case-detail embed so the two can never disagree (owner decision #32):
+ * PII (address/phone/email) follows PII_PRIVILEGED_ROLES, identity (name/advocate/Bar ID) follows
+ * IDENTITY_REVEAL_ROLES. The audit is published and awaited BEFORE anything is returned (fail closed).
+ */
+export async function presentCaseParties(
+  ctx: Parameters<typeof commands.recordIdentityReveal>[0],
+  caseId: string,
+  rows: PartyRowForPresentation[],
+  surface: "case_parties" | "case_detail",
+) {
+  const piiRevealed = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
+  const identityRevealed = piiRevealed || hasAnyRole(ctx, IDENTITY_REVEAL_ROLES);
+  if (identityRevealed) {
+    const revealed = partiesRevealingIdentity(rows);
+    if (revealed.length > 0) await commands.recordIdentityReveal(ctx, caseId, revealed, surface);
+  }
+  return { items: rows.map((r) => presentParty(r, piiRevealed, identityRevealed)), piiRevealed, identityRevealed };
+}
 
 export async function partyRoutes(app: FastifyInstance): Promise<void> {
   // Add a party / advocate to a case (§14/§15).
@@ -35,10 +56,9 @@ export async function partyRoutes(app: FastifyInstance): Promise<void> {
     const { id } = caseIdParam.parse(req.params);
     const rows = await repo.listPartiesByCase(ctx.tenantId, id);
 
-    const privileged = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
-    const items = rows.map((r) => presentParty(r, privileged));
+    const { items, piiRevealed, identityRevealed } = await presentCaseParties(ctx, id, rows, "case_parties");
 
-    return reply.send({ items, count: items.length, source: "db", piiRevealed: privileged });
+    return reply.send({ items, count: items.length, source: "db", piiRevealed, identityRevealed });
   });
 
   // Update an advocate's details on a party.
