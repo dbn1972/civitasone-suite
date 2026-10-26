@@ -1,6 +1,5 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { resolveContext, HttpError } from "../../shared/context.js";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";

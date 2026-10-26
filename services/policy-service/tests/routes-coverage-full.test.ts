@@ -4,7 +4,7 @@
  * Covers ALL routes (roles, bindings, evaluate, abac), auth 403, validation 400,
  * domain logic, error handlers. Uses buildApp + inject with HS256 test JWTs.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -15,7 +15,6 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const ACTOR = randomUUID();
 const VALID_UUID = randomUUID();
-const ROLE_ID = randomUUID();
 
 function token(roles: string[] = ["tenant_admin"], tid = TENANT): string {
   return signToken({ sub: ACTOR, tid, roles, sid: "s1" }, SECRET, 3600);
@@ -827,13 +826,8 @@ describe("evaluate domain — edge cases", () => {
 // DOMAIN — abac/domain.ts additional coverage
 // ══════════════════════════════════════════════════════════════════════════════
 import {
-  evaluate,
   evalPredicate,
   resolvePath,
-  ruleMatches,
-  parseExpression,
-  assertExpression,
-  ExpressionError,
   type CompiledRule,
   type AccessRequest,
   type RuleExpression,
@@ -841,10 +835,6 @@ import {
 
 describe("abac domain — additional path coverage", () => {
   const ROLE = randomUUID();
-
-  function mkRule(id: string, expr: RuleExpression, enabled = true): CompiledRule {
-    return { id, roleId: ROLE, enabled, expression: expr };
-  }
 
   function mkReq(over: Partial<AccessRequest> = {}): AccessRequest {
     return {
@@ -900,7 +890,7 @@ describe("abac domain — additional path coverage", () => {
 // ══════════════════════════════════════════════════════════════════════════════
 // SHARED — context.ts coverage
 // ══════════════════════════════════════════════════════════════════════════════
-import { HttpError, requireRole, resolveContext } from "../src/shared/context.js";
+import { HttpError, requireRole } from "../src/shared/context.js";
 import type { RequestContext } from "@civitasone/types";
 
 describe("shared/context — HttpError", () => {
