@@ -6,6 +6,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { entityRoutes } from "./modules/entities/routes.js";
 import { fieldRoutes } from "./modules/fields/routes.js";
@@ -21,13 +22,26 @@ import { publicFormRoutes } from "./modules/forms/public-routes.js";
 import { configRoutes } from "./modules/config/routes.js";
 import { assertPiiKeyConfigured } from "./shared/pii-crypto.js";
 
+// Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
+// external caller cannot forge it. Same value as hrms-service INTERNAL_PROXY_TRUST. Deliberately not `true`.
+const INTERNAL_PROXY_TRUST = "loopback,linklocal,uniquelocal";
+
 export async function buildApp(): Promise<FastifyInstance> {
   // Fail closed in production if the at-rest PII key is missing: the public lead
   // form writes encrypted name/email/phone columns and must never fall back to
   // plaintext. No-op outside production so dev and tests boot without the key.
   assertPiiKeyConfigured();
-  const app = Fastify({ bodyLimit: 1_048_576, /* SEC: explicit 1 MiB body cap (see fastify-bodylimit-guard) */ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
+  const app = Fastify({ bodyLimit: 1_048_576, trustProxy: INTERNAL_PROXY_TRUST, /* SEC: explicit 1 MiB body cap (see fastify-bodylimit-guard) */ logger: { level: process.env.LOG_LEVEL ?? "info" }, genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID() });
   await app.register(authPlugin as any);
+
+  // Per-user rate limiting (300 req/min keyed by actorId, ops paths excluded), same shape as
+  // hrms/billing/audit-service. authPlugin is registered first so req.ctx is populated.
+  await registerRateLimit(app as any, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
   app.addHook("onRequest", createTenantTxHook(db));
   app.addHook("onRequest", async (req) => { const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId; if (tid) tenantStorage.enterWith({ tenantId: tid }); });
   registerOpsRoutes(app, { service: "metadata-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });

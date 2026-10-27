@@ -20,6 +20,7 @@
     "@civitasone/observability": "workspace:*",
     "@civitasone/outbox": "workspace:*",
     "@civitasone/queue": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/schemas": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9",
