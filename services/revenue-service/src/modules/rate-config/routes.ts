@@ -5,11 +5,14 @@ import { uuidParam } from "../../shared/validators.js";
 import { istToday } from "../arrears/recovery-notice.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { RATE_CONFIG_APPROVER_ROLES } from "../rate-engine/domain.js";
 import { previewProposal, type Proposal } from "./domain.js";
 import { proposeBody, decideBody, proposalListQuery, previewQuery } from "./validators.js";
 
 const REVENUE_ROLES = ["revenue_admin", "revenue_officer", "finance_admin", "super_admin", "tenant_admin"];
 /** Owner decision #2: revenue_admin proposes (a DIFFERENT officer then approves). */
+/** Owner decision F2: only these two roles decide a rate-config proposal (never the proposer). */
+const APPROVER_ROLES = [...RATE_CONFIG_APPROVER_ROLES];
 const PROPOSER_ROLES = ["revenue_admin", "super_admin"];
 
 export async function rateConfigRoutes(app: FastifyInstance): Promise<void> {
@@ -86,7 +89,7 @@ export async function rateConfigRoutes(app: FastifyInstance): Promise<void> {
   // ── PATCH /v1/revenue/rate-config/proposals/:id/decide (checker step) ──────
   app.patch("/v1/revenue/rate-config/proposals/:id/decide", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, REVENUE_ROLES);
+    requireRole(ctx, APPROVER_ROLES);
     const { id } = uuidParam.parse(req.params);
     const body = decideBody.parse(req.body);
     // Synchronous pre-check (409) — the consumer re-enforces both in-transaction.
