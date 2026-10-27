@@ -157,11 +157,14 @@ export function maskProfileView<T extends { attributes: unknown }>(ctx: { roles:
   return { ...view, attributes: maskAttributes((view.attributes ?? {}) as Record<string, unknown>) };
 }
 
+/** Key-name rule is limited to explicit aadhaar/aadhar names; a bare uid is value-driven only. */
+const AADHAAR_KEY_RE = /aadhaar|aadhar/i;
+
 /**
  * GAP-CDP-PROFILES-06 (owner decision D4c #1): data minimisation at ingest. Returns the
  * dotted path of the first Aadhaar-like value in `input`, or null. Aadhaar-like means a
  * 12-digit id (plain, space- or dash-grouped) or ANY non-empty value under an
- * Aadhaar-named key. Only the PATH is returned, never the value, so callers can refuse
+ * aadhaar/aadhar-named key (a bare uid is refused only when its value is 12-digit). Only the PATH is returned, never the value, so callers can refuse
  * without echoing the identifier back or logging it.
  */
 export function findAadhaarLike(input: unknown, path = ""): string | null {
@@ -178,7 +181,7 @@ export function findAadhaarLike(input: unknown, path = ""): string | null {
   if (typeof input === "object") {
     for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
       const here = path ? `${path}.${k}` : k;
-      if (classifyKey(k) === "aadhaar" && v !== null && v !== undefined && v !== "") return here;
+      if (AADHAAR_KEY_RE.test(k) && v !== null && v !== undefined && v !== "") return here;
       const hit = findAadhaarLike(v, here);
       if (hit) return hit;
     }

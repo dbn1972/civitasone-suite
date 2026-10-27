@@ -44,7 +44,11 @@ describe("findAadhaarLike", () => {
   });
   it("finds a value under an aadhaar-named key whatever its shape", () => {
     expect(findAadhaarLike({ aadhaarNumber: "last4 is 0123" })).toBe("aadhaarNumber");
-    expect(findAadhaarLike({ uid: 5 })).toBe("uid");
+    expect(findAadhaarLike({ aadhar_no: 5 })).toBe("aadhar_no");
+  });
+  it("treats uid as value-driven: refused only when 12-digit", () => {
+    expect(findAadhaarLike({ uid: "234567890123" })).toBe("uid");
+    expect(findAadhaarLike({ uid: "u-8f3a", device_uid: "d-1", uid2: 5 })).toBeNull();
   });
   it("does not flag ordinary attributes", () => {
     expect(findAadhaarLike({ name: "Raj", city: "Delhi", phone: "9876543210", pan: "ABCDE1234F", n: 42, t: "2025-06-01" })).toBeNull();
