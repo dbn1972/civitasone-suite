@@ -2905,7 +2905,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme MASTERDATA (was STATUS)
 
-- [~] **Status** (NEEDS OWNER DECISION: tenderTypeId column needed in pre_tenders before type master can be wired end-to-end; GAP-WORKS-TENDERS-NEW-03)
+- [x] **Status** Closed by 9018e1708 (owner decision D4c #40, 2026-10-27): nullable tender_type_id on pre-tenders, form sends it, text code kept for old records
 - **W2 works part 2 note (#2047):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. INTERIM, owner decision.
 - **W2 works note (#2039):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. Select is master-driven and the list resolves names. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Type select loads tender-types master and list resolves names; form still sends tenderType code/name not tenderTypeId, and category remains free text.
