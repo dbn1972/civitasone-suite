@@ -1314,7 +1314,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-SCHEMES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [~] **Status** (NEEDS OWNER DECISION: sector/description fields removed from create form in W0; backend confirmation needed whether grant-service stores and returns them before re-adding)
+- [x] **Status** Closed by d9f3f7afe (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — sector/description inputs were removed from the create form rather than being persisted and shown on the scheme detail page
 - **First-pass claim:** Sector and Description are collected and posted (CreateSchemeForm.tsx:65,68) but never read back: the scheme mapper and detail page ignore them (_data.ts:230-249; schemes/[id]/page.tsx:8-11 SECTOR_LABELS unused).
 - **Verified evidence:** CreateSchemeForm.tsx:65,68 send sector and description. mapSchemeSummaries and mapSchemeDetail (_data.ts:81-110, 230-249) contain no sector/description (grep finds none), and SECTOR_LABELS in schemes/[id]/page.tsx:8-11 is unused. Whether the API persists them cannot be verified.
