@@ -18,6 +18,7 @@
  * mocked-db unit tests in treasury-consumer.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "./support/finance-outbox-lock.js";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -86,6 +87,9 @@ function tenantWrappedQueue(): MemoryQueue {
     rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
   return q;
 }
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(process.env.DATABASE_URL!);
 
 beforeAll(async () => {
   // Bank head (1100) is not seeded by any migration for this tenant — the
