@@ -606,7 +606,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-MAPS-MONITORING-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 1070cb08b (UAT B4, 2026-10-27): map-markers honours date (records that existed on that IST day; status and position stay current, stated in meta and on the page, because the service keeps no history) and bbox is now sent from the visible map area ('Only this map area'); truncation notice already in place. Tests: services/location-service/tests/map-markers-as-of.test.ts, MonitoringMap.test.tsx, CivitasMap.test.tsx.
 - **W2 note:** truncated flag + notice done and parcel filter value fixed; as-of date is disabled (service keeps no history) and viewport bbox needs iframe bounds - NEEDS OWNER DECISION
 - **First-pass claim:** Header comment documents the API filters as domain, status and bbox (MonitoringMap.tsx:6), but the page sends domain, status and date and never bbox (MonitoringMap.tsx:95-97): 'As of date' may be silently ignored and every marker is fetched unbounded; the map caps display at 200 markers (CivitasMap.tsx:20). map-markers contract undeterminable (location-service absent).
 - **Service:** `location-service`  ·  **Endpoint(s):** `['GET /api/v1/locations/map-markers?domain&status&date|bbox']`
