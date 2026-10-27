@@ -323,7 +323,10 @@ describe("trade-service cross-service wiring — submitApplication -> finance.ch
     await q.drain();
 
     // Hop 2: finance-service's own outbox (challanCreate enqueued finance.gl.post) -> shared queue.
-    const relayedFromFinance = await relayOnce(financeDb as never, q, 100, "finance-service");
+    // Drain to completion: relayOnce() takes the OLDEST 100 unpublished rows of the shared
+    // finance outbox, so with a backlog from other suites a single call can miss this row.
+    let relayedFromFinance = 0;
+    for (let n = 1; n > 0;) { n = await relayOnce(financeDb as never, q, 100, "finance-service"); relayedFromFinance += n; }
     expect(relayedFromFinance).toBeGreaterThanOrEqual(1);
     await q.drain();
 

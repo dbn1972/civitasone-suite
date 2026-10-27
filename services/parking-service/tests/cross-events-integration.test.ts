@@ -203,7 +203,8 @@ describe("parking-service cross-events wiring — real DB, no mocks", () => {
 
     // Hop 2: the treasury consumer enqueued finance.gl.post into finance's
     // OWN outbox (same tx) — relay that too, like the real outbox relay would.
-    await relayOnce(finance.db as never, q, 100, "finance-service");
+    // Drain to completion (a single relayOnce() takes only the oldest 100 rows of the shared finance outbox).
+    for (let n = 1; n > 0;) n = await relayOnce(finance.db as never, q, 100, "finance-service");
     await q.drain();
 
     const [violationRow] = await runWithTenant(TENANT, () =>
