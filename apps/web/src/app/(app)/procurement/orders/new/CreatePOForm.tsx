@@ -54,6 +54,13 @@ export function CreatePOForm() {
   const [modeState, setModeState] = useState<ModeState>("idle");
   const [modeNonce, setModeNonce] = useState(0);
   const [copyState, setCopyState] = useState<CopyState>("idle");
+  // D4c #28: a vendor with no empanelment record needs an awarded-tender / GeM basis.
+  // The section appears when the server says so (422 VENDOR_NOT_EMPANELLED).
+  const [needsBasis, setNeedsBasis] = useState(false);
+  const [tenderId, setTenderId] = useState("");
+  const [gemOrderRef, setGemOrderRef] = useState("");
+  const [tenders, setTenders] = useState<Array<{ id: string; label: string }>>([]);
+  const [tendersFailed, setTendersFailed] = useState(false);
 
   const today = todayIST();
   const vendorId = vendor?.id ?? "";
@@ -150,6 +157,25 @@ export function CreatePOForm() {
     }
   }
 
+  useEffect(() => {
+    if (!needsBasis) return;
+    const controller = new AbortController();
+    fetch("/api/proxy/v1/procurement/tenders?limit=100", { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("tender list failed");
+        const body = await res.json() as { data?: Array<{ id?: string; tenderNo?: string; title?: string; status?: string }> } | Array<{ id?: string; tenderNo?: string; title?: string; status?: string }>;
+        const rows = Array.isArray(body) ? body : (body.data ?? []);
+        setTenders(rows.filter((r) => r.id && r.status === "awarded").map((r) => ({ id: r.id as string, label: [r.tenderNo, r.title].filter(Boolean).join(" — ") })));
+        setTendersFailed(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setTenders([]);
+        setTendersFailed(true);
+      });
+    return () => controller.abort();
+  }, [needsBasis]);
+
   // Submit waits for the pickers to be usable: a picker whose search failed must
   // be retried, not silently bypassed.
   const listsReady = vendorState !== "error" && indentState !== "error";
@@ -187,6 +213,8 @@ export function CreatePOForm() {
       vendorId,
       indentRef: `procurement_indent:${indentId}`,
       deliveryDate: deliveryDate || undefined,
+      ...(tenderId ? { tenderId } : {}),
+      ...(gemOrderRef.trim() ? { gemOrderRef: gemOrderRef.trim() } : {}),
       items: validItems.map((it) => ({
         itemCode: it.itemCode.trim(),
         description: it.description.trim(),
@@ -210,6 +238,12 @@ export function CreatePOForm() {
         // page loaded. Show a fixed, translated message -- never the raw server text.
         if (res.status === 422 && errorCode(text) === "VENDOR_BLACKLISTED") {
           setMessage(t("procurement.poForm.vendorBlacklisted"));
+          return;
+        }
+        // D4c #28: no empanelment record -> ask for an awarded tender / GeM reference.
+        if (res.status === 422 && errorCode(text) === "VENDOR_NOT_EMPANELLED") {
+          setNeedsBasis(true);
+          setMessage(t("procurement.poForm.vendorNotEmpanelled"));
           return;
         }
         const human = toHumanError("save", { area: "purchase order" });
@@ -260,6 +294,22 @@ export function CreatePOForm() {
             }}
           />
         </Field>
+
+        {needsBasis ? (
+          <fieldset style={{ gridColumn: "1 / -1", border: "1px solid var(--bd)", borderRadius: 8, padding: 12 }}>
+            <legend style={{ fontWeight: 600, fontSize: "0.875rem" }}>{t("procurement.poForm.basisTitle")}</legend>
+            <Field id="po-basis-tender" label={t("procurement.poForm.tenderLabel")}>
+              <select id="po-basis-tender" className="inp" value={tenderId} onChange={(e) => setTenderId(e.target.value)}>
+                <option value="">{t("procurement.poForm.tenderNone")}</option>
+                {tenders.map((tn) => <option key={tn.id} value={tn.id}>{tn.label}</option>)}
+              </select>
+              {tendersFailed ? <span role="alert" style={{ fontSize: "0.8125rem", color: "var(--bad)" }}>{t("procurement.poForm.tendersFailed")}</span> : null}
+            </Field>
+            <Field id="po-basis-gem" label={t("procurement.poForm.gemRefLabel")}>
+              <Input id="po-basis-gem" value={gemOrderRef} maxLength={128} onChange={(e) => setGemOrderRef(e.target.value)} />
+            </Field>
+          </fieldset>
+        ) : null}
 
         <Field label="Delivery date">
           <Input

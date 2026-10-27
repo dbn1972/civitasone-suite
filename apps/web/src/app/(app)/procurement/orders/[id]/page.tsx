@@ -14,23 +14,22 @@ import { PO_STATUS_LABELS } from "@/lib/procurement-status";
 // Amendment is only meaningful once a PO is a real order (not still draft) and not final.
 const AMENDABLE_STATUSES = new Set(["approved", "dispatched", "partial_grn", "gem_placed"]);
 
-// GAP-PROCUREMENT-ORDERS-DETAIL-01: a PO has exactly ONE release-approval path —
-// the eOffice file-noting decision raised from this page (POST .../submit-approval,
-// decided back on procurement.po.file_decided). Offering it on an already-approved
-// or in-flight PO invites a second, competing maker-checker path. Only offer it
-// while the PO is still awaiting that decision (draft or pending). The service
-// state machine is the authority (it rejects an illegal transition regardless).
+// GAP-PROCUREMENT-ORDERS-DETAIL-01 (D4c #19, owner decision 2026-10-27): a PO has
+// exactly ONE release-approval path - the workflow inbox (maker-checker, role
+// check, audit). An eOffice file note is OPTIONAL: it records administrative
+// noting only (POST .../submit-approval) and never approves, cancels or gates the
+// PO. It is only offered while the PO is still awaiting approval (draft or
+// pending); the service state machine is the authority regardless.
 const APPROVAL_RAISABLE_STATUSES = new Set(["draft", "pending"]);
 
 // Plain-language description of where a PO sits in its single release path.
 function approvalSummary(status: string): { label: string; detail: string } {
   switch (status) {
     case "draft":
-      return { label: "Not yet submitted", detail: "Raise this PO for eOffice approval below. Approval releases the PO for dispatch." };
     case "pending":
-      return { label: "Awaiting approval", detail: "An eOffice file is deciding this PO. The decision releases it for dispatch or cancels it." };
+      return { label: "Awaiting approval", detail: "This PO is in the workflow inbox. An approver other than its creator decides it; approval releases it for dispatch." };
     case "approved":
-      return { label: "Approved — ready to dispatch", detail: "This PO has been released by the eOffice approval decision and can now be dispatched to the vendor." };
+      return { label: "Approved — ready to dispatch", detail: "This PO has been released by its workflow-inbox approval and can now be dispatched to the vendor." };
     case "gem_placed":
       return { label: "Placed on GeM", detail: "This order was placed through GeM; fulfilment is tracked via the GeM order." };
     case "dispatched":
@@ -125,7 +124,7 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
         <div className="fields">
           <div className="field">
             <span className="label">Release path</span>
-            <span>eOffice file-noting approval</span>
+            <span>Workflow inbox approval (maker-checker)</span>
           </div>
           <div className="field">
             <span className="label">Current state</span>
@@ -160,9 +159,13 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
         </div>
       </Card>
 
-      {/* Only the release-approval path, only while awaiting it, only for a
-          role that can act on it (the service also 403s others). */}
+      {/* Optional eOffice file note: only while awaiting approval, only for a role
+          that can act on it (the service also 403s others). It never decides the PO. */}
       {canWrite && APPROVAL_RAISABLE_STATUSES.has(po.status) ? (
+        <>
+        <p style={{ margin: "0 0 8px", color: "var(--mut)", fontSize: "0.875rem" }} data-testid="eoffice-optional-note">
+          Optional: an eOffice file note records administrative noting only. It does not approve or release this PO — approve it from the workflow inbox.
+        </p>
         <RaiseEOfficeNote
           refType="procurement_po"
           refId={po.id}
@@ -172,6 +175,7 @@ export default async function PODetailPage(props: { params: Promise<{ id: string
           defaultApprovalChain="file_noting"
           notifyPath={`/api/proxy/v1/procurement/pos/${po.id}/submit-approval`}
         />
+        </>
       ) : null}
 
       {po.lineItems.length > 0 && (

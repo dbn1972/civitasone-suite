@@ -4,17 +4,38 @@ import { TenderSummaryListSchema, TenderDetailSchema } from "@civitasone/schemas
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
+import { randomUUID } from "node:crypto";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
+import { queue } from "../../shared/infra.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { getCommandOutcome } from "../../shared/outbox.js";
 import { db } from "../../shared/db.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
+import { BID_OPENING_COMMITTEE_ROLES } from "./domain.js";
 import { createTenderBody, submitBidBody, techEvaluateBody, awardTenderBody, idParam } from "./validators.js";
 
 const commandIdParam = z.object({ commandId: z.string().uuid() });
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
+
+/** D4c #20: audit event for a committee view of still-sealed bidder identities (counts only, no names). */
+async function auditTenderBidders(ctx: RequestContext, tenderId: string, bidCount: number): Promise<void> {
+  try {
+    await queue.publish("audit.event.record", {
+      messageId: randomUUID(), type: "audit.event.record",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: {
+        service: "procurement", action: "tender_bidders_view", resourceType: "tender", resourceId: tenderId,
+        outcome: "success", details: { bidCount, beforeOpening: true },
+      },
+    });
+  } catch {
+    throw new HttpError(503, "AUDIT_UNAVAILABLE", "This view could not be recorded, so nothing was returned. Try again shortly.");
+  }
+}
 
 export async function tenderRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/tenders", async (req, reply) => {
@@ -28,9 +49,14 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const detail = await queries.getTenderDetail(id, ctx.tenantId);
+    const isCommittee = hasAnyRole(ctx, [...BID_OPENING_COMMITTEE_ROLES]);
+    const detail = await queries.getTenderDetail(id, ctx.tenantId, { isCommittee });
     if (!detail) throw new HttpError(404, "NOT_FOUND", "tender not found");
-    sendValidated(reply, TenderDetailSchema, detail);
+    const { sealedIdentitiesShown, ...body } = detail;
+    // D4c #20: the bid-opening committee seeing bidder identities BEFORE opening is an
+    // audited view; fails closed (no identities released if the audit cannot be recorded).
+    if (sealedIdentitiesShown) await auditTenderBidders(ctx, id, body.bids.length);
+    sendValidated(reply, TenderDetailSchema, body);
   });
 
   // Two-bid evaluation view — proves the sealing property (financial withheld
@@ -39,9 +65,12 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = idParam.parse(req.params);
-    const view = await queries.getEvaluationView(id, ctx.tenantId);
+    const isCommittee = hasAnyRole(ctx, [...BID_OPENING_COMMITTEE_ROLES]);
+    const view = await queries.getEvaluationView(id, ctx.tenantId, { isCommittee });
     if (!view) throw new HttpError(404, "NOT_FOUND", "tender not found");
-    return reply.send(view);
+    const { sealedIdentitiesShown, ...body } = view;
+    if (sealedIdentitiesShown) await auditTenderBidders(ctx, id, body.bids.length);
+    return reply.send(body);
   });
 
   // ── Competitive lifecycle commands ──────────────────────────────────────

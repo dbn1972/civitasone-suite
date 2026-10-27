@@ -314,7 +314,11 @@ export function registerTenderConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: {
           id: randomUUID(), tenantId: p.tenantId, poNo: "AUTO",
-          vendorId: winner.vendorId, indentRef: `tender:${p.id}`,
+          vendorId: winner.vendorId,
+          // Carry the tender's authorising indent so the PO consumer can reserve budget against it.
+          indentRef: t.indentRef ?? `tender:${p.id}`,
+          // D4c #28: the PO consumer accepts a winner with no empanelment row only on this basis.
+          tenderId: p.id,
           ...(sanctionRef ? { sanctionRef } : {}),
           items: [{
             itemCode: t.tenderNo, description: `Award for tender ${t.tenderNo}`,

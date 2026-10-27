@@ -85,14 +85,18 @@ export async function empanelmentValidity(vendorId: string, tenantId: string, to
   };
 }
 
-export async function listVendors(tenantId: string, limit: number, offset = 0, q?: string): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; vendorType: "registered" | "empanelled" | "blacklisted"; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string; contactPerson?: string; address?: string }> }> {
+export async function listVendors(tenantId: string, limit: number, offset = 0, q?: string): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; performanceScore: number | null; performanceBand: string | null; vendorType: "registered" | "empanelled" | "blacklisted"; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string; contactPerson?: string; address?: string }> }> {
   const rows = await repo.listVendorsByTenant(tenantId, limit, offset, q);
+  const scores = await repo.findPerformanceScores(tenantId, rows.map((v) => v.id));
   return {
     data: rows.map((v) => ({
       id: v.id,
       name: v.name,
       category: v.category ?? v.vendorType,
       ratingDisplay: v.mse ? "MSE ★★★★" : "—",
+      // D4c #22: one rating scale - the scorecard score out of 100 with its band (null = not scored).
+      performanceScore: scores.get(v.id)?.score ?? null,
+      performanceBand: scores.get(v.id)?.band ?? null,
       kycStatus: v.kycStatus,
       vendorType: v.vendorType as "registered" | "empanelled" | "blacklisted",
       // GAP-PROCUREMENT-RFQ-NEW-02: surface the blacklist state so the RFQ
@@ -112,4 +116,10 @@ export async function listVendors(tenantId: string, limit: number, offset = 0, q
       ...(v.ifsc ? { ifsc: v.ifsc } : {}),
     })),
   };
+}
+
+/** D4c #23: the scorecard score (/100) and band for one vendor profile (null = not scored). */
+export async function vendorPerformance(vendorId: string, tenantId: string): Promise<{ performanceScore: number | null; performanceBand: string | null }> {
+  const hit = (await repo.findPerformanceScores(tenantId, [vendorId])).get(vendorId);
+  return { performanceScore: hit?.score ?? null, performanceBand: hit?.band ?? null };
 }

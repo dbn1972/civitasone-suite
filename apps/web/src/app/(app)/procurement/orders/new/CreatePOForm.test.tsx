@@ -286,3 +286,47 @@ describe("CreatePOForm — w0-report: synchronous 422 VENDOR_BLACKLISTED", () =>
     expect(posted(fetchSpy)).toBeUndefined();
   });
 });
+
+// D4c #28 (GAP-PROCUREMENT-ORDERS-NEW-06): a vendor with no empanelment record needs a basis.
+describe("CreatePOForm — D4c #28 non-empanelled vendor basis", () => {
+  beforeEach(() => { vi.restoreAllMocks(); pushMock.mockReset(); });
+
+  const TENDERS = { data: [
+    { id: "t-won", tenderNo: "TN/2026/07", title: "Laptops", status: "awarded" },
+    { id: "t-open", tenderNo: "TN/2026/08", title: "Chairs", status: "published" },
+  ] };
+
+  function mockWithBasis(postResponses: Response[]) {
+    const queue = [...postResponses];
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/procurement/tenders")) return new Response(JSON.stringify(TENDERS), { status: 200 });
+      if (url.includes("/procurement/vendors")) return new Response(JSON.stringify({ data: VENDORS }), { status: 200 });
+      if (url.includes("/procurement/gfr/mode-bands")) return new Response(JSON.stringify(BANDS), { status: 200 });
+      if (url.includes("/procurement/indents")) return new Response(JSON.stringify({ data: INDENTS }), { status: 200 });
+      if (url.includes("/procurement/pos") && (init as RequestInit | undefined)?.method === "POST") return queue.shift() ?? new Response(JSON.stringify({ id: "po-new" }), { status: 202 });
+      return new Response(null, { status: 404 });
+    });
+  }
+
+  it("on 422 VENDOR_NOT_EMPANELLED it asks for an awarded tender or GeM reference, then resubmits with it", async () => {
+    const fetchSpy = mockWithBasis([
+      new Response(JSON.stringify({ code: "VENDOR_NOT_EMPANELLED" }), { status: 422 }),
+      new Response(JSON.stringify({ id: "po-new" }), { status: 202 }),
+    ]);
+    render(<CreatePOForm />);
+    await pickVendor();
+    await pickIndent();
+    fillOneLine();
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    expect(await screen.findByText(/Link the awarded tender this vendor won/)).toBeInTheDocument();
+    // Only the awarded tender is offered.
+    expect(await screen.findByRole("option", { name: /TN\/2026\/07/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /TN\/2026\/08/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("GeM order reference"), { target: { value: "GEM/2026/B/55" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls.filter(([i, ini]) => String(typeof i === "string" ? i : (i as Request).url).includes("/procurement/pos") && (ini as RequestInit)?.method === "POST")[1]!;
+    expect(JSON.parse(String((init as RequestInit).body))).toMatchObject({ gemOrderRef: "GEM/2026/B/55" });
+  });
+});

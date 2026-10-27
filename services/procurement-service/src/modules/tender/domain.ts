@@ -39,6 +39,24 @@ const VALID_TRANSITIONS: Record<TenderStatus, TenderStatus[]> = {
   cancelled:            [],
 };
 
+/**
+ * D4c #20 (GAP-PROCUREMENT-TENDERS-DETAIL-04): the roles that may see WHICH vendors
+ * have bid before the bids are opened (GFR / CVC sealed-bid confidentiality).
+ * Held to the bid-opening committee only - deliberately no super_admin / procurement
+ * role fast path. Every reveal is audited (queries/routes: tender_bidders_view).
+ */
+export const BID_OPENING_COMMITTEE_ROLES = ["bid_opening_committee"] as const;
+
+/**
+ * True while bidder identities are still confidential: bids are not yet opened
+ * (draft / published), or the tender was cancelled before any bid was ever opened
+ * for evaluation.
+ */
+export function isBidderIdentitySealed(tenderStatus: string, bidStatuses: ReadonlyArray<string>): boolean {
+  if (tenderStatus === "draft" || tenderStatus === "published") return true;
+  return tenderStatus === "cancelled" && bidStatuses.every((s) => s === "submitted");
+}
+
 export function assertTenderTransition(from: string, to: TenderStatus): void {
   const allowed = VALID_TRANSITIONS[from as TenderStatus] ?? [];
   if (!allowed.includes(to)) {

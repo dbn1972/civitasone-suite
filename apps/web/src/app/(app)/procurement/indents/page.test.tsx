@@ -17,7 +17,8 @@ function route(payload: unknown, source: "api" | "error" = "api") {
   lastPath = "";
   fetchJsonMock.mockImplementation(
     (path: unknown, _empty: unknown, options?: { mapResponse?: (p: unknown) => unknown }) => {
-      lastPath = typeof path === "string" ? path : "";
+      // The summary endpoint is a separate request; this tracks the LIST path.
+      if (typeof path === "string" && !path.includes("/summary")) lastPath = path;
       const mapped = options?.mapResponse ? options.mapResponse(payload) : payload;
       return Promise.resolve({ data: source === "error" ? [] : mapped, source });
     },
@@ -204,8 +205,10 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
   it("makes one request when there is no filter", async () => {
     serverRoute(tenant());
     render(await IndentsPage({ searchParams: Promise.resolve({}) }));
-    expect(paths).toHaveLength(1);
-    expect(paths[0]).not.toContain("status=");
+    // One LIST request (no duplicate stats fetch); the summary is a separate endpoint.
+    const listPaths = paths.filter((p) => !p.includes("/summary"));
+    expect(listPaths).toHaveLength(1);
+    expect(listPaths[0]).not.toContain("status=");
   });
 
   it("a full filtered page offers Next, carrying the filter", async () => {
@@ -233,5 +236,41 @@ describe("IndentsPage status drill-through across pages (GAP-PROCUREMENT-DASHBOA
     expect(screen.getByText("No indents in this status")).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "Indent pages" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Clear filter" })).toBeInTheDocument();
+  });
+});
+
+// D4c #18 (GAP-PROCUREMENT-INDENTS-01): tiles and pager use the server's TRUE totals.
+describe("IndentsPage server totals (D4c #18)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  function summaryRoute(rows: Array<Record<string, unknown>>, summary: unknown) {
+    fetchJsonMock.mockImplementation(
+      (path: unknown, _empty: unknown, options?: { mapResponse?: (p: unknown) => unknown }) => {
+        const payload = String(path).includes("/summary") ? { data: summary } : { data: rows };
+        return Promise.resolve({ data: options?.mapResponse ? options.mapResponse(payload) : payload, source: "api" });
+      },
+    );
+  }
+
+  it("tiles show whole-tenant counts, not the page, and the total tile says Total indents", async () => {
+    summaryRoute([indent({ id: "a", status: "approved" })], { total: 250, counts: { approved: 200, pending: 40, draft: 10 } });
+    const { container } = render(await IndentsPage({ searchParams: Promise.resolve({}) }));
+    const tile = (label: string) => Array.from(container.querySelectorAll(".stat .lab")).find((el) => el.textContent === label)!.closest(".stat");
+    expect(tile("Total indents")).toHaveTextContent("250");
+    expect(tile("Approved")).toHaveTextContent("200");
+    expect(tile("Pending Approval")).toHaveTextContent("40");
+  });
+
+  it("offers Next from the server total even when the page is exactly full", async () => {
+    summaryRoute(Array.from({ length: 100 }, (_, i) => indent({ id: `i${i}`, indentNo: `IND-${i}` })), { total: 101, counts: { pending: 101 } });
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.getByText(/Showing 1–100 of 101 indents/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Next/i })).toBeInTheDocument();
+  });
+
+  it("no Next on the last page when the total ends exactly at the page boundary", async () => {
+    summaryRoute(Array.from({ length: 100 }, (_, i) => indent({ id: `i${i}`, indentNo: `IND-${i}` })), { total: 100, counts: { pending: 100 } });
+    render(await IndentsPage({ searchParams: Promise.resolve({}) }));
+    expect(screen.queryByRole("link", { name: /Next/i })).not.toBeInTheDocument();
   });
 });

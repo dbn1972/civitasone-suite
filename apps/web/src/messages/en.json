@@ -6026,6 +6026,13 @@
         "serverVendorMissing": "One of the selected vendors could not be found. Search again and re-select it."
       },
       "vendors": {
+        "performanceScore": "Score (/100)",
+        "performanceScoreCell": "{score}/100 · Band {band}",
+        "notScored": "Not scored",
+        "pagerLabel": "Vendor pages",
+        "prev": "← Previous",
+        "next": "Next →",
+        "page": "Page {page}",
         "showingOfTotal": "Showing {shown} of {total} vendors. Search the full directory to find the others.",
         "searchAll": "Search all vendors by name…",
         "searchAllLabel": "Search the full vendor directory",
@@ -6074,6 +6081,9 @@
         }
       },
       "vendorDetail": {
+        "performanceScore": "Performance score {score}/100 · Band {band}",
+        "notScoredYet": "Not scored yet",
+        "performanceScoreHint": "Performance score out of 100 from the vendor scorecard (delivery, quality, SLA). The buyer rating, where recorded, is a separate 1–5 feedback score.",
         "validTill": "Empanelment valid till",
         "expired": "Expired",
         "expiresIn": "Expires in {days, plural, one {# day} other {# days}}",
@@ -6147,9 +6157,19 @@
       "reconcileOpen": "On-time {onTime} + late {late} of {total} orders; {open} not yet delivered.",
       "reconcileMismatch": "On-time {onTime} + late {late} do not add up to the {total} orders recorded."
     },
+    "contractForm": {
+      "poNotFound": "This PO reference does not match any purchase order. Check the PO number, or leave it blank.",
+      "poUnavailable": "The PO reference could not be verified right now. Please try again in a moment."
+    },
     "poForm": {
+      "vendorNotEmpanelled": "This vendor has no empanelment record. Link the awarded tender this vendor won, or enter a GeM order reference, then submit again.",
+      "basisTitle": "Basis for ordering from a vendor with no empanelment record",
+      "tenderLabel": "Awarded tender",
+      "tenderNone": "No tender linked",
+      "gemRefLabel": "GeM order reference",
+      "tendersFailed": "Couldn’t load awarded tenders. You can still enter a GeM order reference.",
       "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
-      "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."
+      "created": "PO created as a draft and sent to the workflow inbox for approval. Once an approver other than its creator approves it, it can be dispatched."
     },
     "gfr": {
       "band": {
@@ -6197,6 +6217,14 @@
         "trailUnavailable": "The approval trail could not be loaded just now, so it is not shown. This does not mean the indent has no decisions. Please try again shortly."
       },
       "approvals": {
+        "statPending": "Pending approvals",
+        "statActionable": "Awaiting your decision",
+        "statIndents": "Indents",
+        "statOrders": "Purchase orders",
+        "statsHintMore": "Counts cover the tasks loaded so far; more are waiting.",
+        "queueIntro": "This workflow queue is the single source for approvals: the figures and the Approve / Reject actions all come from it.",
+        "registerTitle": "Register of pending indents and draft POs (read-only)",
+        "registerNote": "For reference only. Items here are decided in the workflow queue above, never from this list, so its count can differ from the queue.",
         "value": "Value",
         "requestedBy": "Requested by",
         "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",

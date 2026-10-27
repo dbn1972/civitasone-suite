@@ -198,11 +198,17 @@ describe("EMPANELMENT-05 / ORDERS-NEW-06 - a lapsed empanelment cannot be ordere
     expect(res.json().code).toBe("EMPANELMENT_EXPIRED");
   });
 
-  it.each(["/v1/procurement/pos", "/v1/procurement/purchase-orders"])("%s: a vendor with a current empanelment, and a registered vendor with none, are accepted (202)", async (url) => {
-    for (const v of [CURRENT, PLAIN]) {
-      const res = await app.inject({ method: "POST", url, headers: hdr(["procurement_officer"]), payload: poPayload(v) });
-      expect(res.statusCode).toBe(202);
-    }
+  // D4c #28 (owner decision 2026-10-27) supersedes the earlier "registered vendor with
+  // no empanelment record is accepted": with no record the order needs an awarded
+  // tender or a GeM order reference (see d4c-28-po-nonempanelled-basis.test.ts).
+  it.each(["/v1/procurement/pos", "/v1/procurement/purchase-orders"])("%s: a vendor with a current empanelment is accepted (202); one with no record only with a GeM basis", async (url) => {
+    const ok = await app.inject({ method: "POST", url, headers: hdr(["procurement_officer"]), payload: poPayload(CURRENT) });
+    expect(ok.statusCode).toBe(202);
+    const none = await app.inject({ method: "POST", url, headers: hdr(["procurement_officer"]), payload: poPayload(PLAIN) });
+    expect(none.statusCode).toBe(422);
+    expect(none.json().code).toBe("VENDOR_NOT_EMPANELLED");
+    const withGem = await app.inject({ method: "POST", url, headers: hdr(["procurement_officer"]), payload: { ...poPayload(PLAIN), gemOrderRef: "GEM/2026/B/1" } });
+    expect(withGem.statusCode).toBe(202);
   });
 
   it("the poCreate consumer re-checks in its transaction: a command for a lapsed vendor writes no PO", async () => {

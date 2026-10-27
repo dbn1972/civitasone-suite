@@ -25,6 +25,7 @@ const VALID_PO_BODY = {
   poNo: "PO/IGNORED/001", // server now re-issues; still schema-required.
   vendorId: "22222222-2222-4000-8000-000000000001",
   indentRef: "procurement_indent:33333333-3333-4000-8000-000000000001",
+  gemOrderRef: "GEM/TEST/BASIS", // D4c #28: no empanelment record -> needs a GeM/tender basis
   items: [{ itemCode: "IC-1", description: "Widget", quantity: 1, unitPriceMinor: 1000 }],
 };
 
