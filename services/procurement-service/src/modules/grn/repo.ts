@@ -1,5 +1,7 @@
-import { eq, and, count, sql, inArray } from "drizzle-orm";
+import { eq, and, count, sql, inArray, ilike, or, desc, type SQL } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { likePattern } from "../../shared/search.js";
+import { procurementVendors } from "../vendor/schema.js";
 import { procurementGrns, procurementGrnItems, procurementInspections, type GrnRow, type GrnInsert, type GrnItemInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -127,13 +129,49 @@ export async function insertInspection(tx: Writer, row: typeof procurementInspec
   await tx.insert(procurementInspections).values(row);
 }
 
-export async function listGrnsByTenant(tenantId: string, limit = 100, offset = 0): Promise<GrnRow[]> {
+/** GAP-PROCUREMENT-GRN-02: server-side filters for the GRN register. */
+export type GrnListFilter = { q?: string; status?: string; vendorId?: string };
+
+/**
+ * Pre-decision GRN states: the register counts all of them as "awaiting inspection".
+ * The stored `partial` is included because list rows render it as `draft`
+ * (queries.mapGrnStatus has no partial), so the cards stay consistent with the rows.
+ */
+export const GRN_AWAITING_STATUSES = ["draft", "under_inspection", "received", "quality_check", "partial"] as const;
+
+function grnWhere(tenantId: string, f: GrnListFilter): SQL {
+  const conds: SQL[] = [eq(procurementGrns.tenantId, tenantId)];
+  if (f.vendorId) conds.push(eq(procurementGrns.vendorId, f.vendorId));
+  if (f.status) conds.push(eq(procurementGrns.status, f.status));
+  if (f.q) {
+    const pat = likePattern(f.q);
+    // GRN number or vendor name: the vendor lookup is a tenant-scoped subquery so
+    // the search reaches GRNs beyond any page the browser already holds.
+    const byVendor = sql`${procurementGrns.vendorId} IN (SELECT ${procurementVendors.id} FROM ${procurementVendors} WHERE ${procurementVendors.tenantId} = ${tenantId} AND ${ilike(procurementVendors.name, pat)})`;
+    conds.push(or(ilike(procurementGrns.grnNo, pat), byVendor) as SQL);
+  }
+  return and(...conds) as SQL;
+}
+
+export async function listGrnsByTenant(tenantId: string, limit = 100, offset = 0, filter: GrnListFilter = {}): Promise<GrnRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
+  // Newest first, id as tiebreak, so paging by offset is stable.
   return db.transaction((tx) => tx.select().from(procurementGrns)
-    .where(eq(procurementGrns.tenantId, tenantId))
+    .where(grnWhere(tenantId, filter))
+    .orderBy(desc(procurementGrns.createdAt), desc(procurementGrns.id))
     .limit(limit)
     .offset(offset));
+}
+
+/** GAP-PROCUREMENT-GRN-02: TRUE counts over every GRN matching the filter (not one page). */
+export async function countGrnsByStatus(tenantId: string, filter: GrnListFilter = {}): Promise<Array<{ status: string; n: number }>> {
+  const rows = await db.transaction((tx) => tx
+    .select({ status: procurementGrns.status, n: sql<number>`count(*)::int` })
+    .from(procurementGrns)
+    .where(grnWhere(tenantId, filter))
+    .groupBy(procurementGrns.status));
+  return rows.map((r) => ({ status: r.status, n: Number(r.n) }));
 }
 
 /**

@@ -6034,6 +6034,21 @@
         "retry": "Try again",
         "buyerRating": "Buyer rating (/5)"
       },
+      "grn": {
+        "searchLabel": "Search goods receipt notes",
+        "searchPlaceholder": "GRN number or vendor name",
+        "search": "Search",
+        "clearSearch": "Clear search",
+        "matchCount": "{count, plural, one {# GRN matches} other {# GRNs match}}",
+        "noMatchTitle": "No GRNs match your search",
+        "noMatchMessage": "Check the GRN number or vendor name, or clear the search to see every GRN.",
+        "noPageTitle": "No GRNs on this page",
+        "noPageMessage": "There are no more GRNs after the previous page. Go back to the previous page.",
+        "pagerLabel": "GRN pages",
+        "previous": "Previous",
+        "next": "Next",
+        "page": "Page {n}"
+      },
       "vendorActions": {
         "blacklistedNote": "This vendor is blacklisted. Reinstate it from the vendor blacklist register.",
         "accepted": "Request accepted. The status updates shortly.",
@@ -6068,7 +6083,24 @@
         "colPo": "PO",
         "colDate": "Order date",
         "colStatus": "Status",
-        "colAmount": "Amount"
+        "colAmount": "Amount",
+        "grnsTitle": "Goods receipts",
+        "noGrns": "No goods receipts",
+        "noGrnsHint": "GRNs recorded against this vendor will appear here.",
+        "colGrn": "GRN",
+        "colReceived": "Received",
+        "grnsShowingFirst": "Showing the first {count} GRNs. Open the GRN register for the rest.",
+        "viewAllGrns": "Open the GRN register",
+        "securitiesTitle": "EMD and bank guarantees",
+        "noSecurities": "No EMD or bank guarantees",
+        "noSecuritiesHint": "Earnest money and performance guarantees held for this vendor will appear here.",
+        "colType": "Type",
+        "colRef": "Reference",
+        "colInstrument": "Instrument",
+        "colValidUntil": "Valid until",
+        "labelPan": "vendor PAN",
+        "labelEmail": "vendor email",
+        "labelPhone": "vendor phone"
       },
       "vendorNew": {
         "duplicatePan": "A vendor with this PAN is already registered.",

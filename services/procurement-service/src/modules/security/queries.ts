@@ -25,15 +25,15 @@ function mapPbg(r: PbgRow) {
   };
 }
 
-export async function listEmd(tenantId: string, limit: number, offset: number) {
-  return (await repo.listEmdByTenant(tenantId, limit, offset)).map(mapEmd);
+export async function listEmd(tenantId: string, limit: number, offset: number, vendorId?: string) {
+  return (await repo.listEmdByTenant(tenantId, limit, offset, vendorId)).map(mapEmd);
 }
 export async function getEmd(id: string, tenantId: string) {
   const r = await repo.findEmdById(id, tenantId);
   return r ? mapEmd(r) : null;
 }
-export async function listPbg(tenantId: string, limit: number, offset: number) {
-  return (await repo.listPbgByTenant(tenantId, limit, offset)).map(mapPbg);
+export async function listPbg(tenantId: string, limit: number, offset: number, vendorId?: string) {
+  return (await repo.listPbgByTenant(tenantId, limit, offset, vendorId)).map(mapPbg);
 }
 export async function getPbg(id: string, tenantId: string) {
   const r = await repo.findPbgById(id, tenantId);

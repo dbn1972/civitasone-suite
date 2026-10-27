@@ -86,10 +86,10 @@ export async function getGrn(id: string, tenantId: string): Promise<Record<strin
  * fetched-then-counted-in-JS. Response shape and per-row field mapping are
  * unchanged from the original loop.
  */
-export async function listGrns(tenantId: string, limit: number, offset: number) {
+export async function listGrns(tenantId: string, limit: number, offset: number, filter: repo.GrnListFilter = {}) {
   const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "grns", `list:${limit}:${offset}`),
-    () => repo.listGrnsByTenant(tenantId, limit, offset),
+    cache.makeKey(tenantId, "grns", `list:${limit}:${offset}:${filter.q ?? ""}:${filter.status ?? ""}:${filter.vendorId ?? ""}`),
+    () => repo.listGrnsByTenant(tenantId, limit, offset, filter),
     60,
   );
   const grnRows = rows ?? [];
@@ -133,4 +133,23 @@ export async function listGrns(tenantId: string, limit: number, offset: number) 
 function mapGrnStatus(status: string): "draft" | "under_inspection" | "received" | "quality_check" | "accepted" | "partially_rejected" | "rejected" {
   const valid = ["draft", "under_inspection", "received", "quality_check", "accepted", "partially_rejected", "rejected"] as const;
   return (valid as readonly string[]).includes(status) ? status as typeof valid[number] : "draft";
+}
+
+export type GrnSummaryCounts = { total: number; accepted: number; awaitingInspection: number; rejected: number };
+
+/**
+ * GAP-PROCUREMENT-GRN-02: true status-count summary over every GRN matching the
+ * filter, so the register's stat cards and pager stay correct when the store
+ * holds more GRNs than one list page. awaitingInspection / rejected group the
+ * same states the web labels use (draft..quality_check; rejected + partial).
+ */
+export async function grnSummary(tenantId: string, filter: repo.GrnListFilter = {}): Promise<GrnSummaryCounts> {
+  const rows = await repo.countGrnsByStatus(tenantId, filter);
+  const n = (...statuses: string[]) => rows.filter((r) => statuses.includes(r.status)).reduce((a, r) => a + r.n, 0);
+  return {
+    total: rows.reduce((a, r) => a + r.n, 0),
+    accepted: n("accepted"),
+    awaitingInspection: n(...repo.GRN_AWAITING_STATUSES),
+    rejected: n("rejected", "partially_rejected"),
+  };
 }

@@ -20,10 +20,13 @@ export async function findEmdById(id: string, tenantId: string): Promise<EmdRow 
     .where(and(eq(procurementEmd.id, id), eq(procurementEmd.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
-export async function listEmdByTenant(tenantId: string, limit = 50, offset = 0): Promise<EmdRow[]> {
+export async function listEmdByTenant(tenantId: string, limit = 50, offset = 0, vendorId?: string): Promise<EmdRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
-  return db.transaction((tx) => tx.select().from(procurementEmd).where(eq(procurementEmd.tenantId, tenantId)).limit(limit).offset(offset));
+  return db.transaction((tx) => tx.select().from(procurementEmd)
+    // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional vendor filter for the vendor profile.
+    .where(vendorId ? and(eq(procurementEmd.tenantId, tenantId), eq(procurementEmd.vendorId, vendorId)) : eq(procurementEmd.tenantId, tenantId))
+    .limit(limit).offset(offset));
 }
 export async function updateEmdVersioned(tx: Writer, id: string, expectedVersion: number, patch: Partial<EmdInsert>): Promise<void> {
   const res = await (tx as typeof db).update(procurementEmd)
@@ -49,10 +52,12 @@ export async function findPbgById(id: string, tenantId: string): Promise<PbgRow 
     .where(and(eq(procurementPbg.id, id), eq(procurementPbg.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }
-export async function listPbgByTenant(tenantId: string, limit = 50, offset = 0): Promise<PbgRow[]> {
+export async function listPbgByTenant(tenantId: string, limit = 50, offset = 0, vendorId?: string): Promise<PbgRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
-  return db.transaction((tx) => tx.select().from(procurementPbg).where(eq(procurementPbg.tenantId, tenantId)).limit(limit).offset(offset));
+  return db.transaction((tx) => tx.select().from(procurementPbg)
+    .where(vendorId ? and(eq(procurementPbg.tenantId, tenantId), eq(procurementPbg.vendorId, vendorId)) : eq(procurementPbg.tenantId, tenantId))
+    .limit(limit).offset(offset));
 }
 export async function updatePbgVersioned(tx: Writer, id: string, expectedVersion: number, patch: Partial<PbgInsert>): Promise<void> {
   const res = await (tx as typeof db).update(procurementPbg)

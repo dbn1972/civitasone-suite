@@ -811,7 +811,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — truncation notice and partial-stats label already present; server-side pagination with a total and status-count summary needs the procurement-service GRN list endpoint to return {data, total, statusCounts}, not started; blocked on backend decision)
+- [x] **Status** Closed by 07980e447 (UAT B4, 2026-10-27): GET /v1/procurement/grns takes q/status/vendorId + stable order, GET /grns/summary returns true total/accepted/awaiting/rejected counts, the register pages on the server and its stat cards read the summary.
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: the interim 500-row truncation notice and partial-stats label exist (grn/page.tsx). A real fix is server-side pagination with a total and status-count summary (backend + loader + page), not started - scoped for part 2.
 - **W0 note:** partly fixed by #1866 — interim truncation notice at 500-row cap only; no server-side pagination/total/summary counts
 - **First-pass claim:** Hard cap: getProcurementGRNs({ limit: 500 }) (page.tsx:29) with client-side paging and no "showing first 500" cue; stats are computed from the same truncated list (page.tsx:31-34).
@@ -2764,7 +2764,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — phone is now masked via maskPhone() in VendorsTable.tsx (contact: v.contactPerson ?? maskPhone(v.phone)) so no raw number is shown; PAN and bank account are masked in the detail page; audited reveal endpoint (POST /vendors/:id/reveal) needs a backend and role-gate design decision before a reveal control can be added; fail-closed until then)
+- [x] **Status** Closed by c63c60d0e (UAT B4, 2026-10-27): POST /v1/procurement/pii/reveal (role-gated per field, mandatory reason, audit published before the value is released, fail-closed 503); the vendor profile has the Reveal control and the vendor list only receives the masked phone.
 - **W2 p2 REOPENED note: acceptance says an authorised role can reveal the masked value, but no reveal exists (PAN and phone stay masked, fail closed); it needs an audited reveal endpoint; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** DPDP: the Contact column falls back to the raw phone number (contact: v.contactPerson ?? v.phone ?? "—", Table) for every module user; contact persons of proprietorship vendors are natural persons, and no masking or role gate applies.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx:228 sets contact: v.contactPerson ?? v.phone ?? '—' and l.268 shows the Contact column to every module user; the search filter also indexes it. No masking or role gate. Whether contact persons are natural persons is domain fact (plausible for proprietorships).
@@ -2876,7 +2876,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was WIRING)
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — empanelment validity pill and PO tab added in #2055; GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints which the procurement-service does not currently expose; blocked on backend endpoint decision)
+- [~] **Status** (UAT B4 2026-10-27, partly done by e042cbd3e: the profile now also lists the vendor's GRNs and its EMD and bank guarantees, filtered by vendorId on the server, each section with its own error state. REMAINING: the Contracts tab needs a vendorId filter on contract-service GET /v1/contract/contracts, which belongs to the contracts module and not to procurement.)
 - **W2 procurement note (partly fixed in #2055): the profile now shows the empanelment validity (Expired / expires-in-N-days pill) and the vendor's purchase orders (GET /orders?vendorId=, per-section error state). Still open: GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints.**
 - **First-pass claim:** Profile has no history: orders, GRN acceptances, contracts, EMD/BG or empanelment expiry for the vendor are not shown, so an officer cannot judge the record without opening five other screens.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx renders only two cards: Vendor details (l.50-113) and Bank details (115-132) plus a 'View scorecard' link (l.44). VendorDetail (apiMappers.ts:126-159, 270-283) has no orders, GRN, contract, EMD/BG or empanelment-expiry field. Sibling lists exist (orders, grn, contracts, emd-bg, empanelment pages) but whether their list APIs accept a vendorId filter cannot be verified (procurement-service absent).

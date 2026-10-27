@@ -3,6 +3,8 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { GRNSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
+import { z } from "zod";
+import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createGrnBody, idParam, acceptGrnBody, rejectGrnBody, amendGrnBody } from "./validators.js";
 import * as commands from "./commands.js";
@@ -12,12 +14,26 @@ const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin",
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
 const WAREHOUSE_ROLES = ["warehouse_officer", "procurement_admin", "super_admin"];
 
+const grnFilter = searchQuerySchema.extend({
+  status: z.enum(["draft", "under_inspection", "accepted", "rejected", "partial"]).optional(),
+  vendorId: z.string().uuid().optional(),
+}).transform((v) => ({ ...(v.q ? { q: v.q } : {}), ...(v.status ? { status: v.status } : {}), ...(v.vendorId ? { vendorId: v.vendorId } : {}) }));
+
 export async function grnRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/procurement/grns", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, GRNSummaryListSchema, await queries.listGrns(ctx.tenantId, q.limit, q.offset));
+    const filter = grnFilter.parse(req.query);
+    sendValidated(reply, GRNSummaryListSchema, await queries.listGrns(ctx.tenantId, q.limit, q.offset, filter));
+  });
+
+  // GAP-PROCUREMENT-GRN-02: true counts for the stat cards and pager. Registered
+  // before /grns/:id so "summary" is never read as an id.
+  app.get("/v1/procurement/grns/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send({ data: await queries.grnSummary(ctx.tenantId, grnFilter.parse(req.query)) });
   });
 
   app.post("/v1/procurement/grns", async (req, reply) => {

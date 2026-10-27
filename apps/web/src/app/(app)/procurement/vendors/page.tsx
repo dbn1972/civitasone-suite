@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageHeader } from "../../../_components/ds";
+import { maskPhone } from "../../../_components/ds/Masked";
 import { getProcurementVendors, getProcurementVendorSummary } from "../../../_data/loaders";
 import { VendorsTable } from "./VendorsTable";
 
@@ -17,6 +18,10 @@ export default async function VendorsPage() {
   // pagination (HUMAN REVIEW), surface an honest "showing first N" notice when
   // we hit the cap so the count is never mistaken for the whole directory.
   const truncated = vendors.length >= VENDOR_LIST_LIMIT;
+  // GAP-PROCUREMENT-VENDORS-02 (DPDP): the raw phone never leaves the server. The table
+  // (and its offline cache) only ever holds the masked form; the clear value is
+  // available from the vendor profile through the audited reveal.
+  const maskedVendors = vendors.map((v) => (v.phone ? { ...v, phone: maskPhone(v.phone) } : v));
 
   return (
     <>
@@ -36,7 +41,7 @@ export default async function VendorsPage() {
         }
       />
 
-      <VendorsTable vendors={vendors} source={source} truncated={truncated} limit={VENDOR_LIST_LIMIT} summary={summary} />
+      <VendorsTable vendors={maskedVendors} source={source} truncated={truncated} limit={VENDOR_LIST_LIMIT} summary={summary} />
     </>
   );
 }

@@ -23,7 +23,7 @@ import { useTranslations } from "next-intl";
 import { browserFetch } from "@/lib/api/browserClient";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-export type PiiResourceType = "grievance" | "rti" | "service_request" | "onboarding" | "contact" | "employee" | "disciplinary_case";
+export type PiiResourceType = "grievance" | "rti" | "service_request" | "onboarding" | "contact" | "employee" | "disciplinary_case" | "vendor";
 
 /** Default audited-reveal endpoint (crm). HR passes `v1/hrms/pii/reveal`. */
 export const DEFAULT_PII_REVEAL_PATH = "v1/crm/pii/reveal";

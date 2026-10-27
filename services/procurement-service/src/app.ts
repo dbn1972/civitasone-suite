@@ -11,6 +11,7 @@ import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { indentRoutes }   from "./modules/indent/routes.js";
 import { vendorRoutes }   from "./modules/vendor/routes.js";
+import { vendorPiiRevealRoutes } from "./modules/vendor/pii-reveal.js";
 import { poRoutes }       from "./modules/po/routes.js";
 import { grnRoutes }      from "./modules/grn/routes.js";
 import { auctionRoutes }  from "./modules/auction/routes.js";
@@ -67,6 +68,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(indentRoutes);
   await app.register(vendorRoutes);
+  await app.register(vendorPiiRevealRoutes);
   await app.register(poRoutes);
   await app.register(grnRoutes);
   await app.register(auctionRoutes);

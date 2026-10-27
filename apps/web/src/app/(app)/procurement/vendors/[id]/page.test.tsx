@@ -3,11 +3,17 @@ import { render, screen } from "@/test-utils/intl-render";
 
 const vendorMock = vi.fn();
 const ordersMock = vi.fn();
+const grnsMock = vi.fn();
+const emdMock = vi.fn();
+const pbgMock = vi.fn();
 let sessionRoles: string[] = ["procurement_officer"];
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 vi.mock("../../../../_data/loaders", () => ({
   getProcurementVendorById: (...a: unknown[]) => vendorMock(...a),
   getProcurementPOs: (...a: unknown[]) => ordersMock(...a),
+  getProcurementGRNs: (...a: unknown[]) => grnsMock(...a),
+  getVendorEmd: (...a: unknown[]) => emdMock(...a),
+  getVendorPbg: (...a: unknown[]) => pbgMock(...a),
 }));
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => sessionRoles,
@@ -46,6 +52,10 @@ describe("VendorDetailPage", () => {
     vendorMock.mockReset();
     ordersMock.mockReset();
     ordersMock.mockResolvedValue({ data: [], source: "api" });
+    grnsMock.mockReset(); emdMock.mockReset(); pbgMock.mockReset();
+    grnsMock.mockResolvedValue({ data: [], source: "api" });
+    emdMock.mockResolvedValue({ data: [], source: "api" });
+    pbgMock.mockResolvedValue({ data: [], source: "api" });
     sessionRoles = ["procurement_officer"];
   });
 
@@ -182,5 +192,92 @@ describe("VendorDetailPage", () => {
     vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
     render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
     expect(screen.getByText("No purchase orders")).toBeInTheDocument();
+  });
+});
+
+
+describe("VendorDetailPage - GAP-PROCUREMENT-VENDORS-DETAIL-04 history", () => {
+  beforeEach(() => {
+    vendorMock.mockReset();
+    ordersMock.mockReset();
+    grnsMock.mockReset(); emdMock.mockReset(); pbgMock.mockReset();
+    ordersMock.mockResolvedValue({ data: [], source: "api" });
+    grnsMock.mockResolvedValue({ data: [], source: "api" });
+    emdMock.mockResolvedValue({ data: [], source: "api" });
+    pbgMock.mockResolvedValue({ data: [], source: "api" });
+    vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
+    sessionRoles = ["procurement_officer"];
+  });
+
+  it("asks the server for THIS vendor's GRNs, EMDs and guarantees", async () => {
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(grnsMock).toHaveBeenCalledWith(expect.objectContaining({ vendorId: "v1" }));
+    expect(emdMock).toHaveBeenCalledWith("v1");
+    expect(pbgMock).toHaveBeenCalledWith("v1");
+  });
+
+  it("lists the vendor's GRNs with links to /procurement/grn/<id>", async () => {
+    grnsMock.mockResolvedValue({ data: [{ id: "g1", grnNo: "GRN-2026-0001", receivedDate: "2026-09-01", status: "accepted" }], source: "api" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getByRole("link", { name: "GRN-2026-0001" })).toHaveAttribute("href", "/procurement/grn/g1");
+  });
+
+  it("a failed GRN fetch shows an error state, not 'No goods receipts'", async () => {
+    grnsMock.mockResolvedValue({ data: [], source: "error" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.queryByText("No goods receipts")).not.toBeInTheDocument();
+    expect(screen.getByText(/vendor goods receipts/i)).toBeInTheDocument();
+  });
+
+  it("with no GRNs, EMD or guarantees the empty states read as empty (not as errors)", async () => {
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getByText("No goods receipts")).toBeInTheDocument();
+    expect(screen.getByText("No EMD or bank guarantees")).toBeInTheDocument();
+  });
+
+  it("shows EMD and bank guarantees together, and one register failing is an error, not 'none'", async () => {
+    emdMock.mockResolvedValue({ data: [{ id: "e1", kind: "EMD", ref: "EMD-001", instrument: "dd", amountMinor: "500000", status: "held" }], source: "api" });
+    pbgMock.mockResolvedValue({ data: [{ id: "b1", kind: "PBG", ref: "PBG-001", instrument: "bank_guarantee", amountMinor: "900000", status: "active", validUntil: "2027-01-31" }], source: "api" });
+    const first = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getByText("EMD-001")).toBeInTheDocument();
+    expect(screen.getByText("PBG-001")).toBeInTheDocument();
+    first.unmount();
+    pbgMock.mockResolvedValue({ data: [], source: "error" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.queryByText("EMD-001")).not.toBeInTheDocument();
+    expect(screen.queryByText("No EMD or bank guarantees")).not.toBeInTheDocument();
+  });
+});
+
+describe("VendorDetailPage - GAP-PROCUREMENT-VENDORS-02 audited reveal", () => {
+  beforeEach(() => {
+    vendorMock.mockReset();
+    ordersMock.mockReset();
+    ordersMock.mockResolvedValue({ data: [], source: "api" });
+    grnsMock.mockResolvedValue({ data: [], source: "api" });
+    emdMock.mockResolvedValue({ data: [], source: "api" });
+    pbgMock.mockResolvedValue({ data: [], source: "api" });
+    vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
+  });
+
+  it("a procurement officer gets a Reveal control for phone and email but NOT for PAN", async () => {
+    sessionRoles = ["procurement_officer"];
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getAllByRole("button", { name: /^Reveal$/ })).toHaveLength(2);
+    expect(container.innerHTML).not.toContain("9876543210");
+  });
+
+  it("an admin can reveal PAN too; the clear value is still absent from the initial DOM", async () => {
+    sessionRoles = ["procurement_admin"];
+    const { container } = render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getAllByRole("button", { name: /^Reveal$/ })).toHaveLength(3);
+    expect(container.innerHTML).not.toContain("ABCDE1234F");
+  });
+
+  it("a role without reveal rights sees masked values and no Reveal control (fail closed)", async () => {
+    sessionRoles = ["finance_officer"];
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.queryByRole("button", { name: /^Reveal$/ })).not.toBeInTheDocument();
+    expect(screen.getByText("ABCDE****F")).toBeInTheDocument();
   });
 });

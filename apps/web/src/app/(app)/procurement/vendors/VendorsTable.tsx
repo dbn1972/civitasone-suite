@@ -137,7 +137,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
           // GAP-...-VENDORS-02 (DPDP): show the contact person; when only a
           // phone exists, show it MASKED (never the raw number), so neither the
           // cell nor the DataTable global filter indexes the clear value.
-          contact: v.contactPerson ?? (v.phone ? maskPhone(v.phone) : "—"),
+          contact: v.contactPerson ?? (v.phone ? (/[Xx*\u2022]/.test(v.phone) ? v.phone : maskPhone(v.phone)) : "—"),
         })),
     [rows, serverRows, searching, wantStatus],
   );
