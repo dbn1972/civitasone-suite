@@ -106,6 +106,20 @@ describe("VendorDetailPage", () => {
     expect(screen.getByText(/Buyer rating/)).toBeInTheDocument();
   });
 
+  it("D4c #23: the profile shows the scorecard score out of 100 with its band, plus the labelled buyer rating", async () => {
+    vendorMock.mockResolvedValue({ data: { ...VENDOR, performanceScore: 86, performanceBand: "A" }, source: "api" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getByText("Performance score 86/100 · Band A")).toBeInTheDocument();
+    expect(screen.getByText(/Buyer rating 4\/5/)).toBeInTheDocument();
+  });
+
+  it("D4c #23: a vendor with no scorecard reads 'Not scored yet', never a fabricated 0/100", async () => {
+    vendorMock.mockResolvedValue({ data: VENDOR, source: "api" });
+    render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }) }));
+    expect(screen.getByText("Not scored yet")).toBeInTheDocument();
+    expect(screen.queryByText(/0\/100/)).toBeNull();
+  });
+
   it("NEW-03: ?registered=1 shows a confirmation banner with the honest initial status", async () => {
     vendorMock.mockResolvedValue({ data: { ...VENDOR, empanelmentStatus: "not_empanelled" }, source: "api" });
     render(await VendorDetailPage({ params: Promise.resolve({ id: "v1" }), searchParams: Promise.resolve({ registered: "1" }) }));

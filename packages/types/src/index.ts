@@ -1214,7 +1214,12 @@ export type VendorDetail = {
   panNo?: string;
   category: string;
   empanelmentStatus: "empanelled" | "provisional" | "blacklisted" | "not_empanelled";
+  /** Buyer feedback rating (1-5). Distinct from the scorecard score below; always labelled as such. */
   rating?: number;
+  /** D4c #22/#23: the single vendor rating scale - scorecard score out of 100 (absent/null = not scored yet). */
+  performanceScore?: number | null;
+  /** D4c #22/#23: scorecard band for performanceScore. */
+  performanceBand?: "A" | "B" | "C" | "D" | null;
   contactPerson?: string;
   email?: string;
   phone?: string;

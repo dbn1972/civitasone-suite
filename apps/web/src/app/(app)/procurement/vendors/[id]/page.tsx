@@ -115,6 +115,14 @@ export default async function VendorDetailPage(
         actions={
           <>
             <StatusPill status={vendor.empanelmentStatus} label={EMPANELMENT_LABELS[vendor.empanelmentStatus] ?? vendor.empanelmentStatus} />
+            {/* D4c #23: the single vendor rating scale is the scorecard score out of 100 with its band. */}
+            {vendor.performanceScore != null ? (
+              <span className="pill info" title={t("performanceScoreHint")}>
+                {t("performanceScore", { score: vendor.performanceScore, band: vendor.performanceBand ?? "—" })}
+              </span>
+            ) : (
+              <span className="pill" title={t("performanceScoreHint")}>{t("notScoredYet")}</span>
+            )}
             {vendor.rating !== undefined && (
               <span className="pill info" title="Buyer rating (1–5). The scorecard shows a separate performance score out of 100.">Buyer rating {vendor.rating}/5<span aria-hidden="true"> ★</span><span className="sr-only"> buyer rating out of 5</span></span>
             )}

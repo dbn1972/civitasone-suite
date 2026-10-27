@@ -5950,6 +5950,13 @@
         "serverVendorMissing": "One of the selected vendors could not be found. Search again and re-select it."
       },
       "vendors": {
+        "performanceScore": "Score (/100)",
+        "performanceScoreCell": "{score}/100 · Band {band}",
+        "notScored": "Not scored",
+        "pagerLabel": "Vendor pages",
+        "prev": "← Previous",
+        "next": "Next →",
+        "page": "Page {page}",
         "showingOfTotal": "Showing {shown} of {total} vendors. Search the full directory to find the others.",
         "searchAll": "Search all vendors by name…",
         "searchAllLabel": "Search the full vendor directory",
@@ -5998,6 +6005,9 @@
         }
       },
       "vendorDetail": {
+        "performanceScore": "Performance score {score}/100 · Band {band}",
+        "notScoredYet": "Not scored yet",
+        "performanceScoreHint": "Performance score out of 100 from the vendor scorecard (delivery, quality, SLA). The buyer rating, where recorded, is a separate 1–5 feedback score.",
         "validTill": "Empanelment valid till",
         "expired": "Expired",
         "expiresIn": "Expires in {days, plural, one {# day} other {# days}}",

@@ -18,6 +18,8 @@ type Vendor = {
   category: string;
   empanelmentStatus: string;
   rating?: number;
+  performanceScore?: number | null;
+  performanceBand?: string | null;
   contactPerson?: string | null;
   phone?: string | null;
 } & Record<string, unknown>;
@@ -36,7 +38,7 @@ type VendorRow = {
   gstin: string;
   category: string;
   empanelmentStatus: string;
-  rating: string;
+  score: string;
   contact: string;
 } & Record<string, unknown>;
 
@@ -131,9 +133,11 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
           gstin: v.gstin ?? "—",
           category: v.category,
           empanelmentStatus: v.empanelmentStatus,
-          // GAP-...-VENDORS-05: same scale/label as detail+scorecard context —
-          // this is the buyer rating (0-5), distinct from the /100 scorecard.
-          rating: v.rating !== undefined ? `${v.rating}/5` : "—",
+          // D4c #22 (GAP-...-VENDORS-05): ONE rating scale - the scorecard score
+          // out of 100 with its band. Not scored yet reads as such, never 0.
+          score: v.performanceScore != null
+            ? tw("performanceScoreCell", { score: v.performanceScore, band: v.performanceBand ?? "—" })
+            : tw("notScored"),
           // GAP-...-VENDORS-02 (DPDP): show the contact person; when only a
           // phone exists, show it MASKED (never the raw number), so neither the
           // cell nor the DataTable global filter indexes the clear value.
@@ -210,7 +214,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
           sortable
           filterable
           filterPlaceholder="Search name, code, GSTIN…"
-          pageSize={10}
+          pageSize={limit ?? 50}
           columns={[
             { key: "vendorCode", label: "Code" },
             { key: "name", label: "Name" },
@@ -226,7 +230,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
                 />
               ),
             },
-            { key: "rating", label: tw("buyerRating"), align: "right" },
+            { key: "score", label: tw("performanceScore"), align: "right" },
             { key: "contact", label: "Contact" },
           ]}
         />

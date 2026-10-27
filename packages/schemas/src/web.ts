@@ -90,6 +90,9 @@ export const vendorSummarySchema = z.object({
   name: z.string(),
   category: z.string(),
   ratingDisplay: z.string(),
+  // D4c #22: scorecard score out of 100 + band; null when the vendor is not scored yet.
+  performanceScore: z.number().int().min(0).max(100).nullable().optional(),
+  performanceBand: z.enum(["A", "B", "C", "D"]).nullable().optional(),
   gstin: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),

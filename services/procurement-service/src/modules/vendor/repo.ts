@@ -44,9 +44,40 @@ export async function listVendorsByTenant(tenantId: string, limit = 100, offset 
   if (q) {
     return db.transaction((tx) => tx.select().from(procurementVendors)
       .where(and(eq(procurementVendors.tenantId, tenantId), ilike(procurementVendors.name, likePattern(q))))
-      .orderBy(asc(procurementVendors.name)).limit(limit).offset(offset));
+      .orderBy(asc(procurementVendors.name), asc(procurementVendors.id)).limit(limit).offset(offset));
   }
-  return db.transaction((tx) => tx.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset));
+  // D4c #21: explicit order (name, id tiebreak) so server paging never repeats or
+  // skips a vendor between pages.
+  return db.transaction((tx) => tx.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId))
+    .orderBy(asc(procurementVendors.name), asc(procurementVendors.id)).limit(limit).offset(offset));
+}
+
+/**
+ * D4c #22/#23 (GAP-PROCUREMENT-VENDORS-05 / VENDORS-DETAIL-05): the all-time
+ * scorecard (out of 100 + band) for these vendors, keyed by vendor id. A vendor
+ * with no scorecard row, or one with no orders yet (band "unrated"), is absent -
+ * callers must render "not scored", never a fabricated 0.
+ */
+export async function findPerformanceScores(tenantId: string, vendorIds: string[]): Promise<Map<string, { score: number; band: string }>> {
+  if (vendorIds.length === 0) return new Map();
+  const rows = await db.transaction((tx) => tx
+    .select({
+      vendorId: procurementVendorScorecards.vendorId,
+      overallRating: procurementVendorScorecards.overallRating,
+      ratingBand: procurementVendorScorecards.ratingBand,
+      totalOrders: procurementVendorScorecards.totalOrders,
+    })
+    .from(procurementVendorScorecards)
+    .where(and(
+      eq(procurementVendorScorecards.tenantId, tenantId),
+      eq(procurementVendorScorecards.period, "all"),
+      inArray(procurementVendorScorecards.vendorId, vendorIds),
+    )));
+  const out = new Map<string, { score: number; band: string }>();
+  for (const r of rows) {
+    if (r.totalOrders > 0 && r.ratingBand !== "unrated") out.set(r.vendorId, { score: r.overallRating, band: r.ratingBand });
+  }
+  return out;
 }
 
 /** GAP-PROCUREMENT-VENDORS-03: whole-tenant vendor count per vendor_type. */

@@ -198,6 +198,8 @@ export function mapProcurementVendorDetails(payload: unknown): VendorDetail[] | 
       category,
       empanelmentStatus,
       rating: typeof row.rating === "number" ? row.rating : undefined,
+      ...(typeof row.performanceScore === "number" ? { performanceScore: row.performanceScore } : {}),
+      ...(row.performanceBand === "A" || row.performanceBand === "B" || row.performanceBand === "C" || row.performanceBand === "D" ? { performanceBand: row.performanceBand } : {}),
       contactPerson: toText(row.contactPerson) ?? undefined,
       email: toText(row.email) ?? undefined,
       phone: toText(row.phone) ?? undefined,

@@ -7042,6 +7042,13 @@
         "serverVendorMissing": "चुने गए विक्रेताओं में से एक नहीं मिला। फिर से खोजें और दोबारा चुनें।"
       },
       "vendors": {
+        "performanceScore": "स्कोर (/100)",
+        "performanceScoreCell": "{score}/100 · श्रेणी {band}",
+        "notScored": "अंकित नहीं",
+        "pagerLabel": "विक्रेता पृष्ठ",
+        "prev": "← पिछला",
+        "next": "अगला →",
+        "page": "पृष्ठ {page}",
         "showingOfTotal": "{total} में से {shown} विक्रेता दिखाए जा रहे हैं। शेष के लिए पूरी निर्देशिका में खोजें।",
         "searchAll": "नाम से सभी विक्रेता खोजें…",
         "searchAllLabel": "पूरी विक्रेता निर्देशिका में खोजें",
@@ -7090,6 +7097,9 @@
         }
       },
       "vendorDetail": {
+        "performanceScore": "प्रदर्शन स्कोर {score}/100 · श्रेणी {band}",
+        "notScoredYet": "अभी अंकित नहीं",
+        "performanceScoreHint": "विक्रेता स्कोरकार्ड (डिलीवरी, गुणवत्ता, SLA) से 100 में प्रदर्शन स्कोर। क्रेता रेटिंग, जहाँ दर्ज हो, 1–5 की अलग प्रतिक्रिया रेटिंग है।",
         "validTill": "पैनलीकरण की वैधता",
         "expired": "समाप्त",
         "expiresIn": "{days, plural, one {# दिन} other {# दिन}} में समाप्त",

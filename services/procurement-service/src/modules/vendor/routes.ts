@@ -149,6 +149,8 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
         ...queries.presentVendor(vendor),
         empanelmentValidTill: validity.validTill,
         empanelmentLapsed: validity.lapsed,
+        // D4c #23: scorecard score out of 100 + band (null = not scored yet).
+        ...(await queries.vendorPerformance(id, ctx.tenantId)),
       },
     });
   });
