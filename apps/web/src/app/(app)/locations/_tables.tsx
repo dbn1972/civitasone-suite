@@ -18,6 +18,7 @@
 import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../_components/ds";
 import type { InfrastructureRow, GeofenceRow, JurisdictionRow } from "./_data";
+import { GeofenceToggle } from "./geofences/GeofenceActions";
 
 type InfraRow = InfrastructureRow & Record<string, unknown>;
 type GeoRow = GeofenceRow & Record<string, unknown>;
@@ -48,7 +49,7 @@ export function InfrastructureTable({ rows }: { rows: InfrastructureRow[] }) {
   );
 }
 
-export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
+export function GeofencesTable({ rows, canManage = false }: { rows: GeofenceRow[]; canManage?: boolean }) {
   const t = useTranslations("locationsOps.geofences");
   return (
     <Card title={t("cardTitle")}>
@@ -63,6 +64,9 @@ export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
             { key: "radius", label: t("colRadius"), align: "right" },
             { key: "center", label: t("colCenter"), align: "right" },
             { key: "status", label: t("colStatus"), cellType: "status" },
+            ...(canManage
+              ? [{ key: "actions", label: "", render: (row: GeoRow) => <GeofenceToggle id={row.id} name={row.name} active={row.status === "active"} /> }]
+              : []),
           ]}
           rows={rows as GeoRow[]}
           sortable

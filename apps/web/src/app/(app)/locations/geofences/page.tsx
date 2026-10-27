@@ -1,7 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getLocationGeofencesTyped } from "../_data";
+import { GEOFENCE_MANAGE_ROLES } from "../_roles";
+import { GeofenceCreateForm } from "./GeofenceActions";
 import { GeofencesTable } from "../_tables";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +12,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const result = await getLocationGeofencesTyped();
   const t = await getTranslations("locationsOps");
+  const canManage = getSessionRoles().some((r) => GEOFENCE_MANAGE_ROLES.includes(r));
   return (
     <div className="page-main">
       <PageHeader
@@ -23,7 +27,8 @@ export default async function Page() {
       ) : (
         <>
           <DataSourceBadge source="api" />
-          <GeofencesTable rows={result.data} />
+          {canManage ? <GeofenceCreateForm /> : null}
+          <GeofencesTable rows={result.data} canManage={canManage} />
         </>
       )}
     </div>

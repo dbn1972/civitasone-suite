@@ -16516,7 +16516,7 @@
     },
     "geofences": {
       "pageTitle": "Geofences",
-      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. This register is read-only: there is no in-app editor.",
+      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. Location administrators can add geofences and switch them on or off.",
       "area": "geofences",
       "cardTitle": "Geofences",
       "emptyTitle": "No geofences",
@@ -16527,7 +16527,30 @@
       "colShape": "Shape",
       "colRadius": "Radius",
       "colStatus": "Status",
-      "colCenter": "Centre"
+      "colCenter": "Centre",
+      "manageTitle": "Add a geofence",
+      "nameLabel": "Name",
+      "typeLabel": "Type",
+      "types": {
+        "office": "Office",
+        "site": "Site",
+        "zone": "Zone"
+      },
+      "latLabel": "Centre latitude",
+      "lngLabel": "Centre longitude",
+      "radiusLabel": "Radius (metres)",
+      "submit": "Add geofence",
+      "saving": "Saving…",
+      "errName": "Enter a name for the geofence.",
+      "errLat": "Enter a latitude between -90 and 90.",
+      "errLng": "Enter a longitude between -180 and 180.",
+      "errRadius": "Enter the radius as a whole number of metres, more than 0.",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "activateTitle": "Activate this geofence?",
+      "activateDescription": "{name} will be used again for site and attendance checks. This is recorded in the audit log.",
+      "deactivateTitle": "Deactivate this geofence?",
+      "deactivateDescription": "{name} will no longer be used for site and attendance checks. You can activate it again later. This is recorded in the audit log."
     },
     "jurisdictions": {
       "pageTitle": "Jurisdictions",
