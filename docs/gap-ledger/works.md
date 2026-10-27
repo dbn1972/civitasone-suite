@@ -3251,7 +3251,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: virus scan and EXIF stripping are platform-level decisions; GAP-WORKS-EXECUTION-PHOTOS-NEW-05)
+- [~] **Status** (NEEDS OWNER DECISION: virus scan and EXIF stripping are platform-level decisions; GAP-WORKS-EXECUTION-PHOTOS-NEW-05) [deferred post-UAT per owner decision D4c #42, 2026-10-27]
 - **W2 works part 2 note (#2048):** done: fileKey must be this tenant's upload (route 422 INVALID_FILE_KEY), unknown work is 404, presign already enforces extension allow-list and size cap (admin-service uploads/routes.ts). Still open: virus scan and EXIF stripping are platform features. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — GPS range-validated server-side and audit written; fileKey only length-checked, no tenant-prefix verification; presign content-type/size, virus scan and EXIF handling not evidenced.
 - **First-pass claim:** Presign endpoint behaviour, virus scan, EXIF handling and audit of the photo registration are undeterminable — works-service absent and FileUpload internals not traced.
