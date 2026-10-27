@@ -1,4 +1,4 @@
-import { eq, and, asc, sql, type SQL } from "drizzle-orm";
+import { eq, and, asc, inArray, sql, type SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { stockValuationRates } from "../valuation/schema.js";
@@ -6,6 +6,8 @@ import { stockItems, stockUoms, stockItemCategories, type ItemInsert, type ItemR
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export type ItemWithUom = ItemRow & { uom: string | null };
+/** List row: item + joined display names (GAP-STOCK-LIST-02). */
+export type ItemListRow = ItemWithUom & { categoryName: string | null };
 
 export async function insertItem(tx: Writer, row: ItemInsert): Promise<void> {
   await tx.insert(stockItems).values(row);
@@ -74,7 +76,7 @@ export async function findItemWithUomById(id: string, tenantId: string): Promise
 
 const likeEscape = (v: string): string => v.replace(/[\\%_]/g, (m) => `\\${m}`);
 
-export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemListRow[]> {
   const conds: SQL[] = [eq(stockItems.tenantId, tenantId)];
   if (opts?.category) conds.push(eq(stockItems.categoryId, opts.category));
   if (opts?.q) {
@@ -101,9 +103,11 @@ export async function findItemsWithUomByTenant(tenantId: string, opts?: { catego
         updatedBy: stockItems.updatedBy,
         version: stockItems.version,
         uom: stockUoms.symbol,
+        categoryName: stockItemCategories.name,
       })
       .from(stockItems)
       .leftJoin(stockUoms, eq(stockItems.uomId, stockUoms.id))
+      .leftJoin(stockItemCategories, eq(stockItems.categoryId, stockItemCategories.id))
       .where(and(...conds))
       // Stable order: limit/offset pages must not skip or repeat rows.
       .orderBy(asc(stockItems.name), asc(stockItems.id))
@@ -134,6 +138,29 @@ export async function findItemBalances(itemId: string, tenantId: string): Promis
       return { warehouseId: r.warehouseId, qty: r.qty, rateMinor: r.rateMinor.toString(), valueMinor: value.toString() };
     });
     return { itemId, totalQty, totalValueMinor: totalValue.toString(), warehouses };
+  }));
+}
+
+export type ItemStockTotals = { qty: number; valueMinor: bigint };
+
+/**
+ * GAP-STOCK-LIST-04: on-hand quantity and stock value (qty x weighted rate, bigint minor units)
+ * summed across warehouses for a page of items. Tenant-filtered explicitly; items with no
+ * valuation rows are simply absent from the map.
+ */
+export async function findStockTotals(tenantId: string, itemIds: string[]): Promise<Map<string, ItemStockTotals>> {
+  if (itemIds.length === 0) return new Map();
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx
+      .select({
+        itemId: stockValuationRates.itemId,
+        qty: sql<string>`COALESCE(SUM(${stockValuationRates.qty}), 0)::text`,
+        value: sql<string>`COALESCE(SUM(${stockValuationRates.qty}::bigint * ${stockValuationRates.rateMinor}), 0)::text`,
+      })
+      .from(stockValuationRates)
+      .where(and(eq(stockValuationRates.tenantId, tenantId), inArray(stockValuationRates.itemId, itemIds)))
+      .groupBy(stockValuationRates.itemId);
+    return new Map(rows.map((r) => [r.itemId, { qty: Number(r.qty), valueMinor: BigInt(r.value) }]));
   }));
 }
 

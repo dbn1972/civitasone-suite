@@ -18,6 +18,7 @@ import { useRouter } from "next/navigation";
 import { PageHeader, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
+import { revalidateStockViews } from "../../_actions";
 
 type Category = { id: string; name: string };
 type Uom = { id: string; symbol: string; name: string };
@@ -195,8 +196,16 @@ export default function NewStockItemPage() {
       }
       // Reset dirty so the guard does not fire on the programmatic navigation.
       setForm(INITIAL);
+      // GAP-STOCK-ITEMS-NEW-01: router.refresh() only resets the client Router Cache; purge the
+      // server Data Cache for /stock too (awaited just before landing on the list, by which time
+      // a queued 202 create has normally been applied) so the list is not a stale 60 s copy.
       router.refresh();
-      setTimeout(() => router.push("/stock/list"), 700);
+      setTimeout(() => {
+        void (async () => {
+          try { await revalidateStockViews(); } catch { /* cache purge is best-effort */ }
+          router.push("/stock/list");
+        })();
+      }, 700);
     } catch (caught) {
       setIsError(true);
       setMessage(formError.fromException("save", caught).message);

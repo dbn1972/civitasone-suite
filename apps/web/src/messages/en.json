@@ -17491,5 +17491,27 @@
     "emptyTitle": "No visits yet",
     "emptyMessageRange": "Try a wider date range, or clear the dates to see all visits.",
     "emptyMessage": "Check in on a field task to record GPS and outcomes here."
+  },
+  "stockEntryNew": {
+    "subtitle": "Record a receipt, issue, transfer or adjustment in the stock ledger.",
+    "entryTypeTransfer": "Transfer",
+    "entryTypeTransferHelp": "Move stock from one warehouse to another.",
+    "fromWarehouse": "From warehouse",
+    "toWarehouse": "To warehouse",
+    "warehouse": "Warehouse",
+    "selectWarehouse": "Select a warehouse",
+    "notSpecified": "Not specified",
+    "warehousesLoadFailed": "Couldn't load the warehouse list.",
+    "retry": "Retry",
+    "errFromWarehouse": "Pick the warehouse the stock leaves.",
+    "errToWarehouse": "Pick the warehouse the stock goes to.",
+    "errToSameAsFrom": "Destination must differ from the source warehouse.",
+    "errReasonMax": "Reason must be 500 characters or fewer.",
+    "reasonLabel": "Reason",
+    "reasonPlaceholder": "e.g. cycle-count variance, damaged stock",
+    "reasonHint": "Recorded in the audit trail for this entry."
+  },
+  "stockLedger": {
+    "unknownItem": "Unknown item"
   }
 }

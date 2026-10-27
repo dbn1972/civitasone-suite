@@ -198,7 +198,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-01  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [~] **Status** (W2 stock: partial; 202→'submitted'/201→'created' distinction fixed; list revalidation within 60s cache still applies for the 201 sync path — acknowledged limitation of async queue)
+- [x] **Status** Closed by 7f7a9809d (UAT B4, 2026-10-27): role-guarded revalidateStockViews() Server Action purges the /stock Data Cache before landing on the list
 - **W0 note:** partly fixed by #1916 — 202 vs 200/201 messages are distinct, but the list is still revalidated on a 60 s cache (getStockItems revalidateSeconds:60) so a 201 create is not shown immediately
 - **First-pass claim:** Create returns 200/202 (queue path) and the page immediately says 'Stock item created.' then redirects to /stock/list after 700 ms (page.tsx:108-114); the list loader revalidates for 60 s (loaders.ts:3891-3897) and the consumer applies the write asynchronously, so the new SKU commonly is not on the list the clerk lands on.
 - **Verified evidence:** submit() (page.tsx:107-114) treats res.ok||202 as success, sets 'Stock item created.', router.refresh(), pushes /stock/list after 700 ms. list loader getStockItems revalidates 60 s (loaders.ts:3891-3897). The stale-list part is verifiable; that the server applies the write asynchronously (queue consumer) cannot be verified - stock-service is not in the snapshot, though the code comment/202 handling implies it.
@@ -338,7 +338,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 stock: partial; mapper now uses '—' instead of id slices; warehouseName absent from stock_ledger rows — full fix needs backend join. NEEDS OWNER DECISION)
+- [x] **Status** Closed by 2ede60760 (UAT B4, 2026-10-27): GET /v1/stock/ledger joins warehouseName; entry form uses the warehouse picker
 - **First-pass claim:** 'Warehouse' column renders entry.party (StockLedgerClient.tsx:47) but mapStockLedgerEntries never sets party (apiMappers.ts:981-992), so the column is always '—'; the create form also treats warehouse as a raw UUID.
 - **Verified evidence:** StockLedgerClient.tsx:47 renders entry.party ?? '-'; mapStockLedgerEntries (apiMappers.ts:962-993) never sets party or a warehouse field, so the column is always '-'. Create form ledger/new/page.tsx:168-169 has a free-text 'Warehouse ID (optional)' input with placeholder 'UUID', sent as fromWarehouseId/toWarehouseId (lines 90-91). Whether the ledger API returns warehouse id/name per row cannot be seen (service absent).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -354,7 +354,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-03  ·  MEDIUM  ·  confirmed  ·  theme UUID (was OTHER)
 
-- [~] **Status** (W2 stock: partial; mapper uses toText(row.itemCode)/'—' fallback — no id slice; itemCode/itemName still absent from stock_ledger rows, backend join needed. NEEDS OWNER DECISION)
+- [x] **Status** Closed by f6dfa35b3 (UAT B4, 2026-10-27): GET /v1/stock/ledger joins itemCode/itemName; table shows Unknown item when unresolved
 - **First-pass claim:** Item cell prints itemCode = itemId.slice(0,8).toUpperCase() and, without itemName in the payload, the id prefix again (apiMappers.ts:983-984) — clerks see 'A3F91C2E' rather than the SKU code from the item register.
 - **Verified evidence:** apiMappers.ts:983-984 - itemCode = itemId.slice(0,8).toUpperCase() (or entry id prefix); itemName = row.itemName ?? itemId.slice(0,8). Client joins `${itemCode} ${itemName}` (StockLedgerClient.tsx:46), so without itemName the cell prints the id prefix twice. No SKU code is read from the row (row.itemCode is not consulted).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -455,7 +455,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 PQ: INTERIM — transfers intentionally not offered; no warehouse list endpoint exists. NEEDS OWNER DECISION to add GET /v1/stock/warehouses before this can be wired)
+- [x] **Status** Closed by f8988c118 (UAT B4, 2026-10-27): GET /v1/stock/warehouses added; entry form offers Transfer with From/To warehouse pickers, validator requires a distinct pair
 - **W0 note:** partly fixed by #1929 — the raw warehouse-UUID input was removed, but transfers are still not offered (single/no warehouse, no from/to pair; ENTRY_TYPES has receipt/issue/adjustment only)
 - **First-pass claim:** Transfer cannot be expressed: a single free-text 'Warehouse ID' is sent as toWarehouseId for every type except issue (fromWarehouseId) and never both (page.tsx:89-91), so a transfer has no source/destination pair. The field is a raw UUID with no picker (page.tsx:168-169).
 - **Verified evidence:** Single warehouseId state (page.tsx:40); postEntry lines 89-92 sets fromWarehouseId only for issue, else toWarehouseId; transfer never sends both. Input is placeholder 'UUID' (169). Header comment (6-8) shows the API accepts both fromWarehouseId and toWarehouseId.
@@ -592,7 +592,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 PQ: partial in #2036; dashes replace fabricated ids/units, but itemCode is not required and names are not joined from the backend, needs owner acceptance or a backend change)
+- [x] **Status** Closed by 6b3589dd4 (UAT B4, 2026-10-27): GET /v1/stock/items joins categoryName and uomCode; item code is already mandatory on create
 - **First-pass claim:** Raw ids leak into cells: UOM falls back to uomId.slice(0,4) and Category to categoryId.slice(0,8) when the API returns ids not names (apiMappers.ts:1013-1014); item code falls back to the record id (apiMappers.ts:1005). A clerk sees 'a3f9' as a unit.
 - **Verified evidence:** apiMappers.ts:1005 itemCode falls back to record id; :1013 category falls back to categoryId.slice(0,8); :1014 unit falls back to uomId.slice(0,4), else 'EA'. These reach StockListClient COLUMNS (unit, itemCode) directly.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
@@ -694,7 +694,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 stock: backend verified; entry consumer audit() emits {service,action,resourceType,resourceId,outcome} only — reason/notes are NOT included. Structured reason field absent from POST validator. NEEDS OWNER DECISION: add reason to audit payload + validator)
+- [x] **Status** Closed by 8bd087de1 (UAT B4, 2026-10-27): structured optional reason accepted by POST /v1/stock/entries, stored (migration 0013) and carried in the stock_entry audit event; not mandatory for adjustments so existing callers keep working
 - **First-pass claim:** The audit reason is folded into the free-text notes as 'Reason: …' (page.tsx:79-82) instead of a structured field; whether the server emits a proper audit event with it is undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/stock/entries']`
 - **Question:** Does stock-service accept a structured reason field and emit an audit event containing it, rather than parsing 'Reason:' from notes?
@@ -705,7 +705,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 stock: backend verified; ItemWithUom (item list response) has no totalValue field — mapper returns null → '—'. No 100x risk since field is absent. NEEDS OWNER DECISION: add totalValue (bigint paise) to GET /v1/stock/items response)
+- [x] **Status** Closed by d5fad531f (UAT B4, 2026-10-27): GET /v1/stock/items returns currentStock, unitCost and totalValue as bigint paise strings from valuation rows
 - **First-pass claim:** Money: 'Value ₹' column and Stock Value StatCard assume totalValue is paise (StockListClient.tsx:39 comment, formatMoney) but parseMinor() accepts any numeric string (apiMappers.ts:63-71); unit of the stock-service field cannot be verified — undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['GET /api/v1/stock/items']`
 - **Question:** Is totalValue in paise as an integer for every item?
