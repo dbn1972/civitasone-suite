@@ -285,7 +285,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by caf37b7f4 (UAT B4, 2026-10-27): jurisdiction table now shows Level, Office, Unit, Parent unit and LGD code; parent and LGD code are resolved from the administrative hierarchy (/v1/hierarchy: parentId, lgdCode), so no jurisdiction API change was needed; hub copy ('Which offices cover which administrative units') makes no boundary claim. Tests: _data.test.ts, _tables.test.tsx.
 - **W2 note:** Level, resolved Office/Unit names and Primary shown, hub copy fixed; parent and LGD code are not on the jurisdiction API and there is no offices list endpoint - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — typed mapper with Level/Office/Unit columns added; no parent or LGD code column and hub note unchanged
 - **First-pass claim:** The hub describes 'Administrative jurisdiction boundaries' (locations/page.tsx:12) but the table shows no boundary, level, parent or LGD code, only whichever of code/updatedAt the mapper picks as Meta.
