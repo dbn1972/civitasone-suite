@@ -4,7 +4,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists, preTenderReferenceExists } from "./repo.js";
+import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists, preTenderReferenceExists, getActiveTenderType } from "./repo.js";
 import { hasFinalizedTsForWork } from "../approval/repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation, isSelfApprovalAward } from "./domain.js";
 import { findContractorById, findContractorByName } from "../contractor/repo.js";
@@ -104,6 +104,10 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     }
     if (body.referenceNumber && (await preTenderReferenceExists(ctx.tenantId, body.referenceNumber.trim()))) {
       throw new HttpError(409, "DUPLICATE_REFERENCE", "A pre-tender with this reference number already exists");
+    }
+    // D4c #40: the type is saved by its master record, so it must be an active tender type of this tenant.
+    if (body.tenderTypeId && !(await getActiveTenderType(ctx.tenantId, body.tenderTypeId))) {
+      throw new HttpError(422, "INVALID_TENDER_TYPE", "The selected tender type does not exist or is no longer active");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPreTenderCommand(ctx, body));
   });

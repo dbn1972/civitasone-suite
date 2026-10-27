@@ -2,6 +2,7 @@ import { eq, and, desc, inArray, count } from "drizzle-orm";
 import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards, preTenders } from "./schema.js";
+import { tenderTypes } from "../masters/schema.js";
 
 /** GAP-WORKS-TENDERS-NEW-06: a pre-tender reference number is unique per tenant. */
 export async function preTenderReferenceExists(tenantId: string, referenceNumber: string): Promise<boolean> {
@@ -188,5 +189,15 @@ export async function countTenders(tenantId: string): Promise<number> {
       .from(tenders)
       .where(eq(tenders.tenantId, tenantId));
     return Number(rows[0]?.value ?? 0);
+  });
+}
+
+/** D4c #40: an ACTIVE tender-type master of this tenant (uncached: validation must see a just-deactivated type). */
+export async function getActiveTenderType(tenantId: string, id: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(tenderTypes)
+      .where(and(eq(tenderTypes.tenantId, tenantId), eq(tenderTypes.id, id), eq(tenderTypes.active, true)))
+      .limit(1);
+    return rows[0] ?? null;
   });
 }
