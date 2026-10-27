@@ -5,6 +5,8 @@ import * as repo from "./repo.js";
 import * as rbacRepo from "../rbac/repo.js";
 import { TENANT_ADMIN_ROLE_KEY } from "./domain.js";
 import { scopedRead } from "../../shared/db.js";
+import * as holders from "./role-holders-repo.js";
+import { PLATFORM_ROLE_KEYS } from "../operators/domain.js";
 
 const INTERNAL_ROLES = ["super_admin"];
 
@@ -109,6 +111,40 @@ export async function userInternalRoutes(app: FastifyInstance): Promise<void> {
     const user = await repo.findById(ctx.tenantId, id);
     if (!user) return reply.code(404).send({ code: "NOT_FOUND" });
     return reply.send({ id: user.id, status: user.status });
+  });
+
+  /**
+   * Role-based notification delivery (notify-roles): the users a role/desk notice must reach, as IDs ONLY
+   * (the notification service resolves addresses, preferences and consent per user itself).
+   *   scope=tenant      ACTIVE holders of `roles` in the calling tenant.
+   *   scope=platform    ACTIVE holders of a platform-authority role across ALL tenants (operators are not
+   *                     in the tenant whose event raised the notice); `roles` must be platform keys.
+   *   scope=tenant_all  every ACTIVE user of the calling tenant (broadcasts); `roles` is not used.
+   * Keyset-paged: pass the returned `nextCursor` as `after`. Strict internal-elevation gate, like the
+   * other internal lookups here.
+   */
+  app.get("/identity/internal/role-holders", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const q = z.object({
+      scope: z.enum(["tenant", "platform", "tenant_all"]).default("tenant"),
+      roles: z.string().max(512).optional(),
+      limit: z.coerce.number().int().min(1).max(500).default(200),
+      after: z.string().uuid().optional(),
+    }).parse(req.query);
+    const after = q.after ?? null;
+    if (q.scope === "tenant_all") return reply.send(await holders.tenantActiveUsers(ctx.tenantId, q.limit, after));
+    const keys = [...new Set((q.roles ?? "").split(",").map((k) => k.trim()).filter(Boolean))];
+    if (keys.length === 0 || keys.length > 10 || keys.some((k) => !/^[a-z][a-z0-9_]{0,63}$/.test(k))) {
+      throw new HttpError(400, "VALIDATION_FAILED", "roles: 1-10 role keys required");
+    }
+    if (q.scope === "platform") {
+      if (keys.some((k) => !(PLATFORM_ROLE_KEYS as readonly string[]).includes(k))) {
+        throw new HttpError(400, "VALIDATION_FAILED", "roles: platform scope accepts platform-authority roles only");
+      }
+      return reply.send(await holders.platformRoleHolders(keys, q.limit, after));
+    }
+    return reply.send(await holders.tenantRoleHolders(ctx.tenantId, keys, q.limit, after));
   });
 
   app.setErrorHandler((err, req, reply) => {
