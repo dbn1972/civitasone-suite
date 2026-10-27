@@ -71,6 +71,8 @@ export function registerProjectConsumers(queue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const task = await repo.findTaskByIdTx(tx, p.taskId, p.tenantId);
       if (!task) throw new Error(`task ${p.taskId} not found`);
+      // A status command may only touch a task of the project it names.
+      if (task.projectId !== p.projectId) throw new Error(`task ${p.taskId} does not belong to project ${p.projectId}`);
       assertTaskTransitionAllowed(task.status ?? "pending", p.status);
       await repo.updateTaskTx(tx, p.taskId, {
         status: p.status,

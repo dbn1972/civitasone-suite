@@ -5,6 +5,7 @@ import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROJECT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 import { orderTaskTree } from "./taskTree";
 import { AddTaskForm } from "./AddTaskForm";
+import { TaskStatusControl } from "./TaskStatusControl";
 
 export default async function ProjectTasksPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -67,7 +68,7 @@ export default async function ProjectTasksPage(props: { params: Promise<{ id: st
             <table className="tbl">
               <thead>
                 <tr>
-                  {["Task", "Status", "Progress", "Planned Start", "Planned End", "Actual Start", "Actual End", "Weight %"].map((c) => (
+                  {["Task", "Status", "Progress", "Planned Start", "Planned End", "Actual Start", "Actual End", "Weight %", ...(canManage ? ["Update"] : [])].map((c) => (
                     <th key={c} scope="col">{c}</th>
                   ))}
                 </tr>
@@ -113,6 +114,11 @@ export default async function ProjectTasksPage(props: { params: Promise<{ id: st
                     <td style={{ textAlign: "end", color: "var(--ink2)", fontSize: "0.88rem" }}>
                       {t.weightPct.toFixed(1)}%
                     </td>
+                    {canManage && (
+                      <td>
+                        <TaskStatusControl projectId={params.id} taskId={t.id} status={t.status} progressPct={t.progressPct} />
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
