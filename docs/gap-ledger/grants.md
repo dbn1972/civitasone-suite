@@ -343,7 +343,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-APPLICATIONS-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme WIRING (was CONFIRM)
 
-- [~] **Status** (NEEDS OWNER DECISION: reviewer picker requires a user-search endpoint from grant-service; safe interim is free-text ref with the existing hint label)
+- [x] **Status** Closed by 20a96f618 (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — scores/recommendation now shown, but reviewer is still a free-text ref in Assign and Score dialogs (no picker) and the page shows the raw ref, not the reviewer's name
 - **First-pass claim:** Reviewer is a free-text "reference/ID" typed twice — on assign and again on score (ApplicationActions.tsx:100-110; ScoreApplicationDialog.tsx:75-82) — instead of a picker; scores are submitted but the page never displays technical/financial scores or the recommendation afterwards (page.tsx:77-127).
 - **Verified evidence:** Reviewer ref is a free-text field in both ApplicationActions.tsx (assign ConfirmDialog with reasonLabel 'Reviewer reference') and ScoreApplicationDialog.tsx (reviewerRef input) - confirmed. Detail page (page.tsx:77-127) does not display scores, reviewer or recommendation - confirmed, though GrantApplicationDetail (_data.ts) has no such fields so the API/loader would need extending (cannot verify the payload). Theme CONFIRM is wrong.
