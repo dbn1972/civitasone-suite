@@ -5,6 +5,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import { findAadhaarLike } from "../../shared/pii.js";
 import * as commands from "./commands.js";
 
 const CDP_ROLES = ["cdp_user", "cdp_admin", "super_admin", "tenant_admin"];
@@ -43,6 +44,10 @@ export async function eventIngestRoutes(app: FastifyInstance): Promise<void> {
         continue;
       }
       const ev = parsed.data;
+      if (findAadhaarLike(ev.payload)) {
+        rejected.push({ index: i, reason: "identity numbers (Aadhaar) are not accepted" });
+        continue;
+      }
       try {
         await commands.ingestEvent(ctx, {
           profileId: ev.profileId,

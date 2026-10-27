@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { assertNoAadhaarLike } from "../../shared/pii.js";
 import { cache } from "../../shared/infra.js";
 import { canSeeCleartextPii, maskProfileView } from "../../shared/pii.js";
 import * as repo from "./repo.js";
@@ -93,6 +94,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CDP_ROLES);
     const body = createBody.parse(req.body);
+    assertNoAadhaarLike(body.attributes);
 
     return reply.code(202).send(
       await commands.createProfile(ctx, {
@@ -108,6 +110,7 @@ export async function profileRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CDP_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateBody.parse(req.body);
+    assertNoAadhaarLike(body.attributes);
 
     const existing = await repo.findById(id, ctx.tenantId);
     if (!existing || existing.profileType === "merged") {

@@ -16,6 +16,8 @@
  *      12-digit id (Aadhaar) is masked regardless of its key.
  */
 
+import { HttpError } from "./context.js";
+
 /** Roles that may see cleartext PII. Everyone else is masked. */
 export const CDP_PII_CLEARTEXT_ROLES = ["cdp_admin", "super_admin", "tenant_admin"];
 
@@ -153,4 +155,39 @@ export function maskAttributes(attrs: Record<string, unknown>): Record<string, u
 export function maskProfileView<T extends { attributes: unknown }>(ctx: { roles: readonly string[] }, view: T): T {
   if (canSeeCleartextPii(ctx)) return view;
   return { ...view, attributes: maskAttributes((view.attributes ?? {}) as Record<string, unknown>) };
+}
+
+/**
+ * GAP-CDP-PROFILES-06 (owner decision D4c #1): data minimisation at ingest. Returns the
+ * dotted path of the first Aadhaar-like value in `input`, or null. Aadhaar-like means a
+ * 12-digit id (plain, space- or dash-grouped) or ANY non-empty value under an
+ * Aadhaar-named key. Only the PATH is returned, never the value, so callers can refuse
+ * without echoing the identifier back or logging it.
+ */
+export function findAadhaarLike(input: unknown, path = ""): string | null {
+  if (input === null || input === undefined) return null;
+  if (typeof input === "string") return TWELVE_DIGIT_RE.test(input.trim()) ? path || "(value)" : null;
+  if (typeof input === "number") return /^\d{12}$/.test(String(input)) ? path || "(value)" : null;
+  if (Array.isArray(input)) {
+    for (let i = 0; i < input.length; i++) {
+      const hit = findAadhaarLike(input[i], path ? `${path}.${i}` : String(i));
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (typeof input === "object") {
+    for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+      const here = path ? `${path}.${k}` : k;
+      if (classifyKey(k) === "aadhaar" && v !== null && v !== undefined && v !== "") return here;
+      const hit = findAadhaarLike(v, here);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** Throw 422 when `input` carries an Aadhaar-like value; message names the path, never the value. */
+export function assertNoAadhaarLike(input: unknown): void {
+  const at = findAadhaarLike(input);
+  if (at) throw new HttpError(422, "AADHAAR_NOT_ACCEPTED", `identity numbers (Aadhaar) are not accepted; remove the value at "${at}"`);
 }
