@@ -1631,7 +1631,9 @@
     "noDeadline": "कोई समय सीमा दर्ज नहीं",
     "disposed": "निपटाया गया — घड़ी रुकी",
     "overdueBreach": "{count, plural, one {# दिन} other {# दिन}} विलंबित (सांविधिक उल्लंघन)",
-    "daysRemaining": "{count, plural, one {# दिन} other {# दिन}} शेष"
+    "daysRemaining": "{count, plural, one {# दिन} other {# दिन}} शेष",
+    "transfersTitle": "स्थानांतरण",
+    "transferLine": "{from} से {to} को स्थानांतरित"
   },
   "citizenServices": {
     "applicationSteps": "आवेदन चरण",

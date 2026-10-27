@@ -1596,7 +1596,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme MISSING (was DATEFMT)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — expose appeal decision/hearing/outcome and transfers[] on GET /v1/citizen/rti/:id)
+- [~] **Status** (UAT B4, 2026-10-27 PARTIAL: s.6(3) transfer trail built - migration 0045 rti.citizen_rti_transfers, written in the transfer consumer transaction, returned as transfers[] and shown on the detail; appeal grounds were already displayed. REMAINING: appeal decision/hearing date/outcome - no command records an appeal decision today; NEEDS-OWNER-DECISION on who decides a first appeal and the outcome vocabulary)
 - **First-pass claim:** No record of first-appeal outcome, hearing or transfer history: appeals show only 'First appeal — status' and date (RTIDetailClient.tsx:250-253); the §6(3) transfer done from the list leaves no trace here.
 - **Verified evidence:** Appeals list (RTIDetailClient.tsx:250-253) prints only appealType label, a.status and createdAt. RtiAppeal (loaders.ts:136-143 mapper) has id, appealType, grounds, status, createdAt only - grounds is fetched but not displayed; no decision/hearing/outcome fields. RtiDetail (loaders.ts ~105-126) has no transfer fields, and the list's transfer POST (RTIClient.tsx:100) leaves nothing to show. Whether the API returns such data is unverifiable (rti service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`
