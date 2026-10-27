@@ -67,7 +67,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-GEOFENCES-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 12cf99f32 (UAT B4, 2026-10-27): register has an add-geofence form and per-row activate/deactivate for the roles the service allows (POST/PUT /v1/geofences), 202 shown as received then Done when visible, copy no longer says read-only; the register already sorts/filters/paginates (15 per page). Tests: GeofenceActions.test.tsx, page.manage.test.tsx.
 - **W2 note:** copy says read-only and pagination/filter exist; a create/edit UI is a feature build (backend has POST/PUT /v1/geofences) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
