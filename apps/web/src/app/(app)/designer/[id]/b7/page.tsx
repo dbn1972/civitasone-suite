@@ -32,6 +32,7 @@ export default function DesignerB7Page() {
   );
   const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
   const outputsRef = useRef<unknown[]>([]);
+  const [officeCount, setOfficeCount] = useState(0);
   const [meta, setMeta] = useState({
     name: "Untitled service",
     pattern: "certificate",
@@ -48,6 +49,7 @@ export default function DesignerB7Page() {
         if (cancelled) return;
         const pattern = def.servicePattern ?? "certificate";
         outputsRef.current = def.outputs ?? [];
+        setOfficeCount(def.offeringOfficeIds?.length ?? 0);
         setMeta({
           name: def.name,
           pattern,
@@ -150,6 +152,7 @@ export default function DesignerB7Page() {
         initial={initialDesign}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
+        offeringOfficeCount={officeCount}
       />
     </WizardShell>
   );

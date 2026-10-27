@@ -11,6 +11,7 @@ export interface IssuanceOutputConfig {
   templateBody: string;
   numberingFormat: string;
   numberingTokens: IssuanceDesignState["numberingTokens"];
+  numberingResetPolicy?: IssuanceDesignState["numberingResetPolicy"];
   signatoryDesignationId: string;
   signatoryLabel: string;
   digitalSignature: boolean;
@@ -30,6 +31,7 @@ export function issuanceUiToOutput(design: IssuanceDesignState): IssuanceOutputC
     templateBody: design.templateBody,
     numberingFormat: formatNumberingPreview(design.numberingTokens),
     numberingTokens: design.numberingTokens,
+    numberingResetPolicy: design.numberingResetPolicy,
     signatoryDesignationId: design.signatoryDesignationId,
     signatoryLabel: design.signatoryLabel,
     digitalSignature: design.digitalSignature,
@@ -112,6 +114,7 @@ export function issuanceOutputToUi(
     outputType: (cfg.outputType as IssuanceDesignState["outputType"]) ?? base.outputType,
     templateBody: cfg.templateBody ?? base.templateBody,
     numberingTokens: cfg.numberingTokens ?? base.numberingTokens,
+    numberingResetPolicy: cfg.numberingResetPolicy ?? "",
     signatoryDesignationId: cfg.signatoryDesignationId ?? "",
     signatoryLabel: cfg.signatoryLabel ?? "",
     digitalSignature: cfg.digitalSignature ?? false,

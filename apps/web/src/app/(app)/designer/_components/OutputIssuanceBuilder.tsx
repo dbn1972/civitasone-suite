@@ -13,6 +13,7 @@ import { fetchTenantPositions, requestSamplePdf } from "../_data/issuanceBuilder
 import {
   applyOutputTypeChange,
   mergeFieldsForDesign,
+  numberingAdvisories,
   numberingWarning,
   renewalGuidance,
   signatoryWarning,
@@ -29,6 +30,8 @@ interface Props {
   /** Should reject when the save fails so the footer can show "offline". */
   onDesignPersisted?: (design: IssuanceDesignState) => void | Promise<void>;
   onDesignChange?: (design: IssuanceDesignState) => void;
+  /** Offices that offer this service (B1); more than one makes an Office segment advisable. */
+  offeringOfficeCount?: number;
 }
 
 export function OutputIssuanceBuilder({
@@ -39,6 +42,7 @@ export function OutputIssuanceBuilder({
   onSaveState,
   onDesignPersisted,
   onDesignChange,
+  offeringOfficeCount = 0,
 }: Props) {
   const [design, setDesign] = useState(initial);
   const [tab, setTab] = useState(tabLabelForOutputType(initial.outputType));
@@ -100,6 +104,9 @@ export function OutputIssuanceBuilder({
   );
 
   const numWarn = numberingWarning(design.numberingTokens);
+  const numAdvisories = numberingAdvisories(design.numberingTokens, design.numberingResetPolicy, {
+    multiOffice: offeringOfficeCount > 1,
+  });
   const sigWarn = signatoryWarning(design);
   const renewNote = renewalGuidance(design);
   const validityNote = validitySummary(design);
@@ -215,6 +222,9 @@ export function OutputIssuanceBuilder({
             tokens={design.numberingTokens}
             onChange={(numberingTokens) => patch({ numberingTokens })}
             warning={numWarn}
+            resetPolicy={design.numberingResetPolicy}
+            onResetPolicyChange={(numberingResetPolicy) => patch({ numberingResetPolicy })}
+            advisories={numAdvisories}
           />
         </Card>
       ) : null}

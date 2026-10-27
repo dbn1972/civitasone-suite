@@ -76,3 +76,44 @@ describe("NumberingFormatBuilder", () => {
     expect(document.activeElement).toBe(survivingOfficeValue);
   });
 });
+
+// GAP-DESIGNER-DETAIL-B7-03
+describe("financial-year token and reset policy", () => {
+  it("previews an FY token as the Indian financial year", () => {
+    const tokens: NumberingToken[] = [{ kind: "prefix", value: "TL" }, { kind: "fy" }, { kind: "seq", seqWidth: 4 }];
+    expect(formatNumberingPreview(tokens, "2026-10-27")).toBe("TL/2026-27/0041");
+    expect(formatNumberingPreview(tokens, "2027-02-10")).toBe("TL/2026-27/0041");
+    expect(formatNumberingPreview(tokens, "2027-04-01")).toBe("TL/2027-28/0041");
+  });
+
+  it("adds an FY segment and saves the chosen reset policy", () => {
+    const onChange = vi.fn();
+    const onResetPolicyChange = vi.fn();
+    render(
+      <NumberingFormatBuilder
+        tokens={[{ kind: "seq", seqWidth: 5 }]}
+        onChange={onChange}
+        resetPolicy=""
+        onResetPolicyChange={onResetPolicyChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "+ FY" }));
+    expect(onChange).toHaveBeenCalledWith([{ kind: "seq", seqWidth: 5 }, { kind: "fy" }]);
+    fireEvent.change(screen.getByLabelText("Sequence restarts"), { target: { value: "financial_year" } });
+    expect(onResetPolicyChange).toHaveBeenCalledWith("financial_year");
+  });
+
+  it("explains the chosen policy and lists advisories", () => {
+    render(
+      <NumberingFormatBuilder
+        tokens={[{ kind: "seq" }, { kind: "seq" }]}
+        onChange={() => {}}
+        resetPolicy="calendar_year"
+        onResetPolicyChange={() => {}}
+        advisories={["Use a single Sequence segment."]}
+      />,
+    );
+    expect(screen.getByTestId("numbering-reset-help")).toHaveTextContent(/restarts each calendar year/i);
+    expect(screen.getByTestId("numbering-advisories")).toHaveTextContent(/single Sequence/i);
+  });
+});

@@ -9,6 +9,7 @@ import {
   buildSandboxPreview,
   filterMergeFields,
   mergeFieldsForDesign,
+  numberingAdvisories,
   numberingWarning,
   renderMergedTemplate,
   renewalGuidance,
@@ -100,5 +101,31 @@ describe("issuanceBuilderModel", () => {
     design.renewalWindowDays = 45;
     expect(validitySummary(design)).toMatch(/45 days/i);
     expect(renewalGuidance(design)).toMatch(/FN-15/i);
+  });
+});
+
+// GAP-DESIGNER-DETAIL-B7-03
+describe("numberingAdvisories", () => {
+  const seq = { kind: "seq" as const, seqWidth: 5 };
+  it("warns on more than one Sequence segment", () => {
+    expect(numberingAdvisories([seq, seq], "financial_year").join(" ")).toMatch(/one Sequence/i);
+  });
+  it("asks for a restart policy when none is chosen", () => {
+    expect(numberingAdvisories([{ kind: "prefix", value: "TL" }, seq], "").join(" ")).toMatch(/when the sequence restarts/i);
+  });
+  it("warns when the policy never restarts but the number carries a year", () => {
+    expect(numberingAdvisories([{ kind: "year" }, seq], "never").join(" ")).toMatch(/never restarts/i);
+    expect(numberingAdvisories([{ kind: "fy" }, seq], "never").join(" ")).toMatch(/never restarts/i);
+  });
+  it("warns when the policy and year segment disagree", () => {
+    expect(numberingAdvisories([{ kind: "year" }, seq], "financial_year").join(" ")).toMatch(/FY segment/);
+    expect(numberingAdvisories([{ kind: "fy" }, seq], "calendar_year").join(" ")).toMatch(/Year segment/);
+  });
+  it("warns for a multi-office service without an Office segment", () => {
+    expect(numberingAdvisories([seq], "never", { multiOffice: true }).join(" ")).toMatch(/Office segment/);
+    expect(numberingAdvisories([{ kind: "office", value: "HO" }, seq], "never", { multiOffice: true }).join(" ")).not.toMatch(/Office segment/);
+  });
+  it("is quiet for a coherent scheme", () => {
+    expect(numberingAdvisories([{ kind: "prefix", value: "TL" }, { kind: "fy" }, seq], "financial_year")).toEqual([]);
   });
 });

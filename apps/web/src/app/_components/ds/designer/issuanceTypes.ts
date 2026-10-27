@@ -1,11 +1,22 @@
+import { todayIST } from "@/lib/formatters";
+
 export type OutputType = "certificate" | "licence" | "closure_note" | "receipt";
 
 export type ValidityMode = "fixed_date" | "duration" | "none";
 
 export type TemplateOrientation = "portrait" | "landscape";
 
+/** When the running sequence number goes back to 1. "" = not chosen yet. */
+export type NumberingResetPolicy = "never" | "calendar_year" | "financial_year";
+
+export const NUMBERING_RESET_OPTIONS: { id: NumberingResetPolicy; label: string; help: string }[] = [
+  { id: "never", label: "Never (one continuous series)", help: "Sequence never restarts." },
+  { id: "calendar_year", label: "Each calendar year", help: "Sequence restarts each calendar year (January to December)." },
+  { id: "financial_year", label: "Each financial year", help: "Sequence restarts each financial year (April to March)." },
+];
+
 export interface NumberingToken {
-  kind: "prefix" | "ward" | "year" | "seq" | "office";
+  kind: "prefix" | "ward" | "year" | "fy" | "seq" | "office";
   value?: string;
   seqWidth?: number;
 }
@@ -14,6 +25,7 @@ export interface IssuanceDesignState {
   outputType: OutputType;
   templateBody: string;
   numberingTokens: NumberingToken[];
+  numberingResetPolicy: NumberingResetPolicy | "";
   signatoryDesignationId: string;
   signatoryLabel: string;
   digitalSignature: boolean;
@@ -117,6 +129,7 @@ export function emptyIssuanceDesign(pattern = "certificate"): IssuanceDesignStat
           { kind: "year" },
           { kind: "seq", seqWidth: 5 },
         ],
+    numberingResetPolicy: "",
     signatoryDesignationId: "",
     signatoryLabel: "",
     digitalSignature: !isClosure,
@@ -130,8 +143,15 @@ export function emptyIssuanceDesign(pattern = "certificate"): IssuanceDesignStat
   };
 }
 
-export function formatNumberingPreview(tokens: NumberingToken[]): string {
-  const year = new Date().getFullYear();
+/** Indian financial year (April to March) containing an IST date, e.g. "2026-27". */
+export function financialYearLabel(isoDate: string): string {
+  const [yy, mm] = isoDate.split("-").map(Number) as [number, number];
+  const start = mm >= 4 ? yy : yy - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+}
+
+export function formatNumberingPreview(tokens: NumberingToken[], today: string = todayIST()): string {
+  const year = today.slice(0, 4);
   return tokens
     .map((t) => {
       switch (t.kind) {
@@ -140,7 +160,9 @@ export function formatNumberingPreview(tokens: NumberingToken[]): string {
         case "ward":
           return "W12";
         case "year":
-          return String(year);
+          return year;
+        case "fy":
+          return financialYearLabel(today);
         case "office":
           return t.value || "HO";
         case "seq":

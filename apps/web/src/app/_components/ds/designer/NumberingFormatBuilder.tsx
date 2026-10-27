@@ -5,6 +5,8 @@ import { Button } from "../Button";
 import { Segmented } from "../Segmented";
 import {
   formatNumberingPreview,
+  NUMBERING_RESET_OPTIONS,
+  type NumberingResetPolicy,
   type NumberingToken,
 } from "./issuanceTypes";
 
@@ -12,9 +14,14 @@ export interface NumberingFormatBuilderProps {
   tokens: NumberingToken[];
   onChange: (tokens: NumberingToken[]) => void;
   warning?: string | null;
+  /** GAP-DESIGNER-DETAIL-B7-03: when the sequence restarts. Omit to hide the control. */
+  resetPolicy?: NumberingResetPolicy | "";
+  onResetPolicyChange?: (policy: NumberingResetPolicy | "") => void;
+  /** Non-blocking advisories (duplicate Sequence, missing Office, policy/year mismatch). */
+  advisories?: string[];
 }
 
-const TOKEN_OPTIONS = ["Prefix", "Ward", "Year", "Office", "Sequence"] as const;
+const TOKEN_OPTIONS = ["Prefix", "Ward", "Year", "FY", "Office", "Sequence"] as const;
 
 function tokenKindFromLabel(label: string): NumberingToken["kind"] {
   switch (label) {
@@ -24,6 +31,8 @@ function tokenKindFromLabel(label: string): NumberingToken["kind"] {
       return "ward";
     case "Year":
       return "year";
+    case "FY":
+      return "fy";
     case "Office":
       return "office";
     default:
@@ -39,6 +48,8 @@ function labelFromKind(kind: NumberingToken["kind"]): string {
       return "Ward";
     case "year":
       return "Year";
+    case "fy":
+      return "FY";
     case "office":
       return "Office";
     default:
@@ -46,7 +57,14 @@ function labelFromKind(kind: NumberingToken["kind"]): string {
   }
 }
 
-export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingFormatBuilderProps) {
+export function NumberingFormatBuilder({
+  tokens,
+  onChange,
+  warning,
+  resetPolicy,
+  onResetPolicyChange,
+  advisories,
+}: NumberingFormatBuilderProps) {
   const preview = formatNumberingPreview(tokens);
 
   // Stable per-row React key, independent of array position -- see
@@ -187,6 +205,35 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
       <p style={{ marginTop: 16, fontSize: 14 }} data-testid="numbering-preview">
         Next number will look like: <strong>{preview || "—"}</strong>
       </p>
+      {onResetPolicyChange ? (
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
+            <span style={{ fontWeight: 600 }}>Sequence restarts</span>
+            <select
+              aria-label="Sequence restarts"
+              value={resetPolicy ?? ""}
+              onChange={(e) => onResetPolicyChange(e.target.value as NumberingResetPolicy | "")}
+              style={{ maxWidth: 320 }}
+            >
+              <option value="">Choose when it restarts…</option>
+              {NUMBERING_RESET_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
+          </label>
+          {resetPolicy ? (
+            <p data-testid="numbering-reset-help" style={{ margin: "6px 0 0", fontSize: 12, color: "var(--mut)" }}>
+              {NUMBERING_RESET_OPTIONS.find((o) => o.id === resetPolicy)?.help} Saved with the design;
+              numbers already issued are never renumbered.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+      {advisories && advisories.length > 0 ? (
+        <ul data-testid="numbering-advisories" style={{ margin: "8px 0 0", paddingInlineStart: 18, fontSize: 13, color: "var(--warn)" }}>
+          {advisories.map((a) => (<li key={a}>{a}</li>))}
+        </ul>
+      ) : null}
       {warning ? (
         <p data-testid="numbering-warning" style={{ marginTop: 8, fontSize: 13, color: "var(--warn)" }}>
           {warning}

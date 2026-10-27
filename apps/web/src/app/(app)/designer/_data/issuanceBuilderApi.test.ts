@@ -127,3 +127,23 @@ describe("withStoredRenewalPolicy", () => {
     expect(withStoredRenewalPolicy(base, null)).toBe(base);
   });
 });
+
+// GAP-DESIGNER-DETAIL-B7-03
+describe("numbering reset policy persistence", () => {
+  it("saves and reloads the reset policy and FY token", () => {
+    const design = emptyIssuanceDesign("certificate");
+    design.numberingTokens = [{ kind: "prefix", value: "TL" }, { kind: "fy" }, { kind: "seq", seqWidth: 5 }];
+    design.numberingResetPolicy = "financial_year";
+    const cfg = issuanceUiToOutput(design);
+    expect(cfg.numberingResetPolicy).toBe("financial_year");
+    const back = issuanceOutputToUi([cfg], "certificate");
+    expect(back.numberingResetPolicy).toBe("financial_year");
+    expect(back.numberingTokens[1]).toEqual({ kind: "fy" });
+  });
+
+  it("loads an older design with no policy as not chosen yet", () => {
+    const cfg = issuanceUiToOutput(emptyIssuanceDesign("certificate")) as unknown as Record<string, unknown>;
+    delete cfg.numberingResetPolicy;
+    expect(issuanceOutputToUi([cfg], "certificate").numberingResetPolicy).toBe("");
+  });
+});
