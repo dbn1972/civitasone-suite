@@ -303,7 +303,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: citizen-service team must confirm if evaluator supports document-present/payment-status attributes before adding new optgroups
+- [~] **Status** NEEDS OWNER DECISION: citizen-service team must confirm if evaluator supports document-present/payment-status attributes before adding new optgroups [deferred post-UAT per owner decision D4c #6, 2026-10-27]
 - **First-pass claim:** Profile field list is a fixed six-item array; form-answer fields come through formFields but there is no way to reference a document or payment status (eligibilityTypes.ts, b3/page.tsx formFields).
 - **Verified evidence:** eligibilityTypes.ts:53-60 defines exactly six profile attributes (age, ward, resident, bpl, income_band, mobile_verified). b3/page.tsx:45-52 builds formFields from loadFormDesign(...).fields. EligibilityConditionBuilder.tsx:25-32 maps only form fields to options (text, number or boolean). There is no attribute for document presence or verification, or for payment status, so rules cannot reference them. Whether the runtime evaluator supports such attributes is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/designer/eligibilityTypes.ts`, `apps/web/src/app/_components/ds/designer/EligibilityConditionBuilder.tsx`, `apps/web/src/app/(app)/designer/[id]/b3/page.tsx`
@@ -529,7 +529,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: product must define hard-block vs advisory boundary for wizard, `[~]` if blocked + reason)
+- [x] **Status** Closed by a3628b369 (owner decision D4c #7, 2026-10-27): one blocks-versus-warns rule (designerGating.ts) with Blocks Next / Warning badges, help texts and a review-page list
 - **First-pass claim:** Two block-progress semantics: Next is disabled for HOA while B6-B8 only warn (b6 help text) — inconsistent gating.
 - **Verified evidence:** Facts verified. B5 disables Next when the HOA is missing (b5/page.tsx:150,186-190; feeBuilderModel.ts:56-58 has the comment 'block submit/next here, not at publish'). B6's help text (b6/page.tsx:136-139) says mandatory documents without a verifying lane 'warn but do not block Next', and B7/B8 have no gate at all (onNext always navigates, b7/page.tsx:135). This is a deliberate hard-versus-soft split rather than a bug: payments cannot post without an HOA, while a missing verifying lane is advisory. The inconsistency is that the wizard has no visible rule for which checks block and which warn (block rail statuses are hard-coded 'empty' or 'complete', e.g. b6/page.tsx:71-79).
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/designerConstants.ts`, `apps/web/src/app/_components/ds/designer/WizardShell.tsx`
@@ -586,7 +586,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-03  ·  MEDIUM  ·  confirmed  ·  theme DPDP-CLASSIFICATION (was PII)
 
-- [~] **Status** NEEDS OWNER DECISION: DPO must supply classified document catalogue, `[~]` if blocked + reason)
+- [x] **Status** Closed by 2478ebe85 (owner decision D4c #8, 2026-10-27): draft starter category catalogue flagged DPO to confirm, category select with sensitivity and retention, categoryId persisted
 - **First-pass claim:** Document types are free labels; no link to a DPDP-classified document category (Aadhaar copy, income certificate) and no retention hint (documentBuilderModel.ts).
 - **Verified evidence:** documentTypes.ts:10-18 RequiredDocumentUi has docType (a slug generated from the typed name by slugifyDocType, :33-40), labels, formats, maxSizeMb, mandatory and verifiedAtLane. There is no category, sensitivity or retention field, and no link to a shared document-type catalogue. DocumentsBuilder.tsx:373-385 sets docType from the free-text name. documentBuilderModel.ts has no classification logic. Two designers can therefore create 'Aadhaar copy' documents with different docType slugs, and no retention hint is shown. Whether the platform has a document-category catalogue or retention policy is cannot-verify. Masking (<Masked>) is not the right fix here, since the builder shows no personal data. The need is a classified catalogue.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/documentTypes.ts`, `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderApi.ts`
@@ -658,7 +658,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was I18N)
 
-- [~] **Status** NEEDS OWNER DECISION: legal/product must confirm supported signature methods, `[~]` if blocked + reason)
+- [x] **Status** Closed by 0e205a224 (owner decision D4c #9, 2026-10-27): signatureMethod none/DSC/Aadhaar eSign; e-seal remains a known gap
 - **First-pass claim:** Signatory is a designation plus a free label; no eSign/DSC or seal option appears in OutputIssuanceBuilder or issuanceBuilderModel (grep for dsc/esign/seal finds none), while Court orders in the same suite require a DSC (OutputIssuanceBuilder.tsx:217-251).
 - **Verified evidence:** The claim that no DSC or eSign option exists is wrong. OutputIssuanceBuilder.tsx:255-262 has a checkbox 'Require digital signature at issue time' bound to design.digitalSignature. signatoryWarning (issuanceBuilderModel.ts:139-152) says 'Digital signature will be required at issue time (DSC / eSign when the tenant has it configured)'. The signatory is a designation select (:220-237) plus a free label (:244-254). What is really missing: choosing the signature method (DSC token vs Aadhaar eSign), binding to a specific signer certificate, and any seal or stamp option; nothing in the builder or issuanceBuilderModel mentions a seal. Whether the issuance pipeline enforces DSC for Court orders is cannot-verify (court module absent). The I18N theme tag is wrong.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/(app)/designer/_components/OutputIssuanceBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderModel.ts`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderApi.ts`
@@ -707,7 +707,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-05  ·  LOW  ·  partly  ·  theme OTHER (was I18N)
 
-- [~] **Status** NEEDS OWNER DECISION: PDF service must confirm supported paper sizes, `[~]` if blocked + reason)
+- [x] **Status** Closed by 53b53725e (owner decision D4c #10, 2026-10-27): preview labelled A4; other paper sizes remain a known gap
 - **First-pass claim:** Certificate layout is edited on a TemplateCanvas component (OutputIssuanceBuilder.tsx:177) with a merge-field picker; no print-size/paper setting was found in the copy.
 - **Verified evidence:** OutputIssuanceBuilder.tsx:177-189 renders TemplateCanvas with a MergeFieldPicker (TemplateCanvas.tsx:78) and a portrait/landscape toggle (:80-95), and orientation is persisted (issuanceBuilderApi.ts:22,41,72). The canvas preview size is hard-coded to A4 (210x297 mm, TemplateCanvas.tsx:72-73). There is no paper-size selection (A4, A3, Legal) or margin setting, and no indication of A4 to the designer. Whether the PDF renderer supports other sizes is cannot-verify. The I18N theme tag does not fit.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/TemplateCanvas.tsx`, `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderApi.ts`
@@ -764,7 +764,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: product must declare required vs optional blocks, `[~]` if blocked + reason)
+- [x] **Status** Closed by 820b1630b (owner decision D4c #11, 2026-10-27): Run Test needs b1-b7 complete, b8 optional, and names the block holding it back
 - **First-pass claim:** canRunTest treats 'in-progress' blocks as complete enough, so Run Test enables almost immediately; Submit still requires a passing test (useDesignerWizard.ts:37-39,97-98).
 - **Verified evidence:** useDesignerWizard.ts:37-39 blocksCompleteEnough accepts 'complete' or 'in-progress' for every non-hidden block; :31 forces b8 to always 'in-progress'; b5 is in-progress as soon as feeModel exists (:24-ish). :97 canRunTest = that; :98 canSubmit additionally needs testPassed and draft/unsubmitted. Note also empty blocks fail the check (b2..b7 'empty'), so it is not 'immediately' but as soon as each block has any content.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/useDesignerWizard.ts`
