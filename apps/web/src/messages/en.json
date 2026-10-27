@@ -16614,7 +16614,9 @@
       "optionsFailed": "The offices and administrative units could not be loaded, so jurisdictions cannot be assigned right now. Refresh to try again.",
       "revoke": "Revoke",
       "revokeTitle": "Revoke this jurisdiction?",
-      "revokeDescription": "{office} will no longer cover {unit}. This is recorded in the audit log."
+      "revokeDescription": "{office} will no longer cover {unit}. This is recorded in the audit log.",
+      "colParent": "Parent unit",
+      "colLgd": "LGD code"
     }
   },
   "fieldHub": {

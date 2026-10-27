@@ -98,6 +98,8 @@ export function JurisdictionsTable({ rows, canManage = false }: { rows: Jurisdic
             { key: "level", label: t("colLevel") },
             { key: "office", label: t("colOffice"), render: (row: JurisRow) => row.office || t("unresolved") },
             { key: "unit", label: t("colUnit"), render: (row: JurisRow) => row.unit || t("unresolved") },
+            { key: "parent", label: t("colParent"), render: (row: JurisRow) => row.parent || "—" },
+            { key: "lgdCode", label: t("colLgd"), render: (row: JurisRow) => row.lgdCode || "—" },
             { key: "primary", label: t("colPrimary"), render: (row: JurisRow) => (row.primary ? t("yes") : t("no")) },
             ...(canManage
               ? [{ key: "actions", label: "", render: (row: JurisRow) => <JurisdictionRevoke id={row.id} office={row.office} unit={row.unit} /> }]

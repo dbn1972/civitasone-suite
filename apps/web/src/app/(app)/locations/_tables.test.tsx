@@ -77,3 +77,19 @@ describe("locations tables i18n (round-1 review)", () => {
     expect(screen.getByPlaceholderText("जियोफ़ेंस फ़िल्टर करें…")).toBeTruthy();
   });
 });
+
+// GAP-LOCATIONS-JURISDICTIONS-05: the unit's place in the hierarchy is shown, blank (not a guess) when unknown.
+describe("JurisdictionsTable parent and LGD code", () => {
+  it("renders Parent unit and LGD code columns with a dash for a missing value", () => {
+    const rows = [
+      { id: "44444444-4444-4444-8444-444444444444", level: "block", office: "DM Office", unit: "Sadar Block", parent: "Patna", lgdCode: "2121" },
+      { id: "55555555-5555-4555-8555-555555555555", level: "ward", office: "DM Office", unit: "Free Ward", parent: "", lgdCode: "" },
+    ];
+    render(<JurisdictionsTable rows={rows} />);
+    expect(screen.getByRole("columnheader", { name: /Parent unit/i })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: /LGD code/i })).toBeTruthy();
+    expect(screen.getByText("Patna")).toBeTruthy();
+    expect(screen.getByText("2121")).toBeTruthy();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+});

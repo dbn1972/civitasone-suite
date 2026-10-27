@@ -128,6 +128,10 @@ export type JurisdictionRow = {
   office: string;
   /** Resolved administrative-unit name; "" when it could not be resolved. */
   unit: string;
+  /** Name of the unit's parent in the administrative hierarchy; "" when it has none / is unresolved. */
+  parent?: string;
+  /** The unit's LGD code; "" when none is recorded. */
+  lgdCode?: string;
   primary?: boolean;
 };
 
@@ -205,18 +209,41 @@ function indexNames(payload: unknown, into: NameIndex = new Map()): NameIndex {
   return into;
 }
 
-function mapJurisdictions(payload: unknown, names: NameIndex): JurisdictionRow[] {
+type UnitDetail = { name: string; parentId?: string; lgdCode?: string };
+type UnitIndex = Map<string, UnitDetail>;
+
+/** Flattens the administrative hierarchy (`{ id, name, parentId, lgdCode, children? }` tree) into id -> detail. */
+function indexUnits(payload: unknown, into: UnitIndex = new Map()): UnitIndex {
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (id && name) {
+      const parentId = toText(row.parentId);
+      const lgdCode = toText(row.lgdCode);
+      into.set(id, { name, ...(parentId ? { parentId } : {}), ...(lgdCode ? { lgdCode } : {}) });
+    }
+    if (Array.isArray(row.children)) indexUnits(row.children, into);
+  }
+  return into;
+}
+
+function mapJurisdictions(payload: unknown, names: NameIndex, units: UnitIndex = new Map()): JurisdictionRow[] {
   const out: JurisdictionRow[] = [];
   for (const [i, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
     const officeId = toText(row.officeId);
     const unitId = toText(row.unitId);
+    const unit = unitId ? units.get(unitId) : undefined;
     out.push({
       id: toText(row.id) ?? `row-${i + 1}`,
       level: toText(row.level) ?? "—",
       // The register stores ids; show names, never the raw id. Unresolved -> "".
       office: (officeId && names.get(officeId)) || "",
       unit: (unitId && names.get(unitId)) || "",
+      // GAP-LOCATIONS-JURISDICTIONS-05: the unit's place in the hierarchy (parent name, LGD code).
+      parent: (unit?.parentId && units.get(unit.parentId)?.name) || "",
+      lgdCode: unit?.lgdCode ?? "",
       primary: row.isPrimary === true,
     });
   }
@@ -263,7 +290,7 @@ export function getLocationGeofencesTyped(): Promise<LoaderResult<GeofenceRow[]>
 export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<JurisdictionRow[]>> {
   // Name lookups are best-effort: a failure leaves the names unresolved
   // (shown as "Not available") but never fails the register itself.
-  const [main, units, offices] = await Promise.all([
+  const [main, units, offices, unitDetails] = await Promise.all([
     fetchJson<unknown, unknown>("/api/v1/jurisdictions", [], {
       revalidateSeconds: 30,
       telemetryKey: "locations.jurisdictions.typed",
@@ -279,10 +306,15 @@ export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<Juri
       telemetryKey: "locations.jurisdictions.offices",
       mapResponse: (p) => indexNames(p),
     }),
+    fetchJson<unknown, UnitIndex>("/api/v1/hierarchy", new Map(), {
+      revalidateSeconds: 60,
+      telemetryKey: "locations.jurisdictions.unitDetails",
+      mapResponse: (p) => indexUnits(p),
+    }),
   ]);
   const names: NameIndex = new Map([...offices.data, ...units.data]);
   const { data, ...rest } = main;
-  return { ...rest, data: mapJurisdictions(data, names) };
+  return { ...rest, data: mapJurisdictions(data, names, unitDetails.data) };
 }
 
 /** Typed loader for the /locations/list register (name, type, parent, LGD code, status). */
