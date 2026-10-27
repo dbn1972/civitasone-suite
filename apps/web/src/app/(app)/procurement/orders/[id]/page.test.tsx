@@ -49,9 +49,19 @@ describe("PODetailPage — DETAIL-01 single approval path", () => {
     mockLoad.mockResolvedValue({ data: po({ status: "approved" }), source: "api" });
     render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
     expect(screen.queryByTestId("raise-eoffice")).not.toBeInTheDocument();
-    // The Approval card explains the single release path + state.
+    // The Approval card explains the single release path + state: the workflow
+    // inbox (D4c #19) - eOffice is no longer an approval path.
     expect(screen.getByText("Approval")).toBeInTheDocument();
-    expect(screen.getByText(/eOffice file-noting approval/)).toBeInTheDocument();
+    expect(screen.getByText(/Workflow inbox approval \(maker-checker\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/eOffice file-noting approval/)).not.toBeInTheDocument();
+  });
+
+  it("D4c #19: the optional eOffice note is labelled as never approving or releasing the PO", async () => {
+    mockLoad.mockResolvedValue({ data: po({ status: "pending" }), source: "api" });
+    render(await PODetailPage({ params: Promise.resolve({ id: "x" }) }));
+    expect(screen.getByTestId("raise-eoffice")).toBeInTheDocument();
+    expect(screen.getByTestId("eoffice-optional-note")).toHaveTextContent(/does not approve or release this PO/);
+    expect(screen.getAllByText(/workflow inbox/i).length).toBeGreaterThan(0);
   });
 
   it("DOES render the approval-raise control for a draft PO", async () => {

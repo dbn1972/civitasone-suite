@@ -6093,7 +6093,7 @@
       "gemRefLabel": "GeM order reference",
       "tendersFailed": "Couldn’t load awarded tenders. You can still enter a GeM order reference.",
       "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
-      "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."
+      "created": "PO created as a draft and sent to the workflow inbox for approval. Once an approver other than its creator approves it, it can be dispatched."
     },
     "gfr": {
       "band": {

@@ -1,41 +1,29 @@
 import type { Queue } from "@civitasone/queue";
 import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
-import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
+import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
 /**
- * Closes the eOffice decision loop for procurement purchase orders.
+ * eOffice file-noting decisions for a purchase order are RECORDED only.
  *
- * When a PO award is raised into eOffice for administrative approval, eOffice
- * emits `procurement.po.file_decided` once the approval chain concludes. This
- * consumer applies that decision to the PO:
- *   approved → status "approved" (+ procurement.po.approved event)
- *   rejected → status "cancelled"
- *
- * Without this, the file was approved in eOffice but the PO never moved — the
- * integration loop was open.
- *
- * SoD (#9): an "approved" decision is gated by the same
- * assertDistinctMakerChecker guard as the internal poApprove command handler
- * (see po/consumer.ts) — the approver (cb.decidedBy) must differ from the
- * PO's creator. estab-service's own file-noting chain enforces no such
- * distinctness itself (a single officer can legitimately be both the file's
- * initiator and, through role overlap or a misrouted/compromised decision,
- * its decider), so this was the only line of defense against self-approval
- * on this path and it was missing. A self-decided "rejected"/"returned" is
- * NOT a security concern and is left ungated.
+ * D4c #19 (GAP-PROCUREMENT-ORDERS-DETAIL-01, owner decision 2026-10-27): the
+ * workflow inbox (procurement.po.approve - maker-checker, role check, audit) is
+ * the ONLY approval path for a PO. An eOffice file-noting remains optional and
+ * never gates release, so when estab-service reports the file's decision
+ * (`procurement.po.file_decided`) this consumer writes it to the audit trail and
+ * changes nothing else: no status change, no approved / cancelled event. (It used
+ * to approve or cancel the PO itself, which made eOffice a second, competing
+ * release path.)
  */
 export function registerEOfficeDecisionConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.poFileDecided, async (msg) => {
     const parsed = parseDecisionCallback(msg.payload);
     if (!parsed.ok) {
-      // Malformed callback — drop (the envelope/audit trail records the miss).
+      // Malformed callback - drop (the envelope/audit trail records the miss).
       return;
     }
     const cb = parsed.value;
@@ -45,42 +33,12 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
 
       const po = await repo.findPoByIdTx(tx, cb.refId, msg.tenantId);
       if (!po || po.tenantId !== msg.tenantId) return; // not ours / unknown
-      // Only act on a PO still awaiting the eOffice decision.
-      if (po.status !== "pending" && po.status !== "draft") return;
 
-      if (cb.decision === "approved") {
-        // SoD (#9): the eOffice decider must differ from the PO's creator —
-        // reject the decision instead of approving on self-approval.
-        try {
-          assertDistinctMakerChecker(po.createdBy, cb.decidedBy);
-        } catch (err) {
-          if (err instanceof DomainError && err.code === "SOD_VIOLATION") {
-            await enqueue(tx, {
-              topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
-              tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
-              payload: { poId: cb.refId, poNo: po.poNo, reason: err.message, code: err.code },
-            });
-            await audit(tx, msg, "eoffice_approval_rejected_sod", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
-            return;
-          }
-          throw err;
-        }
-        await repo.updatePoVersioned(tx, cb.refId, po.version ?? 1, { status: "approved", updatedBy: cb.decidedBy });
-        await enqueue(tx, {
-          topic: EVENTS.poApproved, eventType: EVENTS.poApproved,
-          tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
-          payload: { poId: cb.refId, poNo: po.poNo, vendorId: po.vendorId, totalMinor: String(po.totalMinor) },
-        });
-        await audit(tx, msg, "eoffice_approved", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
-      } else if (cb.decision === "rejected") {
-        await repo.updatePoVersioned(tx, cb.refId, po.version ?? 1, { status: "cancelled", updatedBy: cb.decidedBy });
-        await audit(tx, msg, "eoffice_rejected", cb.refId, { fileNo: cb.fileNo });
-      } else {
-        // "returned" — leave in its current state for revision (no state change).
-        await audit(tx, msg, "eoffice_returned", cb.refId, { fileNo: cb.fileNo });
-      }
+      await audit(tx, msg, "eoffice_decision_recorded", cb.refId, {
+        decision: cb.decision, fileNo: cb.fileNo, decidedBy: cb.decidedBy, dscHash: cb.dscHash ?? null,
+        note: "recorded only; the PO is approved or rejected in the workflow inbox",
+      });
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "po", cb.refId));
   });
 }
 
