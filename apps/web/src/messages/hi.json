@@ -1313,7 +1313,11 @@
     "statusVerified": "सत्यापित",
     "statusProvided": "प्रदान किया गया (लंबित)",
     "statusMissing": "अनुपलब्ध",
-    "required": "आवश्यक"
+    "required": "आवश्यक",
+    "uploadRow": "अपलोड करें",
+    "reupload": "दोबारा अपलोड करें",
+    "uploadRowAria": "{doc} के लिए फ़ाइल अपलोड करें",
+    "reuploadAria": "{doc} के लिए फ़ाइल दोबारा अपलोड करें"
   },
   "citizenEligibility": {
     "pageTitle": "पात्रता और हकदारी",
