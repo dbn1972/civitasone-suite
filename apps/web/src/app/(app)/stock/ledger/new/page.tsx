@@ -6,16 +6,17 @@
  * entry consumer). The "+ New Entry" actions on /stock, /stock/dashboard and
  * /stock/ledger link here.
  *
- * GAP-STOCK-LEDGER-NEW-01: Inter-warehouse transfers intentionally not offered;
- *   the service has no warehouse list endpoint yet. NEEDS OWNER DECISION.
+ * GAP-STOCK-LEDGER-NEW-01: Inter-warehouse transfers offered with From/To warehouse
+ *   pickers fed by GET /v1/stock/warehouses (a transfer needs both, and they must differ).
  * GAP-STOCK-LEDGER-NEW-02: Adjustment direction (increase/decrease); decimal
  *   qty; issue on-hand warning.
  * GAP-STOCK-LEDGER-NEW-07: Multi-line items in one POST.
  * GAP-STOCK-LEDGER-NEW-08: Searchable EntityPicker instead of limit=200 select.
  */
 import { todayIST } from "@/lib/formatters";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { PageHeader, EntityPicker } from "../../../../_components/ds";
 import type { EntityOption } from "../../../../_components/ds/EntityPicker";
@@ -26,11 +27,15 @@ import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 type Item = { id: string; name: string; code?: string; onHand?: number };
 
 // static reference: entry-type options accepted by POST /v1/stock/entries.
-const ENTRY_TYPES: Array<{ value: string; label: string; help: string }> = [
+// `i18nKey` marks entries whose copy comes from the stockEntryNew catalogue (en + hi) via t().
+const ENTRY_TYPES: Array<{ value: string; label: string; help: string; i18nKey?: string }> = [
   { value: "receipt", label: "Receipt", help: "Stock coming in (purchase, return, opening balance)." },
   { value: "issue", label: "Issue", help: "Stock going out to a department or consumer." },
+  { value: "transfer", label: "Transfer", help: "Move stock from one warehouse to another.", i18nKey: "entryTypeTransfer" },
   { value: "adjustment", label: "Adjustment", help: "Correct the book quantity after a count or write-off." },
 ];
+
+type Warehouse = { id: string; name: string; code?: string };
 
 // GAP-STOCK-LEDGER-NEW-02: adjustment direction options
 const ADJUSTMENT_DIRECTIONS: Array<{ value: string; label: string }> = [
@@ -56,6 +61,9 @@ const INITIAL_HEADER = {
   /** GAP-STOCK-LEDGER-NEW-02: direction for adjustment type. */
   adjustmentDirection: "increase",
   postingDate: today(),
+  /** GAP-STOCK-LEDGER-NEW-01: source / destination warehouse ids ("" = not chosen). */
+  fromWarehouseId: "",
+  toWarehouseId: "",
   refNo: "",
   notes: "",
 };
@@ -90,10 +98,16 @@ function validateLines(
 
 function validateHeader(
   form: typeof INITIAL_HEADER,
+  t: (key: string) => string,
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.postingDate)) errors.postingDate = "Pick a posting date.";
   if (form.postingDate > todayIST()) errors.postingDate = "Posting date cannot be in the future.";
+  if (form.entryType === "transfer") {
+    if (!form.fromWarehouseId) errors.fromWarehouseId = t("errFromWarehouse");
+    if (!form.toWarehouseId) errors.toWarehouseId = t("errToWarehouse");
+    else if (form.toWarehouseId === form.fromWarehouseId) errors.toWarehouseId = t("errToSameAsFrom");
+  }
   return errors;
 }
 
@@ -114,8 +128,34 @@ function useItemSearch() {
   }, []);
 }
 
+// GAP-STOCK-LEDGER-NEW-01: warehouse options for the From/To pickers.
+function useWarehouses() {
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/stock/warehouses?limit=200", { credentials: "same-origin", signal: ctrl.signal });
+        if (!res.ok) throw new Error("warehouses_load_failed");
+        const raw = (await res.json()) as unknown;
+        const list = Array.isArray(raw) ? raw : ((raw as { data?: unknown })?.data ?? []);
+        if (ctrl.signal.aborted) return;
+        setWarehouses((list as Warehouse[]).filter((w) => w && typeof w.id === "string" && typeof w.name === "string"));
+        setFailed(false);
+      } catch {
+        if (!ctrl.signal.aborted) setFailed(true);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [attempt]);
+  return { warehouses, failed, retry: () => setAttempt((n) => n + 1) };
+}
+
 export default function NewStockEntryPage() {
   const router = useRouter();
+  const t = useTranslations("stockEntryNew");
   const [header, setHeader] = useState(INITIAL_HEADER);
   // GAP-STOCK-LEDGER-NEW-07: lines array instead of single item.
   const [lines, setLines] = useState<EntryLine[]>([makeLine()]);
@@ -143,8 +183,16 @@ export default function NewStockEntryPage() {
     [lineErrors, headerErrors, formError.fieldErrors],
   );
 
-  const entryHelp = ENTRY_TYPES.find((t) => t.value === header.entryType)?.help ?? "";
+  const entryTypes = ENTRY_TYPES.map((et) => et.i18nKey
+    ? { ...et, label: t(et.i18nKey), help: t(`${et.i18nKey}Help`) }
+    : et);
+  const entryHelp = entryTypes.find((et) => et.value === header.entryType)?.help ?? "";
   const itemSearch = useItemSearch();
+  const { warehouses, failed: warehousesFailed, retry: retryWarehouses } = useWarehouses();
+  const isTransfer = header.entryType === "transfer";
+  // issue leaves one warehouse; receipt / adjustment land in one; transfer needs both.
+  const showFromWarehouse = header.entryType === "issue" || isTransfer;
+  const showToWarehouse = header.entryType !== "issue";
 
   // Fetch on-hand qty when an item is selected and entry type is "issue".
   const fetchOnHand = useCallback(async (itemId: string) => {
@@ -175,7 +223,7 @@ export default function NewStockEntryPage() {
     setSubmitted(true);
     formError.clear();
     const lErrs = validateLines(lines, header.entryType);
-    const hErrs = validateHeader(header);
+    const hErrs = validateHeader(header, t);
     setLineErrors(lErrs);
     setHeaderErrors(hErrs);
     if (Object.keys(lErrs).length + Object.keys(hErrs).length > 0) return;
@@ -201,6 +249,8 @@ export default function NewStockEntryPage() {
         body: JSON.stringify({
           entryType: header.entryType,
           postingDate: header.postingDate,
+          ...(showFromWarehouse && header.fromWarehouseId ? { fromWarehouseId: header.fromWarehouseId } : {}),
+          ...(showToWarehouse && header.toWarehouseId ? { toWarehouseId: header.toWarehouseId } : {}),
           ...(header.refNo.trim() ? { refNo: header.refNo.trim() } : {}),
           ...(header.notes.trim() ? { notes: header.notes.trim() } : {}),
           items,
@@ -239,7 +289,7 @@ export default function NewStockEntryPage() {
     <>
       <PageHeader
         title="New Stock Entry"
-        subtitle="Record a receipt, issue or adjustment in the stock ledger."
+        subtitle={t("subtitle")}
         back="/stock/ledger"
         backLabel="Stock Ledger"
       />
@@ -269,7 +319,7 @@ export default function NewStockEntryPage() {
                 onChange={(e) => setHeader({ ...header, entryType: e.target.value })}
                 style={inputStyle} aria-describedby="entry-type-hint"
               >
-                {ENTRY_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {entryTypes.map((et) => <option key={et.value} value={et.value}>{et.label}</option>)}
               </select>
               <span id="entry-type-hint" style={{ fontSize: 12, color: "var(--mut)" }}>{entryHelp}</span>
             </div>
@@ -287,6 +337,33 @@ export default function NewStockEntryPage() {
                 </select>
               </div>
             )}
+
+            {/* ── GAP-STOCK-LEDGER-NEW-01: warehouse pickers ── */}
+            {[
+              showFromWarehouse && { key: "fromWarehouseId" as const, id: "entry-from-wh", label: isTransfer ? t("fromWarehouse") : t("warehouse") },
+              showToWarehouse && { key: "toWarehouseId" as const, id: "entry-to-wh", label: isTransfer ? t("toWarehouse") : t("warehouse") },
+            ].map((f) => f && (
+              <div key={f.key} className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                <label className="l" htmlFor={f.id}>{f.label}</label>
+                <select
+                  id={f.id} value={header[f.key]}
+                  onChange={(e) => setHeader({ ...header, [f.key]: e.target.value })}
+                  style={inputStyle} {...ariaFor(f.key, `${f.id}-err`)}
+                >
+                  <option value="">{isTransfer ? t("selectWarehouse") : t("notSpecified")}</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.code ? `${w.name} (${w.code})` : w.name}</option>
+                  ))}
+                </select>
+                {fieldErr(f.key, `${f.id}-err`)}
+              </div>
+            ))}
+            {warehousesFailed ? (
+              <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
+                {t("warehousesLoadFailed")}{" "}
+                <button type="button" className="btn ghost" style={{ fontSize: 12, padding: "2px 8px" }} onClick={retryWarehouses}>{t("retry")}</button>
+              </p>
+            ) : null}
 
             {/* ── GAP-STOCK-LEDGER-NEW-07: Line items ── */}
             <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "12px", margin: 0, width: "100%" }}>

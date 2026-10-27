@@ -16,6 +16,15 @@ export const createEntryBody = z.object({
   toWarehouseId:   z.string().uuid().optional(),
   notes:           z.string().optional(),
   items:           z.array(entryItemSchema).min(1),
+}).superRefine((b, ctx) => {
+  // GAP-STOCK-LEDGER-NEW-01: a transfer moves stock between two warehouses; without both ids the
+  // consumer would silently post only one leg and misstate inventory.
+  if (b.entryType !== "transfer") return;
+  if (!b.fromWarehouseId) ctx.addIssue({ code: "custom", path: ["fromWarehouseId"], message: "required for a transfer" });
+  if (!b.toWarehouseId) ctx.addIssue({ code: "custom", path: ["toWarehouseId"], message: "required for a transfer" });
+  if (b.fromWarehouseId && b.toWarehouseId && b.fromWarehouseId === b.toWarehouseId) {
+    ctx.addIssue({ code: "custom", path: ["toWarehouseId"], message: "must differ from the source warehouse" });
+  }
 });
 export type CreateEntryBody = z.infer<typeof createEntryBody>;
 
