@@ -251,7 +251,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by d982da37a (UAT B4, 2026-10-27): register has an assign form (office and unit chosen by name, level, primary) and a per-row revoke for the roles the service allows (POST/DELETE /v1/jurisdictions), 202 reported as received, copy no longer says read-only; the register already sorts/filters/paginates. Tests: JurisdictionActions.test.tsx.
 - **W2 note:** copy says read-only; assign/revoke UI is a feature build (backend has POST/DELETE /v1/jurisdictions) - NEEDS OWNER DECISION
 - **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
