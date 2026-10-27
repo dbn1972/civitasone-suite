@@ -14,10 +14,19 @@ export async function listInvoices(tenantId: string, opts?: { status?: string })
   return (rows ?? []).map(summarize);
 }
 
+/**
+ * F11: the allocated series number once issued; a draft has none yet (null); a row issued
+ * before the series existed keeps its derived legacy label.
+ */
+function displayInvoiceNumber(r: BillingInvoiceRow): string | null {
+  if (r.invoiceNumber) return r.invoiceNumber;
+  return r.status === "draft" ? null : invoiceNumber(r.periodMonth, r.id);
+}
+
 function summarize(r: BillingInvoiceRow) {
   return {
     id: r.id,
-    invoiceNumber: invoiceNumber(r.periodMonth, r.id),
+    invoiceNumber: displayInvoiceNumber(r),
     supplierGstin: r.supplierGstin,
     recipientGstin: r.recipientGstin,
     placeOfSupply: r.placeOfSupply,

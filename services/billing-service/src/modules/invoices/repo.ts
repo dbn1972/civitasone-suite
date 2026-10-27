@@ -13,6 +13,7 @@ import {
 } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+export type SeriesWriter = Pick<typeof db, "execute">;
 
 export async function insertInvoice(tx: Writer, row: BillingInvoiceInsert): Promise<void> {
   await tx.insert(billingInvoices).values(row);
@@ -141,4 +142,21 @@ export async function outstandingByTenant(tenantId: string): Promise<{ outstandi
     outstandingMinor: BigInt(r.outstanding),
     openCount: Number(r.openCount),
   };
+}
+
+/**
+ * F11: allocate the next number in (supplier GSTIN, FY). The upsert takes the counter row's lock
+ * until the caller's transaction ends, so concurrent issues serialize and a rolled-back issue
+ * returns its number (gap-free). Must run in the same transaction as the issue write.
+ */
+export async function allocateSeriesSeq(tx: SeriesWriter, supplierGstin: string, fiscalYear: string): Promise<bigint> {
+  const res = await tx.execute(sql`
+    INSERT INTO invoices.billing_invoice_series (supplier_gstin, fiscal_year, last_seq)
+    VALUES (${supplierGstin}, ${fiscalYear}, 1)
+    ON CONFLICT (supplier_gstin, fiscal_year)
+    DO UPDATE SET last_seq = invoices.billing_invoice_series.last_seq + 1, updated_at = now()
+    RETURNING last_seq`);
+  const rows = (Array.isArray(res) ? res : (res as { rows?: unknown[] }).rows ?? []) as Array<{ last_seq: string | number | bigint }>;
+  if (!rows[0]) throw new Error("invoice series allocation returned no row");
+  return BigInt(rows[0].last_seq);
 }
