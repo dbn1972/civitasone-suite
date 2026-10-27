@@ -8,6 +8,8 @@ function mapEmd(r: EmdRow) {
     amountMinor: r.amountMinor.toString(), currency: r.currency,
     instrument: r.instrument, status: r.status,
     forfeitReason: r.forfeitReason ?? undefined,
+    paymentRef: r.paymentRef ?? undefined,
+    forfeitureOrderNo: r.forfeitureOrderNo ?? undefined,
     collectedAt: r.collectedAt.toISOString(),
     resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : undefined,
   };
@@ -21,6 +23,8 @@ function mapPbg(r: PbgRow) {
     instrument: r.instrument, status: r.status,
     validUntil: r.validUntil ? String(r.validUntil) : undefined,
     forfeitReason: r.forfeitReason ?? undefined,
+    paymentRef: r.paymentRef ?? undefined,
+    forfeitureOrderNo: r.forfeitureOrderNo ?? undefined,
     resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : undefined,
   };
 }

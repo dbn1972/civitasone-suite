@@ -9,10 +9,25 @@ export const collectEmdBody = z.object({
 });
 export type CollectEmdBody = z.infer<typeof collectEmdBody>;
 
-export const resolveEmdBody = z.object({
+/**
+ * D4c #26 (GAP-PROCUREMENT-EMD-BG-06): the treasury / PFMS payment reference
+ * (UTR) is mandatory on a refund or release, and the forfeiture order number is
+ * mandatory on a forfeit. Both are free text (trimmed, 3-64 chars).
+ */
+const paymentRef = z.string().trim().min(3, "payment reference (UTR / PFMS) is required").max(64);
+const forfeitureOrderNo = z.string().trim().min(1, "forfeiture order number is required").max(64);
+
+export const refundEmdBody = z.object({
   reason: z.string().max(1000).optional(),
+  paymentRef,
 });
-export type ResolveEmdBody = z.infer<typeof resolveEmdBody>;
+export type RefundEmdBody = z.infer<typeof refundEmdBody>;
+
+export const forfeitEmdBody = z.object({
+  reason: z.string().max(1000).optional(),
+  forfeitureOrderNo,
+});
+export type ForfeitEmdBody = z.infer<typeof forfeitEmdBody>;
 
 export const collectPbgBody = z.object({
   vendorId:    z.string().uuid(),
@@ -24,9 +39,16 @@ export const collectPbgBody = z.object({
 });
 export type CollectPbgBody = z.infer<typeof collectPbgBody>;
 
-export const resolvePbgBody = z.object({
+export const releasePbgBody = z.object({
   reason: z.string().max(1000).optional(),
+  paymentRef,
 });
-export type ResolvePbgBody = z.infer<typeof resolvePbgBody>;
+export type ReleasePbgBody = z.infer<typeof releasePbgBody>;
+
+export const forfeitPbgBody = z.object({
+  reason: z.string().max(1000).optional(),
+  forfeitureOrderNo,
+});
+export type ForfeitPbgBody = z.infer<typeof forfeitPbgBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });

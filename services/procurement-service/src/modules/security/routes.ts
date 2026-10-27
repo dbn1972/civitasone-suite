@@ -4,7 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  collectEmdBody, resolveEmdBody, collectPbgBody, resolvePbgBody, idParam,
+  collectEmdBody, refundEmdBody, forfeitEmdBody, collectPbgBody, releasePbgBody, forfeitPbgBody, idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -38,13 +38,13 @@ export async function securityRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/emd/:id/forfeit", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = resolveEmdBody.parse(req.body ?? {});
+    const body = forfeitEmdBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.forfeitEmd(ctx, id, body));
   });
   app.post("/v1/procurement/emd/:id/refund", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = resolveEmdBody.parse(req.body ?? {});
+    const body = refundEmdBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.refundEmd(ctx, id, body));
   });
 
@@ -70,13 +70,13 @@ export async function securityRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/pbg/:id/forfeit", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = resolvePbgBody.parse(req.body ?? {});
+    const body = forfeitPbgBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.forfeitPbg(ctx, id, body));
   });
   app.post("/v1/procurement/pbg/:id/release", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, PROC_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = resolvePbgBody.parse(req.body ?? {});
+    const body = releasePbgBody.parse(req.body ?? {});
     return sendAccepted(reply, acceptedResponseSchema, await commands.releasePbg(ctx, id, body));
   });
 

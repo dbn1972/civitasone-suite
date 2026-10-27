@@ -82,14 +82,15 @@ export function registerSecurityConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.emdForfeit, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string; forfeitureOrderNo?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const emd = await repo.findEmdByIdTx(tx, p.id, p.tenantId);
       if (!emd) throw new Error(`emd ${p.id} not found`);
       assertEmdTransition(emd.status, "forfeited");
       await repo.updateEmdVersioned(tx, p.id, emd.version, {
-        status: "forfeited", forfeitReason: p.reason ?? null, resolvedAt: new Date(), updatedBy: msg.actorId,
+        status: "forfeited", forfeitReason: p.reason ?? null, forfeitureOrderNo: p.forfeitureOrderNo ?? null,
+        resolvedAt: new Date(), updatedBy: msg.actorId,
       });
       // Finance: forfeiture → liability becomes income.
       await enqueue(tx, {
@@ -112,14 +113,14 @@ export function registerSecurityConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.emdRefund, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string; paymentRef?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const emd = await repo.findEmdByIdTx(tx, p.id, p.tenantId);
       if (!emd) throw new Error(`emd ${p.id} not found`);
       assertEmdTransition(emd.status, "refunded");
       await repo.updateEmdVersioned(tx, p.id, emd.version, {
-        status: "refunded", resolvedAt: new Date(), updatedBy: msg.actorId,
+        status: "refunded", paymentRef: p.paymentRef ?? null, resolvedAt: new Date(), updatedBy: msg.actorId,
       });
       // Finance: refund → reverse the deposit liability against bank.
       await enqueue(tx, {
@@ -178,14 +179,15 @@ export function registerSecurityConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.pbgForfeit, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string; forfeitureOrderNo?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pbg = await repo.findPbgByIdTx(tx, p.id, p.tenantId);
       if (!pbg) throw new Error(`pbg ${p.id} not found`);
       assertPbgTransition(pbg.status, "forfeited");
       await repo.updatePbgVersioned(tx, p.id, pbg.version, {
-        status: "forfeited", forfeitReason: p.reason ?? null, resolvedAt: new Date(), updatedBy: msg.actorId,
+        status: "forfeited", forfeitReason: p.reason ?? null, forfeitureOrderNo: p.forfeitureOrderNo ?? null,
+        resolvedAt: new Date(), updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,
@@ -207,14 +209,14 @@ export function registerSecurityConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.pbgRelease, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; reason?: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string; paymentRef?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const pbg = await repo.findPbgByIdTx(tx, p.id, p.tenantId);
       if (!pbg) throw new Error(`pbg ${p.id} not found`);
       assertPbgTransition(pbg.status, "released");
       await repo.updatePbgVersioned(tx, p.id, pbg.version, {
-        status: "released", resolvedAt: new Date(), updatedBy: msg.actorId,
+        status: "released", paymentRef: p.paymentRef ?? null, resolvedAt: new Date(), updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: FINANCE_GL_POST, eventType: FINANCE_GL_POST,

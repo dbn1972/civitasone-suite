@@ -45,7 +45,7 @@ describe("EMD/PBG dispositions — server-side authorization (GAP-PROCUREMENT-EM
 
     it(`POST ${url} → 202 for an authorised procurement officer`, async () => {
       const app = await buildApp();
-      const res = await app.inject({ method: "POST", url, headers: procAuth, payload: { reason: "test" } });
+      const res = await app.inject({ method: "POST", url, headers: procAuth, payload: { reason: "test", paymentRef: "UTR-TEST-1", forfeitureOrderNo: "FO-TEST-1" } });
       await app.close();
       expect(res.statusCode).toBe(202);
     });
