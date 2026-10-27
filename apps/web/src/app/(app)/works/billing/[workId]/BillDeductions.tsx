@@ -31,7 +31,10 @@ export function BillDeductions({ bills }: { bills: Array<{ id: string; billNo: s
     setState((prev) => ({ ...prev, [id]: { status: "loading" } }));
     try {
       const res = await fetch(`/api/proxy/v1/works/billing/bills/${id}/recoveries`);
-      if (!res.ok) throw new Error("load failed");
+      if (!res.ok) {
+        setState((prev) => ({ ...prev, [id]: { status: "error" } }));
+        return;
+      }
       const body = (await res.json()) as { data?: unknown };
       const lines = Array.isArray(body.data) ? (body.data as Line[]) : [];
       setState((prev) => ({ ...prev, [id]: { status: "ready", lines } }));
