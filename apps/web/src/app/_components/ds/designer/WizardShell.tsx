@@ -13,6 +13,10 @@ export interface DesignerBlock {
   hidden?: boolean;
   status: BlockStatus;
   errorCount?: number;
+  /** D4c #7: issues that stop Next on this block (money / statute). */
+  blockingCount?: number;
+  /** D4c #7: advisory issues on this block; they never stop Next. */
+  warningCount?: number;
 }
 
 export interface BlockRailProps {
@@ -32,6 +36,7 @@ function statusLabel(status: BlockStatus, errorCount?: number): string {
 }
 
 export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
+  const t = useDesignerT();
   const handleKey = (e: KeyboardEvent<HTMLButtonElement>, block: DesignerBlock) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -92,6 +97,22 @@ export function BlockRail({ blocks, activeBlockId, onSelect }: BlockRailProps) {
                     {hidden ? "Not used by this pattern" : statusLabel(block.status, block.errorCount)}
                   </span>
                 </span>
+                {!hidden && block.blockingCount ? (
+                  <span
+                    data-testid={`rail-blocks-${block.id}`}
+                    style={{ fontSize: 11, fontWeight: 600, color: "var(--bad)", background: "var(--badbg)", border: "1px solid var(--badbd)", borderRadius: 999, padding: "2px 8px" }}
+                  >
+                    {t("railBlocks", { count: block.blockingCount })}
+                  </span>
+                ) : null}
+                {!hidden && block.warningCount ? (
+                  <span
+                    data-testid={`rail-warning-${block.id}`}
+                    style={{ fontSize: 11, fontWeight: 600, color: "var(--warn)", border: "1px solid var(--warn)", borderRadius: 999, padding: "2px 8px" }}
+                  >
+                    {t("railWarning", { count: block.warningCount })}
+                  </span>
+                ) : null}
                 {block.errorCount && block.errorCount > 0 ? (
                   <span
                     aria-label={`${block.errorCount} errors`}

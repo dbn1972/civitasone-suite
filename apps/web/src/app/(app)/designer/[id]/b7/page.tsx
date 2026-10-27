@@ -9,6 +9,8 @@ import type { FormFieldDefinition } from "@/app/_components/ds/designer/formType
 import type { IssuanceDesignState } from "@/app/_components/ds/designer/issuanceTypes";
 import { OutputIssuanceBuilder } from "../../_components/OutputIssuanceBuilder";
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
+import { useDesignerT } from "@/lib/designerText";
+import { isSignatoryBlocking } from "../../_data/issuanceBuilderModel";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadFormDesign } from "../../_data/formBuilderApi";
 import {
@@ -24,12 +26,14 @@ export default function DesignerB7Page() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
 
+  const t = useDesignerT();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
   const [initialDesign, setInitialDesign] = useState<IssuanceDesignState>(() =>
     issuanceOutputToUi([], "certificate"),
   );
+  const [liveDesign, setLiveDesign] = useState<IssuanceDesignState>(() => issuanceOutputToUi([], "certificate"));
   const [formFields, setFormFields] = useState<FormFieldDefinition[]>([]);
   const outputsRef = useRef<unknown[]>([]);
   const [officeCount, setOfficeCount] = useState(0);
@@ -86,6 +90,8 @@ export default function DesignerB7Page() {
   const patternMeta = SERVICE_PATTERN_OPTIONS.find((p) => p.id === meta.pattern);
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const { prev, next } = adjacentBlocks(meta.pattern, "b7");
+  // D4c #7: a signatory is statute-related, so it stops Next (a receipt needs none).
+  const signatoryBlocked = isSignatoryBlocking(liveDesign);
 
   const blocks: DesignerBlock[] = useMemo(
     () =>
@@ -138,18 +144,20 @@ export default function DesignerB7Page() {
       activeBlockId="b7"
       onBlockSelect={(blockId) => router.push(`/designer/${params.id}/${blockId}`)}
       onBack={() => router.push(`/designer/${params.id}/${prev}`)}
-      onNext={() => router.push(`/designer/${params.id}/${next}`)}
-      help={
-        <HelpTip term="Output & Issuance">
-          Design what citizens receive (certificate, licence, closure note or receipt): template, numbering, signatory and validity.
-        </HelpTip>
-      }
+      onNext={signatoryBlocked ? undefined : () => router.push(`/designer/${params.id}/${next}`)}
+      help={<HelpTip term="Output & Issuance">{t("helpB7")}</HelpTip>}
     >
+      {signatoryBlocked ? (
+        <p role="status" data-testid="signatory-gate" style={{ margin: "0 0 12px", fontSize: 13, color: "var(--bad)" }}>
+          {t("gateBlocksNext")}: {t("issueSignatoryMissing")}
+        </p>
+      ) : null}
       <OutputIssuanceBuilder
         serviceName={meta.name}
         pattern={meta.pattern}
         formFields={formFields}
         initial={initialDesign}
+        onDesignChange={setLiveDesign}
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
         offeringOfficeCount={officeCount}

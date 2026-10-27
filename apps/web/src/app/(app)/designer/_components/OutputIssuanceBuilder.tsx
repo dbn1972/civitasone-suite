@@ -69,13 +69,18 @@ export function OutputIssuanceBuilder({
   const patch = useCallback(
     (p: Partial<IssuanceDesignState> | ((d: IssuanceDesignState) => IssuanceDesignState)) => {
       setDesign((prev) => {
-        const next = typeof p === "function" ? p(prev) : { ...prev, ...p };
-        onDesignChange?.(next);
-        return next;
+        return typeof p === "function" ? p(prev) : { ...prev, ...p };
       });
     },
-    [onDesignChange],
+    [],
   );
+
+  // Told to the parent after commit, not from inside the state updater: a parent
+  // that keeps the live design in state (B7 gates Next on the signatory) must not
+  // be updated while this component renders.
+  useEffect(() => {
+    onDesignChange?.(design);
+  }, [design, onDesignChange]);
 
   const schedulePersist = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);

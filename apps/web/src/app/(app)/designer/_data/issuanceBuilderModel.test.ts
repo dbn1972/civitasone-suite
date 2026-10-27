@@ -8,6 +8,7 @@ import {
   applyOutputTypeChange,
   buildSandboxPreview,
   filterMergeFields,
+  isSignatoryBlocking,
   mergeFieldsForDesign,
   numberingAdvisories,
   numberingWarning,
@@ -127,5 +128,16 @@ describe("numberingAdvisories", () => {
   });
   it("is quiet for a coherent scheme", () => {
     expect(numberingAdvisories([{ kind: "prefix", value: "TL" }, { kind: "fy" }, seq], "financial_year")).toEqual([]);
+  });
+});
+
+describe("isSignatoryBlocking (D4c #7 — the signatory is statute-related, so it blocks Next)", () => {
+  it("blocks a certificate with no designation and no label", () => {
+    expect(isSignatoryBlocking({ outputType: "certificate", signatoryDesignationId: "", signatoryLabel: "" })).toBe(true);
+  });
+  it("clears with a designation or a typed label, and never blocks a receipt", () => {
+    expect(isSignatoryBlocking({ outputType: "certificate", signatoryDesignationId: "p1", signatoryLabel: "" })).toBe(false);
+    expect(isSignatoryBlocking({ outputType: "licence", signatoryDesignationId: "", signatoryLabel: "Licensing Officer" })).toBe(false);
+    expect(isSignatoryBlocking({ outputType: "receipt", signatoryDesignationId: "", signatoryLabel: "" })).toBe(false);
   });
 });

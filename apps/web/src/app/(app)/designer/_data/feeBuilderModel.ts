@@ -62,6 +62,19 @@ export function hoaBlockMessage(design: Pick<FeeDesignState, "feeModel" | "hoaCo
   return "Choose a Head of Account before you continue — payments cannot post without it.";
 }
 
+/**
+ * D4c #7: the fee itself is money, so it blocks Next like the Head of Account:
+ * once a fee model is chosen it needs an amount (fixed fee) or a slab or formula.
+ * The engine model takes its amounts from the bound engine, so it never blocks.
+ */
+export function isFeeBlocking(
+  design: Pick<FeeDesignState, "feeModel" | "baseAmountPaise" | "slabs" | "formula">,
+): boolean {
+  if (design.feeModel === "flat") return !(design.baseAmountPaise > 0);
+  if (design.feeModel === "slab") return !(design.slabs.length > 0 || Boolean(design.formula?.trim()));
+  return false;
+}
+
 export function isFeeDesignReadyToAdvance(design: FeeDesignState): boolean {
   if (!design.feeModel) return false;
   if (isHoaBlocking(design)) return false;

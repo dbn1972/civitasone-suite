@@ -172,6 +172,18 @@ export function renewalGuidance(
   return "Renewal uses a lighter follow-on flow (FN-15) once published — this flag only marks the service as renewable.";
 }
 
+/**
+ * D4c #7: a signatory is statute-related, so it blocks Next. A receipt names no
+ * authority and never blocks. A typed label counts, because a tenant with no
+ * loaded positions can still only supply a label.
+ */
+export function isSignatoryBlocking(
+  design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "signatoryLabel">,
+): boolean {
+  if (design.outputType === "receipt") return false;
+  return !design.signatoryDesignationId && !design.signatoryLabel.trim();
+}
+
 export function signatoryWarning(
   design: Pick<IssuanceDesignState, "outputType" | "signatoryDesignationId" | "digitalSignature">,
 ): string | null {

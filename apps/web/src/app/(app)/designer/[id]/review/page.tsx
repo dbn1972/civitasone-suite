@@ -6,6 +6,7 @@ import { useEffect, useCallback, useState } from "react";
 import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
 import { VersionDiff, WizardShell } from "@/app/_components/ds/designer";
 import { AccessibilityPreview } from "../../_components/AccessibilityPreview";
+import { DesignIssuesList } from "../../_components/DesignIssuesList";
 import type { ServiceDefinitionDto } from "../../_data/designerApi";
 import {
   fetchPublishedByKey,
@@ -151,6 +152,11 @@ export default function DesignerReviewPage() {
             should see what is wrong with the form before deciding, not after. */}
         <div style={{ marginTop: 24 }}>
           <AccessibilityPreview definitionId={params.id} onResult={onA11yResult} />
+        </div>
+
+        {/* D4c #7: all warnings are listed here so none is missed before the decision. */}
+        <div style={{ marginTop: 24 }}>
+          <DesignIssuesList issues={wizard.issues} />
         </div>
 
         <div style={{ marginTop: 24 }}>{readOnlySummary(wizard.def)}</div>

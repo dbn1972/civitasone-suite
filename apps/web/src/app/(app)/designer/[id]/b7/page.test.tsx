@@ -93,3 +93,32 @@ describe("B7 page validity editing", () => {
     expect(years.value).toBe("4");
   });
 });
+
+// D4c #7: the signatory is statute-related, so it blocks Next.
+describe("B7 page — a missing signatory blocks Next (D4c #7)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    updateServiceDefinition.mockReset().mockResolvedValue(undefined);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("hides Next and says why until a signatory label or designation exists", async () => {
+    fetchServiceDefinition.mockReset().mockResolvedValue(def());
+    render(<DesignerB7Page />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+    expect(screen.queryByRole("button", { name: "Next" })).toBeNull();
+    expect(screen.getByTestId("signatory-gate").textContent).toContain("Blocks Next");
+  });
+
+  it("offers Next once the stored design names a signatory", async () => {
+    fetchServiceDefinition.mockReset().mockResolvedValue(
+      def({ outputs: [{ kind: "issuance", outputType: "certificate", signatoryDesignationId: "p1", signatoryLabel: "Officer" }] }),
+    );
+    render(<DesignerB7Page />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(50); });
+    expect(screen.getByRole("button", { name: "Next" })).toBeTruthy();
+    expect(screen.queryByTestId("signatory-gate")).toBeNull();
+  });
+});
