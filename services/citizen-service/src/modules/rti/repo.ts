@@ -1,9 +1,12 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
-  citizenRtiRequests, citizenRtiResponses, citizenRtiAppeals,
-  type RtiRow, type RtiInsert, type RtiResponseInsert, type RtiAppealInsert,
+  citizenRtiRequests, citizenRtiResponses, citizenRtiAppeals, citizenRtiTransfers,
+  type RtiRow, type RtiInsert, type RtiResponseInsert, type RtiAppealInsert, type RtiTransferInsert,
 } from "./schema.js";
+import { cpioDirectory } from "../cpio/schema.js";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -43,6 +46,38 @@ export async function listResponses(rtiId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   return db.transaction((tx) => tx.select().from(citizenRtiResponses).where(eq(citizenRtiResponses.rtiId, rtiId)));
+}
+
+export async function insertTransfer(tx: Writer, row: RtiTransferInsert): Promise<void> {
+  await tx.insert(citizenRtiTransfers).values(row);
+}
+
+/**
+ * GAP-CITIZEN-RTI-DETAIL-06: the s.6(3) transfer trail for one RTI, oldest first.
+ * The authority columns hold cpio_directory ids; they are resolved to a directory
+ * public-authority name when the id is known, otherwise the raw value is returned.
+ */
+export async function listTransfers(rtiId: string) {
+  // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+  // before this read -- a bare db.select() runs with no RLS GUC set.
+  return db.transaction(async (tx) => {
+    const rows = await tx.select().from(citizenRtiTransfers)
+      .where(eq(citizenRtiTransfers.rtiId, rtiId))
+      .orderBy(asc(citizenRtiTransfers.transferredAt));
+    const ids = [...new Set(rows.flatMap((r) => [r.fromAuthority, r.toAuthority]).filter((v) => UUID_RE.test(v)))];
+    const names = new Map<string, string>();
+    if (ids.length > 0) {
+      const dir = await tx.select({ id: cpioDirectory.id, authority: cpioDirectory.publicAuthority })
+        .from(cpioDirectory).where(inArray(cpioDirectory.id, ids));
+      for (const d of dir) names.set(d.id, d.authority);
+    }
+    return rows.map((r) => ({
+      id: r.id,
+      fromAuthority: names.get(r.fromAuthority) ?? r.fromAuthority,
+      toAuthority: names.get(r.toAuthority) ?? r.toAuthority,
+      transferredAt: r.transferredAt,
+    }));
+  });
 }
 
 export async function listAppeals(rtiId: string) {

@@ -49,9 +49,25 @@ export const citizenRtiAppeals = rtiSchema.table("citizen_rti_appeals", {
   version:    integer("version").notNull().default(1),
 });
 
+export const citizenRtiTransfers = rtiSchema.table("citizen_rti_transfers", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  rtiId:         uuid("rti_id").notNull(),
+  fromAuthority: text("from_authority").notNull(),
+  toAuthority:   text("to_authority").notNull(),
+  transferredBy: uuid("transferred_by").notNull(),
+  transferredAt: timestamp("transferred_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:     uuid("created_by").notNull(),
+  updatedBy:     uuid("updated_by").notNull(),
+  version:       integer("version").notNull().default(1),
+});
+
 export type RtiRow         = typeof citizenRtiRequests.$inferSelect;
 export type RtiInsert      = typeof citizenRtiRequests.$inferInsert;
 export type RtiResponseInsert = typeof citizenRtiResponses.$inferInsert;
 export type RtiAppealInsert   = typeof citizenRtiAppeals.$inferInsert;
+export type RtiTransferInsert = typeof citizenRtiTransfers.$inferInsert;
 
-export const schema = { citizenRtiRequests, citizenRtiResponses, citizenRtiAppeals };
+export const schema = { citizenRtiRequests, citizenRtiResponses, citizenRtiAppeals, citizenRtiTransfers };
