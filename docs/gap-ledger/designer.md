@@ -675,7 +675,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: backend must confirm numbering sequence reset policy, `[~]` if blocked + reason)
+- [x] **Status** Closed by a97cee585 (UAT B4, 2026-10-27). Reset policy is stored in the output design (outputs is schemaless JSON, no migration); the numbering is never applied retroactively. Gap/reuse handling is not modelled because no issuance numbering service exists in the repo to define it.
 - **First-pass claim:** Numbering format is free-form; collision/gap policy across financial years is not surfaced (NumberingFormatBuilder).
 - **Verified evidence:** The numbering is not free-form text. NumberingFormatBuilder.tsx offers a token composer (Prefix, Ward, Year, Office, Sequence with a width of 3-10) and a preview (formatNumberingPreview, issuanceTypes.ts:133-154). numberingWarning (issuanceBuilderModel.ts:97-103) only checks that at least one segment exists and that a Sequence is included. What is true: the Year token is the calendar year (`new Date().getFullYear()`, issuanceTypes.ts:134), not a financial year, and nothing is offered for sequence reset (per year, per office, per FY), gap handling, or collision. Nothing prevents two Sequence tokens or a numbering scheme without an Office or Year token, which can collide across offices. Whether the backend numbering service enforces uniqueness is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/_components/ds/designer/NumberingFormatBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderModel.ts`
