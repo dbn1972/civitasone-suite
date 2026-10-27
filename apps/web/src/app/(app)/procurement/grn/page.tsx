@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
-import { getProcurementGRNs } from "../../../_data/loaders";
+import { getTranslations } from "next-intl/server";
+import { getProcurementGRNs, getProcurementGRNSummary } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { isAwaitingInspection, matchState, MATCH_LABELS, MATCH_PILL_STATUS, MATCH_STATUS_LABELS, GRN_STATUS_LABELS } from "./statusLabels";
+import { matchState, MATCH_LABELS, MATCH_PILL_STATUS, MATCH_STATUS_LABELS, GRN_STATUS_LABELS } from "./statusLabels";
 import { parsePoRef } from "./poRef";
 
-// GAP-PROCUREMENT-GRN-02 — the API cap. Until server-side pagination with a
-// true total/summary is wired in, the list fetches at most this many rows and
-// labels the stats as partial when the cap is hit (see the truncation notice
-// below) so the stat cards never silently under-report for a large store.
-const LIST_LIMIT = 500;
+// GAP-PROCUREMENT-GRN-02 — the register pages on the SERVER (limit/offset from
+// the URL) and takes its stat cards and pager totals from the server's true
+// status-count summary, so neither the figures nor the search are limited to
+// the rows the browser happens to hold.
+const PAGE_SIZE = 25;
 
 type GRNRow = {
   id: string;
@@ -24,23 +25,38 @@ type GRNRow = {
   status: string;
 } & Record<string, unknown>;
 
-export default async function GRNPage() {
-  const { data: grns, source } = await getProcurementGRNs({ limit: LIST_LIMIT });
+function readParam(searchParams: Record<string, string | string[] | undefined> | undefined, key: string): string | undefined {
+  const v = searchParams?.[key];
+  return Array.isArray(v) ? v[0] : v;
+}
+
+export default async function GRNPage(
+  props: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {},
+) {
+  const t = await getTranslations("procurement.w2.grn");
+  const searchParams = await props.searchParams;
+  const pageParam = Number(readParam(searchParams, "page") ?? "1");
+  const pageNo = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
+  const q = readParam(searchParams, "q")?.trim().slice(0, 100) || undefined;
+  const offset = (pageNo - 1) * PAGE_SIZE;
+
+  // The stat cards always describe the whole store; with a search active a second
+  // summary gives the match count that drives the pager.
+  const [{ data: grns, source }, { data: overall }, matched] = await Promise.all([
+    getProcurementGRNs({ limit: PAGE_SIZE, offset, q }),
+    getProcurementGRNSummary(),
+    q ? getProcurementGRNSummary({ q }) : Promise.resolve(null),
+  ]);
 
   // GAP-PROCUREMENT-GRN-03 — on a failed fetch the loader returns [], so these
   // counts would be genuine-looking zeros. Gate every figure on `errored` and
-  // show "—" (not a fabricated 0) exactly as the procurement dashboard does.
+  // show "—" (not a fabricated 0) exactly as the procurement dashboard does. A
+  // missing summary reads "—" too: unknown is never shown as zero.
   const errored = source === "error";
-  const accepted = grns.filter((g) => g.status === "accepted").length;
-  // GAP-PROCUREMENT-GRN-01 — "Awaiting inspection" now counts every pre-decision
-  // state (draft, under_inspection, received, quality_check) instead of only
-  // quality_check/received, so a GRN under inspection is no longer invisible.
-  const pendingQC = grns.filter((g) => isAwaitingInspection(g.status)).length;
-  const rejected = grns.filter((g) => g.status === "rejected" || g.status === "partially_rejected").length;
-
-  // GAP-PROCUREMENT-GRN-02 — interim truncation cue: if we got exactly the cap
-  // back there may be more rows the stats don't reflect.
-  const truncated = !errored && grns.length === LIST_LIMIT;
+  const stat = (n: number | undefined): number | null => (errored || n === undefined ? null : n);
+  // The match count for the active search, else the whole-store total.
+  const total = q ? matched?.data?.total : overall?.total;
+  const hasNext = total !== undefined ? offset + grns.length < total : grns.length === PAGE_SIZE;
 
   const rows: GRNRow[] = grns.map((g) => {
     const ms = matchState(g.threeWayMatch);
@@ -63,6 +79,22 @@ export default async function GRNPage() {
     };
   });
 
+  const pageHref = (n: number) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (n > 1) params.set("page", String(n));
+    const qs = params.toString();
+    return qs ? `/procurement/grn?${qs}` : "/procurement/grn";
+  };
+  // Shown under the rows AND under the empty state, so a page past the end can always step back.
+  const pager = (hasNext || pageNo > 1) ? (
+    <nav aria-label={t("pagerLabel")} style={{ display: "flex", gap: 8, alignItems: "center", marginBlockStart: 10 }}>
+      {pageNo > 1 ? <Link className="btn ghost" href={pageHref(pageNo - 1)}>{t("previous")}</Link> : null}
+      <span aria-live="polite" style={{ fontSize: 13, color: "var(--mut)" }}>{t("page", { n: pageNo })}</span>
+      {hasNext ? <Link className="btn ghost" href={pageHref(pageNo + 1)}>{t("next")}</Link> : null}
+    </nav>
+  ) : null;
+
   return (
     <>
       <PageHeader
@@ -78,18 +110,28 @@ export default async function GRNPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📦" tone="info" label="Total GRNs" value={errored ? "—" : grns.length} />
-        <StatCard icon="✅" tone="good" label="Accepted" value={errored ? "—" : accepted} />
-        <StatCard icon="🔍" tone="warn" label="Awaiting inspection" value={errored ? "—" : pendingQC} />
-        <StatCard icon="❌" tone="bad" label="Rejected" value={errored ? "—" : rejected} />
+        <StatCard icon="📦" tone="info" label="Total GRNs" value={stat(overall?.total)} />
+        <StatCard icon="✅" tone="good" label="Accepted" value={stat(overall?.accepted)} />
+        <StatCard icon="🔍" tone="warn" label="Awaiting inspection" value={stat(overall?.awaitingInspection)} />
+        <StatCard icon="❌" tone="bad" label="Rejected" value={stat(overall?.rejected)} />
       </StatGrid>
 
-      {truncated ? (
-        <p role="status" style={{ margin: "0 0 12px", fontSize: "0.875rem", color: "var(--warn)" }}>
-          Showing the first {LIST_LIMIT} GRNs — refine your filters to find others. The totals above
-          count only the GRNs shown.
-        </p>
-      ) : null}
+      {/* GAP-PROCUREMENT-GRN-02: server-side search, so a GRN outside the current page is found. */}
+      <form method="get" role="search" aria-label={t("searchLabel")} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", margin: "0 0 12px" }}>
+        <input
+          type="search"
+          name="q"
+          defaultValue={q ?? ""}
+          maxLength={100}
+          placeholder={t("searchPlaceholder")}
+          aria-label={t("searchLabel")}
+          className="inp"
+          style={{ minInlineSize: 260 }}
+        />
+        <button type="submit" className="btn">{t("search")}</button>
+        {q ? <Link href="/procurement/grn" className="btn ghost">{t("clearSearch")}</Link> : null}
+        {q && total !== undefined ? <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>{t("matchCount", { count: total })}</span> : null}
+      </form>
 
       <Card title="Goods receipt notes">
         {source === "error" ? (
@@ -97,21 +139,29 @@ export default async function GRNPage() {
           // officer gets a Retry action, matching the stat cards reading "—".
           <RefreshErrorState error={toHumanError("load", { area: "GRNs" })} backHref="/procurement/grn" />
         ) : rows.length === 0 ? (
-          <EmptyState
-            icon="📦"
-            title="No goods received yet"
-            message="A Goods Received Note (GRN) is the check you do when a delivery arrives against an order. Create one when goods come in."
-            action={<Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>}
-          />
+          <>
+            <EmptyState
+              icon="📦"
+              title={pageNo > 1 ? t("noPageTitle") : q ? t("noMatchTitle") : "No goods received yet"}
+              message={pageNo > 1
+                ? t("noPageMessage")
+                : q
+                  ? t("noMatchMessage")
+                  : "A Goods Received Note (GRN) is the check you do when a delivery arrives against an order. Create one when goods come in."}
+              action={q || pageNo > 1
+                ? <Link href="/procurement/grn" className="btn ghost">{t("clearSearch")}</Link>
+                : <Link href="/procurement/grn/new" className="btn primary">+ New GRN</Link>}
+            />
+            {pager}
+          </>
         ) : (
+          <>
           <DataTable<GRNRow>
             rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/procurement/grn/"
             sortable
-            filterable
-        filterPlaceholder="Filter by GRN no, PO ref, vendor…"
-            pageSize={10}
+            pageSize={PAGE_SIZE}
             exportable exportAudit="procurement/grn"
             columns={[
               { key: "grnNo", label: "GRN No" },
@@ -126,6 +176,8 @@ export default async function GRNPage() {
               { key: "status", label: "Status", cellType: "status", statusLabels: GRN_STATUS_LABELS },
             ]}
           />
+          {pager}
+          </>
         )}
       </Card>
     </>

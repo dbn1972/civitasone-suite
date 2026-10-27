@@ -3586,6 +3586,29 @@ export async function getProcurementGRNs(query?: ProcurementListQuery): Promise<
   };
 }
 
+/** GAP-PROCUREMENT-GRN-02: true status counts over every GRN matching the filter (not one page). */
+export type GrnSummaryCounts = { total: number; accepted: number; awaitingInspection: number; rejected: number };
+
+export async function getProcurementGRNSummary(query?: { q?: string; vendorId?: string }): Promise<LoaderResult<GrnSummaryCounts | null>> {
+  const params = new URLSearchParams();
+  if (query?.q?.trim()) params.set("q", query.q.trim());
+  if (query?.vendorId) params.set("vendorId", query.vendorId);
+  const qs = params.toString();
+  return fetchJson<unknown, GrnSummaryCounts | null>(`/api/v1/procurement/grns/summary${qs ? `?${qs}` : ""}`, null, {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.grns.summary",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d) return null;
+      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const total = n(d.total), accepted = n(d.accepted), awaitingInspection = n(d.awaitingInspection), rejected = n(d.rejected);
+      return total === null || accepted === null || awaitingInspection === null || rejected === null
+        ? null
+        : { total, accepted, awaitingInspection, rejected };
+    },
+  });
+}
+
 export async function getProcurementGRNById(id: string): Promise<LoaderResult<GRNDetail | null>> {
   return fetchJson<unknown, GRNDetail | null>(`/api/v1/procurement/grns/${id}`, null, {
     revalidateSeconds: 30,
