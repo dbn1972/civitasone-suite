@@ -105,6 +105,8 @@ export interface UpdateDefinitionPayload {
   laneBindings?: unknown[];
   issuanceType?: string;
   outputs?: unknown[];
+  /** FN-15 runtime renewal policy; B7 derives it from the output validity design. */
+  renewalPolicy?: ServiceDefinitionDto["renewalPolicy"];
   allowedApplicantTypes?: string[];
   applicantTypeRejectMessage?: string;
   profileAttributeBindings?: ProfileAttributeBindingDto[];
