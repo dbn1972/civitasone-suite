@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-23T04:23:39.080Z",
+  "generatedAt": "2026-10-27T12:49:17.097Z",
   "counts": {
-    "totalNoLoader": 580,
-    "renderPassed": 537,
-    "renderFailed": 43,
-    "manifestConfirmed": 535
+    "totalNoLoader": 585,
+    "renderPassed": 498,
+    "renderFailed": 87,
+    "manifestConfirmed": 534
   },
-  "coveragePct": 94.9,
+  "coveragePct": 94.2,
   "results": [
     {
       "module": "admin",
@@ -233,8 +233,8 @@
     {
       "module": "assets",
       "screen": "/assets/fixed-assets",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "assets",
@@ -293,8 +293,8 @@
     {
       "module": "assets",
       "screen": "/assets/list",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "assets",
@@ -395,14 +395,14 @@
     {
       "module": "catalogue",
       "screen": "/catalogue/bundles",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "catalogue",
       "screen": "/catalogue/categories",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "catalogue",
@@ -413,26 +413,26 @@
     {
       "module": "catalogue",
       "screen": "/catalogue/products",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "catalogue",
       "screen": "/catalogue/rates",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/events",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/identity",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
@@ -443,20 +443,20 @@
     {
       "module": "cdp",
       "screen": "/cdp/profiles/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/profiles",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
       "screen": "/cdp/segments",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "cdp",
@@ -509,6 +509,12 @@
     {
       "module": "citizen",
       "screen": "/citizen/discovery",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "citizen",
+      "screen": "/citizen/documents/digilocker/callback",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -591,12 +597,6 @@
       "reason": "ok"
     },
     {
-      "module": "contracts",
-      "screen": "/contracts",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
       "module": "court",
       "screen": "/court/admin",
       "verdict": "PASS",
@@ -671,8 +671,8 @@
     {
       "module": "crm",
       "screen": "/crm/contacts",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "crm",
@@ -865,6 +865,12 @@
       "screen": "/crm/service-requests/new",
       "verdict": "PASS",
       "reason": "ok"
+    },
+    {
+      "module": "crm",
+      "screen": "/crm/service-requests",
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "crm",
@@ -1127,8 +1133,8 @@
     {
       "module": "estab",
       "screen": "/estab/vehicles/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "estab",
@@ -1175,8 +1181,8 @@
     {
       "module": "finance",
       "screen": "/finance/accounting/vouchers/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1187,26 +1193,26 @@
     {
       "module": "finance",
       "screen": "/finance/budget/formulation/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/fund-releases",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/monitoring",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/budget/sanctions/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1217,8 +1223,8 @@
     {
       "module": "finance",
       "screen": "/finance/chart-of-accounts",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1241,8 +1247,8 @@
     {
       "module": "finance",
       "screen": "/finance/journal-entry",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1271,14 +1277,14 @@
     {
       "module": "finance",
       "screen": "/finance/reconciliation/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
       "screen": "/finance/reconciliation",
       "verdict": "FAIL",
-      "reason": "Objects are not valid as a React child (found: [object Promise]). If you meant to render a collection of children, use an array instead."
+      "reason": "[object Object]"
     },
     {
       "module": "finance",
@@ -1337,8 +1343,8 @@
     {
       "module": "grants",
       "screen": "/grants/disbursements/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "grants",
@@ -1367,14 +1373,14 @@
     {
       "module": "help",
       "screen": "/help/[module]",
-      "verdict": "PASS",
-      "reason": "not-found (notFound() on empty record)"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "help",
       "screen": "/help",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "helpdesk",
@@ -1385,8 +1391,8 @@
     {
       "module": "helpdesk",
       "screen": "/helpdesk/slas",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "helpdesk",
@@ -2206,6 +2212,12 @@
     },
     {
       "module": "inspection",
+      "screen": "/inspection/inspections/[id]",
+      "verdict": "PASS",
+      "reason": "not-found (notFound() on empty record)"
+    },
+    {
+      "module": "inspection",
       "screen": "/inspection/inspections",
       "verdict": "PASS",
       "reason": "ok"
@@ -2423,68 +2435,62 @@
     {
       "module": "learning",
       "screen": "/learning/assessments/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/assessments",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/assessments/verify",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/calendar",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/competency",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/courses",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "learning",
-      "screen": "/learning/my-learning",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/training-plans/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/training-plans/new",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "learning",
       "screen": "/learning/training-plans",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "legal",
@@ -2525,6 +2531,12 @@
     {
       "module": "locations",
       "screen": "/locations/jurisdictions",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "locations",
+      "screen": "/locations/list",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -2613,6 +2625,12 @@
       "reason": "ok"
     },
     {
+      "module": "meeting",
+      "screen": "/meeting",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
       "module": "metadata",
       "screen": "/metadata/entities",
       "verdict": "PASS",
@@ -2669,8 +2687,8 @@
     {
       "module": "municipal",
       "screen": "/municipal",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "notifications",
@@ -2782,6 +2800,12 @@
     },
     {
       "module": "procurement",
+      "screen": "/procurement/contracts",
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
+    },
+    {
+      "module": "procurement",
       "screen": "/procurement/grn/new",
       "verdict": "PASS",
       "reason": "ok"
@@ -2789,8 +2813,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/grn",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2801,8 +2825,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/indents",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2813,8 +2837,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/orders",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2831,8 +2855,8 @@
     {
       "module": "procurement",
       "screen": "/procurement/reverse-auction/[id]",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "procurement",
@@ -2849,12 +2873,6 @@
     {
       "module": "procurement",
       "screen": "/procurement/vendors/new",
-      "verdict": "PASS",
-      "reason": "ok"
-    },
-    {
-      "module": "procurement",
-      "screen": "/procurement/vendors",
       "verdict": "PASS",
       "reason": "ok"
     },
@@ -3041,8 +3059,8 @@
     {
       "module": "setup",
       "screen": "/setup",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "stock",
@@ -3250,6 +3268,18 @@
     },
     {
       "module": "workflow",
+      "screen": "/workflow/delegations/legacy",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
+      "screen": "/workflow/delegations",
+      "verdict": "PASS",
+      "reason": "ok"
+    },
+    {
+      "module": "workflow",
       "screen": "/workflow/designer",
       "verdict": "FAIL",
       "reason": "ResizeObserver is not defined"
@@ -3257,8 +3287,8 @@
     {
       "module": "workflow",
       "screen": "/workflow/instances/[id]",
-      "verdict": "PASS",
-      "reason": "not-found (notFound() on empty record)"
+      "verdict": "FAIL",
+      "reason": "[object Object]"
     },
     {
       "module": "workflow",

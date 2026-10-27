@@ -429,7 +429,7 @@ function runHooksPipeline(repoFileList: string[], packageJsons: Record<string, P
   const hooksReport: HookReportEntry[] = [];
   const appliedHookContents = new Map<string, unknown>();
 
-  for (const { file, raw, parsed } of rawHooks) {
+  for (const { file, parsed } of rawHooks) {
     if (!parsed.ok) {
       hooksReport.push({ file, status: "needs-manual-review", flaggedReasons: [`parse error: ${parsed.error}`] });
       continue;
