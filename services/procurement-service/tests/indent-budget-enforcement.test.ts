@@ -102,6 +102,7 @@ function poCreateMessage(opts: { poId: string; indentId: string; rupees: number;
     payload: {
       id: opts.poId, tenantId: TENANT, poNo: `PO-IB-${opts.poId.slice(0, 8)}`,
       vendorId: opts.vendorId ?? randomUUID(),
+      gemOrderRef: "GEM/TEST/BASIS", // D4c #28: no empanelment record -> needs a GeM/tender basis
       indentRef: `procurement_indent:${opts.indentId}`,
       items: [{ itemCode: "ITM-1", description: "Test item", quantity: 1, unit: "nos", unitPriceMinor: opts.rupees * 100 }],
     },
@@ -281,7 +282,7 @@ describe("indent-budget enforcement — poCreate / gemOrderCreate (real DB, no m
       messageId: poId, type: COMMANDS.poCreate, tenantId: TENANT, actorId: ACTOR,
       correlationId: `corr-${poId}`, schemaVersion: "1.0",
       payload: {
-        id: poId, tenantId: TENANT, poNo: "PO-IB-MALFORMED", vendorId: randomUUID(),
+        id: poId, tenantId: TENANT, poNo: "PO-IB-MALFORMED", vendorId: randomUUID(), gemOrderRef: "GEM/TEST/BASIS",
         indentRef: "not-a-real-reference",
         items: [{ itemCode: "ITM-1", description: "Test item", quantity: 1, unit: "nos", unitPriceMinor: 10000 }],
       },

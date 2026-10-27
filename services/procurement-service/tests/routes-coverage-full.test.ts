@@ -134,7 +134,7 @@ describe("POST routes — accepted (202)", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/pos", headers: auth,
       payload: {
-        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001",
+        poNo: "PO-TEST-001", vendorId: FAKE_UUID, indentRef: "IND-001", gemOrderRef: "GEM/TEST/BASIS",
         items: [{ itemCode: "IT001", description: "Monitor", quantity: 5, unitPriceMinor: 200000 }],
       },
     });

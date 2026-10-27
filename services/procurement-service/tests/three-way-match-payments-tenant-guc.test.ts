@@ -125,7 +125,7 @@ async function seedRealChain(tenant: string): Promise<{ poId: string }> {
     type: COMMANDS.poCreate, tenantId: tenant, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0",
     payload: {
       id: poId, tenantId: tenant, poNo: `PO-GUC-${poId.slice(0, 8)}`,
-      vendorId: randomUUID(), indentRef: indentId,
+      vendorId: randomUUID(), indentRef: indentId, gemOrderRef: "GEM/TEST/BASIS",
       items: [{ itemCode: "ITEM-1", description: "test item", quantity: ITEM_QTY, unit: "nos", unitPriceMinor: ITEM_UNIT_PRICE_MINOR }],
     },
   });

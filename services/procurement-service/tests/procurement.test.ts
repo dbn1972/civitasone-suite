@@ -273,7 +273,7 @@ describe("PO consumer — sequential creation for one tenant (integration)", () 
         messageId, type: COMMANDS.poCreate, tenantId: SEQ_TENANT, actorId: SEQ_ACTOR,
         correlationId: `corr-${messageId}`, schemaVersion: "1.0",
         payload: {
-          id: poId, tenantId: SEQ_TENANT, poNo: "CLIENT-SUPPLIED-IGNORED", vendorId, indentRef,
+          id: poId, tenantId: SEQ_TENANT, poNo: "CLIENT-SUPPLIED-IGNORED", vendorId, indentRef, gemOrderRef: "GEM/TEST/BASIS",
           items: [{ itemCode: "ITEM-1", description: "test item", quantity, unit: "nos", unitPriceMinor: 5000 }],
         },
       });

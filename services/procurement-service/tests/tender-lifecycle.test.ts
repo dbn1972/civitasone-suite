@@ -457,7 +457,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
-      id: SANCTIONED_PO, tenantId: TENANT, poNo: "AUTO", vendorId,
+      id: SANCTIONED_PO, tenantId: TENANT, poNo: "AUTO", vendorId, gemOrderRef: "GEM/TEST/BASIS",
       indentRef: `procurement_indent:${FINANCE_TEST_INDENT}`, sanctionRef: "finance_sanction:abc-123",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
@@ -495,7 +495,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     registerPoConsumers(q);
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
-      id: REJECTED_PO, tenantId: TENANT, poNo: "AUTO", vendorId,
+      id: REJECTED_PO, tenantId: TENANT, poNo: "AUTO", vendorId, gemOrderRef: "GEM/TEST/BASIS",
       indentRef: "tender:finance-test-2", sanctionRef: "finance_sanction:def-456",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));

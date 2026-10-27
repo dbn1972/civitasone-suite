@@ -11,6 +11,10 @@ export const procurementPos = poSchema.table("procurement_pos", {
   sanctionRef:     text("sanction_ref"),
   rateContractRef: text("rate_contract_ref"),
   gemOrderNo:      text("gem_order_no"),
+  // D4c #28: basis for a PO to a vendor with no empanelment record - the awarded
+  // tender it is linked to and/or the GeM order reference.
+  tenderId:        uuid("tender_id"),
+  gemOrderRef:     text("gem_order_ref"),
   // SVC-046: distinguishes a supply Purchase Order from a service / work order.
   orderType:       varchar("order_type", { length: 16 }).notNull().default("supply"),
   totalMinor:      bigint("total_minor", { mode: "bigint" }).notNull().default(0n),
