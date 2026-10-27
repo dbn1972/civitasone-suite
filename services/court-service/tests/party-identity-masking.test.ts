@@ -12,9 +12,10 @@ const row = {
 };
 
 describe("who may see party identity (owner decision #32)", () => {
-  it("judges, registrars and court staff (court_admin / super_admin) reveal identity; court_clerk and others do not", () => {
-    expect([...IDENTITY_REVEAL_ROLES].sort()).toEqual(["court_admin", "judge", "registrar", "super_admin"]);
+  it("F12: only judge, registrar and court_admin reveal identity; court_clerk and every other role (incl. super_admin) do not", () => {
+    expect([...IDENTITY_REVEAL_ROLES].sort()).toEqual(["court_admin", "judge", "registrar"]);
     expect(IDENTITY_REVEAL_ROLES).not.toContain("court_clerk");
+    expect(IDENTITY_REVEAL_ROLES).not.toContain("super_admin");
   });
   it("identity reveal is wider than the address/phone/email PII list (registrar sees names, not contact details)", () => {
     expect(PII_PRIVILEGED_ROLES).not.toContain("registrar");

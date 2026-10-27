@@ -6566,8 +6566,8 @@ export type PlansData = {
  * PlansData` cast let that array through, so plans/page.tsx threw on
  * `plansData.plans.find` and the whole page fell to error.tsx. With the guard a
  * mismatched payload becomes source "error" (honest empty/error state) instead.
- * The real wiring (tenant-service /v1/tenant/plans + subscription/current, or a
- * billing-service tenant-plans read) is an owner decision — see the PR notes.
+ * F9: the loader now reads billing-service GET /v1/billing/tenant-plans, which returns this
+ * shape (with the tenant edition) directly.
  */
 export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.object({
   plans: z.array(z.object({
@@ -6611,6 +6611,9 @@ export type DowngradeRequestSummary = {
   requestedAt: string;
   decidedAt?: string | null;
   decisionReason?: string | null;
+  /** F8: an approved downgrade takes effect at the end of the billing period (effectiveAt) and is then applied (appliedAt). */
+  effectiveAt?: string | null;
+  appliedAt?: string | null;
 };
 
 export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequestSummary[]>> {
@@ -6621,9 +6624,34 @@ export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequ
   });
 }
 
+/**
+ * OWNER DECISION F8: platform billing's queue of tenants' pending downgrade
+ * requests (all tenants; platform_admin / super_admin only). An empty list and a
+ * failed read stay distinct (source "error").
+ */
+export type PendingDowngradeRequest = {
+  id: string;
+  tenantId: string;
+  fromPlanId: string;
+  targetPlanId: string;
+  reason: string;
+  requestedAt: string;
+};
+
+export async function getPendingDowngradeRequests(): Promise<LoaderResult<PendingDowngradeRequest[]>> {
+  return fetchJson<unknown, PendingDowngradeRequest[]>("/api/v1/tenant/subscription/downgrade-requests/pending", [] as PendingDowngradeRequest[], {
+    revalidateSeconds: 0,
+    telemetryKey: "platform.downgrade-queue",
+    mapResponse: (p) => (getArrayPayload(p) as PendingDowngradeRequest[] | null) ?? [],
+  });
+}
+
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {
   return fetchJson<unknown, PlansData>(
-    "/api/v1/billing/plans",
+    // F9 (UAT B4): the edition-aware tenant read (plans + limits, current plan, GST invoice rows,
+    // tenant edition). The bare /api/v1/billing/plans catalogue has no edition or invoices, so
+    // payment modes and GST rows never reached this page.
+    "/api/v1/billing/tenant-plans",
     { plans: [], currentPlanId: "", invoices: [], trialDaysLeft: null },
     {
       revalidateSeconds: 300,
@@ -6714,6 +6742,15 @@ export async function getDataExports(): Promise<LoaderResult<DataExportRequest[]
     revalidateSeconds: 30,
     telemetryKey: "admin.data-exports",
     mapResponse: (p) => getArrayPayload(p) as DataExportRequest[] | null,
+  });
+}
+
+/** F7: the modules a data export can actually cover (admin-service reports them from its registered exporters). */
+export async function getExportableModules(): Promise<LoaderResult<string[]>> {
+  return fetchJson<unknown, string[]>("/api/v1/admin/data-export/modules", [] as string[], {
+    revalidateSeconds: 300,
+    telemetryKey: "admin.data-export-modules",
+    mapResponse: (p) => ((getArrayPayload(p) as unknown[] | null) ?? []).filter((m): m is string => typeof m === "string"),
   });
 }
 

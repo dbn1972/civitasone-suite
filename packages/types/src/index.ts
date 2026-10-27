@@ -2410,6 +2410,10 @@ export type LegalCaseSummary = {
 
 export type LegalCaseDetail = LegalCaseSummary & {
   description?: string;
+  // F3: mirrors LegalCaseDetailSchema (packages/schemas/src/web.ts).
+  privileged?: boolean;
+  courtVerified?: boolean;
+  advocateId?: string;
   hearings: Array<{
     id: string;
     date: string;

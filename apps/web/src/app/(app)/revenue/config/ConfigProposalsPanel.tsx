@@ -131,9 +131,12 @@ function PreviewBox({ proposalId }: { proposalId: string }) {
 export function ConfigProposalsPanel({
   proposals,
   currentUserId,
+  canApprove = true,
 }: {
   proposals: ConfigProposal[];
   currentUserId?: string | null;
+  /** Owner decision F2: only a revenue admin or finance admin may approve or reject. */
+  canApprove?: boolean;
 }) {
   const pending = proposals.filter((p) => p.status === "pending");
   const decided = proposals.filter((p) => p.status !== "pending").slice(0, 10);
@@ -160,6 +163,7 @@ export function ConfigProposalsPanel({
                   status={p.status}
                   makerUserId={p.makerUserId}
                   currentUserId={currentUserId}
+                  {...(canApprove ? {} : { roleBlockedNote: "Only a revenue admin or finance admin can approve or reject a rate change." })}
                   summary={<>{describeProposal(p).toLowerCase()} effective {formatIndianDate(p.effectiveFrom)}</>}
                 />
               </div>

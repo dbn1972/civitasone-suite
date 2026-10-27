@@ -64,6 +64,11 @@ export const EXPORTERS: EntityExporter[] = [
   },
 ];
 
+/** F7: the modules an export can actually cover today, i.e. those with at least one exporter. Sorted, distinct. */
+export function exportableModules(): string[] {
+  return [...new Set(EXPORTERS.map((e) => e.module))].sort();
+}
+
 export type Plan = { ok: true; exporters: EntityExporter[] } | { ok: false; reason: "NO_EXPORTER_FOR_MODULE" | "UNKNOWN_ENTITY" };
 
 /** Which exporters a request covers. Pure, so every outcome is unit-testable. */

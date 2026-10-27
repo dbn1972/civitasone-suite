@@ -1,7 +1,7 @@
 /**
  * subscriptions repo — Drizzle queries against `subscriptions.*` ONLY (L2).
  */
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { subscriptions, downgradeRequests, type SubscriptionRow, type SubscriptionInsert, type DowngradeRequestRow } from "./schema.js";
@@ -78,6 +78,13 @@ export async function findPendingDowngrade(tenantId: string): Promise<DowngradeR
   return rows[0] ? toDowngradeView(rows[0]) : null;
 }
 
+/** F8: an approved downgrade that has not been applied yet (scheduled for the period end). */
+export async function findScheduledDowngrade(tenantId: string): Promise<DowngradeRequestView | null> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(downgradeRequests)
+    .where(and(eq(downgradeRequests.tenantId, tenantId), eq(downgradeRequests.status, "approved"), isNull(downgradeRequests.appliedAt))).limit(1)));
+  return rows[0] ? toDowngradeView(rows[0]) : null;
+}
+
 export async function findDowngradeRequest(tenantId: string, id: string): Promise<DowngradeRequestView | null> {
   const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(downgradeRequests)
     .where(and(eq(downgradeRequests.tenantId, tenantId), eq(downgradeRequests.id, id))).limit(1)));
@@ -103,6 +110,18 @@ export async function listPendingDowngradesForPlatform(limit = 100): Promise<Arr
     requestedBy: String(r.requested_by),
     requestedAt: new Date(r.requested_at as string | Date).toISOString(),
   }));
+}
+
+/**
+ * F8: approved downgrades whose period has ended, across tenants, through the
+ * SECURITY DEFINER function of migration 0033. Only the sweeper may call this.
+ */
+export async function listDueDowngradesForPlatform(limit = 100): Promise<Array<{ id: string; tenantId: string; decidedBy: string }>> {
+  const res = await db.execute(sql`SELECT * FROM subscriptions.list_due_downgrades(${limit}::int)`);
+  const raw: Array<Record<string, unknown>> = Array.isArray(res)
+    ? (res as unknown as Array<Record<string, unknown>>)
+    : (res as unknown as { rows: Array<Record<string, unknown>> }).rows;
+  return raw.map((r) => ({ id: String(r.id), tenantId: String(r.tenant_id), decidedBy: String(r.decided_by) }));
 }
 
 // ── writes (consumer only, within a tx) ──────────────────────────────

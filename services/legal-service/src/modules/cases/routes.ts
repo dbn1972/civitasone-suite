@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTypeBody } from "./validators.js";
+import { createCaseBody, disposeCaseBody, idParam, listCasesQuery, createCaseTypeBody, officersQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -11,6 +11,7 @@ import { findAdvocateById } from "../advocates/repo.js";
 import { assertCaseAccess, hiddenCaseIds } from "./access.js";
 import { COURT_MASTER, OTHER_COURT_CODE, findCourt } from "../../config/courts.js";
 import { getOrgClient, OrgServiceError } from "../../shared/org-client.js";
+import { getOfficerClient } from "../../shared/officer-client.js";
 
 const LEGAL_ROLES  = ["legal_officer", "legal_admin", "super_admin"];
 const READER_ROLES = [...LEGAL_ROLES, "audit_officer"];
@@ -53,6 +54,20 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Owner decisions #10/#11/#13: departments from the org hierarchy (id + name) for pickers.
+  // F4: officer picker for privileged cases, backed by the HRMS employee directory. Offers login ids only.
+  app.get("/v1/legal/officers", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEGAL_ROLES);
+    const { q } = officersQuery.parse(req.query);
+    try {
+      const items = await getOfficerClient().search({ tenantId: ctx.tenantId, correlationId: ctx.correlationId }, q);
+      return reply.send({ items });
+    } catch (err) {
+      if (err instanceof OrgServiceError) throw new HttpError(503, "OFFICER_DIRECTORY_UNAVAILABLE", "the officer directory is temporarily unavailable; please retry");
+      throw err;
+    }
+  });
+
   app.get("/v1/legal/departments", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
@@ -102,11 +117,26 @@ export async function caseRoutes(app: FastifyInstance): Promise<void> {
     if (!departments.some((d) => d.id === body.departmentId)) {
       throw new HttpError(422, "UNKNOWN_DEPARTMENT", "departmentId does not reference a department in the organisation hierarchy");
     }
+    // F4: every named officer other than the (already authenticated) creator must be a real employee login of this tenant.
+    const named = [...new Set(body.assignedOfficerIds ?? [])];
+    const others = named.filter((id) => id !== ctx.actorId);
+    if (others.length > 0) {
+      let known: Set<string>;
+      try {
+        known = new Set((await getOfficerClient().resolve({ tenantId: ctx.tenantId, correlationId: ctx.correlationId }, others)).map((o) => o.id));
+      } catch (err) {
+        if (err instanceof OrgServiceError) throw new HttpError(503, "OFFICER_DIRECTORY_UNAVAILABLE", "the officer directory is temporarily unavailable; please retry");
+        throw err;
+      }
+      if (others.some((id) => !known.has(id))) {
+        throw new HttpError(422, "UNKNOWN_OFFICER", "assignedOfficerIds must reference officers in the employee directory");
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createCase(ctx, {
       ...body, court, courtCode, courtVerified,
-      // Owner decision #12: a privileged case with no named officers is assigned to its creator, so it is never
-      // created in a state only the legal head can open.
-      ...(body.privileged && !(body.assignedOfficerIds && body.assignedOfficerIds.length > 0) ? { assignedOfficerIds: [ctx.actorId] } : {}),
+      // Owner decision #12 + F4: a privileged case always keeps its creator among the assigned officers (so it is never
+      // created in a state only the legal head can open), plus any officers picked from the directory.
+      ...(body.privileged ? { assignedOfficerIds: [ctx.actorId, ...others] } : {}),
     }));
   });
 

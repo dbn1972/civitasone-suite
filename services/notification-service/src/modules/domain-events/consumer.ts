@@ -127,21 +127,21 @@ type AuditParaIssuedPayload = {
 // ─── Visitor security/safety event payloads (role-recipient) ──────────────
 
 /**
- * Desk/role recipient for visitor security alerts. The delivery pipeline resolves
- * this against the tenant taken from the message envelope (see enqueue below), so
- * the alert reaches the tenant's security control room rather than any per-person
- * id. This mirrors the recipient convention used by visitor-service's already-
- * notifying watchlist/capacity alerts (recipient: "security_control_room").
+ * Desk/role recipient for visitor security alerts. The send consumer expands the
+ * desk into the tenant's ACTIVE security_admin users (deliveries/role-recipients.ts),
+ * one send each, honouring every user's own channel preferences and consent. This
+ * mirrors the recipient convention used by visitor-service's watchlist/capacity
+ * alerts (recipient: "security_control_room").
  */
 const SECURITY_DESK = "security_control_room";
 
 /**
- * Role recipient for tenant-wide release-notes broadcasts (LOOP 2). Resolved
- * against the message-envelope tenant by the delivery pipeline, so the release
- * note reaches the tenant's user audience rather than any single person id.
+ * Role recipient for tenant-wide release-notes broadcasts (LOOP 2). The send
+ * consumer expands it into the tenant's active users (capped and audited), see
+ * deliveries/role-recipients.ts.
  */
 const BROADCAST_AUDIENCE = "all_users";
-/** Role recipient for contract lifecycle alerts — resolved per tenant by the delivery pipeline. */
+/** Role recipient for contract lifecycle alerts — expanded to the tenant's contract_admin users by the send consumer. */
 const CONTRACT_DESK = "contract_management_desk";
 /**
  * Owner decision #24: platform billing decides plan downgrade requests (the
@@ -194,7 +194,7 @@ type VisitorEmergencyUnlockPayload = {
  * LOOP 2 — admin-service change management emits notification.broadcast.send on a
  * successful release with notes to publish. There is no single per-person target:
  * the release note fans out to the tenant's user audience. We address it to a
- * role recipient (BROADCAST_AUDIENCE) resolved per tenant by the delivery pipeline,
+ * role recipient (BROADCAST_AUDIENCE) expanded per tenant by the send consumer,
  * mirroring the visitor security-desk role-recipient convention above.
  */
 type BroadcastSendPayload = {

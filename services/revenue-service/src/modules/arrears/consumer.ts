@@ -8,8 +8,8 @@ import { instalmentPlans, instalments, writeOffs, recoveryReferrals } from "./sc
 import { waivers } from "../trade-license/schema.js";
 import { dcbEntries, demands } from "../assessment/schema.js";
 import { getAssesseeOutstanding, getLatestDemandBalance } from "./outstanding.js";
-import { requireLapsedNoticeTx, istToday } from "./recovery-notice.js";
-import { demandNotices } from "./schema.js";
+import { requireLapsedNoticeTx, istToday, loadNoticeDefaultTx, resolveNoticePeriod, NOTICE_SETTINGS_ROLES } from "./recovery-notice.js";
+import { demandNotices, noticeSettings } from "./schema.js";
 import {
   generateInstalmentSchedule,
   validateWriteOff,
@@ -506,7 +506,7 @@ export function registerArrearsConsumers(queue: Queue): void {
       demandId?: string;
       noticeNo: string;
       servedOn: string;
-      noticePeriodDays: number;
+      noticePeriodDays?: number;
     };
 
     await db.transaction(async (tx) => {
@@ -517,13 +517,18 @@ export function registerArrearsConsumers(queue: Queue): void {
         throw new DomainError("NOTICE_DATE_IN_FUTURE", "A demand notice cannot be recorded as served on a future date");
       }
 
+      // Owner decision F1: the tenant default (seeded 15) is the floor; an
+      // officer may only lengthen it. Omitted -> the default itself.
+      const tenantDefault = await loadNoticeDefaultTx(tx, msg.tenantId, { seed: true });
+      const periodDays = resolveNoticePeriod(noticePeriodDays, tenantDefault.days);
+
       await tx.insert(demandNotices).values({
         tenantId: msg.tenantId,
         assesseeId,
         demandId: demandId ?? null,
         noticeNo,
         servedOn,
-        noticePeriodDays,
+        noticePeriodDays: periodDays,
         servedBy: msg.actorId,
       });
 
@@ -533,7 +538,41 @@ export function registerArrearsConsumers(queue: Queue): void {
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: SERVICE, action: "serve", resourceType: "demand_notice", outcome: "success", assesseeId, noticeNo, servedOn, noticePeriodDays },
+        payload: { service: SERVICE, action: "serve", resourceType: "demand_notice", outcome: "success", assesseeId, noticeNo, servedOn, noticePeriodDays: periodDays },
+      });
+    });
+  });
+
+  // ── noticeSettingsSet (owner decision F1) ───────────────────────────────────
+  queue.subscribe(COMMANDS.noticeSettingsSet, async (msg) => {
+    const { defaultNoticePeriodDays, actorRoles } = msg.payload as { defaultNoticePeriodDays: number; actorRoles?: string[] };
+
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+
+      // Only revenue_admin / finance_admin may change it (fails closed without roles).
+      if (!(actorRoles ?? []).some((r) => (NOTICE_SETTINGS_ROLES as readonly string[]).includes(r))) {
+        throw new DomainError("FORBIDDEN_ROLE", "Only a revenue_admin or finance_admin may change the default notice period");
+      }
+      if (!Number.isInteger(defaultNoticePeriodDays) || defaultNoticePeriodDays < 1 || defaultNoticePeriodDays > 365) {
+        throw new DomainError("INVALID_NOTICE_PERIOD", "The default notice period must be between 1 and 365 days");
+      }
+
+      await tx
+        .insert(noticeSettings)
+        .values({ tenantId: msg.tenantId, defaultNoticePeriodDays, updatedBy: msg.actorId })
+        .onConflictDoUpdate({
+          target: noticeSettings.tenantId,
+          set: { defaultNoticePeriodDays, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${noticeSettings.version} + 1` },
+        });
+
+      await enqueue(tx, {
+        topic: "audit.event.record",
+        eventType: "audit.event.record",
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: { service: SERVICE, action: "configure", resourceType: "notice_settings", outcome: "success", defaultNoticePeriodDays },
       });
     });
   });

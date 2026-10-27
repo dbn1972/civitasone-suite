@@ -87,6 +87,8 @@ export const COMMANDS = {
   recoveryReferDecide: "revenue.recovery.decide",
   /** payload: { assesseeId, noticeNo, servedOn, noticePeriodDays, demandId? } — record a served demand notice */
   demandNoticeServe: "revenue.demand_notice.serve",
+  /** payload: { defaultNoticePeriodDays, actorRoles } — set the tenant default notice period (owner decision F1) */
+  noticeSettingsSet: "revenue.notice_settings.set",
 
   // ── BBPS Biller (SVC-134) ────────────────────────────────────────────────
   /** payload: { assesseeIdentifier } — returns outstanding via DCB */

@@ -6,7 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, SERVICE } from "../../topics.js";
 import { rateHeads, rateSlabs, penaltyRules, rebateRules, configProposals } from "../rate-engine/schema.js";
-import { DomainError, assertMakerChecker } from "../rate-engine/domain.js";
+import { DomainError, assertMakerChecker, assertRateConfigApprover } from "../rate-engine/domain.js";
 import { istToday } from "../arrears/recovery-notice.js";
 import { loadConfigStateTx } from "./repo.js";
 import { planProposal, type PlanOp, type PlanTable, type Proposal } from "./domain.js";
@@ -121,7 +121,7 @@ export function registerRateConfigConsumers(queue: Queue): void {
 
   // ─── rateConfigDecide (checker step) ──────────────────────────────────────
   queue.subscribe(COMMANDS.rateConfigDecide, async (msg) => {
-    const { proposalId, approve, reason } = msg.payload as { proposalId: string; approve: boolean; reason?: string };
+    const { proposalId, approve, reason, actorRoles } = msg.payload as { proposalId: string; approve: boolean; reason?: string; actorRoles?: string[] };
     let headToInvalidate: string | null = null;
 
     await db.transaction(async (tx) => {
@@ -155,6 +155,8 @@ export function registerRateConfigConsumers(queue: Queue): void {
 
       // Segregation of duties, enforced in the consumer.
       assertMakerChecker(row.makerUserId, msg.actorId);
+      // Owner decision F2: only revenue_admin / finance_admin decide (fails closed without roles).
+      assertRateConfigApprover(actorRoles);
       headToInvalidate = row.rateHeadId ?? null;
 
       if (!approve) {

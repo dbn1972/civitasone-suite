@@ -13,7 +13,6 @@ import type { DataExportRequest } from "@/app/_data/loaders";
 type ExportType = "full" | "module" | "entity";
 type ExportFormat = "csv" | "json" | "pdf";
 
-const MODULES = ["admin", "finance", "hrms", "payroll", "procurement", "projects", "assets", "inventory", "documents"];
 
 /** Owner decision #22: a signed link lives 15 minutes; the file list comes from the download route. */
 type DownloadFile = { entity: string; fileName: string; rowCount: number; sizeBytes: number; url: string };
@@ -29,7 +28,9 @@ function formatSize(bytes: number | null) {
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-export function DataExportClient({ exports: initialExports, source }: { exports: DataExportRequest[]; source: "api" | "error" }) {
+// F7: `modules` is the list the server says it can actually export (never a hard-coded
+// catalogue), so a user cannot pick a module whose export is certain to fail.
+export function DataExportClient({ exports: initialExports, source, modules = [], modulesFailed = false }: { exports: DataExportRequest[]; source: "api" | "error"; modules?: string[]; modulesFailed?: boolean }) {
   const router = useRouter();
   const { data: seededExports, provenance, offline, cachedAt } = useSeededResource("admin.data-exports", initialExports, source, (d) => d.length === 0);
   const [exportType, setExportType] = useState<ExportType>("full");
@@ -156,8 +157,11 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
               <Field label="Module">
                 <Select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
                   <option value="">Select module...</option>
-                  {MODULES.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
+                  {modules.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
                 </Select>
+                {modules.length === 0 ? (
+                  <p role="status" style={{ fontSize: 12, color: "var(--ink2)", margin: "4px 0 0" }}>{modulesFailed ? t("modulesError") : t("noModules")}</p>
+                ) : null}
               </Field>
             )}
 

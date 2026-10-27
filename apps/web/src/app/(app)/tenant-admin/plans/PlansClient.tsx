@@ -7,7 +7,7 @@ import { Button, EmptyState, ConfirmDialog, StatusPill } from "@/app/_components
 import { useFormError } from "@/lib/useFormError";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { paymentModesForEdition, type PaymentMode } from "@/lib/billing/paymentModes";
 import { InvoiceList, type InvoiceRow } from "../subscription/InvoiceList";
 import type { PlansData, DowngradeRequestSummary } from "@/app/_data/loaders";
@@ -31,6 +31,9 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
   const [justRequested, setJustRequested] = useState<string | null>(null);
   const openRequest = downgradeRequests.find((r) => r.status === "pending") ?? null;
   const decided = downgradeRequests.find((r) => r.status !== "pending") ?? null;
+  // F8: an approved downgrade only takes effect at the end of the billing period; until it is
+  // applied it is "scheduled" and a further downgrade request is refused by the server.
+  const scheduled = downgradeRequests.find((r) => r.status === "approved" && !r.appliedAt && r.effectiveAt) ?? null;
   // GAP-TENANT-ADMIN-PLANS-03: single source of truth — the current plan is
   // derived from the loader data, never a locally-mutated copy that could
   // drift from the header StatCards after a (previously fake) change.
@@ -124,7 +127,7 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
         </div>
       ) : decided ? (
         <div role="status" style={{ border: "1px solid var(--line)", borderRadius: 8, padding: "12px 16px", marginTop: 18 }}>
-          {decided.status === "approved" ? t("lastApproved") : t("lastRejected", { reason: decided.decisionReason === "USAGE_EXCEEDS_TARGET_PLAN" || decided.decisionReason === "PLAN_OR_SUBSCRIPTION_CHANGED" ? t(`rejectReason.${decided.decisionReason}`) : decided.decisionReason ?? "" })}
+          {decided.status === "approved" ? (scheduled && scheduled.id === decided.id ? t("scheduledApproved", { date: formatIndianDate(scheduled.effectiveAt) }) : t("lastApproved")) : t("lastRejected", { reason: decided.decisionReason === "USAGE_EXCEEDS_TARGET_PLAN" || decided.decisionReason === "PLAN_OR_SUBSCRIPTION_CHANGED" ? t(`rejectReason.${decided.decisionReason}`) : decided.decisionReason ?? "" })}
         </div>
       ) : null}
 
@@ -160,7 +163,7 @@ export function PlansClient({ plansData, source, downgradeRequests = [] }: { pla
                   <Button
                     variant={planIsUpgrade ? "primary" : "ghost"}
                     style={{ width: "100%" }}
-                    disabled={!planIsUpgrade && (openRequest !== null || justRequested !== null)}
+                    disabled={!planIsUpgrade && (openRequest !== null || scheduled !== null || justRequested !== null)}
                     onClick={() => { setBlocked(null); setDowngradeError(undefined); setChangeTarget(plan.id); }}
                   >
                     {planIsUpgrade ? "Request upgrade" : "Request downgrade"}

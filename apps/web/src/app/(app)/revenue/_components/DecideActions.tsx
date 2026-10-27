@@ -20,6 +20,7 @@ export function DecideActions({
   status,
   makerUserId,
   currentUserId,
+  roleBlockedNote,
   summary,
 }: {
   /** PATCH path (relative to the API proxy), e.g. v1/revenue/instalments/:id/decide. */
@@ -30,6 +31,8 @@ export function DecideActions({
   makerUserId?: string | null;
   /** Signed-in user id (JWT sub), for the maker != checker UI hint. */
   currentUserId?: string | null;
+  /** When set, the signed-in user's role may not decide this item: buttons are disabled and this explains why. */
+  roleBlockedNote?: string;
   /** Human description of the item for the confirm dialog. */
   summary: ReactNode;
 }) {
@@ -43,7 +46,7 @@ export function DecideActions({
 
   const isPending = status === "pending";
   const isMaker = !!currentUserId && !!makerUserId && currentUserId === makerUserId;
-  const canDecide = isPending && !isMaker && !decidedLocally;
+  const canDecide = isPending && !isMaker && !decidedLocally && !roleBlockedNote;
 
   function start(approve: boolean) {
     if (!canDecide) return;
@@ -90,6 +93,11 @@ export function DecideActions({
 
   return (
     <div style={{ display: "grid", gap: 12 }}>
+      {roleBlockedNote && (
+        <p role="status" style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>
+          {roleBlockedNote}
+        </p>
+      )}
       {isMaker && (
         <p role="status" style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>
           You raised this {noun}, so a different officer must decide it.

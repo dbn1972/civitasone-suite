@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
@@ -48,6 +49,7 @@ function tliClass(itemIndex: number, currentIndex: number): "done" | "cur" | "to
 export default async function LegalCaseDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const { data: caseData, source, status } = await getLegalCaseById(params.id);
+  const t = await getTranslations("legalCaseDetail");
 
   // GAP-LEGAL-CASES-DETAIL-02: distinguish genuine 404 from a service outage.
   if (!caseData) {
@@ -149,6 +151,13 @@ export default async function LegalCaseDetailPage(props: { params: Promise<{ id:
         actions={<CaseActions caseId={caseData.id} />}
       />
 
+      {/* F3 (owner decision #12): visible only to assigned officers and the legal head; say so. */}
+      {caseData.privileged && (
+        <p style={{ margin: "0 0 12px" }}>
+          <span className="pill bad" title={t("privilegedTitle")}>{t("privileged")}</span>
+        </p>
+      )}
+
       {source === "error" && <DataSourceBadge source={source} />}
 
       <div className="grid g-main" style={{ alignItems: "start" }}>
@@ -159,7 +168,16 @@ export default async function LegalCaseDetailPage(props: { params: Promise<{ id:
             <div className="card-h"><h3>Details</h3></div>
             <div className="fields">
               <div className="fld"><div className="l">Case no.</div><div className="v"><span className="mono">{caseData.caseNo}</span></div></div>
-              <div className="fld"><div className="l">Court</div><div className="v">{caseData.court}</div></div>
+              <div className="fld">
+                <div className="l">Court</div>
+                <div className="v">
+                  {caseData.court}
+                  {/* F3 (owner decision #10): a court typed as "Other" is unverified. Only an explicit false shows it. */}
+                  {caseData.courtVerified === false && (
+                    <span className="pill warn" title={t("unverifiedCourtTitle")} style={{ marginInlineStart: 8 }}>{t("unverifiedCourt")}</span>
+                  )}
+                </div>
+              </div>
               <div className="fld"><div className="l">Subject</div><div className="v">{caseData.type}</div></div>
               {caseData.petitioner && (
                 <div className="fld"><div className="l">Petitioner</div><div className="v">{caseData.petitioner}</div></div>

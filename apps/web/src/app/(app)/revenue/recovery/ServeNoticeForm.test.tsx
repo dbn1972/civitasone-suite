@@ -16,13 +16,31 @@ describe("ServeNoticeForm (owner decision #4)", () => {
 
   it("requires the notice number, the served-on date and a notice period", () => {
     render(<ServeNoticeForm assesseeId="a1" />);
+    // the period is pre-filled with the tenant default; clearing it is an error
+    fireEvent.change(screen.getByLabelText(/^Notice period/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Record served notice" }));
     expect(screen.getByText("Enter the demand notice number.")).toBeInTheDocument();
     expect(screen.getByText("Enter the date the notice was served.")).toBeInTheDocument();
     expect(screen.getByText("Enter the notice period in days (1 to 365).")).toBeInTheDocument();
   });
 
-  it("posts the notice with the officer-entered period (no default is assumed)", async () => {
+  it("F1: the period is pre-filled with the tenant default (15 unless configured) and cannot go below it", () => {
+    const { unmount } = render(<ServeNoticeForm assesseeId="a1" />);
+    expect(screen.getByLabelText(/^Notice period/)).toHaveValue(15);
+    expect(screen.getByLabelText(/^Notice period/)).toHaveAttribute("min", "15");
+    unmount();
+    render(<ServeNoticeForm assesseeId="a1" defaultNoticePeriodDays={30} />);
+    expect(screen.getByLabelText(/^Notice period/)).toHaveValue(30);
+    fireEvent.change(screen.getByLabelText(/^Notice number/), { target: { value: "DN-1" } });
+    fireEvent.change(screen.getByLabelText(/^Served on/), { target: { value: "2026-08-01" } });
+    fireEvent.change(screen.getByLabelText(/^Notice period/), { target: { value: "20" } });
+    const spy = vi.spyOn(globalThis, "fetch");
+    fireEvent.click(screen.getByRole("button", { name: "Record served notice" }));
+    expect(screen.getByText("The notice period cannot be shorter than the default of 30 days; you can only lengthen it.")).toBeInTheDocument();
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("posts the notice with the officer-entered (lengthened) period", async () => {
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { messageId: "m1" } }), { status: 202 }));
     render(<ServeNoticeForm assesseeId="a1" />);
     fireEvent.change(screen.getByLabelText(/^Notice number/), { target: { value: "DN-2026-0007" } });

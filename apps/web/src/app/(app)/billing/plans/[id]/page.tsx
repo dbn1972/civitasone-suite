@@ -48,6 +48,9 @@ export default async function PlanDetailPage(props: { params: Promise<{ id: stri
   const active = typeof plan.active === "boolean" ? plan.active : null;
   const statusLabel = active === null ? null : active ? "active" : "inactive";
   const govtExempt = typeof plan.govtExempt === "boolean" ? plan.govtExempt : null;
+  // GAP-BILLING-PLANS-NEW-01 (UAT B4): the plan's billing interval, as stored by billing-service.
+  const INTERVAL_LABEL: Record<string, string> = { monthly: "Monthly", quarterly: "Quarterly", yearly: "Yearly" };
+  const intervalLabel = typeof plan.interval === "string" ? (INTERVAL_LABEL[plan.interval] ?? "—") : "—";
 
   return (
     <div className="page-main wrap">
@@ -68,6 +71,7 @@ export default async function PlanDetailPage(props: { params: Promise<{ id: stri
           <div className="field"><span className="label">Code</span><span>{code}</span></div>
           <div className="field"><span className="label">Name</span><span>{name}</span></div>
           <div className="field"><span className="label">Price</span><span>{priceDisplay}</span></div>
+          <div className="field"><span className="label">Interval</span><span>{intervalLabel}</span></div>
           <div className="field"><span className="label">Govt exempt</span><span>{govtExempt === null ? "—" : govtExempt ? "Yes" : "No"}</span></div>
           <div className="field">
             <span className="label">Status</span>

@@ -63,14 +63,14 @@ export const PII_PRIVILEGED_ROLES = Object.freeze([
 // widening PII access on BOTH endpoints that share this constant.
 
 /**
- * Owner decision #32 (GAP-COURT-CASES-CASEID-04): roles that see party and advocate IDENTITY (name,
- * advocate name, Bar ID) unmasked - judges, registrars and court staff (court_admin / super_admin).
- * Everyone else with read access (court_clerk) sees it masked. Deliberately wider than
+ * Owner decisions #32 + F12 (GAP-COURT-CASES-CASEID-04): roles that see party and advocate IDENTITY (name,
+ * advocate name, Bar ID) unmasked - judge, registrar and court_admin ONLY. court_clerk and every other
+ * role (super_admin included) sees it masked. Deliberately wider than
  * PII_PRIVILEGED_ROLES: a registrar needs the names to run the case, but not the contact details.
  * Every unmasked delivery is audited (see party/commands.ts recordIdentityReveal).
  */
 export const IDENTITY_REVEAL_ROLES = Object.freeze([
-  "judge", "registrar", "court_admin", "super_admin",
+  "judge", "registrar", "court_admin",
 ]) as string[];
 
 /** "Ramesh Kumar Sharma" -> "R*** K*** S***": first character of each word, nothing else. */

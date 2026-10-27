@@ -73,8 +73,8 @@ async function propose(q: MemoryQueue, body: Record<string, unknown>) {
   await q.drain();
   return id;
 }
-async function decide(q: MemoryQueue, id: string, actor: string, approve: boolean, reason?: string) {
-  await q.publish(COMMANDS.rateConfigDecide, msg(COMMANDS.rateConfigDecide, actor, { proposalId: id, approve, reason }));
+async function decide(q: MemoryQueue, id: string, actor: string, approve: boolean, reason?: string, actorRoles: string[] | null = ["finance_admin"]) {
+  await q.publish(COMMANDS.rateConfigDecide, msg(COMMANDS.rateConfigDecide, actor, { proposalId: id, approve, reason, ...(actorRoles ? { actorRoles } : {}) }));
   await q.drain();
 }
 const proposalRow = (id: string) => runWithTenant(TENANT, () => db.transaction(async (tx) => (await tx.select().from(configProposals).where(eq(configProposals.id, id)))[0]));
@@ -135,6 +135,38 @@ describe("rate config is maker-checker (owner decision #2, real DB)", () => {
     const decideAudit = (await audits()).find((a) => a.action === "decide");
     expect(decideAudit).toMatchObject({ resourceType: "rate_config", outcome: "approved", kind: "rate_slab", configAction: "revise", resourceId: id });
     await q.stop();
+  });
+
+  it("F2: only revenue_admin or finance_admin may decide in the consumer; every other role (or none) is refused, even a different user", async () => {
+    for (const roles of [["revenue_officer"], ["tenant_admin"], ["super_admin"], ["employee"], [], null]) {
+      const q = await start();
+      const id = await propose(q, REVISE_SLAB);
+      const before = q.dlq.length;
+      await decide(q, id, CHECKER, true, undefined, roles as string[] | null);
+      expect(q.dlq.length, JSON.stringify(roles)).toBeGreaterThan(before);
+      expect((await proposalRow(id))!.status, JSON.stringify(roles)).toBe("pending");
+      expect(await slabs()).toHaveLength(1);
+      await q.stop();
+    }
+  });
+
+  it("F2: a role-refused REJECT is also refused (the proposal stays pending)", async () => {
+    const q = await start();
+    const id = await propose(q, REVISE_SLAB);
+    await decide(q, id, CHECKER, false, "no", ["revenue_officer"]);
+    expect((await proposalRow(id))!.status).toBe("pending");
+    await q.stop();
+  });
+
+  it("F2: revenue_admin (not the proposer) and finance_admin can both approve", async () => {
+    for (const roles of [["revenue_admin"], ["finance_admin"]]) {
+      await clean(); await seed();
+      const q = await start();
+      const id = await propose(q, REVISE_SLAB);
+      await decide(q, id, CHECKER, true, undefined, roles);
+      expect((await proposalRow(id))!.status, roles[0]).toBe("approved");
+      await q.stop();
+    }
   });
 
   it("a rejected proposal changes nothing", async () => {
@@ -258,6 +290,21 @@ describe("rate-config routes (owner decision #2)", () => {
     expect((await d("f9999999-9999-4999-8999-999999999999", tok(R_OTHER, ["finance_admin"]))).statusCode).toBe(404);
     expect((await d(P_PENDING, tok(R_OTHER, ["finance_admin"]))).statusCode).toBe(202);
     expect((await d(P_PENDING, tok(R_OTHER, ["employee"]))).statusCode).toBe(403);
+  });
+  it("F2 decide: revenue_officer and tenant_admin are no longer approvers (403, nothing published); the decider roles ride the command", async () => {
+    const d = (id: string, h: Record<string, string>, payload: Record<string, unknown> = { approve: true }) => app.inject({ method: "PATCH", url: `/v1/revenue/rate-config/proposals/${id}/decide`, headers: h, payload });
+    publishSpy.mockClear();
+    for (const r of ["revenue_officer", "tenant_admin", "super_admin"]) {
+      expect((await d(P_PENDING, tok(R_OTHER, [r]))).statusCode, r).toBe(403);
+    }
+    expect(publishSpy).not.toHaveBeenCalled();
+    // a client cannot smuggle its own actorRoles through the body
+    const res = await d(P_PENDING, tok(R_OTHER, ["finance_admin"]), { approve: true, actorRoles: ["revenue_admin"] });
+    expect(res.statusCode).toBe(202);
+    expect(publishSpy.mock.calls[0]![1].payload.actorRoles).toEqual(["finance_admin"]);
+    // the read-only queue stays visible to revenue officers
+    const list = await app.inject({ method: "GET", url: "/v1/revenue/rate-config/proposals", headers: tok(R_OTHER, ["revenue_officer"]) });
+    expect(list.statusCode).toBe(200);
   });
   it("list (status filter), get, and PREVIEW before approval", async () => {
     const list = await app.inject({ method: "GET", url: "/v1/revenue/rate-config/proposals?status=pending", headers: tok(R_OTHER, ["finance_admin"]) });

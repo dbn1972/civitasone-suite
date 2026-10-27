@@ -16,7 +16,7 @@ export interface InvoicePdfItem {
 }
 
 export interface InvoicePdfModel {
-  invoiceNumber: string;
+  invoiceNumber: string | null;
   periodMonth: string;
   status: string;
   issuedAt: Date | string | null;
@@ -58,7 +58,7 @@ function issueDate(v: Date | string | null): string {
 export function invoiceDocumentLines(m: InvoicePdfModel): string[] {
   const lines: string[] = [
     "TAX INVOICE",
-    `Invoice no.: ${m.invoiceNumber}`,
+    `Invoice no.: ${m.invoiceNumber ?? "-"}`,
     `Billing period: ${m.periodMonth}`,
     `Issue date: ${issueDate(m.issuedAt)}`,
     `Status: ${m.status}`,

@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import type { PlanInterval } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -12,13 +13,13 @@ export function registerPlansConsumers(rawQueue: Queue): void {
   // #146 regression fix: run every handler inside the message tenant context so
   // NOBYPASSRLS + FORCE RLS accepts consumer writes (telephony PR #152 pattern).
   const queue = tenantScoped(rawQueue);
-  queue.subscribe<{ id: string; name: string; code: string; priceMinor: number; currency?: string; govtExempt?: boolean }>(COMMANDS.planCreate, async (msg) => {
+  queue.subscribe<{ id: string; name: string; code: string; priceMinor: number; currency?: string; govtExempt?: boolean; interval?: PlanInterval }>(COMMANDS.planCreate, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insert(tx, {
         id: msg.payload.id, name: msg.payload.name, code: msg.payload.code,
         priceMinor: BigInt(msg.payload.priceMinor), currency: msg.payload.currency ?? "INR",
-        govtExempt: msg.payload.govtExempt ?? true, createdBy: msg.actorId, updatedBy: msg.actorId,
+        govtExempt: msg.payload.govtExempt ?? true, billingInterval: msg.payload.interval ?? "monthly", createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
         topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

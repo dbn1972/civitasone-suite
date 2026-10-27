@@ -16785,6 +16785,29 @@
     "unknownEmployee": "Unknown employee"
   },
   "tenantW3": {
+    "billing": {
+      "title": "Plan downgrade requests",
+      "subtitle": "Approve or reject tenants' requests to move to a cheaper plan.",
+      "queueTitle": "Requests awaiting a decision",
+      "queueHint": "An approved downgrade does not change the plan now: it takes effect at the end of the tenant's current billing period. A rejection needs a reason, which the requester is shown.",
+      "colTenant": "Tenant",
+      "colFrom": "Current plan",
+      "colTo": "Requested plan",
+      "colRequested": "Requested on",
+      "colReason": "Reason given",
+      "colActions": "Decide",
+      "approve": "Approve",
+      "reject": "Reject",
+      "none": "No downgrade requests are waiting.",
+      "noneHint": "New requests from tenants will appear here.",
+      "approveTitle": "Approve this downgrade?",
+      "rejectTitle": "Reject this downgrade?",
+      "approveBody": "The tenant stays on its current plan until the end of its current billing period, then moves to the requested plan.",
+      "rejectBody": "The tenant stays on its current plan and is told your reason.",
+      "reasonLabel": "Reason (recorded in the audit log and shown to the requester)",
+      "approved": "Approved. The plan changes at the end of the billing period.",
+      "rejected": "Rejected. The requester has been told why."
+    },
     "consent": {
       "pendingTitle": "Decisions awaiting the consent officer",
       "pendingHint": "Approve or reject on behalf of the data principal. A reason is required and is recorded in the audit log.",
@@ -16822,6 +16845,8 @@
       "reasonLabel": "Reason (at least 10 characters, recorded in the audit log)"
     },
     "export": {
+      "noModules": "No module can be exported yet.",
+      "modulesError": "The list of exportable modules could not be loaded. Refresh to try again.",
       "formatCsv": "CSV (one file per entity)",
       "formatJson": "JSON (single full export)",
       "rows": "{count, plural, one {# row} other {# rows}}",
@@ -16862,6 +16887,7 @@
       "pendingTitle": "Downgrade requested.",
       "pendingBody": "Your request to move to {plan} is awaiting approval from platform billing. Nothing changes until it is approved.",
       "lastApproved": "Your last downgrade request was approved.",
+      "scheduledApproved": "Your downgrade request was approved. The change takes effect at the end of your billing period, on {date}.",
       "lastRejected": "Your last downgrade request was not approved. {reason}",
       "rejectReason": {
         "USAGE_EXCEEDS_TARGET_PLAN": "Your usage was above the limits of the requested plan when it was reviewed.",
@@ -17364,12 +17390,25 @@
       "failed": "Could not be processed"
     }
   },
+  "legalCaseDetail": {
+    "privileged": "Privileged",
+    "privilegedTitle": "Confidential case: visible only to its assigned officers and the legal head.",
+    "unverifiedCourt": "Unverified court",
+    "unverifiedCourtTitle": "This court was typed in as \"Other\" and is not in the court master list."
+  },
   "legalCaseNew": {
     "advocateLabel": "Empanelled advocate",
     "advocateNone": "No advocate (use the counsel reference below)",
     "advocatesError": "The advocate list could not be loaded; you can still use the counsel reference.",
     "privilegedLabel": "Privileged / confidential case",
     "privilegedHelp": "Only the officers assigned to this case and the legal head can see it. You are assigned automatically.",
+    "officersSearchLabel": "Search officers by name or employee number",
+    "officersHelp": "You are assigned automatically. Search to add other officers who may open this case (at least 2 characters).",
+    "officersSearching": "Searching...",
+    "officersNone": "No matching officers.",
+    "officersError": "Officer search is unavailable right now. Try again shortly.",
+    "officersAdd": "Add {name}",
+    "officersRemove": "Remove {name}",
     "loading": "Loading…",
     "selectCourt": "Select a court or tribunal…",
     "courtOtherOption": "Other (not in the list)",
