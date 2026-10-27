@@ -2084,7 +2084,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — active/resolved metric definitions in portal/metrics undeterminable; service absent)
+- [x] **Status** Closed (UAT B4, 2026-10-27): definitions verified and pinned by tests/portal-metrics-definitions.test.ts - active = submitted + under_review + in_progress; resolved = status resolved only, in the current IST month (was UTC month: dropped the first 5.5 h of each month).
 - **First-pass claim:** Metrics come from citizen-service portal/metrics (loaders.ts:3355-3361 comment); service absent, so definitions of 'active' and 'resolved' are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/portal/metrics']`
 - **Question:** How are active and resolved defined (statuses included, time window, SLA) in portal/metrics?
