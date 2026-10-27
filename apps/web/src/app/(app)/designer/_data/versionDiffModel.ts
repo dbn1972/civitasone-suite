@@ -238,12 +238,18 @@ export function buildVersionDiffRows(
   return rows;
 }
 
-export function feeSummaryForPublish(def: ServiceDefinitionDto): string {
+export function feeSummaryForPublish(
+  def: ServiceDefinitionDto,
+  hoaDescriptions?: Record<string, string>,
+): string {
   const amount = extractFeeFromMinor(def);
   const parts: string[] = [];
   if (def.feeModel) parts.push(`${def.feeModel} fee`);
   if (amount != null) parts.push(`from ${formatMoney(amount)}`);
-  if (def.hoaCode) parts.push(`HOA ${def.hoaCode}`);
+  if (def.hoaCode) {
+    const desc = hoaDescriptions?.[def.hoaCode];
+    parts.push(desc ? `HOA ${def.hoaCode} — ${desc}` : `HOA ${def.hoaCode}`);
+  }
   return parts.length > 0 ? parts.join(" · ") : "No fee configured";
 }
 
@@ -252,8 +258,11 @@ export function feeSummaryForPublish(def: ServiceDefinitionDto): string {
  * list — fee, SLA, channels and whether an approval chain is configured — so the
  * checker sees what goes live, not just the fee.
  */
-export function publishSummary(def: ServiceDefinitionDto): string[] {
-  const lines: string[] = [feeSummaryForPublish(def)];
+export function publishSummary(
+  def: ServiceDefinitionDto,
+  hoaDescriptions?: Record<string, string>,
+): string[] {
+  const lines: string[] = [feeSummaryForPublish(def, hoaDescriptions)];
   lines.push(`SLA: ${def.slaDays != null ? `${def.slaDays} day(s)` : "not set"}`);
   if (Array.isArray(def.channels) && def.channels.length > 0) {
     lines.push(`Channels: ${def.channels.join(", ")}`);

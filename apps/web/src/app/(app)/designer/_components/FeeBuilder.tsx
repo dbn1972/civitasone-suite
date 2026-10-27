@@ -14,6 +14,7 @@ import {
   buildSampleCalculation,
   buildSampleSubjectFields,
   fetchHoaOptions,
+  type HoaOption,
   paiseToRupeesInput,
   persistFeeDesign,
   rupeesInputToPaise,
@@ -74,7 +75,10 @@ export function FeeBuilder({
   const [sampleValues, setSampleValues] = useState<Record<string, string>>({});
   const [sampleNumeric, setSampleNumeric] = useState("100");
   const [scenario, setScenario] = useState<SamplePaymentScenario>("on_time");
-  const [hoaOptions, setHoaOptions] = useState<{ code: string; label: string }[]>([]);
+  const [hoaOptions, setHoaOptions] = useState<HoaOption[]>([]);
+  // GAP-DESIGNER-DETAIL-B5-04: a failed load is not the same as "no heads published".
+  const [hoaLoadFailed, setHoaLoadFailed] = useState(false);
+  const [hoaReload, setHoaReload] = useState(0);
   const [hoaQuery, setHoaQuery] = useState("");
   const [hoaListOpen, setHoaListOpen] = useState(false);
   const [showFormula, setShowFormula] = useState(Boolean(initial.formula));
@@ -104,10 +108,10 @@ export function FeeBuilder({
   useEffect(() => {
     let live = true;
     fetchHoaOptions()
-      .then((data) => { if (live) setHoaOptions(data); })
-      .catch(() => { if (live) setHoaOptions([]); });
+      .then((data) => { if (live) { setHoaOptions(data); setHoaLoadFailed(false); } })
+      .catch(() => { if (live) { setHoaOptions([]); setHoaLoadFailed(true); } });
     return () => { live = false; };
-  }, []);
+  }, [hoaReload]);
 
   const sampleFields = useMemo(
     () => buildSampleSubjectFields(design.exemptions, formFields),
@@ -445,9 +449,11 @@ export function FeeBuilder({
                     >
                       {filteredHoa.length === 0 ? (
                         <li style={{ padding: 10, fontSize: 13, color: "var(--mut)" }}>
-                          {hoaOptions.length === 0
-                            ? "No HOA codes loaded — check finance major-heads access."
-                            : "No matches."}
+                          {hoaLoadFailed
+                            ? "Head of Account list could not be loaded."
+                            : hoaOptions.length === 0
+                              ? "No Head of Account codes are published for this tenant yet."
+                              : "No matches."}
                         </li>
                       ) : (
                         filteredHoa.map((h) => (
@@ -472,10 +478,27 @@ export function FeeBuilder({
                     </ul>
                   ) : null}
                 </div>
-                {design.hoaCode ? (
-                  <span style={{ color: "var(--good)", fontSize: 12 }}>
-                    Attached: {design.hoaCode}
+                {hoaLoadFailed ? (
+                  <span
+                    data-testid="hoa-load-error"
+                    role="alert"
+                    style={{ color: "var(--bad)", fontSize: 12, display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    Could not load Head of Account codes from finance.
+                    <Button type="button" variant="ghost" onClick={() => setHoaReload((n) => n + 1)}>
+                      Retry
+                    </Button>
                   </span>
+                ) : null}
+                {design.hoaCode ? (
+                  <>
+                    <span style={{ color: "var(--good)", fontSize: 12 }}>
+                      Attached: {design.hoaCode}
+                    </span>
+                    <span data-testid="hoa-confirmation" style={{ fontSize: 12, color: "var(--ink)" }}>
+                      Fees will post to {selectedHoaLabel || design.hoaCode}
+                    </span>
+                  </>
                 ) : (
                   <span style={{ color: "var(--warn)", fontSize: 12 }}>
                     Required before Next / Submit — choose the account that receives this fee.

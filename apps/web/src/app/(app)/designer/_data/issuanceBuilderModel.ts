@@ -5,6 +5,7 @@ import {
   defaultTemplateBodyForOutputType,
   formatNumberingPreview,
   type IssuanceDesignState,
+  type NumberingResetPolicy,
   type NumberingToken,
   type OutputType,
   type ValidityMode,
@@ -101,6 +102,40 @@ export function numberingWarning(tokens: NumberingToken[]): string | null {
     return "Include a Sequence segment so each issue gets a unique number.";
   }
   return null;
+}
+
+/**
+ * GAP-DESIGNER-DETAIL-B7-03: non-blocking advisories about collision / restart
+ * risk. The blocking check stays in numberingWarning().
+ */
+export function numberingAdvisories(
+  tokens: NumberingToken[],
+  resetPolicy: NumberingResetPolicy | "",
+  opts: { multiOffice?: boolean } = {},
+): string[] {
+  const out: string[] = [];
+  const has = (k: NumberingToken["kind"]) => tokens.some((t) => t.kind === k);
+  if (tokens.filter((t) => t.kind === "seq").length > 1) {
+    out.push("Use only one Sequence segment — two running counters in one number make it hard to audit.");
+  }
+  if (opts.multiOffice && !has("office")) {
+    out.push("This service is offered by several offices; add an Office segment so offices cannot issue the same number.");
+  }
+  if (!resetPolicy) {
+    if (has("seq")) out.push("Choose when the sequence restarts so numbers stay unique across years.");
+  } else {
+    const hasYear = has("year") || has("fy");
+    if (resetPolicy === "never" && hasYear) {
+      out.push("The sequence never restarts but the number carries a year — the counter will keep climbing across years.");
+    }
+    if (resetPolicy === "financial_year" && !has("fy")) {
+      out.push("The sequence restarts each financial year; add an FY segment so numbers from different years cannot clash.");
+    }
+    if (resetPolicy === "calendar_year" && !has("year")) {
+      out.push("The sequence restarts each calendar year; add a Year segment so numbers from different years cannot clash.");
+    }
+  }
+  return out;
 }
 
 export function validitySummary(design: Pick<

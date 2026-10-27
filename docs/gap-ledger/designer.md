@@ -512,7 +512,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was ROLEGATE)
 
-- [~] **Status** NEEDS OWNER DECISION: product/backend must confirm HOA category field availability, `[~]` if blocked + reason)
+- [x] **Status** Closed by f6f6baa92 (UAT B4, 2026-10-27). Confirmation line, review/publish description and load-failure retry built; the per-draft confirm checkbox and a head category were not built (finance major-heads carries no category field, and a stored confirmation would need a new definition column) -- acceptance criteria met without them.
 - **First-pass claim:** HOA search lists finance major-heads only by code/description; wrong-head risk is unmitigated with no tariff cross-check (FeeBuilder.tsx:393-470, finance/major-heads).
 - **Verified evidence:** FeeBuilder.tsx:389-470 implements the HOA combobox. Options come from fetchHoaOptions (feeBuilderApi.ts:325-333), which maps /api/proxy/v1/finance/major-heads rows to `${code} — ${description}`. filterHoaOptions matches code or label text only. Once chosen it shows 'Attached: <code>' in green (:463-466). Nothing checks the head against the fee type (no tariff cross-check), and no confirmation is shown. The finding's ROLEGATE tag is wrong (this is wrong-selection risk, not access control). Whether finance restricts which heads a designer may attach is cannot-verify (finance service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
@@ -569,7 +569,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: backend contract must support extra locale keys in requiredDocuments, `[~]` if blocked + reason)
+- [x] **Status** Closed by 489cf84c6 (UAT B4, 2026-10-27).
 - **First-pass claim:** Preview language toggle offers fixed languages while B1 stores tenant locales (en, or); Odia is not previewable if the toggle is English/Hindi only (DocumentsBuilder.tsx:81 vs GovernanceLinkageBuilder.tsx:156-168).
 - **Verified evidence:** DocumentsBuilder.tsx:82 hard-codes the preview toggle as ['en','hi']. LocaleKey is 'en' | 'hi' only (LocaleTabs.tsx:5), documents store labels as {en, hi} (documentTypes.ts:3-6), and documentBuilderApi.ts:13-38 persists only those two. B1's locale list is free text (GovernanceLinkageBuilder.tsx:152-171, placeholder 'en, or', hint 'e.g. en, or'), so a tenant that publishes in Odia ('or') cannot author or preview Odia document names. The two places are not connected. The locale completeness meter (documentsLocaleCompleteness) is also en/hi only.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/documentTypes.ts`, `apps/web/src/app/_components/ds/designer/LocaleTabs.tsx`, `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderApi.ts`, `apps/web/src/app/(app)/designer/_data/documentBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b6/page.tsx`
@@ -640,7 +640,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: backend must decide canonical validity storage path, `[~]` if blocked + reason)
+- [x] **Status** Closed by 14fbd950e (UAT B4, 2026-10-27). Canonical path: the Output tab edits validity; renewalPolicy is derived from it in the same PATCH, no backend schema change needed.
 - **W0-10 note:** review found the W0 tick wrong — Both Validity & renewal editors still rendered and editable on B7: b7/page.tsx:172-175 RenewalPolicyBuilder still persists via phase3.patch (only a warning note added :150-171, not read-only/derived); onDesignPersisted (:98-109) swallows errors and OutputIssuanceBuilder.tsx:80 does not await so offline state never fires; acceptance (one editor, one PATCH path, failure -> offline) all unmet.
 - **First-pass claim:** Two separate 'Validity & renewal' editors on one page (OutputIssuanceBuilder Card and RenewalPolicyBuilder) with different field sets and different persistence paths (service design vs phase3 config) can disagree (OutputIssuanceBuilder.tsx:272-338 vs RenewalPolicyBuilder.tsx:46-111, b7/page.tsx).
 - **Verified evidence:** Two validity and renewal editors. (1) OutputIssuanceBuilder.tsx:271-356 'Validity & renewal' tab edits design.validityMode (duration / fixed_date / none), validityYears, validityFixedDate, renewable and renewalWindowDays (min 1, default 30). It is saved via issuanceBuilderApi (fields at :17-21,36-40) into updateServiceDefinition({issuanceType, outputs}) (b7/page.tsx:98-105). (2) RenewalPolicyBuilder.tsx:46-111 edits a separate renewalPolicy (validityMode 'none' | 'duration' | 'fixed_date', validityYears, validityFixedDate, renewable, renewalWindowDays min 0), saved via phase3.patch({renewalPolicy}) (b7/page.tsx:151-154). The labels and defaults differ. The issuance default is 'duration' for non-closure outputs (issuanceTypes.ts:123), while renewalPolicy defaults to 'none' / never expires. No code syncs them. Related: OutputIssuanceBuilder.schedulePersist (:75-86) calls onDesignPersisted without awaiting it, and the page's onDesignPersisted swallows errors (b7/page.tsx:106), so the footer says 'saved' even if the PATCH failed.
@@ -675,7 +675,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION: backend must confirm numbering sequence reset policy, `[~]` if blocked + reason)
+- [x] **Status** Closed by a97cee585 (UAT B4, 2026-10-27). Reset policy is stored in the output design (outputs is schemaless JSON, no migration); the numbering is never applied retroactively. Gap/reuse handling is not modelled because no issuance numbering service exists in the repo to define it.
 - **First-pass claim:** Numbering format is free-form; collision/gap policy across financial years is not surfaced (NumberingFormatBuilder).
 - **Verified evidence:** The numbering is not free-form text. NumberingFormatBuilder.tsx offers a token composer (Prefix, Ward, Year, Office, Sequence with a width of 3-10) and a preview (formatNumberingPreview, issuanceTypes.ts:133-154). numberingWarning (issuanceBuilderModel.ts:97-103) only checks that at least one segment exists and that a Sequence is included. What is true: the Year token is the calendar year (`new Date().getFullYear()`, issuanceTypes.ts:134), not a financial year, and nothing is offered for sequence reset (per year, per office, per FY), gap handling, or collision. Nothing prevents two Sequence tokens or a numbering scheme without an Office or Year token, which can collide across offices. Whether the backend numbering service enforces uniqueness is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/_components/ds/designer/NumberingFormatBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderModel.ts`

@@ -4,6 +4,8 @@ import {
   issuanceOutputToUi,
   issuanceUiToOutput,
   mergeOutputsWithIssuance,
+  renewalPolicyFromDesign,
+  withStoredRenewalPolicy,
   requestSamplePdf,
 } from "./issuanceBuilderApi";
 
@@ -69,5 +71,79 @@ describe("issuanceBuilderApi", () => {
   it("defaults grievance pattern when outputs are empty", () => {
     const ui = issuanceOutputToUi([], "grievance");
     expect(ui.outputType).toBe("closure_note");
+  });
+});
+
+// GAP-DESIGNER-DETAIL-B7-01: the Output tab is the single validity editor; the
+// runtime renewalPolicy is derived from it so the two stores cannot disagree.
+describe("renewalPolicyFromDesign", () => {
+  it("derives a duration policy with the renewal window", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), validityMode: "duration" as const, validityYears: 3, renewable: true, renewalWindowDays: 45 };
+    expect(renewalPolicyFromDesign(d)).toEqual({
+      renewable: true,
+      renewalWindowDays: 45,
+      validityMode: "duration",
+      validityYears: 3,
+    });
+  });
+
+  it("derives a fixed-date policy and drops years", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), validityMode: "fixed_date" as const, validityFixedDate: "2030-03-31", renewable: false };
+    expect(renewalPolicyFromDesign(d)).toEqual({
+      renewable: false,
+      renewalWindowDays: 30,
+      validityMode: "fixed_date",
+      validityFixedDate: "2030-03-31",
+    });
+  });
+
+  it("never marks a non-expiring document renewable", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), validityMode: "none" as const, renewable: true };
+    expect(renewalPolicyFromDesign(d)).toMatchObject({ validityMode: "none", renewable: false });
+  });
+
+  it("clamps values into what the catalogue API accepts", () => {
+    const d = { ...emptyIssuanceDesign("certificate"), validityMode: "duration" as const, validityYears: 500, renewalWindowDays: -4 };
+    const out = renewalPolicyFromDesign(d);
+    expect(out.validityYears).toBe(99);
+    expect(out.renewalWindowDays).toBe(0);
+  });
+});
+
+describe("withStoredRenewalPolicy", () => {
+  it("prefers the stored runtime policy so existing expiry is not changed", () => {
+    const base = emptyIssuanceDesign("certificate");
+    const out = withStoredRenewalPolicy(base, {
+      renewable: true,
+      renewalWindowDays: 90,
+      validityMode: "duration",
+      validityYears: 5,
+    });
+    expect(out).toMatchObject({ validityMode: "duration", validityYears: 5, renewable: true, renewalWindowDays: 90 });
+  });
+
+  it("keeps the design untouched when no policy is stored", () => {
+    const base = emptyIssuanceDesign("certificate");
+    expect(withStoredRenewalPolicy(base, null)).toBe(base);
+  });
+});
+
+// GAP-DESIGNER-DETAIL-B7-03
+describe("numbering reset policy persistence", () => {
+  it("saves and reloads the reset policy and FY token", () => {
+    const design = emptyIssuanceDesign("certificate");
+    design.numberingTokens = [{ kind: "prefix", value: "TL" }, { kind: "fy" }, { kind: "seq", seqWidth: 5 }];
+    design.numberingResetPolicy = "financial_year";
+    const cfg = issuanceUiToOutput(design);
+    expect(cfg.numberingResetPolicy).toBe("financial_year");
+    const back = issuanceOutputToUi([cfg], "certificate");
+    expect(back.numberingResetPolicy).toBe("financial_year");
+    expect(back.numberingTokens[1]).toEqual({ kind: "fy" });
+  });
+
+  it("loads an older design with no policy as not chosen yet", () => {
+    const cfg = issuanceUiToOutput(emptyIssuanceDesign("certificate")) as unknown as Record<string, unknown>;
+    delete cfg.numberingResetPolicy;
+    expect(issuanceOutputToUi([cfg], "certificate").numberingResetPolicy).toBe("");
   });
 });

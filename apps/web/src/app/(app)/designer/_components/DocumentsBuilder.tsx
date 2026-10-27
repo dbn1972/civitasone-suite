@@ -8,6 +8,7 @@ import {
   SortableList,
   type LocaleKey,
 } from "@/app/_components/ds/designer";
+import { localeLabel } from "@/app/_components/ds/designer/LocaleTabs";
 import {
   DOCUMENT_FORMAT_OPTIONS,
   newDocumentRow,
@@ -30,6 +31,8 @@ import {
 } from "../_data/documentBuilderModel";
 import type { WorkflowLane } from "../_data/workflowConstants";
 
+const DEFAULT_LOCALES: readonly LocaleKey[] = ["en", "hi"];
+
 interface Props {
   initial: DocumentsDesignState;
   lanes: WorkflowLane[];
@@ -39,18 +42,22 @@ interface Props {
   onDesignPersisted?: (design: DocumentsDesignState) => void;
   /** Fired on every local change so the wizard footer can show locale completeness. */
   onDesignChange?: (design: DocumentsDesignState) => void;
+  /** GAP-DESIGNER-DETAIL-B6-02: locales the service publishes in (B1). Defaults to en/hi. */
+  locales?: readonly LocaleKey[];
 }
 
 function CitizenUploadPreview({
   doc,
   locale,
   onLocaleChange,
+  locales,
 }: {
   doc: RequiredDocumentUi;
   locale: LocaleKey;
   onLocaleChange: (locale: LocaleKey) => void;
+  locales: readonly LocaleKey[];
 }) {
-  const preview = buildCitizenUploadPreview(doc, locale);
+  const preview = buildCitizenUploadPreview(doc, locale, locales);
 
   return (
     <div
@@ -79,14 +86,14 @@ function CitizenUploadPreview({
           Citizen upload card
         </span>
         <div role="group" aria-label="Preview language" style={{ display: "flex", gap: 4 }}>
-          {(["en", "hi"] as LocaleKey[]).map((key) => (
+          {locales.map((key) => (
             <Button
               key={key}
               variant={locale === key ? "primary" : "ghost"}
               onClick={() => onLocaleChange(key)}
               style={{ fontSize: 11, padding: "2px 8px" }}
             >
-              {key === "en" ? "EN" : "हिंदी"}
+              {key === "en" ? "EN" : localeLabel(key)}
             </Button>
           ))}
         </div>
@@ -95,7 +102,7 @@ function CitizenUploadPreview({
       <div style={{ padding: 12 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
           <div
-            lang={locale}
+            lang={preview.labelLocale}
             style={{ fontWeight: 650, fontSize: 14, color: preview.emptyName ? "var(--mut)" : "var(--ink)" }}
           >
             {preview.label}
@@ -120,7 +127,7 @@ function CitizenUploadPreview({
           )}
         </div>
         {preview.secondaryLabel ? (
-          <div lang={locale === "en" ? "hi" : "en"} style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>
+          <div lang={preview.secondaryLocale ?? undefined} style={{ fontSize: 12, color: "var(--mut)", marginTop: 2 }}>
             {preview.secondaryLabel}
           </div>
         ) : null}
@@ -163,6 +170,7 @@ export function DocumentsBuilder({
   onSaveState,
   onDesignPersisted,
   onDesignChange,
+  locales = DEFAULT_LOCALES,
 }: Props) {
   const [design, setDesign] = useState(initial);
   const [selectedId, setSelectedId] = useState<string | null>(initial.documents[0]?.id ?? null);
@@ -198,8 +206,8 @@ export function DocumentsBuilder({
   );
 
   const localeMeter = useMemo(
-    () => documentsLocaleCompleteness(design.documents),
-    [design.documents],
+    () => documentsLocaleCompleteness(design.documents, locales),
+    [design.documents, locales],
   );
 
   const suggestedLane = useMemo(
@@ -298,8 +306,8 @@ export function DocumentsBuilder({
             fontSize: 12,
           }}
         >
-          Locale completeness: {localeMeter.meterLabel}. Add Hindi (and English) names so the
-          citizen upload card is bilingual-ready.
+          Locale completeness: {localeMeter.meterLabel}. Add a name in every configured
+          language so the citizen upload card reads correctly in each.
         </div>
       ) : null}
 
@@ -365,18 +373,18 @@ export function DocumentsBuilder({
               <LocaleTabs
                 active={locale}
                 onChange={setLocale}
-                completeness={{
-                  en: Boolean(selected.labels.en.trim()),
-                  hi: Boolean(selected.labels.hi.trim()),
-                }}
+                locales={locales}
+                completeness={Object.fromEntries(
+                  locales.map((c) => [c, Boolean((selected.labels[c] ?? "").trim())]),
+                )}
               />
               <label style={{ display: "block", marginBottom: 12 }}>
                 <span style={{ fontSize: 12, color: "var(--mut)" }}>Name</span>
                 <input
-                  value={selected.labels[locale]}
+                  value={selected.labels[locale] ?? ""}
                   onChange={(e) => {
                     const labels = { ...selected.labels, [locale]: e.target.value };
-                    const docType = selected.docType || slugifyDocType(labels.en || labels.hi);
+                    const docType = selected.docType || slugifyDocType(labels.en || labels.hi || Object.values(labels).find(Boolean) || "");
                     updateDoc(selected.id, { labels, docType });
                   }}
                   style={{ width: "100%" }}
@@ -490,8 +498,9 @@ export function DocumentsBuilder({
 
               <CitizenUploadPreview
                 doc={selected}
-                locale={previewLocale}
+                locale={locales.includes(previewLocale) ? previewLocale : (locales[0] ?? "en")}
                 onLocaleChange={setPreviewLocale}
+                locales={locales}
               />
             </>
           ) : (

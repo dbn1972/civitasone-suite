@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { DocumentsBuilder } from "./DocumentsBuilder";
 import type { WorkflowLane } from "../_data/workflowConstants";
 
@@ -123,5 +123,57 @@ describe("DocumentsBuilder", () => {
       "href",
       "/designer/svc-9/b4",
     );
+  });
+
+  // GAP-DESIGNER-DETAIL-B6-02
+  it("renders one tab and one preview toggle per configured locale", () => {
+    render(
+      <DocumentsBuilder
+        serviceId="svc-or"
+        lanes={baseLanes}
+        locales={["en", "or"]}
+        initial={{
+          documents: [{
+            id: "d-or",
+            docType: "rent",
+            labels: { en: "Rent agreement", hi: "", or: "" },
+            formats: ["pdf"],
+            maxSizeMb: 5,
+            mandatory: false,
+            verifiedAtLane: "",
+          }],
+        }}
+      />,
+    );
+    expect(screen.getByRole("tab", { name: /ଓଡ଼ିଆ/ })).toBeTruthy();
+    expect(screen.queryByRole("tab", { name: /हिंदी/ })).toBeNull();
+    const group = screen.getByRole("group", { name: "Preview language" });
+    expect(group.textContent).toContain("ଓଡ଼ିଆ");
+    expect(group.textContent).not.toContain("हिंदी");
+    expect(screen.getByTestId("documents-locale-hint").textContent).toContain("EN 1/1 · OR 0/1");
+  });
+  // WCAG 3.1.2 (Language of Parts): the secondary label carries the language of the locale that supplied it.
+  it("tags the secondary preview label with the locale that supplied it", () => {
+    render(
+      <DocumentsBuilder
+        serviceId="svc-lang"
+        lanes={baseLanes}
+        locales={["en", "or"]}
+        initial={{
+          documents: [{
+            id: "d-lang",
+            docType: "rent",
+            labels: { en: "Rent agreement", hi: "", or: "ଭଡ଼ା ଚୁକ୍ତି" },
+            formats: ["pdf"],
+            maxSizeMb: 5,
+            mandatory: false,
+            verifiedAtLane: "",
+          }],
+        }}
+      />,
+    );
+    fireEvent.click(within(screen.getByRole("group", { name: "Preview language" })).getByRole("button", { name: /ଓଡ଼ିଆ/ }));
+    expect(screen.getByText("ଭଡ଼ା ଚୁକ୍ତି").closest("[lang]")).toHaveAttribute("lang", "or");
+    expect(screen.getByText("Rent agreement", { selector: "div[lang]" })).toHaveAttribute("lang", "en");
   });
 });

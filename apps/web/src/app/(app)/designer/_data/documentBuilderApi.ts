@@ -10,7 +10,7 @@ import { documentsWithWarnings as assessWarnings } from "./documentBuilderModel"
 interface ApiRequiredDoc {
   docType: string;
   label?: string;
-  labels?: { en?: string; hi?: string };
+  labels?: Record<string, string | undefined>;
   mandatory: boolean;
   formats?: string[];
   maxSizeMb?: number;
@@ -33,7 +33,10 @@ export function documentsApiToUi(docs: ApiRequiredDoc[]): RequiredDocumentUi[] {
   return docs.map((d) => ({
     id: crypto.randomUUID(),
     docType: d.docType,
+    // GAP-DESIGNER-DETAIL-B6-02: keep every stored locale (e.g. "or"); en/hi
+    // default so older en/hi-only documents load with the missing locale empty.
     labels: {
+      ...Object.fromEntries(Object.entries(d.labels ?? {}).map(([k, v]) => [k, v ?? ""])),
       en: d.labels?.en ?? d.label ?? d.docType.replace(/_/g, " "),
       hi: d.labels?.hi ?? "",
     },

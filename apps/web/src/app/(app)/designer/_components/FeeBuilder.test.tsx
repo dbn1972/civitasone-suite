@@ -174,4 +174,55 @@ describe("FeeBuilder", () => {
       expect(slabWrites).toHaveLength(1);
     });
   });
+
+  // GAP-DESIGNER-DETAIL-B5-04
+  it("confirms where fees will post once a head is chosen", async () => {
+    render(
+      <FeeBuilder
+        serviceId="svc-hoa"
+        serviceName="Trade License"
+        initial={{ ...emptyFeeDesign("Trade License"), feeModel: "flat", baseAmountPaise: 25000, hoaCode: "0070" }}
+        formFields={[]}
+        engineAvailable={false}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId("hoa-confirmation")).toHaveTextContent(
+        "Fees will post to 0070 — Other Administrative Services",
+      );
+    });
+  });
+
+  it("offers a retry when the head list cannot be loaded, distinct from an empty list", async () => {
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo) => {
+        if (String(input).includes("/finance/major-heads")) {
+          calls += 1;
+          if (calls === 1) return { ok: false, status: 503, json: async () => ({}) } as Response;
+          return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
+        }
+        return { ok: true, status: 202, json: async () => ({ id: "s" }) } as Response;
+      }),
+    );
+    render(
+      <FeeBuilder
+        serviceId="svc-retry"
+        serviceName="Trade License"
+        initial={{ ...emptyFeeDesign("Trade License"), feeModel: "flat", baseAmountPaise: 25000 }}
+        formFields={[]}
+        engineAvailable={false}
+      />,
+    );
+    const retry = await screen.findByRole("button", { name: /Retry/i });
+    expect(screen.getByTestId("hoa-load-error")).toBeInTheDocument();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(screen.queryByTestId("hoa-load-error")).not.toBeInTheDocument();
+    });
+    expect(calls).toBe(2);
+    fireEvent.focus(screen.getByPlaceholderText(/Search by code or description/i));
+    expect(await screen.findByText(/No Head of Account codes are published/i)).toBeInTheDocument();
+  });
 });

@@ -10,7 +10,7 @@ import { DocumentsBuilder, documentsUiToApi } from "../../_components/DocumentsB
 import { fetchServiceDefinition, updateServiceDefinition } from "../../_data/designerApi";
 import { adjacentBlocks } from "../../_data/designerNavigation";
 import { loadDocumentsDesign } from "../../_data/documentBuilderApi";
-import { documentsLocaleCompleteness } from "../../_data/documentBuilderModel";
+import { documentsLocaleCompleteness, resolveDocumentLocales } from "../../_data/documentBuilderModel";
 import { DEFAULT_BLOCKS, hiddenBlocksForPattern, SERVICE_PATTERN_OPTIONS } from "../../_data/designerConstants";
 import { emptyWorkflowDesign, loadWorkflowDesign } from "../../_data/workflowBuilderApi";
 
@@ -23,6 +23,7 @@ export default function DesignerB6Page() {
   const [saveState, setSaveState] = useState<"saving" | "saved" | "offline">("saved");
   const [initialDesign, setInitialDesign] = useState<DocumentsDesignState>({ documents: [] });
   const [liveDesign, setLiveDesign] = useState<DocumentsDesignState>({ documents: [] });
+  const [locales, setLocales] = useState<string[]>(() => resolveDocumentLocales(null));
   const [lanes, setLanes] = useState(emptyWorkflowDesign("").lanes);
   const [meta, setMeta] = useState({
     name: "Untitled service",
@@ -43,6 +44,7 @@ export default function DesignerB6Page() {
           version: def.version,
           status: def.status,
         });
+        setLocales(resolveDocumentLocales(def.locales));
         const docs = await loadDocumentsDesign(def.requiredDocuments);
         setInitialDesign(docs);
         setLiveDesign(docs);
@@ -62,8 +64,8 @@ export default function DesignerB6Page() {
   const hidden = hiddenBlocksForPattern(meta.pattern);
   const { prev, next } = adjacentBlocks(meta.pattern, "b6");
   const localeMeter = useMemo(
-    () => documentsLocaleCompleteness(liveDesign.documents),
-    [liveDesign.documents],
+    () => documentsLocaleCompleteness(liveDesign.documents, locales),
+    [liveDesign.documents, locales],
   );
 
   const blocks: DesignerBlock[] = useMemo(
@@ -136,6 +138,7 @@ export default function DesignerB6Page() {
         onSaveState={setSaveState}
         onDesignPersisted={onDesignPersisted}
         onDesignChange={setLiveDesign}
+        locales={locales}
       />
     </WizardShell>
   );

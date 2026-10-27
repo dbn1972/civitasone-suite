@@ -13,6 +13,7 @@ import { fetchTenantPositions, requestSamplePdf } from "../_data/issuanceBuilder
 import {
   applyOutputTypeChange,
   mergeFieldsForDesign,
+  numberingAdvisories,
   numberingWarning,
   renewalGuidance,
   signatoryWarning,
@@ -26,8 +27,11 @@ interface Props {
   formFields?: FormFieldDefinition[];
   initial: IssuanceDesignState;
   onSaveState?: (state: "saving" | "saved" | "offline") => void;
-  onDesignPersisted?: (design: IssuanceDesignState) => void;
+  /** Should reject when the save fails so the footer can show "offline". */
+  onDesignPersisted?: (design: IssuanceDesignState) => void | Promise<void>;
   onDesignChange?: (design: IssuanceDesignState) => void;
+  /** Offices that offer this service (B1); more than one makes an Office segment advisable. */
+  offeringOfficeCount?: number;
 }
 
 export function OutputIssuanceBuilder({
@@ -38,6 +42,7 @@ export function OutputIssuanceBuilder({
   onSaveState,
   onDesignPersisted,
   onDesignChange,
+  offeringOfficeCount = 0,
 }: Props) {
   const [design, setDesign] = useState(initial);
   const [tab, setTab] = useState(tabLabelForOutputType(initial.outputType));
@@ -77,7 +82,7 @@ export function OutputIssuanceBuilder({
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
       try {
-        onDesignPersisted?.(latest.current);
+        await onDesignPersisted?.(latest.current);
         onSaveState?.("saved");
       } catch {
         onSaveState?.("offline");
@@ -86,7 +91,12 @@ export function OutputIssuanceBuilder({
   }, [onDesignPersisted, onSaveState]);
 
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-  useEffect(() => { schedulePersist(); }, [design, schedulePersist]);
+  // Only a real edit schedules a save: opening the page must not rewrite the
+  // stored validity / renewal of an existing service.
+  useEffect(() => {
+    if (design === initial) return;
+    schedulePersist();
+  }, [design, initial, schedulePersist]);
 
   const mergeFields = useMemo(
     () => mergeFieldsForDesign(formFields, design.outputType),
@@ -94,6 +104,9 @@ export function OutputIssuanceBuilder({
   );
 
   const numWarn = numberingWarning(design.numberingTokens);
+  const numAdvisories = numberingAdvisories(design.numberingTokens, design.numberingResetPolicy, {
+    multiOffice: offeringOfficeCount > 1,
+  });
   const sigWarn = signatoryWarning(design);
   const renewNote = renewalGuidance(design);
   const validityNote = validitySummary(design);
@@ -209,6 +222,9 @@ export function OutputIssuanceBuilder({
             tokens={design.numberingTokens}
             onChange={(numberingTokens) => patch({ numberingTokens })}
             warning={numWarn}
+            resetPolicy={design.numberingResetPolicy}
+            onResetPolicyChange={(numberingResetPolicy) => patch({ numberingResetPolicy })}
+            advisories={numAdvisories}
           />
         </Card>
       ) : null}
