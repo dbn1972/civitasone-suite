@@ -571,7 +571,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 locations: INTERIM in #2046)
+- [x] **Status** Closed by 87553bf6b (UAT B4, 2026-10-27): archive refuses with 409 IN_USE while hrms reports current employees at the location and fails closed (503 REFERENCES_UNVERIFIABLE) when it cannot check; asset-service locationId is its own functional-location master so assets are not a reference. Tests: location-archive-edit-real-db.test.ts, hrms-client.test.ts, LocationsListTable.test.tsx.
 - **W2 note:** archive already 409s on active children, takes a reason and audits (location-archive-edit-real-db.test.ts); blocking on linked assets/employees is a cross-service check - NEEDS OWNER DECISION
 - **First-pass claim:** If mounted, archive is a one-step PATCH with reason (LocationActions.tsx:115-122) and no check that active records (assets, employees) reference the office; audit on create/archive and the location-service contract are undeterminable (service absent from snapshot).
 - **Service:** `location-service`  ·  **Endpoint(s):** `['POST /api/v1/locations', 'PATCH /api/v1/locations/:id/archive']`
