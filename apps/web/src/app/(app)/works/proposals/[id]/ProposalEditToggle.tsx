@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { paiseToRupeeString, rupeeStringToPaise } from "@/lib/formatters";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { useFormError } from "@/lib/useFormError";
@@ -82,6 +83,7 @@ function ProposalEditForm({
   // when the clerk never touched the field. Prefill the EXACT rupee string
   // ("8650000.50") so an unedited field diffs as unchanged, and a genuine
   // missing cost (UX-006) stays blank rather than a fabricated "0".
+  const tLoc = useTranslations("works.location");
   const rupeesStr = paiseToRupeeString(proposal.estimatedCostMinor) ?? "";
 
   const [description, setDescription] = useState(proposal.description);
@@ -248,7 +250,7 @@ function ProposalEditForm({
           </div>
           <div style={fieldWrap}>
             <label htmlFor={`${formId}-taluka`} style={labelStyle}>
-              Taluka
+              {tLoc("tehsilBlock")}
             </label>
             <input
               id={`${formId}-taluka`}

@@ -1,6 +1,7 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { StatusTimeline } from "@/app/_components/ds/designer/StatusTimeline";
 import type { StatusTimelineStep } from "@/app/_components/ds/designer/StatusTimeline";
@@ -178,6 +179,7 @@ export default async function WorkProposalDetailPage(
   }
 ) {
   const params = await props.params;
+  const tLoc = await getTranslations("works.location");
   const { data: proposal, source, status } = await getProposal(params.id);
 
   // GAP-WORKS-PROPOSALS-DETAIL-01 (FAILMASK): a failed fetch used to call
@@ -270,7 +272,7 @@ export default async function WorkProposalDetailPage(
         <StatCard
           icon="🏘"
           tone="warn"
-          label="Taluka"
+          label={tLoc("tehsilBlock")}
           value={proposal.taluka}
         />
         <StatCard

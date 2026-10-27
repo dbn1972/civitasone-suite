@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, EntityPicker, Field, ConfirmDialog } from "@/app/_components/ds";
@@ -29,6 +30,7 @@ type StringFormField = Exclude<keyof ProposalForm, "category">;
 
 export default function NewProposalPage() {
   const router = useRouter();
+  const t = useTranslations("works.location");
   const { toast } = useToast();
   // SF-19: unsaved-changes prompt is the shared ConfirmDialog, not window.confirm.
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -267,7 +269,7 @@ export default function NewProposalPage() {
             </div>
 
             <div>
-              <label htmlFor="proposal-new-taluka" style={labelStyle}>Taluka</label>
+              <label htmlFor="proposal-new-taluka" style={labelStyle}>{t("tehsilBlock")}</label>
               <input
                 id="proposal-new-taluka"
                 type="text"

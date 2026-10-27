@@ -16403,6 +16403,9 @@
       "workPlaceholder": "Search by work number…",
       "cooldownBlocked": "You rated this contractor within the last {days} days. You can rate it again once that period has ended."
     },
+    "location": {
+      "tehsilBlock": "Tehsil / Block"
+    },
     "billDeductions": {
       "title": "Deductions by bill",
       "bill": "Bill {billNo}",
