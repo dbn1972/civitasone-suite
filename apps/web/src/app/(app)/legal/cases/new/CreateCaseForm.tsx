@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { todayIST } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
+import { OfficerPicker, type PickedOfficer } from "./OfficerPicker";
 
 interface CaseTypeOption {
   id: string;
@@ -49,6 +50,8 @@ export function CreateCaseForm() {
   const [departmentId, setDepartmentId] = useState("");
   // GAP-LEGAL-CASES-DETAIL-06 (owner decision #12): privileged / confidential case.
   const [privileged, setPrivileged] = useState(false);
+  // F4: extra officers (beyond the creator, who the server always assigns) for a privileged case.
+  const [officers, setOfficers] = useState<PickedOfficer[]>([]);
   const [courts, setCourts] = useState<CourtOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [refData, setRefData] = useState<"loading" | "ready" | "error">("loading");
@@ -145,7 +148,7 @@ export function CreateCaseForm() {
       ...(courtCode === OTHER ? { court: courtOther.trim() } : {}),
       filingDate,
       departmentId,
-      ...(privileged ? { privileged: true } : {}),
+      ...(privileged ? { privileged: true, ...(officers.length > 0 ? { assignedOfficerIds: officers.map((o) => o.id) } : {}) } : {}),
       subject: subject.trim() || undefined,
       petitioner: petitioner.trim() || undefined,
       counselRef: counselRef.trim() || undefined,
@@ -298,13 +301,14 @@ export function CreateCaseForm() {
         </div>
         <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="privileged" style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
-            <input id="privileged" type="checkbox" checked={privileged} onChange={(e) => setPrivileged(e.target.checked)} style={{ marginTop: 3 }} />
+            <input id="privileged" type="checkbox" checked={privileged} onChange={(e) => { setPrivileged(e.target.checked); if (!e.target.checked) setOfficers([]); }} style={{ marginTop: 3 }} />
             <span>
               {t("privilegedLabel")}
               <span style={{ display: "block", fontSize: "0.75rem", color: "var(--ink2)", fontWeight: 400 }}>{t("privilegedHelp")}</span>
             </span>
           </label>
         </div>
+        {privileged ? <OfficerPicker selected={officers} onChange={setOfficers} /> : null}
         <div className="field" style={{ gridColumn: "1 / -1" }}>
           <label className="label" htmlFor="subject">Subject</label>
           <textarea id="subject" className="inp" rows={3} value={subject} onChange={(e) => setSubject(e.target.value)} />
