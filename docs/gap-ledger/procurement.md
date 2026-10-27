@@ -811,7 +811,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — truncation notice and partial-stats label already present; server-side pagination with a total and status-count summary needs the procurement-service GRN list endpoint to return {data, total, statusCounts}, not started; blocked on backend decision)
+- [x] **Status** Closed by 07980e447 (UAT B4, 2026-10-27): GET /v1/procurement/grns takes q/status/vendorId + stable order, GET /grns/summary returns true total/accepted/awaiting/rejected counts, the register pages on the server and its stat cards read the summary.
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: the interim 500-row truncation notice and partial-stats label exist (grn/page.tsx). A real fix is server-side pagination with a total and status-count summary (backend + loader + page), not started - scoped for part 2.
 - **W0 note:** partly fixed by #1866 — interim truncation notice at 500-row cap only; no server-side pagination/total/summary counts
 - **First-pass claim:** Hard cap: getProcurementGRNs({ limit: 500 }) (page.tsx:29) with client-side paging and no "showing first 500" cue; stats are computed from the same truncated list (page.tsx:31-34).
