@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Alert, Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 import {
   activateDomainPackStage3,
   fetchDomainPackActivationStatus,
@@ -358,7 +359,7 @@ export function DomainPackActivatePanel({
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return Number.isNaN(d.getTime()) ? "" : formatIndianDate(iso);
 }
 
 const TECH_STYLE = { fontFamily: "ui-monospace, monospace", fontSize: 11, color: "var(--ink2)" } as const;
