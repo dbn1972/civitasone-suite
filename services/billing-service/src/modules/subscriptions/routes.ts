@@ -7,6 +7,7 @@ import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../..
 import { createSubBody, idParam, tenantParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as plansQueries from "../plans/queries.js";
 
 const SUBSCRIPTION_READERS = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
 const SUMMARY_STATUSES = new Set(["active", "cancelled", "past_due", "suspended", "trial"]);
@@ -52,6 +53,12 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SUBSCRIPTION_READERS);
     const sub = await queries.getSubscription(ctx.tenantId);
     if (!sub) return reply.send(null);
+    // GAP-BILLING-SUBSCRIPTIONS-03: name and price of the plan this subscription is on. A plan
+    // lookup failure degrades to unknown (null), never an invented value or a failed summary.
+    const plan = await plansQueries.getPlan(sub.planId).catch((err: unknown) => {
+      req.log.warn({ err }, "subscription summary: plan lookup failed");
+      return null;
+    });
     sendValidated(reply, SubscriptionSummarySchema, {
       id: sub.id,
       plan: sub.planId,
@@ -65,7 +72,11 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
       currentPeriodEnd: sub.trialExpiresAt?.slice(0, 10) ?? null,
       activeUsers: null,
       moduleAccess: [],
-      currency: null,
+      currency: plan?.currency ?? null,
+      planName: plan?.name ?? null,
+      startDate: sub.startedAt?.slice(0, 10) ?? null,
+      renewalDate: sub.endsAt?.slice(0, 10) ?? null,
+      amountMinor: plan ? plan.priceMinor : null,
     });
   });
 

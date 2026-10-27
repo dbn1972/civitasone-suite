@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, StatCard, StatGrid, EmptyState, StatusPill, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 // GAP-BILLING-SUBSCRIPTIONS-01/02/03: the billing-service GET
 // /v1/billing/subscriptions returns the CALLER'S OWN subscription — a single
@@ -19,6 +19,11 @@ interface SubscriptionSummary {
   currentPeriodEnd: string | null;
   activeUsers: number | null;
   currency: string | null;
+  // GAP-BILLING-SUBSCRIPTIONS-03 (UAT B4): plan name, start, renewal and plan price in paise.
+  planName: string | null;
+  startDate: string | null;
+  renewalDate: string | null;
+  amountMinor: string | null;
 }
 
 async function getSubscription(): Promise<LoaderResult<SubscriptionSummary | null>> {
@@ -40,6 +45,10 @@ async function getSubscription(): Promise<LoaderResult<SubscriptionSummary | nul
         currentPeriodEnd: typeof rec.currentPeriodEnd === "string" ? rec.currentPeriodEnd : null,
         activeUsers: typeof rec.activeUsers === "number" ? rec.activeUsers : null,
         currency: typeof rec.currency === "string" ? rec.currency : null,
+        planName: typeof rec.planName === "string" ? rec.planName : null,
+        startDate: typeof rec.startDate === "string" ? rec.startDate : null,
+        renewalDate: typeof rec.renewalDate === "string" ? rec.renewalDate : null,
+        amountMinor: typeof rec.amountMinor === "string" && /^\d+$/.test(rec.amountMinor) ? rec.amountMinor : null,
       };
     },
   });
@@ -91,13 +100,16 @@ export default async function BillingSubscriptionsPage() {
           <div className="field">
             <span className="label">Plan</span>
             {/* GAP-BILLING-SUBSCRIPTIONS-03: link to the plan detail. */}
-            <span><Link href={`/billing/plans/${sub.plan}`}>{sub.plan}</Link></span>
+            <span><Link href={`/billing/plans/${sub.plan}`}>{sub.planName ?? sub.plan}</Link></span>
           </div>
           <div className="field">
             <span className="label">Status</span>
             <span>{sub.status === "—" ? "—" : <StatusPill status={sub.status} />}</span>
           </div>
           {/* The server returns null for period/usage until real billing data exists; never present an invented period as fact. */}
+          <div className="field"><span className="label">Subscription start</span><span>{sub.startDate ? formatIndianDate(sub.startDate) : "—"}</span></div>
+          <div className="field"><span className="label">Renewal date</span><span>{sub.renewalDate ? formatIndianDate(sub.renewalDate) : "—"}</span></div>
+          <div className="field"><span className="label">Plan price</span><span>{sub.amountMinor !== null ? formatMoney(sub.amountMinor) : "—"}</span></div>
           <div className="field"><span className="label">Period start</span><span>{sub.currentPeriodStart ? formatIndianDate(sub.currentPeriodStart) : "—"}</span></div>
           <div className="field"><span className="label">Trial / period end</span><span>{sub.currentPeriodEnd ? formatIndianDate(sub.currentPeriodEnd) : "—"}</span></div>
           <div className="field"><span className="label">Active users</span><span>{sub.activeUsers ?? "—"}</span></div>

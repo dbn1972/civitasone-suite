@@ -12,6 +12,7 @@ export async function findByTenant(tenantId: string): Promise<SubscriptionView |
   const trials = await scopedRead((tx) => tx.select().from(billingTrials).where(eq(billingTrials.subscriptionId, sub.id)).limit(1));
   const view: SubscriptionView = {
     id: sub.id, tenantId: sub.tenantId, planId: sub.planId, status: sub.status,
+    startedAt: sub.startedAt.toISOString(), endsAt: sub.endsAt ? sub.endsAt.toISOString() : null,
   };
   if (trials[0]?.expiresAt) view.trialExpiresAt = trials[0].expiresAt.toISOString();
   return view;
@@ -35,6 +36,7 @@ export async function findByTenantTx(tx: Writer, tenantId: string): Promise<Subs
   const trials = await (tx as typeof db).select().from(billingTrials).where(eq(billingTrials.subscriptionId, sub.id)).limit(1);
   const view: SubscriptionView = {
     id: sub.id, tenantId: sub.tenantId, planId: sub.planId, status: sub.status,
+    startedAt: sub.startedAt.toISOString(), endsAt: sub.endsAt ? sub.endsAt.toISOString() : null,
   };
   if (trials[0]?.expiresAt) view.trialExpiresAt = trials[0].expiresAt.toISOString();
   return view;

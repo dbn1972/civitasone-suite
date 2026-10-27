@@ -42,6 +42,15 @@ describe("BillingSubscriptionsPage (GAP-BILLING-SUBSCRIPTIONS-01..05)", () => {
     expect(link).toHaveAttribute("href", "/billing/plans/11111111-2222-3333-4444-555555555555");
   });
 
+  it("SUBS-03 (UAT B4): shows the plan name as the link text, start, renewal and the plan price", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: sub({ planName: "Standard", startDate: "2026-04-01", renewalDate: "2027-03-31", amountMinor: "499900" }), source: "api", status: 200 });
+    render(await BillingSubscriptionsPage());
+    expect(screen.getByRole("link", { name: "Standard" })).toHaveAttribute("href", "/billing/plans/11111111-2222-3333-4444-555555555555");
+    expect(screen.getByText("01 Apr 2026")).toBeInTheDocument();
+    expect(screen.getByText("31 Mar 2027")).toBeInTheDocument();
+    expect(screen.getByText("₹4,999.00")).toBeInTheDocument();
+  });
+
   it("renders NO churn risk column/badge (SUBS-01/05 — dead data removed)", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: sub(), source: "api", status: 200 });
     render(await BillingSubscriptionsPage());

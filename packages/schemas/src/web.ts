@@ -2725,6 +2725,12 @@ export const SubscriptionSummarySchema = z.object({
   billingEmail: z.string().optional(),
   amount: z.number().optional(),
   currency: z.string().nullable(),
+  // GAP-BILLING-SUBSCRIPTIONS-03: plan name, subscription start, scheduled renewal (end) and the
+  // plan price in paise as a string. Optional + nullable: unknown is null, never invented.
+  planName: z.string().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  renewalDate: z.string().nullable().optional(),
+  amountMinor: z.string().nullable().optional(),
 });
 
 export const TenantModuleSchema = z.object({
