@@ -19,6 +19,7 @@ function notice(partial: Partial<CitizenNotice>): CitizenNotice {
     published: "2026-03-05T00:00:00.000Z",
     expiry: "",
     type: "Statutory",
+    status: "published",
     ...partial,
   };
 }

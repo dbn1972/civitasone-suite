@@ -8,6 +8,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { todayIST, istDatePart } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import type { CitizenNotice } from "../../../_data/loaders";
+import { NewNoticeButton, PublishWithdrawActions } from "../_components/EngagementActions";
 
 type NoticeRow = {
   id: string;
@@ -17,10 +18,11 @@ type NoticeRow = {
   published: string;
   expiry: string;
   type: string;
-  noticeStatus: "active" | "expired";
+  noticeStatus: "active" | "expired" | "draft" | "withdrawn";
+  lifecycle: string;
 } & Record<string, unknown>;
 
-type Filter = "active" | "expired" | "all";
+type Filter = "active" | "expired" | "draft" | "all";
 
 /**
  * GAP-CITIZEN-NOTICES-02: a notice is EXPIRED when it has an expiry date that
@@ -31,7 +33,7 @@ function isExpired(expiry: string | null | undefined): boolean {
   return day !== null && day < todayIST();
 }
 
-export function NoticesTable({ notices, source = "api" }: { notices: CitizenNotice[]; source?: "api" | "error" }) {
+export function NoticesTable({ notices, source = "api", canAuthor = false }: { notices: CitizenNotice[]; source?: "api" | "error"; canAuthor?: boolean }) {
   const t = useTranslations("citizenNotices");
   const [filter, setFilter] = useState<Filter>("active");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<CitizenNotice[]>(
@@ -51,7 +53,9 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
         published: n.published,
         expiry: n.expiry,
         type: n.type,
-        noticeStatus: isExpired(n.expiry) ? "expired" : "active",
+        // GAP-CITIZEN-NOTICES-05: a draft / withdrawn notice is never "active"; only published ones age into "expired".
+        noticeStatus: n.status === "draft" || n.status === "withdrawn" ? n.status : isExpired(n.expiry) ? "expired" : "active",
+        lifecycle: n.status,
       })),
     [rows],
   );
@@ -97,6 +101,8 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
       </StatGrid>
 
       <Card title={t("tableTitle")}>
+        {/* GAP-CITIZEN-NOTICES-05: officer-tier users author notices; publishing is a statutory act the service audits and maker-checks. */}
+        {canAuthor ? <div style={{ padding: "8px 0" }}><NewNoticeButton /></div> : null}
         <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
         <div style={{ padding: "8px 0" }} role="group" aria-label={t("filterStatusAria")}>
           <Segmented
@@ -105,6 +111,7 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
             options={[
               { value: "active", label: t("filterActive") },
               { value: "expired", label: t("filterExpired") },
+              ...(canAuthor ? [{ value: "draft", label: t("filterDrafts") }] : []),
               { value: "all", label: t("filterAll") },
             ]}
           />
@@ -132,11 +139,14 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
                 key: "noticeStatus",
                 label: t("colStatus"),
                 cellType: "status",
-                statusLabels: { active: t("statusActive"), expired: t("statusExpired") },
+                statusLabels: { active: t("statusActive"), expired: t("statusExpired"), draft: t("statusDraft"), withdrawn: t("statusWithdrawn") },
               },
               // GAP-CITIZEN-NOTICES-03: type is NOT a workflow status — render
               // the plain humanised value, no StatusPill colour semantics.
               { key: "type", label: t("colType") },
+              ...(canAuthor
+                ? [{ key: "actions", label: t("colActions"), render: (r: NoticeRow) => <PublishWithdrawActions kind="notices" id={r.id} status={r.lifecycle} /> }]
+                : []),
             ]}
           />
         )}
