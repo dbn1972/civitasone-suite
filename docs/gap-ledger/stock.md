@@ -338,7 +338,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 stock: partial; mapper now uses '—' instead of id slices; warehouseName absent from stock_ledger rows — full fix needs backend join. NEEDS OWNER DECISION)
+- [x] **Status** Closed by 2ede60760 (UAT B4, 2026-10-27): GET /v1/stock/ledger joins warehouseName; entry form uses the warehouse picker
 - **First-pass claim:** 'Warehouse' column renders entry.party (StockLedgerClient.tsx:47) but mapStockLedgerEntries never sets party (apiMappers.ts:981-992), so the column is always '—'; the create form also treats warehouse as a raw UUID.
 - **Verified evidence:** StockLedgerClient.tsx:47 renders entry.party ?? '-'; mapStockLedgerEntries (apiMappers.ts:962-993) never sets party or a warehouse field, so the column is always '-'. Create form ledger/new/page.tsx:168-169 has a free-text 'Warehouse ID (optional)' input with placeholder 'UUID', sent as fromWarehouseId/toWarehouseId (lines 90-91). Whether the ledger API returns warehouse id/name per row cannot be seen (service absent).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
