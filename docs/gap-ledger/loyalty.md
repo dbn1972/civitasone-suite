@@ -266,7 +266,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-REDEMPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSINGFEATURE (was DATEFMT)
 
-- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: loyalty-service has no fulfil/reject endpoint; Void-only flow is the correct interim)
+- [x] **Status** Closed by 30b8a14ac (UAT B4, 2026-10-27): fulfil/reject endpoints + consumers (SoD, points restore on reject), migration 0006, RedemptionsTable actions; tests/uat-b4-redemption-fulfil.test.ts
 - **W0 note:** partly fixed by #1924 — dedicated table with Reward/Points/Status/Requested/Voided columns and an admin Void action (reason required); no fulfil/reject flow (loyalty-service has no such endpoint) and no Fulfilled column.
 - **First-pass claim:** Redemption history has no points-spent, reward, amount or fulfilment-date column, only generic Detail/Meta (ModuleListTable.tsx:40-44); pending/rejected redemptions cannot be actioned - no mutation code in the route tree.
 - **Verified evidence:** ModuleListTable.tsx:37-46 fixed generic columns ID/Name/Detail/Status/Meta; no points-spent, reward, or fulfilment date. Loyalty tree has no mutation code (no method: POST etc.), so pending redemptions cannot be approved/fulfilled. The DATEFMT tag is wrong. Backend endpoints for fulfil/reject cannot be verified.
