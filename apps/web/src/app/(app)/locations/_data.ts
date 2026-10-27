@@ -317,3 +317,43 @@ export function getAssetLinkOptions(): Promise<LoaderResult<AssetLinkOption[]>> 
     mapResponse: mapAssetOptions,
   });
 }
+
+/** A record picked by name in a form; the id is what is sent, the label is what the user sees. */
+export type NameOption = { id: string; label: string };
+
+function flattenNames(payload: unknown, out: NameOption[] = []): NameOption[] {
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (id && name && toText(row.status) !== "archived") out.push({ id, label: name });
+    if (Array.isArray(row.children)) flattenNames(row.children, out);
+  }
+  return out;
+}
+
+/**
+ * Options for the assign-jurisdiction form (GAP-LOCATIONS-JURISDICTIONS-02): the offices register and the
+ * administrative hierarchy, both by name. `source` is "error" if either could not be read, so the page can
+ * leave the form out rather than offer an empty picker.
+ */
+export async function getJurisdictionFormOptions(): Promise<LoaderResult<{ offices: NameOption[]; units: NameOption[] }>> {
+  const [offices, units] = await Promise.all([
+    fetchJson<unknown, NameOption[]>("/api/v1/locations?limit=500", [], {
+      revalidateSeconds: 30,
+      telemetryKey: "locations.jurisdictions.formOffices",
+      mapResponse: (p) => flattenNames(p),
+    }),
+    fetchJson<unknown, NameOption[]>("/api/v1/hierarchy", [], {
+      revalidateSeconds: 30,
+      telemetryKey: "locations.jurisdictions.formUnits",
+      mapResponse: (p) => flattenNames(p),
+    }),
+  ]);
+  const failed = offices.source === "error" ? offices : units.source === "error" ? units : null;
+  return {
+    data: { offices: offices.data, units: units.data },
+    source: failed ? "error" : offices.source,
+    ...(failed?.status !== undefined ? { status: failed.status } : {}),
+  };
+}

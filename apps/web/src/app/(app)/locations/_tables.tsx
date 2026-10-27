@@ -20,6 +20,7 @@ import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../_components/ds";
 import type { InfrastructureRow, GeofenceRow, JurisdictionRow } from "./_data";
 import { GeofenceToggle } from "./geofences/GeofenceActions";
+import { JurisdictionRevoke } from "./jurisdictions/JurisdictionActions";
 
 type InfraRow = InfrastructureRow & Record<string, unknown>;
 type GeoRow = GeofenceRow & Record<string, unknown>;
@@ -85,7 +86,7 @@ export function GeofencesTable({ rows, canManage = false }: { rows: GeofenceRow[
   );
 }
 
-export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
+export function JurisdictionsTable({ rows, canManage = false }: { rows: JurisdictionRow[]; canManage?: boolean }) {
   const t = useTranslations("locationsOps.jurisdictions");
   return (
     <Card title={t("cardTitle")}>
@@ -98,6 +99,9 @@ export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
             { key: "office", label: t("colOffice"), render: (row: JurisRow) => row.office || t("unresolved") },
             { key: "unit", label: t("colUnit"), render: (row: JurisRow) => row.unit || t("unresolved") },
             { key: "primary", label: t("colPrimary"), render: (row: JurisRow) => (row.primary ? t("yes") : t("no")) },
+            ...(canManage
+              ? [{ key: "actions", label: "", render: (row: JurisRow) => <JurisdictionRevoke id={row.id} office={row.office} unit={row.unit} /> }]
+              : []),
           ]}
           rows={rows as JurisRow[]}
           sortable

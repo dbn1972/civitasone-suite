@@ -16579,7 +16579,7 @@
     },
     "jurisdictions": {
       "pageTitle": "Jurisdictions",
-      "pageSubtitle": "Which offices cover which administrative units. This register is read-only: there is no in-app editor.",
+      "pageSubtitle": "Which offices cover which administrative units. Location administrators can assign and revoke jurisdictions here.",
       "area": "jurisdictions",
       "cardTitle": "Jurisdictions",
       "emptyTitle": "No jurisdictions",
@@ -16591,7 +16591,30 @@
       "colPrimary": "Primary",
       "yes": "Yes",
       "no": "No",
-      "unresolved": "Not available"
+      "unresolved": "Not available",
+      "manageTitle": "Assign a jurisdiction",
+      "officeLabel": "Office",
+      "unitLabel": "Administrative unit",
+      "levelLabel": "Level",
+      "choose": "Choose…",
+      "levels": {
+        "state": "State",
+        "district": "District",
+        "block": "Block",
+        "gp": "Gram Panchayat",
+        "ward": "Ward",
+        "zone": "Zone"
+      },
+      "primaryLabel": "This is the office's primary jurisdiction",
+      "submit": "Assign jurisdiction",
+      "saving": "Saving…",
+      "errOffice": "Choose an office.",
+      "errUnit": "Choose an administrative unit.",
+      "noOptions": "There are no offices or administrative units to choose from yet. Add them first, then assign a jurisdiction here.",
+      "optionsFailed": "The offices and administrative units could not be loaded, so jurisdictions cannot be assigned right now. Refresh to try again.",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke this jurisdiction?",
+      "revokeDescription": "{office} will no longer cover {unit}. This is recorded in the audit log."
     }
   },
   "fieldHub": {
