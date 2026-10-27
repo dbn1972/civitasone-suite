@@ -3264,7 +3264,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: server-side uniqueness per scope/month for progress deltas is a product rule; GAP-WORKS-EXECUTION-RECORD-PROGRESS-06)
+- [x] **Status** Closed by 3b5e6c76d (owner decision D4c #43, 2026-10-27): unique (scope, month) for ordinary entries; corrections are negative entries with a stored reason
 - **W2 works part 2 note (#2048):** the web form now warns on a second entry for the same scope/month; whether the server should refuse it (deltas are insert-only) is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Cumulative<=target enforced sync and in consumer, negative delta needs reason, audit written; no one-entry-per-scope-per-month uniqueness (insert-only deltas).
 - **First-pass claim:** Server rules (uniqueness per scope-month, cumulative cap, audit) undeterminable — works-service absent.
