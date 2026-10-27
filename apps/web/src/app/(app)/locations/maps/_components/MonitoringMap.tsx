@@ -8,23 +8,24 @@
  * controls. Selecting a marker reveals its label + status and a link to the
  * underlying record. The data is a snapshot refreshed on filter change or when
  * Refresh is pressed (there is no polling), and the page says when it was
- * last updated. The service has no history, so the "as of date" control is
- * disabled with an honest note rather than sending a parameter it ignores.
+ * last updated. "As of date" (GAP-LOCATIONS-MAPS-MONITORING-02) shows the records that existed on that
+ * day; the service keeps no history of status or position changes, so those are always current and the
+ * page says so. "Only this map area" asks the service for just the markers in the visible bounds.
  *
  * Accessible (labelled filters, keyboard-selectable markers via the map), responsive
  * and theme-aware via civitas-ds classes.
  */
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { PageHeader } from "@/app/_components/ds/PageHeader";
 import { StatGrid } from "@/app/_components/ds/StatGrid";
 import { StatCard } from "@/app/_components/ds/StatCard";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
-import { CivitasMap, type MapMarker } from "@/app/_components/maps";
+import { CivitasMap, type MapMarker, type MapView } from "@/app/_components/maps";
 import { useFormError } from "@/lib/useFormError";
-import { formatInIST } from "@/lib/formatters";
+import { formatIndianDate, formatInIST, todayIST } from "@/lib/formatters";
 
 const API = "/api/proxy/v1/locations/map-markers";
 
@@ -85,6 +86,12 @@ function recordHref(domain: string, refId: string): string | null {
   }
 }
 
+/** minLng,minLat,maxLng,maxLat for the service, clamped to valid coordinates (a zoomed-out map reports more). */
+function bboxParam([west, south, east, north]: MapView["bbox"]): string {
+  const c = (n: number, lim: number) => Math.min(lim, Math.max(-lim, n)).toFixed(5);
+  return [c(west, 180), c(south, 90), c(east, 180), c(north, 90)].join(",");
+}
+
 function normalizeMarkers(body: unknown): MonitoringMarker[] {
   const raw =
     (body as { markers?: unknown[] })?.markers ??
@@ -115,6 +122,13 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
   const [domain, setDomain] = useState<string>("");
   const [status, setStatus] = useState<string>("");
   const [selected, setSelected] = useState<MonitoringMarker | null>(null);
+  // As-of day (YYYY-MM-DD, IST) and the optional map-area restriction.
+  const [asOf, setAsOf] = useState("");
+  const [area, setArea] = useState<MapView["bbox"] | null>(null);
+  // Where the map was last looking: kept so a reload (new filter / area) does not snap the camera back.
+  const [camera, setCamera] = useState<Pick<MapView, "center" | "zoom"> | null>(null);
+  const lastView = useRef<MapView | null>(null);
+  const [hasView, setHasView] = useState(false);
   const formError = useFormError("map marker");
 
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -124,6 +138,8 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       const qs = new URLSearchParams();
       if (domain) qs.set("domain", domain);
       if (status) qs.set("status", status);
+      if (asOf) qs.set("date", asOf);
+      if (area) qs.set("bbox", bboxParam(area));
       const res = await fetch(`${API}?${qs.toString()}`, { signal });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "load")).message);
@@ -140,6 +156,8 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
         // set for the stat tiles. Best-effort: on failure the tiles fall back to the view.
         const sq = new URLSearchParams();
         if (domain) sq.set("domain", domain);
+        if (asOf) sq.set("date", asOf);
+        if (area) sq.set("bbox", bboxParam(area));
         const sres = await fetch(`${API}?${sq.toString()}`, { signal }).catch(() => null);
         if (signal?.aborted) return;
         setSummary(sres?.ok ? normalizeMarkers(await sres.json()) : null);
@@ -160,7 +178,7 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
     // genuinely looping — "Maximum update depth exceeded" — before this
     // fix) every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domain, status]);
+  }, [domain, status, asOf, area]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -194,6 +212,24 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
     for (const m of markers) map.set(m.id, m);
     return map;
   }, [markers]);
+
+  const onViewChange = useCallback((view: MapView) => {
+    lastView.current = view;
+    setHasView(true);
+  }, []);
+
+  // Restrict the feed to what the map shows now, or lift the restriction. Either way the camera stays put.
+  const limitToView = useCallback(() => {
+    const v = lastView.current;
+    if (!v) return;
+    setCamera({ center: v.center, zoom: v.zoom });
+    setArea(v.bbox);
+  }, []);
+  const showEverywhere = useCallback(() => {
+    const v = lastView.current;
+    if (v) setCamera({ center: v.center, zoom: v.zoom });
+    setArea(null);
+  }, []);
 
   const onMarkerClick = useCallback(
     (marker: MapMarker) => setSelected(byId.get(marker.id) ?? null),
@@ -269,14 +305,28 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
             <input
               style={INPUT_STYLE}
               type="date"
-              value=""
-              disabled
-              readOnly
+              value={asOf}
+              max={todayIST()}
+              onChange={(e) => setAsOf(e.target.value)}
               aria-label={t("asOfLabel")}
               aria-describedby="as-of-note"
             />
-            <span id="as-of-note" style={{ fontSize: 11, color: "var(--ink2)" }}>{t("asOfUnavailable")}</span>
+            <span id="as-of-note" style={{ fontSize: 11, color: "var(--ink2)" }}>{t("asOfNote")}</span>
           </label>
+          {asOf ? (
+            <button type="button" className="btn ghost" onClick={() => setAsOf("")}>
+              {t("asOfClear")}
+            </button>
+          ) : null}
+          {area ? (
+            <button type="button" className="btn ghost" onClick={showEverywhere}>
+              {t("areaClear")}
+            </button>
+          ) : (
+            <button type="button" className="btn ghost" onClick={limitToView} disabled={!hasView}>
+              {t("areaLimit")}
+            </button>
+          )}
           <button type="button" className="btn ghost" onClick={() => void load()}>
             Refresh
           </button>
@@ -299,6 +349,15 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
         </div>
       )}
 
+      {asOf ? (
+        <p role="status" style={{ color: "var(--ink2)", fontSize: 13, marginBottom: 8 }}>
+          {t("asOfActive", { date: formatIndianDate(asOf) })}
+        </p>
+      ) : null}
+      {area ? (
+        <p role="status" style={{ color: "var(--ink2)", fontSize: 13, marginBottom: 8 }}>{t("areaActive")}</p>
+      ) : null}
+
       {truncated ? (
         <p role="status" style={{ color: "var(--warn)", fontSize: 13, marginBottom: 8 }}>
           {t("truncated", { shown: markers.length })}
@@ -306,7 +365,14 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       ) : null}
 
       <div className="map-layout">
-        <CivitasMap markers={mapMarkers} onMarkerClick={onMarkerClick} height="clamp(320px, 60vh, 800px)" {...(tileUrl ? { tileUrl } : {})} />
+        <CivitasMap
+          markers={mapMarkers}
+          onMarkerClick={onMarkerClick}
+          onViewChange={onViewChange}
+          height="clamp(320px, 60vh, 800px)"
+          {...(camera ? { center: camera.center, zoom: camera.zoom } : {})}
+          {...(tileUrl ? { tileUrl } : {})}
+        />
 
         <div className="card" role="region" aria-label="Selected marker">
           <div className="card-h">

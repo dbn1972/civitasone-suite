@@ -6,6 +6,7 @@
  * marker exposes a link to the underlying record.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { act } from "@testing-library/react";
 import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 import { MonitoringMap } from "./MonitoringMap";
 
@@ -191,14 +192,87 @@ describe("MonitoringMap (SVC-119)", () => {
     });
   });
 
-  it("says so when the feed was capped, and disables the as-of control it cannot honour", async () => {
+  it("says so when the feed was capped", async () => {
     vi.stubGlobal("fetch", fetchReturning({ markers: MARKERS, meta: { total: 2, limit: 2, truncated: true } }));
     render(<MonitoringMap />);
     expect(await screen.findByText(/Showing the first 2 markers/)).toBeInTheDocument();
-    expect(screen.getByLabelText("As of date")).toBeDisabled();
-    expect(screen.getByText(/historical \(as-of\) view is not available/i)).toBeInTheDocument();
-    const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
-    expect(urls.every((u) => !u.includes("date="))).toBe(true);
+  });
+
+  // GAP-LOCATIONS-MAPS-MONITORING-02
+  describe("as-of date", () => {
+    const lastUrl = () => {
+      const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      return calls[calls.length - 1]![0] as string;
+    };
+
+    it("is enabled, sends no date until one is chosen, and cannot be set in the future", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      expect(lastUrl()).not.toContain("date=");
+      const input = screen.getByLabelText("As of date") as HTMLInputElement;
+      expect(input).not.toBeDisabled();
+      expect(input.max).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it("re-queries with date=<day>, says what the view means, and clears back to today", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2020-01-01" } });
+      await waitFor(() => expect(lastUrl()).toContain("date=2020-01-01"));
+      expect(screen.getByText(/Showing records that existed on/)).toBeInTheDocument();
+      expect(screen.getByText(/status and position are as of today/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Show today" }));
+      await waitFor(() => expect(lastUrl()).not.toContain("date="));
+      expect(screen.queryByText(/Showing records that existed on/)).toBeNull();
+    });
+
+    it("keeps the date when the status tiles are recomputed under a status filter", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      fireEvent.change(screen.getByLabelText("As of date"), { target: { value: "2020-01-01" } });
+      fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "active" } });
+      await waitFor(() => {
+        const urls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
+        expect(urls.some((u) => u.includes("status=active") && u.includes("date=2020-01-01"))).toBe(true);
+        expect(urls.some((u) => !u.includes("status=") && u.includes("date=2020-01-01"))).toBe(true);
+      });
+    });
+  });
+
+  // GAP-LOCATIONS-MAPS-MONITORING-02
+  describe("only this map area", () => {
+    const sendView = (view: unknown) =>
+      act(() => {
+        window.dispatchEvent(new MessageEvent("message", { source: mapIframe().contentWindow, data: { type: "map-view", ...(view as object) } }));
+      });
+    const lastUrl = () => {
+      const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+      return calls[calls.length - 1]![0] as string;
+    };
+
+    it("is disabled until the map has reported what it shows", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("button", { name: "Only this map area" })).toBeDisabled();
+    });
+
+    it("sends the visible bounds as bbox (clamped to valid coordinates), then lifts the restriction", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      sendView({ bbox: [-200, 18.5, 79.25, 95], center: { lat: 28.6, lng: 77.2 }, zoom: 7 });
+      fireEvent.click(await screen.findByRole("button", { name: "Only this map area" }));
+      await waitFor(() => expect(decodeURIComponent(lastUrl())).toContain("bbox=-180.00000,18.50000,79.25000,90.00000"));
+      expect(screen.getByText(/only the markers inside the map area/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Show everywhere" }));
+      await waitFor(() => expect(lastUrl()).not.toContain("bbox="));
+    });
+
+    it("ignores a malformed view message", async () => {
+      render(<MonitoringMap />);
+      await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      sendView({ bbox: ["a", 1, 2, 3], center: { lat: 1, lng: 2 }, zoom: 3 });
+      expect(screen.getByRole("button", { name: "Only this map area" })).toBeDisabled();
+    });
   });
 
   // CLOS-S2-04: an aborted (superseded) load must not clear the loading flag that

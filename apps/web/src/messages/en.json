@@ -16496,8 +16496,13 @@
     "statusAlert": "Alert",
     "statusMaintenance": "Maintenance",
     "asOfLabel": "As of date",
-    "asOfUnavailable": "A historical (as-of) view is not available yet.",
-    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest."
+    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest.",
+    "asOfNote": "Shows the records that existed on this date. Status and position are today's: changes are not kept as history.",
+    "asOfClear": "Show today",
+    "asOfActive": "Showing records that existed on {date}. Their status and position are as of today.",
+    "areaLimit": "Only this map area",
+    "areaClear": "Show everywhere",
+    "areaActive": "Showing only the markers inside the map area you chose."
   },
   "locationsOps": {
     "backLabel": "Locations",

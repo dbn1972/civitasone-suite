@@ -85,6 +85,21 @@
     });
   });
 
+  // GAP-LOCATIONS-MAPS-MONITORING-02: tell the page what the map is showing (bounds, centre, zoom) so it can
+  // ask the service for only the markers in view. Numbers only; the parent validates them.
+  function reportView() {
+    var b = map.getBounds();
+    var c = map.getCenter();
+    window.parent.postMessage({
+      type: 'map-view',
+      bbox: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
+      center: { lat: c.lat, lng: c.lng },
+      zoom: map.getZoom()
+    }, '*');
+  }
+  map.on('moveend', reportView);
+  map.whenReady(reportView);
+
   // Keyboard zoom controls
   document.addEventListener('keydown', function (e) {
     if (e.key === '+' || e.key === '=') map.zoomIn();
