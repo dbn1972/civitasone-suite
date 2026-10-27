@@ -189,7 +189,7 @@ function errorHandler(err: unknown, req: any, reply: any): void {
     return;
   }
   if (err instanceof HttpError) {
-    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: err.status === 503 });
     return;
   }
   req.log.error({ err }, "unhandled error");

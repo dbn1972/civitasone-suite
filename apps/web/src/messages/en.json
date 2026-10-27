@@ -6081,6 +6081,10 @@
       "reconcileOpen": "On-time {onTime} + late {late} of {total} orders; {open} not yet delivered.",
       "reconcileMismatch": "On-time {onTime} + late {late} do not add up to the {total} orders recorded."
     },
+    "contractForm": {
+      "poNotFound": "This PO reference does not match any purchase order. Check the PO number, or leave it blank.",
+      "poUnavailable": "The PO reference could not be verified right now. Please try again in a moment."
+    },
     "poForm": {
       "vendorNotEmpanelled": "This vendor has no empanelment record. Link the awarded tender this vendor won, or enter a GeM order reference, then submit again.",
       "basisTitle": "Basis for ordering from a vendor with no empanelment record",

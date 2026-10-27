@@ -150,6 +150,30 @@ describe("CreateContractForm", () => {
     expect(await screen.findByText("A contract with this number already exists.")).toBeInTheDocument();
   });
 
+  it("D4c #25: a 422 PO_NOT_FOUND shows an inline error on the PO reference field", async () => {
+    mockFetch(async (url) => {
+      if (url.includes("/procurement/vendors")) return { ok: true, json: async () => VENDORS };
+      return { ok: false, status: 422, json: async () => ({ code: "PO_NOT_FOUND" }), text: async () => "" };
+    });
+    render(<CreateContractForm />);
+    await fillValid();
+    fireEvent.change(screen.getByLabelText("PO reference"), { target: { value: "PO/NOPE/1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create contract" }));
+    expect(await screen.findByText(/does not match any purchase order/)).toBeInTheDocument();
+  });
+
+  it("D4c #25: a 503 PO_VALIDATION_UNAVAILABLE asks the officer to retry, not to fix the reference", async () => {
+    mockFetch(async (url) => {
+      if (url.includes("/procurement/vendors")) return { ok: true, json: async () => VENDORS };
+      return { ok: false, status: 503, json: async () => ({ code: "PO_VALIDATION_UNAVAILABLE" }), text: async () => "" };
+    });
+    render(<CreateContractForm />);
+    await fillValid();
+    fireEvent.change(screen.getByLabelText("PO reference"), { target: { value: "PO/1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create contract" }));
+    expect(await screen.findByText(/could not be verified right now/)).toBeInTheDocument();
+  });
+
   it("GAP-CONTRACTS-NEW-05: sends exact paise via rupeesToMinorString (1000.50 -> 100050), no float error", async () => {
     let sentBody: Record<string, unknown> | null = null;
     mockFetch(async (url, init) => {

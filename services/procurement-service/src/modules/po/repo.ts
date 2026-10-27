@@ -15,6 +15,13 @@ export async function findPoById(id: string, tenantId: string): Promise<PoRow | 
   return rows[0] ?? null;
 }
 
+/** D4c #25: exact (tenant-scoped) lookup of a PO by its number. */
+export async function findPoByNo(poNo: string, tenantId: string): Promise<PoRow | null> {
+  const rows = await db.transaction((tx) => tx.select().from(procurementPos)
+    .where(and(eq(procurementPos.poNo, poNo), eq(procurementPos.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function findPoItemsByPoId(poId: string, tenantId: string): Promise<(typeof procurementPoItems.$inferSelect)[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.

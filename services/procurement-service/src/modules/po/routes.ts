@@ -117,6 +117,18 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createGemOrder(ctx, body));
   });
 
+  // D4c #25: resolve a PO reference for contract-service (service-to-service,
+  // x-internal) so a contract can only quote a PO that exists. Registered before
+  // /pos/:id so "resolve" is not read as an id. Tenant-scoped.
+  app.get("/v1/procurement/pos/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { ref } = z.object({ ref: z.string().trim().min(1).max(200) }).parse(req.query);
+    const po = await queries.resolvePoRef(ctx.tenantId, ref);
+    if (!po) throw new HttpError(404, "NOT_FOUND", "purchase order not found");
+    return reply.send({ data: po });
+  });
+
   app.get("/v1/procurement/pos/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
