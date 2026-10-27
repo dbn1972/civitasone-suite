@@ -3,7 +3,7 @@
  * PATCH /v1/locations/:id/archive actually exists (the web Archive action
  * called it, but it 404'd) -- real DB (migration 0025 widens the status CHECK).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -13,6 +13,11 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerLocationConsumers } from "../src/modules/locations/consumer.js";
+
+// The archive route asks hrms-service whether employees are still posted at the location
+// (GAP-LOCATIONS-LIST-04). Unit tests do not run hrms: its answer is stubbed per test.
+const staffAt = vi.hoisted(() => ({ answer: { ok: true, total: 0 } as { ok: true; total: number } | { ok: false; reason: "unavailable" } }));
+vi.mock("../src/shared/hrms-client.js", () => ({ countActiveEmployeesAt: async () => staffAt.answer }));
 
 registerLocationConsumers(queue);
 const drain = () => (queue as unknown as MemoryQueue).drain();
@@ -126,6 +131,37 @@ describe("archive (PATCH /v1/locations/:id/archive)", () => {
     expect((await app.inject({ method: "PATCH", url: `/v1/locations/${randomUUID()}/archive`, headers: admin(), payload: {} })).statusCode).toBe(404);
     expect((await app.inject({ method: "PATCH", url: `/v1/locations/${stateId}/archive`, headers: h(["employee"]), payload: {} })).statusCode).toBe(403);
     expect((await app.inject({ method: "PATCH", url: `/v1/locations/${districtId}/archive`, headers: admin(), payload: { reason: "x".repeat(501) } })).statusCode).toBe(400);
+  });
+});
+
+describe("archive is blocked while employees are still posted (GAP-LOCATIONS-LIST-04)", () => {
+  it("409 IN_USE when hrms reports current employees; the location stays active and no archive is audited", async () => {
+    const id = await create({ name: "Staffed Office", type: "office" });
+    staffAt.answer = { ok: true, total: 3 };
+    const r = await app.inject({ method: "PATCH", url: `/v1/locations/${id}/archive`, headers: admin(), payload: { reason: "closing" } });
+    expect(r.statusCode).toBe(409);
+    expect((r.json() as { code: string }).code).toBe("IN_USE");
+    await drain();
+    expect((await get(id)).status).toBe("active");
+    expect((await auditFor(id)).some((x) => x.action === "archive")).toBe(false);
+    // once nobody is posted there the same archive goes through
+    staffAt.answer = { ok: true, total: 0 };
+    const ok = await app.inject({ method: "PATCH", url: `/v1/locations/${id}/archive`, headers: admin(), payload: { reason: "closing" } });
+    expect(ok.statusCode).toBe(202);
+    await drain();
+    expect((await get(id)).status).toBe("archived");
+    expect((await auditFor(id)).find((x) => x.action === "archive")?.metadata).toMatchObject({ reason: "closing" });
+  });
+
+  it("fails closed: 503 REFERENCES_UNVERIFIABLE when hrms cannot be read, and nothing is archived", async () => {
+    const id = await create({ name: "Unverifiable Office", type: "office" });
+    staffAt.answer = { ok: false, reason: "unavailable" };
+    const r = await app.inject({ method: "PATCH", url: `/v1/locations/${id}/archive`, headers: admin(), payload: {} });
+    expect(r.statusCode).toBe(503);
+    expect((r.json() as { code: string }).code).toBe("REFERENCES_UNVERIFIABLE");
+    await drain();
+    expect((await get(id)).status).toBe("active");
+    staffAt.answer = { ok: true, total: 0 };
   });
 });
 

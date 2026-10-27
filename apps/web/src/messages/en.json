@@ -10735,6 +10735,8 @@
     "confirmDescription": "This will archive \"{name}\". Archived locations are hidden from active operations and cannot be selected for new records.",
     "confirmLabel": "Archive location",
     "errHasActiveChildren": "This location still has active sub-locations. Archive those first.",
+    "errInUse": "Employees are still posted at this location. Move them to another location first, then archive it.",
+    "errInUseUnverifiable": "We could not check whether employees are still posted here, so the location was not archived. Try again in a moment.",
     "errAlreadyArchived": "This location is already archived."
   },
   "tenantLifecycle": {
