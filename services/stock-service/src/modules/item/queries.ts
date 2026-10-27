@@ -1,6 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import type { ItemWithUom } from "./repo.js";
+import type { ItemWithUom, ItemListRow } from "./repo.js";
 import type { ItemCategoryRow, UomRow } from "./schema.js";
 
 export async function getItem(tenantId: string, id: string): Promise<ItemWithUom | null> {
@@ -12,9 +12,13 @@ export async function getItem(tenantId: string, id: string): Promise<ItemWithUom
   return row && row.tenantId === tenantId ? row : null;
 }
 
-export async function listItems(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+/** Item list row as served: category name joined, plus the UOM code the web list shows (GAP-STOCK-LIST-02). */
+export type ItemListEntry = ItemListRow & { uomCode: string | null };
+
+export async function listItems(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemListEntry[]> {
   const key = cache.listKey(tenantId, "item", JSON.stringify(opts ?? {}));
-  return (await cache.getOrLoad(key, () => repo.findItemsWithUomByTenant(tenantId, opts))) ?? [];
+  const items = (await cache.getOrLoad(key, () => repo.findItemsWithUomByTenant(tenantId, opts))) ?? [];
+  return items.map((i) => ({ ...i, uomCode: i.uom }));
 }
 
 export async function listCategories(tenantId: string): Promise<ItemCategoryRow[]> {

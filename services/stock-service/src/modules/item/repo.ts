@@ -6,6 +6,8 @@ import { stockItems, stockUoms, stockItemCategories, type ItemInsert, type ItemR
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 export type ItemWithUom = ItemRow & { uom: string | null };
+/** List row: item + joined display names (GAP-STOCK-LIST-02). */
+export type ItemListRow = ItemWithUom & { categoryName: string | null };
 
 export async function insertItem(tx: Writer, row: ItemInsert): Promise<void> {
   await tx.insert(stockItems).values(row);
@@ -74,7 +76,7 @@ export async function findItemWithUomById(id: string, tenantId: string): Promise
 
 const likeEscape = (v: string): string => v.replace(/[\\%_]/g, (m) => `\\${m}`);
 
-export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemListRow[]> {
   const conds: SQL[] = [eq(stockItems.tenantId, tenantId)];
   if (opts?.category) conds.push(eq(stockItems.categoryId, opts.category));
   if (opts?.q) {
@@ -101,9 +103,11 @@ export async function findItemsWithUomByTenant(tenantId: string, opts?: { catego
         updatedBy: stockItems.updatedBy,
         version: stockItems.version,
         uom: stockUoms.symbol,
+        categoryName: stockItemCategories.name,
       })
       .from(stockItems)
       .leftJoin(stockUoms, eq(stockItems.uomId, stockUoms.id))
+      .leftJoin(stockItemCategories, eq(stockItems.categoryId, stockItemCategories.id))
       .where(and(...conds))
       // Stable order: limit/offset pages must not skip or repeat rows.
       .orderBy(asc(stockItems.name), asc(stockItems.id))
