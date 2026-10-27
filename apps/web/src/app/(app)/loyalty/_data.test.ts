@@ -32,32 +32,31 @@ function lastCall() {
 }
 
 describe("loyalty loaders (GAP-LOYALTY-ACCRUALS-01, MEMBERS-01, TIERS-01)", () => {
-  it("ACCRUALS-01/03: enrolment mapper keeps points & balance visible (not buried behind a timestamp)", async () => {
-    await getLoyaltyAccruals();
+  it("ACCRUALS-01: accruals loader targets the tenant-wide ledger and maps points transactions", async () => {
+    await getLoyaltyAccruals({ limit: 25, offset: 50 });
     const c = lastCall();
-    expect(c.path).toContain("/api/v1/loyalty/enrolments");
+    expect(c.path).toContain("/api/v1/loyalty/accruals");
+    expect(c.path).not.toContain("/enrolments");
+    expect(c.path).toContain("limit=25");
     const result = c.options.mapResponse({
       data: [
         {
-          id: "e1",
-          programId: "p1",
-          profileId: "pf1",
-          status: "active",
-          tier: "Gold",
-          pointsBalance: "4500",
-          lifetimePoints: "120",
-          enrolledAt: "2026-08-14T09:12:44.000Z",
-          updatedAt: "2026-08-14T09:12:44.000Z",
+          id: "a1",
+          enrolmentId: "e1",
+          points: "120",
+          source: "purchase",
+          txType: "bonus",
+          accrualDate: "2026-08-14T09:12:44.000Z",
+          expiresAt: null,
         },
       ],
-      meta: { total: 1 },
+      meta: { total: 7 },
     }) as { rows: Array<Record<string, unknown>>; total: number | null };
-    // GAP-LOYALTY-MEMBERS-04: mapResponse now returns {rows, total}
-    expect(result.total).toBe(1);
-    const mapped = result.rows;
-    expect(mapped[0].pointsBalance).toBe("4500");
-    expect(mapped[0].lifetimePoints).toBe("120");
-    expect(mapped[0].tier).toBe("Gold");
+    expect(result.total).toBe(7);
+    expect(result.rows[0].points).toBe("120");
+    expect(result.rows[0].txType).toBe("bonus");
+    expect(result.rows[0].enrolmentId).toBe("e1");
+    expect(result.rows[0].expiresAt).toBeNull();
   });
 
   it("MEMBERS-01: member mapper surfaces tier as its own field, defaulting to 'base'", async () => {

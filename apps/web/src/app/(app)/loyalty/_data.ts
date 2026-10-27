@@ -115,6 +115,37 @@ export type LoyaltyRedemptionRow = {
   voidedAt: string | null;
 };
 
+// ---- Accruals (points ledger) ---------------------------------------------
+
+const accrualApi = z.object({
+  id: z.string(),
+  enrolmentId: z.string().nullable().optional(),
+  points: z.string().nullable().optional(),
+  source: z.string().nullable().optional(),
+  sourceRef: z.string().nullable().optional(),
+  txType: z.string().nullable().optional(),
+  expiresAt: z.string().nullable().optional(),
+  accrualDate: z.string().nullable().optional(),
+});
+
+export type LoyaltyAccrualRow = {
+  id: string;
+  enrolmentId: string | null;
+  points: string | null;
+  source: string | null;
+  txType: string | null;
+  accrualDate: string | null;
+  expiresAt: string | null;
+};
+
+export type LoyaltyAccrualPage = {
+  rows: LoyaltyAccrualRow[];
+  /** Exact count on the server, or null when the service omits it. */
+  total: number | null;
+};
+
+const LOYALTY_ACCRUAL_PAGE_EMPTY: LoyaltyAccrualPage = { rows: [], total: null };
+
 // ---- Tiers (definitions) --------------------------------------------------
 
 const tierApi = z.object({
@@ -148,6 +179,7 @@ export type LoyaltyStats = {
 const programsSchema = listEnvelope(programApi);
 const enrolmentsSchema = listEnvelope(enrolmentApi);
 const redemptionsSchema = listEnvelope(redemptionApi);
+const accrualsSchema = listEnvelope(accrualApi);
 const tiersSchema = listEnvelope(tierApi);
 
 function qs(params: Record<string, string | number | undefined>): string {
@@ -215,26 +247,32 @@ export function getLoyaltyMembers(
 }
 
 /**
- * GAP-LOYALTY-ACCRUALS-01/02/03: loyalty-service exposes points transactions
- * only per enrolment (GET /enrolments/:id/accruals), not tenant-wide, so the
- * tenant-level Accruals surface is the per-member points *position* — current
- * balance and lifetime points earned per enrolment. Same enrolment source as
- * Members but projected to the points columns, so points/balance are always
- * visible (never buried behind a timestamp as the old meta chain did), and the
- * page no longer promises a per-member drill-down route that does not exist.
+ * GAP-LOYALTY-ACCRUALS-01: the tenant-wide points ledger (GET
+ * /v1/loyalty/accruals) — one row per points transaction (date, type, source,
+ * points, expiry) rather than the per-member position the page had to fall
+ * back to while loyalty-service only exposed accruals per enrolment. The
+ * enrolment is carried as an opaque reference; no member PII is in the payload.
  */
 export function getLoyaltyAccruals(
-  params: { limit?: number; offset?: number } = {},
-): Promise<LoaderResult<LoyaltyMemberPage>> {
-  return fetchJson<z.infer<typeof enrolmentsSchema>, LoyaltyMemberPage>(
-    `/api/v1/loyalty/enrolments${qs(params)}`,
-    LOYALTY_MEMBER_PAGE_EMPTY,
+  params: { limit?: number; offset?: number; enrolmentId?: string } = {},
+): Promise<LoaderResult<LoyaltyAccrualPage>> {
+  return fetchJson<z.infer<typeof accrualsSchema>, LoyaltyAccrualPage>(
+    `/api/v1/loyalty/accruals${qs(params)}`,
+    LOYALTY_ACCRUAL_PAGE_EMPTY,
     {
       revalidateSeconds: 30,
       telemetryKey: "loyalty.accruals",
-      responseSchema: enrolmentsSchema,
+      responseSchema: accrualsSchema,
       mapResponse: (payload) => ({
-        rows: payload.data.map(mapEnrolment),
+        rows: payload.data.map((a) => ({
+          id: a.id,
+          enrolmentId: a.enrolmentId ?? null,
+          points: a.points ?? null,
+          source: a.source ?? null,
+          txType: a.txType ?? null,
+          accrualDate: a.accrualDate ?? null,
+          expiresAt: a.expiresAt ?? null,
+        })),
         total: payload.meta?.total ?? null,
       }),
     },

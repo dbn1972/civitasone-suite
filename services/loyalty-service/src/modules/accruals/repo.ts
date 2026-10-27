@@ -42,6 +42,26 @@ export async function listByEnrolment(
   return { rows, total };
 }
 
+/** Tenant-wide points ledger (GAP-LOYALTY-ACCRUALS-01), newest first, optional enrolment filter. */
+export async function listByTenant(
+  tenantId: string,
+  limit: number,
+  offset: number,
+  enrolmentId?: string,
+): Promise<{ rows: AccrualRow[]; total: number }> {
+  const where: SQL = enrolmentId
+    ? and(eq(accruals.tenantId, tenantId), eq(accruals.enrolmentId, enrolmentId))!
+    : eq(accruals.tenantId, tenantId);
+
+  const rows = await scopedRead((tx) =>
+    tx.select().from(accruals).where(where).orderBy(desc(accruals.accrualDate), desc(accruals.id)).limit(limit).offset(offset),
+  );
+  const countResult = await scopedRead((tx) =>
+    tx.select({ count: sql<number>`count(*)::int` }).from(accruals).where(where),
+  );
+  return { rows, total: countResult[0]?.count ?? 0 };
+}
+
 export async function getBalanceSummary(
   tenantId: string,
   enrolmentId: string,
