@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { todayIST } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
 
 interface CaseTypeOption {
@@ -19,7 +20,7 @@ interface DepartmentOption { id: string; name: string }
 const OTHER = "other";
 const COURT_GROUPS: ReadonlyArray<CourtOption["kind"]> = ["supreme", "high_court", "district", "tribunal"];
 
-const todayIso = (): string => new Date().toISOString().slice(0, 10);
+const todayIso = (): string => todayIST();
 
 /** Poll the new case detail until the async create consumer has written it. */
 async function waitForCase(id: string): Promise<boolean> {
