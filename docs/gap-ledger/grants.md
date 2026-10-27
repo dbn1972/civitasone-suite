@@ -820,7 +820,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-LIST-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [~] **Status** (NEEDS OWNER DECISION: static masking done for non-privileged roles; audited reveal button needs a /grants/pii/reveal endpoint and DPO decision — MaskedReveal component exists but the grants reveal path is not wired)
+- [x] **Status** Closed by bc6dc9f04 (UAT B4, 2026-10-27)
 - **W0 note:** partly fixed by #1865 — non-privileged roles see a masked grantee name, but privileged reveal writes no audit event
 - **First-pass claim:** Individual (natural-person) grantees are listed by name to every module user with no role gate (GrantsTable.tsx:21); DPDP purpose limitation not shown.
 - **Verified evidence:** GrantsTable.tsx:21 renders granteeName for every row with no role check; the grants tree only has ModuleGate in layout.tsx (tenant enablement). Whether a grantee is a natural person cannot be seen (GrantSummary type absent) and no purpose-limitation notice exists. No shared <Masked> component exists in app/_components/ds (Masked only appears as local usage in admin/integrations and hr/employees/new Step4). There is no CSV export on this page, so the export-gating part of the fix does not apply here.
