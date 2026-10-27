@@ -77,7 +77,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-05  ·  LOW  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [~] **Status** INTERIM — marketing site uses fixed Tailwind gray/white site-wide (layout.tsx); dark mode requires a site-wide decision, not a single-page fix. NEEDS OWNER DECISION: confirm whether the public marketing site should support dark mode / DS tokens.
+- [x] **Status** Closed per owner decision D4c #3 (2026-10-27): marketing site stays light-only (layout.tsx:114 declares color-scheme light); accepted, no GIGW/UAT need for dark mode.
 - **First-pass claim:** Page uses hard-coded Tailwind gray-* and a white gradient (page.tsx:27), so it does not follow theme tokens or dark mode, unlike the app shell.
 - **Verified evidence:** contact/page.tsx:28 and card classes use fixed Tailwind gray-*/white (bg-white, from-white to-gray-50, text-gray-900, border-gray-200). True, but the entire marketing group is the same: layout.tsx:13-100 hard-codes gray/white with no dark variant; (app) shell uses CSS variables. So this is a marketing-site-wide choice, not a page-specific fault.
 - **Files to change:** `apps/web/src/app/(marketing)/contact/page.tsx`, `apps/web/src/app/(marketing)/layout.tsx`
