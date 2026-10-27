@@ -17395,5 +17395,17 @@
       "descriptionLabel": "विवरण",
       "descriptionHint": "वैकल्पिक। अधिकतम 2000 अक्षर। योजना के विवरण पृष्ठ पर दिखाया जाता है।",
       "descriptionTooLong": "विवरण 2000 अक्षरों या उससे कम का होना चाहिए।"
+  },
+  "grantsB4Installments": {
+      "blockedLabel": "अवरुद्ध",
+      "blockedSequence": "पहले इस अनुदान की पिछली किस्तें जारी करें।",
+      "blockedGrantStatus": "यह अनुदान {status} है; किस्तें जारी नहीं की जा सकतीं।",
+      "grantStatusSuspended": "निलंबित",
+      "grantStatusCancelled": "रद्द",
+      "grantStatusCompleted": "पूर्ण",
+      "payeeAccount": "प्राप्तकर्ता खाता: अंतिम अंक {last4}, IFSC {ifsc}।",
+      "payeeNoAccount": "इस अनुदान प्राप्तकर्ता का कोई बैंक खाता पंजीकृत नहीं है। राशि जारी करने से पहले प्राप्तकर्ता का रिकॉर्ड जाँचें।",
+      "granteeUnresolved": "अनुदान प्राप्तकर्ता",
+      "dash": "—"
   }
 }

@@ -1810,12 +1810,19 @@ export type GrantInstallmentSummary = {
   id: string;
   grantId: string;
   grantNo: string;
-  granteeName: string;
+  /** null when the grantee could not be resolved. */
+  granteeName: string | null;
   installmentNo: number;
+  /** Minor units (paise). */
   amount: number;
   scheduledDate: string;
   releasedDate?: string;
   status: "pending" | "released" | "utilized";
+  /** GAP-GRANTS-INSTALLMENTS-03: release eligibility of the grant; only "active" grants may be released. */
+  grantStatus?: "active" | "completed" | "suspended" | "cancelled";
+  /** GAP-GRANTS-INSTALLMENTS-03: last 4 digits of the payee account (null = none registered). */
+  payeeAccountLast4?: string | null;
+  payeeIfsc?: string | null;
 };
 
 export type GrantRelease = {

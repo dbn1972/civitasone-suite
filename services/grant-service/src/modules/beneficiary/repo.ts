@@ -62,6 +62,28 @@ export async function findAadhaarByTokenAndTenant(tenantId: string, token: strin
   }));
 }
 
+/**
+ * Batch loader for the installment read-model: the most recently registered ACTIVE bank
+ * account per beneficiary (the account a release is paid to). One query; the map is keyed
+ * by beneficiary id. Only the masked number and IFSC are ever read out of this table.
+ */
+export async function findLatestActiveBankAccounts(beneficiaryIds: string[], tenantId: string): Promise<Map<string, BankAccountRow>> {
+  const out = new Map<string, BankAccountRow>();
+  if (beneficiaryIds.length === 0) return out;
+  const rows = await runWithTenant(tenantId, () => scopedRead(async (tx) =>
+    tx.select().from(grantBankAccounts)
+      .where(and(
+        inArray(grantBankAccounts.beneficiaryId, beneficiaryIds),
+        eq(grantBankAccounts.tenantId, tenantId),
+        eq(grantBankAccounts.status, "active"),
+      ))));
+  for (const r of rows) {
+    const cur = out.get(r.beneficiaryId);
+    if (!cur || r.createdAt > cur.createdAt) out.set(r.beneficiaryId, r);
+  }
+  return out;
+}
+
 export async function insertBeneficiary(tx: Writer, row: BeneficiaryInsert): Promise<void> {
   await tx.insert(grantBeneficiaries).values(row);
 }

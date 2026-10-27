@@ -32,7 +32,7 @@ export function mapGrantStatus(status: string): "active" | "completed" | "suspen
 }
 
 /** Installment DB status → web read-model status. */
-function mapInstallmentStatus(status: string): "pending" | "released" | "utilized" {
+export function mapInstallmentStatus(status: string): "pending" | "released" | "utilized" {
   if (status === "disbursed" || status === "released") return "released";
   if (status === "utilized") return "utilized";
   return "pending";

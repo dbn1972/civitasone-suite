@@ -17468,5 +17468,17 @@
       "descriptionLabel": "Description",
       "descriptionHint": "Optional. Up to 2000 characters. Shown on the scheme detail page.",
       "descriptionTooLong": "The description must be 2000 characters or fewer."
+  },
+  "grantsB4Installments": {
+      "blockedLabel": "Blocked",
+      "blockedSequence": "Release earlier installments of this grant first.",
+      "blockedGrantStatus": "This grant is {status}; installments cannot be released.",
+      "grantStatusSuspended": "suspended",
+      "grantStatusCancelled": "cancelled",
+      "grantStatusCompleted": "completed",
+      "payeeAccount": "Payee account: ending {last4}, IFSC {ifsc}.",
+      "payeeNoAccount": "No bank account is registered for this grantee. Check the grantee record before releasing funds.",
+      "granteeUnresolved": "the grantee",
+      "dash": "—"
   }
 }

@@ -80,6 +80,40 @@ describe("InstallmentsTable", () => {
     expect(screen.getByText("Blocked")).toBeInTheDocument();
   });
 
+  // GAP-GRANTS-INSTALLMENTS-03: the grant's release eligibility comes from grant-service.
+  it("offers no Release on a suspended or cancelled grant and says why", () => {
+    const rows = [
+      { ...ROW, id: "s1", grantId: "g-susp", installmentNo: 1, status: "pending" as const, grantStatus: "suspended" as const },
+      { ...ROW, id: "c1", grantId: "g-canc", installmentNo: 1, status: "pending" as const, grantStatus: "cancelled" as const },
+    ];
+    render(<InstallmentsTable installments={rows} source="api" canRelease />);
+    expect(screen.queryByRole("button", { name: "Release" })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Blocked")).toHaveLength(2);
+    expect(screen.getAllByText("Blocked")[0]).toHaveAttribute("title", "This grant is suspended; installments cannot be released.");
+    expect(screen.getAllByText("Blocked")[1]).toHaveAttribute("title", "This grant is cancelled; installments cannot be released.");
+  });
+
+  it("still offers Release when the grant is active", () => {
+    render(<InstallmentsTable installments={[{ ...ROW, grantStatus: "active" as const }]} source="api" canRelease />);
+    expect(screen.getByRole("button", { name: "Release" })).toBeInTheDocument();
+  });
+
+  // GAP-GRANTS-INSTALLMENTS-03: the confirm dialog names the grantee and the masked payee account.
+  it("shows the grantee and the masked payee account in the release confirmation", async () => {
+    render(<InstallmentsTable installments={[{ ...ROW, payeeAccountLast4: "4321", payeeIfsc: "SBIN0001234" }]} source="api" canRelease />);
+    fireEvent.click(screen.getByRole("button", { name: "Release" }));
+    await waitFor(() => expect(screen.getByText(/Release installment #1\?/)).toBeInTheDocument());
+    expect(screen.getAllByText(/District Panchayat, Nashik/).length).toBeGreaterThan(0);
+    expect(screen.getByText("Payee account: ending 4321, IFSC SBIN0001234.")).toBeInTheDocument();
+  });
+
+  it("warns when the grantee has no registered bank account", async () => {
+    render(<InstallmentsTable installments={[{ ...ROW, payeeAccountLast4: null }]} source="api" canRelease />);
+    fireEvent.click(screen.getByRole("button", { name: "Release" }));
+    await waitFor(() => expect(screen.getByText(/Release installment #1\?/)).toBeInTheDocument());
+    expect(screen.getByText(/No bank account is registered for this grantee/)).toBeInTheDocument();
+  });
+
   // GAP-GRANTS-INSTALLMENTS-16: clerk-safe error, not raw server text.
   it("shows a clerk-safe error, not the raw server text, when the release fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(

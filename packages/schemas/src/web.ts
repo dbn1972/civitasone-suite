@@ -1894,12 +1894,19 @@ export const GrantInstallmentSummarySchema = z.object({
   id: z.string(),
   grantId: z.string(),
   grantNo: z.string(),
-  granteeName: z.string(),
+  /** null when the grantee could not be resolved (never a placeholder string). */
+  granteeName: z.string().nullable(),
   installmentNo: z.number(),
+  /** Minor units (paise). */
   amount: z.number(),
   scheduledDate: z.string(),
   releasedDate: z.string().optional(),
   status: z.enum(["pending", "released", "utilized"]),
+  /** GAP-GRANTS-INSTALLMENTS-03: release eligibility of the grant (application + scheme). Absent on older services. */
+  grantStatus: z.enum(["active", "completed", "suspended", "cancelled"]).optional(),
+  /** GAP-GRANTS-INSTALLMENTS-03: last 4 digits of the payee's registered account; null when none is registered. */
+  payeeAccountLast4: z.string().nullable().optional(),
+  payeeIfsc: z.string().nullable().optional(),
 });
 export const GrantInstallmentSummaryListSchema = z.array(GrantInstallmentSummarySchema);
 
