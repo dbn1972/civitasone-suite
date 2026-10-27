@@ -3371,7 +3371,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-DETAIL-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: deviation percent computation and award-outcome follow-up from 202 queue need product rules; GAP-WORKS-TENDERS-DETAIL-08)
+- [x] **Status** Closed by 162a11573 (owner decision D4c #45, 2026-10-27): signed deviation % computed server-side; Award pending shown until the queued award arrives, then confirmed
 - **W2 works part 2 note (#2047):** deviation percent and the award outcome (still queued, 202) need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** role gates and maker-checker exist; deviation percent is not computed in works-service and the award outcome is still queued (202). Needs a product rule.
 - **W0 note:** partly fixed by #1944 — Award/finalize role-gated with maker-checker and ordered statuses (draft, dao_finalized); deviation percent is not computed anywhere in works-service, enums undocumented; award outcome still queued.
