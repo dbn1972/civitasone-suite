@@ -44,6 +44,9 @@ vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
     listQuotations: vi.fn(async () => []),
     preTenderReferenceExists: vi.fn(async (_t: string, ref: string) => ref === "DUP/1"),
     tenderOrPreTenderExists: vi.fn(async () => true),
+    // D4c #45: the quotation list also reads the work estimate and the award; neither exists in this fixture.
+    getTenderEstimate: vi.fn(async () => null),
+    getAwardForWork: vi.fn(async () => null),
   };
 });
 
