@@ -354,7 +354,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-03  ·  MEDIUM  ·  confirmed  ·  theme UUID (was OTHER)
 
-- [~] **Status** (W2 stock: partial; mapper uses toText(row.itemCode)/'—' fallback — no id slice; itemCode/itemName still absent from stock_ledger rows, backend join needed. NEEDS OWNER DECISION)
+- [x] **Status** Closed by f6dfa35b3 (UAT B4, 2026-10-27): GET /v1/stock/ledger joins itemCode/itemName; table shows Unknown item when unresolved
 - **First-pass claim:** Item cell prints itemCode = itemId.slice(0,8).toUpperCase() and, without itemName in the payload, the id prefix again (apiMappers.ts:983-984) — clerks see 'A3F91C2E' rather than the SKU code from the item register.
 - **Verified evidence:** apiMappers.ts:983-984 - itemCode = itemId.slice(0,8).toUpperCase() (or entry id prefix); itemName = row.itemName ?? itemId.slice(0,8). Client joins `${itemCode} ${itemName}` (StockLedgerClient.tsx:46), so without itemName the cell prints the id prefix twice. No SKU code is read from the row (row.itemCode is not consulted).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/_data/loaders.ts`
