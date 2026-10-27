@@ -757,7 +757,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-03  ·  MEDIUM  ·  confirmed  ·  theme API-CONTRACT (was OTHER)
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: URL uses r.projectId as schemeId with a code comment documenting the alias. Backend project-service is absent from the snapshot so an explicit schemeId field cannot be added. NEEDS OWNER DECISION: backend to return schemeId on FundReleaseSummary, then drop the comment.)
+- [x] **Status** Closed by cc87ad189 (UAT B4, 2026-10-27): FundReleaseSummary.schemeId from project-service; DisburseButton keyed by schemeId, fails closed without it; FundReleasesTable.test.tsx
 - **First-pass claim:** The URL uses schemeId but is fed r.projectId (FundReleasesTable.tsx:47; FundReleasesActions.tsx:9,27): the code’s own comment concedes “backend stores schemeId as projectId”, an id-naming trap for a mutation route.
 - **Verified evidence:** FundReleasesTable.tsx:47 passes r.projectId as prop schemeId; FundReleasesActions.tsx:9 documents 'backend stores schemeId as projectId' and :27 builds /projects/schemes/${schemeId}/fund-releases/... . Functionally consistent if the comment is true, but the API contract cannot be verified here and a wrong id would hit a mutation route.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`
