@@ -70,7 +70,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was MONEY)
 
-- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: loyalty-service has no tenant-wide accruals endpoint; page shows per-member points position correctly); page honestly shows per-member points position; NEEDS OWNER DECISION: tenant-wide accruals endpoint or per-member drill-down route)
+- [x] **Status** Closed by af1940a69 (UAT B4, 2026-10-27): GET /v1/loyalty/accruals tenant-wide ledger + AccrualsTable; services/loyalty-service tests/uat-b4-accruals-ledger.test.ts
 - **W0 note:** partly fixed by #1924 — points/lifetime now always visible via a zod-typed loader and the drill-down promise is removed; page still lists per-member enrolment positions, not points transactions (no tenant-wide accruals endpoint).
 - **First-pass claim:** Accruals page shows no accruals: it lists enrolments (loyalty/_data.ts:90) and points/balance is the LAST option of the meta chain, after code/currency/updatedAt/createdAt (loyalty/_data.ts:61-67), so any row with a timestamp never shows points or balance. The "accrual/balance drill-down" (accruals/page.tsx:16) has no drill-down route.
 - **Verified evidence:** apps/web/src/app/(app)/loyalty/_data.ts:91 getLoyaltyAccruals = moduleLoader('/api/v1/loyalty/enrolments') (same as members, line 90 in the read; file lines 88-92). mapRows meta chain (61-67) is code ?? currency ?? updatedAt ?? createdAt ?? points ?? balance, so any row with a string timestamp never surfaces points/balance. accruals/page.tsx:16 describes 'accrual/balance drill-down' but ls shows only loyalty/accruals/page.tsx; no drill-down route. Points are not money, so the paise/formatINR theme does not apply; loyalty-service is absent so real field names cannot be verified.
@@ -266,7 +266,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-REDEMPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSINGFEATURE (was DATEFMT)
 
-- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: loyalty-service has no fulfil/reject endpoint; Void-only flow is the correct interim)
+- [x] **Status** Closed by 11d08889e (UAT B4, 2026-10-27): fulfil/reject endpoints + consumers (SoD, points restore on reject), migration 0006, RedemptionsTable actions; tests/uat-b4-redemption-fulfil.test.ts
 - **W0 note:** partly fixed by #1924 — dedicated table with Reward/Points/Status/Requested/Voided columns and an admin Void action (reason required); no fulfil/reject flow (loyalty-service has no such endpoint) and no Fulfilled column.
 - **First-pass claim:** Redemption history has no points-spent, reward, amount or fulfilment-date column, only generic Detail/Meta (ModuleListTable.tsx:40-44); pending/rejected redemptions cannot be actioned - no mutation code in the route tree.
 - **Verified evidence:** ModuleListTable.tsx:37-46 fixed generic columns ID/Name/Detail/Status/Meta; no points-spent, reward, or fulfilment date. Loyalty tree has no mutation code (no method: POST etc.), so pending redemptions cannot be approved/fulfilled. The DATEFMT tag is wrong. Backend endpoints for fulfil/reject cannot be verified.

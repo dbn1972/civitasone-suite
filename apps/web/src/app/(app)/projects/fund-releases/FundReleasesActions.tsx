@@ -7,7 +7,7 @@ import { formatMoney } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
 interface DisburseButtonProps {
-  /** The schemeId — maps to projectId on FundReleaseSummary (backend stores schemeId as projectId). */
+  /** The scheme id (FundReleaseSummary.schemeId) — the disburse route is keyed by scheme. */
   schemeId: string;
   releaseId: string;
   releaseNo: string;

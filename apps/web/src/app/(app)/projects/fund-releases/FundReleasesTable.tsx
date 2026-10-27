@@ -68,12 +68,14 @@ export function FundReleasesTable({ rows, canDisburse = false }: { rows: FundRel
           sortable: false,
           render: (r: FundReleaseRow) => {
             if (!DISBURSE_ELIGIBLE.has(r.status as string)) return null;
+            // GAP-PROJECTS-FUND-RELEASES-03: the disburse route is keyed by the
+            // scheme id, which the API now returns explicitly as `schemeId`.
+            // Fail closed: without it there is no safe id for a mutation URL,
+            // so no Disburse control is offered (never fall back to projectId).
+            if (!r.schemeId) return null;
             return (
               <DisburseButton
-                // GAP-PROJECTS-FUND-RELEASES-03: the disburse URL path segment is
-                // the schemeId; on FundReleaseSummary that value is carried in
-                // projectId (backend stores schemeId there). Passed explicitly.
-                schemeId={r.projectId as string}
+                schemeId={r.schemeId as string}
                 releaseId={r.id as string}
                 releaseNo={r.releaseNo as string}
                 amount={r.amount as number}

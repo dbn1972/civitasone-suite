@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "../../../_components/ds";
 import { getLoyaltyAccruals } from "../_data";
-import { MembersTable } from "../members/MembersTable";
+import { AccrualsTable } from "./AccrualsTable";
 
 export const dynamic = "force-dynamic";
 
@@ -25,7 +25,7 @@ export default async function Page(props: { searchParams?: Promise<{ page?: stri
     <div className="page-main">
       <PageHeader
         title="Loyalty — Accruals"
-        subtitle="Per-member points position: current balance and lifetime points earned."
+        subtitle="Points ledger: every accrual with its date, type, source and expiry."
         back="/loyalty"
         backLabel="Loyalty Programs"
       />
@@ -34,7 +34,7 @@ export default async function Page(props: { searchParams?: Promise<{ page?: stri
           Showing {(page - 1) * PAGE_SIZE + 1}–{loadedUpTo} of {total}.
         </p>
       )}
-      <MembersTable rows={rows} source={source} variant="accruals" />
+      <AccrualsTable rows={rows} source={source} />
       {showPager && (
         <nav
           aria-label="Accruals pages"

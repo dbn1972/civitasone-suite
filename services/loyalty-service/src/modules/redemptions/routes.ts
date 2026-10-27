@@ -3,7 +3,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as enrolmentRepo from "../enrolments/repo.js";
-import { validateRedemption, canVoid } from "./domain.js";
+import { validateRedemption, canVoid, canDecide } from "./domain.js";
 import * as commands from "./commands.js";
 
 const READ_ROLES = ["loyalty_user", "loyalty_admin", "super_admin"];
@@ -22,7 +22,12 @@ const redeemBody = z.object({
   enrolmentId: z.string().uuid(),
   points: z.coerce.number().int().positive(),
   rewardType: z.string().min(1).max(50),
+  // true: hold the points and leave the redemption pending until an admin
+  // fulfils or rejects it. Default keeps the original instant-fulfil behaviour.
+  deferFulfilment: z.boolean().default(false),
 });
+
+const fulfilBody = z.object({ version: z.number().int().min(1) });
 
 const voidBody = z.object({
   reason: z.string().min(1).max(500),
@@ -57,6 +62,7 @@ export async function redemptionRoutes(app: FastifyInstance): Promise<void> {
         points: body.points,
         rewardType: body.rewardType,
         enrolmentVersion: enrolment.version,
+        deferFulfilment: body.deferFulfilment,
       }),
     );
   });
@@ -84,6 +90,46 @@ export async function redemptionRoutes(app: FastifyInstance): Promise<void> {
         points: redemption.points.toString(),
       }),
     );
+  });
+
+  // GAP-LOYALTY-REDEMPTIONS-02: decide a pending redemption.
+  app.post("/v1/loyalty/redemptions/:id/fulfil", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = fulfilBody.parse(req.body);
+
+    const redemption = await repo.findById(id, ctx.tenantId);
+    if (!redemption) {
+      throw new HttpError(404, "NOT_FOUND", "redemption not found");
+    }
+    if (!canDecide(redemption.status)) {
+      throw new HttpError(422, "FULFIL_INVALID", `cannot fulfil redemption in state ${redemption.status}`);
+    }
+    // Segregation of duties: the officer who raised it cannot also fulfil it
+    // (re-enforced in the consumer's guarded UPDATE).
+    if (redemption.createdBy === ctx.actorId) {
+      throw new HttpError(403, "SOD_VIOLATION", "a redemption cannot be fulfilled by the officer who raised it");
+    }
+
+    return reply.code(202).send(await commands.fulfilRedemption(ctx, id, { version: body.version }));
+  });
+
+  app.post("/v1/loyalty/redemptions/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = voidBody.parse(req.body);
+
+    const redemption = await repo.findById(id, ctx.tenantId);
+    if (!redemption) {
+      throw new HttpError(404, "NOT_FOUND", "redemption not found");
+    }
+    if (!canDecide(redemption.status)) {
+      throw new HttpError(422, "REJECT_INVALID", `cannot reject redemption in state ${redemption.status}`);
+    }
+
+    return reply.code(202).send(await commands.rejectRedemption(ctx, id, { reason: body.reason, version: body.version }));
   });
 
   app.get("/v1/loyalty/redemptions", async (req, reply) => {

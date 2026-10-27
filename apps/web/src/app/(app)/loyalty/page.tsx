@@ -13,7 +13,7 @@ const sections: NavTile[] = [
 	// longer promises "Create and manage".
 	{ title: "Programs", description: "View loyalty programmes.", href: "/loyalty/programs", icon: "🏆" },
 	{ title: "Members", description: "Member enrolments, balances, and tier status.", href: "/loyalty/members", icon: "👤" },
-	{ title: "Accruals", description: "Per-member points balances and lifetime points.", href: "/loyalty/accruals", icon: "➕" },
+	{ title: "Accruals", description: "Points ledger: every accrual with its date, type, source and expiry.", href: "/loyalty/accruals", icon: "➕" },
 	{ title: "Redemptions", description: "Point redemption history and reward fulfilment.", href: "/loyalty/redemptions", icon: "🎁" },
 	{ title: "Tiers", description: "Tier definitions, thresholds, and benefits.", href: "/loyalty/tiers", icon: "🏅" },
 ];

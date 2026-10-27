@@ -321,7 +321,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: AddTaskForm (POST /tasks, role-gated) is present; status/progress edit UI (PATCH /tasks/:id/status) is still missing. Backend endpoint exists per W0-10 note. NEEDS OWNER DECISION: implement the full PATCH task-status form as a separate sprint item. Flagged L-effort web+backend.)
+- [x] **Status** Closed by d51c94fbb (UAT B4, 2026-10-27): TaskStatusControl on projects/[id]/tasks; service-side ownership + transition pre-check; tests/uat-b4-task-status.test.ts, TaskStatusControl.test.tsx
 - **W0-10 note:** review found the W0 tick partly — AddTaskForm (POST /tasks, role-gated, backend exists) and empty-state copy done, but no status/progress edit UI: no PATCH call anywhere under projects/[id]/tasks although backend PATCH /tasks/:taskId and /status exist (fix step 2)
 - **First-pass claim:** Empty state tells end users “Use the API to create tasks.” (page.tsx:56) and the page offers no add/edit control, so a project team cannot build a WBS from the UI; /projects/wbs repeats the dependency (“Create tasks in a project to see the WBS”).
 - **Verified evidence:** tasks/page.tsx:56 message 'Use the API to create tasks.'; no add/edit control on the page; wbs/page.tsx:33 says 'Create tasks in a project to see the WBS.' Backend create-task endpoint cannot be verified (copy implies one exists).
@@ -757,7 +757,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-03  ·  MEDIUM  ·  confirmed  ·  theme API-CONTRACT (was OTHER)
 
-- [~] **Status** (INTERIM W2-PROJECTS-1: URL uses r.projectId as schemeId with a code comment documenting the alias. Backend project-service is absent from the snapshot so an explicit schemeId field cannot be added. NEEDS OWNER DECISION: backend to return schemeId on FundReleaseSummary, then drop the comment.)
+- [x] **Status** Closed by 747356cca (UAT B4, 2026-10-27): FundReleaseSummary.schemeId from project-service; DisburseButton keyed by schemeId, fails closed without it; FundReleasesTable.test.tsx
 - **First-pass claim:** The URL uses schemeId but is fed r.projectId (FundReleasesTable.tsx:47; FundReleasesActions.tsx:9,27): the code’s own comment concedes “backend stores schemeId as projectId”, an id-naming trap for a mutation route.
 - **Verified evidence:** FundReleasesTable.tsx:47 passes r.projectId as prop schemeId; FundReleasesActions.tsx:9 documents 'backend stores schemeId as projectId' and :27 builds /projects/schemes/${schemeId}/fund-releases/... . Functionally consistent if the comment is true, but the API contract cannot be verified here and a wrong id would hit a mutation route.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`

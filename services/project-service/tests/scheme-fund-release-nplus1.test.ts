@@ -44,7 +44,7 @@ describe("listFundReleaseSummaries batching", () => {
     expect(H.findSchemesByIds).toHaveBeenCalledTimes(1);
     expect(H.findSchemesByIds).toHaveBeenCalledWith(["s1", "s2"], TENANT);
     expect(out.map((r) => r.projectName)).toEqual(["Scheme One", "Scheme One", "Scheme Two"]);
-    expect(out[0]).toMatchObject({ id: "1", releaseNo: "R-1", projectId: "s1", amount: 2500, status: "released", releasedBy: "u1", releaseDate: "2026-10-01" });
+    expect(out[0]).toMatchObject({ id: "1", releaseNo: "R-1", projectId: "s1", schemeId: "s1", amount: 2500, status: "released", releasedBy: "u1", releaseDate: "2026-10-01" });
   });
 
   it("falls back to the scheme id when a scheme is missing", async () => {

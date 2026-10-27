@@ -19,13 +19,12 @@ import type { LoyaltyRedemptionRow } from "../_data";
  * ModuleListTable, but this dedicated table applies the same error-vs-empty
  * distinction directly.
  *
- * ACTIONS DECISION (recorded for HUMAN REVIEW): loyalty-service has no
- * "fulfil" transition — a redemption is created pending and can be VOIDED
- * (POST /v1/loyalty/redemptions/:id/void, admin-only, reason required, which
- * restores the points). There is no fulfil/reject endpoint to wire, so this
- * surfaces the real, existing void action (reason + confirm + optimistic
- * version) rather than inventing a fulfilment flow. The server remains the
- * authority; the button is only shown to admins and only on voidable rows.
+ * GAP-LOYALTY-REDEMPTIONS-02 (UAT B4): a pending redemption can now be
+ * FULFILLED (POST .../fulfil) or REJECTED with a reason (POST .../reject,
+ * which restores the held points), alongside the existing Void. All three are
+ * admin-only buttons; the server remains the authority (including the
+ * segregation-of-duties rule that the officer who raised a redemption cannot
+ * fulfil it) and its refusal is surfaced as a plain-language message.
  */
 
 type RedemptionTableRow = {
@@ -34,15 +33,29 @@ type RedemptionTableRow = {
   points: string;
   status: string;
   requested: string;
+  fulfilled: string;
   voided: string;
   version: number | undefined;
   canVoid: boolean;
+  canDecide: boolean;
 };
 
 function voidActionError(status?: number): string {
   const kind = status === 403 ? "forbidden" : status === 409 || status === 422 ? "conflict" : "save";
   const human = toHumanError(kind, { area: "redemption" });
   return `${human.what} ${human.next}`;
+}
+
+async function postDecision(
+  id: string,
+  action: "fulfil" | "reject",
+  body: Record<string, unknown>,
+): Promise<Response> {
+  return fetch(`/api/proxy/v1/loyalty/redemptions/${id}/${action}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 export function RedemptionsTable({
@@ -90,15 +103,30 @@ export function RedemptionsTable({
     router.refresh();
   }
 
+  async function decide(id: string, action: "fulfil" | "reject", versionRaw: number | undefined, reason?: string) {
+    const res = await postDecision(
+      id,
+      action,
+      action === "reject" ? { reason: reason ?? "", version: versionRaw ?? 1 } : { version: versionRaw ?? 1 },
+    );
+    if (!res.ok) {
+      if (res.status === 409 || res.status === 422) router.refresh();
+      throw new Error(voidActionError(res.status));
+    }
+    router.refresh();
+  }
+
   const tableRows: RedemptionTableRow[] = data.map((r) => ({
     id: r.id,
     reward: r.rewardType ? humanizeStatus(r.rewardType) : "—",
     points: formatPoints(r.points),
     status: r.status,
     requested: r.redeemedAt ? formatIndianDate(r.redeemedAt) : "—",
+    fulfilled: r.fulfilledAt ? formatIndianDate(r.fulfilledAt) : "—",
     voided: r.voidedAt ? formatIndianDate(r.voidedAt) : "—",
     version: r.version ?? undefined,
     canVoid: canManage && (r.status === "pending" || r.status === "confirmed"),
+    canDecide: canManage && r.status === "pending",
   }));
 
   return (
@@ -116,6 +144,7 @@ export function RedemptionsTable({
             { key: "points", label: "Points", align: "right" },
             { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
             { key: "requested", label: "Requested" },
+            { key: "fulfilled", label: "Fulfilled" },
             { key: "voided", label: "Voided" },
             ...(canManage
               ? [
@@ -125,17 +154,42 @@ export function RedemptionsTable({
                     sortable: false,
                     csvExclude: true,
                     render: (r: RedemptionTableRow) =>
-                      r.canVoid ? (
-                        <ActionButton
-                          label="Void"
-                          danger
-                          className="btn danger"
-                          confirmTitle="Void this redemption?"
-                          confirmDescription="Voiding restores the member's points and cannot be undone."
-                          requireReason
-                          reasonLabel="Reason for voiding"
-                          onConfirm={(reason) => voidRedemption(r.id, r.version, reason)}
-                        />
+                      r.canVoid || r.canDecide ? (
+                        <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap" }}>
+                          {r.canDecide && (
+                            <ActionButton
+                              label="Fulfil"
+                              className="btn"
+                              confirmTitle="Fulfil this redemption?"
+                              confirmDescription="Confirms the reward has been handed over. The points stay deducted."
+                              onConfirm={() => decide(r.id, "fulfil", r.version)}
+                            />
+                          )}
+                          {r.canDecide && (
+                            <ActionButton
+                              label="Reject"
+                              danger
+                              className="btn danger"
+                              confirmTitle="Reject this redemption?"
+                              confirmDescription="Rejecting restores the member's points and cannot be undone."
+                              requireReason
+                              reasonLabel="Reason for rejecting"
+                              onConfirm={(reason) => decide(r.id, "reject", r.version, reason)}
+                            />
+                          )}
+                          {r.canVoid && (
+                            <ActionButton
+                              label="Void"
+                              danger
+                              className="btn danger"
+                              confirmTitle="Void this redemption?"
+                              confirmDescription="Voiding restores the member's points and cannot be undone."
+                              requireReason
+                              reasonLabel="Reason for voiding"
+                              onConfirm={(reason) => voidRedemption(r.id, r.version, reason)}
+                            />
+                          )}
+                        </span>
                       ) : (
                         <span style={{ fontSize: 13, color: "var(--ink2)" }}>—</span>
                       ),

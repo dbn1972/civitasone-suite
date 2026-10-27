@@ -1660,7 +1660,10 @@ export type MilestoneSummary = {
 export type FundReleaseSummary = {
   id: string;
   releaseNo: string;
+  /** Historical alias: carries the scheme id (kept for existing consumers). */
   projectId: string;
+  /** GAP-PROJECTS-FUND-RELEASES-03: the explicit scheme id; mutation routes use this. */
+  schemeId?: string;
   projectName: string;
   amount: number;
   releaseDate: string;

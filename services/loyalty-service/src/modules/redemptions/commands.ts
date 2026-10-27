@@ -14,11 +14,18 @@ export interface RedeemPointsInput {
   points: number;
   rewardType: string;
   enrolmentVersion: number;
+  /** true: create a pending redemption (points held) that an admin later fulfils or rejects. */
+  deferFulfilment?: boolean;
 }
 
 export async function redeemPoints(ctx: RequestContext, body: RedeemPointsInput): Promise<Accepted> {
   const id = randomUUID();
-  return publishCommand(ctx, COMMANDS.redeemPoints, id, { id, ...body, status: "fulfilled" });
+  const { deferFulfilment, ...rest } = body;
+  return publishCommand(ctx, COMMANDS.redeemPoints, id, {
+    id,
+    ...rest,
+    status: deferFulfilment ? "pending" : "fulfilled",
+  });
 }
 
 export async function voidRedemption(
@@ -27,4 +34,20 @@ export async function voidRedemption(
   body: { reason: string; version: number; enrolmentId: string | null; points: string },
 ): Promise<Accepted> {
   return publishCommand(ctx, COMMANDS.voidRedemption, id, { id, ...body });
+}
+
+export async function fulfilRedemption(
+  ctx: RequestContext,
+  id: string,
+  body: { version: number },
+): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.fulfilRedemption, id, { id, ...body });
+}
+
+export async function rejectRedemption(
+  ctx: RequestContext,
+  id: string,
+  body: { reason: string; version: number },
+): Promise<Accepted> {
+  return publishCommand(ctx, COMMANDS.rejectRedemption, id, { id, ...body });
 }

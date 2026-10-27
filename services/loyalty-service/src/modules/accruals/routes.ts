@@ -25,6 +25,8 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const tenantListQuery = listQuery.extend({ enrolmentId: z.string().uuid().optional() });
+
 const idParam = z.object({ id: z.string().uuid() });
 
 const accrueBody = z.object({
@@ -70,6 +72,17 @@ export async function accrualRoutes(app: FastifyInstance): Promise<void> {
         enrolmentVersion: enrolment.version,
       }),
     );
+  });
+
+  // GAP-LOYALTY-ACCRUALS-01: tenant-wide points ledger (the page used to fall
+  // back to per-enrolment balances because only the per-enrolment list existed).
+  app.get("/v1/loyalty/accruals", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const q = tenantListQuery.parse(req.query);
+    const { rows, total } = await repo.listByTenant(ctx.tenantId, q.limit, q.offset, q.enrolmentId);
+    const page = Math.floor(q.offset / q.limit) + 1;
+    return reply.send({ data: rows.map(repo.toView), meta: { page, pageSize: q.limit, total } });
   });
 
   app.get("/v1/loyalty/enrolments/:id/accruals", async (req, reply) => {
