@@ -355,6 +355,16 @@ describe("GstnConsole", () => {
       expect(screen.getByText("REF-OLD-1")).toBeInTheDocument();
     });
 
+    it("describes the earlier return's status in plain words, never the raw status value", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [{ ...filed, status: "processing" }] }), { status: 200 }));
+      render(<GstnConsole />);
+      fillSubmitForm();
+      fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+      await waitFor(() => expect(screen.getByText(/was already filed for this GSTIN/)).toBeInTheDocument());
+      expect(screen.getByText(/status being processed\)/)).toBeInTheDocument();
+      expect(screen.queryByText(/status processing\)/)).not.toBeInTheDocument();
+    });
+
     it("shows no duplicate warning when only a rejected return exists or history is empty", async () => {
       vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [{ ...filed, status: "rejected" }] }), { status: 200 }));
       render(<GstnConsole />);

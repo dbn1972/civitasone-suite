@@ -57,6 +57,13 @@ const MONEY_FIELDS = [
   { key: "totalIgst", label: "Total IGST (₹)" },
 ] as const;
 
+const DUPLICATE_STATUS_LABEL: Record<string, string> = {
+  submitted: "submitted",
+  processing: "being processed",
+  filed: "filed",
+  rejected: "rejected",
+};
+
 export function SubmitReturnPanel({
   onSubmitted,
   onCheckStatus,
@@ -149,8 +156,8 @@ export function SubmitReturnPanel({
         totalIgst: minorToDecimalString(d.totalIgstMinor) ?? "",
       });
       setFieldErrors({});
-    } catch (err) {
-      setPrepareError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setPrepareError("Network error. Please try again.");
     } finally {
       setPrepareBusy(false);
     }
@@ -451,7 +458,7 @@ export function SubmitReturnPanel({
             {duplicates.length > 0 && (
               <p role="alert" className="pill warn" style={{ width: "fit-content", margin: 0 }}>
                 A {returnType} return for {returnPeriod} was already filed for this GSTIN (reference{" "}
-                <span className="mono">{duplicates[0]?.referenceId}</span>, status {duplicates[0]?.status}). Filing again may create a duplicate.
+                <span className="mono">{duplicates[0]?.referenceId}</span>, status {DUPLICATE_STATUS_LABEL[duplicates[0]?.status ?? ""] ?? "recorded"}). Filing again may create a duplicate.
               </p>
             )}
             <div className="fields">

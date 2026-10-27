@@ -49,8 +49,8 @@ export function FilingHistoryPanel({ onOpenStatus, refreshKey = 0 }: { onOpenSta
       }
       const body = (await res.json()) as { data?: FiledReturn[] };
       setRows(Array.isArray(body.data) ? body.data : []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+    } catch {
+      setError("Network error. Please try again.");
     }
   }, []);
 
