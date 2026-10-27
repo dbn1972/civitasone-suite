@@ -368,6 +368,7 @@ function makeToken(roles: string[] = ["super_admin"]): string {
 }
 const ADMIN_TOKEN = () => makeToken(["super_admin"]);
 const REGISTRAR_TOKEN = () => makeToken(["registrar"]);
+const COURT_ADMIN_TOKEN = () => makeToken(["court_admin"]);
 const NO_ROLE_TOKEN = () => makeToken(["employee"]);
 
 // ─── Seed data templates ─────────────────────────────────────────
@@ -493,7 +494,7 @@ describe("Case Registry Routes", () => {
       expect(getCasePartiesByCaseId).toHaveBeenCalledWith(TENANT_ID, CASE_ID);
     });
 
-    it("masks party contact PII for a registrar but reveals it for super_admin (DPDP regression guard)", async () => {
+    it("masks party contact PII for a registrar but reveals it for court_admin (DPDP regression guard)", async () => {
       // This is the exact bug PR #794 fixed: GET /cases/:id used to embed
       // parties straight from the DB row with NO role-based masking at all,
       // while the dedicated GET /cases/:id/parties endpoint (party module,
@@ -532,12 +533,19 @@ describe("Case Registry Routes", () => {
       expect(registrarBody.parties[0].emailEnc).toBeUndefined();
 
       (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockResolvedValueOnce([partyRow]);
-      const adminRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      const adminRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${COURT_ADMIN_TOKEN()}` } });
       expect(adminRes.statusCode).toBe(200);
       const adminBody = adminRes.json();
       expect(adminBody.piiRevealed).toBe(true);
       expect(adminBody.parties[0].name).toBe("Ramesh Kumar Sharma");
       expect(adminBody.parties[0].phone).toBe("9876543210");
+
+      // F12: super_admin is not an identity-reveal role - name and Bar ID stay masked.
+      (getCasePartiesByCaseId as ReturnType<typeof vi.fn>).mockResolvedValueOnce([partyRow]);
+      const superRes = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(superRes.json().identityRevealed).toBe(false);
+      expect(superRes.json().parties[0].name).toBe("R*** K*** S***");
+      expect(superRes.json().parties[0].advocateBarId).toBe("********2010");
     });
 
     it("returns 404 when not found", async () => {
@@ -1531,11 +1539,18 @@ describe("Party Routes", () => {
   });
 
   describe("GET /v1/court/cases/:id/parties", () => {
-    it("returns parties list with full PII for super_admin", async () => {
-      const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}/parties`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+    it("returns parties list with full PII for court_admin", async () => {
+      const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}/parties`, headers: { authorization: `Bearer ${COURT_ADMIN_TOKEN()}` } });
       expect(res.statusCode).toBe(200);
       expect(res.json().piiRevealed).toBe(true);
       expect(res.json().items[0].name).toBe("A. Rao");
+    });
+
+    it("F12: super_admin gets masked party names (not an identity-reveal role)", async () => {
+      const res = await app.inject({ method: "GET", url: `/v1/court/cases/${CASE_ID}/parties`, headers: { authorization: `Bearer ${ADMIN_TOKEN()}` } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().identityRevealed).toBe(false);
+      expect(res.json().items[0].name).toBe("A*** R***");
     });
 
     it("returns parties list with masked PII for registrar", async () => {

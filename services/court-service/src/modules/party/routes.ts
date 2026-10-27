@@ -30,7 +30,9 @@ export async function presentCaseParties(
   surface: "case_parties" | "case_detail",
 ) {
   const piiRevealed = hasAnyRole(ctx, PII_PRIVILEGED_ROLES);
-  const identityRevealed = piiRevealed || hasAnyRole(ctx, IDENTITY_REVEAL_ROLES);
+  // F12: identity follows ONLY IDENTITY_REVEAL_ROLES (judge / registrar / court_admin); holding a PII role
+  // (e.g. super_admin, for contact details) does NOT unmask names or Bar IDs.
+  const identityRevealed = hasAnyRole(ctx, IDENTITY_REVEAL_ROLES);
   if (identityRevealed) {
     const revealed = partiesRevealingIdentity(rows);
     if (revealed.length > 0) await commands.recordIdentityReveal(ctx, caseId, revealed, surface);

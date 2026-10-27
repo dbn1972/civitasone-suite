@@ -73,13 +73,24 @@ const caseUrl = `/v1/court/cases/${CASE_ID}`;
 type P = { id: string; name: string | null; advocateName: string | null; advocateBarId: string | null; address: string | null; phone: string | null };
 
 describe("party identity reveal (owner decision #32)", () => {
-  it.each([["judge"], ["registrar"], ["court_admin"], ["super_admin"]])("%s sees the full name, advocate name and Bar ID", async (role) => {
+  it.each([["judge"], ["registrar"], ["court_admin"]])("%s sees the full name, advocate name and Bar ID", async (role) => {
     const spy = vi.spyOn(appQueue, "publish").mockResolvedValue(undefined);
     const res = await app.inject({ method: "GET", url: partiesUrl, headers: hdr([role]) });
     expect(res.statusCode).toBe(200);
     const p1 = (res.json().items as P[]).find((p) => p.id === P1)!;
     expect(p1).toMatchObject({ name: "Ramesh Kumar Sharma", advocateName: "Adv. Priya Singh", advocateBarId: "UP/1234/2010" });
     expect(res.json().identityRevealed).toBe(true);
+    spy.mockRestore();
+  });
+
+  it("F12: super_admin is NOT an identity-reveal role - sees masked values and no reveal is audited", async () => {
+    const spy = vi.spyOn(appQueue, "publish").mockResolvedValue(undefined);
+    const res = await app.inject({ method: "GET", url: partiesUrl, headers: hdr(["super_admin"]) });
+    const p1 = (res.json().items as P[]).find((p) => p.id === P1)!;
+    expect(res.json().identityRevealed).toBe(false);
+    expect(p1.name).toBe("R*** K*** S***");
+    expect(p1.advocateBarId).toBe("********2010");
+    expect(spy.mock.calls.filter((c) => c[0] === REVEAL_TOPIC)).toHaveLength(0);
     spy.mockRestore();
   });
 
