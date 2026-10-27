@@ -31,7 +31,7 @@ function readParam(searchParams: Record<string, string | string[] | undefined> |
 }
 
 export default async function GRNPage(
-  props: { searchParams?: Promise<Record<string, string | string[] | undefined>> } = {},
+  props: { searchParams?: Promise<Record<string, string | string[] | undefined>> },
 ) {
   const t = await getTranslations("procurement.w2.grn");
   const searchParams = await props.searchParams;
