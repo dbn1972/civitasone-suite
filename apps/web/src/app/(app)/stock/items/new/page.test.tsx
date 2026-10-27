@@ -10,6 +10,10 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+// GAP-STOCK-ITEMS-NEW-01: the Server Action that purges the /stock Data Cache.
+const revalidateMock = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock("../../_actions", () => ({ revalidateStockViews: () => revalidateMock() }));
+
 import Page from "./page";
 
 function res(ok: boolean, status: number, body: unknown): Response {
@@ -44,6 +48,8 @@ async function fillValid() {
 beforeEach(() => {
   pushMock.mockReset();
   refreshMock.mockReset();
+  revalidateMock.mockReset();
+  revalidateMock.mockResolvedValue(undefined);
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -184,4 +190,40 @@ describe("New Stock Item page", () => {
     expect(body.reorderQty).toBe(5.5);
   });
 
+});
+// ── GAP-STOCK-ITEMS-NEW-01: the list the clerk lands on must not be a stale cached copy ──
+describe("GAP-STOCK-ITEMS-NEW-01: purge the stock view cache before landing on the list", () => {
+  it("awaits revalidateStockViews() before navigating to /stock/list (201 sync create)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      installLookupFetch();
+      render(<Page />);
+      await fillValid();
+      const order: string[] = [];
+      revalidateMock.mockImplementation(async () => { order.push("revalidate"); });
+      pushMock.mockImplementation(() => { order.push("push"); });
+      fireEvent.click(screen.getByRole("button", { name: /Create item/i }));
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Stock item created."));
+      await vi.advanceTimersByTimeAsync(800);
+      expect(order).toEqual(["revalidate", "push"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still navigates when the cache purge fails (it is an optimisation, not part of the write)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      installLookupFetch();
+      render(<Page />);
+      await fillValid();
+      revalidateMock.mockRejectedValue(new Error("no request scope"));
+      fireEvent.click(screen.getByRole("button", { name: /Create item/i }));
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Stock item created."));
+      await vi.advanceTimersByTimeAsync(800);
+      expect(pushMock).toHaveBeenCalledWith("/stock/list");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
