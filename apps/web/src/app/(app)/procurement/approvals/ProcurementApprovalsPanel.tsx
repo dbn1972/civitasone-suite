@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
-import { ConfirmDialog, DataTable, EmptyState, ErrorState, Button } from "@/app/_components/ds";
+import { ConfirmDialog, DataTable, EmptyState, ErrorState, Button, StatGrid, StatCard } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney, formatDateTimeIST } from "@/lib/formatters";
 
@@ -305,6 +305,15 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
   // GAP-PROCUREMENT-APPROVALS-07: the approver sees the value they are deciding on, in the dialog.
   const dialogValue = dialogTask ? taskValue(dialogTask) : null;
 
+  // D4c #17 (GAP-PROCUREMENT-APPROVALS-02, owner decision 2026-10-27): this workflow
+  // queue is the single source of truth for action AND for the figures. The tiles
+  // are computed from the same `tasks` the table renders, so they can never
+  // disagree with it; while the queue is loading or failed they read "—" (never a
+  // fabricated 0), and while more pages exist the counts carry a "+".
+  const statsUnknown = (loading || Boolean(error)) && tasks.length === 0;
+  const stat = (n: number): string | null => (statsUnknown ? null : `${n}${maybeIncomplete ? "+" : ""}`);
+  const countType = (...types: string[]) => tasks.filter((t) => t.refType && types.includes(t.refType)).length;
+
   // Build table rows as plain records for DataTable
   type TaskRow = {
     id: string;
@@ -382,6 +391,15 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
       <div className="card-h">
         <h3>Workflow approval queue</h3>
         {cacheNote ? <span style={{ fontSize: 12, color: "var(--warn)" }}>{cacheNote}</span> : null}
+      </div>
+      <div className="pad" style={{ paddingBottom: 0 }}>
+        <p style={{ fontSize: "0.8125rem", color: "var(--mut)", margin: "0 0 12px" }}>{tw("queueIntro")}</p>
+        <StatGrid>
+          <StatCard icon="⏳" tone="info" label={tw("statPending")} value={stat(tasks.length)} hint={maybeIncomplete ? tw("statsHintMore") : undefined} />
+          <StatCard icon="✍️" tone="warn" label={tw("statActionable")} value={stat(tasks.filter((t) => canActOnTask(t, viewerRoles)).length)} />
+          <StatCard icon="📋" tone="neutral" label={tw("statIndents")} value={stat(countType("procurement_indent"))} />
+          <StatCard icon="📦" tone="neutral" label={tw("statOrders")} value={stat(countType("procurement_po", "procurement_po_amendment"))} />
+        </StatGrid>
       </div>
       {message ? (
         <p className="pad" role="status" aria-live="polite" style={{ color: "var(--good)", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p>

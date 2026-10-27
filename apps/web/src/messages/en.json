@@ -6141,6 +6141,14 @@
         "trailUnavailable": "The approval trail could not be loaded just now, so it is not shown. This does not mean the indent has no decisions. Please try again shortly."
       },
       "approvals": {
+        "statPending": "Pending approvals",
+        "statActionable": "Awaiting your decision",
+        "statIndents": "Indents",
+        "statOrders": "Purchase orders",
+        "statsHintMore": "Counts cover the tasks loaded so far; more are waiting.",
+        "queueIntro": "This workflow queue is the single source for approvals: the figures and the Approve / Reject actions all come from it.",
+        "registerTitle": "Register of pending indents and draft POs (read-only)",
+        "registerNote": "For reference only. Items here are decided in the workflow queue above, never from this list, so its count can differ from the queue.",
         "value": "Value",
         "requestedBy": "Requested by",
         "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
