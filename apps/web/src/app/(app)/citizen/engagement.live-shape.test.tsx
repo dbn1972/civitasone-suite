@@ -50,8 +50,8 @@ const ALERTS = {
 };
 const NOTICES = {
   data: [
-    { id: "n1", noticeNo: "NTC-2026-1A2B3C4D", subject: "Road widening hearing", department: "Public Works", published: "2026-10-18T04:30:00.000Z", expiry: "", type: "Public Hearing" },
-    { id: "n2", noticeNo: "GAZ/2026/041", subject: "Stores tender", department: "Stores", published: "2026-10-10T04:30:00.000Z", expiry: "2099-01-01T00:00:00.000Z", type: "Tender" },
+    { id: "n1", noticeNo: "NTC-2026-1A2B3C4D", subject: "Road widening hearing", department: "Public Works", published: "2026-10-18T04:30:00.000Z", expiry: "", type: "Public Hearing", status: "published" },
+    { id: "n2", noticeNo: "GAZ/2026/041", subject: "Stores tender", department: "Stores", published: "2026-10-10T04:30:00.000Z", expiry: "2099-01-01T00:00:00.000Z", type: "Tender", status: "published" },
   ],
 };
 const SURVEYS = {

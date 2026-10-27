@@ -1046,7 +1046,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-05  ·  LOW  ·  partly  ·  theme FEATURE (was DEADROUTE)
 
-- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — no attachmentUrl/documentId in CitizenNotice and no publish/withdraw backend endpoint verified; cannot implement safely without backend contract)
+- [~] **Status** (UAT B4, 2026-10-27 PARTIAL: Draft / Publish / Withdraw built for officer roles with confirmation, maker-checker and audit enforced by the service. REMAINING: the View link needs an attachment/document reference on notices - NEEDS-OWNER-DECISION on how a notice attachment is stored: recommend a documentId pointing at document-service)
 - **First-pass claim:** Read-only route; no publish/withdraw action or link to the notice document (page tree has no mutation).
 - **Verified evidence:** Route is read-only: NoticesTable has no actions and CitizenNotice (_data/loaders.ts:3420-3428) has no document/url field, so no link to the notice document is possible from current data. No publish/withdraw endpoint is referenced anywhere in apps/web (grep). This is a missing feature rather than a dead route/link; backend contract cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`, `apps/web/src/app/_data/loaders.ts`

@@ -3517,6 +3517,7 @@ export const CitizenNoticeSchema = z.object({
   published: z.string(),
   expiry: z.string(),
   type: z.string(),
+  status: z.string(),
 });
 export const CitizenSurveySchema = z.object({
   id: z.string(),

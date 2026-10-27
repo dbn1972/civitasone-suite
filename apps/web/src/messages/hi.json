@@ -1414,7 +1414,11 @@
     "filterStatusAria": "स्थिति के अनुसार सूचनाएं फ़िल्टर करें",
     "filterActive": "सक्रिय",
     "filterExpired": "समाप्त",
-    "filterAll": "सभी"
+    "filterAll": "सभी",
+    "colActions": "कार्रवाइयाँ",
+    "statusDraft": "ड्राफ़्ट",
+    "statusWithdrawn": "वापस लिया गया",
+    "filterDrafts": "ड्राफ़्ट"
   },
   "citizenPayments": {
     "pageTitle": "शुल्क और भुगतान",
@@ -17388,6 +17392,8 @@
   "citizenEngagementActions": {
     "newAlert": "नई चेतावनी",
     "newAlertTitle": "नई सार्वजनिक चेतावनी",
+    "newNotice": "नई सूचना",
+    "newNoticeTitle": "नई सार्वजनिक सूचना",
     "draftNote": "ड्राफ़्ट के रूप में सहेजा जाएगा। नागरिकों को दिखने से पहले कोई दूसरा अधिकारी इसे प्रकाशित करेगा।",
     "saveDraft": "ड्राफ़्ट सहेजें",
     "fieldTitle": "शीर्षक",
@@ -17395,7 +17401,16 @@
     "fieldCategory": "श्रेणी",
     "fieldAudience": "लक्षित वर्ग",
     "fieldExpires": "समाप्ति (वैकल्पिक)",
+    "fieldSubject": "विषय",
+    "fieldDepartment": "विभाग",
+    "fieldNoticeNo": "सूचना क्रमांक (वैकल्पिक, खाली होने पर स्वतः बनेगा)",
+    "fieldType": "प्रकार",
+    "type_general": "सामान्य",
+    "type_statutory": "वैधानिक",
+    "type_public_hearing": "सार्वजनिक सुनवाई",
+    "type_tender": "निविदा",
     "nounAlert": "चेतावनी",
+    "nounNotice": "सूचना",
     "publish": "प्रकाशित करें",
     "withdraw": "वापस लें",
     "publishTitle": "इस {noun} को प्रकाशित करें?",

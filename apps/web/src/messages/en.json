@@ -1415,7 +1415,11 @@
     "filterStatusAria": "Filter notices by status",
     "filterActive": "Active",
     "filterExpired": "Expired",
-    "filterAll": "All"
+    "filterAll": "All",
+    "colActions": "Actions",
+    "statusDraft": "Draft",
+    "statusWithdrawn": "Withdrawn",
+    "filterDrafts": "Drafts"
   },
   "citizenPayments": {
     "pageTitle": "Fees & Payments",
@@ -17461,6 +17465,8 @@
   "citizenEngagementActions": {
     "newAlert": "New alert",
     "newAlertTitle": "New public alert",
+    "newNotice": "New notice",
+    "newNoticeTitle": "New public notice",
     "draftNote": "Saved as a draft. A different officer must publish it before citizens can see it.",
     "saveDraft": "Save draft",
     "fieldTitle": "Title",
@@ -17468,7 +17474,16 @@
     "fieldCategory": "Category",
     "fieldAudience": "Target audience",
     "fieldExpires": "Expires (optional)",
+    "fieldSubject": "Subject",
+    "fieldDepartment": "Department",
+    "fieldNoticeNo": "Notice number (optional, auto-numbered if blank)",
+    "fieldType": "Type",
+    "type_general": "General",
+    "type_statutory": "Statutory",
+    "type_public_hearing": "Public hearing",
+    "type_tender": "Tender",
     "nounAlert": "alert",
+    "nounNotice": "notice",
     "publish": "Publish",
     "withdraw": "Withdraw",
     "publishTitle": "Publish this {noun}?",

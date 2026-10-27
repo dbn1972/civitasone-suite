@@ -8,8 +8,8 @@ import { useFormError } from "@/lib/useFormError";
 import { UserFacingError } from "@/lib/userFacingError";
 
 /**
- * GAP-CITIZEN-ALERTS-05: officer authoring controls for
- * the public alerts board. The service enforces the real rules
+ * GAP-CITIZEN-ALERTS-05 / GAP-CITIZEN-NOTICES-05: officer authoring controls for
+ * the public alerts and notice board. The service enforces the real rules
  * (officer-tier roles, maker-checker: nobody publishes their own draft, past
  * expiry rejected); the web only shows the controls to officer roles and
  * surfaces the service's refusal in plain language. Every call is a CQRS
@@ -19,7 +19,7 @@ import { UserFacingError } from "@/lib/userFacingError";
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
-export type EngagementKind = "alerts";
+export type EngagementKind = "alerts" | "notices";
 
 function useEngagementPost() {
   const router = useRouter();
@@ -87,6 +87,54 @@ export function NewAlertButton() {
   );
 }
 
+const NOTICE_TYPES = ["general", "statutory", "public_hearing", "tender"] as const;
+
+export function NewNoticeButton() {
+  const t = useTranslations("citizenEngagementActions");
+  const { post, refresh } = useEngagementPost();
+  const [subject, setSubject] = useState("");
+  const [department, setDepartment] = useState("");
+  const [noticeNo, setNoticeNo] = useState("");
+  const [type, setType] = useState<(typeof NOTICE_TYPES)[number]>("general");
+  const [body, setBody] = useState("");
+  const [expires, setExpires] = useState("");
+  return (
+    <ActionButton
+      label={t("newNotice")}
+      confirmTitle={t("newNoticeTitle")}
+      confirmDescription={t("draftNote")}
+      confirmLabel={t("saveDraft")}
+      blockConfirm={subject.trim().length === 0 || department.trim().length === 0}
+      onConfirm={async () => {
+        await post("notices", {
+          subject: subject.trim(),
+          department: department.trim(),
+          type,
+          ...(noticeNo.trim() ? { noticeNo: noticeNo.trim() } : {}),
+          ...(body.trim() ? { body: body.trim() } : {}),
+          ...(toIsoOrUndefined(expires) ? { expiresAt: toIsoOrUndefined(expires) } : {}),
+        });
+      }}
+      onSuccess={() => { setSubject(""); setDepartment(""); setNoticeNo(""); setType("general"); setBody(""); setExpires(""); refresh(); }}
+    >
+      <label htmlFor="notice-subject" style={labelStyle}>{t("fieldSubject")}</label>
+      <input id="notice-subject" value={subject} maxLength={300} onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
+      <label htmlFor="notice-department" style={labelStyle}>{t("fieldDepartment")}</label>
+      <input id="notice-department" value={department} maxLength={128} onChange={(e) => setDepartment(e.target.value)} style={inputStyle} />
+      <label htmlFor="notice-no" style={labelStyle}>{t("fieldNoticeNo")}</label>
+      <input id="notice-no" value={noticeNo} maxLength={64} onChange={(e) => setNoticeNo(e.target.value)} style={inputStyle} />
+      <label htmlFor="notice-type" style={labelStyle}>{t("fieldType")}</label>
+      <select id="notice-type" value={type} onChange={(e) => setType(e.target.value as (typeof NOTICE_TYPES)[number])} style={inputStyle}>
+        {NOTICE_TYPES.map((v) => <option key={v} value={v}>{t(`type_${v}`)}</option>)}
+      </select>
+      <label htmlFor="notice-body" style={labelStyle}>{t("fieldBody")}</label>
+      <textarea id="notice-body" value={body} maxLength={8000} rows={4} onChange={(e) => setBody(e.target.value)} style={{ ...inputStyle, minHeight: 88 }} />
+      <label htmlFor="notice-expires" style={labelStyle}>{t("fieldExpires")}</label>
+      <input id="notice-expires" type="datetime-local" value={expires} onChange={(e) => setExpires(e.target.value)} style={inputStyle} />
+    </ActionButton>
+  );
+}
+
 /**
  * Publish (draft only) and Withdraw (any not-yet-withdrawn row) for one alert or
  * notice. Publishing a public notice is a statutory act, so each action goes
@@ -95,7 +143,7 @@ export function NewAlertButton() {
 export function PublishWithdrawActions({ kind, id, status }: { kind: EngagementKind; id: string; status: string }) {
   const t = useTranslations("citizenEngagementActions");
   const { post, refresh } = useEngagementPost();
-  const noun = t("nounAlert");
+  const noun = kind === "alerts" ? t("nounAlert") : t("nounNotice");
   const isDraft = status === "draft";
   const isWithdrawn = status === "withdrawn";
   if (!isDraft && isWithdrawn) return null;

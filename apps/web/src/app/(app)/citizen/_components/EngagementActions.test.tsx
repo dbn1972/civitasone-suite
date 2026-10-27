@@ -6,7 +6,7 @@ import enMessages from "@/messages/en.json";
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
-import { NewAlertButton, PublishWithdrawActions } from "./EngagementActions";
+import { NewAlertButton, NewNoticeButton, PublishWithdrawActions } from "./EngagementActions";
 
 function ui(node: React.ReactElement) {
   return render(<NextIntlClientProvider locale="en" messages={enMessages}>{node}</NextIntlClientProvider>);
@@ -25,28 +25,28 @@ describe("PublishWithdrawActions", () => {
     expect(screen.getByRole("button", { name: "Publish" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
     a.unmount();
-    const b = ui(<PublishWithdrawActions kind="alerts" id="a1" status="published" />);
+    const b = ui(<PublishWithdrawActions kind="notices" id="n1" status="published" />);
     expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
     b.unmount();
-    const c = ui(<PublishWithdrawActions kind="alerts" id="a1" status="withdrawn" />);
+    const c = ui(<PublishWithdrawActions kind="notices" id="n1" status="withdrawn" />);
     expect(c.container).toBeEmptyDOMElement();
   });
 
-  it("publishes a draft alert via POST /alerts/:id/publish after confirmation, then refreshes", async () => {
+  it("publishes a draft notice via POST /notices/:id/publish after confirmation, then refreshes", async () => {
     const fetchMock = stubFetch();
-    ui(<PublishWithdrawActions kind="alerts" id="a-1" status="draft" />);
+    ui(<PublishWithdrawActions kind="notices" id="n-1" status="draft" />);
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Publish" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/proxy/v1/citizen/alerts/a-1/publish");
+    expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/proxy/v1/citizen/notices/n-1/publish");
     expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe("POST");
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 
   it("shows plain language (no raw server text) when the service refuses, e.g. maker-checker 403", async () => {
-    stubFetch(403, { code: "FORBIDDEN", message: "maker-checker: the creator of an alert cannot publish it" });
-    ui(<PublishWithdrawActions kind="alerts" id="a-1" status="draft" />);
+    stubFetch(403, { code: "FORBIDDEN", message: "maker-checker: the creator of a notice cannot publish it" });
+    ui(<PublishWithdrawActions kind="notices" id="n-1" status="draft" />);
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
     fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Publish" }));
     const alert = await screen.findByText(/couldn.t|not allowed|permission/i);
@@ -71,5 +71,20 @@ describe("authoring forms", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(String(fetchMock.mock.calls[0]![0])).toBe("/api/proxy/v1/citizen/alerts");
     expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ title: "Water outage", category: "Utilities" });
+  });
+
+  it("New notice requires subject and department and posts the chosen type", async () => {
+    const fetchMock = stubFetch();
+    ui(<NewNoticeButton />);
+    fireEvent.click(screen.getByRole("button", { name: "New notice" }));
+    expect(await screen.findByRole("button", { name: "Save draft" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Subject"), { target: { value: "Road hearing" } });
+    expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Department"), { target: { value: "Public Works" } });
+    fireEvent.change(screen.getByLabelText("Type"), { target: { value: "public_hearing" } });
+    await waitFor(() => expect(screen.getByRole("button", { name: "Save draft" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "Save draft" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ subject: "Road hearing", department: "Public Works", type: "public_hearing" });
   });
 });
