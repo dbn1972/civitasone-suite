@@ -14,6 +14,7 @@
  * book before this fix (HR/manager only). GET /v1/hrms/service-book/me is
  * new, resolving the caller's own record server-side.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -22,7 +23,7 @@ import { sqlClient } from "../shared/db.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
-const TENANT      = "facade00-0f1b-4000-8000-000000000f1b";
+const TENANT      = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const SEED_ACTOR   = "facade00-0f1b-4000-8000-0000000000ff";
 const DEPT_A       = "facade00-0f1b-4000-8000-0000000000d1";
 const DEPT_B       = "facade00-0f1b-4000-8000-0000000000d2";

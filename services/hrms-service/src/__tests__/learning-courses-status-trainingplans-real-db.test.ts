@@ -9,6 +9,7 @@
  * TRAINING-PLANS-05: the list route returns {data,total}, honours ?year and
  * ?limit/?offset.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -17,7 +18,7 @@ import { sqlClient } from "../shared/db.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
-const TENANT     = "facade00-1ea2-4000-8000-000000000b01";
+const TENANT     = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const SEED_ACTOR = "facade00-1ea2-4000-8000-0000000000fe";
 
 const PUB_COURSE   = "facade00-1ea2-4000-8000-0000000000f1";

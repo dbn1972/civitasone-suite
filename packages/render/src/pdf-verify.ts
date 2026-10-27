@@ -228,14 +228,20 @@ export function verifyPdfSignature(pdfBuffer: Buffer): VerifyResult {
     return { valid: false, issues: ["empty_signature"] };
   }
 
-  const evenHex = trimmedHex.length % 2 === 0 ? trimmedHex : trimmedHex + "0";
-  const derBytes = forge.util.hexToBytes(evenHex);
+  // Do NOT parse the zero-stripped hex: the /Contents placeholder is zero-padded
+  // after the DER blob, so stripping trailing "0" characters cannot tell padding
+  // from a signature whose final octet is 0x00 (about 1 in 256 RSA signatures).
+  // Such a signature lost its last byte and was rejected as "invalid_pkcs7".
+  // Parse the full placeholder and let the DER length header delimit the blob
+  // (parseAllBytes:false: the zero padding after it is expected).
+  const fullHex = signatureHex.length % 2 === 0 ? signatureHex : signatureHex + "0";
+  const derBytes = forge.util.hexToBytes(fullHex);
 
   // Step 3: Parse CMS SignedData (PKCS#7)
   let pkcs7Asn1: forge.asn1.Asn1;
   let p7: forge.pkcs7.PkcsSignedData;
   try {
-    pkcs7Asn1 = forge.asn1.fromDer(derBytes);
+    pkcs7Asn1 = forge.asn1.fromDer(derBytes, { parseAllBytes: false } as unknown as boolean /* @types/node-forge only types the legacy boolean form */);
     const msg = forge.pkcs7.messageFromAsn1(pkcs7Asn1);
     p7 = msg as forge.pkcs7.PkcsSignedData;
   } catch {

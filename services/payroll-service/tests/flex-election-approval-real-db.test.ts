@@ -222,7 +222,14 @@ describe("flex election approval -- maker-checker (default ON)", () => {
       decide(id, "approve", CHECKER, OFFICER),
       decide(id, "reject", CHECKER_2, OFFICER, { reason: "rejecting concurrently here" }),
     ]);
-    expect([a.statusCode, b.statusCode]).toEqual([202, 202]);
+    // Both reviewers pass the route's "still pending" pre-check before either decision
+    // commits -> 202/202. If the winner's decision commits first, the loser is refused at
+    // the route instead -> 202/409 ELECTION_NOT_PENDING. Which one happens is scheduling,
+    // not behaviour; the invariant (one decision, one audit row) is asserted below.
+    const statuses = [a.statusCode, b.statusCode].sort();
+    expect(statuses[0]).toBe(202);
+    expect([202, 409]).toContain(statuses[1]);
+    for (const r of [a, b]) if (r.statusCode === 409) expect(r.json().code).toBe("ELECTION_NOT_PENDING");
     const row = await until(() => read(id), (r) => r?.status !== "submitted");
     await settle();
     expect(["approved", "rejected"]).toContain(row?.status);

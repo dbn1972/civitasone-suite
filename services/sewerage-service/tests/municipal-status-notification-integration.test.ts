@@ -121,7 +121,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     sewerageDb.transaction((tx) =>
-      tx.delete(sewerageOutboxMessages).where(eq(sewerageOutboxMessages.tenantId, TENANT)),
+      tx.delete(sewerageOutboxMessages).where(and(eq(sewerageOutboxMessages.tenantId, TENANT), eq(sewerageOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   await sewerageSqlClient.end();

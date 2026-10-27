@@ -120,7 +120,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     crematoriumDb.transaction((tx) =>
-      tx.delete(crematoriumOutboxMessages).where(eq(crematoriumOutboxMessages.tenantId, TENANT)),
+      tx.delete(crematoriumOutboxMessages).where(and(eq(crematoriumOutboxMessages.tenantId, TENANT), eq(crematoriumOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   await crematoriumSqlClient.end();

@@ -124,7 +124,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     fireDb.transaction((tx) =>
-      tx.delete(fireOutboxMessages).where(eq(fireOutboxMessages.tenantId, TENANT)),
+      tx.delete(fireOutboxMessages).where(and(eq(fireOutboxMessages.tenantId, TENANT), eq(fireOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   await fireSqlClient.end();

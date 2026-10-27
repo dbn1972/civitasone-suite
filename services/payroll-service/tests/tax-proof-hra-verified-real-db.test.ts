@@ -22,7 +22,7 @@ import { hraExemptionMinor } from "../src/modules/tax/engine.js";
 import { applyPlanToRowExact } from "../src/modules/tax/verified-inputs.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "90000000-4802-4000-8000-000000000001";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const EMPLOYEE = "70000000-4802-4000-8000-0000000000e1";
 const EMPLOYEE_LOGIN = "70000000-4802-4000-8000-0000000000f1";
 const OFFICER = randomUUID();

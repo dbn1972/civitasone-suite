@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -542,7 +542,7 @@ describe("config feature-flag create — idempotent insert (integration)", () =>
   beforeAll(async () => {
     await runWithTenant(PLATFORM, () => db.transaction(async (tx) => {
       await tx.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+      await tx.delete(outboxMessages).where(and(eq(outboxMessages.tenantId, PLATFORM), eq(outboxMessages.actorId, ACTOR))); // this file's rows only: the platform tenant's outbox is shared by sibling files
       await tx.delete(processed).where(eq(processed.messageId, MSG_A));
       await tx.delete(processed).where(eq(processed.messageId, MSG_B));
     }));
@@ -550,7 +550,7 @@ describe("config feature-flag create — idempotent insert (integration)", () =>
   afterAll(async () => {
     await runWithTenant(PLATFORM, () => db.transaction(async (tx) => {
       await tx.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+      await tx.delete(outboxMessages).where(and(eq(outboxMessages.tenantId, PLATFORM), eq(outboxMessages.actorId, ACTOR))); // this file's rows only: the platform tenant's outbox is shared by sibling files
       await tx.delete(processed).where(eq(processed.messageId, MSG_A));
       await tx.delete(processed).where(eq(processed.messageId, MSG_B));
     }));

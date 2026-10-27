@@ -15,7 +15,7 @@ import { HttpError } from "../src/shared/context.js";
 
 const MAKER   = "00000000-bbbb-4000-8000-0000000000a1";
 const CHECKER = "00000000-bbbb-4000-8000-0000000000a2";
-const TENANT  = "22222222-bbbb-4000-8000-0000000000ff";
+const TENANT  = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 
 function ctx(actorId: string): RequestContext {
   return { tenantId: TENANT, actorId, actorType: "user", roles: ["procurement_admin"], correlationId: "c-sod" };

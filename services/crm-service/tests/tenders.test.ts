@@ -8,6 +8,7 @@
  * before returning, and state is asserted through the read path rather than
  * from the command response.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, afterAll, beforeAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -26,7 +27,7 @@ import {
 } from "../src/modules/deals/tender-domain.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "aaaaaaaa-1111-4000-8000-000000000060";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const ACTOR = "cccccccc-3333-4000-8000-000000000060";
 const ACCOUNT = "dddddddd-4444-4000-8000-000000000060";
 const NONEXIST = "ffffffff-ffff-4000-8000-000000000060";

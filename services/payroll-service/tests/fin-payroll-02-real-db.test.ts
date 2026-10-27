@@ -134,7 +134,7 @@ describe("gratuity rule config (GAP-PAYROLL-STATUTORY-GRATUITY-01/04)", () => {
     const before = await app.inject({ method: "GET", url: "/v1/payroll/statutory/gratuity/rules?asOf=2023-12-31", headers: auth(ADMIN, ADMIN_ROLES) });
     expect(before.json().resolved.ruleSet).toBe("pog_act");
 
-    const trail = await q(sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic = 'audit.event.record' AND payload->>'resourceType' = 'gratuity_rule_config'`);
+    const trail = await q(sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic = 'audit.event.record' AND payload->>'resourceType' = 'gratuity_rule_config' ORDER BY created_at`);
     expect(trail).toHaveLength(1);
     expect(trail[0]!.payload).toMatchObject({ action: "create", before: { ruleSet: "pog_act" }, after: { ruleSet: "ccs_dcrg" }, changeReason: body.changeReason });
     expect(trail[0]!.actor_id).toBe(ADMIN);
@@ -187,7 +187,7 @@ describe("arrears maker-checker (GAP-PAYROLL-ARREARS-03)", () => {
     expect(res.statusCode).toBe(202);
     await drain();
     expect(await arrear(id)).toMatchObject({ status: "approved", decided_by: CHECKER, decision_note: "checked against order" });
-    const trail = await q(sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceId' = ${id}`);
+    const trail = await q(sql`SELECT actor_id, payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceId' = ${id} ORDER BY created_at`);
     expect(trail).toHaveLength(1);
     expect(trail[0]).toMatchObject({ actor_id: CHECKER });
     expect(trail[0]!.payload).toMatchObject({ action: "approve", resourceType: "payroll_arrear", differenceMinor: "50000" });
@@ -228,7 +228,7 @@ describe("arrears maker-checker (GAP-PAYROLL-ARREARS-03)", () => {
     const row = await arrear(id);
     expect(["approved", "rejected"]).toContain(row.status);
     expect([CHECKER, CHECKER_2]).toContain(row.decided_by);
-    const trail = await q(sql`SELECT payload->>'action' AS action FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceId' = ${id}`);
+    const trail = await q(sql`SELECT payload->>'action' AS action FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceId' = ${id} ORDER BY created_at`);
     const actions = trail.map((r) => r.action).sort();
     expect(actions).toHaveLength(2);
     expect(actions).toContain("decide_refused"); // the loser is audited, not silent
@@ -286,7 +286,7 @@ describe("arrears maker-checker (GAP-PAYROLL-ARREARS-03)", () => {
     expect(res.statusCode).toBe(202);
     await drain();
     expect((await app.inject({ method: "GET", url: "/v1/payroll/arrears/approval-policy", headers: auth(ADMIN, ADMIN_ROLES) })).json().required).toBe(false);
-    const trail = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceType'='payroll_arrear_policy'`);
+    const trail = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceType'='payroll_arrear_policy' ORDER BY created_at`);
     expect(trail[0]!.payload).toMatchObject({ before: { required: true }, after: { required: false }, reason: "small office, single payroll officer" });
     const id = await seedArrear({ createdBy: MAKER });
     expect((await decide(id, "approve", MAKER)).statusCode).toBe(202);
@@ -375,7 +375,7 @@ describe("tax declaration lifecycle (GAP-PAYROLL-TAX-DECLARATION-02/04/05)", () 
     await app.inject({ method: "PUT", url: "/v1/payroll/tax-declarations/window", headers: auth(ADMIN, ADMIN_ROLES), payload: { fy: FY, closesOn: "2099-12-31", changeReason: "extended by order dated today" } });
     await drain();
     expect((await declare(EMPLOYEE_ROLES, EMP_LOGIN, { section80c: 400000 })).statusCode).toBe(202);
-    const trail = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceType'='tax_declaration_window'`);
+    const trail = await q(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT}::uuid AND topic='audit.event.record' AND payload->>'resourceType'='tax_declaration_window' ORDER BY created_at`);
     expect(trail.length).toBe(2);
     expect(trail[1]!.payload).toMatchObject({ action: "set_window", before: { closesOn: "2020-01-01" }, after: { closesOn: "2099-12-31" } });
   });
