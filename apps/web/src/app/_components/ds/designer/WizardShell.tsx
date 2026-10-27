@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent, ReactNode } from "react";
 import { Button } from "../Button";
+import { useDesignerT } from "@/lib/designerText";
 
 export type BlockStatus = "empty" | "in-progress" | "complete" | "error";
 
@@ -128,6 +129,8 @@ export interface WizardShellProps {
   onBack?: () => void;
   onNext?: () => void;
   canRunTest?: boolean;
+  /** Labels of the required blocks still holding Run Test back (D4c #11). */
+  runTestBlockedBy?: string[];
   canSubmit?: boolean;
   onRunTest?: () => void;
   onSubmit?: () => void;
@@ -150,6 +153,7 @@ export function WizardShell({
   onBack,
   onNext,
   canRunTest = false,
+  runTestBlockedBy,
   canSubmit = false,
   onRunTest,
   onSubmit,
@@ -158,10 +162,16 @@ export function WizardShell({
   help,
   footerMeta,
 }: WizardShellProps) {
+  const t = useDesignerT();
   const saveLabel =
     saveState === "saving" ? "Saving…"
       : saveState === "offline" ? "Offline — retrying"
         : "Saved just now";
+
+  const runTestHint =
+    !canRunTest && runTestBlockedBy && runTestBlockedBy.length > 0
+      ? t("runTestWaiting", { blocks: runTestBlockedBy.join(", ") })
+      : null;
 
   return (
     <div className="designer-wizard" style={{ display: "flex", flexDirection: "column", minHeight: "calc(100vh - 120px)" }}>
@@ -222,6 +232,11 @@ export function WizardShell({
               {footerMeta}
             </span>
           ) : null}
+          {runTestHint ? (
+            <span data-testid="run-test-blockers" style={{ fontSize: 12, color: "var(--warn)" }}>
+              {runTestHint}
+            </span>
+          ) : null}
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {onBack ? (
@@ -235,7 +250,7 @@ export function WizardShell({
             variant="ghost"
             disabled={!canRunTest}
             onClick={onRunTest}
-            title={canRunTest ? undefined : "Complete all active blocks first"}
+            title={canRunTest ? undefined : (runTestHint ?? t("runTestFallback"))}
           >
             Run Test
           </Button>

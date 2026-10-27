@@ -135,3 +135,49 @@ describe("useDesignerWizard — canSubmit is bound to the tested design", () => 
     expect((await submittable({ id: "", status: "none" })).canSubmit).toBe(false);
   });
 });
+
+/**
+ * Owner decision D4c #11 (GAP-DESIGNER-DETAIL-B8-03): blocks 1 to 7 must be
+ * complete before the officer can run the test; block 8 (notifications) may stay
+ * optional. The hook says which block is holding Run Test back.
+ */
+describe("useDesignerWizard — Run Test needs blocks 1 to 7 complete (D4c #11)", () => {
+  const COMPLETE = {
+    id: "def-1", serviceKey: "k", name: "S", servicePattern: "certificate",
+    channels: ["portal"], status: "draft", version: 1,
+    formId: "f", eligibilityRuleSetId: "e", workflowDefinitionId: "w", feeScheduleId: "fs", hoaCode: "h",
+    requiredDocuments: [{ docType: "id" }], issuanceType: "certificate",
+  };
+  async function wizardFor(def: Record<string, unknown>) {
+    fetchServiceDefinition.mockReset().mockResolvedValue(def);
+    fetchLatestSandboxTest.mockReset().mockResolvedValue({ id: "", status: "none" });
+    const { result } = renderHook(() => useDesignerWizard("def-1", "b1"));
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    return result.current;
+  }
+
+  it("allows Run Test when b1-b7 are complete even though b8 is only in progress", async () => {
+    const w = await wizardFor(COMPLETE);
+    expect(w.blocks.find((b) => b.id === "b8")?.status).toBe("in-progress");
+    expect(w.canRunTest).toBe(true);
+    expect(w.runTestBlockedBy).toEqual([]);
+  });
+
+  it("a fee model with no Head of Account (b5 in progress) holds Run Test back and names the block", async () => {
+    const w = await wizardFor({ ...COMPLETE, hoaCode: undefined });
+    expect(w.canRunTest).toBe(false);
+    expect(w.runTestBlockedBy).toEqual(["Fee & Revenue"]);
+  });
+
+  it("names every incomplete required block, in order", async () => {
+    const w = await wizardFor({ ...COMPLETE, formId: undefined, requiredDocuments: [] });
+    expect(w.canRunTest).toBe(false);
+    expect(w.runTestBlockedBy).toEqual(["Intake Form", "Documents"]);
+  });
+
+  it("does not hold Run Test back for a block the pattern hides", async () => {
+    const w = await wizardFor({ ...COMPLETE, servicePattern: "collection", eligibilityRuleSetId: undefined, workflowDefinitionId: undefined, requiredDocuments: [] });
+    expect(w.canRunTest).toBe(true);
+  });
+});

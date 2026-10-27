@@ -35,8 +35,16 @@ function blockStatusForDef(def: ServiceDefinitionDto, blockId: string, hidden: S
   }
 }
 
-function blocksCompleteEnough(blocks: DesignerBlock[]): boolean {
-  return blocks.filter((b) => !b.hidden).every((b) => b.status === "complete" || b.status === "in-progress");
+/**
+ * Owner decision D4c #11 (GAP-DESIGNER-DETAIL-B8-03): blocks 1 to 7 must be
+ * complete before the officer can run the test; block 8 (outputs, notifications)
+ * may stay optional. Returns the blocks holding Run Test back, in rail order, so
+ * the footer can say which one to finish.
+ */
+export const OPTIONAL_FOR_RUN_TEST = new Set(["b8"]);
+
+export function blocksHoldingRunTest(blocks: DesignerBlock[]): DesignerBlock[] {
+  return blocks.filter((b) => !b.hidden && !OPTIONAL_FOR_RUN_TEST.has(b.id) && b.status !== "complete");
 }
 
 export function useDesignerWizard(definitionId: string, activeBlockId: string) {
@@ -105,7 +113,8 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
   }, [def, hidden]);
 
   const { prev, next } = adjacentBlocks(pattern, activeBlockId);
-  const canRunTest = blocksCompleteEnough(blocks);
+  const runTestBlockedBy = useMemo(() => blocksHoldingRunTest(blocks).map((b) => b.label), [blocks]);
+  const canRunTest = runTestBlockedBy.length === 0;
   const canSubmit = canRunTest && testPassed && def?.status === "draft" && !def?.submittedBy;
 
   const onRunTest = useCallback(() => {
@@ -151,6 +160,7 @@ export function useDesignerWizard(definitionId: string, activeBlockId: string) {
     prev,
     next,
     canRunTest,
+    runTestBlockedBy,
     canSubmit,
     testPassed,
     submitting,
