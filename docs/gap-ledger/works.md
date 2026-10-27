@@ -2507,7 +2507,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [~] **Status** (NEEDS OWNER DECISION: location field label and master data for location picker; GAP-WORKS-PROPOSALS-NEW-04)
+- [~] **Status** (NEEDS OWNER DECISION: location field label and master data for location picker; GAP-WORKS-PROPOSALS-NEW-04) [partly built by 31fc27889 per owner decision D4c #39, 2026-10-27: label is now Tehsil / Block (en+hi); LGD district/block picker still open: location-service masters are role-gated to location roles and expose no admin-level filter, so works users cannot read them]
 - **W2 works part 2 note (#2047):** Taluka/Tehsil label and location masters need a product decision. INTERIM, owner decision.
 - **W2 works note (#2039):** needs a product decision (Taluka/Tehsil label, location masters).
 - **First-pass claim:** Location is three free-text fields (District, Taluka, Village) — "Taluka" is not an Odisha administrative term (tehsil/block) and values are not validated against a master; no latitude/longitude or executing division/office field although the list shows Office (ProposalsTable.tsx:14).
