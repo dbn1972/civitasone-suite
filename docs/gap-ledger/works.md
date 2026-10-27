@@ -3334,7 +3334,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (NEEDS OWNER DECISION: estimated-cost cap and duplicate detection for proposals need product rules; GAP-WORKS-PROPOSALS-NEW-06)
+- [x] **Status** Closed by b7de6b503 (owner decision D4c #44, 2026-10-27): no hard cost cap; likely duplicate (title, location, category, financial year) is warned about, never blocked
 - **W2 works part 2 note (#2047):** estimated-cost cap and duplicate detection need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** cost cap and duplicate detection need a product rule.
 - **W0 note:** partly fixed by #1867 — description max 2048, category enum, uuid fields and audit present; no estimated-cost cap and no duplicate detection.
