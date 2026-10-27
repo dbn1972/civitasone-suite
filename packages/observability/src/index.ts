@@ -764,6 +764,8 @@ export function formatSharedMetrics(): string[] {
 }
 
 /** Standard /health /ready /metrics /openapi.json for every service. */
+const UNSAFE_OPENAPI_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
   const version = opts.version ?? process.env.npm_package_version ?? "0.1.0";
 
@@ -864,13 +866,17 @@ export function registerOpsRoutes(app: AppLike, opts: OpsOptions): void {
 
   app.addHook("onReady", async () => {
     const routes = (app as { routes?: Array<{ method: string | string[]; url: string }> }).routes ?? [];
-    const paths: Record<string, Record<string, unknown>> = {};
+    // Route URLs / methods are registration-time data, but still never let them
+    // address Object.prototype: null-prototype maps plus an explicit key blocklist.
+    const paths: Record<string, Record<string, unknown>> = Object.create(null);
     for (const r of routes) {
       const methods = Array.isArray(r.method) ? r.method : [r.method];
       const path = r.url.replace(/:(\w+)/g, "{$1}");
-      paths[path] ??= {};
+      if (UNSAFE_OPENAPI_KEYS.has(path)) continue;
+      paths[path] ??= Object.create(null) as Record<string, unknown>;
       for (const m of methods) {
         const ml = m.toLowerCase();
+        if (UNSAFE_OPENAPI_KEYS.has(ml)) continue;
         paths[path][ml] = {
           summary: `${m} ${path}`,
           responses: ml === "get"

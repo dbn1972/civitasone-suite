@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { registerOpsRoutes } from "@civitasone/observability";
 import { createQueue, resolveQueueDriver } from "./bus.js";
 
@@ -16,16 +17,30 @@ import { createQueue, resolveQueueDriver } from "./bus.js";
  * here). Deployability is the `queue` PM2 process + `/ready` 200 (PM2
  * `wait_ready` via `signalReady()` — see server.ts, PERF-015 tranche 5).
  */
+// Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
+// external caller cannot forge it. Same value as hrms-service INTERNAL_PROXY_TRUST. Deliberately not `true`.
+const INTERNAL_PROXY_TRUST = "loopback,linklocal,uniquelocal";
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     // SEC: explicit request-body cap (1 MiB) -- bounds zod collection validation (GHSA-mrhx-c7xc-m3w5); guarded by scripts/ci/fastify-bodylimit-guard.mjs
     bodyLimit: 1_048_576,
+    trustProxy: INTERNAL_PROXY_TRUST,
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
   await app.register(authPlugin);
+
+  // Per-user rate limiting (300 req/min keyed by actorId, ops paths excluded), same shape as
+  // hrms/billing/audit-service. authPlugin is registered first so req.ctx is populated.
+  await registerRateLimit(app, {
+    max: 300,
+    timeWindow: "1 minute",
+    keyGenerator: (req) => (req as { ctx?: { actorId?: string } }).ctx?.actorId ?? req.ip ?? "anonymous",
+    skip: (req) => (req.url ?? "").startsWith("/health") || (req.url ?? "").startsWith("/ready") || (req.url ?? "").startsWith("/metrics"),
+  });
 
   const bus = createQueue();
   // PERF-015 tranche 5: tie the bus client's lifecycle to the Fastify app's

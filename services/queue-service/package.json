@@ -26,6 +26,7 @@
     "@civitasone/db": "workspace:*",
     "@civitasone/events": "workspace:*",
     "@civitasone/observability": "workspace:*",
+    "@civitasone/rate-limit": "workspace:*",
     "@civitasone/types": "workspace:*",
     "@fastify/cors": "^9.0.0",
     "@smithy/node-http-handler": "^3.3.3",

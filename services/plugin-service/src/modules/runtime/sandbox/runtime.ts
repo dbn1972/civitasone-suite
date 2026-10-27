@@ -137,6 +137,20 @@ function toRehydratableJson(value: unknown): string {
 }
 
 /**
+ * Encode a string as a JavaScript string-literal that is safe to splice into
+ * generated source. JSON.stringify alone leaves U+2028/U+2029 and the HTML-ish
+ * characters `<`, `>`, `/` raw; escape them (and every other non-ASCII-printable
+ * code unit) as \\uXXXX so the literal can never terminate its enclosing
+ * statement, comment or script context, whatever the embedded value contains.
+ */
+export function toJsStringLiteral(value: string): string {
+  return JSON.stringify(value).replace(
+    /[<>/\u2028\u2029\u007f-\uffff]/g,
+    (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+}
+
+/**
  * Execute an untrusted handler body in an isolated vm context.
  * @param handler   plugin-supplied JS (the async function body)
  * @param api       the ONLY capabilities exposed to the handler (as `ctx`)
@@ -203,7 +217,7 @@ export async function runInSandbox(
   // untrusted handler shares that same global scope and could reference it
   // directly, same as `ctx`.
   const rehydrateSource = objectEntries
-    .map(([key, value]) => `ctx[${JSON.stringify(key)}] = JSON.parse(${JSON.stringify(toRehydratableJson(value))});`)
+    .map(([key, value]) => `ctx[${toJsStringLiteral(key)}] = JSON.parse(${toJsStringLiteral(toRehydratableJson(value))});`)
     .join(" ");
 
   // Wrap the handler body in an async IIFE. `eval`/`new Function` inside the
