@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
+import * as repo from "./repo.js";
 import {
   submitGstReturn,
   verifyGstin,
@@ -90,6 +91,13 @@ const gstReturnBody = z
     },
     { message: "a return cannot carry both CGST/SGST and IGST" },
   );
+
+const returnListQuery = z.object({
+  gstin: z.string().length(15).optional(),
+  period: z.string().regex(/^(0[1-9]|1[0-2])\/\d{4}$/).optional(),
+  returnType: z.enum(["GSTR1", "GSTR3B", "GSTR9", "GSTR9C"]).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 const returnRefParam = z.object({
   ref: z.string().min(1).max(128),
@@ -229,6 +237,19 @@ export async function gstnRoutes(app: FastifyInstance): Promise<void> {
 
       await publishAudit("success", { referenceId: result.referenceId, returnStatus: result.status });
 
+      // GAP-BILLING-GSTN-05: remember the filing so the console can show history and warn on a
+      // duplicate period/type. The filing already happened: a failed history write must never
+      // turn a filed return into an error response, so it is logged and the 201 stands.
+      await repo
+        .insertReturn({
+          tenantId: ctx.tenantId, gstin: body.gstin, returnPeriod: body.returnPeriod, returnType: body.returnType,
+          referenceId: result.referenceId, status: result.status,
+          totalTaxableMinor: BigInt(body.totalTaxableValue), totalCgstMinor: BigInt(body.totalCgst),
+          totalSgstMinor: BigInt(body.totalSgst), totalIgstMinor: BigInt(body.totalIgst),
+          createdBy: ctx.actorId, updatedBy: ctx.actorId,
+        })
+        .catch((e: unknown) => req.log.error({ err: e, referenceId: result.referenceId }, "GSTN return filed but history write failed"));
+
       return reply.code(201).send({ data: result });
     } catch (err) {
       req.log.error(
@@ -252,6 +273,31 @@ export async function gstnRoutes(app: FastifyInstance): Promise<void> {
   });
 
   /**
+   * GET /v1/billing/gstn/returns?gstin=&period=&returnType=&limit=
+   *
+   * GAP-BILLING-GSTN-05: filing history for the caller's own tenant, newest first. Local data
+   * only (no GSTN call), so it works while the integration is disabled. Amounts are paise strings.
+   */
+  app.get("/v1/billing/gstn/returns", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BILLING_ROLES);
+    const parsed = returnListQuery.safeParse(req.query);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".") || "query"}: ${i.message}`).join("; "));
+    }
+    const rows = await repo.listReturns(ctx.tenantId, parsed.data);
+    return reply.send({
+      data: rows.map((r) => ({
+        id: r.id, gstin: r.gstin, returnPeriod: r.returnPeriod, returnType: r.returnType,
+        referenceId: r.referenceId, status: r.status,
+        totalTaxableMinor: r.totalTaxableMinor.toString(), totalCgstMinor: r.totalCgstMinor.toString(),
+        totalSgstMinor: r.totalSgstMinor.toString(), totalIgstMinor: r.totalIgstMinor.toString(),
+        filedAt: r.filedAt, filedBy: r.createdBy,
+      })),
+    });
+  });
+
+  /**
    * GET /v1/billing/gstn/returns/:ref/status
    *
    * Check the status of a previously submitted GST return.
@@ -272,6 +318,10 @@ export async function gstnRoutes(app: FastifyInstance): Promise<void> {
         { adapter: "gstn", action: "fetchReturnStatus", durationMs: Date.now() - startMs, status: "success" },
         "GSTN return status fetched",
       );
+
+      await repo
+        .updateStatusByReference(ctx.tenantId, ref, result.status, ctx.actorId)
+        .catch((e: unknown) => req.log.warn({ err: e, referenceId: ref }, "GSTN status lookup succeeded but history status update failed"));
 
       return reply.send({ data: result });
     } catch (err) {

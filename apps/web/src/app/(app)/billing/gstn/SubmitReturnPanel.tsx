@@ -3,7 +3,8 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
 import type { PillVariant } from "@/app/_components/ds/StatusPill";
-import { browserJson } from "@/lib/api/browserClient";
+import { browserFetch, browserJson } from "@/lib/api/browserClient";
+import type { FiledReturn } from "./FilingHistoryPanel";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { isValidGstin } from "@/lib/gstin";
@@ -61,6 +62,8 @@ export function SubmitReturnPanel({
   const [result, setResult] = useState<GstReturnResult | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // GAP-BILLING-GSTN-05: returns already filed for this GSTIN + period + type (not rejected).
+  const [duplicates, setDuplicates] = useState<FiledReturn[]>([]);
 
   const idempotencyKeyRef = useRef<string | null>(null);
 
@@ -88,14 +91,31 @@ export function SubmitReturnPanel({
     return errors;
   }
 
-  function handleReview(e: React.FormEvent) {
+  /**
+   * GAP-BILLING-GSTN-05: look up returns already filed for exactly this GSTIN, period and type
+   * (local history, read-only). A failed lookup shows no warning rather than blocking the filing.
+   */
+  async function findDuplicates(): Promise<FiledReturn[]> {
+    try {
+      const qs = `gstin=${encodeURIComponent(gstin)}&period=${encodeURIComponent(returnPeriod)}&returnType=${returnType}&limit=5`;
+      const res = await browserFetch(`v1/billing/gstn/returns?${qs}`);
+      if (!res.ok) return [];
+      const body = (await res.clone().json()) as { data?: unknown };
+      return Array.isArray(body.data) ? (body.data as FiledReturn[]).filter((r) => r.status !== "rejected") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  async function handleReview(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
     setResult(null);
     const errors = validate();
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) return;
-    // Open the confirm/review step; nothing is POSTed until the user confirms.
+    setDuplicates(await findDuplicates());
+    // Open the confirm/review step; nothing is filed until the user confirms.
     setConfirmOpen(true);
   }
 
@@ -147,7 +167,7 @@ export function SubmitReturnPanel({
   const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
   return (
-    <form onSubmit={handleReview} aria-label="Submit GST return" style={{ display: "grid", gap: 14, maxWidth: 560 }}>
+    <form onSubmit={(e) => void handleReview(e)} aria-label="Submit GST return" style={{ display: "grid", gap: 14, maxWidth: 560 }}>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={gstinId} style={{ fontSize: 13, fontWeight: 600 }}>
           GSTIN <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
@@ -299,6 +319,12 @@ export function SubmitReturnPanel({
             <p style={{ margin: 0 }}>
               This files a GST return to the external GSTN portal and is effectively irreversible. Please confirm:
             </p>
+            {duplicates.length > 0 && (
+              <p role="alert" className="pill warn" style={{ width: "fit-content", margin: 0 }}>
+                A {returnType} return for {returnPeriod} was already filed for this GSTIN (reference{" "}
+                <span className="mono">{duplicates[0]?.referenceId}</span>, status {duplicates[0]?.status}). Filing again may create a duplicate.
+              </p>
+            )}
             <div className="fields">
               <div className="field"><span className="label">GSTIN</span><span className="mono">{gstin}</span></div>
               <div className="field"><span className="label">Period</span><span>{returnPeriod}</span></div>
