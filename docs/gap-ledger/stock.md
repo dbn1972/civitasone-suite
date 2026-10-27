@@ -705,7 +705,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [~] **Status** (W2 stock: backend verified; ItemWithUom (item list response) has no totalValue field — mapper returns null → '—'. No 100x risk since field is absent. NEEDS OWNER DECISION: add totalValue (bigint paise) to GET /v1/stock/items response)
+- [x] **Status** Closed by d5fad531f (UAT B4, 2026-10-27): GET /v1/stock/items returns currentStock, unitCost and totalValue as bigint paise strings from valuation rows
 - **First-pass claim:** Money: 'Value ₹' column and Stock Value StatCard assume totalValue is paise (StockListClient.tsx:39 comment, formatMoney) but parseMinor() accepts any numeric string (apiMappers.ts:63-71); unit of the stock-service field cannot be verified — undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['GET /api/v1/stock/items']`
 - **Question:** Is totalValue in paise as an integer for every item?
