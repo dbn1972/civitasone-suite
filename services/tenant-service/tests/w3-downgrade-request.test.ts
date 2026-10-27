@@ -174,13 +174,14 @@ describe("downgrade request lifecycle (owner decision #24)", () => {
     expect((await request(good)).status).toBe(202);
   });
 
-  it("platform billing approves: the plan moves to the target, decided_by is recorded and an audit row is written", async () => {
+  it("platform billing approves: the change is SCHEDULED for the period end (F8), decided_by is recorded and an audit row is written", async () => {
     await request(good); await infraQueue.drain();
     const [row] = await rows();
     expect((await decide(row!.id, "approve")).status).toBe(202);
     await infraQueue.drain();
-    expect((await rows())[0]).toMatchObject({ status: "approved", decidedBy: BILLING });
-    expect((await sub()).planId).toBe(SMALL);
+    expect((await rows())[0]).toMatchObject({ status: "approved", decidedBy: BILLING, appliedAt: null });
+    // the plan moves only when the billing period ends (see f8-downgrade-period-end.test.ts)
+    expect((await sub()).planId).toBe(BIG);
     expect((await audits()).some((a) => a.action === "downgrade_approve" && a.resourceId === row!.id)).toBe(true);
     // a decided request cannot be decided again
     expect((await decide(row!.id, "reject", { reason: "too late" })).json().code).toBe("ALREADY_DECIDED");

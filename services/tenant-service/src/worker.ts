@@ -12,6 +12,7 @@ import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTenantConsumers } from "./modules/tenant/consumer.js";
 import { registerPlanConsumers } from "./modules/plans/consumer.js";
 import { registerSubscriptionConsumers } from "./modules/subscriptions/consumer.js";
+import { startDowngradeSweeper } from "./modules/subscriptions/sweeper.js";
 import { registerQuotaConsumers } from "./modules/quotas/consumer.js";
 import { registerSettingConsumers } from "./modules/settings/consumer.js";
 import { registerOrgHierarchyConsumers } from "./modules/org-hierarchy/consumer.js";
@@ -54,11 +55,14 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
   batchSize: 1000,
   logger: log,
 });
+// F8: apply approved downgrades whose billing period has ended.
+const downgradeSweeper = startDowngradeSweeper(queue, (err) => log.error({ err }, "downgrade sweep failed"));
 log.info("tenant-service worker: consumers + outbox relay running");
 
 async function shutdown(signal: string): Promise<void> {
   log.info({ signal }, "shutting down");
   clearInterval(purge);
+  clearInterval(downgradeSweeper);
   clearInterval(relay);
   await queue.stop();
   await sqlClient.end();

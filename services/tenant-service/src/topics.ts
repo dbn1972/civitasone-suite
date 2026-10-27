@@ -21,6 +21,8 @@ export const COMMANDS = {
   /** Owner decision #24: the tenant ASKS for a downgrade; platform billing decides. */
   subscriptionDowngradeRequest: "tenant.subscription.downgrade_request",
   subscriptionDowngradeDecision: "tenant.subscription.downgrade_decision",
+  /** F8: the sweeper asks for one approved, due downgrade to be applied at period end. */
+  subscriptionDowngradeApply: "tenant.subscription.downgrade_apply",
   subscriptionCancelSelf: "tenant.subscription.cancel_self",
   // ── quotas ─────────────────────────────────────────────────────────
   quotaSet: "tenant.quota.set",

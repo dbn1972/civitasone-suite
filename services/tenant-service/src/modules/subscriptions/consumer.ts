@@ -243,6 +243,7 @@ export function registerSubscriptionConsumers(queue: Queue): void {
 
         let outcome: "approved" | "rejected" = p.decision === "approve" ? "approved" : "rejected";
         let decisionReason = p.reason;
+        let effectiveAt: Date | null = null;
         if (outcome === "approved") {
           const target = targetPlan && targetPlan.id === req.targetPlanId ? targetPlan : null;
           const sub = await repo.findByIdTx(tx as unknown as repo.Writer, req.subscriptionId);
@@ -253,17 +254,53 @@ export function registerSubscriptionConsumers(queue: Queue): void {
             outcome = "rejected";
             decisionReason = over.length > 0 ? "USAGE_EXCEEDS_TARGET_PLAN" : "PLAN_OR_SUBSCRIPTION_CHANGED";
           } else {
-            await repo.update(tx as unknown as repo.Writer, sub.id, { planId: req.targetPlanId, updatedBy: msg.actorId, version: sub.version + 1 });
+            // F8: approval only SCHEDULES the change for the end of the current billing period.
+            effectiveAt = sub.currentPeriodEnd;
           }
         }
         await tx.update(downgradeRequests).set({
           status: outcome, decidedBy: msg.actorId, decidedAt: new Date(), decisionReason: decisionReason ?? null, updatedAt: new Date(), version: req.version + 1,
+          ...(effectiveAt ? { effectiveAt } : {}),
         }).where(and(eq(downgradeRequests.id, p.id), eq(downgradeRequests.tenantId, msg.tenantId)));
         if (outcome === "approved") {
-          await emit(tx, msg, EVENTS.subscriptionDowngraded, { subscriptionId: req.subscriptionId, oldPlanId: req.fromPlanId, newPlanId: req.targetPlanId, requestId: p.id }, "downgrade_approve", p.id, { reason: decisionReason ?? null });
+          // Audit only: the plan has not changed yet, so no "downgraded" domain event until it is applied.
+          await audit(tx, msg, "downgrade_approve", p.id, { reason: decisionReason ?? null, effectiveAt: effectiveAt?.toISOString() ?? null });
         } else {
           // notification-service tells the requester (requestedBy) the outcome and why.
           await emit(tx, msg, EVENTS.subscriptionDowngradeRejected, { subscriptionId: req.subscriptionId, requestId: p.id, requestedBy: req.requestedBy, targetPlanId: req.targetPlanId, reason: decisionReason ?? null }, "downgrade_reject", p.id, { reason: decisionReason ?? null });
+        }
+      });
+      const sub = await repo.findByTenantIdScoped(msg.tenantId);
+      if (sub) await cache.invalidate(keyFor(msg.tenantId, sub.id));
+    },
+  );
+
+  // F8: apply ONE approved downgrade once its period has ended. Idempotent: the request row is
+  // locked, and only an approved, due, not-yet-applied request is acted on. markProcessed + the
+  // guarded plan write + the audit/event all share ONE transaction.
+  queue.subscribe<{ id: string }>(
+    COMMANDS.subscriptionDowngradeApply,
+    async (msg) => {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        const rows = await tx.select().from(downgradeRequests)
+          .where(and(eq(downgradeRequests.id, msg.payload.id), eq(downgradeRequests.tenantId, msg.tenantId))).limit(1).for("update");
+        const req = rows[0];
+        if (!req || req.status !== "approved" || req.appliedAt || !req.effectiveAt || req.effectiveAt.getTime() > Date.now()) return;
+        const sub = await repo.findByIdTx(tx as unknown as repo.Writer, req.subscriptionId);
+        let outcome = "applied";
+        if (!sub || sub.planId !== req.fromPlanId) {
+          // The subscription moved to another plan since approval: never overwrite it.
+          outcome = "skipped_plan_changed";
+        } else {
+          await repo.update(tx as unknown as repo.Writer, sub.id, { planId: req.targetPlanId, updatedBy: msg.actorId, version: sub.version + 1 });
+        }
+        await tx.update(downgradeRequests).set({ appliedAt: new Date(), applyOutcome: outcome, updatedAt: new Date(), version: req.version + 1 })
+          .where(and(eq(downgradeRequests.id, req.id), eq(downgradeRequests.tenantId, msg.tenantId)));
+        if (outcome === "applied") {
+          await emit(tx, msg, EVENTS.subscriptionDowngraded, { subscriptionId: req.subscriptionId, oldPlanId: req.fromPlanId, newPlanId: req.targetPlanId, requestId: req.id }, "downgrade_apply", req.id, { outcome });
+        } else {
+          await audit(tx, msg, "downgrade_apply", req.id, { outcome });
         }
       });
       const sub = await repo.findByTenantIdScoped(msg.tenantId);
@@ -296,6 +333,21 @@ export function registerSubscriptionConsumers(queue: Queue): void {
       if (sub) await cache.invalidate(keyFor(msg.tenantId, sub.id));
     },
   );
+}
+
+/** Enqueue the mandatory audit event only (no domain event). */
+async function audit(
+  tx: unknown,
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceId: string,
+  auditExtra: Record<string, unknown> = {},
+): Promise<void> {
+  await enqueue(tx as Parameters<typeof enqueue>[0], {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: { service: "tenant", action, resourceType: "subscription", resourceId, outcome: "success", ...auditExtra },
+  });
 }
 
 /** Enqueue domain event + mandatory audit event. */

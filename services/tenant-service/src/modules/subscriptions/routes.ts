@@ -172,6 +172,7 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
       });
     }
     if (await repo.findPendingDowngrade(ctx.tenantId)) throw new HttpError(409, "REQUEST_ALREADY_PENDING", "a downgrade request is already awaiting approval");
+    if (await repo.findScheduledDowngrade(ctx.tenantId)) throw new HttpError(409, "DOWNGRADE_ALREADY_SCHEDULED", "an approved downgrade is already scheduled for the end of the current billing period");
     const result = await commands.subscriptionDowngradeRequest(ctx, {
       subscriptionId: sub.id, fromPlanId: sub.planId, targetPlanId: target.id, reason: parsed.data.reason,
       usage: { checks: [{ resource: "users", used: used("users"), limit: target.maxUsers }, { resource: "storage_gb", used: used("storage_gb"), limit: target.maxStorageGb }] },

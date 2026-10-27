@@ -6611,6 +6611,9 @@ export type DowngradeRequestSummary = {
   requestedAt: string;
   decidedAt?: string | null;
   decisionReason?: string | null;
+  /** F8: an approved downgrade takes effect at the end of the billing period (effectiveAt) and is then applied (appliedAt). */
+  effectiveAt?: string | null;
+  appliedAt?: string | null;
 };
 
 export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequestSummary[]>> {
@@ -6618,6 +6621,28 @@ export async function getDowngradeRequests(): Promise<LoaderResult<DowngradeRequ
     revalidateSeconds: 30,
     telemetryKey: "admin.downgrade-requests",
     mapResponse: (p) => (getArrayPayload(p) as DowngradeRequestSummary[] | null) ?? [],
+  });
+}
+
+/**
+ * OWNER DECISION F8: platform billing's queue of tenants' pending downgrade
+ * requests (all tenants; platform_admin / super_admin only). An empty list and a
+ * failed read stay distinct (source "error").
+ */
+export type PendingDowngradeRequest = {
+  id: string;
+  tenantId: string;
+  fromPlanId: string;
+  targetPlanId: string;
+  reason: string;
+  requestedAt: string;
+};
+
+export async function getPendingDowngradeRequests(): Promise<LoaderResult<PendingDowngradeRequest[]>> {
+  return fetchJson<unknown, PendingDowngradeRequest[]>("/api/v1/tenant/subscription/downgrade-requests/pending", [] as PendingDowngradeRequest[], {
+    revalidateSeconds: 0,
+    telemetryKey: "platform.downgrade-queue",
+    mapResponse: (p) => (getArrayPayload(p) as PendingDowngradeRequest[] | null) ?? [],
   });
 }
 

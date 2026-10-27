@@ -88,3 +88,20 @@ describe("PlansClient downgrade request (owner decision #24)", () => {
     expect((screen.getByRole("button", { name: "Request downgrade" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+describe("PlansClient scheduled downgrade (F8)", () => {
+  it("an approved, not-yet-applied downgrade says when it takes effect and blocks a further request", () => {
+    const approved: DowngradeRequestSummary = { id: "r2", targetPlanId: "basic", fromPlanId: "enterprise", reason: "x".repeat(12), status: "approved", requestedAt: "2026-10-26T10:00:00Z", effectiveAt: "2026-11-30T18:29:59Z", appliedAt: null };
+    render(<PlansClient plansData={DATA} source="api" downgradeRequests={[approved]} />);
+    expect(screen.getByRole("status").textContent).toMatch(/end of your billing period, on 30 Nov 2026/);
+    expect((screen.getByRole("button", { name: "Request downgrade" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("once applied it is simply an approved past request and a new downgrade can be raised", () => {
+    const applied: DowngradeRequestSummary = { id: "r3", targetPlanId: "basic", fromPlanId: "enterprise", reason: "x".repeat(12), status: "approved", requestedAt: "2026-10-26T10:00:00Z", effectiveAt: "2026-11-30T18:29:59Z", appliedAt: "2026-12-01T00:05:00Z" };
+    render(<PlansClient plansData={DATA} source="api" downgradeRequests={[applied]} />);
+    expect(screen.getByRole("status").textContent).toMatch(/was approved/);
+    expect(screen.getByRole("status").textContent).not.toMatch(/takes effect/);
+    expect((screen.getByRole("button", { name: "Request downgrade" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
