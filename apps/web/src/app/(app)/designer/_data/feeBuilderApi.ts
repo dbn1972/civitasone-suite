@@ -339,7 +339,7 @@ export interface HoaOption {
  */
 export async function fetchHoaOptions(): Promise<HoaOption[]> {
   const res = await fetch("/api/proxy/v1/finance/major-heads", { cache: "no-store" });
-  if (!res.ok) throw new Error(`major-heads ${res.status}`);
+  if (!res.ok) throw new Error("Head of Account list unavailable");
   const payload = (await res.json()) as { data?: MajorHeadDto[] };
   return (payload.data ?? []).map((h) => ({
     code: h.code,
