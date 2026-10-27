@@ -10,6 +10,7 @@
  *
  * Validates: Requirements 15.5, 15.6, 15.7
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -24,7 +25,7 @@ vi.mock("@civitasone/storage", () => ({
 }));
 
 const SECRET = "test_secret_for_civitasone_32chr";
-const TENANT_ID = "11111111-1111-1111-1111-111111111111";
+const TENANT_ID = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const ACTOR_ID = "22222222-2222-2222-2222-222222222222";
 const CALL_ID = "33333333-3333-3333-3333-333333333333";
 

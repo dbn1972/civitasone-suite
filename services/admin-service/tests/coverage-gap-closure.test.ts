@@ -146,7 +146,7 @@ describe("backup consumer + repo — schedule upsert, trigger, listRuns (integra
       actorId: ACTOR, correlationId: "c-sched-1", schemaVersion: "1.0",
       payload: { tenantId: T, cronExpr: "0 2 * * *" },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupSchedules).where(eq(adminBackupSchedules.tenantId, T)))), (r) => r.length === 1);
 
     let rows = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupSchedules).where(eq(adminBackupSchedules.tenantId, T))));
     expect(rows).toHaveLength(1);
@@ -158,7 +158,7 @@ describe("backup consumer + repo — schedule upsert, trigger, listRuns (integra
       actorId: ACTOR, correlationId: "c-sched-2", schemaVersion: "1.0",
       payload: { tenantId: T, cronExpr: "30 3 * * *" },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupSchedules).where(eq(adminBackupSchedules.tenantId, T)))), (r) => r[0]?.cronExpr === "30 3 * * *");
     await q.stop();
 
     rows = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupSchedules).where(eq(adminBackupSchedules.tenantId, T))));
@@ -181,7 +181,7 @@ describe("backup consumer + repo — schedule upsert, trigger, listRuns (integra
       actorId: ACTOR, correlationId: "c-run-1", schemaVersion: "1.0",
       payload: { tenantId: T, runId: RUN_ID },
     });
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupRuns).where(eq(adminBackupRuns.id, RUN_ID)))), (r) => r.length === 1);
     await q.stop();
 
     const rows = await runWithTenant(T, () => db.transaction((tx) => tx.select().from(adminBackupRuns).where(eq(adminBackupRuns.id, RUN_ID))));
@@ -231,7 +231,7 @@ describe("config repo — getTenantConfig, listFlags, setFlagOverride (integrati
     await runWithTenant(T, () => db.transaction((tx) => tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T))));
     await runWithTenant(PLATFORM, () => db.transaction(async (tx) => {
       await tx.delete(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG));
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, PLATFORM));
+      await tx.delete(outboxMessages).where(and(eq(outboxMessages.tenantId, PLATFORM), eq(outboxMessages.actorId, ACTOR))); // this file's rows only: the platform tenant's outbox is shared by sibling files
       await tx.delete(processed).where(eq(processed.messageId, MSG_FLAG_CREATE));
       await tx.delete(processed).where(eq(processed.messageId, MSG_FLAG_OVERRIDE));
       await tx.delete(processed).where(eq(processed.messageId, MSG_FLAG_DUP));
@@ -265,13 +265,13 @@ describe("config repo — getTenantConfig, listFlags, setFlagOverride (integrati
       actorId: ACTOR, correlationId: "c-flag-create", schemaVersion: "1.0",
       payload: { flagKey: FLAG, enabled: false },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await waitFor(() => runWithTenant(PLATFORM, () => db.transaction((tx) => tx.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG)))), (r) => r.length === 1);
     await q.publish(COMMANDS.featureFlagOverride, {
       messageId: MSG_FLAG_OVERRIDE, type: COMMANDS.featureFlagOverride, tenantId: T,
       actorId: ACTOR, correlationId: "c-flag-override", schemaVersion: "1.0",
       payload: { flagKey: FLAG, tenantId: T, enabled: true },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await waitFor(() => configRepo.getTenantConfig(T), (c) => c?.featureFlags[FLAG] === true);
     await q.stop();
 
     const config = await configRepo.getTenantConfig(T);
@@ -299,7 +299,8 @@ describe("config repo — getTenantConfig, listFlags, setFlagOverride (integrati
       actorId: ACTOR, correlationId: "c-flag-dup", schemaVersion: "1.0",
       payload: { flagKey: FLAG, enabled: true }, // different `enabled` value — must NOT overwrite
     });
-    await new Promise((r) => setTimeout(r, 300));
+    // The consumer records the messageId in `processed` once it has handled the command (here: as a no-op).
+    await waitFor(() => runWithTenant(PLATFORM, () => db.transaction((tx) => tx.select().from(processed).where(eq(processed.messageId, MSG_FLAG_DUP)))), (r) => r.length === 1);
     await q.stop();
 
     const rows = await runWithTenant(PLATFORM, () => db.transaction((tx) => tx.select().from(adminFeatureFlags).where(eq(adminFeatureFlags.flagKey, FLAG))));
@@ -354,7 +355,8 @@ describe("custom-domains — GET dns-instructions success path (integration)", (
       actorId: ACTOR, correlationId: "c-cd-cname", schemaVersion: "1.0",
       payload: { id: DOMAIN_CNAME_ID, tenantId: T, domain: "cname.example.gov.in", verificationMethod: "dns_cname", verificationToken: "civitasone-verify-def456" },
     });
-    await new Promise((r) => setTimeout(r, 500));
+    // Wait until BOTH register commands have been consumed -- a fixed 500ms sleep lost the second one under load.
+    await waitFor(() => runWithTenant(T, () => db.transaction((tx) => tx.select().from(customDomains).where(eq(customDomains.tenantId, T)))), (r) => r.length === 2);
     await q.stop();
   });
   afterAll(cleanup);

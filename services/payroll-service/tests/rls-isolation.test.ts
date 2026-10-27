@@ -6,6 +6,7 @@
  * - Attempts to access a specific Tenant B resource by ID return HTTP 404 (not 403)
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
@@ -16,11 +17,13 @@ import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
-const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
-const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
+// Per-run unique ids: this file never deletes the payroll run it creates, so fixed ids made every
+// re-run against the same database hit 409 DUPLICATE_RUN_FOR_PERIOD for tenant A / 2026-06.
+const TENANT_A = randomUUID();
+const TENANT_B = randomUUID();
 const ACTOR_A = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 const ACTOR_B = "bbbbbbbb-0000-4000-8000-bbbbbbbbbbbb";
-const STRUCTURE_A = "eeeeeeee-0001-0000-0000-000000000001";
+const STRUCTURE_A = randomUUID();
 
 function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["super_admin", "hr_admin", "payroll_admin"]) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-rls" }, SECRET, 3600);

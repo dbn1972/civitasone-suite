@@ -130,4 +130,55 @@ describe("verifyPdfSignature", () => {
     expect(result.signerCN).toBeUndefined();
     expect(result.serialNumber).toBeUndefined();
   });
+
+  it("parses a signature whose final octet is 0x00 (zero padding must not eat it)", () => {
+    // About 1 in 256 RSA signatures ends in a 0x00 byte. The /Contents placeholder is
+    // zero-padded after the DER blob, so a verifier that strips trailing "0" characters
+    // also strips that real byte and used to reject the PDF as "invalid_pkcs7"
+    // (the intermittent CI failure of the three tests above). Build such a PDF
+    // deterministically instead of waiting for a random key to produce one.
+    const oid = forge.pki.oids as Record<string, string | undefined>;
+    const { p12Buffer, passphrase } = generateTestP12();
+    const p12 = forge.pkcs12.pkcs12FromAsn1(forge.asn1.fromDer(p12Buffer.toString("binary")), passphrase);
+    const keyBag = p12.getBags({ bagType: oid.pkcs8ShroudedKeyBag! })[oid.pkcs8ShroudedKeyBag!]![0]!;
+    const certBag = p12.getBags({ bagType: oid.certBag! })[oid.certBag!]![0]!;
+    const p7 = forge.pkcs7.createSignedData();
+    p7.content = forge.util.createBuffer("x", "raw");
+    p7.addCertificate(certBag.cert!);
+    p7.addSigner({
+      key: keyBag.key as forge.pki.rsa.PrivateKey, certificate: certBag.cert!, digestAlgorithm: oid.sha256!,
+      authenticatedAttributes: [
+        { type: oid.contentType!, value: oid.data },
+        { type: oid.messageDigest! },
+      ],
+    });
+    p7.sign({ detached: true });
+    // SignedData's last element is the signerInfos SET; a SignerInfo ends with the signature OCTET STRING.
+    const asn1 = p7.toAsn1() as forge.asn1.Asn1;
+    const signedData = ((asn1.value as forge.asn1.Asn1[])[1]!.value as forge.asn1.Asn1[])[0]!;
+    const signerInfos = (signedData.value as forge.asn1.Asn1[]).at(-1)!;
+    const signerInfo = (signerInfos.value as forge.asn1.Asn1[])[0]!;
+    (signerInfo.value as forge.asn1.Asn1[]).at(-1)!.value = "A".repeat(255) + "\x00"; // final DER octet is 0x00
+    const derHex = forge.util.bytesToHex(forge.asn1.toDer(asn1).getBytes());
+    expect(derHex.endsWith("00")).toBe(true);
+
+    const placeholderLen = 16384;
+    const head = "%PDF-1.7\n1 0 obj<</Type/Sig/ByteRange [0 0 0 0]/Contents <";
+    const contents = derHex.padEnd(placeholderLen, "0");
+    const body = head + contents + ">>endobj\n%%EOF";
+    const bytes = Buffer.from(body, "binary");
+    const off2 = head.length + placeholderLen + 1;
+    const withRange = Buffer.from(
+      bytes.toString("binary").replace("[0 0 0 0]", `[0 ${head.length} ${off2} ${bytes.length - off2}]`),
+      "binary",
+    );
+
+    const result = verifyPdfSignature(withRange);
+
+    // The forged signature value is not a valid RSA signature, so the PDF is rejected --
+    // but for the right reason, after the CMS structure and signer certificate were read.
+    expect(result.issues).not.toContain("invalid_pkcs7");
+    expect(result.signerCN).toBe("Test Verifier Corp");
+    expect(result.valid).toBe(false);
+  });
 });

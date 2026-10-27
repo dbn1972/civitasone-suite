@@ -39,6 +39,7 @@
  * the same values those services' own CI-passing test runs already rely on.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -80,6 +81,9 @@ let registerDeliveryConsumers: (q: unknown) => void;
 // config / process env), captured and restored below instead of re-pointed.
 const FINANCE_URL = process.env.TRADE_TEST_FINANCE_DATABASE_URL
   ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_URL);
 const NOTIFICATION_URL = process.env.TRADE_TEST_NOTIFICATION_DATABASE_URL
   ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
 
@@ -319,7 +323,10 @@ describe("trade-service cross-service wiring — submitApplication -> finance.ch
     await q.drain();
 
     // Hop 2: finance-service's own outbox (challanCreate enqueued finance.gl.post) -> shared queue.
-    const relayedFromFinance = await relayOnce(financeDb as never, q, 100, "finance-service");
+    // Drain to completion: relayOnce() takes the OLDEST 100 unpublished rows of the shared
+    // finance outbox, so with a backlog from other suites a single call can miss this row.
+    let relayedFromFinance = 0;
+    for (let n = 1; n > 0;) { n = await relayOnce(financeDb as never, q, 100, "finance-service"); relayedFromFinance += n; }
     expect(relayedFromFinance).toBeGreaterThanOrEqual(1);
     await q.drain();
 

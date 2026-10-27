@@ -95,7 +95,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     vendorDb.transaction((tx) =>
-      tx.delete(vendorOutboxMessages).where(eq(vendorOutboxMessages.tenantId, TENANT)),
+      tx.delete(vendorOutboxMessages).where(and(eq(vendorOutboxMessages.tenantId, TENANT), eq(vendorOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   if (releaseRelayLock) await releaseRelayLock();

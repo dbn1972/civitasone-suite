@@ -30,7 +30,10 @@ const REQ_USER = "0a111111-0000-4000-8000-000000000001"; // platform_admin
 const APPR_SA = "0a222222-0000-4000-8000-000000000002"; // super_admin
 const APPR_PA = "0a333333-0000-4000-8000-000000000003"; // platform_admin
 const TENANT_ADMIN = "0a444444-0000-4000-8000-000000000004";
-const T = "0a000000-0000-4000-8000-0000000000b1";
+// Per-run unique tenant ids: a fixed literal let two processes (parallel files, a
+// re-run racing a previous one, a concurrent agent on the same Postgres) wipe()
+// each other's tenant row, requests and audit rows mid-test.
+const T = randomUUID();
 
 function bearer(sub: string, roles: string[], tid = PLAT): { authorization: string } {
   return { authorization: `Bearer ${signToken({ sub, tid, roles, sid: "s" }, SECRET, 3600)}` };
@@ -76,7 +79,12 @@ async function waitFor<V>(read: () => Promise<V>, ok: (v: V) => boolean, ms = 40
   for (;;) {
     const v = await read();
     if (ok(v)) return v;
-    if (Date.now() - t0 > ms) return v;
+    if (Date.now() - t0 > ms) {
+      // Fail loudly with the timeout instead of handing back a stale value: the
+      // caller's next line then dereferences undefined ("reading 'payload'") and
+      // hides that the async consumer never reached the awaited state.
+      throw new Error(`waitFor: condition not met within ${ms}ms; last value: ${JSON.stringify(v)}`);
+    }
     await new Promise((r) => setTimeout(r, 40));
   }
 }
@@ -376,7 +384,7 @@ describe("reactivate, edit, reject, scheduling", () => {
 
   it("an edit that collides on the unique domain fails the request and leaves the tenant untouched", async () => {
     await seedTenant("active");
-    const other = "0a000000-0000-4000-8000-0000000000b2";
+    const other = randomUUID();
     await wipe(other);
     await runWithTenant(other, () => db.transaction(async (tx) => { await tx.insert(adminTenants).values(seedRow(other, "active")); }));
     try {

@@ -36,7 +36,7 @@ import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { resolveLatestRevision } from "../src/modules/payroll/consumer.js";
 
-const TENANT = "90000000-dead-4000-8000-00000000c0de";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const CONCURRENCY = 13;
 const MONTH = "2026-09";
 

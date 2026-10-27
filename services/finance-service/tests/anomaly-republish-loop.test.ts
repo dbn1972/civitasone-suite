@@ -28,6 +28,7 @@
  * that path represents a genuinely NEW detection nobody has announced yet.
  */
 import { describe, it, expect } from "vitest";
+import { serializeFinanceOutboxRelay } from "./support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -61,6 +62,9 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
     payload,
   };
 }
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(process.env.DATABASE_URL!);
 
 describe("anomaly consumer -- self-republish loop (real DB, no mocks)", () => {
   it(

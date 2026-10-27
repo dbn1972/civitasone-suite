@@ -29,6 +29,7 @@
  * DATABASE_URL from vitest.config.ts / the test run's env.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -76,6 +77,9 @@ function tenantWrappedQueue(): MemoryQueue {
 
 const FINANCE_URL = process.env.SHOP_TEST_FINANCE_DATABASE_URL
   ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_URL);
 const NOTIFICATION_URL = process.env.SHOP_TEST_NOTIFICATION_DATABASE_URL
   ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
 

@@ -26,6 +26,7 @@
  * challanCreate + GL-posting consumers against finance's REAL database.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -64,6 +65,9 @@ async function relayToCompletion(db: unknown, queue: unknown, batchLimit: number
 const PGPORT = process.env.PGPORT ?? "5435";
 const EVENT_DSN = `postgres://event_svc:event_dev_pw@localhost:${PGPORT}/civitas_event`;
 const FINANCE_DSN = `postgres://finance_svc:finance_dev_pw@localhost:${PGPORT}/civitas_finance`;
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_DSN);
 
 // Platform default tenant -- finance-service migration
 // 0070_municipal_cross_service_challan.sql seeds the 0075 municipal-fee

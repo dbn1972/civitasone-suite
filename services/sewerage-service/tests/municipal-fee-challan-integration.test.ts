@@ -32,6 +32,7 @@
  * vitest.config.ts / the test run's env.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -135,6 +136,9 @@ const FINANCE_URL =
   process.env.SEWERAGE_TEST_FINANCE_DATABASE_URL ??
   "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
 
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_URL);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let finance: any;
 const registeredBillIds: string[] = [];
@@ -199,7 +203,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     sewerageDb.transaction((tx) =>
-      tx.delete(sewerageOutboxMessages).where(eq(sewerageOutboxMessages.tenantId, TENANT)),
+      tx.delete(sewerageOutboxMessages).where(and(eq(sewerageOutboxMessages.tenantId, TENANT), eq(sewerageOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   await sewerageSqlClient.end();

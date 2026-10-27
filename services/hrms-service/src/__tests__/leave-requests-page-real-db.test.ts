@@ -11,6 +11,7 @@
  *  - Without withMeta the response is still the bare array every existing caller
  *    parses.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -19,7 +20,7 @@ import { sqlClient } from "../shared/db.js";
 
 const SECRET = process.env.JWT_SECRET ?? "";
 
-const TENANT = "facade00-0f17-4000-8000-000000000f17";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const SEED = "facade00-0f17-4000-8000-0000000000ff";
 const DEPT = "facade00-0f17-4000-8000-0000000000d1";
 const DESIG = "facade00-0f17-4000-8000-0000000000d2";

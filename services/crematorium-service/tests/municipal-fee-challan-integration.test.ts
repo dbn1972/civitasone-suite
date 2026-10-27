@@ -28,6 +28,7 @@
  * vitest.config.ts / the test run's env.
  */
 import { describe, it, expect, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -99,6 +100,9 @@ const FINANCE_URL =
   process.env.CREMATORIUM_TEST_FINANCE_DATABASE_URL ??
   "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
 
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_URL);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let finance: any;
 const registeredBookingIds: string[] = [];
@@ -153,7 +157,7 @@ afterAll(async () => {
   }
   await runWithTenant(TENANT, () =>
     crematoriumDb.transaction((tx) =>
-      tx.delete(crematoriumOutboxMessages).where(eq(crematoriumOutboxMessages.tenantId, TENANT)),
+      tx.delete(crematoriumOutboxMessages).where(and(eq(crematoriumOutboxMessages.tenantId, TENANT), eq(crematoriumOutboxMessages.actorId, ACTOR))), // this file only: ACTOR is unique per file, a tenant-wide wipe raced sibling files
     ),
   );
   await crematoriumSqlClient.end();

@@ -30,7 +30,7 @@ import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
-const TENANT = "90000000-dead-4000-8000-00000000c0de";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const CREATOR = "90000000-dead-4000-8000-0000000ac70a";
 const APPROVER = "90000000-dead-4000-8000-0000000ac70b";
 

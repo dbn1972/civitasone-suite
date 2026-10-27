@@ -19,7 +19,7 @@ import { registerVendorScorecardConsumers } from "../src/modules/vendor/scorecar
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../src/topics.js";
 import { randomUUID } from "node:crypto";
 
-const TENANT = "8e8e8e8e-1111-4000-8000-0000000000e1";
+const TENANT = randomUUID(); // unique per file/run: a shared literal let sibling test files wipe this tenant's rows
 const OTHER   = "8e8e8e8e-2222-4000-8000-0000000000e2";
 const ISSUER  = "8f8f8f8f-0000-4000-8000-000000000001";
 const DECIDER = "8f8f8f8f-0000-4000-8000-000000000002";

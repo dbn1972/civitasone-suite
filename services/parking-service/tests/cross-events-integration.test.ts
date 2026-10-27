@@ -38,6 +38,7 @@
  * (PR #1022), both merged.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "../../finance-service/tests/support/finance-outbox-lock.js";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
@@ -87,6 +88,9 @@ function tenantWrappedQueue(): MemoryQueue {
 
 const FINANCE_URL = process.env.PARKING_TEST_FINANCE_DATABASE_URL
   ?? "postgres://finance_svc:finance_dev_pw@localhost:5435/civitas_finance";
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(FINANCE_URL);
 const NOTIFICATION_URL = process.env.PARKING_TEST_NOTIFICATION_DATABASE_URL
   ?? "postgres://notification_svc:notification_dev_pw@localhost:5435/civitas_notification";
 
@@ -199,7 +203,8 @@ describe("parking-service cross-events wiring — real DB, no mocks", () => {
 
     // Hop 2: the treasury consumer enqueued finance.gl.post into finance's
     // OWN outbox (same tx) — relay that too, like the real outbox relay would.
-    await relayOnce(finance.db as never, q, 100, "finance-service");
+    // Drain to completion (a single relayOnce() takes only the oldest 100 rows of the shared finance outbox).
+    for (let n = 1; n > 0;) n = await relayOnce(finance.db as never, q, 100, "finance-service");
     await q.drain();
 
     const [violationRow] = await runWithTenant(TENANT, () =>

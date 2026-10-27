@@ -12,6 +12,7 @@
  * pattern (registerGlConsumers + relayOnce loop).
  */
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
+import { serializeFinanceOutboxRelay } from "./support/finance-outbox-lock.js";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { idempotentId } from "@civitasone/auth";
@@ -105,6 +106,9 @@ async function clean() {
 
 beforeEach(async () => { BILL = randomUUID(); await seedHeads(); });
 afterAll(async () => { await clean(); await sqlClient.end(); });
+
+// Other processes relay this same finance outbox; hold a cross-process lock per test (see helper).
+serializeFinanceOutboxRelay(process.env.DATABASE_URL!);
 
 describe("NEW-001 XS-1 — two-stage approval posts exactly one GL journal (both consumers, real relay)", () => {
   it("two approvals by distinct officers post one balanced journal; replay of stage 2 posts no second journal", async () => {
