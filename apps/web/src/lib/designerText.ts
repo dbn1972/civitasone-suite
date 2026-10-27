@@ -33,12 +33,15 @@ export function designerTextEn(key: string, vars?: Vars): string {
  * to the English catalogue when no NextIntlClientProvider is mounted (component
  * tests render the designer without one), the same approach Skeleton takes.
  */
-export function useDesignerT(): DesignerT {
-  let t: DesignerT | null = null;
+function useOptionalDesignerT(): DesignerT | null {
   try {
-    t = useTranslations("designer") as unknown as DesignerT;
+    return useTranslations("designer") as unknown as DesignerT;
   } catch {
-    t = null;
+    return null;
   }
+}
+
+export function useDesignerT(): DesignerT {
+  const t = useOptionalDesignerT();
   return (key, vars) => (t ? t(key, vars) : designerTextEn(key, vars));
 }
